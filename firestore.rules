@@ -1,0 +1,253 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Market Intelligence Platform — Firestore Security Rules
+// Version: 1.0
+//
+// KEY DESIGN DECISIONS:
+//
+//  1. Subscription tier is stored as a Firebase Auth custom claim ({ tier: "pro" })
+//     set by the backend (Firebase Admin SDK) whenever Stripe webhook fires.
+//     Rules read request.auth.token.tier — zero extra Firestore reads per rule eval.
+//
+//  2. ALL market-data collections (news, earnings, analyst_actions, etc.) are
+//     READ-ONLY for clients. Every write comes from ECS workers via Admin SDK,
+//     which bypasses these rules entirely.
+//
+//  3. User sub-collections are isolated to the owning uid — no cross-user reads.
+//
+//  4. Field-level gating (e.g. aiNote on analyst_actions for Pro+ only) is
+//     enforced at the API layer (Fastify), not here. Firestore rules cannot
+//     strip individual fields from a document.
+//
+//  5. Watchlist 5-ticker limit for Free tier is enforced at the API layer.
+//     Firestore rules cannot count sub-collection documents cheaply.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ────────────────────────────────────────────────────
+
+    // User must be signed in via Firebase Authentication
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Request comes from the document owner
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // Read subscription tier from custom claim (set by backend on Stripe events)
+    // Defaults to "free" if claim is not yet set
+    function tier() {
+      return request.auth.token.get('tier', 'free');
+    }
+
+    function isFree() {
+      return tier() == 'free';
+    }
+
+    function isProOrPremium() {
+      return tier() in ['pro', 'premium'];
+    }
+
+    function isPremium() {
+      return tier() == 'premium';
+    }
+
+    // Incoming data must not attempt to change uid or tier fields
+    function noTierOrUidChange() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(['uid', 'tier', 'stripeCustomerId', 'stripeSubId']);
+    }
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // MARKET DATA COLLECTIONS — server writes only, tier-gated client reads
+    // ═════════════════════════════════════════════════════════════════════════
+
+    // Company reference data — all authenticated users
+    match /companies/{ticker} {
+      allow read:  if isAuthenticated();
+      allow write: if false;  // Admin SDK only
+    }
+
+    // Earnings calendar + actuals — all authenticated users
+    match /earnings_events/{eventId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // AI-generated earnings summaries — Pro and Premium only
+    // (Free users see a teaser in the UI via API middleware, not raw Firestore)
+    match /earnings_summaries/{summaryId} {
+      allow read:  if isAuthenticated() && isProOrPremium();
+      allow write: if false;
+    }
+
+    // News feed — all authenticated users
+    match /news/{newsId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Analyst upgrades/downgrades — all authenticated users
+    // (aiNote field stripped by API middleware for Free users)
+    match /analyst_actions/{actionId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Macro/economic calendar — all authenticated users
+    match /macro_events/{eventId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Market movers snapshots — all authenticated users
+    match /market_movers/{moverId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Options flow (unusual activity) — Pro and Premium only
+    match /options_flow/{flowId} {
+      allow read:  if isAuthenticated() && isProOrPremium();
+      allow write: if false;
+    }
+
+    // Block trades — Pro and Premium only
+    match /block_trades/{tradeId} {
+      allow read:  if isAuthenticated() && isProOrPremium();
+      allow write: if false;
+    }
+
+    // 13F fund holdings — Pro and Premium only
+    // Covers fund document, filings sub-collection, and positions sub-sub-collection
+    match /fund_holdings/{cik} {
+      allow read:  if isAuthenticated() && isProOrPremium();
+      allow write: if false;
+
+      match /filings/{filingId} {
+        allow read:  if isAuthenticated() && isProOrPremium();
+        allow write: if false;
+
+        match /positions/{ticker} {
+          allow read:  if isAuthenticated() && isProOrPremium();
+          allow write: if false;
+        }
+      }
+    }
+
+    // Story stocks — Premium only
+    match /story_stocks/{storyId} {
+      allow read:  if isAuthenticated() && isPremium();
+      allow write: if false;
+    }
+
+    // EOD and weekly recaps — Pro and Premium only
+    match /recaps/{recapId} {
+      allow read:  if isAuthenticated() && isProOrPremium();
+      allow write: if false;
+    }
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // USER COLLECTIONS — scoped strictly to owning uid
+    // ═════════════════════════════════════════════════════════════════════════
+
+    match /users/{uid} {
+      // Only the user can read their own profile
+      allow read: if isOwner(uid);
+
+      // Create: server creates user doc on first sign-in via Admin SDK.
+      // Allow client create only if uid matches and required fields are present.
+      allow create: if isOwner(uid)
+                    && request.resource.data.keys().hasAll(['uid', 'email', 'tier', 'createdAt'])
+                    && request.resource.data.tier == 'free';  // always starts free
+
+      // Update: user can update display name / photo only; tier + stripe fields are server-only
+      allow update: if isOwner(uid) && noTierOrUidChange();
+
+      // Hard deletes blocked — use deletedAt soft-delete via API
+      allow delete: if false;
+
+
+      // ── Portfolios ──────────────────────────────────────────────────────────
+      match /portfolios/{portfolioId} {
+        allow read:   if isOwner(uid);
+        allow create: if isOwner(uid)
+                      && request.resource.data.keys().hasAll(['name', 'createdAt']);
+        allow update: if isOwner(uid);
+        allow delete: if isOwner(uid);
+
+        // Holdings inside a portfolio
+        match /holdings/{ticker} {
+          allow read:   if isOwner(uid);
+          allow create: if isOwner(uid)
+                        && request.resource.data.keys().hasAll(['ticker', 'shares', 'addedAt']);
+          allow update: if isOwner(uid);
+          allow delete: if isOwner(uid);
+        }
+      }
+
+      // ── Watchlists ─────────────────────────────────────────────────────────
+      // Tier limit (Free = max 5 tickers per list) enforced at API layer.
+      match /watchlists/{watchlistId} {
+        allow read:   if isOwner(uid);
+        allow create: if isOwner(uid)
+                      && request.resource.data.keys().hasAll(['name', 'tickers', 'createdAt'])
+                      && request.resource.data.tickers is list;
+        allow update: if isOwner(uid);
+        allow delete: if isOwner(uid);
+      }
+
+      // ── Alert Rules ────────────────────────────────────────────────────────
+      // 12 alert types available; which types are active depends on tier
+      // (enforced at API layer, not here).
+      match /alerts/{alertId} {
+        allow read:   if isOwner(uid);
+        allow create: if isOwner(uid)
+                      && request.resource.data.keys().hasAll(['type', 'deliveryChannels', 'enabled', 'createdAt'])
+                      && request.resource.data.type in [
+                           'earnings', 'analyst', 'volume', 'price', '52wk_breakout',
+                           'peer_move', 'macro_event', 'block_trade', '13f_filing',
+                           'group_rs_rank', 'options_unusual', 'price_target_hit'
+                         ]
+                      && request.resource.data.deliveryChannels is list;
+        allow update: if isOwner(uid);
+        allow delete: if isOwner(uid);
+      }
+
+      // ── Notifications ──────────────────────────────────────────────────────
+      // Created by server (alert engine via Admin SDK).
+      // Users can only mark as read (update 'read' field) or delete.
+      match /notifications/{notificationId} {
+        allow read:   if isOwner(uid);
+
+        // Client can only flip read → true; all other fields are server-managed
+        allow update: if isOwner(uid)
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+                      && request.resource.data.read == true;
+
+        // Clients can dismiss (delete) their own notifications
+        allow delete: if isOwner(uid);
+
+        // Creates come from Admin SDK only
+        allow create: if false;
+      }
+
+    } // end /users/{uid}
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // DENY ALL — catch-all for any path not explicitly matched above
+    // ═════════════════════════════════════════════════════════════════════════
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}
