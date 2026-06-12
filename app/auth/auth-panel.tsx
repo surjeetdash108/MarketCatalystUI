@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { FirebaseError } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
+  getRedirectResult,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
   updateProfile,
 } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -75,6 +77,14 @@ function showError(message: string) {
   window.alert(message);
 }
 
+function shouldUseGoogleRedirect() {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  const isMobile = /android|iphone|ipad|ipod|mobile/.test(userAgent);
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+
+  return isMobile || isStandalone;
+}
+
 export function AuthPanel({ mode }: Readonly<{ mode: AuthMode }>) {
   const router = useRouter();
   const copy = authCopy[mode];
@@ -106,6 +116,64 @@ export function AuthPanel({ mode }: Readonly<{ mode: AuthMode }>) {
       label: "Remembered it?",
       href: "/auth/login",
       text: "Back to sign in",
+    };
+  }, [mode]);
+
+  async function completeGoogleLogin(userCredential: Awaited<ReturnType<typeof signInWithPopup>>) {
+    const profileReference = doc(firebaseDb, "users", userCredential.user.uid);
+    const profileSnapshot = await getDoc(profileReference);
+
+    if (!profileSnapshot.exists()) {
+      await setDoc(profileReference, {
+        ...emptyInvestorProfile,
+        uid: userCredential.user.uid,
+        name: userCredential.user.displayName ?? "",
+        email: userCredential.user.email ?? "",
+        tier: "free",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      router.push("/profile/edit");
+      return;
+    }
+
+    router.push("/dashboard");
+  }
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function handleRedirectResult() {
+      try {
+        const userCredential = await getRedirectResult(firebaseAuth);
+
+        if (!userCredential || !isMounted) {
+          return;
+        }
+
+        setIsSubmitting(true);
+        await completeGoogleLogin(userCredential);
+      } catch (redirectError) {
+        if (!isMounted) {
+          return;
+        }
+
+        const message = getAuthErrorMessage(redirectError);
+        setError(message);
+        showError(message);
+      } finally {
+        if (isMounted) {
+          setIsSubmitting(false);
+        }
+      }
+    }
+
+    if (mode !== "forgot") {
+      void handleRedirectResult();
+    }
+
+    return () => {
+      isMounted = false;
     };
   }, [mode]);
 
@@ -170,28 +238,16 @@ export function AuthPanel({ mode }: Readonly<{ mode: AuthMode }>) {
     setIsSubmitting(true);
 
     try {
+      if (shouldUseGoogleRedirect()) {
+        await signInWithRedirect(firebaseAuth, googleAuthProvider);
+        return;
+      }
+
       const userCredential = await signInWithPopup(
         firebaseAuth,
         googleAuthProvider,
       );
-      const profileReference = doc(firebaseDb, "users", userCredential.user.uid);
-      const profileSnapshot = await getDoc(profileReference);
-
-      if (!profileSnapshot.exists()) {
-        await setDoc(profileReference, {
-          ...emptyInvestorProfile,
-          uid: userCredential.user.uid,
-          name: userCredential.user.displayName ?? "",
-          email: userCredential.user.email ?? "",
-          tier: "free",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        router.push("/profile/edit");
-        return;
-      }
-
-      router.push("/dashboard");
+      await completeGoogleLogin(userCredential);
     } catch (authError) {
       const message = getAuthErrorMessage(authError);
       setError(message);

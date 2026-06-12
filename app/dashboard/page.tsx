@@ -1,21 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AuthGuard } from "./auth-guard";
-
-const navItems = [
-  ["Dashboard", "D"],
-  ["What Matters Now", "W"],
-  ["Earnings Hub", "E"],
-  ["Market Movers", "M"],
-  ["Analyst Actions", "A"],
-  ["13F Intelligence", "13"],
-  ["Portfolio Pulse", "P"],
-  ["AI Copilot", "AI"],
-  ["Alerts", "!"],
-  ["Watchlists", "*"],
-  ["Macro Calendar", "C"],
-  ["Reports", "R"],
-];
+import { menuItems } from "./menu-items";
 
 const indices = [
   { name: "S&P 500", value: "5,312.08", change: "+0.73%", good: true },
@@ -228,15 +214,15 @@ export default function Home() {
           </div>
 
           <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-            {navItems.map(([label], index) => (
+            {menuItems.map(({ label, slug }, index) => (
               <a
                 className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium ${
                   index === 0
                     ? "bg-[#e8f3ef] text-[#1f5f50]"
                     : "text-[#22332b] hover:bg-[#eef3f0]"
                 }`}
-                href="#"
-                key={label}
+                href={slug === "dashboard" ? "/dashboard" : `/menu/${slug}`}
+                key={slug}
               >
                 <span
                   className={`grid size-7 place-items-center rounded-md border ${
