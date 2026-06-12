@@ -11,13 +11,24 @@ export function SignOutButton() {
 
   async function handleSignOut() {
     setIsSigningOut(true);
-    await signOut(firebaseAuth);
-    router.replace("/auth/login");
+
+    try {
+      await signOut(firebaseAuth);
+      router.replace("/auth/login");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to sign out. Please try again.";
+      window.alert(message);
+    } finally {
+      setIsSigningOut(false);
+    }
   }
 
   return (
     <button
-      className="h-10 rounded-md border border-[#e4e6ef] px-4 text-sm font-black text-[#4b46e8] transition hover:bg-[#f2f1ff] disabled:cursor-not-allowed disabled:opacity-60"
+      className="h-10 rounded-md border border-[#d6dfd9] px-4 text-sm font-semibold text-[#1f5f50] transition hover:bg-[#eef6f3] disabled:cursor-not-allowed disabled:opacity-60"
       disabled={isSigningOut}
       onClick={handleSignOut}
       type="button"

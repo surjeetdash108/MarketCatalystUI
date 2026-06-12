@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AuthGuard } from "./auth-guard";
-import { SignOutButton } from "./sign-out-button";
 
 const navItems = [
   ["Dashboard", "D"],
@@ -71,7 +70,7 @@ const watchlist = [
 const macro = [
   ["10Y Yield", "4.32%", "-0.04%", false],
   ["WTI Oil", "78.64", "-1.21%", false],
-  ["Gold", "2,344.10", "+0.31%", true],
+  ["Gold", "2344.10", "+0.31%", true],
   ["USD Index", "104.21", "+0.12%", true],
 ];
 
@@ -99,7 +98,7 @@ function Card({
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
   return (
     <section
-      className={`rounded-lg border border-[#e8e9f1] bg-white shadow-[0_8px_24px_rgba(30,41,59,0.04)] ${className}`}
+      className={`rounded-md border border-[#dde5df] bg-white shadow-sm shadow-slate-200/40 ${className}`}
     >
       {children}
     </section>
@@ -111,11 +110,13 @@ function CardHeader({
   action,
 }: Readonly<{ title: string; action?: string }>) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-[#eff0f6] px-4 py-3">
-      <h2 className="text-sm font-bold uppercase text-[#151827]">{title}</h2>
+    <div className="flex items-center justify-between gap-4 border-b border-[#e5ebe7] px-4 py-3">
+      <h2 className="text-sm font-semibold uppercase tracking-[0.04em] text-[#17231d]">
+        {title}
+      </h2>
       {action ? (
-        <a className="text-xs font-semibold text-[#5146d8]" href="#">
-          {action} -&gt;
+        <a className="text-xs font-semibold text-[#166052]" href="#">
+          {action} &gt;
         </a>
       ) : null}
     </div>
@@ -138,31 +139,73 @@ function MiniSparkline({ positive = true }: Readonly<{ positive?: boolean }>) {
   );
 }
 
+function NavIcon({ label }: Readonly<{ label: string }>) {
+  const paths: Record<string, React.ReactNode> = {
+    Dashboard: (
+      <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9.5Z" />
+    ),
+    "What Matters Now": <path d="M13 2 4 14h7l-1 8 10-13h-7l1-7Z" />,
+    "Earnings Hub": <path d="M4 5h16v14H4V5Zm4 4h8M8 13h5" />,
+    "Market Movers": <path d="M4 17 9 12l4 4 7-9M15 7h5v5" />,
+    "Analyst Actions": <path d="M5 19V5m0 14h14M8 15l3-4 3 2 4-6" />,
+    "13F Intelligence": <path d="M6 4h9l3 3v13H6V4Zm8 0v4h4M9 12h6M9 16h6" />,
+    "Portfolio Pulse": <path d="M4 7h16v11H4V7Zm4 11V7m8 11V7" />,
+    "AI Copilot": <path d="M12 3l2.2 5.2L20 10l-5.8 1.8L12 17l-2.2-5.2L4 10l5.8-1.8L12 3Z" />,
+    Alerts: <path d="M6 17h12l-1.5-2v-4.5a4.5 4.5 0 0 0-9 0V15L6 17Zm4 3h4" />,
+    Watchlists: <path d="m12 4 2.4 5 5.6.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.6-.8L12 4Z" />,
+    "Macro Calendar": <path d="M5 5h14v15H5V5Zm0 5h14M8 3v4m8-4v4" />,
+    Reports: <path d="M6 4h12v16H6V4Zm3 5h6M9 13h6M9 17h4" />,
+    "Dark Mode": <path d="M21 14.5A7.5 7.5 0 0 1 9.5 3 8.5 8.5 0 1 0 21 14.5Z" />,
+    "Help & Support": <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-6v.01M9.8 9a2.2 2.2 0 1 1 3.4 1.85c-.78.52-1.2.95-1.2 1.9" />,
+    Settings: <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0-12v2m0 13v2m8.5-8.5h-2m-13 0h-2m14.6-6.1-1.4 1.4M6.8 17.2l-1.4 1.4m0-12.7 1.4 1.4m10.4 10.4 1.4 1.4" />,
+  };
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      {paths[label] ?? <path d="M5 12h14" />}
+    </svg>
+  );
+}
+
 export default function Home() {
   return (
     <AuthGuard>
-      <main className="relative min-h-screen bg-[#f7f7fb] text-[#161925]">
-      <div className="absolute right-4 top-4 z-20 sm:right-6">
-        <SignOutButton />
-      </div>
-      <div className="mx-auto flex max-w-[1500px]">
-        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 overflow-hidden border-r border-[#ececf4] bg-white px-5 py-5 lg:flex lg:flex-col">
+      <main className="relative min-h-screen bg-[#f4f6f8] text-[#17231d]">
+      <div className="mx-auto flex max-w-[1520px]">
+        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 overflow-hidden border-r border-[#dde5df] bg-white px-4 py-4 lg:flex lg:flex-col">
           <div className="mb-5 flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-lg bg-[#4b46e8] text-lg font-black text-white shadow-lg shadow-indigo-200">
+            <div className="grid size-10 place-items-center rounded-md bg-[#1f5f50] text-base font-bold text-white shadow-sm shadow-emerald-100">
               26
             </div>
             <div>
-              <p className="text-xl font-bold leading-none">finapp26</p>
+              <p className="text-lg font-semibold leading-none">finapp26</p>
               <p className="mt-1 text-xs font-medium text-[#7b8090]">
                 Investor Intelligence
               </p>
             </div>
           </div>
 
-          <div className="relative mb-6 rounded-lg border border-[#e8e9f1] bg-[#fbfbfe] p-4 text-center">
+          <div className="relative mb-5 rounded-md border border-[#dde5df] bg-[#fbfcfb] p-4 text-center">
+            <Link
+              aria-label="Profile settings"
+              className="absolute left-3 top-3 grid size-8 place-items-center rounded-md border border-[#d6dfd9] bg-white text-sm font-semibold text-[#166052] transition hover:bg-[#eef6f3]"
+              href="/settings"
+              title="Profile settings"
+            >
+              ⚙
+            </Link>
             <Link
               aria-label="Edit profile"
-              className="absolute right-3 top-3 grid size-8 place-items-center rounded-md border border-[#dfe2ec] bg-white text-sm font-black text-[#5146d8] transition hover:bg-[#f2f1ff]"
+              className="absolute right-3 top-3 grid size-8 place-items-center rounded-md border border-[#d6dfd9] bg-white text-sm font-semibold text-[#166052] transition hover:bg-[#eef6f3]"
               href="/profile/edit"
               title="Edit profile"
             >
@@ -170,43 +213,43 @@ export default function Home() {
             </Link>
             <Image
               alt="Arjun Investor profile photo"
-              className="mx-auto rounded-full border-4 border-white shadow-md shadow-indigo-100"
+              className="mx-auto rounded-full border-4 border-white shadow-sm shadow-emerald-100"
               height={72}
               src="/profile-avatar.svg"
               width={72}
             />
-            <p className="mt-3 text-sm font-black">Arjun Investor</p>
-            <p className="mt-1 text-xs font-semibold text-[#777d8d]">
+            <p className="mt-3 text-sm font-semibold">Arjun Investor</p>
+            <p className="mt-1 text-xs font-semibold text-[#66756d]">
               Premium Plan
             </p>
-            <button className="mt-3 h-9 w-full rounded-md bg-[#f0efff] text-xs font-bold text-[#5146d8]">
+            <button className="mt-3 h-9 w-full rounded-md bg-[#e8f3ef] text-xs font-semibold text-[#166052]">
               Manage Plan
             </button>
           </div>
 
           <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-            {navItems.map(([label, icon], index) => (
+            {navItems.map(([label], index) => (
               <a
-                className={`flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold ${
+                className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium ${
                   index === 0
-                    ? "bg-[#eeedff] text-[#4b46e8]"
-                    : "text-[#303442] hover:bg-[#f3f4f8]"
+                    ? "bg-[#e8f3ef] text-[#1f5f50]"
+                    : "text-[#22332b] hover:bg-[#eef3f0]"
                 }`}
                 href="#"
                 key={label}
               >
                 <span
-                  className={`grid size-6 place-items-center rounded border text-[10px] font-bold ${
+                  className={`grid size-7 place-items-center rounded-md border ${
                     index === 0
-                      ? "border-[#4b46e8] bg-[#4b46e8] text-white"
-                      : "border-[#c9ccd8] text-[#6c7280]"
+                      ? "border-[#1f5f50] bg-[#1f5f50] text-white"
+                      : "border-[#cad6cf] text-[#66756d]"
                   }`}
                 >
-                  {icon}
+                  <NavIcon label={label} />
                 </span>
                 <span className="min-w-0 flex-1 truncate">{label}</span>
                 {label === "AI Copilot" ? (
-                  <span className="rounded bg-[#3f35d8] px-2 py-1 text-[10px] text-white">
+                  <span className="rounded bg-[#166052] px-2 py-1 text-[10px] text-white">
                     NEW
                   </span>
                 ) : null}
@@ -214,15 +257,15 @@ export default function Home() {
             ))}
           </nav>
 
-          <div className="mt-4 shrink-0 space-y-2 border-t border-[#eeeeF5] pt-4">
+          <div className="mt-4 shrink-0 space-y-1 border-t border-[#e5ebe7] pt-4">
             {["Dark Mode", "Help & Support", "Settings"].map((item) => (
               <a
-                className="flex h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold text-[#3c4050] hover:bg-[#f3f4f8]"
-                href="#"
+                className="flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-[#33453c] hover:bg-[#eef3f0]"
+                href={item === "Settings" ? "/settings" : "#"}
                 key={item}
               >
-                <span className="grid size-6 place-items-center rounded border border-[#c9ccd8] text-[11px] text-[#6c7280]">
-                  {item.charAt(0)}
+                <span className="grid size-7 place-items-center rounded-md border border-[#cad6cf] text-[#66756d]">
+                  <NavIcon label={item} />
                 </span>
                 {item}
               </a>
@@ -230,18 +273,18 @@ export default function Home() {
           </div>
         </aside>
 
-        <div className="min-w-0 flex-1 px-4 pb-4 pt-16 sm:px-6 lg:px-7">
-          <header className="mb-5 flex flex-col gap-4 rounded-lg border border-[#ececf4] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(30,41,59,0.03)] xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-7">
+          <header className="mb-5 flex flex-col gap-4 rounded-md border border-[#dde5df] bg-white px-4 py-3 shadow-sm shadow-slate-200/40 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-3 lg:hidden">
-              <div className="grid size-10 place-items-center rounded-lg bg-[#4b46e8] font-black text-white">
+              <div className="grid size-10 place-items-center rounded-lg bg-[#1f5f50] font-black text-white">
                 26
               </div>
               <div>
                 <p className="font-bold">finapp26</p>
-                <p className="text-xs text-[#747a89]">Investor Intelligence</p>
+                <p className="text-xs text-[#66756d]">Investor Intelligence</p>
               </div>
             </div>
-            <label className="flex h-11 w-full max-w-xl items-center gap-3 rounded-lg border border-[#e4e6ef] bg-[#fbfbfd] px-4 text-sm text-[#8b91a1]">
+            <label className="flex h-11 w-full max-w-xl items-center gap-3 rounded-md border border-[#d6dfd9] bg-[#fbfcfb] px-4 text-sm text-[#7a8981]">
               <span className="text-lg leading-none">⌕</span>
               <input
                 className="min-w-0 flex-1 bg-transparent outline-none"
@@ -252,7 +295,7 @@ export default function Home() {
             <div className="flex flex-wrap items-center gap-5">
               {indices.map((index) => (
                 <div key={index.name}>
-                  <p className="text-xs font-bold uppercase text-[#767c8c]">
+                  <p className="text-xs font-bold uppercase text-[#66756d]">
                     {index.name}
                   </p>
                   <p className="mt-1 text-sm font-bold">
@@ -267,10 +310,10 @@ export default function Home() {
                   </p>
                 </div>
               ))}
-              <button className="grid size-10 place-items-center rounded-full border border-[#e4e6ef] text-xl">
+              <button className="grid size-10 place-items-center rounded-full border border-[#d6dfd9] text-xl">
                 !
               </button>
-              <div className="grid size-11 place-items-center rounded-full bg-[#e7efff] text-sm font-bold text-[#2d4588]">
+              <div className="grid size-11 place-items-center rounded-full bg-[#e8f3ef] text-sm font-bold text-[#17463d]">
                 AI
               </div>
             </div>
@@ -295,7 +338,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <div className="border-y border-[#eff0f6] py-4 xl:border-x xl:border-y-0 xl:px-6 xl:py-0">
+              <div className="border-y border-[#e5ebe7] py-4 xl:border-x xl:border-y-0 xl:px-6 xl:py-0">
                 <p className="text-xs font-black uppercase text-emerald-700">
                   Why it matters
                 </p>
@@ -303,8 +346,8 @@ export default function Home() {
                   Stronger AI demand drove data center revenue higher. Guidance
                   raised; management sees sustained momentum into 2025.
                 </p>
-                <button className="mt-5 rounded-md bg-[#eeedff] px-4 py-2 text-sm font-bold text-[#5146d8]">
-                  Read 30-sec AI Summary -&gt;
+                <button className="mt-5 rounded-md bg-[#e8f3ef] px-4 py-2 text-sm font-bold text-[#166052]">
+                  Read 30-sec AI Summary &gt;
                 </button>
               </div>
               <div>
@@ -323,19 +366,19 @@ export default function Home() {
                     ),
                   )}
                 </div>
-                <a className="mt-6 block text-sm font-bold text-[#5146d8]" href="#">
-                  See full impact -&gt;
+                <a className="mt-6 block text-sm font-bold text-[#166052]" href="#">
+                  See full impact &gt;
                 </a>
               </div>
             </div>
-            <div className="grid gap-3 border-t border-[#eff0f6] p-4 md:grid-cols-3">
+            <div className="grid gap-3 border-t border-[#e5ebe7] p-4 md:grid-cols-3">
               {[
                 "EPS beat by 18% ($0.81 vs $0.69 est.)",
                 "Revenue beat by 15% ($26.08 vs $22.68 est.)",
                 "Raised FY25 guidance for Data Center growth",
               ].map((item) => (
                 <div
-                  className="rounded-md border border-[#eff0f6] bg-[#fcfcfe] p-3 text-sm font-semibold"
+                  className="rounded-md border border-[#e5ebe7] bg-[#fcfcfe] p-3 text-sm font-semibold"
                   key={item}
                 >
                   <span className="mr-2 inline-grid size-5 place-items-center rounded-full bg-emerald-600 text-xs text-white">
@@ -352,7 +395,7 @@ export default function Home() {
               <CardHeader title="Earnings Calendar" action="View all" />
               <div className="px-4 py-3">
                 <div className="mb-3 flex gap-6 text-xs font-bold">
-                  <span className="border-b-2 border-[#5146d8] pb-2 text-[#5146d8]">
+                  <span className="border-b-2 border-[#166052] pb-2 text-[#166052]">
                     Today (Thu, May 16)
                   </span>
                   <span>Tomorrow</span>
@@ -366,7 +409,7 @@ export default function Home() {
                       </span>
                       <div>
                         <span className="font-black">{symbol}</span>
-                        <span className="ml-3 text-xs text-[#666d7d]">{name}</span>
+                        <span className="ml-3 text-xs text-[#52645b]">{name}</span>
                       </div>
                       <span className="text-xs font-semibold text-[#555d6e]">
                         {time}
@@ -385,8 +428,8 @@ export default function Home() {
                     <span
                       className={`rounded-md px-3 py-2 ${
                         index === 0
-                          ? "bg-[#eeedff] text-[#5146d8]"
-                          : "bg-[#f6f7fb] text-[#4c5261]"
+                          ? "bg-[#e8f3ef] text-[#166052]"
+                          : "bg-[#f4f6f8] text-[#4c5261]"
                       }`}
                       key={tab}
                     >
@@ -403,7 +446,7 @@ export default function Home() {
                       </span>
                       <div>
                         <span className="font-black">{symbol}</span>
-                        <span className="ml-3 text-xs text-[#666d7d]">{name}</span>
+                        <span className="ml-3 text-xs text-[#52645b]">{name}</span>
                       </div>
                       <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-600">
                         {change}
@@ -433,11 +476,11 @@ export default function Home() {
               <div className="p-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-[#737988]">Total Value</p>
+                    <p className="text-xs text-[#66756d]">Total Value</p>
                     <p className="mt-1 text-2xl font-black">$128,430</p>
                   </div>
                   <div>
-                    <p className="text-xs text-[#737988]">Day Change</p>
+                    <p className="text-xs text-[#66756d]">Day Change</p>
                     <p className="mt-1 text-xl font-black text-emerald-600">
                       +1.42% <span className="text-sm">($1,798)</span>
                     </p>
@@ -447,7 +490,7 @@ export default function Home() {
                   {["Holdings 12", "Earnings 3", "Alerts 5", "Risk 2"].map(
                     (stat) => (
                       <div key={stat}>
-                        <p className="text-[#737988]">{stat.split(" ")[0]}</p>
+                        <p className="text-[#66756d]">{stat.split(" ")[0]}</p>
                         <p className="mt-1 font-black">{stat.split(" ")[1]}</p>
                       </div>
                     ),
@@ -462,7 +505,7 @@ export default function Home() {
                   ))}
                 </div>
                 <div className="mt-4 flex gap-4 text-xs font-bold text-[#555d6e]">
-                  <span className="rounded bg-[#4b46e8] px-3 py-1.5 text-white">
+                  <span className="rounded bg-[#1f5f50] px-3 py-1.5 text-white">
                     1D
                   </span>
                   <span>1W</span>
@@ -486,13 +529,13 @@ export default function Home() {
                   "VIX declined to 14.18.",
                 ].map((item) => (
                   <p className="flex gap-3" key={item}>
-                    <span className="mt-1 grid size-5 shrink-0 place-items-center rounded-full bg-[#eeedff] text-[10px] font-black text-[#5146d8]">
+                    <span className="mt-1 grid size-5 shrink-0 place-items-center rounded-full bg-[#e8f3ef] text-[10px] font-black text-[#166052]">
                       i
                     </span>
                     {item}
                   </p>
                 ))}
-                <p className="pt-2 text-xs font-semibold text-[#767c8c]">
+                <p className="pt-2 text-xs font-semibold text-[#66756d]">
                   AI-generated summary • 9:15 AM ET
                 </p>
               </div>
@@ -500,16 +543,16 @@ export default function Home() {
 
             <Card>
               <CardHeader title="Fear & Greed Index" action="View history" />
-              <div className="grid place-items-center p-6 text-center">
-                <div className="relative h-28 w-56 overflow-hidden">
+              <div className="grid place-items-center px-6 pb-7 pt-5 text-center">
+                <div className="relative h-24 w-56 overflow-hidden">
                   <div className="absolute inset-0 rounded-t-full bg-[conic-gradient(from_270deg_at_50%_100%,#ef4444_0deg,#f59e0b_60deg,#facc15_95deg,#22c55e_150deg,#22c55e_180deg,transparent_180deg)]" />
-                  <div className="absolute bottom-0 left-1/2 h-24 w-48 -translate-x-1/2 rounded-t-full bg-white" />
-                  <div className="absolute bottom-2 left-1/2 h-20 w-1 origin-bottom rotate-[28deg] rounded-full bg-[#151827]" />
-                  <div className="absolute bottom-0 left-1/2 size-5 -translate-x-1/2 rounded-full bg-[#151827]" />
+                  <div className="absolute bottom-0 left-1/2 h-20 w-48 -translate-x-1/2 rounded-t-full bg-white" />
+                  <div className="absolute bottom-2 left-1/2 h-16 w-1 origin-bottom rotate-[28deg] rounded-full bg-[#17231d]" />
+                  <div className="absolute bottom-0 left-1/2 size-5 -translate-x-1/2 rounded-full bg-[#17231d]" />
                 </div>
-                <p className="-mt-3 text-5xl font-black">62</p>
-                <p className="mt-1 text-lg font-black text-emerald-600">Greed</p>
-                <p className="mt-2 text-xs text-[#737988]">Previous Close: 58</p>
+                <p className="mt-1 text-5xl font-semibold leading-none">62</p>
+                <p className="mt-2 text-lg font-semibold leading-6 text-emerald-600">Greed</p>
+                <p className="mt-2 text-xs text-[#66756d]">Previous Close: 58</p>
               </div>
             </Card>
 
@@ -517,9 +560,9 @@ export default function Home() {
               <CardHeader title="Story Stocks" action="View all" />
               <div className="grid gap-3 p-4 sm:grid-cols-3">
                 {storyStocks.map(([symbol, headline, detail, tone]) => (
-                  <div className="rounded-md border border-[#eceef6] bg-[#fbfbfe] p-3" key={symbol}>
+                  <div className="rounded-md border border-[#e5ebe7] bg-[#fbfcfb] p-3" key={symbol}>
                     <p className={`text-lg font-black ${tone}`}>{symbol}</p>
-                    <p className="mt-2 text-sm font-bold">{headline}</p>
+                    <p className="mt-2 text-xs font-semibold">{headline}</p>
                     <p className="mt-2 text-xs text-[#606778]">{detail}</p>
                   </div>
                 ))}
@@ -576,21 +619,21 @@ export default function Home() {
                     "Analyze my portfolio risk",
                   ].map((prompt) => (
                     <button
-                      className="rounded-md bg-[#f2f1ff] px-4 py-2 text-sm font-semibold text-[#5146d8]"
+                      className="rounded-md bg-[#eef6f3] px-4 py-2 text-sm font-semibold text-[#166052]"
                       key={prompt}
                     >
                       {prompt}
                     </button>
                   ))}
                 </div>
-                <label className="mt-5 flex h-12 items-center gap-3 rounded-lg border border-[#e4e6ef] bg-white px-4">
+                <label className="mt-5 flex h-12 items-center gap-3 rounded-lg border border-[#d6dfd9] bg-white px-4">
                   <input
                     className="min-w-0 flex-1 text-sm outline-none"
                     placeholder="Ask your question..."
                     type="text"
                   />
-                  <button className="grid size-9 place-items-center rounded-full bg-[#4b46e8] text-sm font-black text-white">
-                    -&gt;
+                  <button className="grid size-9 place-items-center rounded-full bg-[#1f5f50] text-sm font-black text-white">
+                    &gt;
                   </button>
                 </label>
               </div>
@@ -598,14 +641,14 @@ export default function Home() {
 
             <Card>
               <CardHeader title="Macro Snapshot" />
-              <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-4">
                 {macro.map(([label, value, change, positive]) => (
                   <div
-                    className="rounded-md border border-[#eceef6] bg-[#fbfbfe] p-4"
+                    className="min-w-0 rounded-md border border-[#e5ebe7] bg-[#fbfcfb] p-3"
                     key={String(label)}
                   >
-                    <p className="text-xs font-bold text-[#505767]">{label}</p>
-                    <p className="mt-4 text-2xl font-black">{value}</p>
+                    <p className="truncate text-[11px] font-semibold text-[#505767]">{label}</p>
+                    <p className="mt-3 truncate text-base font-semibold leading-none">{value}</p>
                     <p
                       className={`mt-2 text-sm font-bold ${
                         positive ? "text-emerald-600" : "text-rose-500"
