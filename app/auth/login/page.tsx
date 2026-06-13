@@ -1,5 +1,10 @@
-import { AuthPanel } from "../auth-panel";
+import { AuthLayout } from "../auth-layout";
+import { LoginForm } from "./login-form";
 
 export default function LoginPage() {
-  return <AuthPanel mode="login" />;
+  return (
+    <AuthLayout>
+      <LoginForm />
+    </AuthLayout>
+  );
 }

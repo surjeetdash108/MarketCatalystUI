@@ -1,5 +1,10 @@
-import { AuthPanel } from "../auth-panel";
+import { AuthLayout } from "../auth-layout";
+import { SignupForm } from "./signup-form";
 
 export default function SignupPage() {
-  return <AuthPanel mode="signup" />;
+  return (
+    <AuthLayout wide>
+      <SignupForm />
+    </AuthLayout>
+  );
 }

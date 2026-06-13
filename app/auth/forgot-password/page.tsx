@@ -1,5 +1,10 @@
-import { AuthPanel } from "../auth-panel";
+import { AuthLayout } from "../auth-layout";
+import { ForgotForm } from "./forgot-form";
 
 export default function ForgotPasswordPage() {
-  return <AuthPanel mode="forgot" />;
+  return (
+    <AuthLayout>
+      <ForgotForm />
+    </AuthLayout>
+  );
 }

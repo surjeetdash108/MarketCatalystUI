@@ -1,93 +1,62 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { FirebaseError } from "firebase/app";
-import { onAuthStateChanged, updateProfile } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { updateProfile } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { firebaseAuth, firebaseDb } from "../../firebase";
-import {
-  InvestorProfile,
-  ProfileFields,
-  emptyInvestorProfile,
-} from "../profile-fields";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { updateProfileData } from "../../store/profile-slice";
+import { InvestorProfile, ProfileFields, emptyInvestorProfile } from "../profile-fields";
 
 function getSaveErrorMessage(error: unknown) {
-  if (error instanceof FirebaseError) {
-    return error.message;
-  }
-
+  if (error instanceof FirebaseError) return error.message;
   return "Unable to save profile. Please try again.";
 }
 
-function showError(message: string) {
-  window.alert(message);
-}
-
 export function ProfileEditForm() {
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((state) => state.auth);
+  const { data: savedProfile, status: profileStatus } = useAppSelector(
+    (state) => state.profile,
+  );
+
   const [profile, setProfile] = useState<InvestorProfile>(emptyInvestorProfile);
-  const [userId, setUserId] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Sync local form state from Redux whenever the stored profile loads or changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-      if (!user) {
-        return;
-      }
-
-      try {
-        setUserId(user.uid);
-
-        const profileSnapshot = await getDoc(doc(firebaseDb, "users", user.uid));
-        const savedProfile = profileSnapshot.exists()
-          ? (profileSnapshot.data() as Partial<InvestorProfile>)
-          : {};
-
-        setProfile({
-          ...emptyInvestorProfile,
-          ...savedProfile,
-          name: savedProfile.name ?? user.displayName ?? "",
-          email: user.email ?? savedProfile.email ?? "",
-          preferredAssetClasses: savedProfile.preferredAssetClasses ?? [],
-        });
-      } catch (loadError) {
-        const message = getSaveErrorMessage(loadError);
-        setError(message);
-        showError(message);
-      } finally {
-        setIsLoading(false);
-      }
-    });
-
-    return unsubscribe;
-  }, []);
+    if (savedProfile) {
+      setProfile({
+        ...emptyInvestorProfile,
+        ...savedProfile,
+        email: user?.email ?? savedProfile.email ?? "",
+      });
+    }
+  }, [savedProfile, user]);
 
   function handleProfileChange(
     field: keyof InvestorProfile,
     value: string | string[],
   ) {
-    setProfile((currentProfile) => ({
-      ...currentProfile,
-      [field]: value,
-    }));
+    setProfile((current) => ({ ...current, [field]: value }));
   }
 
   async function handleSave() {
-    if (!userId) {
+    if (!user?.uid) {
       const message = "Your session is not ready. Please sign in again.";
       setError(message);
-      showError(message);
+      window.alert(message);
       return;
     }
 
     if (profile.preferredAssetClasses.length === 0) {
       const message = "Select at least one preferred asset class.";
       setError(message);
-      showError(message);
+      window.alert(message);
       return;
     }
 
@@ -103,25 +72,31 @@ export function ProfileEditForm() {
       }
 
       await setDoc(
-        doc(firebaseDb, "users", userId),
-        {
-          ...profile,
-          updatedAt: serverTimestamp(),
-        },
+        doc(firebaseDb, "users", user.uid),
+        { ...profile, updatedAt: serverTimestamp() },
         { merge: true },
+      );
+
+      // Reflect changes immediately across the app without a Firestore re-read
+      dispatch(
+        updateProfileData({
+          ...profile,
+          uid: user.uid,
+          tier: savedProfile?.tier ?? "free",
+        }),
       );
 
       setSuccess("Profile updated successfully.");
     } catch (saveError) {
       const message = getSaveErrorMessage(saveError);
       setError(message);
-      showError(message);
+      window.alert(message);
     } finally {
       setIsSaving(false);
     }
   }
 
-  if (isLoading) {
+  if (profileStatus === "loading" || (profileStatus === "idle" && !savedProfile)) {
     return (
       <section className="rounded-md border border-[#dde5df] bg-white p-6 shadow-sm shadow-slate-200/50">
         <p className="text-sm font-semibold text-[#52645b]">
@@ -136,10 +111,8 @@ export function ProfileEditForm() {
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
         <img
           alt={`${profile.name || "Investor"} profile photo`}
-          className="rounded-full border-4 border-white shadow-sm shadow-emerald-100"
-          height={96}
+          className="size-24 rounded-full border-4 border-white object-cover shadow-sm shadow-emerald-100"
           src={profile.profile_image || "/profile-avatar.svg"}
-          width={96}
         />
         <div>
           <h2 className="text-xl font-semibold">
@@ -151,7 +124,10 @@ export function ProfileEditForm() {
         </div>
       </div>
 
-      <form className="mt-8 space-y-6" onSubmit={(event) => event.preventDefault()}>
+      <form
+        className="mt-8 space-y-6"
+        onSubmit={(event) => event.preventDefault()}
+      >
         <ProfileFields
           emailReadOnly
           onChange={handleProfileChange}

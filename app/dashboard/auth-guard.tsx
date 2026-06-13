@@ -1,49 +1,18 @@
 "use client";
 
-import { onAuthStateChanged } from "firebase/auth";
-import { ReactNode, useEffect, useState } from "react";
-import { firebaseAuth } from "../firebase";
+import { ReactNode, useEffect } from "react";
+import { useAppSelector } from "../store/hooks";
 
 export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
-  const [isChecking, setIsChecking] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, status } = useAppSelector((state) => state.auth);
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let cancelled = false;
+    if (status === "ready" && !user) {
+      window.location.href = "/auth/login";
+    }
+  }, [status, user]);
 
-    // authStateReady() resolves once Firebase has read the persisted session
-    // from IndexedDB. Without this, onAuthStateChanged can fire with null
-    // before the stored token is loaded, causing a spurious redirect to login.
-    void firebaseAuth.authStateReady().then(() => {
-      if (cancelled) return;
-
-      unsubscribe = onAuthStateChanged(
-        firebaseAuth,
-        (user) => {
-          if (user) {
-            setIsAuthenticated(true);
-          } else {
-            window.location.href = "/auth/login";
-          }
-          setIsChecking(false);
-        },
-        (error) => {
-          console.error("Auth state error:", error);
-          window.alert(error.message);
-          window.location.href = "/auth/login";
-          setIsChecking(false);
-        },
-      );
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, []);
-
-  if (isChecking) {
+  if (status === "loading") {
     return (
       <main className="grid min-h-screen place-items-center bg-[#f4f6f8] text-[#17231d]">
         <div className="rounded-lg border border-[#dde5df] bg-white px-6 py-5 text-center shadow-[0_24px_80px_rgba(35,38,75,0.08)]">
@@ -56,9 +25,7 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!user) return null;
 
   return children;
 }

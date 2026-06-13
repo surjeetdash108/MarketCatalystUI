@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { firebaseAuth, firebaseDb } from "../firebase";
+import { useAppSelector } from "../store/hooks";
 import { menuItems } from "./menu-items";
 
 function NavIcon({ label }: Readonly<{ label: string }>) {
@@ -18,14 +15,24 @@ function NavIcon({ label }: Readonly<{ label: string }>) {
     "Analyst Actions": <path d="M5 19V5m0 14h14M8 15l3-4 3 2 4-6" />,
     "13F Intelligence": <path d="M6 4h9l3 3v13H6V4Zm8 0v4h4M9 12h6M9 16h6" />,
     "Portfolio Pulse": <path d="M4 7h16v11H4V7Zm4 11V7m8 11V7" />,
-    "AI Copilot": <path d="M12 3l2.2 5.2L20 10l-5.8 1.8L12 17l-2.2-5.2L4 10l5.8-1.8L12 3Z" />,
-    Alerts: <path d="M6 17h12l-1.5-2v-4.5a4.5 4.5 0 0 0-9 0V15L6 17Zm4 3h4" />,
-    Watchlists: <path d="m12 4 2.4 5 5.6.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.6-.8L12 4Z" />,
+    "AI Copilot": (
+      <path d="M12 3l2.2 5.2L20 10l-5.8 1.8L12 17l-2.2-5.2L4 10l5.8-1.8L12 3Z" />
+    ),
+    Alerts: (
+      <path d="M6 17h12l-1.5-2v-4.5a4.5 4.5 0 0 0-9 0V15L6 17Zm4 3h4" />
+    ),
+    Watchlists: (
+      <path d="m12 4 2.4 5 5.6.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.6-.8L12 4Z" />
+    ),
     "Macro Calendar": <path d="M5 5h14v15H5V5Zm0 5h14M8 3v4m8-4v4" />,
     Reports: <path d="M6 4h12v16H6V4Zm3 5h6M9 13h6M9 17h4" />,
     "Dark Mode": <path d="M21 14.5A7.5 7.5 0 0 1 9.5 3 8.5 8.5 0 1 0 21 14.5Z" />,
-    "Help & Support": <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-6v.01M9.8 9a2.2 2.2 0 1 1 3.4 1.85c-.78.52-1.2.95-1.2 1.9" />,
-    Settings: <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0-12v2m0 13v2m8.5-8.5h-2m-13 0h-2m14.6-6.1-1.4 1.4M6.8 17.2l-1.4 1.4m0-12.7 1.4 1.4m10.4 10.4 1.4 1.4" />,
+    "Help & Support": (
+      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-6v.01M9.8 9a2.2 2.2 0 1 1 3.4 1.85c-.78.52-1.2.95-1.2 1.9" />
+    ),
+    Settings: (
+      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0-12v2m0 13v2m8.5-8.5h-2m-13 0h-2m14.6-6.1-1.4 1.4M6.8 17.2l-1.4 1.4m0-12.7 1.4 1.4m10.4 10.4 1.4 1.4" />
+    ),
   };
 
   return (
@@ -49,27 +56,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentSlug }: Readonly<SidebarProps>) {
-  const [user, setUser] = useState<User | null>(null);
-  const [profileImage, setProfileImage] = useState("");
+  const { user } = useAppSelector((state) => state.auth);
+  const { data: profile } = useAppSelector((state) => state.profile);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, async (u) => {
-      setUser(u);
-      if (!u) { setProfileImage(""); return; }
-      try {
-        const snap = await getDoc(doc(firebaseDb, "users", u.uid));
-        const img = snap.exists()
-          ? (snap.data() as { profile_image?: string }).profile_image ?? ""
-          : "";
-        setProfileImage(img || u.photoURL || "");
-      } catch {
-        setProfileImage(u.photoURL || "");
-      }
-    });
-    return unsubscribe;
-  }, []);
-
-  const displayName = user?.displayName ?? user?.email ?? "User";
+  const displayName = profile?.name ?? user?.displayName ?? user?.email ?? "User";
+  const email = user?.email ?? "";
+  const profileImage =
+    profile?.profile_image || user?.photoURL || "/profile-avatar.svg";
 
   return (
     <aside className="sticky top-0 hidden h-screen w-72 shrink-0 overflow-hidden border-r border-[#dde5df] bg-white px-4 py-4 lg:flex lg:flex-col">
@@ -105,19 +98,17 @@ export function Sidebar({ currentSlug }: Readonly<SidebarProps>) {
         <img
           alt={`${displayName} profile photo`}
           className="mx-auto size-[72px] rounded-full border-4 border-white object-cover shadow-sm shadow-emerald-100"
-          src={profileImage || "/profile-avatar.svg"}
+          src={profileImage}
         />
         <p className="mt-3 text-sm font-semibold">{displayName}</p>
-        <p className="mt-1 text-xs font-semibold text-[#66756d]">
-          {user?.email ?? ""}
-        </p>
+        <p className="mt-1 text-xs font-semibold text-[#66756d]">{email}</p>
         <button className="mt-3 h-9 w-full rounded-md bg-[#e8f3ef] text-xs font-semibold text-[#166052]">
           Manage Plan
         </button>
       </div>
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-        {menuItems.map(({ label, slug }, index) => {
+        {menuItems.map(({ label, slug }) => {
           const isActive = currentSlug === slug;
           return (
             <a

@@ -1,27 +1,23 @@
 "use client";
 
 import { signOut } from "firebase/auth";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { firebaseAuth } from "../firebase";
 
 export function SignOutButton() {
-  const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   async function handleSignOut() {
     setIsSigningOut(true);
-
     try {
       await signOut(firebaseAuth);
-      router.replace("/auth/login");
+      window.location.href = "/auth/login";
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "Unable to sign out. Please try again.";
       window.alert(message);
-    } finally {
       setIsSigningOut(false);
     }
   }

@@ -1,40 +1,20 @@
 "use client";
 
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { firebaseAuth, firebaseDb } from "../firebase";
+import { useAppSelector } from "../store/hooks";
 
 interface UserAvatarProps {
   className?: string;
 }
 
-export function UserAvatar({ className = "size-11 rounded-full object-cover" }: Readonly<UserAvatarProps>) {
-  const [src, setSrc] = useState("/profile-avatar.svg");
-  const [name, setName] = useState("User");
+export function UserAvatar({
+  className = "size-11 rounded-full object-cover",
+}: Readonly<UserAvatarProps>) {
+  const { user } = useAppSelector((state) => state.auth);
+  const { data: profile } = useAppSelector((state) => state.profile);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-      if (!user) return;
-      setName(user.displayName ?? user.email ?? "User");
-      try {
-        const snap = await getDoc(doc(firebaseDb, "users", user.uid));
-        const img = snap.exists()
-          ? (snap.data() as { profile_image?: string }).profile_image ?? ""
-          : "";
-        setSrc(img || user.photoURL || "/profile-avatar.svg");
-      } catch {
-        setSrc(user.photoURL || "/profile-avatar.svg");
-      }
-    });
-    return unsubscribe;
-  }, []);
+  const src =
+    profile?.profile_image || user?.photoURL || "/profile-avatar.svg";
+  const name = profile?.name ?? user?.displayName ?? user?.email ?? "User";
 
-  return (
-    <img
-      alt={`${name} profile photo`}
-      className={className}
-      src={src}
-    />
-  );
+  return <img alt={`${name} profile photo`} className={className} src={src} />;
 }
