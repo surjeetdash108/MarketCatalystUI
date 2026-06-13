@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { FirebaseError } from "firebase/app";
 import {
@@ -86,7 +85,6 @@ function shouldUseGoogleRedirect() {
 }
 
 export function AuthPanel({ mode }: Readonly<{ mode: AuthMode }>) {
-  const router = useRouter();
   const copy = authCopy[mode];
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -133,44 +131,46 @@ export function AuthPanel({ mode }: Readonly<{ mode: AuthMode }>) {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      router.push("/profile/edit");
+      window.location.href = "/profile/edit";
       return;
     }
 
-    router.push("/dashboard");
+    window.location.href = "/dashboard";
   }
 
   useEffect(() => {
+    if (mode === "forgot") return;
+
     let isMounted = true;
 
-    async function handleRedirectResult() {
+    void (async () => {
       try {
+        // 1. Check for a pending Google redirect result first.
         const userCredential = await getRedirectResult(firebaseAuth);
+        if (!isMounted) return;
 
-        if (!userCredential || !isMounted) {
-          return;
+        if (userCredential) {
+          setIsSubmitting(true);
+          await completeGoogleLogin(userCredential);
+          return; // completeGoogleLogin handled navigation
         }
 
-        setIsSubmitting(true);
-        await completeGoogleLogin(userCredential);
-      } catch (redirectError) {
-        if (!isMounted) {
-          return;
+        // 2. No redirect — check if the user is already logged in and
+        //    send them straight to the dashboard.
+        await firebaseAuth.authStateReady();
+        if (!isMounted) return;
+        if (firebaseAuth.currentUser) {
+          window.location.href = "/dashboard";
         }
-
-        const message = getAuthErrorMessage(redirectError);
+      } catch (err) {
+        if (!isMounted) return;
+        const message = getAuthErrorMessage(err);
         setError(message);
         showError(message);
       } finally {
-        if (isMounted) {
-          setIsSubmitting(false);
-        }
+        if (isMounted) setIsSubmitting(false);
       }
-    }
-
-    if (mode !== "forgot") {
-      void handleRedirectResult();
-    }
+    })();
 
     return () => {
       isMounted = false;
@@ -186,7 +186,7 @@ export function AuthPanel({ mode }: Readonly<{ mode: AuthMode }>) {
     try {
       if (mode === "login") {
         await signInWithEmailAndPassword(firebaseAuth, email, password);
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
         return;
       }
 
@@ -217,7 +217,7 @@ export function AuthPanel({ mode }: Readonly<{ mode: AuthMode }>) {
           updatedAt: serverTimestamp(),
         });
 
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
         return;
       }
 
@@ -243,10 +243,7 @@ export function AuthPanel({ mode }: Readonly<{ mode: AuthMode }>) {
         return;
       }
 
-      const userCredential = await signInWithPopup(
-        firebaseAuth,
-        googleAuthProvider,
-      );
+      const userCredential = await signInWithPopup(firebaseAuth, googleAuthProvider);
       await completeGoogleLogin(userCredential);
     } catch (authError) {
       const message = getAuthErrorMessage(authError);

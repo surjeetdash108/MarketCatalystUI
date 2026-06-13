@@ -1,33 +1,47 @@
 "use client";
 
 import { onAuthStateChanged } from "firebase/auth";
-import { useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import { firebaseAuth } from "../firebase";
 
 export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
-  const router = useRouter();
   const [isChecking, setIsChecking] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      firebaseAuth,
-      (user) => {
-        if (!user) {
-          router.replace("/auth/login");
-          return;
-        }
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
 
-        setIsChecking(false);
-      },
-      (error) => {
-        window.alert(error.message);
-        router.replace("/auth/login");
-      },
-    );
+    // authStateReady() resolves once Firebase has read the persisted session
+    // from IndexedDB. Without this, onAuthStateChanged can fire with null
+    // before the stored token is loaded, causing a spurious redirect to login.
+    void firebaseAuth.authStateReady().then(() => {
+      if (cancelled) return;
 
-    return unsubscribe;
-  }, [router]);
+      unsubscribe = onAuthStateChanged(
+        firebaseAuth,
+        (user) => {
+          if (user) {
+            setIsAuthenticated(true);
+          } else {
+            window.location.href = "/auth/login";
+          }
+          setIsChecking(false);
+        },
+        (error) => {
+          console.error("Auth state error:", error);
+          window.alert(error.message);
+          window.location.href = "/auth/login";
+          setIsChecking(false);
+        },
+      );
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, []);
 
   if (isChecking) {
     return (
@@ -40,6 +54,10 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
         </div>
       </main>
     );
+  }
+
+  if (!isAuthenticated) {
+    return null;
   }
 
   return children;

@@ -134,7 +134,7 @@ export function ProfileEditForm() {
   return (
     <section className="rounded-md border border-[#dde5df] bg-white p-6 shadow-sm shadow-slate-200/50">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-        <Image
+        <img
           alt={`${profile.name || "Investor"} profile photo`}
           className="rounded-full border-4 border-white shadow-sm shadow-emerald-100"
           height={96}

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AuthGuard } from "./auth-guard";
 import { menuItems } from "./menu-items";
+import { Sidebar } from "./sidebar";
 
 const indices = [
   { name: "S&P 500", value: "5,312.08", change: "+0.73%", good: true },
@@ -167,97 +168,7 @@ export default function Home() {
     <AuthGuard>
       <main className="relative min-h-screen bg-[#f4f6f8] text-[#17231d]">
       <div className="mx-auto flex max-w-[1520px]">
-        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 overflow-hidden border-r border-[#dde5df] bg-white px-4 py-4 lg:flex lg:flex-col">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-md bg-[#1f5f50] text-base font-bold text-white shadow-sm shadow-emerald-100">
-              26
-            </div>
-            <div>
-              <p className="text-lg font-semibold leading-none">finapp26</p>
-              <p className="mt-1 text-xs font-medium text-[#7b8090]">
-                Investor Intelligence
-              </p>
-            </div>
-          </div>
-
-          <div className="relative mb-5 rounded-md border border-[#dde5df] bg-[#fbfcfb] p-4 text-center">
-            <Link
-              aria-label="Profile settings"
-              className="absolute left-3 top-3 grid size-8 place-items-center rounded-md border border-[#d6dfd9] bg-white text-sm font-semibold text-[#166052] transition hover:bg-[#eef6f3]"
-              href="/settings"
-              title="Profile settings"
-            >
-              ⚙
-            </Link>
-            <Link
-              aria-label="Edit profile"
-              className="absolute right-3 top-3 grid size-8 place-items-center rounded-md border border-[#d6dfd9] bg-white text-sm font-semibold text-[#166052] transition hover:bg-[#eef6f3]"
-              href="/profile/edit"
-              title="Edit profile"
-            >
-              ✎
-            </Link>
-            <Image
-              alt="Arjun Investor profile photo"
-              className="mx-auto rounded-full border-4 border-white shadow-sm shadow-emerald-100"
-              height={72}
-              src="/profile-avatar.svg"
-              width={72}
-            />
-            <p className="mt-3 text-sm font-semibold">Arjun Investor</p>
-            <p className="mt-1 text-xs font-semibold text-[#66756d]">
-              Premium Plan
-            </p>
-            <button className="mt-3 h-9 w-full rounded-md bg-[#e8f3ef] text-xs font-semibold text-[#166052]">
-              Manage Plan
-            </button>
-          </div>
-
-          <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-            {menuItems.map(({ label, slug }, index) => (
-              <a
-                className={`flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium ${
-                  index === 0
-                    ? "bg-[#e8f3ef] text-[#1f5f50]"
-                    : "text-[#22332b] hover:bg-[#eef3f0]"
-                }`}
-                href={slug === "dashboard" ? "/dashboard" : `/menu/${slug}`}
-                key={slug}
-              >
-                <span
-                  className={`grid size-7 place-items-center rounded-md border ${
-                    index === 0
-                      ? "border-[#1f5f50] bg-[#1f5f50] text-white"
-                      : "border-[#cad6cf] text-[#66756d]"
-                  }`}
-                >
-                  <NavIcon label={label} />
-                </span>
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-                {label === "AI Copilot" ? (
-                  <span className="rounded bg-[#166052] px-2 py-1 text-[10px] text-white">
-                    NEW
-                  </span>
-                ) : null}
-              </a>
-            ))}
-          </nav>
-
-          <div className="mt-4 shrink-0 space-y-1 border-t border-[#e5ebe7] pt-4">
-            {["Dark Mode", "Help & Support", "Settings"].map((item) => (
-              <a
-                className="flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-[#33453c] hover:bg-[#eef3f0]"
-                href={item === "Settings" ? "/settings" : "#"}
-                key={item}
-              >
-                <span className="grid size-7 place-items-center rounded-md border border-[#cad6cf] text-[#66756d]">
-                  <NavIcon label={item} />
-                </span>
-                {item}
-              </a>
-            ))}
-          </div>
-        </aside>
+        <Sidebar currentSlug="dashboard" />
 
         <div className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-7">
           <header className="mb-5 flex flex-col gap-4 rounded-md border border-[#dde5df] bg-white px-4 py-3 shadow-sm shadow-slate-200/40 xl:flex-row xl:items-center xl:justify-between">
@@ -529,12 +440,11 @@ export default function Home() {
 
             <Card>
               <CardHeader title="Fear & Greed Index" action="View history" />
-              <div className="grid place-items-center px-6 pb-7 pt-5 text-center">
-                <div className="relative h-24 w-56 overflow-hidden">
-                  <div className="absolute inset-0 rounded-t-full bg-[conic-gradient(from_270deg_at_50%_100%,#ef4444_0deg,#f59e0b_60deg,#facc15_95deg,#22c55e_150deg,#22c55e_180deg,transparent_180deg)]" />
-                  <div className="absolute bottom-0 left-1/2 h-20 w-48 -translate-x-1/2 rounded-t-full bg-white" />
-                  <div className="absolute bottom-2 left-1/2 h-16 w-1 origin-bottom rotate-[28deg] rounded-full bg-[#17231d]" />
-                  <div className="absolute bottom-0 left-1/2 size-5 -translate-x-1/2 rounded-full bg-[#17231d]" />
+              <div className="grid place-items-center px-6 pb-7 pt-12 text-center">
+                <div className="relative w-56 h-28 overflow-hidden">
+                  <div className="absolute inset-0 rounded-t-full bg-[conic-gradient(from_270deg_at_50%_100%,#ef4444_0deg,#f59e0b_60deg,#facc15_95deg,#22c55e_150deg,#22c55e_210deg,#f59e0b_270deg,#ef4444_180deg)]" />
+                  <div className="absolute left-1/2 top-full -translate-x-1/2 h-2 w-2 rounded-full bg-[#17231d]" />
+                  <div className="absolute left-1/2 bottom-0 h-28 w-1.5 -translate-x-1/2 origin-bottom rotate-[-76deg] rounded-full bg-[#17231d]" />
                 </div>
                 <p className="mt-1 text-5xl font-semibold leading-none">62</p>
                 <p className="mt-2 text-lg font-semibold leading-6 text-emerald-600">Greed</p>
