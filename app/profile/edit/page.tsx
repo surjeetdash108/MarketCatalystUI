@@ -1,30 +1,20 @@
-import Link from "next/link";
-import { AuthGuard } from "../../dashboard/auth-guard";
+import { IQShell } from "../../iq/shell";
 import { ProfileEditForm } from "./profile-edit-form";
 
 export default function EditProfilePage() {
   return (
-    <AuthGuard>
-      <main className="min-h-screen bg-[#f4f6f8] px-5 py-8 text-[#17231d] sm:px-8">
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#166052]">
-                Profile
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold">Edit profile</h1>
-            </div>
-            <Link
-              className="rounded-md border border-[#d6dfd9] bg-white px-4 py-2 text-sm font-semibold text-[#166052] transition hover:bg-[#eef6f3]"
-              href="/dashboard"
-            >
-              Back to dashboard
-            </Link>
-          </div>
-
+    <IQShell>
+      <div className="page-head">
+        <div>
+          <div className="page-title">Edit Profile</div>
+          <div className="page-sub">Update your investor details and preferences</div>
+        </div>
+      </div>
+      <div className="dash" style={{ gridTemplateColumns: "1fr", maxWidth: 760 }}>
+        <div className="col-12">
           <ProfileEditForm />
         </div>
-      </main>
-    </AuthGuard>
+      </div>
+    </IQShell>
   );
 }

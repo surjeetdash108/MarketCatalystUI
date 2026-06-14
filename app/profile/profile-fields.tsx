@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 export type InvestorProfile = {
   profile_image: string;
   name: string;
@@ -92,17 +90,14 @@ function TextField({
 }>) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-bold text-[#26372f]" htmlFor={id}>
-        {label}
-      </label>
+      <label className="iq-label" htmlFor={id}>{label}</label>
       <input
-        className="h-12 w-full rounded-md border border-[#d6dfd9] bg-white px-4 text-base outline-none transition focus:border-[#1f5f50] focus:ring-4 focus:ring-[#1f5f50]/10 disabled:bg-[#f4f7f5]"
+        className="iq-input"
         id={id}
-        onChange={(event) => onChange(event.target.value)}
-        readOnly={readOnly}
-        required
         type={type}
         value={value}
+        readOnly={readOnly}
+        onChange={e => onChange(e.target.value)}
       />
     </div>
   );
@@ -123,21 +118,16 @@ function SelectField({
 }>) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-bold text-[#26372f]" htmlFor={id}>
-        {label}
-      </label>
+      <label className="iq-label" htmlFor={id}>{label}</label>
       <select
-        className="h-12 w-full rounded-md border border-[#d6dfd9] bg-white px-4 text-base outline-none transition focus:border-[#1f5f50] focus:ring-4 focus:ring-[#1f5f50]/10"
+        className="iq-select"
         id={id}
-        onChange={(event) => onChange(event.target.value)}
-        required
         value={value}
+        onChange={e => onChange(e.target.value)}
       >
-        <option value="">Select</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
+        <option value="">Select…</option>
+        {options.map(o => (
+          <option key={o} value={o}>{o}</option>
         ))}
       </select>
     </div>
@@ -150,167 +140,100 @@ export function ProfileFields({
   emailReadOnly = false,
 }: Readonly<ProfileFieldsProps>) {
   function toggleAssetClass(assetClass: string) {
-    const nextAssetClasses = profile.preferredAssetClasses.includes(assetClass)
-      ? profile.preferredAssetClasses.filter((item) => item !== assetClass)
+    const next = profile.preferredAssetClasses.includes(assetClass)
+      ? profile.preferredAssetClasses.filter(i => i !== assetClass)
       : [...profile.preferredAssetClasses, assetClass];
-
-    onChange("preferredAssetClasses", nextAssetClasses);
+    onChange("preferredAssetClasses", next);
   }
 
   function handleImageChange(file: File | undefined) {
-    if (!file) {
-      return;
-    }
-
+    if (!file) return;
     if (!file.type.startsWith("image/")) {
       window.alert("Please select a valid image file.");
       return;
     }
-
     if (file.size > 650 * 1024) {
       window.alert("Please select an image smaller than 650 KB.");
       return;
     }
-
     const reader = new FileReader();
-
     reader.onload = () => {
-      if (typeof reader.result === "string") {
-        onChange("profile_image", reader.result);
-      }
+      if (typeof reader.result === "string") onChange("profile_image", reader.result);
     };
-
-    reader.onerror = () => {
-      window.alert("Unable to read the selected image. Please try again.");
-    };
-
+    reader.onerror = () => window.alert("Unable to read the selected image. Please try again.");
     reader.readAsDataURL(file);
   }
 
   return (
-    <div className="grid gap-5 sm:grid-cols-2">
-      <div className="sm:col-span-2">
-        <label
-          className="mb-2 block text-sm font-bold text-[#26372f]"
-          htmlFor="profile-image"
-        >
-          Profile image
-        </label>
-        <div className="flex flex-col gap-4 rounded-md border border-[#d6dfd9] bg-[#fbfcfb] p-4 sm:flex-row sm:items-center">
-          <Image
+    <div className="iq-form-grid">
+      {/* Image upload */}
+      <div className="span-2">
+        <label className="iq-label" htmlFor="profile-image">Profile image</label>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 14,
+          padding: "12px 14px", borderRadius: "var(--r-sm)",
+          border: "1px solid var(--border)", background: "var(--surface-1)",
+        }}>
+          <img
             alt="Profile preview"
-            className="size-20 rounded-full border-4 border-white bg-[#e8f3ef] object-cover shadow-sm shadow-emerald-100"
-            height={80}
             src={profile.profile_image || "/profile-avatar.svg"}
-            unoptimized
-            width={80}
+            style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "2px solid var(--border-strong)" }}
           />
-          <div className="flex-1">
+          <div style={{ flex: 1 }}>
             <input
-              accept="image/*"
-              className="block w-full text-sm text-[#52645b] file:mr-4 file:rounded-md file:border-0 file:bg-[#e8f3ef] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[#166052]"
               id="profile-image"
-              onChange={(event) => handleImageChange(event.target.files?.[0])}
               type="file"
+              accept="image/*"
+              style={{ fontSize: 12.5, color: "var(--text)", width: "100%" }}
+              onChange={e => handleImageChange(e.target.files?.[0])}
             />
-            <p className="mt-2 text-xs text-[#66756d]">
-              Saved as <span className="font-semibold">profile_image</span>.
-              Use an image under 650 KB.
-            </p>
+            <div style={{ fontSize: 11, color: "var(--text-dim-solid)", marginTop: 4 }}>
+              Max 650 KB · Stored as <span style={{ fontFamily: "var(--f-mono)", color: "var(--text)" }}>profile_image</span>
+            </div>
           </div>
         </div>
       </div>
-      <TextField
-        id="profile-name"
-        label="Name"
-        onChange={(value) => onChange("name", value)}
-        value={profile.name}
-      />
-      <TextField
-        id="profile-email"
-        label="Email"
-        onChange={(value) => onChange("email", value)}
-        readOnly={emailReadOnly}
-        type="email"
-        value={profile.email}
-      />
-      <TextField
-        id="profile-mobile"
-        label="Mobile number"
-        onChange={(value) => onChange("mobileNumber", value)}
-        type="tel"
-        value={profile.mobileNumber}
-      />
-      <TextField
-        id="profile-age"
-        label="Age"
-        onChange={(value) => onChange("age", value)}
-        type="number"
-        value={profile.age}
-      />
-      <SelectField
-        id="profile-income"
-        label="Income range"
-        onChange={(value) => onChange("incomeRange", value)}
-        options={incomeRanges}
-        value={profile.incomeRange}
-      />
-      <SelectField
-        id="profile-experience"
-        label="Investment experience"
-        onChange={(value) => onChange("investmentExperience", value)}
-        options={investmentExperienceOptions}
-        value={profile.investmentExperience}
-      />
-      <SelectField
-        id="profile-goals"
-        label="Investment goals"
-        onChange={(value) => onChange("investmentGoals", value)}
-        options={investmentGoalOptions}
-        value={profile.investmentGoals}
-      />
-      <SelectField
-        id="profile-risk"
-        label="Risk tolerance"
-        onChange={(value) => onChange("riskTolerance", value)}
-        options={riskToleranceOptions}
-        value={profile.riskTolerance}
-      />
-      <SelectField
-        id="profile-horizon"
-        label="Investment horizon"
-        onChange={(value) => onChange("investmentHorizon", value)}
-        options={investmentHorizonOptions}
-        value={profile.investmentHorizon}
-      />
-      <TextField
-        id="profile-value"
-        label="Current portfolio value"
-        onChange={(value) => onChange("currentPortfolioValue", value)}
-        type="number"
-        value={profile.currentPortfolioValue}
-      />
-      <fieldset className="sm:col-span-2">
-        <legend className="mb-3 text-sm font-bold text-[#26372f]">
-          Preferred asset classes
-        </legend>
-        <div className="grid gap-3 sm:grid-cols-4">
-          {assetClassOptions.map((assetClass) => (
-            <label
-              className="flex h-11 items-center gap-3 rounded-md border border-[#d6dfd9] bg-white px-3 text-sm font-semibold text-[#26372f]"
-              key={assetClass}
-            >
-              <input
-                checked={profile.preferredAssetClasses.includes(assetClass)}
-                className="size-4 accent-[#1f5f50]"
-                onChange={() => toggleAssetClass(assetClass)}
-                type="checkbox"
-              />
-              {assetClass}
-            </label>
-          ))}
+
+      <TextField id="profile-name" label="Name" value={profile.name} onChange={v => onChange("name", v)} />
+      <TextField id="profile-email" label="Email" type="email" value={profile.email} readOnly={emailReadOnly} onChange={v => onChange("email", v)} />
+      <TextField id="profile-mobile" label="Mobile number" type="tel" value={profile.mobileNumber} onChange={v => onChange("mobileNumber", v)} />
+      <TextField id="profile-age" label="Age" type="number" value={profile.age} onChange={v => onChange("age", v)} />
+      <SelectField id="profile-income" label="Income range" options={incomeRanges} value={profile.incomeRange} onChange={v => onChange("incomeRange", v)} />
+      <SelectField id="profile-experience" label="Investment experience" options={investmentExperienceOptions} value={profile.investmentExperience} onChange={v => onChange("investmentExperience", v)} />
+      <SelectField id="profile-goals" label="Investment goals" options={investmentGoalOptions} value={profile.investmentGoals} onChange={v => onChange("investmentGoals", v)} />
+      <SelectField id="profile-risk" label="Risk tolerance" options={riskToleranceOptions} value={profile.riskTolerance} onChange={v => onChange("riskTolerance", v)} />
+      <SelectField id="profile-horizon" label="Investment horizon" options={investmentHorizonOptions} value={profile.investmentHorizon} onChange={v => onChange("investmentHorizon", v)} />
+      <TextField id="profile-value" label="Current portfolio value ($)" type="number" value={profile.currentPortfolioValue} onChange={v => onChange("currentPortfolioValue", v)} />
+
+      {/* Asset class checkboxes */}
+      <div className="span-2">
+        <div className="iq-label" style={{ marginBottom: 8 }}>Preferred asset classes</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {assetClassOptions.map(ac => {
+            const checked = profile.preferredAssetClasses.includes(ac);
+            return (
+              <label key={ac} style={{
+                display: "flex", alignItems: "center", gap: 7,
+                padding: "6px 14px", borderRadius: 99, cursor: "pointer",
+                fontSize: 13, fontWeight: 500,
+                background: checked ? "var(--brand-dim)" : "var(--surface-2)",
+                border: `1px solid ${checked ? "var(--brand)" : "var(--border)"}`,
+                color: checked ? "var(--brand-2)" : "var(--text)",
+                transition: "all .12s",
+              }}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleAssetClass(ac)}
+                  style={{ display: "none" }}
+                />
+                {checked && <span style={{ fontSize: 11, fontWeight: 700 }}>✓</span>}
+                {ac}
+              </label>
+            );
+          })}
         </div>
-      </fieldset>
+      </div>
     </div>
   );
 }

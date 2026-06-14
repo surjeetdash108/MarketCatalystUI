@@ -23,6 +23,8 @@ interface IQActions {
   openSector: (name: string) => void;
   openFund: (idx: number) => void;
   setCopilot: (open: boolean) => void;
+  theme: "dark" | "light";
+  setTheme: (t: "dark" | "light") => void;
 }
 export const IQActionsContext = createContext<IQActions>({
   openStock: () => {},
@@ -30,6 +32,8 @@ export const IQActionsContext = createContext<IQActions>({
   openSector: () => {},
   openFund: () => {},
   setCopilot: () => {},
+  theme: "dark",
+  setTheme: () => {},
 });
 export function useIQActions() { return useContext(IQActionsContext); }
 
@@ -370,6 +374,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [drawer, setDrawer] = useState<
     | { type: "stock"; sym: string }
     | { type: "earnings"; sym: string }
@@ -378,11 +383,24 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     | null
   >(null);
 
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    }
+    if (profileDropdownOpen) document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [profileDropdownOpen]);
+
   // Keyboard shortcuts
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setPaletteOpen(true); }
-      if (e.key === "Escape") { setPaletteOpen(false); setDrawer(null); setCopilotOpen(false); }
+      if (e.key === "Escape") { setPaletteOpen(false); setDrawer(null); setCopilotOpen(false); setProfileDropdownOpen(false); }
     }
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -395,6 +413,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     openSector: useCallback((name) => setDrawer({ type: "sector", name }), []),
     openFund: useCallback((idx) => setDrawer({ type: "fund", idx }), []),
     setCopilot: setCopilotOpen,
+    theme,
+    setTheme,
   };
 
   const displayName = profile?.name || user?.displayName || user?.email || "User";
@@ -439,10 +459,38 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 onClick={() => setCopilotOpen(o => !o)}>
                 ✦
               </button>
-              <div className="topbar-avatar" title={displayName} onClick={() => window.location.href = "/profile/edit"}>
-                {profileImage
-                  ? <img src={profileImage} alt={displayName} />
-                  : initials}
+              <div className="profile-dropdown-wrap" ref={profileDropdownRef}>
+                <div
+                  className="topbar-avatar"
+                  title={displayName}
+                  onClick={() => setProfileDropdownOpen(o => !o)}
+                  style={{ cursor: "pointer" }}
+                >
+                  {initials}
+                  {profileImage && <img src={profileImage} alt={displayName} />}
+                </div>
+
+                {profileDropdownOpen && (
+                  <div className="profile-dropdown">
+                    {/* User info */}
+                    <div className="pd-user">
+                      <div className="pd-name">{displayName}</div>
+                      <div className="pd-email">{user?.email ?? ""}</div>
+                    </div>
+
+                    {/* Menu items */}
+                    <button className="pd-item" onClick={() => { window.location.href = "/profile/edit"; setProfileDropdownOpen(false); }}>
+                      <span className="pd-icon">👤</span> My Profile
+                    </button>
+                    <button className="pd-item" onClick={() => { window.location.href = "/settings"; setProfileDropdownOpen(false); }}>
+                      <span className="pd-icon">⚙</span> Settings
+                    </button>
+                    <div className="pd-divider" />
+                    <button className="pd-item danger" onClick={() => { handleSignOut(); setProfileDropdownOpen(false); }}>
+                      <span className="pd-icon">↩</span> Logout
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -486,14 +534,18 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               <div className="planbox">
                 <div className="row">
                   <div className="avatar">
-                    {profileImage ? <img src={profileImage} alt={displayName} /> : initials}
+                    {initials}
+                    {profileImage && <img src={profileImage} alt={displayName} />}
                   </div>
                   <div>
                     <div className="who">{displayName}</div>
                     <div className="tier">✦ {tier}</div>
                   </div>
                 </div>
-                <button className="planbtn" onClick={handleSignOut}>Sign out</button>
+                <button className="planbtn" onClick={() => window.location.href = "/manage-plan"}>
+                  <span style={{ fontSize: 13 }}>◈</span>
+                  Manage plan
+                </button>
               </div>
             </nav>
 

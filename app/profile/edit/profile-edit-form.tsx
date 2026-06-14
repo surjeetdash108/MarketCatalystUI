@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FirebaseError } from "firebase/app";
 import { updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -17,17 +16,14 @@ function getSaveErrorMessage(error: unknown) {
 
 export function ProfileEditForm() {
   const dispatch = useAppDispatch();
-  const { user } = useAppSelector((state) => state.auth);
-  const { data: savedProfile, status: profileStatus } = useAppSelector(
-    (state) => state.profile,
-  );
+  const { user } = useAppSelector(state => state.auth);
+  const { data: savedProfile, status: profileStatus } = useAppSelector(state => state.profile);
 
   const [profile, setProfile] = useState<InvestorProfile>(emptyInvestorProfile);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Sync local form state from Redux whenever the stored profile loads or changes
   useEffect(() => {
     if (savedProfile) {
       setProfile({
@@ -38,59 +34,37 @@ export function ProfileEditForm() {
     }
   }, [savedProfile, user]);
 
-  function handleProfileChange(
-    field: keyof InvestorProfile,
-    value: string | string[],
-  ) {
-    setProfile((current) => ({ ...current, [field]: value }));
+  function handleProfileChange(field: keyof InvestorProfile, value: string | string[]) {
+    setProfile(current => ({ ...current, [field]: value }));
   }
 
   async function handleSave() {
     if (!user?.uid) {
-      const message = "Your session is not ready. Please sign in again.";
-      setError(message);
-      window.alert(message);
+      const msg = "Your session is not ready. Please sign in again.";
+      setError(msg);
+      window.alert(msg);
       return;
     }
-
     if (profile.preferredAssetClasses.length === 0) {
-      const message = "Select at least one preferred asset class.";
-      setError(message);
-      window.alert(message);
+      const msg = "Select at least one preferred asset class.";
+      setError(msg);
+      window.alert(msg);
       return;
     }
-
     setError("");
     setSuccess("");
     setIsSaving(true);
-
     try {
       if (firebaseAuth.currentUser) {
-        await updateProfile(firebaseAuth.currentUser, {
-          displayName: profile.name,
-        });
+        await updateProfile(firebaseAuth.currentUser, { displayName: profile.name });
       }
-
-      await setDoc(
-        doc(firebaseDb, "users", user.uid),
-        { ...profile, updatedAt: serverTimestamp() },
-        { merge: true },
-      );
-
-      // Reflect changes immediately across the app without a Firestore re-read
-      dispatch(
-        updateProfileData({
-          ...profile,
-          uid: user.uid,
-          tier: savedProfile?.tier ?? "free",
-        }),
-      );
-
+      await setDoc(doc(firebaseDb, "users", user.uid), { ...profile, updatedAt: serverTimestamp() }, { merge: true });
+      dispatch(updateProfileData({ ...profile, uid: user.uid, tier: savedProfile?.tier ?? "free" }));
       setSuccess("Profile updated successfully.");
     } catch (saveError) {
-      const message = getSaveErrorMessage(saveError);
-      setError(message);
-      window.alert(message);
+      const msg = getSaveErrorMessage(saveError);
+      setError(msg);
+      window.alert(msg);
     } finally {
       setIsSaving(false);
     }
@@ -98,71 +72,75 @@ export function ProfileEditForm() {
 
   if (profileStatus === "loading" || (profileStatus === "idle" && !savedProfile)) {
     return (
-      <section className="rounded-md border border-[#dde5df] bg-white p-6 shadow-sm shadow-slate-200/50">
-        <p className="text-sm font-semibold text-[#52645b]">
-          Loading profile details...
-        </p>
-      </section>
+      <div className="card">
+        <div className="card-b" style={{ color: "var(--text-dim-solid)", fontSize: 13 }}>
+          Loading profile details…
+        </div>
+      </div>
     );
   }
 
   return (
-    <section className="rounded-md border border-[#dde5df] bg-white p-6 shadow-sm shadow-slate-200/50">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-        <img
-          alt={`${profile.name || "Investor"} profile photo`}
-          className="size-24 rounded-full border-4 border-white object-cover shadow-sm shadow-emerald-100"
-          src={profile.profile_image || "/profile-avatar.svg"}
-        />
-        <div>
-          <h2 className="text-xl font-semibold">
-            {profile.name || "Investor profile"}
-          </h2>
-          <p className="mt-1 text-sm font-semibold text-[#66756d]">
-            {profile.investmentExperience || "Investment profile"}
-          </p>
+    <>
+      {/* Profile header */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-b" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <img
+            alt={profile.name || "Profile"}
+            src={profile.profile_image || "/profile-avatar.svg"}
+            style={{
+              width: 56, height: 56, borderRadius: "50%",
+              objectFit: "cover", border: "2px solid var(--border-strong)", flexShrink: 0,
+            }}
+          />
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
+              {profile.name || "Investor profile"}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginTop: 2 }}>
+              {profile.investmentExperience || "Investment profile"}
+            </div>
+          </div>
         </div>
       </div>
 
-      <form
-        className="mt-8 space-y-6"
-        onSubmit={(event) => event.preventDefault()}
-      >
-        <ProfileFields
-          emailReadOnly
-          onChange={handleProfileChange}
-          profile={profile}
-        />
+      {/* Form */}
+      <div className="card">
+        <div className="card-h"><h3>Profile details</h3></div>
+        <div className="card-b">
+          <form onSubmit={e => e.preventDefault()}>
+            <ProfileFields emailReadOnly onChange={handleProfileChange} profile={profile} />
 
-        {error ? (
-          <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
-            {error}
-          </p>
-        ) : null}
+            {error && (
+              <div style={{
+                marginTop: 14, padding: "9px 13px", borderRadius: "var(--r-sm)",
+                background: "var(--down-dim)", border: "1px solid var(--down)",
+                fontSize: 13, color: "var(--down)",
+              }}>
+                {error}
+              </div>
+            )}
+            {success && (
+              <div style={{
+                marginTop: 14, padding: "9px 13px", borderRadius: "var(--r-sm)",
+                background: "var(--up-dim)", border: "1px solid var(--up)",
+                fontSize: 13, color: "var(--up)",
+              }}>
+                {success}
+              </div>
+            )}
 
-        {success ? (
-          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-            {success}
-          </p>
-        ) : null}
-
-        <div className="flex justify-end gap-3">
-          <Link
-            className="rounded-md border border-[#d6dfd9] px-5 py-3 text-sm font-semibold text-[#4c5261] transition hover:bg-[#f4f7f5]"
-            href="/dashboard"
-          >
-            Cancel
-          </Link>
-          <button
-            className="rounded-md bg-[#1f5f50] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#17483d] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSaving}
-            onClick={handleSave}
-            type="button"
-          >
-            {isSaving ? "Saving..." : "Save changes"}
-          </button>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+              <button type="button" className="iq-btn-ghost" onClick={() => window.location.href = "/dashboard"}>
+                Cancel
+              </button>
+              <button type="button" className="iq-btn-primary" disabled={isSaving} onClick={handleSave}>
+                {isSaving ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
-    </section>
+      </div>
+    </>
   );
 }
