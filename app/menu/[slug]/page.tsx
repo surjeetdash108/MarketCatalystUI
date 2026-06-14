@@ -1,69 +1,48 @@
 import { notFound } from "next/navigation";
-import { AuthGuard } from "../../dashboard/auth-guard";
-import { BackButton } from "../../dashboard/back-button";
-import { getMenuItemBySlug, menuItems } from "../../dashboard/menu-items";
-import { Sidebar } from "../../dashboard/sidebar";
+import { menuItems } from "../../dashboard/menu-items";
+import { IQShell } from "../../iq/shell";
+import { EarningsScreen } from "../../iq/screens/earnings";
+import { MoversScreen } from "../../iq/screens/movers";
+import { HeatmapScreen } from "../../iq/screens/heatmap";
+import { AnalystScreen } from "../../iq/screens/analyst";
+import { ScreenerScreen } from "../../iq/screens/screener";
+import { PortfolioScreen } from "../../iq/screens/portfolio";
+import { WatchlistScreen } from "../../iq/screens/watchlist";
+import { StockScreen } from "../../iq/screens/stock";
+import { ThirteenFScreen } from "../../iq/screens/thirteenf";
+import { CommentaryScreen } from "../../iq/screens/commentary";
+import { RecapScreen } from "../../iq/screens/recap";
+import { MacroScreen } from "../../iq/screens/macro";
 
 export function generateStaticParams() {
   return menuItems
-    .filter((item) => item.slug !== "dashboard")
-    .map((item) => ({ slug: item.slug }));
+    .filter(item => item.slug !== "dashboard")
+    .map(item => ({ slug: item.slug }));
 }
 
-export default async function MenuDetailPage({
+const SCREENS: Record<string, React.ReactNode> = {
+  earnings:    <EarningsScreen />,
+  movers:      <MoversScreen />,
+  heatmap:     <HeatmapScreen />,
+  analyst:     <AnalystScreen />,
+  screener:    <ScreenerScreen />,
+  portfolio:   <PortfolioScreen />,
+  watchlist:   <WatchlistScreen />,
+  stock:       <StockScreen />,
+  thirteenf:   <ThirteenFScreen />,
+  commentary:  <CommentaryScreen />,
+  recap:       <RecapScreen />,
+  macro:       <MacroScreen />,
+};
+
+export default async function MenuPage({
   params,
-}: Readonly<{
+}: {
   params: Promise<{ slug: string }>;
-}>) {
+}) {
   const { slug } = await params;
-  const item = getMenuItemBySlug(slug);
+  const screen = SCREENS[slug];
+  if (!screen) notFound();
 
-  if (!item || item.slug === "dashboard") {
-    notFound();
-  }
-
-  return (
-    <AuthGuard>
-      <main className="relative min-h-screen bg-[#f4f6f8] text-[#17231d]">
-        <div className="mx-auto flex max-w-[1520px]">
-          <Sidebar currentSlug={slug} />
-
-          <div className="min-w-0 flex-1 px-4 py-6 sm:px-8">
-            <div className="mx-auto max-w-5xl">
-              <BackButton />
-
-              <section className="rounded-md border border-[#dde5df] bg-white p-6 shadow-sm shadow-slate-200/50">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#166052]">
-                  finapp26 module
-                </p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight">
-                  {item.label}
-                </h1>
-                <p className="mt-3 max-w-3xl text-sm font-medium leading-6 text-[#52645b]">
-                  {item.description}
-                </p>
-
-                <div className="mt-8 grid gap-4 md:grid-cols-3">
-                  {["Overview", "Signals", "Actions"].map((section) => (
-                    <div
-                      className="rounded-md border border-[#e5ebe7] bg-[#fbfcfb] p-4"
-                      key={section}
-                    >
-                      <p className="text-sm font-semibold text-[#17231d]">
-                        {section}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-[#52645b]">
-                        This section is ready for {item.label.toLowerCase()} data,
-                        workflows, and controls.
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      </main>
-    </AuthGuard>
-  );
+  return <IQShell>{screen}</IQShell>;
 }

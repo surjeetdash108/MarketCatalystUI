@@ -130,11 +130,6 @@ export function Sidebar({ currentSlug }: Readonly<SidebarProps>) {
                 <NavIcon label={label} />
               </span>
               <span className="min-w-0 flex-1 truncate">{label}</span>
-              {label === "AI Copilot" ? (
-                <span className="rounded bg-[#166052] px-2 py-1 text-[10px] text-white">
-                  NEW
-                </span>
-              ) : null}
             </a>
           );
         })}
