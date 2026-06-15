@@ -17,175 +17,209 @@ import {
   showError,
 } from "../auth-utils";
 
+/* ---- shared inline style helpers ---- */
+const card: React.CSSProperties = {
+  background: "var(--surface-1)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-lg)",
+  boxShadow: "0 1px 0 rgba(255,255,255,.02) inset, 0 20px 60px -20px rgba(0,0,0,.8)",
+  padding: "28px 28px 24px",
+};
+const label: React.CSSProperties = {
+  display: "block",
+  fontSize: ".72rem",
+  fontWeight: 600,
+  letterSpacing: ".06em",
+  textTransform: "uppercase",
+  color: "var(--text-dim-solid)",
+  marginBottom: 7,
+};
+const input: React.CSSProperties = {
+  width: "100%",
+  height: 42,
+  background: "var(--surface-0)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r)",
+  padding: "0 14px",
+  fontSize: ".88rem",
+  color: "var(--text-hi)",
+  fontFamily: "var(--f-body)",
+  outline: "none",
+  transition: "border-color .14s, box-shadow .14s",
+};
+const divider: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 12,
+  margin: "18px 0",
+  fontSize: ".66rem", fontWeight: 700,
+  letterSpacing: ".08em", textTransform: "uppercase",
+  color: "var(--text-dim-solid)",
+};
+const divLine: React.CSSProperties = {
+  flex: 1, height: 1, background: "var(--border-soft)",
+};
+
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [focused, setFocused] = useState("");
 
   useEffect(() => {
     let isMounted = true;
-
     void (async () => {
       try {
-        const userCredential = await getRedirectResult(firebaseAuth);
+        const cred = await getRedirectResult(firebaseAuth);
         if (!isMounted) return;
-
-        if (userCredential) {
-          setIsSubmitting(true);
-          await completeGoogleLogin(userCredential);
-          return;
-        }
-
+        if (cred) { setIsSubmitting(true); await completeGoogleLogin(cred); return; }
         await checkAndRedirectIfLoggedIn();
       } catch (err) {
         if (!isMounted) return;
-        const message = getAuthErrorMessage(err);
-        setError(message);
-        showError(message);
+        const msg = getAuthErrorMessage(err);
+        setError(msg); showError(msg);
       } finally {
         if (isMounted) setIsSubmitting(false);
       }
     })();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setIsSubmitting(true);
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(""); setIsSubmitting(true);
     try {
       await signInWithEmailAndPassword(firebaseAuth, email, password);
       window.location.href = "/dashboard";
-    } catch (authError) {
-      const message = getAuthErrorMessage(authError);
-      setError(message);
-      showError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (err) {
+      const msg = getAuthErrorMessage(err);
+      setError(msg); showError(msg);
+    } finally { setIsSubmitting(false); }
   }
 
-  async function handleGoogleLogin() {
-    setError("");
-    setIsSubmitting(true);
+  async function handleGoogle() {
+    setError(""); setIsSubmitting(true);
     try {
       if (shouldUseGoogleRedirect()) {
-        await signInWithRedirect(firebaseAuth, googleAuthProvider);
-        return;
+        await signInWithRedirect(firebaseAuth, googleAuthProvider); return;
       }
-      const userCredential = await signInWithPopup(firebaseAuth, googleAuthProvider);
-      await completeGoogleLogin(userCredential);
-    } catch (authError) {
-      const message = getAuthErrorMessage(authError);
-      setError(message);
-      showError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
+      await completeGoogleLogin(await signInWithPopup(firebaseAuth, googleAuthProvider));
+    } catch (err) {
+      const msg = getAuthErrorMessage(err);
+      setError(msg); showError(msg);
+    } finally { setIsSubmitting(false); }
   }
 
+  const focusStyle = (id: string): React.CSSProperties => ({
+    ...input,
+    borderColor: focused === id ? "var(--brand)" : "var(--border)",
+    boxShadow: focused === id ? "0 0 0 3px var(--brand-dim)" : "none",
+  });
+
   return (
-    <div className="rounded-md border border-[#dde5df] bg-white p-6 shadow-sm shadow-slate-200/50 sm:p-7">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#166052]">
-        Welcome back
-      </p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight">
-        Sign in to finapp26
-      </h1>
-      <p className="mt-2 text-sm font-medium leading-6 text-[#52645b]">
-        Access your financial intelligence dashboard.
+    <div style={card}>
+      {/* Header */}
+      <div style={{
+        fontSize: ".64rem", fontWeight: 600, letterSpacing: ".14em",
+        textTransform: "uppercase", color: "var(--brand-2)",
+        fontFamily: "var(--f-display)", marginBottom: 8,
+      }}>Welcome back</div>
+      <h1 style={{
+        fontFamily: "var(--f-display)", fontSize: "1.55rem",
+        fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
+      }}>Sign in to InvestIQ</h1>
+      <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
+        Access your market intelligence terminal.
       </p>
 
+      {/* Google */}
       <button
-        className="mt-6 flex h-12 w-full items-center justify-center gap-3 rounded-md border border-[#d6dfd9] bg-white text-sm font-semibold transition hover:bg-[#f4f7f5] disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isSubmitting}
-        onClick={handleGoogleLogin}
         type="button"
+        disabled={isSubmitting}
+        onClick={handleGoogle}
+        style={{
+          width: "100%", height: 42, display: "flex", alignItems: "center",
+          justifyContent: "center", gap: 10, borderRadius: "var(--r)",
+          background: "var(--surface-2)", border: "1px solid var(--border-strong)",
+          color: "var(--text-hi)", fontSize: ".84rem", fontWeight: 600,
+          cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? .6 : 1,
+          transition: "border-color .13s, background .13s", fontFamily: "var(--f-body)",
+        }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--brand)")}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border-strong)")}
       >
-        <span className="grid size-6 place-items-center rounded-full bg-[#e8f3ef] text-sm font-semibold text-[#1f5f50]">
-          G
-        </span>
+        <span style={{
+          width: 22, height: 22, borderRadius: "50%",
+          background: "var(--surface-3)", display: "grid", placeItems: "center",
+          fontSize: ".78rem", fontWeight: 700, color: "var(--brand-2)",
+        }}>G</span>
         Continue with Google
       </button>
 
-      <div className="my-5 flex items-center gap-3 text-xs font-bold uppercase text-[#8b9992]">
-        <span className="h-px flex-1 bg-[#eceef5]" />
-        or use email
-        <span className="h-px flex-1 bg-[#eceef5]" />
-      </div>
+      <div style={divider}><span style={divLine} />or use email<span style={divLine} /></div>
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
+      {/* Form */}
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label
-            className="mb-2 block text-sm font-bold text-[#26372f]"
-            htmlFor="email"
-          >
-            Work email
-          </label>
+          <label style={label} htmlFor="email">Email</label>
           <input
-            autoComplete="email"
-            className="h-12 w-full rounded-md border border-[#d6dfd9] bg-white px-4 text-base outline-none transition focus:border-[#1f5f50] focus:ring-4 focus:ring-[#1f5f50]/10"
-            id="email"
-            name="email"
-            onChange={(e) => setEmail(e.target.value)}
+            id="email" type="email" required
             placeholder="analyst@company.com"
-            required
-            type="email"
+            autoComplete="email"
             value={email}
+            onChange={e => setEmail(e.target.value)}
+            onFocus={() => setFocused("email")}
+            onBlur={() => setFocused("")}
+            style={focusStyle("email")}
           />
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between gap-4">
-            <label
-              className="block text-sm font-bold text-[#26372f]"
-              htmlFor="password"
-            >
-              Password
-            </label>
-            <Link
-              className="text-sm font-bold text-[#166052]"
-              href="/auth/forgot-password"
-            >
-              Forgot password?
-            </Link>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+            <span style={label}>Password</span>
+            <Link href="/auth/forgot-password" style={{
+              fontSize: ".74rem", fontWeight: 600, color: "var(--brand-2)", textDecoration: "none",
+            }}>Forgot password?</Link>
           </div>
           <input
-            autoComplete="current-password"
-            className="h-12 w-full rounded-md border border-[#d6dfd9] bg-white px-4 text-base outline-none transition focus:border-[#1f5f50] focus:ring-4 focus:ring-[#1f5f50]/10"
-            id="password"
-            minLength={6}
-            name="password"
-            onChange={(e) => setPassword(e.target.value)}
+            id="password" type="password" required minLength={6}
             placeholder="Enter password"
-            required
-            type="password"
+            autoComplete="current-password"
             value={password}
+            onChange={e => setPassword(e.target.value)}
+            onFocus={() => setFocused("password")}
+            onBlur={() => setFocused("")}
+            style={focusStyle("password")}
           />
         </div>
 
-        {error ? (
-          <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
-            {error}
-          </p>
-        ) : null}
+        {error && (
+          <div style={{
+            background: "var(--down-dim)", border: "1px solid var(--down)",
+            borderRadius: "var(--r-sm)", padding: "9px 12px",
+            fontSize: ".8rem", color: "var(--down)", fontWeight: 600,
+          }}>{error}</div>
+        )}
 
         <button
-          className="h-12 w-full rounded-md bg-[#1f5f50] px-5 text-base font-semibold text-white transition hover:bg-[#17483d] disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isSubmitting}
-          type="submit"
+          type="submit" disabled={isSubmitting}
+          style={{
+            height: 42, width: "100%", borderRadius: "var(--r)",
+            background: isSubmitting ? "var(--surface-3)" : "linear-gradient(135deg, var(--brand), #6354d6)",
+            border: "none", color: "#fff", fontSize: ".88rem", fontWeight: 600,
+            cursor: isSubmitting ? "not-allowed" : "pointer",
+            opacity: isSubmitting ? .7 : 1,
+            transition: "filter .14s", fontFamily: "var(--f-body)",
+          }}
+          onMouseEnter={e => { if (!isSubmitting) e.currentTarget.style.filter = "brightness(1.1)"; }}
+          onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
         >
-          {isSubmitting ? "Please wait..." : "Sign in"}
+          {isSubmitting ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm font-medium text-[#52645b]">
-        New to finapp26?{" "}
-        <Link className="font-semibold text-[#166052]" href="/auth/signup">
+      <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
+        New to InvestIQ?{" "}
+        <Link href="/auth/signup" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Create an account
         </Link>
       </p>

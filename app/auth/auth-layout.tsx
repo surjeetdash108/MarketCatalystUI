@@ -1,64 +1,183 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 
+const FEATURES = [
+  { label: "Live Signals",   value: "128",  detail: "+14 today",  color: "var(--up)" },
+  { label: "AI Copilot",     value: "On",   detail: "GPT-4o",     color: "var(--ai)" },
+  { label: "13F Funds",      value: "5",    detail: "tracked",    color: "var(--brand-2)" },
+];
+
+const BULLETS = [
+  { icon: "◆", c: "var(--ai)",      text: "AI-generated earnings briefs pushed before market open" },
+  { icon: "▲", c: "var(--up)",      text: "Institutional 13F flow parsed the day filings hit EDGAR" },
+  { icon: "★", c: "var(--brand-2)", text: "Screener with RS, sales growth, EPS expansion in one view" },
+  { icon: "●", c: "var(--warn)",    text: "Portfolio Pulse: AI summary of what moved your names today" },
+];
+
 interface AuthLayoutProps {
   children: ReactNode;
   wide?: boolean;
 }
 
 export function AuthLayout({ children, wide = false }: Readonly<AuthLayoutProps>) {
+  const S: Record<string, React.CSSProperties> = {
+    root: {
+      minHeight: "100vh",
+      background: "var(--bg)",
+      fontFamily: "var(--f-body)",
+      color: "var(--text)",
+      WebkitFontSmoothing: "antialiased",
+      position: "relative",
+    },
+    glow: {
+      position: "fixed",
+      inset: 0,
+      background: [
+        "radial-gradient(ellipse 60% 40% at 70% -10%, rgba(124,108,245,.22) 0%, transparent 60%)",
+        "radial-gradient(ellipse 40% 30% at 100% 60%, rgba(52,226,240,.12) 0%, transparent 55%)",
+        "radial-gradient(ellipse 50% 50% at -5% 80%, rgba(124,108,245,.1) 0%, transparent 60%)",
+      ].join(","),
+      pointerEvents: "none",
+      zIndex: 0,
+    },
+    grid: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      minHeight: "100vh",
+      position: "relative",
+      zIndex: 1,
+    },
+    left: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "40px 32px",
+      minHeight: "100vh",
+    },
+    inner: {
+      width: "100%",
+      maxWidth: wide ? 720 : 420,
+    },
+    logo: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 36,
+      textDecoration: "none",
+    },
+    logoOrb: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      background: "radial-gradient(circle at 35% 30%, var(--ai-2), var(--ai) 60%, #1d8d99)",
+      boxShadow: "0 0 20px -4px var(--ai)",
+      display: "grid",
+      placeItems: "center",
+    },
+    logoText: {
+      fontFamily: "var(--f-display)",
+      fontWeight: 700,
+      fontSize: "1.15rem",
+      color: "var(--text-hi)",
+      letterSpacing: "-.01em",
+    },
+    logoSub: {
+      fontSize: ".65rem",
+      color: "var(--text-dim-solid)",
+      marginTop: 1,
+      letterSpacing: ".08em",
+      textTransform: "uppercase" as const,
+    },
+    right: {
+      background: "linear-gradient(160deg, var(--surface-2) 0%, var(--surface-0) 100%)",
+      borderLeft: "1px solid var(--border)",
+      padding: "60px 48px",
+      display: "flex",
+      alignItems: "center",
+    },
+  };
+
   return (
-    <div className="min-h-screen bg-[#f4f6f8] text-[#17231d]">
-      <div className="grid min-h-screen lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="flex items-center justify-center px-5 py-10 sm:px-8">
-          <div className={`w-full ${wide ? "max-w-4xl" : "max-w-md"}`}>
-            <Link className="mb-9 flex w-fit items-center gap-3" href="/">
-              <span className="grid size-10 place-items-center rounded-md bg-[#1f5f50] text-base font-bold text-white shadow-sm shadow-emerald-100">
-                26
-              </span>
-              <span>
-                <span className="block text-xl font-semibold leading-none">
-                  finapp26
-                </span>
-                <span className="mt-1 block text-xs font-semibold text-[#737989]">
-                  Investor Intelligence
-                </span>
-              </span>
+    <div style={S.root}>
+      <div style={S.glow} />
+      <div style={S.grid}>
+
+        {/* ---- Left: Form panel ---- */}
+        <div style={S.left}>
+          <div style={S.inner}>
+            <Link href="/" style={S.logo}>
+              <div style={S.logoOrb}>
+                <svg viewBox="0 0 24 24" fill="none" style={{ width: 18, height: 18, color: "#05222a" }}>
+                  <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
+                  <circle cx="18.5" cy="17.5" r="2" fill="currentColor" />
+                </svg>
+              </div>
+              <div>
+                <div style={S.logoText}>InvestIQ</div>
+                <div style={S.logoSub}>Market Intelligence</div>
+              </div>
             </Link>
             {children}
           </div>
-        </section>
+        </div>
 
-        <aside className="hidden bg-[#17231d] px-12 py-12 text-white lg:flex lg:items-center">
-          <div className="w-full">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#a7d8c6]">
-              Market command center
-            </p>
-            <h2 className="mt-4 max-w-xl text-5xl font-semibold leading-tight">
+        {/* ---- Right: Brand panel ---- */}
+        <div style={S.right}>
+          <div style={{ width: "100%" }}>
+            <div style={{
+              fontSize: ".64rem", fontWeight: 600, letterSpacing: ".18em",
+              textTransform: "uppercase", color: "var(--brand-2)", marginBottom: 14,
+              fontFamily: "var(--f-display)",
+            }}>
+              Market Intelligence Platform
+            </div>
+            <h2 style={{
+              fontFamily: "var(--f-display)", fontWeight: 700,
+              fontSize: "2.2rem", lineHeight: 1.2, color: "var(--text-hi)",
+              letterSpacing: "-.02em", maxWidth: 380, marginBottom: 32,
+            }}>
               Authenticated intelligence for faster portfolio decisions.
             </h2>
-            <div className="mt-10 grid gap-4 xl:grid-cols-3">
-              {[
-                ["Live Signals", "128", "+14 today"],
-                ["Portfolio Risk", "Low", "2 alerts"],
-                ["AI Recaps", "9:15", "AM ET"],
-              ].map(([label, value, detail]) => (
-                <div
-                  className="rounded-md border border-white/10 bg-white/[0.06] p-5"
-                  key={label}
-                >
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#b8c7bf]">
-                    {label}
-                  </p>
-                  <p className="mt-4 text-3xl font-semibold">{value}</p>
-                  <p className="mt-2 text-sm font-semibold text-emerald-300">
-                    {detail}
-                  </p>
+
+            {/* Stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 32 }}>
+              {FEATURES.map(f => (
+                <div key={f.label} style={{
+                  background: "var(--surface-1)", border: "1px solid var(--border)",
+                  borderRadius: "var(--r-lg)", padding: "14px 16px",
+                }}>
+                  <div style={{ fontSize: ".62rem", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-dim-solid)" }}>
+                    {f.label}
+                  </div>
+                  <div style={{ fontFamily: "var(--f-mono)", fontSize: "1.6rem", fontWeight: 700, color: "var(--text-hi)", margin: "6px 0 3px" }}>
+                    {f.value}
+                  </div>
+                  <div style={{ fontSize: ".72rem", fontWeight: 600, color: f.color }}>
+                    {f.detail}
+                  </div>
                 </div>
               ))}
             </div>
+
+            {/* Bullet features */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {BULLETS.map(b => (
+                <div key={b.text} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ color: b.c, fontSize: ".8rem", marginTop: 1, flexShrink: 0 }}>{b.icon}</span>
+                  <span style={{ fontSize: ".84rem", color: "var(--text)", lineHeight: 1.5 }}>{b.text}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{
+              marginTop: 36, paddingTop: 20, borderTop: "1px solid var(--border-soft)",
+              fontSize: ".7rem", color: "var(--text-dim-solid)",
+            }}>
+              AI-generated · not investment advice · data for informational purposes only
+            </div>
           </div>
-        </aside>
+        </div>
       </div>
     </div>
   );

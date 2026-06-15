@@ -6,86 +6,113 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { firebaseAuth } from "../../firebase";
 import { getAuthErrorMessage, showError } from "../auth-utils";
 
+const card: React.CSSProperties = {
+  background: "var(--surface-1)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-lg)",
+  boxShadow: "0 1px 0 rgba(255,255,255,.02) inset, 0 20px 60px -20px rgba(0,0,0,.8)",
+  padding: "28px 28px 24px",
+};
+const label: React.CSSProperties = {
+  display: "block", fontSize: ".72rem", fontWeight: 600,
+  letterSpacing: ".06em", textTransform: "uppercase",
+  color: "var(--text-dim-solid)", marginBottom: 7,
+};
+
 export function ForgotForm() {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [focused, setFocused] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
-    setIsSubmitting(true);
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(""); setSuccess(""); setIsSubmitting(true);
     try {
       await sendPasswordResetEmail(firebaseAuth, email);
       setSuccess("Password reset email sent. Check your inbox.");
-    } catch (authError) {
-      const message = getAuthErrorMessage(authError);
-      setError(message);
-      showError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (err) {
+      const msg = getAuthErrorMessage(err);
+      setError(msg); showError(msg);
+    } finally { setIsSubmitting(false); }
   }
 
   return (
-    <div className="rounded-md border border-[#dde5df] bg-white p-6 shadow-sm shadow-slate-200/50 sm:p-7">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#166052]">
-        Recover access
-      </p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight">
-        Reset your password
-      </h1>
-      <p className="mt-2 text-sm font-medium leading-6 text-[#52645b]">
-        We will send a password reset link to your email.
+    <div style={card}>
+      {/* Header */}
+      <div style={{
+        fontSize: ".64rem", fontWeight: 600, letterSpacing: ".14em",
+        textTransform: "uppercase", color: "var(--brand-2)",
+        fontFamily: "var(--f-display)", marginBottom: 8,
+      }}>Recover access</div>
+      <h1 style={{
+        fontFamily: "var(--f-display)", fontSize: "1.55rem",
+        fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
+      }}>Reset your password</h1>
+      <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
+        We'll send a password reset link to your email.
       </p>
 
-      <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label
-            className="mb-2 block text-sm font-bold text-[#26372f]"
-            htmlFor="email"
-          >
-            Work email
-          </label>
+          <label style={label} htmlFor="email">Email</label>
           <input
-            autoComplete="email"
-            className="h-12 w-full rounded-md border border-[#d6dfd9] bg-white px-4 text-base outline-none transition focus:border-[#1f5f50] focus:ring-4 focus:ring-[#1f5f50]/10"
-            id="email"
-            name="email"
-            onChange={(e) => setEmail(e.target.value)}
+            id="email" type="email" required
             placeholder="analyst@company.com"
-            required
-            type="email"
+            autoComplete="email"
             value={email}
+            onChange={e => setEmail(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            style={{
+              width: "100%", height: 42,
+              background: "var(--surface-0)",
+              border: `1px solid ${focused ? "var(--brand)" : "var(--border)"}`,
+              boxShadow: focused ? "0 0 0 3px var(--brand-dim)" : "none",
+              borderRadius: "var(--r)", padding: "0 14px",
+              fontSize: ".88rem", color: "var(--text-hi)",
+              fontFamily: "var(--f-body)", outline: "none",
+              transition: "border-color .14s, box-shadow .14s",
+            }}
           />
         </div>
 
-        {error ? (
-          <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
-            {error}
-          </p>
-        ) : null}
+        {error && (
+          <div style={{
+            background: "var(--down-dim)", border: "1px solid var(--down)",
+            borderRadius: "var(--r-sm)", padding: "9px 12px",
+            fontSize: ".8rem", color: "var(--down)", fontWeight: 600,
+          }}>{error}</div>
+        )}
 
-        {success ? (
-          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-            {success}
-          </p>
-        ) : null}
+        {success && (
+          <div style={{
+            background: "var(--up-dim)", border: "1px solid var(--up)",
+            borderRadius: "var(--r-sm)", padding: "9px 12px",
+            fontSize: ".8rem", color: "var(--up)", fontWeight: 600,
+          }}>{success}</div>
+        )}
 
         <button
-          className="h-12 w-full rounded-md bg-[#1f5f50] px-5 text-base font-semibold text-white transition hover:bg-[#17483d] disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isSubmitting}
-          type="submit"
+          type="submit" disabled={isSubmitting}
+          style={{
+            height: 42, width: "100%", borderRadius: "var(--r)",
+            background: isSubmitting ? "var(--surface-3)" : "linear-gradient(135deg, var(--brand), #6354d6)",
+            border: "none", color: "#fff", fontSize: ".88rem", fontWeight: 600,
+            cursor: isSubmitting ? "not-allowed" : "pointer",
+            opacity: isSubmitting ? .7 : 1, fontFamily: "var(--f-body)",
+          }}
+          onMouseEnter={e => { if (!isSubmitting) e.currentTarget.style.filter = "brightness(1.1)"; }}
+          onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
         >
-          {isSubmitting ? "Please wait..." : "Send reset link"}
+          {isSubmitting ? "Sending…" : "Send reset link"}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm font-medium text-[#52645b]">
+      <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
         Remembered it?{" "}
-        <Link className="font-semibold text-[#166052]" href="/auth/login">
+        <Link href="/auth/login" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Back to sign in
         </Link>
       </p>

@@ -22,152 +22,170 @@ import {
   showError,
 } from "../auth-utils";
 
+const card: React.CSSProperties = {
+  background: "var(--surface-1)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--r-lg)",
+  boxShadow: "0 1px 0 rgba(255,255,255,.02) inset, 0 20px 60px -20px rgba(0,0,0,.8)",
+  padding: "28px 28px 24px",
+};
+const divider: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 12,
+  margin: "18px 0",
+  fontSize: ".66rem", fontWeight: 700,
+  letterSpacing: ".08em", textTransform: "uppercase",
+  color: "var(--text-dim-solid)",
+};
+const divLine: React.CSSProperties = { flex: 1, height: 1, background: "var(--border-soft)" };
+const label: React.CSSProperties = {
+  display: "block", fontSize: ".72rem", fontWeight: 600,
+  letterSpacing: ".06em", textTransform: "uppercase",
+  color: "var(--text-dim-solid)", marginBottom: 7,
+};
+
 export function SignupForm() {
   const [password, setPassword] = useState("");
   const [profile, setProfile] = useState<InvestorProfile>(emptyInvestorProfile);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [focused, setFocused] = useState("");
 
-  function handleProfileChange(
-    field: keyof InvestorProfile,
-    value: string | string[],
-  ) {
-    setProfile((current) => ({ ...current, [field]: value }));
+  function handleProfileChange(field: keyof InvestorProfile, value: string | string[]) {
+    setProfile(cur => ({ ...cur, [field]: value }));
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setIsSubmitting(true);
-
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(""); setIsSubmitting(true);
     try {
       if (profile.preferredAssetClasses.length === 0) {
-        const message = "Select at least one preferred asset class.";
-        setError(message);
-        showError(message);
-        return;
+        const msg = "Select at least one preferred asset class.";
+        setError(msg); showError(msg); return;
       }
-
-      const userCredential = await createUserWithEmailAndPassword(
-        firebaseAuth,
-        profile.email,
-        password,
-      );
-
-      await updateProfile(userCredential.user, {
-        displayName: profile.name,
-      });
-
-      await setDoc(doc(firebaseDb, "users", userCredential.user.uid), {
+      const cred = await createUserWithEmailAndPassword(firebaseAuth, profile.email, password);
+      await updateProfile(cred.user, { displayName: profile.name });
+      await setDoc(doc(firebaseDb, "users", cred.user.uid), {
         ...profile,
-        uid: userCredential.user.uid,
-        email: userCredential.user.email ?? profile.email,
+        uid: cred.user.uid,
+        email: cred.user.email ?? profile.email,
         tier: "free",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-
       window.location.href = "/dashboard";
-    } catch (authError) {
-      const message = getAuthErrorMessage(authError);
-      setError(message);
-      showError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (err) {
+      const msg = getAuthErrorMessage(err);
+      setError(msg); showError(msg);
+    } finally { setIsSubmitting(false); }
   }
 
-  async function handleGoogleLogin() {
-    setError("");
-    setIsSubmitting(true);
+  async function handleGoogle() {
+    setError(""); setIsSubmitting(true);
     try {
       if (shouldUseGoogleRedirect()) {
-        await signInWithRedirect(firebaseAuth, googleAuthProvider);
-        return;
+        await signInWithRedirect(firebaseAuth, googleAuthProvider); return;
       }
-      const userCredential = await signInWithPopup(firebaseAuth, googleAuthProvider);
-      await completeGoogleLogin(userCredential);
-    } catch (authError) {
-      const message = getAuthErrorMessage(authError);
-      setError(message);
-      showError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
+      await completeGoogleLogin(await signInWithPopup(firebaseAuth, googleAuthProvider));
+    } catch (err) {
+      const msg = getAuthErrorMessage(err);
+      setError(msg); showError(msg);
+    } finally { setIsSubmitting(false); }
   }
 
+  const pwStyle: React.CSSProperties = {
+    width: "100%", height: 42,
+    background: "var(--surface-0)",
+    border: `1px solid ${focused === "pw" ? "var(--brand)" : "var(--border)"}`,
+    boxShadow: focused === "pw" ? "0 0 0 3px var(--brand-dim)" : "none",
+    borderRadius: "var(--r)", padding: "0 14px",
+    fontSize: ".88rem", color: "var(--text-hi)",
+    fontFamily: "var(--f-body)", outline: "none", transition: "border-color .14s",
+  };
+
   return (
-    <div className="rounded-md border border-[#dde5df] bg-white p-6 shadow-sm shadow-slate-200/50 sm:p-7">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#166052]">
-        Create account
-      </p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight">
-        Start using finapp26
-      </h1>
-      <p className="mt-2 text-sm font-medium leading-6 text-[#52645b]">
+    <div style={card}>
+      {/* Header */}
+      <div style={{
+        fontSize: ".64rem", fontWeight: 600, letterSpacing: ".14em",
+        textTransform: "uppercase", color: "var(--brand-2)",
+        fontFamily: "var(--f-display)", marginBottom: 8,
+      }}>Create account</div>
+      <h1 style={{
+        fontFamily: "var(--f-display)", fontSize: "1.55rem",
+        fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
+      }}>Start using InvestIQ</h1>
+      <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
         Create your analyst workspace in a few seconds.
       </p>
 
+      {/* Google */}
       <button
-        className="mt-6 flex h-12 w-full items-center justify-center gap-3 rounded-md border border-[#d6dfd9] bg-white text-sm font-semibold transition hover:bg-[#f4f7f5] disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isSubmitting}
-        onClick={handleGoogleLogin}
-        type="button"
+        type="button" disabled={isSubmitting} onClick={handleGoogle}
+        style={{
+          width: "100%", height: 42, display: "flex", alignItems: "center",
+          justifyContent: "center", gap: 10, borderRadius: "var(--r)",
+          background: "var(--surface-2)", border: "1px solid var(--border-strong)",
+          color: "var(--text-hi)", fontSize: ".84rem", fontWeight: 600,
+          cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? .6 : 1,
+          fontFamily: "var(--f-body)", transition: "border-color .13s",
+        }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--brand)")}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border-strong)")}
       >
-        <span className="grid size-6 place-items-center rounded-full bg-[#e8f3ef] text-sm font-semibold text-[#1f5f50]">
-          G
-        </span>
+        <span style={{
+          width: 22, height: 22, borderRadius: "50%",
+          background: "var(--surface-3)", display: "grid", placeItems: "center",
+          fontSize: ".78rem", fontWeight: 700, color: "var(--brand-2)",
+        }}>G</span>
         Continue with Google
       </button>
 
-      <div className="my-5 flex items-center gap-3 text-xs font-bold uppercase text-[#8b9992]">
-        <span className="h-px flex-1 bg-[#eceef5]" />
-        or use email
-        <span className="h-px flex-1 bg-[#eceef5]" />
-      </div>
+      <div style={divider}><span style={divLine} />or use email<span style={divLine} /></div>
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <ProfileFields onChange={handleProfileChange} profile={profile} />
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <ProfileFields profile={profile} onChange={handleProfileChange} />
 
         <div>
-          <label
-            className="mb-2 block text-sm font-bold text-[#26372f]"
-            htmlFor="password"
-          >
-            Password
-          </label>
+          <label style={label} htmlFor="password">Password</label>
           <input
-            autoComplete="new-password"
-            className="h-12 w-full rounded-md border border-[#d6dfd9] bg-white px-4 text-base outline-none transition focus:border-[#1f5f50] focus:ring-4 focus:ring-[#1f5f50]/10"
-            id="password"
-            minLength={6}
-            name="password"
-            onChange={(e) => setPassword(e.target.value)}
+            id="password" type="password" required minLength={6}
             placeholder="Create a password"
-            required
-            type="password"
+            autoComplete="new-password"
             value={password}
+            onChange={e => setPassword(e.target.value)}
+            onFocus={() => setFocused("pw")}
+            onBlur={() => setFocused("")}
+            style={pwStyle}
           />
         </div>
 
-        {error ? (
-          <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
-            {error}
-          </p>
-        ) : null}
+        {error && (
+          <div style={{
+            background: "var(--down-dim)", border: "1px solid var(--down)",
+            borderRadius: "var(--r-sm)", padding: "9px 12px",
+            fontSize: ".8rem", color: "var(--down)", fontWeight: 600,
+          }}>{error}</div>
+        )}
 
         <button
-          className="h-12 w-full rounded-md bg-[#1f5f50] px-5 text-base font-semibold text-white transition hover:bg-[#17483d] disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isSubmitting}
-          type="submit"
+          type="submit" disabled={isSubmitting}
+          style={{
+            height: 42, width: "100%", borderRadius: "var(--r)",
+            background: isSubmitting ? "var(--surface-3)" : "linear-gradient(135deg, var(--brand), #6354d6)",
+            border: "none", color: "#fff", fontSize: ".88rem", fontWeight: 600,
+            cursor: isSubmitting ? "not-allowed" : "pointer",
+            opacity: isSubmitting ? .7 : 1, fontFamily: "var(--f-body)",
+          }}
+          onMouseEnter={e => { if (!isSubmitting) e.currentTarget.style.filter = "brightness(1.1)"; }}
+          onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
         >
-          {isSubmitting ? "Please wait..." : "Create account"}
+          {isSubmitting ? "Creating account…" : "Create account"}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm font-medium text-[#52645b]">
+      <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
         Already have access?{" "}
-        <Link className="font-semibold text-[#166052]" href="/auth/login">
+        <Link href="/auth/login" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Sign in
         </Link>
       </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import "../iq.css";
+// iq.css is imported globally via app/layout.tsx
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";

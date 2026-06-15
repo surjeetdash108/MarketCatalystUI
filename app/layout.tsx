@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Space_Grotesk, JetBrains_Mono } from "next/font/goog
 import { FirebaseAnalytics } from "./firebase-analytics";
 import { ReduxProvider } from "./store/redux-provider";
 import "./globals.css";
+import "./iq.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
