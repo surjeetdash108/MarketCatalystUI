@@ -1,160 +1,119 @@
 "use client";
 
+import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
-import { pulse, wmn, movers, earnings, folio, analyst } from "../data";
-import { fmt, sign, cls, arr, Spark, Gauge } from "../utils";
+import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList } from "../data";
+import { fmt, sign, cls, arr, Spark, gaugeSVG } from "../utils";
+
+const LIVE_FEED = [
+  {
+    cat: "Earnings", col: "var(--up)", time: "9:31a",
+    t: '<b style="color:var(--text-hi)">NVDA</b> beats EPS by 18%, raises FY25 guidance',
+    why: "Confirms AI data-center demand is still accelerating — bullish read-through for the entire semis group.",
+  },
+  {
+    cat: "Analyst", col: "var(--brand-2)", time: "9:18a",
+    t: 'Morgan Stanley upgrades <b style="color:var(--text-hi)">CRM</b> to Overweight, PT $340',
+    why: "Third upgrade this week; sell-side is turning constructive after the margin-expansion story.",
+  },
+  {
+    cat: "Block Trade", col: "var(--ai)", time: "9:05a",
+    t: '4.2M-share block in <b style="color:var(--text-hi)">XLF</b> crossed above VWAP',
+    why: "Large institutional buyer in financials — aligns with the risk-on rotation today.",
+  },
+  {
+    cat: "Macro", col: "var(--warn)", time: "8:30a",
+    t: 'May core CPI <b style="color:var(--text-hi)">+0.2%</b> m/m, below 0.3% est.',
+    why: "Softer inflation lifts September rate-cut odds; 10Y yield fell 4bps on the print.",
+  },
+];
+
+const TABS = ["Today", "Premarket", "Live", "After Hours", "This Week", "My Portfolio"];
+
+function analystDir(type: string) {
+  if (type === "upgrade")    return <span className="up">▲ Upg</span>;
+  if (type === "downgrade")  return <span className="down">▼ Dng</span>;
+  if (type === "initiation") return <span style={{ color: "var(--ai)" }}>◆ Init</span>;
+  return <span style={{ color: "var(--text-dim-solid)" }}>Reit</span>;
+}
 
 export function DashboardScreen() {
   const { openStock, openEarnings, openSector, setCopilot } = useIQActions();
+  const { user } = useAppSelector(s => s.auth);
+  const { data: profile } = useAppSelector(s => s.profile);
 
-  const totalVal = folio.reduce((s, f) => s + f.qty * f.px, 0);
+  const displayName = profile?.name || user?.displayName || "Investor";
+  const firstName = displayName.split(" ")[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  const now = new Date();
+  const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
+  const datePart = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const timePart = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const dateStr = `${dayName} · ${datePart} · ${timePart} ET`;
+
+  const totalVal  = folio.reduce((s, f) => s + f.qty * f.px, 0);
   const totalCost = folio.reduce((s, f) => s + f.qty * f.avg, 0);
-  const totalGain = totalVal - totalCost;
-  const totalGainPct = (totalGain / totalCost) * 100;
+  const totalGain    = totalVal - totalCost;
+  const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
   return (
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Dashboard</div>
-          <div className="page-sub">Market Intelligence — May 24, 2025</div>
+          <div className="eyebrow">{dateStr}</div>
+          <h1 className="page-title">{greeting}, {firstName}</h1>
         </div>
-        <div className="actions">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div className="tabs">
+            {TABS.map((t, i) => (
+              <button key={t} className={`tab${i === 0 ? " active" : ""}`}>{t}</button>
+            ))}
+          </div>
           <button className="chip ai-c" onClick={() => setCopilot(true)}>✦ AI Summary</button>
         </div>
       </div>
 
       <div className="dash">
-        {/* Market Pulse */}
+
+        {/* ── Pulse strip ── */}
         <div className="col-12">
-          <div className="card">
-            <div className="pulse">
-              {pulse.slice(0, 6).map((x, i) => (
-                <div key={x.l} className="p">
-                  <div className="lbl">{x.l}</div>
-                  <div className="val">{fmt(x.v, x.v > 1000 ? 0 : 2)}</div>
-                  <div className={`chg ${cls(x.c)}`}>{arr(x.c)} {Math.abs(x.c).toFixed(2)}%</div>
-                  <Spark seed={i + 1} up={x.c >= 0} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* What Matters Now */}
-        <div className="col-8">
-          <div className="card">
-            <div className="card-h">
-              <h3>What Matters Now</h3>
-              <span className="more">6 stories</span>
-            </div>
-            <div className="card-b">
-              <div className="wmn-grid">
-                {wmn.map((w, i) => (
-                  <div key={i} className="wmn-card">
-                    <div className={`wmn-tag ${w.tag}`}>{w.tag === "earn" ? "earnings" : w.tag}</div>
-                    <div className="wmn-h">{w.h}</div>
-                    <div className="wmn-t" dangerouslySetInnerHTML={{ __html: w.t }} />
-                  </div>
-                ))}
+          <div className="pulse">
+            {pulse.slice(0, 6).map((x, i) => (
+              <div key={x.l} className="p">
+                <div className="lbl">{x.l}</div>
+                <div className="val">{fmt(x.v, x.v > 1000 ? 0 : 2)}</div>
+                <div className={`chg ${cls(x.c)}`}>{arr(x.c)} {sign(x.c)}</div>
+                <Spark seed={i + 1} up={x.c >= 0} />
               </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* AI Sentiment + VIX */}
-        <div className="col-4">
-          <div className="card" style={{ marginBottom: 10 }}>
-            <div className="card-h"><h3>AI Sentiment</h3></div>
-            <Gauge v={62} label="62" color="var(--up)" sublabel="Fear & Greed — Greed" />
-          </div>
-          <div className="card">
-            <div className="card-h"><h3>Volatility (VIX)</h3></div>
-            <div className="vix-card">
-              <div className="vix-lbl">VIX INDEX</div>
-              <div className="vix-val">14.18</div>
-              <div className="vix-sub">▼ 2.51% · Calm conditions</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Today's Movers */}
-        <div className="col-8">
-          <div className="card">
-            <div className="card-h">
-              <h3>Today&apos;s Movers</h3>
-              <a className="more" href="/menu/movers">View all →</a>
-            </div>
-            <div className="card-b">
-              {movers.slice(0, 6).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(m.s)}>
-                  <span className="tkr">{m.s}</span>
-                  <span className="mini-name">{m.n}</span>
-                  <span className="mini-name" style={{ color: "var(--text-dim-solid)", fontSize: 11 }}>{m.reason}</span>
-                  <span className={`pill ${m.c > 0 ? "up" : "dn"}`}>{arr(m.c)} {Math.abs(m.c).toFixed(1)}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Upcoming Earnings */}
+        {/* ── At a glance: Portfolio ── */}
         <div className="col-4">
           <div className="card">
             <div className="card-h">
-              <h3>Upcoming Earnings</h3>
-              <a className="more" href="/menu/earnings">View all →</a>
+              <h3>My Portfolio</h3>
+              <a className="link" href="/menu/portfolio">View all →</a>
             </div>
-            <div className="card-b">
-              {earnings.slice(0, 5).map(e => (
-                <div key={e.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openEarnings(e.s)}>
-                  <span className="tkr">{e.s}</span>
-                  <span className="mini-name">{e.t}</span>
-                  {e.epsA != null ? (
-                    <span className={`pill ${e.epsA >= e.epsE ? "up" : "dn"}`}>
-                      {e.epsA >= e.epsE ? "Beat" : "Miss"}
-                    </span>
-                  ) : (
-                    <span className="pill flat">Upcoming</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Portfolio Snapshot */}
-        <div className="col-6">
-          <div className="card">
-            <div className="card-h">
-              <h3>Portfolio Pulse</h3>
-              <a className="more" href="/menu/portfolio">View all →</a>
-            </div>
-            <div className="card-b">
-              <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--text-dim-solid)" }}>Total Value</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--f-mono)", color: "var(--text-hi)" }}>
-                    ${fmt(totalVal)}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--text-dim-solid)" }}>Total Gain</div>
-                  <div className={`${cls(totalGain)}`} style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--f-mono)" }}>
-                    {arr(totalGain)} ${fmt(Math.abs(totalGain))} ({Math.abs(totalGainPct).toFixed(1)}%)
-                  </div>
-                </div>
+            <div className="card-b" style={{ paddingTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                <span className="mono" style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-hi)" }}>
+                  ${fmt(totalVal, 0)}
+                </span>
+                <span className={`mono ${cls(totalGainPct)}`} style={{ fontWeight: 600, fontSize: ".8rem" }}>
+                  {arr(totalGainPct)} {Math.abs(totalGainPct).toFixed(1)}%
+                </span>
               </div>
               {folio.slice(0, 4).map(f => {
-                const gain = (f.px - f.avg) / f.avg * 100;
+                const dayC = movers.find(m => m.s === f.s)?.c ?? 0;
                 return (
                   <div key={f.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(f.s)}>
-                    <span className="tkr">{f.s}</span>
-                    <span className="mini-name">{f.n}</span>
-                    <span className="mini-val">${fmt(f.px)}</span>
-                    <span className={`pill ${gain >= 0 ? "up" : "dn"}`}>{arr(gain)} {Math.abs(gain).toFixed(1)}%</span>
+                    <span className="tkr">{f.s}<small>{f.n}</small></span>
+                    <span className="mid">{f.sec}</span>
+                    <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
                   </div>
                 );
               })}
@@ -162,26 +121,235 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* Analyst Actions */}
-        <div className="col-6">
+        {/* ── At a glance: Watchlist ── */}
+        <div className="col-4">
           <div className="card">
             <div className="card-h">
-              <h3>Analyst Actions</h3>
-              <a className="more" href="/menu/analyst">View all →</a>
+              <h3>Watchlist</h3>
+              <a className="link" href="/menu/watchlist">View all →</a>
             </div>
-            <div className="card-b">
-              {analyst.slice(0, 4).map(a => (
-                <div key={a.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(a.s)}>
-                  <span className="tkr">{a.s}</span>
-                  <span className="mini-name">{a.firm}</span>
-                  <span style={{ fontSize: 11.5, color: a.type === "upgrade" ? "var(--up)" : a.type === "downgrade" ? "var(--down)" : "var(--brand-2)", fontWeight: 600 }}>
-                    {a.type}
-                  </span>
-                  <span className="mini-val">${a.tgt}</span>
+            <div className="card-b" style={{ paddingTop: 8 }}>
+              {watch.slice(0, 5).map(w => (
+                <div key={w.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
+                  <span className="tkr">{w.s}<small>{w.n}</small></span>
+                  <span className="mid">{w.note}</span>
+                  <span className={`r ${cls(w.c)}`}>{sign(w.c)}</span>
                 </div>
               ))}
             </div>
           </div>
+        </div>
+
+        {/* ── At a glance: Heatmap mini ── */}
+        <div className="col-4">
+          <div className="card">
+            <div className="card-h">
+              <h3>Market Heatmap</h3>
+              <a className="link" href="/menu/heatmap">View all →</a>
+            </div>
+            <div className="card-b" style={{ paddingTop: 10 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {sectorList.slice(0, 8).map(sd => {
+                  const tot = sd.items.reduce((s, i) => s + i[1], 0);
+                  const a = Math.min(Math.abs(sd.chg) / 2, 1);
+                  const col = sd.chg >= 0
+                    ? `rgba(28,170,112,${(0.25 + a * 0.55).toFixed(2)})`
+                    : `rgba(208,52,76,${(0.25 + a * 0.55).toFixed(2)})`;
+                  return (
+                    <div key={sd.name} onClick={() => openSector(sd.name)}
+                      style={{ cursor: "pointer", background: col, borderRadius: 7, padding: "8px 9px", flex: `${Math.max(1, tot / 1400)} 1 78px` }}>
+                      <div style={{ fontSize: ".62rem", fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>{sd.name}</div>
+                      <div className="mono" style={{ fontSize: ".66rem", color: "#ffffffd0", marginTop: 2 }}>{sign(sd.chg)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 9 }}>
+                Tap a sector for its stocks &amp; news.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── WMN Signature block + Live Feed ── */}
+        <div className="col-8">
+          <div className="wmn">
+            <div className="wmn-h">
+              <div className="t">
+                <div className="wmn-orb">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
+                  </svg>
+                </div>
+                <div>
+                  <h2>What Matters Now</h2>
+                  <div className="meta">
+                    <span className="live"><span className="dot" />Live</span>
+                    · AI-curated · updates every 90s
+                  </div>
+                </div>
+              </div>
+              <button className="btn ai">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                30-sec audio
+              </button>
+            </div>
+            <ul className="wmn-body">
+              {wmn.map((b, i) => (
+                <li key={i}>
+                  <span className="bullet" />
+                  <span>
+                    <b>{b.h}.</b>{" "}
+                    <span dangerouslySetInnerHTML={{ __html: b.t }} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="wmn-foot">
+              Sources used:
+              <span className="src-chip">CPI release</span>
+              <span className="src-chip">NVDA 10-Q</span>
+              <span className="src-chip">Analyst feed</span>
+              <span className="src-chip">Your portfolio</span>
+              <span style={{ marginLeft: "auto", color: "var(--ai)" }}>
+                AI-generated · informational, not investment advice
+              </span>
+            </div>
+          </div>
+
+          {/* Live Market Feed */}
+          <div className="card" style={{ marginTop: 14 }}>
+            <div className="card-h">
+              <h3>📡 Live Market Feed</h3>
+              <a className="link" href="/menu/commentary">All-market commentary →</a>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              {LIVE_FEED.map((f, i) => (
+                <div key={i} style={{
+                  display: "flex", gap: 12, padding: "11px 0",
+                  borderBottom: i < LIVE_FEED.length - 1 ? "1px solid var(--border-soft)" : undefined,
+                }}>
+                  <div style={{ flexShrink: 0, width: 84 }}>
+                    <span className="pill" style={{ background: "var(--surface-3)", color: f.col }}>{f.cat}</span>
+                    <div style={{ fontFamily: "var(--f-mono)", fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
+                      {f.time}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: ".86rem", color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: f.t }} />
+                    <div style={{
+                      fontSize: ".78rem", color: "var(--text-dim-solid)",
+                      borderLeft: `2px solid ${f.col}88`, paddingLeft: 9, marginTop: 5,
+                    }}>
+                      <b style={{ color: "var(--ai)", fontWeight: 600 }}>Why it matters · </b>{f.why}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right column widget stack ── */}
+        <div className="col-4" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* VIX */}
+          <div className="card vix">
+            <div className="card-h">
+              <h3>VIX · Volatility</h3>
+              <span className="pill up">Calm</span>
+            </div>
+            <div className="card-b">
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span className="big">14.18</span>
+                <span className="mono down" style={{ fontWeight: 600 }}>▼ -2.51%</span>
+              </div>
+              <div className="pctl"><i style={{ width: "22%" }} /></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
+                <span>12-mo percentile: 22nd</span>
+                <span>Trend: falling</span>
+              </div>
+              <div className="note">
+                VIX at 14 is low and historically corresponds to a calm, risk-on tape. Cheap hedging environment.
+              </div>
+            </div>
+          </div>
+
+          {/* Fear & Greed */}
+          <div className="card">
+            <div className="card-h">
+              <h3>Fear &amp; Greed</h3>
+              <span className="link">History →</span>
+            </div>
+            <div className="card-b gauge-wrap">
+              <div dangerouslySetInnerHTML={{ __html: gaugeSVG(62, "", "var(--up)") }} />
+              <div className="gauge-num up">62</div>
+              <div className="gauge-lbl up">Greed</div>
+              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Previous close: 58</div>
+            </div>
+          </div>
+
+          {/* Earnings Today */}
+          <div className="card">
+            <div className="card-h">
+              <h3>Earnings Today</h3>
+              <a className="link" href="/menu/earnings">View all →</a>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              {earnings.slice(0, 5).map(e => (
+                <div key={e.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openEarnings(e.s)}>
+                  <span className="tkr">{e.s}<small>{e.n}</small></span>
+                  <span className="mid">
+                    <span className={`pill ${e.t === "BMO" ? "bmo" : "amc"}`}>{e.t}</span>
+                  </span>
+                  <span className={`r ${e.react != null ? cls(e.react) : ""}`}>
+                    {e.react != null
+                      ? sign(e.react)
+                      : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Analyst Actions */}
+          <div className="card">
+            <div className="card-h">
+              <h3>Analyst Actions</h3>
+              <a className="link" href="/menu/analyst">View all →</a>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              {analyst.slice(0, 5).map((a, i) => (
+                <div key={i} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(a.s)}>
+                  <span className="tkr">{a.s}</span>
+                  <span className="mid">
+                    {a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.to}</b>
+                  </span>
+                  <span className="r">{analystDir(a.type)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top Movers */}
+          <div className="card">
+            <div className="card-h">
+              <h3>Top Movers</h3>
+              <a className="link" href="/menu/movers">View all →</a>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              {movers.slice(0, 5).map(m => (
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                  <span className="tkr">{m.s}</span>
+                  <span className="mid">{m.reason}</span>
+                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
       </div>
     </>
