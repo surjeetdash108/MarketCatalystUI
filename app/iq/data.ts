@@ -16,9 +16,24 @@ export interface AnalystAction {
   s: string; n: string; from: string; to: string;
   tgt: number; prev: number; firm: string; type: string;
 }
-export interface FolioItem { s: string; n: string; qty: number; avg: number; px: number; sec: string; }
-export interface Fund { name: string; ticker: string; atm: string; top: string[]; }
-export interface WatchItem { s: string; n: string; px: number; c: number; tgt: number; note: string; }
+export interface FolioItem {
+  s: string; n: string;
+  p: number;    // current price
+  c: number;    // day % change
+  gl: number;   // total gain/loss %
+  size: "Small" | "Medium" | "Large";
+  conv: "High" | "Medium" | "Low";
+  evt: string;
+}
+export interface Fund {
+  name: string; av: string; mgr: string;
+  aum: string; pos: number; top1: string;
+  newPos: number; exits: number; quarter: string;
+}
+export interface WatchItem {
+  s: string; n: string; px: number; c: number;
+  er: string; analyst: string | null; opt: boolean; headline: string;
+}
 export interface StockInfo {
   name: string; px: number; c: number; mkt: string;
   pe: number; eps: number; wkh52: number; wkl52: number;
@@ -41,8 +56,17 @@ export interface ScreenerStock {
   rating: string; // Strong Buy | Buy | Neutral | Sell | Strong Sell
 }
 export interface MacroEvent { dt: string; ev: string; sub?: string; type: string; }
-export interface CommentaryItem { by: string; dt: string; title: string; blurb: string; tag: string; }
-export interface RecapData { date: string; mkt: string; items: { dt: string; title: string; body: string; }[]; }
+export interface CommentaryItem {
+  cat: string; accent: string; time: string; text: string; why: string;
+}
+export interface RecapData {
+  date: string; subtitle: string; headline: string;
+  indices: { l: string; v: number }[];
+  stories: string[];
+  tomorrow: { time: string; ev: string }[];
+  movers: { s: string; reason: string; c: number }[];
+  internals: { l: string; v: string; c: number }[];
+}
 
 // ---- Market Pulse (10 items) ----
 export const pulse: PulseItem[] = [
@@ -108,32 +132,33 @@ export const analyst: AnalystAction[] = [
 
 // ---- Portfolio ----
 export const folio: FolioItem[] = [
-  { s: 'NVDA', n: 'Nvidia', qty: 50, avg: 478, px: 1025, sec: 'Semis' },
-  { s: 'MSFT', n: 'Microsoft', qty: 30, avg: 280, px: 415, sec: 'Software' },
-  { s: 'AAPL', n: 'Apple', qty: 100, avg: 150, px: 191, sec: 'Hardware' },
-  { s: 'META', n: 'Meta', qty: 20, avg: 280, px: 490, sec: 'Social' },
-  { s: 'AMZN', n: 'Amazon', qty: 25, avg: 140, px: 182, sec: 'E-comm' },
-  { s: 'TSLA', n: 'Tesla', qty: 15, avg: 220, px: 168, sec: 'Auto' },
-  { s: 'PLTR', n: 'Palantir', qty: 200, avg: 16, px: 24, sec: 'Software' },
-  { s: 'BRK.B', n: 'Berkshire B', qty: 40, avg: 310, px: 395, sec: 'Finance' },
+  { s: 'NVDA', n: 'NVIDIA',       p: 1181.75, c:  8.23, gl:  42.60, size: 'Large',  conv: 'High',   evt: 'Earnings beat · raised guide' },
+  { s: 'AAPL', n: 'Apple',        p:  189.98, c:  1.02, gl:  12.40, size: 'Large',  conv: 'High',   evt: 'Reports after close today' },
+  { s: 'TSLA', n: 'Tesla',        p:  171.40, c:  3.45, gl:  -8.10, size: 'Medium', conv: 'Medium', evt: 'UBS upgrade to Neutral' },
+  { s: 'META', n: 'Meta',         p:  415.32, c:  0.86, gl:  28.90, size: 'Medium', conv: 'High',   evt: 'WF initiates Overweight' },
+  { s: 'HD',   n: 'Home Depot',   p:  342.10, c: -1.10, gl:   4.20, size: 'Small',  conv: 'Low',    evt: 'Lowered guidance' },
+  { s: 'MSFT', n: 'Microsoft',    p:  415.50, c:  0.41, gl:  19.70, size: 'Large',  conv: 'High',   evt: '—' },
+  { s: 'AMZN', n: 'Amazon',       p:  182.20, c:  2.11, gl:  30.14, size: 'Medium', conv: 'High',   evt: '—' },
+  { s: 'PLTR', n: 'Palantir',     p:   24.88, c:  6.18, gl:  55.50, size: 'Small',  conv: 'High',   evt: 'Guidance raise' },
 ];
 
 // ---- 13F Funds ----
 export const funds: Fund[] = [
-  { name: 'Berkshire Hathaway', ticker: 'BRK', atm: '$1.6T', top: ['AAPL', 'BAC', 'AXP', 'KO', 'CVX'] },
-  { name: 'Vanguard 500 Index', ticker: 'VOO', atm: '$1.1T', top: ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'META'] },
-  { name: 'ARK Innovation', ticker: 'ARKK', atm: '$6.8B', top: ['TSLA', 'COIN', 'ROKU', 'SHOP', 'PATH'] },
-  { name: 'Bridgewater Pure Alpha', ticker: 'BW', atm: '$124B', top: ['SPY', 'GLD', 'EEM', 'IAU', 'TLT'] },
+  { name: 'Berkshire Hathaway', av: 'BH', mgr: 'Warren Buffett',    aum: '$331B',  pos: 42,  top1: 'AAPL', newPos: 1,   exits: 2,  quarter: 'Q1 2024' },
+  { name: 'Pershing Square',    av: 'PS', mgr: 'Bill Ackman',       aum: '$10.4B', pos: 8,   top1: 'CMG',  newPos: 1,   exits: 1,  quarter: 'Q1 2024' },
+  { name: 'Tiger Global',       av: 'TG', mgr: 'Chase Coleman',     aum: '$24.9B', pos: 34,  top1: 'MSFT', newPos: 5,   exits: 6,  quarter: 'Q1 2024' },
+  { name: 'Scion Asset Mgmt',   av: 'SC', mgr: 'Michael Burry',     aum: '$1.6B',  pos: 11,  top1: 'BABA', newPos: 4,   exits: 3,  quarter: 'Q1 2024' },
+  { name: 'Bridgewater',        av: 'BW', mgr: 'Ray Dalio (fmr)',   aum: '$19.8B', pos: 680, top1: 'IVV',  newPos: 120, exits: 90, quarter: 'Q1 2024' },
 ];
 
 // ---- Watchlist ----
 export const watch: WatchItem[] = [
-  { s: 'AMD', n: 'Advanced Micro Devices', px: 162, c: 2.4, tgt: 200, note: 'AI GPU ramp' },
-  { s: 'SOFI', n: 'SoFi Technologies', px: 8.2, c: -1.1, tgt: 12, note: 'Profitability turn' },
-  { s: 'CRWD', n: 'CrowdStrike', px: 345, c: 0.8, tgt: 400, note: 'FedRAMP expansion' },
-  { s: 'MRVL', n: 'Marvell Technology', px: 72, c: 4.2, tgt: 90, note: 'Custom silicon' },
-  { s: 'PANW', n: 'Palo Alto Networks', px: 312, c: -0.3, tgt: 360, note: 'Platformization win' },
-  { s: 'SNOW', n: 'Snowflake', px: 148, c: 1.7, tgt: 185, note: 'AI data cloud' },
+  { s: 'AMD',  n: 'Adv Micro Dev',  px: 165.20,   c: -2.10, er: 'Jul 30', analyst: 'JPM → Neutral',      opt: true,  headline: 'Downgraded on AI-share concerns' },
+  { s: 'AVGO', n: 'Broadcom',       px: 1402.50,  c:  2.97, er: 'Jun 12', analyst: null,                  opt: true,  headline: 'Semis rally on NVDA read-through' },
+  { s: 'SMCI', n: 'Super Micro',    px:  812.40,  c:  5.60, er: 'Aug 06', analyst: 'Barclays PT $1,000',  opt: true,  headline: 'Server demand commentary lifts shares' },
+  { s: 'COIN', n: 'Coinbase',       px:  241.80,  c:  4.20, er: 'Aug 01', analyst: null,                  opt: false, headline: 'Bitcoin breakout boosts exchanges' },
+  { s: 'UBER', n: 'Uber',           px:   64.50,  c:  0.80, er: 'Aug 06', analyst: 'GS reiterates Buy',   opt: false, headline: '—' },
+  { s: 'PLTR', n: 'Palantir',       px:   24.88,  c:  6.18, er: 'Aug 05', analyst: null,                  opt: true,  headline: 'Guidance raise drives momentum' },
 ];
 
 // ---- Stock Detail ----
@@ -309,43 +334,50 @@ export const macro: MacroEvent[] = [
   { dt: 'Fri May 31', ev: 'Fed Chair Powell Speech', sub: 'Annual Economic Conference', type: 'speech' },
 ];
 
-// ---- Commentary ----
+// ---- Commentary (live intraday feed) ----
 export const commentary: CommentaryItem[] = [
-  {
-    by: 'InvestIQ Analysis', dt: 'May 24',
-    title: 'The AI-Industrial Complex: How Hyperscalers Are Reshaping Capex',
-    blurb: 'Microsoft, Google, and Meta collectively committed $250B+ in AI infrastructure spending over 2024-2025. We break down who wins and loses in the supply chain.',
-    tag: 'AI',
-  },
-  {
-    by: 'InvestIQ Analysis', dt: 'May 22',
-    title: 'Reading the Fed: What the Pause Really Means for Equities',
-    blurb: 'Rate cuts may be delayed, but the market has largely priced in "higher for longer". Here is what actually matters for multiple expansion.',
-    tag: 'Macro',
-  },
-  {
-    by: 'Sector Desk', dt: 'May 21',
-    title: 'Semiconductor Cycle Watch: Where Are We Really?',
-    blurb: 'Inventory digestion is nearly done for memory, but logic chips are seeing diverging demand. Our model points to a mid-2025 upturn.',
-    tag: 'Sectors',
-  },
-  {
-    by: 'InvestIQ Analysis', dt: 'May 20',
-    title: 'Consumer Health Check: Bifurcation Is Real',
-    blurb: "High-income consumers still splurging; low-income consumers pulling back sharply. Target's miss vs. Costco's beat tells the whole story.",
-    tag: 'Consumer',
-  },
+  { cat: 'Macro',       accent: 'var(--warn)',     time: '10:18a', text: 'Treasury yields extend decline; 10-year down to <b>4.32%</b>', why: 'Softer CPI keeps a September cut in play — supportive for long-duration growth names.' },
+  { cat: 'Sector',      accent: 'var(--ai)',       time: '10:02a', text: 'Semiconductors lead all groups, <b>+3.1%</b>', why: "NVDA's print is lifting the whole complex; AVGO, MU, AMD all participating." },
+  { cat: 'Earnings',    accent: 'var(--up)',       time: '9:31a',  text: '<b>NVDA</b> beats EPS by 18%, raises FY25 guidance', why: "Removes the market's biggest worry — that AI data-center demand was peaking." },
+  { cat: 'Analyst',     accent: 'var(--brand-2)',  time: '9:18a',  text: 'Morgan Stanley upgrades <b>CRM</b> to Overweight, PT $340', why: 'Third upgrade this week; the sell-side is turning constructive on the margin story.' },
+  { cat: 'Block Trade', accent: 'var(--ai)',       time: '9:05a',  text: '4.2M-share block in <b>XLF</b> crossed above VWAP', why: 'Large institutional buyer in financials aligns with today\'s risk-on rotation.' },
+  { cat: 'Story Stock', accent: 'var(--warn)',     time: '8:58a',  text: '<b>ZIM</b> +10% on a blowout quarter and reinstated dividend', why: 'Freight-rate spike is flowing straight to the bottom line for shippers.' },
+  { cat: 'Fed/Rates',   accent: 'var(--warn)',     time: '8:30a',  text: 'May core CPI <b>+0.2%</b> m/m vs +0.3% est.', why: 'First clean downside inflation surprise in months; rate-cut odds repriced higher.' },
 ];
 
-// ---- Weekly Recap ----
+// ---- End-of-Day Recap ----
 export const recap: RecapData = {
-  date: 'May 20–24, 2025',
-  mkt: "S&P 500 gained 1.3%, led by Tech (+3.1%) and Communication Services (+2.4%). VIX fell to 14.2, its lowest since late 2019. NVIDIA's blowout earnings set the tone for the week.",
-  items: [
-    { dt: 'Mon May 20', title: 'NVDA blowout kicks off the week', body: 'Nvidia pre-market +8% after reporting EPS of $6.57 vs. $5.56 estimate. Data Center revenue hit $22.6B (+427% YoY). Raised FY25 Data Center forecast.' },
-    { dt: 'Tue May 21', title: 'CPI benign, yields fall', body: 'May core CPI at 0.2% m/m, below the 0.3% estimate. 10Y yields fell 9 bps to 4.32%. September rate cut odds rose from 28% to 38%.' },
-    { dt: 'Wed May 22', title: 'Target miss weighs on retail', body: 'TGT -7.8% after missing EPS by 11% and cutting full-year guidance. Discretionary categories weakest in 4 quarters. Rival WMT up 5% on their own beat.' },
-    { dt: 'Thu May 23', title: 'Jobless claims steady', body: 'Weekly claims 215K, in-line with estimates. Continuing claims ticked up slightly to 1.79M. Labor market remains resilient despite elevated rates.' },
-    { dt: 'Fri May 24', title: 'Markets close near highs', body: 'Broad rally Friday ahead of long weekend. S&P closed at 5,312, up 1.3% on the week. Tech and Semis led; Energy and Real Estate lagged.' },
+  date: 'Tuesday, May 21',
+  subtitle: 'auto-generated 4:31 ET',
+  headline: 'Markets closed broadly higher on cooler inflation',
+  indices: [
+    { l: 'S&P 500',    v:  0.73 },
+    { l: 'Nasdaq',     v:  1.02 },
+    { l: 'Dow',        v:  0.41 },
+    { l: 'Russell 2K', v: -0.32 },
+  ],
+  stories: [
+    'Cooler-than-expected CPI lifted rate-cut hopes and sent yields lower.',
+    "NVDA's beat-and-raise powered a 3.1% rally in semiconductors.",
+    'Defensive sectors lagged as risk appetite returned across the tape.',
+  ],
+  tomorrow: [
+    { time: '8:30a', ev: 'Initial jobless claims' },
+    { time: 'BMO',   ev: 'Earnings: DELL, HD' },
+    { time: '2:00p', ev: 'FOMC minutes' },
+    { time: 'AMC',   ev: 'Earnings: SNOW, WDAY' },
+  ],
+  movers: [
+    { s: 'NVDA', reason: 'Earnings beat',  c:  8.23 },
+    { s: 'ZIM',  reason: 'Earnings beat',  c:  9.97 },
+    { s: 'PLTR', reason: 'Guidance raise', c:  6.18 },
+    { s: 'DELL', reason: 'Margin miss',    c: -3.45 },
+    { s: 'WBA',  reason: 'Guidance cut',   c: -5.80 },
+  ],
+  internals: [
+    { l: 'Advancers / Decliners', v: '2,810 / 1,140', c:  1 },
+    { l: 'New 52-wk highs',       v: '184',            c:  1 },
+    { l: 'New 52-wk lows',        v: '39',             c: -1 },
+    { l: 'Up volume',             v: '71%',            c:  1 },
   ],
 };

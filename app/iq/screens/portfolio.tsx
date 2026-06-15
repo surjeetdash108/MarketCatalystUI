@@ -2,132 +2,155 @@
 
 import { useIQActions } from "../shell";
 import { folio } from "../data";
-import { fmt, cls, arr, Spark } from "../utils";
+import { cls, arr, sign } from "../utils";
+
+const ALERTS = [
+  { title: "Earnings posted",       subs: "NVDA, AAPL" },
+  { title: "Move > 5% post-ER",     subs: "All holdings" },
+  { title: "Analyst up/downgrade",  subs: "All holdings" },
+  { title: "Unusual options",       subs: "NVDA, TSLA" },
+  { title: "13F change",            subs: "Tracked funds" },
+];
+
+const PULSE = [
+  "NVDA is your standout, up +8.2% after a beat-and-raise. It's now your largest position by weight — consider whether you want to trim into strength.",
+  "AAPL reports after close. Options imply a ±4.8% move. You hold a large position with high conviction — set a post-earnings alert.",
+  "TSLA caught a UBS upgrade (Sell → Neutral). The stock is your only red year-to-date holding at -8.1%.",
+  "HD lowered guidance — down -1.1%. Low conviction, small size; not a portfolio risk today.",
+];
+
+function convPill(conv: string) {
+  const c = conv === "High" ? "up" : conv === "Low" ? "dn" : "amc";
+  return <span className={`pill ${c}`}>{conv}</span>;
+}
 
 export function PortfolioScreen() {
   const { openStock } = useIQActions();
-
-  const rows = folio.map(f => ({
-    ...f,
-    value: f.qty * f.px,
-    cost: f.qty * f.avg,
-    gain: f.qty * (f.px - f.avg),
-    gainPct: (f.px - f.avg) / f.avg * 100,
-  }));
-
-  const totalVal = rows.reduce((s, r) => s + r.value, 0);
-  const totalCost = rows.reduce((s, r) => s + r.cost, 0);
-  const totalGain = totalVal - totalCost;
-  const totalGainPct = totalGain / totalCost * 100;
 
   return (
     <>
       <div className="page-head">
         <div>
+          <div className="eyebrow">My Portfolio</div>
           <div className="page-title">Portfolio Pulse</div>
-          <div className="page-sub">{folio.length} positions · Updated May 24, 2025</div>
+          <div className="page-sub">
+            {folio.length} holdings · $128,430 ·{" "}
+            <span className="up">+1.42% today (+$1,798)</span>
+          </div>
         </div>
+        <button className="btn primary">
+          <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
+            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          Add holding
+        </button>
       </div>
 
-      {/* Summary cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, padding: "14px 18px" }}>
-        {[
-          { l: "Total Value", v: `$${fmt(totalVal)}`, sub: "", c: 0 },
-          { l: "Total Cost Basis", v: `$${fmt(totalCost)}`, sub: "", c: 0 },
-          { l: "Total Gain / Loss", v: `${totalGain >= 0 ? "+" : ""}$${fmt(Math.abs(totalGain))}`, sub: `${Math.abs(totalGainPct).toFixed(1)}%`, c: totalGain },
-          { l: "Day Change (est.)", v: `+$${fmt(totalVal * 0.0073)}`, sub: "+0.73%", c: 1 },
-        ].map(card => (
-          <div key={card.l} className="card">
-            <div className="card-b">
-              <div style={{ fontSize: 10.5, color: "var(--text-dim-solid)", marginBottom: 4 }}>{card.l}</div>
-              <div className={`${cls(card.c)}`} style={{ fontSize: 18, fontWeight: 700, fontFamily: "var(--f-mono)" }}>
-                {card.v}
+      <div className="dash" style={{ padding: "0 18px 18px" }}>
+        {/* col-8: WMN + holdings */}
+        <div className="col-8" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* AI Portfolio Pulse block */}
+          <div className="wmn">
+            <div className="wmn-h">
+              <div className="t">
+                <div className="wmn-orb">
+                  <svg viewBox="0 0 24 24" fill="none" style={{ width: 16, height: 16 }}>
+                    <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
+                  </svg>
+                </div>
+                <div>
+                  <h2>Portfolio Pulse · Today</h2>
+                  <div className="meta">
+                    <span className="live"><span className="dot" />Live</span>
+                    · generated 10:24 ET
+                  </div>
+                </div>
               </div>
-              {card.sub && <div style={{ fontSize: 11, color: "var(--text-dim-solid)", marginTop: 2 }}>{card.sub}</div>}
+            </div>
+            <ul className="wmn-body" style={{ columns: 1 }}>
+              {PULSE.map((p, i) => (
+                <li key={i}>
+                  <span className="bullet" />
+                  <span dangerouslySetInnerHTML={{ __html: p
+                    .replace(/\+8\.2%/, '<b class="up">+8.2%</b>')
+                    .replace(/-8\.1%/, '<b class="down">-8.1%</b>')
+                    .replace(/-1\.1%/, '<b class="down">-1.1%</b>')
+                    .replace(/(NVDA|AAPL|TSLA|HD)/, '<b>$1</b>')
+                  }} />
+                </li>
+              ))}
+            </ul>
+            <div className="wmn-foot">
+              <span style={{ color: "var(--ai)" }}>
+                4 of {folio.length} holdings had a material event today · AI-generated, not investment advice
+              </span>
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* Holdings table */}
-      <div style={{ padding: "0 18px 18px" }}>
-        <div className="card">
-          <div className="card-h"><h3>Holdings</h3></div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Name</th>
-                  <th>Sector</th>
-                  <th>Qty</th>
-                  <th>Avg Cost</th>
-                  <th>Current Px</th>
-                  <th>Gain/Loss %</th>
-                  <th>Gain/Loss $</th>
-                  <th>Value</th>
-                  <th>Weight</th>
-                  <th>Trend</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={r.s} onClick={() => openStock(r.s)}>
-                    <td><span className={`sym ${cls(r.gainPct)}`}>{r.s}</span></td>
-                    <td style={{ color: "var(--text-hi)" }}>{r.n}</td>
-                    <td><span className="pill flat">{r.sec}</span></td>
-                    <td className="mono">{r.qty}</td>
-                    <td className="mono">${r.avg}</td>
-                    <td className="mono" style={{ color: "var(--text-hi)", fontWeight: 600 }}>${r.px}</td>
-                    <td>
-                      <span className={cls(r.gainPct)} style={{ fontWeight: 700, fontFamily: "var(--f-mono)" }}>
-                        {arr(r.gainPct)} {Math.abs(r.gainPct).toFixed(1)}%
-                      </span>
-                    </td>
-                    <td>
-                      <span className={cls(r.gain)} style={{ fontFamily: "var(--f-mono)", fontWeight: 600 }}>
-                        {r.gain >= 0 ? "+" : ""}${fmt(Math.abs(r.gain))}
-                      </span>
-                    </td>
-                    <td className="mono" style={{ color: "var(--text-hi)" }}>${fmt(r.value)}</td>
-                    <td className="mono" style={{ color: "var(--text-dim-solid)" }}>
-                      {(r.value / totalVal * 100).toFixed(1)}%
-                    </td>
-                    <td><Spark seed={i + 10} up={r.gainPct >= 0} /></td>
+          {/* Holdings table */}
+          <div className="card">
+            <div className="card-h">
+              <h3>Holdings</h3>
+              <span className="link">Manage alerts →</span>
+            </div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Stock</th>
+                    <th className="num">Price</th>
+                    <th className="num">Day</th>
+                    <th className="num">G/L</th>
+                    <th>Size</th>
+                    <th>Conviction</th>
+                    <th>Today's event</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {folio.map(f => (
+                    <tr key={f.s} style={{ cursor: "pointer" }} onClick={() => openStock(f.s)}>
+                      <td>
+                        <div className="co">
+                          <span className="s">{f.s}</span>
+                          <span className="n">{f.n}</span>
+                        </div>
+                      </td>
+                      <td className="num">${f.p.toFixed(2)}</td>
+                      <td className={`num ${cls(f.c)}`}>{sign(f.c)}</td>
+                      <td className={`num ${cls(f.gl)}`}>{sign(f.gl)}</td>
+                      <td><span className="pill hold">{f.size}</span></td>
+                      <td>{convPill(f.conv)}</td>
+                      <td style={{
+                        color: f.evt === "—" ? "var(--text-dim-solid)" : "var(--text)",
+                        fontSize: ".8rem",
+                      }}>{f.evt}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Allocation bar */}
-      <div style={{ padding: "0 18px 18px" }}>
-        <div className="card">
-          <div className="card-h"><h3>Sector Allocation</h3></div>
-          <div className="card-b">
-            {Object.entries(
-              rows.reduce((acc, r) => {
-                acc[r.sec] = (acc[r.sec] ?? 0) + r.value;
-                return acc;
-              }, {} as Record<string, number>)
-            )
-              .sort((a, b) => b[1] - a[1])
-              .map(([sec, val]) => {
-                const pct = val / totalVal * 100;
-                return (
-                  <div key={sec} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, color: "var(--text-dim-solid)", width: 70 }}>{sec}</div>
-                    <div style={{ flex: 1, height: 6, background: "var(--surface-3)", borderRadius: 99 }}>
-                      <div style={{ width: `${pct}%`, height: "100%", background: "var(--brand)", borderRadius: 99 }} />
-                    </div>
-                    <div className="mono" style={{ fontSize: 12, color: "var(--text-hi)", width: 40, textAlign: "right" }}>
-                      {pct.toFixed(1)}%
-                    </div>
-                  </div>
-                );
-              })}
+        {/* col-4: Active alerts */}
+        <div className="col-4">
+          <div className="card">
+            <div className="card-h">
+              <h3>Active alerts</h3>
+              <span className="link">Edit →</span>
+            </div>
+            <div className="card-b">
+              {ALERTS.map(a => (
+                <div key={a.title} className="minirow">
+                  <span className="mid">
+                    <b style={{ color: "var(--text-hi)" }}>{a.title}</b>
+                    <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{a.subs}</div>
+                  </span>
+                  <span className="r"><span className="pill up">On</span></span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

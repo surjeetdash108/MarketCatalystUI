@@ -1,77 +1,152 @@
 "use client";
 
+import { useState } from "react";
 import { useIQActions } from "../shell";
 import { funds } from "../data";
 
+const AI_SECTIONS = [
+  { h: "What changed",   p: "Berkshire <b>trimmed its Apple stake by ~13%</b> — the single biggest dollar move of the quarter — while sharply building cash. Net posture turned more defensive." },
+  { h: "Biggest buys",   p: "Added to <b>Chubb (CB)</b>, the previously-secret position now disclosed at ~$6.7B, and topped up <b>Occidental</b>." },
+  { h: "Biggest exits",  p: "Fully exited <b>HP Inc</b> and <b>Paramount</b>, booking a loss on the latter." },
+  { h: "Theme shift",    p: "Rotation <b>away from mega-cap tech concentration</b> toward insurance and energy — consistent with valuation caution." },
+  { h: "Concentration",  p: "<b>Less concentrated</b>: top-5 weight fell from 79% to 75% after the Apple trim." },
+  { h: "Your overlap",   p: "You both hold <b>AAPL</b>. Berkshire reducing while you hold a large high-conviction position — worth noting the divergence." },
+];
+
+const CROSS_OWN = [
+  { s: "MSFT", note: "held by 4 funds", dir: 1 },
+  { s: "AMZN", note: "held by 3 funds", dir: 1 },
+  { s: "GOOGL", note: "held by 3 funds", dir: 1 },
+];
+const CROSS_SOLD = [
+  { s: "AAPL", note: "trimmed by 3 funds", dir: -1 },
+  { s: "DIS",  note: "trimmed by 3 funds", dir: -1 },
+];
+const CROSS_LONE = [
+  { s: "BABA", note: "only Scion" },
+  { s: "CMG",  note: "only Pershing" },
+];
+
 export function ThirteenFScreen() {
   const { openFund, openStock } = useIQActions();
+  const [activeFund, setActiveFund] = useState(0);
 
   return (
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">13F Intelligence</div>
-          <div className="page-sub">Major institutional filings · Q1 2025</div>
+          <div className="eyebrow">13F Intelligence</div>
+          <div className="page-title">Institutional Flow</div>
+          <div className="page-sub">Tracking {funds.length} funds · Q1 2024 filings · sourced from SEC EDGAR</div>
         </div>
+        <button className="btn">
+          <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
+            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          Track a fund
+        </button>
       </div>
 
-      <div style={{ padding: "14px 18px" }}>
-        <div style={{
-          background: "var(--ai-dim)", border: "1px solid var(--ai)", borderRadius: "var(--r-lg)",
-          padding: "12px 14px", marginBottom: 16, fontSize: 12.5, color: "var(--text)",
-        }}>
-          <span style={{ color: "var(--ai)", fontWeight: 700 }}>✦ AI Insight:</span> Institutional money flowed into semiconductors (+$24B net) and out of consumer discretionary (−$8B net) this quarter. Berkshire's Apple reduction continues while adding energy.
-        </div>
-
-        <div className="card">
-          <div className="card-h"><h3>Major Fund Holdings</h3></div>
-          <div className="card-b">
-            {funds.map((f, i) => (
-              <div key={f.name} className="fundcard" onClick={() => openFund(i)}>
-                <div className="fn">{f.name}</div>
-                <div className="ft">{f.ticker} · AUM {f.atm}</div>
-                <div className="ftops">
-                  {f.top.map(t => (
-                    <div key={t} className="ftop"
-                      onClick={e => { e.stopPropagation(); openStock(t); }}>{t}</div>
-                  ))}
+      {/* Fund cards */}
+      <div className="dash" style={{ padding: "0 18px" }}>
+        {funds.map((f, i) => (
+          <div key={f.name} className="col-4">
+            <div className={`fundcard${activeFund === i ? " on" : ""}`}
+              onClick={() => { setActiveFund(i); openFund(i); }}>
+              <div style={{ display: "flex", gap: 11, alignItems: "center", marginBottom: 12 }}>
+                <div className="av">{f.av}</div>
+                <div>
+                  <div className="nm">{f.name}</div>
+                  <div className="mgr">{f.mgr}</div>
                 </div>
               </div>
-            ))}
+              <div style={{ display: "flex", gap: 14, fontFamily: "var(--f-mono)", fontSize: ".78rem" }}>
+                <div>
+                  <div style={{ color: "var(--text-dim-solid)", fontSize: ".62rem", fontFamily: "var(--f-body)" }}>13F AUM</div>
+                  <b style={{ color: "var(--text-hi)" }}>{f.aum}</b>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-dim-solid)", fontSize: ".62rem", fontFamily: "var(--f-body)" }}>Positions</div>
+                  <b style={{ color: "var(--text-hi)" }}>{f.pos}</b>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-dim-solid)", fontSize: ".62rem", fontFamily: "var(--f-body)" }}>Top</div>
+                  <b style={{ color: "var(--text-hi)" }}>{f.top1}</b>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 11, alignItems: "center" }}>
+                <span className="pill up">{f.newPos} new</span>
+                <span className="pill dn">{f.exits} exits</span>
+                <span className="pill amc">{f.quarter}</span>
+                <span className="link" style={{ marginLeft: "auto" }}
+                  onClick={e => { e.stopPropagation(); openFund(i); }}>
+                  Deep analysis →
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* AI Summary + Cross-fund signals */}
+      <div className="dash" style={{ padding: "14px 18px 18px" }}>
+
+        {/* AI 13F Summary (col-8) */}
+        <div className="col-8">
+          <div className="ai-block">
+            <div className="card-h">
+              <h3 className="ai-c">◆ AI 13F Summary · {funds[activeFund]?.name} · {funds[activeFund]?.quarter}</h3>
+              <span className="pill ai">Auto-generated</span>
+            </div>
+            <div className="card-b">
+              {AI_SECTIONS.map(s => (
+                <div key={s.h} className="ai-sec">
+                  <div className="h">{s.h}</div>
+                  <p dangerouslySetInnerHTML={{ __html: s.p }} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Notable moves */}
-        <div className="card" style={{ marginTop: 12 }}>
-          <div className="card-h"><h3>Notable Q1 Moves</h3></div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr><th>Fund</th><th>Stock</th><th>Action</th><th>Shares</th><th>Value</th></tr>
-              </thead>
-              <tbody>
-                {[
-                  { fund: "Berkshire Hathaway", sym: "AAPL", action: "Reduced", shares: "−116M", val: "$22.2B" },
-                  { fund: "Berkshire Hathaway", sym: "CVX", action: "Added", shares: "+2.3M", val: "$340M" },
-                  { fund: "ARK Innovation", sym: "TSLA", action: "Added", shares: "+1.1M", val: "$185M" },
-                  { fund: "Bridgewater", sym: "GLD", action: "Added", shares: "+4.2M", val: "$320M" },
-                  { fund: "Vanguard 500", sym: "NVDA", action: "Added", shares: "+8.1M", val: "$8.3B" },
-                ].map((row, i) => (
-                  <tr key={i} onClick={() => openStock(row.sym)}>
-                    <td style={{ color: "var(--text-dim-solid)", fontSize: 12 }}>{row.fund}</td>
-                    <td><span className="sym">{row.sym}</span></td>
-                    <td>
-                      <span style={{
-                        color: row.action === "Added" ? "var(--up)" : "var(--down)",
-                        fontWeight: 600, fontSize: 12,
-                      }}>{row.action}</span>
-                    </td>
-                    <td className="mono" style={{ color: row.action === "Added" ? "var(--up)" : "var(--down)" }}>{row.shares}</td>
-                    <td className="mono" style={{ color: "var(--text-hi)" }}>{row.val}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Cross-fund signals (col-4) */}
+        <div className="col-4">
+          <div className="card">
+            <div className="card-h"><h3>Cross-fund signals</h3></div>
+            <div className="card-b">
+              <div style={{ fontSize: ".7rem", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--up)", fontWeight: 700, margin: "4px 0 6px" }}>
+                Most owned (3+ funds)
+              </div>
+              {CROSS_OWN.map(r => (
+                <div key={r.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(r.s)}>
+                  <span className="tkr">{r.s}</span>
+                  <span className="mid">{r.note}</span>
+                  <span className="r up">▲</span>
+                </div>
+              ))}
+
+              <div style={{ fontSize: ".7rem", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--down)", fontWeight: 700, margin: "12px 0 6px" }}>
+                Most sold (3+ funds)
+              </div>
+              {CROSS_SOLD.map(r => (
+                <div key={r.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(r.s)}>
+                  <span className="tkr">{r.s}</span>
+                  <span className="mid">{r.note}</span>
+                  <span className="r down">▼</span>
+                </div>
+              ))}
+
+              <div style={{ fontSize: ".7rem", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--ai)", fontWeight: 700, margin: "12px 0 6px" }}>
+                Lone high-conviction
+              </div>
+              {CROSS_LONE.map(r => (
+                <div key={r.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(r.s)}>
+                  <span className="tkr">{r.s}</span>
+                  <span className="mid">{r.note}</span>
+                  <span className="r ai-c">◆</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

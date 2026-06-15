@@ -81,10 +81,8 @@ export function DashboardScreen() {
   const timePart = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const dateStr  = `${dayName} · ${datePart} · ${timePart} ET`;
 
-  const totalVal     = folio.reduce((s, f) => s + f.qty * f.px,  0);
-  const totalCost    = folio.reduce((s, f) => s + f.qty * f.avg, 0);
-  const totalGain    = totalVal - totalCost;
-  const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
+  const totalVal     = 128430;
+  const totalGainPct = folio.reduce((s, f) => s + f.gl, 0) / folio.length;
 
   return (
     <>
@@ -145,7 +143,7 @@ export function DashboardScreen() {
                 return (
                   <div key={f.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(f.s)}>
                     <span className="tkr">{f.s}<small>{f.n}</small></span>
-                    <span className="mid">{f.sec}</span>
+                    <span className="mid">{f.evt === "—" ? "" : f.evt}</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
                   </div>
                 );
@@ -163,7 +161,7 @@ export function DashboardScreen() {
               {watch.slice(0, 5).map(w => (
                 <div key={w.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
                   <span className="tkr">{w.s}<small>{w.n}</small></span>
-                  <span className="mid">{w.note}</span>
+                  <span className="mid">{w.headline === "—" ? "" : w.headline}</span>
                   <span className={`r ${cls(w.c)}`}>{sign(w.c)}</span>
                 </div>
               ))}

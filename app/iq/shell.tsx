@@ -252,18 +252,26 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
         <div className="drawer-head">
           <div>
             <div className="drawer-title">{fund?.name ?? "Fund"}</div>
-            <div className="drawer-sub">{fund?.ticker} · AUM {fund?.atm}</div>
+            <div className="drawer-sub">{fund?.mgr} · AUM {fund?.aum}</div>
           </div>
           <button className="drawer-close" onClick={onClose}>✕</button>
         </div>
         {fund && (
           <div className="card">
-            <div className="card-h"><h3>Top Holdings</h3></div>
+            <div className="card-h"><h3>Fund Summary</h3></div>
             <div className="card-b">
-              {fund.top.map((t, i) => (
-                <div key={t} className="fin-row">
-                  <span className="fin-lbl">#{i + 1}</span>
-                  <span className="sym">{t}</span>
+              {[
+                ["Manager", fund.mgr],
+                ["13F AUM", fund.aum],
+                ["Positions", String(fund.pos)],
+                ["Top holding", fund.top1],
+                ["New positions", String(fund.newPos)],
+                ["Exits", String(fund.exits)],
+                ["Quarter", fund.quarter],
+              ].map(([l, v]) => (
+                <div key={l} className="fin-row">
+                  <span className="fin-lbl">{l}</span>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".82rem", color: "var(--text-hi)" }}>{v}</span>
                 </div>
               ))}
             </div>
