@@ -3,7 +3,7 @@
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
 import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList } from "../data";
-import { fmt, sign, cls, arr, Spark, gaugeSVG } from "../utils";
+import { fmt, sign, cls, arr, Spark } from "../utils";
 
 const LIVE_FEED = [
   {
@@ -37,6 +37,33 @@ function analystDir(type: string) {
   return <span style={{ color: "var(--text-dim-solid)" }}>Reit</span>;
 }
 
+/** Circular progress gauge — number lives inside the ring */
+function CircleGauge({ value, color = "var(--up)" }: { value: number; color?: string }) {
+  const r = 30;
+  const circ = 2 * Math.PI * r;
+  const filled = circ * (value / 100);
+  return (
+    <div style={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
+      <svg viewBox="0 0 80 80" style={{ width: 80, height: 80 }}>
+        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--surface-3)" strokeWidth="7" />
+        <circle cx="40" cy="40" r={r} fill="none" stroke={color} strokeWidth="7"
+          strokeDasharray={`${filled.toFixed(2)} ${(circ - filled).toFixed(2)}`}
+          strokeLinecap="round"
+          transform="rotate(-90 40 40)" />
+      </svg>
+      <div style={{
+        position: "absolute", inset: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <span style={{
+          fontFamily: "var(--f-mono)", fontSize: 18, fontWeight: 700,
+          color: "var(--text-hi)", lineHeight: 1,
+        }}>{value}</span>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardScreen() {
   const { openStock, openEarnings, openSector, setCopilot } = useIQActions();
   const { user } = useAppSelector(s => s.auth);
@@ -48,18 +75,19 @@ export function DashboardScreen() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const now = new Date();
-  const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
+  const dayName  = now.toLocaleDateString("en-US", { weekday: "long" });
   const datePart = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const timePart = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const dateStr = `${dayName} · ${datePart} · ${timePart} ET`;
+  const dateStr  = `${dayName} · ${datePart} · ${timePart} ET`;
 
-  const totalVal  = folio.reduce((s, f) => s + f.qty * f.px, 0);
-  const totalCost = folio.reduce((s, f) => s + f.qty * f.avg, 0);
+  const totalVal     = folio.reduce((s, f) => s + f.qty * f.px,  0);
+  const totalCost    = folio.reduce((s, f) => s + f.qty * f.avg, 0);
   const totalGain    = totalVal - totalCost;
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
   return (
     <>
+      {/* ── Header ── */}
       <div className="page-head">
         <div>
           <div className="eyebrow">{dateStr}</div>
@@ -77,7 +105,7 @@ export function DashboardScreen() {
 
       <div className="dash">
 
-        {/* ── Pulse strip ── */}
+        {/* ── 1. Pulse strip ── */}
         <div className="col-12">
           <div className="pulse">
             {pulse.slice(0, 6).map((x, i) => (
@@ -91,14 +119,18 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── At a glance: Portfolio ── */}
-        <div className="col-4">
-          <div className="card">
+        {/* ── 2. At-a-glance row — all three cards equal height ── */}
+        <div className="col-12" style={{
+          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, alignItems: "stretch",
+        }}>
+
+          {/* Portfolio mini */}
+          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>My Portfolio</h3>
               <a className="link" href="/menu/portfolio">View all →</a>
             </div>
-            <div className="card-b" style={{ paddingTop: 8 }}>
+            <div className="card-b" style={{ flex: 1, paddingTop: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
                 <span className="mono" style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-hi)" }}>
                   ${fmt(totalVal, 0)}
@@ -119,16 +151,14 @@ export function DashboardScreen() {
               })}
             </div>
           </div>
-        </div>
 
-        {/* ── At a glance: Watchlist ── */}
-        <div className="col-4">
-          <div className="card">
+          {/* Watchlist mini */}
+          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Watchlist</h3>
               <a className="link" href="/menu/watchlist">View all →</a>
             </div>
-            <div className="card-b" style={{ paddingTop: 8 }}>
+            <div className="card-b" style={{ flex: 1, paddingTop: 8 }}>
               {watch.slice(0, 5).map(w => (
                 <div key={w.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
                   <span className="tkr">{w.s}<small>{w.n}</small></span>
@@ -138,42 +168,49 @@ export function DashboardScreen() {
               ))}
             </div>
           </div>
-        </div>
 
-        {/* ── At a glance: Heatmap mini ── */}
-        <div className="col-4">
-          <div className="card">
+          {/* Heatmap mini — exactly 3 rows × 2 cols */}
+          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Market Heatmap</h3>
               <a className="link" href="/menu/heatmap">View all →</a>
             </div>
-            <div className="card-b" style={{ paddingTop: 10 }}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {sectorList.slice(0, 8).map(sd => {
-                  const tot = sd.items.reduce((s, i) => s + i[1], 0);
+            <div className="card-b" style={{ flex: 1, display: "flex", flexDirection: "column", paddingTop: 10 }}>
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 1fr",
+                gridTemplateRows: "1fr 1fr 1fr", gap: 4, flex: 1,
+              }}>
+                {sectorList.slice(0, 6).map(sd => {
                   const a = Math.min(Math.abs(sd.chg) / 2, 1);
-                  const col = sd.chg >= 0
+                  const bg = sd.chg >= 0
                     ? `rgba(28,170,112,${(0.25 + a * 0.55).toFixed(2)})`
                     : `rgba(208,52,76,${(0.25 + a * 0.55).toFixed(2)})`;
                   return (
                     <div key={sd.name} onClick={() => openSector(sd.name)}
-                      style={{ cursor: "pointer", background: col, borderRadius: 7, padding: "8px 9px", flex: `${Math.max(1, tot / 1400)} 1 78px` }}>
+                      style={{
+                        cursor: "pointer", background: bg, borderRadius: 7,
+                        padding: "7px 9px", display: "flex", flexDirection: "column", justifyContent: "space-between",
+                      }}>
                       <div style={{ fontSize: ".62rem", fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>{sd.name}</div>
-                      <div className="mono" style={{ fontSize: ".66rem", color: "#ffffffd0", marginTop: 2 }}>{sign(sd.chg)}</div>
+                      <div className="mono" style={{ fontSize: ".66rem", color: "#ffffffd0" }}>{sign(sd.chg)}</div>
                     </div>
                   );
                 })}
               </div>
-              <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 9 }}>
-                Tap a sector for its stocks &amp; news.
+              <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                Tap a sector for stocks &amp; news.
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── WMN Signature block + Live Feed ── */}
-        <div className="col-8">
-          <div className="wmn">
+        {/* ── 3. WMN + VIX/F&G — paired so heights match ── */}
+        <div className="col-12" style={{
+          display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, alignItems: "stretch",
+        }}>
+
+          {/* WMN Signature block */}
+          <div className="wmn" style={{ display: "flex", flexDirection: "column" }}>
             <div className="wmn-h">
               <div className="t">
                 <div className="wmn-orb">
@@ -196,7 +233,7 @@ export function DashboardScreen() {
                 30-sec audio
               </button>
             </div>
-            <ul className="wmn-body">
+            <ul className="wmn-body" style={{ flex: 1 }}>
               {wmn.map((b, i) => (
                 <li key={i}>
                   <span className="bullet" />
@@ -219,8 +256,64 @@ export function DashboardScreen() {
             </div>
           </div>
 
-          {/* Live Market Feed */}
-          <div className="card" style={{ marginTop: 14 }}>
+          {/* VIX + Fear & Greed — stacked to match WMN height */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* VIX */}
+            <div className="card vix" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+              <div className="card-h">
+                <h3>VIX · Volatility</h3>
+                <span className="pill up">Calm</span>
+              </div>
+              <div className="card-b" style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                    <span className="big">14.18</span>
+                    <span className="mono down" style={{ fontWeight: 600 }}>▼ -2.51%</span>
+                  </div>
+                  <div className="pctl" style={{ marginTop: 12 }}><i style={{ width: "22%" }} /></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
+                    <span>12-mo percentile: 22nd</span>
+                    <span>Trend: falling</span>
+                  </div>
+                </div>
+                <div className="note">
+                  VIX at 14 is low and historically corresponds to a calm, risk-on tape. Cheap hedging environment.
+                </div>
+              </div>
+            </div>
+
+            {/* Fear & Greed — circle with number, label to the right */}
+            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+              <div className="card-h">
+                <h3>Fear &amp; Greed</h3>
+                <span className="link">History →</span>
+              </div>
+              <div className="card-b" style={{
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18,
+              }}>
+                <CircleGauge value={62} color="var(--up)" />
+                <div>
+                  <div style={{
+                    fontSize: "1.4rem", fontWeight: 700, color: "var(--up)",
+                    fontFamily: "var(--f-display)", lineHeight: 1,
+                  }}>Greed</div>
+                  <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
+                    Fear &amp; Greed Index
+                  </div>
+                  <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 3 }}>
+                    Prev close: <b style={{ color: "var(--text)" }}>58</b>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ── 4. Live Market Feed + bottom widget stack ── */}
+        <div className="col-8">
+          <div className="card">
             <div className="card-h">
               <h3>📡 Live Market Feed</h3>
               <a className="link" href="/menu/commentary">All-market commentary →</a>
@@ -252,44 +345,7 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── Right column widget stack ── */}
         <div className="col-4" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* VIX */}
-          <div className="card vix">
-            <div className="card-h">
-              <h3>VIX · Volatility</h3>
-              <span className="pill up">Calm</span>
-            </div>
-            <div className="card-b">
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                <span className="big">14.18</span>
-                <span className="mono down" style={{ fontWeight: 600 }}>▼ -2.51%</span>
-              </div>
-              <div className="pctl"><i style={{ width: "22%" }} /></div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
-                <span>12-mo percentile: 22nd</span>
-                <span>Trend: falling</span>
-              </div>
-              <div className="note">
-                VIX at 14 is low and historically corresponds to a calm, risk-on tape. Cheap hedging environment.
-              </div>
-            </div>
-          </div>
-
-          {/* Fear & Greed */}
-          <div className="card">
-            <div className="card-h">
-              <h3>Fear &amp; Greed</h3>
-              <span className="link">History →</span>
-            </div>
-            <div className="card-b gauge-wrap">
-              <div dangerouslySetInnerHTML={{ __html: gaugeSVG(62, "", "var(--up)") }} />
-              <div className="gauge-num up">62</div>
-              <div className="gauge-lbl up">Greed</div>
-              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Previous close: 58</div>
-            </div>
-          </div>
 
           {/* Earnings Today */}
           <div className="card">
@@ -324,9 +380,7 @@ export function DashboardScreen() {
               {analyst.slice(0, 5).map((a, i) => (
                 <div key={i} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(a.s)}>
                   <span className="tkr">{a.s}</span>
-                  <span className="mid">
-                    {a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.to}</b>
-                  </span>
+                  <span className="mid">{a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.to}</b></span>
                   <span className="r">{analystDir(a.type)}</span>
                 </div>
               ))}
