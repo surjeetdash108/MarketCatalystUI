@@ -30,7 +30,16 @@ export interface StockInfo {
   ins: { n: string; a: string; dt: string; }[];
 }
 export interface SectorRow { name: string; rank: number; trend: string; chg: number; items: [string, number, number][]; }
-export interface ScreenerStock { s: string; n: string; sec: string; px: number; mc: number; pe: number; rev: number; eg: number; moat: string; roe: number; yld: number; alpha: number; }
+export interface ScreenerStock {
+  s: string; n: string; sec: string;
+  mc: number; pe: number;
+  rs: number;     // relative strength 0–100
+  salesG: number; // sales growth %
+  epsG: number;   // EPS growth %
+  mgn: number;    // gross margin %
+  rvol: number;   // relative volume
+  rating: string; // Strong Buy | Buy | Neutral | Sell | Strong Sell
+}
 export interface MacroEvent { dt: string; ev: string; sub?: string; type: string; }
 export interface CommentaryItem { by: string; dt: string; title: string; blurb: string; tag: string; }
 export interface RecapData { date: string; mkt: string; items: { dt: string; title: string; body: string; }[]; }
@@ -246,23 +255,45 @@ export const sectorByName: Record<string, SectorRow> = Object.fromEntries(sector
 
 // ---- Screener ----
 export const screenerStocks: ScreenerStock[] = [
-  { s: 'NVDA', n: 'Nvidia', sec: 'Semis', px: 1025, mc: 2910, pe: 78, rev: 96.3, eg: 120, moat: 'Wide', roe: 91, yld: 0, alpha: 8.2 },
-  { s: 'MSFT', n: 'Microsoft', sec: 'Software', px: 415, mc: 3100, pe: 36, rev: 211, eg: 15, moat: 'Wide', roe: 38, yld: 0.8, alpha: 2.1 },
-  { s: 'AAPL', n: 'Apple', sec: 'Hardware', px: 191, mc: 3000, pe: 29, rev: 383, eg: 8, moat: 'Wide', roe: 147, yld: 0.5, alpha: 0.4 },
-  { s: 'AMZN', n: 'Amazon', sec: 'E-comm', px: 182, mc: 1900, pe: 55, rev: 575, eg: 32, moat: 'Wide', roe: 18, yld: 0, alpha: 1.9 },
-  { s: 'META', n: 'Meta', sec: 'Social', px: 490, mc: 1200, pe: 27, rev: 134, eg: 28, moat: 'Wide', roe: 35, yld: 0.4, alpha: 3.2 },
-  { s: 'AVGO', n: 'Broadcom', sec: 'Semis', px: 1330, mc: 612, pe: 31, rev: 47, eg: 20, moat: 'Narrow', roe: 52, yld: 1.2, alpha: 4.1 },
-  { s: 'TSLA', n: 'Tesla', sec: 'Auto', px: 168, mc: 536, pe: 42, rev: 96, eg: 22, moat: 'Narrow', roe: 18, yld: 0, alpha: -3.1 },
-  { s: 'AMD', n: 'AMD', sec: 'Semis', px: 162, mc: 262, pe: 46, rev: 22, eg: 45, moat: 'Narrow', roe: 4, yld: 0, alpha: 2.4 },
-  { s: 'PLTR', n: 'Palantir', sec: 'Software', px: 24, mc: 51, pe: 80, rev: 2.7, eg: 20, moat: 'Narrow', roe: 8, yld: 0, alpha: 5.9 },
-  { s: 'CRWD', n: 'CrowdStrike', sec: 'Cybersec', px: 345, mc: 84, pe: 500, rev: 3.1, eg: 33, moat: 'Wide', roe: 5, yld: 0, alpha: 0.8 },
+  { s: 'NVDA', n: 'NVIDIA',       sec: 'Semis',    mc: 2910, pe: 71.4, rs: 98, salesG: 262, epsG: 486, mgn: 53, rvol: 4.2, rating: 'Strong Buy' },
+  { s: 'AVGO', n: 'Broadcom',     sec: 'Semis',    mc: 648,  pe: 48.2, rs: 91, salesG: 34,  epsG: 12,  mgn: 46, rvol: 1.8, rating: 'Buy' },
+  { s: 'CRM',  n: 'Salesforce',   sec: 'Software', mc: 281,  pe: 44.1, rs: 78, salesG: 11,  epsG: 44,  mgn: 30, rvol: 2.2, rating: 'Buy' },
+  { s: 'PLTR', n: 'Palantir',     sec: 'Software', mc: 52,   pe: 66.0, rs: 88, salesG: 21,  epsG: 60,  mgn: 25, rvol: 3.4, rating: 'Strong Buy' },
+  { s: 'META', n: 'Meta',         sec: 'Internet', mc: 1060, pe: 27.8, rs: 84, salesG: 27,  epsG: 117, mgn: 38, rvol: 1.3, rating: 'Buy' },
+  { s: 'AMD',  n: 'Adv Micro Dev',sec: 'Semis',    mc: 266,  pe: 51.5, rs: 62, salesG: 2,   epsG: -7,  mgn: 11, rvol: 1.9, rating: 'Neutral' },
+  { s: 'MU',   n: 'Micron',       sec: 'Semis',    mc: 152,  pe: 39.0, rs: 81, salesG: 58,  epsG: 120, mgn: 18, rvol: 1.6, rating: 'Buy' },
+  { s: 'INTC', n: 'Intel',        sec: 'Semis',    mc: 128,  pe: 32.1, rs: 34, salesG: -9,  epsG: -40, mgn: 5,  rvol: 1.9, rating: 'Sell' },
+  { s: 'SMCI', n: 'Super Micro',  sec: 'Hardware', mc: 48,   pe: 38.4, rs: 95, salesG: 200, epsG: 308, mgn: 14, rvol: 4.8, rating: 'Strong Buy' },
+  { s: 'WBA',  n: 'Walgreens',    sec: 'Retail',   mc: 14,   pe: 6.2,  rs: 9,  salesG: 6,   epsG: -60, mgn: 2,  rvol: 2.7, rating: 'Strong Sell' },
 ];
 
-export const screenerPresets = [
-  { name: 'AI Infrastructure', f: { moat: 'Wide', eg: 30 } },
-  { name: 'Quality + Value', f: { moat: 'Wide', pe_max: 35 } },
-  { name: 'High Growth', f: { eg: 25 } },
-  { name: 'Income & Stability', f: { yld: 0.5 } },
+export interface ScreenerPreset {
+  name: string;
+  desc: string;
+  f: { rs_min?: number; salesG_min?: number; epsG_min?: number; rvol_min?: number; rating?: string[]; mc_min?: number; };
+}
+
+export const screenerPresets: ScreenerPreset[] = [
+  { name: 'Briefing growth screen',     desc: '6-mo RS ≥ 80 · sales & EPS growth · expanding margins', f: { rs_min: 80, salesG_min: 20, epsG_min: 25 } },
+  { name: 'Post-earnings momentum',     desc: 'beat + raise · gap up · RVOL > 2×',                      f: { rvol_min: 2 } },
+  { name: 'Oversold quality',           desc: 'RSI < 35 · positive FCF · above 200-DMA',                f: {} },
+  { name: 'Unusual volume',             desc: 'RVOL > 3× · price > $5',                                 f: { rvol_min: 3 } },
+  { name: 'CAN SLIM leaders',           desc: "O'Neil: EPS+sales accel · RS ≥ 90 · near highs",         f: { rs_min: 90, salesG_min: 15, epsG_min: 20 } },
+  { name: 'Minervini trend template',   desc: 'price > 50 > 150 > 200-DMA, all rising',                 f: { rs_min: 75 } },
+  { name: '52-week-high breakouts',     desc: 'new 52w high · volume surge',                             f: { rvol_min: 1.5, rs_min: 80 } },
+  { name: 'Gap-and-go (premarket)',     desc: 'gap > 4% · premarket RVOL > 5×',                          f: { rvol_min: 3 } },
+  { name: 'Relative-strength leaders', desc: 'RS ≥ 90 vs S&P over 6 months',                            f: { rs_min: 90 } },
+  { name: 'Dividend growth aristocrats',desc: '25-yr dividend growth · payout < 60%',                   f: {} },
+  { name: 'Magic Formula (Greenblatt)', desc: 'high ROIC · high earnings yield',                        f: {} },
+  { name: 'GARP',                       desc: 'growth ≥ 15% · PEG < 1.5',                               f: { salesG_min: 15, epsG_min: 15 } },
+  { name: 'Deep value (low P/E + FCF)', desc: 'P/E < 12 · FCF yield > 8%',                              f: {} },
+  { name: 'Net-net / asset value',      desc: 'price < net current assets',                              f: {} },
+  { name: 'Short-squeeze candidates',   desc: 'short interest > 20% · rising price',                    f: { rs_min: 60 } },
+  { name: 'Insider-buying cluster',     desc: '3+ insider buys in 90 days',                              f: {} },
+  { name: 'Analyst-upgrade momentum',   desc: '2+ upgrades in 30 days · PT raised',                     f: { rs_min: 70 } },
+  { name: 'Golden cross (50>200)',       desc: '50-DMA crossing above 200-DMA',                          f: { rs_min: 65 } },
+  { name: 'Bollinger squeeze breakout', desc: 'low volatility → expansion',                              f: { rvol_min: 2 } },
+  { name: 'Cup-with-handle setups',     desc: 'classic base · breakout pivot',                           f: { rs_min: 80 } },
 ];
 
 // ---- Macro Events ----

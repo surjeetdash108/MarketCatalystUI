@@ -571,7 +571,18 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <FundDrawer idx={drawer.idx} onClose={() => setDrawer(null)} />
           )}
 
-          {/* Copilot */}
+          {/* Copilot FAB — visible when panel is closed */}
+          {!copilotOpen && (
+            <button className="copilot-fab" onClick={() => setCopilotOpen(true)}>
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
+                <circle cx="18.5" cy="17.5" r="2" fill="currentColor" />
+              </svg>
+              Market Copilot
+            </button>
+          )}
+
+          {/* Copilot panel */}
           {copilotOpen && <CopilotPanel onClose={() => setCopilotOpen(false)} />}
 
           {/* Command palette */}
