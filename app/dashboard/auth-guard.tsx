@@ -16,7 +16,7 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
     return (
       <div style={{
         position: "fixed", inset: 0,
-        background: "#080B11",
+        background: "transparent",
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         gap: 16,

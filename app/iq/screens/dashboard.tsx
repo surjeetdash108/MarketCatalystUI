@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
 import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList } from "../data";
@@ -128,7 +129,7 @@ export function DashboardScreen() {
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>My Portfolio</h3>
-              <a className="link" href="/menu/portfolio">View all →</a>
+              <Link className="link" href="/menu/portfolio">View all →</Link>
             </div>
             <div className="card-b" style={{ flex: 1, paddingTop: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
@@ -156,7 +157,7 @@ export function DashboardScreen() {
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Watchlist</h3>
-              <a className="link" href="/menu/watchlist">View all →</a>
+              <Link className="link" href="/menu/watchlist">View all →</Link>
             </div>
             <div className="card-b" style={{ flex: 1, paddingTop: 8 }}>
               {watch.slice(0, 5).map(w => (
@@ -173,7 +174,7 @@ export function DashboardScreen() {
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Market Heatmap</h3>
-              <a className="link" href="/menu/heatmap">View all →</a>
+              <Link className="link" href="/menu/heatmap">View all →</Link>
             </div>
             <div className="card-b" style={{ flex: 1, display: "flex", flexDirection: "column", paddingTop: 10 }}>
               <div style={{
@@ -320,7 +321,7 @@ export function DashboardScreen() {
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>📡 Live Market Feed</h3>
-              <a className="link" href="/menu/commentary">All-market commentary →</a>
+              <Link className="link" href="/menu/commentary">All-market commentary →</Link>
             </div>
             <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
               {LIVE_FEED.map((f, i) => (
@@ -352,7 +353,7 @@ export function DashboardScreen() {
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Earnings Today</h3>
-              <a className="link" href="/menu/earnings">View all →</a>
+              <Link className="link" href="/menu/earnings">View all →</Link>
             </div>
             <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
               {earnings.slice(0, 5).map(e => (
@@ -382,7 +383,7 @@ export function DashboardScreen() {
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Analyst Actions</h3>
-              <a className="link" href="/menu/analyst">View all →</a>
+              <Link className="link" href="/menu/analyst">View all →</Link>
             </div>
             <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
               {analyst.slice(0, 5).map((a, i) => (
@@ -399,7 +400,7 @@ export function DashboardScreen() {
           <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Top Movers</h3>
-              <a className="link" href="/menu/movers">View all →</a>
+              <Link className="link" href="/menu/movers">View all →</Link>
             </div>
             <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
               {movers.slice(0, 5).map(m => (
