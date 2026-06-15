@@ -14,14 +14,33 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
 
   if (status === "loading") {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#f4f6f8] text-[#17231d]">
-        <div className="rounded-lg border border-[#dde5df] bg-white px-6 py-5 text-center shadow-[0_24px_80px_rgba(35,38,75,0.08)]">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-[#166052]">
-            finapp26
-          </p>
-          <p className="mt-2 text-lg font-black">Checking your session...</p>
+      <div style={{
+        position: "fixed", inset: 0,
+        background: "#080B11",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        gap: 16,
+      }}>
+        <style>{`
+          @keyframes iq-spin { to { transform: rotate(360deg); } }
+          @keyframes iq-fade { 0%,100%{opacity:.4} 50%{opacity:1} }
+        `}</style>
+        <div style={{
+          width: 36, height: 36, borderRadius: "50%",
+          border: "2px solid #1B2433",
+          borderTopColor: "#7C6CF5",
+          animation: "iq-spin 0.75s linear infinite",
+        }} />
+        <div style={{
+          fontFamily: "'Inter', sans-serif",
+          fontSize: 11, letterSpacing: "0.14em",
+          textTransform: "uppercase", fontWeight: 600,
+          color: "#697486",
+          animation: "iq-fade 1.6s ease-in-out infinite",
+        }}>
+          InvestIQ
         </div>
-      </main>
+      </div>
     );
   }
 

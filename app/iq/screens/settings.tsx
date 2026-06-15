@@ -1,11 +1,13 @@
 "use client";
 
 import { signOut } from "firebase/auth";
+import { useRouter } from "next/navigation";
 import { firebaseAuth } from "../../firebase";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
 
 export function SettingsScreen() {
+  const router = useRouter();
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
   const { theme, setTheme } = useIQActions();
@@ -41,7 +43,7 @@ export function SettingsScreen() {
               <span className="fin-val mono" style={{ fontSize: 12.5 }}>{user?.email || "—"}</span>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
-              <button className="iq-btn-ghost" onClick={() => window.location.href = "/profile/edit"}>
+              <button className="iq-btn-ghost" onClick={() => router.push("/profile/edit")}>
                 Edit Profile
               </button>
               <button className="iq-btn-danger" onClick={handleSignOut}>

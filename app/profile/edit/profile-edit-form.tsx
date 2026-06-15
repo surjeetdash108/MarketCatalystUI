@@ -4,6 +4,7 @@ import { FirebaseError } from "firebase/app";
 import { updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { firebaseAuth, firebaseDb } from "../../firebase";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { updateProfileData } from "../../store/profile-slice";
@@ -15,6 +16,7 @@ function getSaveErrorMessage(error: unknown) {
 }
 
 export function ProfileEditForm() {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector(state => state.auth);
   const { data: savedProfile, status: profileStatus } = useAppSelector(state => state.profile);
@@ -131,7 +133,7 @@ export function ProfileEditForm() {
             )}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
-              <button type="button" className="iq-btn-ghost" onClick={() => window.location.href = "/dashboard"}>
+              <button type="button" className="iq-btn-ghost" onClick={() => router.push("/dashboard")}>
                 Cancel
               </button>
               <button type="button" className="iq-btn-primary" disabled={isSaving} onClick={handleSave}>

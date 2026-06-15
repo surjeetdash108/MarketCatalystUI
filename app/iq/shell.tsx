@@ -2,7 +2,8 @@
 
 import "../iq.css";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { signOut } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
 import { useAppSelector } from "../store/hooks";
@@ -368,6 +369,7 @@ function CommandPalette({ onClose, onNavigate }: { onClose: () => void; onNaviga
 // ---- Main IQ Shell ----
 export function IQShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
 
@@ -479,10 +481,10 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     </div>
 
                     {/* Menu items */}
-                    <button className="pd-item" onClick={() => { window.location.href = "/profile/edit"; setProfileDropdownOpen(false); }}>
+                    <button className="pd-item" onClick={() => { router.push("/profile/edit"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">👤</span> My Profile
                     </button>
-                    <button className="pd-item" onClick={() => { window.location.href = "/settings"; setProfileDropdownOpen(false); }}>
+                    <button className="pd-item" onClick={() => { router.push("/settings"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">⚙</span> Settings
                     </button>
                     <div className="pd-divider" />
@@ -516,7 +518,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     const href = slugToHref(item.slug);
                     const isActive = pathname === href;
                     return (
-                      <a key={item.slug} href={href} className={`navitem${isActive ? " active" : ""}`}>
+                      <Link key={item.slug} href={href} className={`navitem${isActive ? " active" : ""}`}>
                         <div className="nicon"><NavIcon slug={item.slug} /></div>
                         {item.label}
                         {item.badge && (
@@ -524,7 +526,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                             {item.badge}
                           </span>
                         )}
-                      </a>
+                      </Link>
                     );
                   })}
                 </div>
@@ -542,7 +544,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <div className="tier">✦ {tier}</div>
                   </div>
                 </div>
-                <button className="planbtn" onClick={() => window.location.href = "/manage-plan"}>
+                <button className="planbtn" onClick={() => router.push("/manage-plan")}>
                   <span style={{ fontSize: 13 }}>◈</span>
                   Manage plan
                 </button>
@@ -576,7 +578,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           {paletteOpen && (
             <CommandPalette
               onClose={() => setPaletteOpen(false)}
-              onNavigate={href => { window.location.href = href; }}
+              onNavigate={href => { router.push(href); }}
             />
           )}
         </div>
