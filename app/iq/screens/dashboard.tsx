@@ -177,10 +177,10 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ flex: 1, display: "flex", flexDirection: "column", paddingTop: 10 }}>
               <div style={{
-                display: "grid", gridTemplateColumns: "1fr 1fr",
-                gridTemplateRows: "1fr 1fr 1fr", gap: 4, flex: 1,
+                display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 4, flex: 1,
               }}>
-                {sectorList.slice(0, 6).map(sd => {
+                {sectorList.slice(0, 8).map(sd => {
                   const a = Math.min(Math.abs(sd.chg) / 2, 1);
                   const bg = sd.chg >= 0
                     ? `rgba(28,170,112,${(0.25 + a * 0.55).toFixed(2)})`
