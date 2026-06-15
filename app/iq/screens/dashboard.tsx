@@ -311,14 +311,18 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── 4. Live Market Feed + bottom widget stack ── */}
-        <div className="col-8">
-          <div className="card">
+        {/* ── 4. Live Market Feed + Earnings Today — same height ── */}
+        <div className="col-12" style={{
+          display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, alignItems: "stretch",
+        }}>
+
+          {/* Live Market Feed */}
+          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>📡 Live Market Feed</h3>
               <a className="link" href="/menu/commentary">All-market commentary →</a>
             </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
+            <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
               {LIVE_FEED.map((f, i) => (
                 <div key={i} style={{
                   display: "flex", gap: 12, padding: "11px 0",
@@ -343,17 +347,14 @@ export function DashboardScreen() {
               ))}
             </div>
           </div>
-        </div>
-
-        <div className="col-4" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
           {/* Earnings Today */}
-          <div className="card">
+          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Earnings Today</h3>
               <a className="link" href="/menu/earnings">View all →</a>
             </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
+            <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
               {earnings.slice(0, 5).map(e => (
                 <div key={e.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openEarnings(e.s)}>
                   <span className="tkr">{e.s}<small>{e.n}</small></span>
@@ -370,13 +371,20 @@ export function DashboardScreen() {
             </div>
           </div>
 
+        </div>
+
+        {/* ── 5. Analyst Actions + Top Movers — side by side, equal width & height ── */}
+        <div className="col-12" style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch",
+        }}>
+
           {/* Analyst Actions */}
-          <div className="card">
+          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Analyst Actions</h3>
               <a className="link" href="/menu/analyst">View all →</a>
             </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
+            <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
               {analyst.slice(0, 5).map((a, i) => (
                 <div key={i} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(a.s)}>
                   <span className="tkr">{a.s}</span>
@@ -388,12 +396,12 @@ export function DashboardScreen() {
           </div>
 
           {/* Top Movers */}
-          <div className="card">
+          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Top Movers</h3>
               <a className="link" href="/menu/movers">View all →</a>
             </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
+            <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
               {movers.slice(0, 5).map(m => (
                 <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
                   <span className="tkr">{m.s}</span>
