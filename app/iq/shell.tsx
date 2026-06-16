@@ -5,7 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { signOut } from "firebase/auth";
-import { firebaseAuth } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { firebaseAuth, firebaseDb } from "../firebase";
 import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
@@ -381,7 +382,10 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
 
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    if (typeof window === "undefined") return "dark";
+    return (localStorage.getItem("iq-theme") as "dark" | "light") || "dark";
+  });
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -394,6 +398,25 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   >(null);
 
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Load saved theme from Firestore on mount
+  useEffect(() => {
+    if (!user?.uid) return;
+    const uid = user.uid;
+    void (async () => {
+      try {
+        const snap = await getDoc(doc(firebaseDb, "settings", uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (typeof data.darkMode === "boolean") {
+            const resolved = data.darkMode ? "dark" : "light";
+            localStorage.setItem("iq-theme", resolved);
+            setTheme(resolved);
+          }
+        }
+      } catch { /* keep default dark theme on error */ }
+    })();
+  }, [user?.uid]);
 
   // Close profile dropdown when clicking outside
   useEffect(() => {
@@ -461,10 +484,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 <div className="dot" />
                 Markets Open
               </div>
-              <button className={`iconbtn${theme === "light" ? " active" : ""}`} title="Toggle theme"
-                onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}>
-                {theme === "dark" ? "☽" : "☀"}
-              </button>
               <button className={`iconbtn${copilotOpen ? " ai-active" : ""}`} title="AI Copilot"
                 onClick={() => setCopilotOpen(o => !o)}>
                 ✦

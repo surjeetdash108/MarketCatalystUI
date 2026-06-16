@@ -41,6 +41,22 @@
   --rail-w: 218px;
 }
 
+.iq-root[data-theme="dark"] {
+  --bg: #080B11;
+  --surface-0: #0C1017;
+  --surface-1: #11161F;
+  --surface-2: #161D28;
+  --surface-3: #1B2433;
+  --border: #212C3B;
+  --border-soft: #1A222E;
+  --border-strong: #2C3A4D;
+  --text-hi: #EAEFF6;
+  --text: #A9B5C6;
+  --text-dim: #69748699;
+  --text-dim-solid: #697486;
+  --shadow: 0 1px 0 rgba(255,255,255,.02) inset, 0 8px 30px -12px rgba(0,0,0,.7);
+}
+
 .iq-root[data-theme="light"] {
   --bg: #EDF1F7;
   --surface-0: #E4E9F2;

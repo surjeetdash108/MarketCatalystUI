@@ -243,6 +243,15 @@ service cloud.firestore {
 
 
     // ═════════════════════════════════════════════════════════════════════════
+    // USER SETTINGS — per-user preferences (dark mode, etc.)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    match /settings/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+
+    // ═════════════════════════════════════════════════════════════════════════
     // DENY ALL — catch-all for any path not explicitly matched above
     // ═════════════════════════════════════════════════════════════════════════
     match /{document=**} {

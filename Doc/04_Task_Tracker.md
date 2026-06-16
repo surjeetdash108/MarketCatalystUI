@@ -94,19 +94,40 @@ Task Registry
   T-076    F-40          **Build Cmd+K Command Bar: global keyboard shortcut overlay, ticker lookup and navigation, feed filter, layout switch, contextual suggestions by current page**                               Frontend   2d         P1        FE Eng 1       S-14         Not Started   Phase 2; keyboard-first navigation (Cmd+K / Ctrl+K); fuzzy search across tickers and actions
   -------- ------------- --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- ---------- ---------- --------- -------------- ------------ ------------- -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+  T-077    F-42          Build IQShell component: sidebar nav, topbar, drawers (stock/earnings/sector/fund), AI Copilot panel, Cmd+K palette, profile dropdown. IQActionsContext provider.                                                                                  Frontend   5d         **P0**    FE Eng 1       S-03         **Done**      shell.tsx. Each page wraps its own IQShell instance (not a Next.js layout). Theme state lives in IQShell; passed via IQActionsContext. Drawers open via openStock/openEarnings/openSector/openFund.
+  T-078    F-42          Build InvestIQ design system (iq.css): CSS custom properties, dark/light themes, layout primitives (.dash, .col-*), card/pill/badge components, heatmap grid, fund card, toggle, topbar.                                                             Frontend   3d         **P0**    FE Eng 1       S-03         **Done**      Imported globally in app/layout.tsx. .iq-root[data-theme="dark/light"] drives theme switching.
+  T-079    Infra         Migrate state management from Zustand+React Query to Redux Toolkit. Implement auth-slice, profile-slice, FirebaseListener, ReduxProvider, typed hooks.                                                                                               Frontend   2d         **P0**    FE Eng 1       S-02         **Done**      store.ts + auth-slice.ts + profile-slice.ts + firebase-listener.tsx + hooks.ts. FirebaseListener uses authStateReady() before subscribing to avoid stale initial state.
+  T-080    Infra         Replace Vite + React SPA with Next.js 14 App Router (static export). Configure next.config.ts with output: 'export'. Set up Firebase Hosting (firebase.json, .firebaserc). Migrate routing to App Router conventions.                               Infra      2d         **P0**    Infra Eng      S-01         **Done**      Project: fin-app26. Deploy: firebase deploy --only hosting. All routes rewrite to index.html for SPA navigation.
+  T-081    F-43          Redesign auth pages (Login, Create Account, Forgot Password) to match InvestIQ dark theme. Two-panel layout (AuthLayout): left = form, right = brand panel with stat cards + feature bullets. All styling via CSS variable inline styles.           Frontend   2d         **P0**    FE Eng 1       S-02         **Done**      auth-layout.tsx + login-form.tsx + signup-form.tsx + forgot-form.tsx. Removed all Tailwind from auth forms.
+  T-082    F-44          Wire dark mode toggle in Settings to Firestore settings/{uid} (darkMode: boolean). Custom in-app confirmation modal. Theme init from localStorage (eliminates page-nav flicker). Firestore read on shell mount syncs across sessions.               Frontend   1d         **P0**    FE Eng 1       S-03         **Done**      settings.tsx: ThemeConfirmModal component + pending state. shell.tsx: useState lazy init from localStorage + useEffect Firestore read + localStorage write. firestore.rules: added settings/{uid} read/write rule.
+  T-083    F-45          Build Stock Screener screen: left checkbox filter panel (9 filters), 20 named presets (dropdown + browse overlay with click-outside), results table (RS color-coded, Tech Rating badge), preset apply/reset logic.                                  Frontend   3d         **P0**    FE Eng 2       S-05         **Done**      screener.tsx. applyPreset() resets all checkboxes then sets from preset's filter object. Filter logic stacks preset + checkbox rules. CheckOpt component for styled checkbox inputs.
+  T-084    F-01          Build Dashboard screen: WMN block, Market Pulse strip, sector heatmap widget, top movers, portfolio summary, watchlist, earnings today widgets.                                                                                                     Frontend   2d         **P0**    FE Eng 1       S-04         **Done**      screens/dashboard.tsx. Static data from data.ts. openStock/openEarnings via IQActionsContext.
+  T-085    F-13          Build Portfolio screen: AI pulse block, holdings table (conviction pill, size pill, event column), alerts sidebar.                                                                                                                                  Frontend   1.5d       **P0**    FE Eng 1       S-07         **Done**      screens/portfolio.tsx. FolioItem interface: s/n/p/c/gl/size/conv/evt fields.
+  T-086    F-15          Build Watchlist screen: filter tabs (All/Reporting this week/Options active/Movers today), table with ER/analyst/options/headline/spark columns.                                                                                                   Frontend   1.5d       **P0**    FE Eng 2       S-07         **Done**      screens/watchlist.tsx. WatchItem interface: s/n/px/c/er/analyst/opt/headline fields.
+  T-087    F-26          Build 13F Intelligence screen: fund cards (.fundcard/.av/.nm/.mgr), active fund AI summary (6 ai-sec blocks), cross-ownership tables (cross-owned/cross-sold/lone positions).                                                                     Frontend   2d         **P0**    FE Eng 1       S-12         **Done**      screens/thirteenf.tsx. Fund interface: name/av/mgr/aum/pos/top1/newPos/exits/quarter fields.
+  T-088    F-07          Build Commentary screen: Live/Premarket/After Hours/My names/Macro tabs, live feed with cat pill + dangerouslySetInnerHTML text + Why it matters annotation, Before Bell / After Close sidebar cards.                                             Frontend   1.5d       **P0**    FE Eng 2       S-03         **Done**      screens/commentary.tsx. CommentaryItem interface: cat/accent/time/text/why fields.
+  T-089    F-22          Build Recap screen: recap-hero (WMN orb + headline + indices + stories/up-next), sector heatmap (.heat grid with inline background), movers + internals columns.                                                                                  Frontend   1.5d       **P0**    FE Eng 1       S-10         **Done**      screens/recap.tsx. RecapData interface + heatColor() helper. PDF download buttons.
+  T-090    F-12          Build Analyst Actions screen: table with direction arrows, firm, rating change, PT change, action pills.                                                                                                                                           Frontend   1d         **P0**    FE Eng 2       S-07         **Done**      screens/analyst.tsx.
+  T-091    F-10          Build Movers screen: Gainers/Losers/Volume/Gap Up/Gap Down/High RVol view tabs, mover rows with RVOL ratio, catalyst pill.                                                                                                                        Frontend   1d         **P0**    FE Eng 2       S-06         **Done**      screens/movers.tsx.
+  T-092    F-21          Build Macro screen: macro calendar table, market regime widget, VIX section.                                                                                                                                                                       Frontend   1d         **P1**    FE Eng 1       S-09         **Done**      screens/macro.tsx.
+  T-093    Infra         Add Firestore settings/{uid} security rule (read/write: isOwner). Deploy firestore.rules via firebase deploy --only firestore:rules.                                                                                                               Infra      0.5d       **P0**    Infra Eng      S-03         **Done**      firestore.rules updated. Rule: match /settings/{uid} { allow read, write: if isOwner(uid); }
+
 Task Count Summary
 
-  ------------------------- -------- -------- --------
-  **Category**              **P0**   **P1**   **P2**
-  Infrastructure & Auth     6        1        0
-  Data Ingestion            5        2        0
-  Home Dashboard            5        0        0
-  Earnings Workspace        10       0        0
-  Market Movers             3        1        0
-  Analyst Actions           1        1        0
-  Portfolio & Alerts        6        0        0
-  Stock Detail              1        2        0
-  Macro, VIX, Feed, Recap   6        3        0
-  Phase 2 Tasks             9        7        1
-  TOTAL                     52       17       1
-  ------------------------- -------- -------- --------
+  ----------------------------------- -------- -------- -------- ----------
+  **Category**                        **P0**   **P1**   **P2**   **Done**
+  Infrastructure & Auth               6        1        0        4 (T-079,080,082,093)
+  Data Ingestion                      5        2        0        0
+  Home Dashboard                      5        0        0        1 (T-084)
+  Earnings Workspace                  10       0        0        0
+  Market Movers                       3        1        0        1 (T-091)
+  Analyst Actions                     1        1        0        1 (T-090)
+  Portfolio & Alerts                  6        0        0        2 (T-085,T-086)
+  Stock Detail                        1        2        0        0
+  Macro, VIX, Feed, Recap             6        3        0        3 (T-088,T-089,T-092)
+  Phase 2 Tasks                       9        7        1        1 (T-087)
+  New: Shell/Design System            2        0        0        2 (T-077,T-078)
+  New: Auth Redesign                  1        0        0        1 (T-081)
+  New: Screener UI                    1        0        0        1 (T-083)
+  TOTAL                               56       17       1        17 tasks Done
+  ----------------------------------- -------- -------- -------- ----------

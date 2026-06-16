@@ -77,33 +77,39 @@ The project is structured in two phases: MVP (18 weeks) delivering core market d
 
 5\. Technology Stack
 
-Frontend
+Frontend (Current)
 
--   React 18 + TypeScript, Vite, TailwindCSS
+-   **Next.js 14 (App Router)** + TypeScript, static export (`output: 'export'`)
 
--   Recharts / D3 for charts and heatmaps
+-   **Redux Toolkit** for global state (auth slice + profile slice); no Zustand, no React Query
 
--   React Query for server state, Zustand for client state
+-   **InvestIQ custom CSS design system** (`iq.css`) with CSS custom properties — no TailwindCSS for IQ screens
 
--   WebSocket client (native) for live feed
+-   Recharts / D3 for charts and heatmaps (Phase 2 — static data currently)
 
-Backend
+-   **Firebase Hosting** for static site deployment (project: `fin-app26`)
+
+-   **Firebase Authentication** — email/password + Google OAuth
+
+-   **Cloud Firestore** — user profiles (`users/{uid}`), settings (`settings/{uid}`)
+
+Backend (Planned — Phase 1/2)
 
 -   Node.js + Fastify (API server), Python (data ingestion workers)
 
--   Firestore (primary document DB), Redis (cache + pub/sub for WS), ClickHouse (time-series market data)
+-   Firestore (domain document DB), Redis (cache + pub/sub for WS), ClickHouse (time-series market data)
 
 -   BullMQ for background job queues (recap generation, alert dispatch)
 
--   Anthropic Claude API for AI summaries and Copilot
+-   **Anthropic Claude API** (claude-sonnet-4-6 or latest) for AI summaries, Copilot, TA generation
 
-Infrastructure
+Infrastructure (Planned)
 
--   AWS: ECS Fargate (API), ElastiCache Redis, S3 (audio, exports)
+-   AWS: ECS Fargate (API + workers), ElastiCache Redis, S3 (audio, exports), CloudFront, Route 53
 
--   Vercel for frontend hosting
+-   Firebase Hosting (frontend — already live), Firebase Authentication + Firestore (auth + data store)
 
--   Firebase Authentication + Firestore (auth and primary data store), Stripe for billing
+-   Stripe for subscription billing (Free / Pro / Premium tiers)
 
 -   Datadog for observability, PagerDuty for alerting
 

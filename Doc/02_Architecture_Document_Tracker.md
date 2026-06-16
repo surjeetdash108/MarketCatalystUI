@@ -120,31 +120,91 @@ AI Generation Workers (BullMQ)
 
 -   Phase 2: SMS via Twilio, push via FCM/APNs
 
-3.5 Frontend Architecture (React SPA)
+3.5 Frontend Architecture (Next.js — Current Implementation)
 
-State Management
+Framework & Build
 
--   React Query: all server data fetching, caching, background refetch, optimistic updates
+-   **Next.js 14 (App Router)** with TypeScript. Output mode: `static export` (`next build` → `out/` directory). Deployed to Firebase Hosting.
 
--   Zustand: UI state (dashboard layout, active session tab, widget visibility, drawer state)
+-   All IQ screens are client components (`"use client"`). Server components are only used for the root layout.
 
--   WebSocket manager: singleton context provider --- subscribes on mount, fan-out to subscribed components via Zustand slices
+-   Fonts loaded via `next/font/google`: Space Grotesk (display), Geist Sans (body), JetBrains Mono (monospace), Geist Mono.
 
-Routing
+State Management — Redux Toolkit
 
--   React Router v6. Routes: /, /earnings, /movers, /analyst-actions, /portfolio, /stocks/:ticker, /13f, /markets, /recap, /story-stocks, /settings
+-   **Redux Toolkit** (`configureStore`) is the single source of truth for global app state. No Zustand, no React Query.
 
--   Protected routes: all except / (landing), /login, /register require valid session
+-   **`store.ts`**: combines two slices — `auth` and `profile`.
 
-Component Architecture
+-   **`auth-slice.ts`**: holds `SerializedUser | null` (uid, email, displayName, photoURL) and `status: "loading" | "ready"`. Firebase `User` object is serialized before dispatch (Firebase objects are not Redux-serializable).
 
--   Design system: shared component library (Button, Table, Drawer, Pill, Sparkline, Chart, AlertBadge, WidgetGrid)
+-   **`profile-slice.ts`**: holds `StoredProfile | null` (InvestorProfile fields + uid + tier) and `status: "idle" | "loading" | "ready"`. Firestore Timestamps are stripped before dispatch.
 
--   Page components consume domain hooks (useEarningsCalendar, useMovers, usePortfolio, useAlerts)
+-   **`firebase-listener.tsx`** (`FirebaseListener` component): mounts inside `ReduxProvider`, calls `firebaseAuth.authStateReady()` then subscribes to `onAuthStateChanged`. On user sign-in, dispatches `setUser` and fetches `users/{uid}` from Firestore to dispatch `setProfile`. Runs once for the lifetime of the app.
 
--   Domain hooks wrap React Query calls and WebSocket subscriptions
+-   **`redux-provider.tsx`**: wraps the app in `<Provider store={store}><FirebaseListener />{children}</Provider>` inside `app/layout.tsx`.
 
--   AI components (AISummaryCard, CopilotPanel) use streaming fetch (SSE from API) CommandBar: global Cmd+K overlay component; fuzzy search across tickers and actions; Zustand state for open/close PeerScatterMatrix: D3-powered bubble chart (RS vs EPS growth rate); available on stock detail page and group page (Phase 2) LearnCard: AI-generated contextual micro-card component; page-context trigger map; dismiss/save-to-library state in Zustand
+-   **Typed hooks**: `useAppSelector` and `useAppDispatch` (from `store/hooks.ts`) wrap the RTK hooks with `RootState` and `AppDispatch` types.
+
+Routing — Next.js App Router
+
+-   `/` → landing / redirect
+-   `/auth/login` → Login (email/password + Google OAuth)
+-   `/auth/signup` → Create Account
+-   `/auth/forgot-password` → Password Reset
+-   `/dashboard` → IQ Dashboard screen
+-   `/menu/[slug]` → all IQ screens (portfolio, watchlist, earnings, screener, analyst, thirteenf, movers, heatmap, macro, commentary, recap, stock, manage-plan)
+-   `/settings` → Settings screen
+-   `/profile/edit` → Profile edit
+-   Protected routes: all IQ routes guarded by `AuthGuard` component (checks Redux `state.auth.status === "ready"` and `state.auth.user`; redirects to `/auth/login` if not authenticated).
+
+IQ Shell & Component Architecture
+
+-   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav, topbar, drawer system (stock/earnings/sector/fund drawers), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`.
+
+-   **`IQActionsContext`**: React context providing `openStock(sym)`, `openEarnings(sym)`, `openSector(name)`, `openFund(idx)`, `setCopilot(open)`, `theme`, `setTheme` to all child screens. Consumed via `useIQActions()` hook.
+
+-   **Theme system**: `theme: "dark" | "light"` state in `IQShell`. Applied as `data-theme={theme}` on `.iq-root` div. Initialized from `localStorage` synchronously (no flicker on navigation). Persisted to Firestore `settings/{uid}` collection (`darkMode: boolean` field) when user changes preference via Settings. `localStorage` acts as a fast cache so the correct theme is available on the first render of every page mount.
+
+Design System — InvestIQ (`iq.css`)
+
+-   All styling is via a custom CSS design system in `app/iq.css`, imported globally in `app/layout.tsx`.
+
+-   CSS custom properties on `:root` define the dark-mode palette (default): `--bg`, `--surface-0/1/2/3`, `--border`, `--border-soft`, `--border-strong`, `--text-hi`, `--text`, `--text-dim-solid`, `--brand`, `--brand-2`, `--brand-dim`, `--ai`, `--ai-2`, `--ai-dim`, `--up`, `--up-dim`, `--down`, `--down-dim`, `--warn`, `--warn-dim`, `--f-display`, `--f-body`, `--f-mono`, `--r-sm`, `--r`, `--r-lg`, `--r-xl`, `--shadow`.
+
+-   `.iq-root[data-theme="dark"]` explicitly sets dark palette on the root element.
+
+-   `.iq-root[data-theme="light"]` overrides with a light palette (`--bg: #EDF1F7` etc.).
+
+-   Layout primitives: `.app` (CSS grid: sidebar + content), `.dash` (12-column content grid), `.col-4/6/8/12`, `.card`, `.card-h`, `.card-b`, `.page-head`, `.page-title`.
+
+-   Component classes: `.wmn` (What Matters Now block), `.ai-block`, `.ai-sec`, `.heat` (sector heatmap grid), `.fundcard`, `.fin-row`, `.iq-toggle`, `.iq-toggle-row`, `.pill`, `.pill.up/dn/amc`, `.tr-badge`, `.iconbtn`, `.topbar-avatar`.
+
+-   Auth pages use the same CSS variables (imported globally) but are not wrapped in `.iq-root`; they use inline styles referencing `var(--*)`.
+
+Screens (Current)
+
+| Slug | Screen File | Status |
+|---|---|---|
+| dashboard | screens/dashboard.tsx | UI complete — static data |
+| portfolio | screens/portfolio.tsx | UI complete — static data |
+| watchlist | screens/watchlist.tsx | UI complete — static data |
+| earnings | screens/earnings.tsx | UI complete — static data |
+| screener | screens/screener.tsx | UI complete — 20 presets, checkbox filters |
+| analyst | screens/analyst.tsx | UI complete — static data |
+| thirteenf | screens/thirteenf.tsx | UI complete — static data |
+| movers | screens/movers.tsx | UI complete — static data |
+| heatmap | screens/heatmap.tsx | UI complete — static data |
+| macro | screens/macro.tsx | UI complete — static data |
+| commentary | screens/commentary.tsx | UI complete — static data |
+| recap | screens/recap.tsx | UI complete — static data |
+| stock | screens/stock.tsx | UI complete — static data |
+| settings | screens/settings.tsx | Settings + dark mode wired to Firestore |
+| manage-plan | screens/manage-plan.tsx | UI scaffold |
+
+Cmd+K Command Bar
+
+-   Global `Cmd+K` (or `Ctrl+K`) opens the palette overlay in `IQShell`. Searches menu items and tickers by label/slug. Keyboard navigation (↑↓ arrows, Enter, Escape). Navigates via Next.js `router.push()`. Phase 2: fuzzy ticker search via API.
 
 4\. Security Architecture
 
@@ -172,15 +232,23 @@ Component Architecture
   Uptime SLA                   99.9%                        Firestore 99.999% SLA (Google-managed), ECS across 2 AZs, ALB health checks
   ---------------------------- ---------------------------- ---------------------------------------------------
 
-6\. Infrastructure Diagram (AWS)
+6\. Infrastructure
 
-*All production workloads run in AWS us-east-1 (primary). Firestore is a Google-managed globally distributed service (no VPC placement required).*
+**Current (Frontend MVP)**
+
+-   **Firebase Hosting**: serves the Next.js static export (`out/` directory). Project ID: `fin-app26`. Deployed via `firebase deploy --only hosting`. Clean URLs enabled; all routes rewrite to `index.html` for SPA navigation.
+
+-   **Firebase Authentication**: email/password + Google OAuth. Firebase ID tokens issued client-side; `FirebaseListener` monitors `onAuthStateChanged` and syncs to Redux store.
+
+-   **Cloud Firestore**: primary data store. Collections live: `users/{uid}` (profile), `settings/{uid}` (user preferences including dark mode). Security rules enforced via `firestore.rules` (deployed via `firebase deploy --only firestore:rules`). Firebase project: `fin-app26`.
+
+**Planned (Backend / Phase 2 — not yet deployed)**
+
+*All backend workloads planned for AWS us-east-1.*
 
 -   VPC with public subnets (ALB, NAT Gateway) and private subnets (ECS tasks, Redis)
 
 -   ECS Cluster: api-service (2--10 tasks), websocket-service (2--8 tasks), ingestion workers (per-worker task definitions), ai-workers (1--4 tasks)
-
--   Firebase: Firestore (domain data, auto-scaling, no provisioning), Firebase Authentication (email/password + Google OAuth, managed token issuance)
 
 -   ElastiCache Redis: cache.r6g.large, cluster mode disabled (single shard), Multi-AZ with auto-failover
 
@@ -188,6 +256,6 @@ Component Architecture
 
 -   S3: market-platform-prod bucket, versioning enabled, lifecycle policy to Glacier after 90 days
 
--   CloudFront: CDN for frontend assets and S3 audio files
+-   CloudFront: CDN for S3 audio files and static asset acceleration
 
 -   Route 53: DNS with health checks; automatic failover
