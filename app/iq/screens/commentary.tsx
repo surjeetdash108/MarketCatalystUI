@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { commentary } from "../data";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
 export function CommentaryScreen() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
 
   return (
@@ -111,7 +113,7 @@ export function CommentaryScreen() {
               <p style={{ fontSize: ".82rem", lineHeight: 1.55, color: "var(--text-dim-solid)" }}>
                 A pushed summary of final index performance, the day's top stories, and what's scheduled for tomorrow will appear here within 30 minutes of the close.
               </p>
-              <button className="btn ai" style={{ marginTop: 10, width: "100%" }}>
+              <button className="btn ai" style={{ marginTop: 10, width: "100%" }} onClick={() => router.push("/menu/recap")}>
                 See today's EOD recap →
               </button>
             </div>

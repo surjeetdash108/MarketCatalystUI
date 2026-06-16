@@ -5,13 +5,15 @@ import { useIQActions } from "../shell";
 import { stockInfo, watch, folio } from "../data";
 import { fmt, cls, arr, sign, Spark, Gauge } from "../utils";
 
-const DEFAULT_SYM = "NVDA";
 const SYMBOLS = [...Object.keys(stockInfo), ...watch.map(w => w.s), ...folio.map(f => f.s)]
   .filter((v, i, a) => a.indexOf(v) === i);
 
 export function StockScreen() {
   const { openEarnings } = useIQActions();
-  const [sym, setSym] = useState(DEFAULT_SYM);
+  const [sym, setSym] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("iq-stock") || "NVDA";
+    return "NVDA";
+  });
   const [search, setSearch] = useState("");
 
   const suggestions = SYMBOLS.filter(s =>

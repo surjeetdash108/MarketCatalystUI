@@ -3,120 +3,123 @@
 import { useState } from "react";
 import { useIQActions } from "../shell";
 import { sectorList } from "../data";
-import { cls, arr } from "../utils";
+import { sign, cls } from "../utils";
 
-function heatColor(chg: number): string {
-  if (chg > 2) return "#1a5c38";
-  if (chg > 1) return "#1f7245";
-  if (chg > 0) return "#245c38";
-  if (chg === 0) return "#1B2433";
-  if (chg > -1) return "#5c2424";
-  if (chg > -2) return "#7a1e1e";
-  return "#8f1212";
+const SEC_PAGE = 10;
+const SEC_PAGES = Math.ceil(sectorList.length / SEC_PAGE);
+
+const TABS = ["Stocks", "S&P 500", "ETFs", "Crypto"];
+
+function hmColor(p: number): string {
+  const a = Math.min(Math.abs(p) / 3, 1);
+  return p >= 0
+    ? `rgba(28,170,112,${(0.22 + a * 0.62).toFixed(2)})`
+    : `rgba(208,52,76,${(0.22 + a * 0.62).toFixed(2)})`;
 }
 
-function stockHeatColor(chg: number): string {
-  if (chg > 1.5) return "#175c35";
-  if (chg > 0.5) return "#1d6b40";
-  if (chg > 0) return "#1c4530";
-  if (chg === 0) return "#1B2433";
-  if (chg > -0.5) return "#4a1c1c";
-  if (chg > -1.5) return "#6b1d1d";
-  return "#821a1a";
-}
+const k = 2.0;
 
 export function HeatmapScreen() {
   const { openSector, openStock } = useIQActions();
-  const [view, setView] = useState<"sector" | "stock">("sector");
+  const [tab, setTab] = useState(0);
+  const [heatPage, setHeatPage] = useState(0);
+
+  const start = heatPage * SEC_PAGE;
+  const page = sectorList.slice(start, start + SEC_PAGE);
 
   return (
     <>
       <div className="page-head">
         <div>
-          <div className="page-title">Market Heatmap</div>
-          <div className="page-sub">Today's sector and stock performance by weight</div>
+          <div className="eyebrow">Market Heatmap</div>
+          <h1 className="page-title">Where the day is leaning</h1>
+          <div className="page-sub">
+            {sectorList.length} industry groups · size = market cap, color = % change · tap &quot;View all&quot; for constituents &amp; news, or a tile to open the stock
+          </div>
         </div>
-        <div className="actions">
-          <button className={`chip${view === "sector" ? " active" : ""}`} onClick={() => setView("sector")}>By Sector</button>
-          <button className={`chip${view === "stock" ? " active" : ""}`} onClick={() => setView("stock")}>By Stock</button>
+        <div className="tabs">
+          {TABS.map((t, i) => (
+            <button key={t} className={`tab${i === tab ? " on" : ""}`} onClick={() => setTab(i)}>{t}</button>
+          ))}
         </div>
       </div>
 
-      {view === "sector" ? (
-        <div className="heat-grid">
-          {sectorList.map(s => (
-            <div
-              key={s.name}
-              className="heat-cell"
-              style={{
-                background: heatColor(s.chg),
-                minHeight: 80,
-                flexBasis: `${Math.max(8, Math.min(20, 100 / sectorList.length * 2.5))}%`,
-              }}
-              onClick={() => openSector(s.name)}
-            >
-              <div className="ht" style={{ fontSize: 11 }}>{s.name}</div>
-              <div className="hc">{s.chg > 0 ? "+" : ""}{s.chg.toFixed(2)}%</div>
-            </div>
-          ))}
+      <div className="fbar">
+        <button className="chip on">Color: % change</button>
+        <button className="chip">Size: Market cap</button>
+        <div className="spacer" />
+        <div className="legend">
+          -3%{" "}
+          <i style={{ width: 18, height: 10, display: "inline-block", background: "rgba(208,52,76,.85)" }} />
+          <i style={{ width: 18, height: 10, display: "inline-block", background: "rgba(208,52,76,.4)" }} />
+          <i style={{ width: 18, height: 10, display: "inline-block", background: "#3a4658" }} />
+          <i style={{ width: 18, height: 10, display: "inline-block", background: "rgba(28,170,112,.4)" }} />
+          <i style={{ width: 18, height: 10, display: "inline-block", background: "rgba(28,170,112,.85)" }} />
+          {" "}+3%
         </div>
-      ) : (
-        <div className="heat-grid">
-          {sectorList.flatMap(s =>
-            s.items.map(([sym, mc, chg]) => (
-              <div
-                key={sym}
-                className="heat-cell"
-                style={{
-                  background: stockHeatColor(chg),
-                  minHeight: Math.max(50, Math.min(100, mc / 100)),
-                  flexBasis: `${Math.max(5, Math.min(15, mc / 200))}%`,
-                }}
-                onClick={() => openStock(sym)}
-              >
-                <div className="ht" style={{ fontSize: 10.5 }}>{sym}</div>
-                <div className="hc" style={{ fontSize: 9.5 }}>{chg > 0 ? "+" : ""}{chg.toFixed(1)}%</div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+      </div>
 
-      {/* Sector table */}
-      <div style={{ padding: "0 18px 18px" }}>
-        <div className="card">
-          <div className="card-h"><h3>Sector Summary</h3></div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr><th>#</th><th>Sector</th><th>Change</th><th>Trend</th><th>Top Holdings</th></tr>
-              </thead>
-              <tbody>
-                {sectorList.map(s => (
-                  <tr key={s.name} onClick={() => openSector(s.name)}>
-                    <td style={{ color: "var(--text-dim-solid)" }}>{s.rank}</td>
-                    <td style={{ color: "var(--text-hi)", fontWeight: 600 }}>{s.name}</td>
-                    <td>
-                      <span className={cls(s.chg)} style={{ fontWeight: 700, fontFamily: "var(--f-mono)" }}>
-                        {arr(s.chg)} {Math.abs(s.chg).toFixed(2)}%
+      <div className="card">
+        <div className="card-b">
+          <div className="treemap">
+            {page.map(g => {
+              const tot = g.items.reduce((s, i) => s + i[1], 0);
+              return (
+                <div
+                  key={g.name}
+                  className="tm-sector"
+                  style={{ flex: `${Math.max(1, tot / 800)} 1 240px` }}
+                >
+                  <div
+                    className="sl"
+                    onClick={() => openSector(g.name)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <span>
+                      {g.name}{" "}
+                      <span className={cls(g.chg)} style={{ fontFamily: "var(--f-mono)", fontWeight: 600 }}>
+                        {sign(g.chg)}
                       </span>
-                    </td>
-                    <td>
-                      <span style={{
-                        fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
-                        background: s.trend === "Improving" ? "var(--up-dim)" : s.trend === "Deteriorating" ? "var(--down-dim)" : "var(--surface-3)",
-                        color: s.trend === "Improving" ? "var(--up)" : s.trend === "Deteriorating" ? "var(--down)" : "var(--text-dim-solid)",
-                      }}>{s.trend}</span>
-                    </td>
-                    <td style={{ color: "var(--text-dim-solid)", fontSize: 11 }}>
-                      {s.items.slice(0, 4).map(([t]) => t).join(", ")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                    <span style={{ color: "var(--brand-2)", fontWeight: 600 }}>View all →</span>
+                  </div>
+                  <div className="tm-cells">
+                    {g.items.map(([sym, mc, chg]) => {
+                      const w = Math.max(56, Math.sqrt(mc) * k);
+                      const h = Math.max(42, Math.sqrt(mc) * k * 0.62);
+                      const fs = Math.max(0.62, Math.min(1, Math.sqrt(mc) / 40));
+                      return (
+                        <div
+                          key={sym}
+                          className="tm-cell"
+                          onClick={e => { e.stopPropagation(); openStock(sym); }}
+                          style={{ width: w, height: h, background: hmColor(chg) }}
+                        >
+                          <span className="tt" style={{ fontSize: `${fs}rem` }}>{sym}</span>
+                          <span className="tc" style={{ fontSize: `${fs * 0.8}rem` }}>{sign(chg)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14, fontSize: ".82rem" }}>
+        <span style={{ color: "var(--text-dim-solid)" }}>
+          Sectors <b style={{ color: "var(--text-hi)" }}>{start + 1}–{Math.min(start + SEC_PAGE, sectorList.length)}</b> of {sectorList.length}
+        </span>
+        <span style={{ display: "flex", gap: 16 }}>
+          {heatPage > 0 && (
+            <span className="link" onClick={() => setHeatPage(p => p - 1)}>← Previous 10</span>
+          )}
+          <span className="link" onClick={() => setHeatPage(p => heatPage < SEC_PAGES - 1 ? p + 1 : 0)}>
+            {heatPage < SEC_PAGES - 1 ? "Show next 10 →" : "Back to first 10 ↺"}
+          </span>
+        </span>
       </div>
     </>
   );

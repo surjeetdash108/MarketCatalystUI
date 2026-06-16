@@ -1,24 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
-import { recap } from "../data";
+import { recap, sectorList } from "../data";
 import { cls, arr, sign } from "../utils";
 
 const TABS = ["Today (EOD)", "This Week"];
-
-const SECTORS: { name: string; v: number }[] = [
-  { name: "Semiconductors", v: 3.10 },
-  { name: "Software",       v: 1.40 },
-  { name: "Internet",       v: 0.98 },
-  { name: "Industrials",    v: 0.72 },
-  { name: "Financials",     v: 0.61 },
-  { name: "Healthcare",     v: 0.22 },
-  { name: "Consumer Disc",  v: -0.44 },
-  { name: "Real Estate",    v: -0.81 },
-  { name: "Utilities",      v: -0.28 },
-  { name: "Energy",         v: -1.12 },
-];
 
 function heatColor(v: number): string {
   const abs = Math.min(Math.abs(v) / 4, 1);
@@ -27,7 +15,8 @@ function heatColor(v: number): string {
 }
 
 export function RecapScreen() {
-  const { openStock } = useIQActions();
+  const router = useRouter();
+  const { openStock, openSector } = useIQActions();
   const [activeTab, setActiveTab] = useState(0);
 
   function downloadRecap(which: string) {
@@ -50,7 +39,7 @@ export function RecapScreen() {
         </div>
         <div className="tabs">
           {TABS.map((t, i) => (
-            <button key={t} className={`tab${i === activeTab ? " active" : ""}`}
+            <button key={t} className={`tab${i === activeTab ? " on" : ""}`}
               onClick={() => setActiveTab(i)}>{t}</button>
           ))}
         </div>
@@ -137,14 +126,14 @@ export function RecapScreen() {
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
             <h3>Sector heatmap</h3>
-            <span className="link">View all →</span>
+            <span className="link" onClick={() => router.push("/menu/heatmap")}>View all →</span>
           </div>
           <div className="card-b">
             <div className="heat">
-              {SECTORS.map(s => (
-                <div key={s.name} className="s" style={{ background: heatColor(s.v) }}>
+              {sectorList.slice(0, 10).map(s => (
+                <div key={s.name} className="s" style={{ background: heatColor(s.chg), cursor: "pointer" }} onClick={() => openSector(s.name)}>
                   <div className="nm">{s.name}</div>
-                  <div className="v">{arr(s.v)}{sign(s.v)}</div>
+                  <div className="v">{arr(s.chg)}{sign(s.chg)}</div>
                 </div>
               ))}
             </div>

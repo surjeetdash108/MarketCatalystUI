@@ -11,10 +11,13 @@ export interface Earning {
   guide: string | null; react: number | null;
   tags: string[]; owned: boolean; implied: number;
 }
-export interface Mover { s: string; n: string; c: number; v: string; reason: string; sec: string; }
+export interface Mover { s: string; n: string; p: number; c: number; rvol: number; cat: string; ma: string; owned: boolean; }
 export interface AnalystAction {
-  s: string; n: string; from: string; to: string;
-  tgt: number; prev: number; firm: string; type: string;
+  s: string; n: string; firm: string;
+  dir: 'up' | 'down' | 'init' | 'hold';
+  from: string; to: string;
+  ptF: number; ptT: number;
+  react: number; n30: number; owned: boolean;
 }
 export interface FolioItem {
   s: string; n: string;
@@ -29,6 +32,13 @@ export interface Fund {
   name: string; av: string; mgr: string;
   aum: string; pos: number; top1: string;
   newPos: number; exits: number; quarter: string;
+}
+export interface FundDetail {
+  holdings: [string, number, string][];
+  buys: [string, string][];
+  exits: [string, string][];
+  theme: string;
+  conc: string;
 }
 export interface WatchItem {
   s: string; n: string; px: number; c: number;
@@ -106,28 +116,27 @@ export const earnings: Earning[] = [
 
 // ---- Market Movers ----
 export const movers: Mover[] = [
-  { s: 'NVDA', n: 'Nvidia', c: 8.2, v: '$6.2B', reason: 'Earnings beat + raised guide', sec: 'Semis' },
-  { s: 'ARM', n: 'Arm Holdings', c: 6.1, v: '$4.1B', reason: 'NVDA halo + AI chip demand', sec: 'Semis' },
-  { s: 'SMCI', n: 'Super Micro', c: -12.4, v: '$2.8B', reason: 'Weak gross margins reported', sec: 'Hardware' },
-  { s: 'TGT', n: 'Target', c: -7.8, v: '$1.9B', reason: 'EPS miss, guide cut', sec: 'Retail' },
-  { s: 'META', n: 'Meta', c: 3.2, v: '$3.5B', reason: 'Ad revenue beat, AI investment raised', sec: 'Social' },
-  { s: 'PLTR', n: 'Palantir', c: 5.9, v: '$2.1B', reason: 'Gov contracts + AI momentum', sec: 'Software' },
-  { s: 'COIN', n: 'Coinbase', c: 4.7, v: '$1.6B', reason: 'Bitcoin rally, trading volume up', sec: 'Fintech' },
-  { s: 'TSLA', n: 'Tesla', c: -3.1, v: '$3.9B', reason: 'China EV competition & margin concern', sec: 'Auto' },
-  { s: 'MRVL', n: 'Marvell', c: 4.2, v: '$1.2B', reason: 'Custom AI chip revenue guidance raised', sec: 'Semis' },
-  { s: 'WMT', n: 'Walmart', c: 5.2, v: '$2.8B', reason: 'Beat + guide raised on grocery strength', sec: 'Retail' },
+  { s: 'NVDA', n: 'Nvidia',     p: 1181.75, c:  8.23, rvol: 5.8, cat: 'Earnings beat',     ma: 'Above all MAs',  owned: true  },
+  { s: 'ZIM',  n: 'ZIM Int\'l', p:   18.42, c:  9.97, rvol: 4.2, cat: 'Earnings beat',     ma: 'Above all MAs',  owned: false },
+  { s: 'PLTR', n: 'Palantir',   p:   24.88, c:  6.18, rvol: 3.4, cat: 'Guidance raise',    ma: 'Above all MAs',  owned: true  },
+  { s: 'AVGO', n: 'Broadcom',   p: 1402.50, c:  2.97, rvol: 1.9, cat: 'Peer read-through', ma: 'Above all MAs',  owned: false },
+  { s: 'META', n: 'Meta',       p:  415.32, c:  3.20, rvol: 1.6, cat: 'Earnings beat',     ma: 'Above all MAs',  owned: true  },
+  { s: 'WBA',  n: 'Walgreens',  p:   15.30, c: -5.80, rvol: 2.7, cat: 'Earnings miss',     ma: 'Below 200-DMA',  owned: false },
+  { s: 'DELL', n: 'Dell',       p:  161.80, c: -3.45, rvol: 3.1, cat: 'Earnings miss',     ma: 'Below 50-DMA',   owned: false },
+  { s: 'TGT',  n: 'Target',     p:  141.20, c: -7.80, rvol: 2.8, cat: 'Miss + guide cut',  ma: 'Below all MAs',  owned: false },
+  { s: 'SMCI', n: 'Super Micro',p:  812.40, c:  5.60, rvol: 3.8, cat: 'AI server demand',  ma: 'Above all MAs',  owned: false },
+  { s: 'TSLA', n: 'Tesla',      p:  171.40, c:  3.45, rvol: 2.1, cat: 'UBS upgrade',       ma: 'Above 50-DMA',   owned: true  },
 ];
 
 // ---- Analyst Actions ----
 export const analyst: AnalystAction[] = [
-  { s: 'NVDA', n: 'Nvidia', from: 'Buy', to: 'Strong Buy', tgt: 1250, prev: 1000, firm: 'Goldman Sachs', type: 'upgrade' },
-  { s: 'TSLA', n: 'Tesla', from: 'Hold', to: 'Sell', tgt: 140, prev: 200, firm: 'UBS', type: 'downgrade' },
-  { s: 'AAPL', n: 'Apple', from: 'Neutral', to: 'Buy', tgt: 215, prev: 195, firm: 'Morgan Stanley', type: 'upgrade' },
-  { s: 'AMZN', n: 'Amazon', from: 'Buy', to: 'Buy', tgt: 225, prev: 205, firm: 'Citi', type: 'target raise' },
-  { s: 'MSFT', n: 'Microsoft', from: 'Outperform', to: 'Outperform', tgt: 500, prev: 460, firm: 'Barclays', type: 'target raise' },
-  { s: 'META', n: 'Meta', from: 'Hold', to: 'Buy', tgt: 520, prev: 450, firm: 'JPMorgan', type: 'upgrade' },
-  { s: 'INTC', n: 'Intel', from: 'Buy', to: 'Neutral', tgt: 32, prev: 50, firm: 'Deutsche Bank', type: 'downgrade' },
-  { s: 'GOOG', n: 'Alphabet', from: 'Buy', to: 'Buy', tgt: 210, prev: 195, firm: 'BofA', type: 'target raise' },
+  { s: 'CRM',  n: 'Salesforce',  firm: 'Morgan Stanley', dir: 'up',   from: 'Equal Weight', to: 'Overweight', ptF: 280,  ptT: 340,  react:  3.80, n30: 3, owned: false },
+  { s: 'NVDA', n: 'Nvidia',      firm: 'Goldman Sachs',  dir: 'up',   from: 'Buy',          to: 'Strong Buy', ptF: 1000, ptT: 1250, react:  8.23, n30: 1, owned: true  },
+  { s: 'TSLA', n: 'Tesla',       firm: 'UBS',            dir: 'up',   from: 'Sell',         to: 'Neutral',    ptF: 120,  ptT: 135,  react:  3.45, n30: 2, owned: true  },
+  { s: 'AAPL', n: 'Apple',       firm: 'Morgan Stanley', dir: 'up',   from: 'Neutral',      to: 'Buy',        ptF: 195,  ptT: 215,  react:  1.02, n30: 1, owned: true  },
+  { s: 'AMZN', n: 'Amazon',      firm: 'Citi',           dir: 'hold', from: 'Buy',          to: 'Buy',        ptF: 205,  ptT: 225,  react:  2.11, n30: 2, owned: false },
+  { s: 'INTC', n: 'Intel',       firm: 'Deutsche Bank',  dir: 'down', from: 'Buy',          to: 'Neutral',    ptF: 50,   ptT: 32,   react: -2.14, n30: 1, owned: false },
+  { s: 'GOOG', n: 'Alphabet',    firm: 'BofA',           dir: 'hold', from: 'Buy',          to: 'Buy',        ptF: 195,  ptT: 210,  react:  1.30, n30: 2, owned: false },
 ];
 
 // ---- Portfolio ----
@@ -380,4 +389,43 @@ export const recap: RecapData = {
     { l: 'New 52-wk lows',        v: '39',             c: -1 },
     { l: 'Up volume',             v: '71%',            c:  1 },
   ],
+};
+
+// ---- 13F Fund Detail (for drawer) ----
+export const fundDetail: Record<string, FundDetail> = {
+  'Berkshire Hathaway': {
+    holdings: [['AAPL',42.8,'reduced'],['BAC',10.9,'unchanged'],['AXP',7.6,'unchanged'],['KO',6.1,'unchanged'],['CVX',5.8,'unchanged'],['OXY',4.2,'unchanged'],['MCO',3.2,'unchanged'],['CB',2.8,'new'],['KHC',2.2,'unchanged'],['DVA',1.1,'unchanged']],
+    buys: [['CB','New position disclosed at ~$6.7B'],['OXY','Added 7.2M shares (+4.3%)']],
+    exits: [['HP','Fully exited'],['PARA','Fully exited']],
+    theme: 'Berkshire trimmed its largest position (Apple) by 13% while sharply building cash reserves. Net posture turned more defensive this quarter — rotation away from mega-cap tech toward insurance and energy.',
+    conc: 'Slightly less concentrated: top-5 weight fell from 79% to 75% after the Apple trim. Still extremely concentrated by typical fund standards.',
+  },
+  'Pershing Square': {
+    holdings: [['CMG',24.1,'unchanged'],['HLT',21.3,'unchanged'],['CP',15.6,'unchanged'],['GOOGL',11.3,'new'],['QSR',9.2,'unchanged'],['HHC',7.6,'reduced'],['FRPH',4.5,'unchanged'],['LOW',3.8,'new'],['OPK',1.6,'unchanged'],['UNH',1.0,'reduced']],
+    buys: [['GOOGL','New position ~$2.1B (11.3% of portfolio)'],['LOW','Added $300M']],
+    exits: [['NFLX','Fully exited after +62% gain']],
+    theme: 'Ackman initiated a significant GOOGL position while adding to LOW, signaling conviction in AI-driven ad monetization and home improvement durability.',
+    conc: 'Highly concentrated: top-5 positions = 81% of AUM. Deliberately concentrated, high-conviction style.',
+  },
+  'Tiger Global': {
+    holdings: [['MSFT',18.2,'unchanged'],['NVDA',14.1,'added'],['META',9.8,'unchanged'],['AMZN',8.2,'unchanged'],['CRM',6.5,'new'],['GOOGL',6.1,'unchanged'],['DDOG',4.5,'added'],['CRWD',3.8,'new'],['NOW',3.1,'unchanged'],['SHOP',2.4,'reduced']],
+    buys: [['NVDA','Added $1.1B (now #2 position)'],['CRM','New position $680M'],['CRWD','New position $450M']],
+    exits: [['TSLA','Fully exited'],['NFLX','Fully exited'],['PTON','Fully exited'],['SPOT','Trimmed 80%'],['RBLX','Fully exited'],['LYFT','Fully exited']],
+    theme: 'Tiger rotated aggressively into AI infrastructure plays — NVDA, CRM, CRWD — while exiting legacy/consumer tech names.',
+    conc: 'Less concentrated than peers; top-10 = 77% of AUM. Showing high conviction in AI theme.',
+  },
+  'Scion Asset Mgmt': {
+    holdings: [['BABA',31.5,'unchanged'],['JD',21.3,'added'],['REAL',14.8,'new'],['BIDU',8.6,'unchanged'],['PDD',7.4,'new'],['GOOG',6.5,'new'],['ACM',4.9,'unchanged'],['OLPX',2.3,'reduced'],['CPRI',1.8,'unchanged'],['GOOS',0.9,'unchanged']],
+    buys: [['JD','Added 3.2M shares'],['REAL','New position'],['PDD','New position'],['GOOG','New position']],
+    exits: [['GXO','Fully exited'],['WDC','Fully exited'],['HGV','Fully exited']],
+    theme: 'Burry is doubling down on China + value plays. Significant new positions in Chinese e-commerce while adding a first U.S. tech position (GOOG).',
+    conc: 'Extremely concentrated: top-5 = 84% of portfolio. Classic Burry high-conviction style.',
+  },
+  'Bridgewater': {
+    holdings: [['IVV',14.3,'unchanged'],['SPY',11.2,'unchanged'],['EEM',8.6,'added'],['GLD',7.5,'added'],['VWO',6.2,'unchanged'],['IEMG',5.8,'unchanged'],['IEF',4.9,'new'],['TIP',4.2,'new'],['EFA',3.8,'unchanged'],['DIA',3.1,'reduced']],
+    buys: [['EEM','Added $1.2B'],['GLD','Added $900M gold ETF'],['IEF','New position — rate positioning'],['TIP','New position — inflation hedge']],
+    exits: [['BRK.B','Fully exited'],['MSFT','Reduced 60%'],['GOOG','Reduced 45%']],
+    theme: 'Bridgewater shifted toward a classic all-weather defensive posture: more EM exposure, added gold and TIPS, reduced single-stock equity concentration.',
+    conc: 'Portfolio is diversified across 680 positions — very low concentration by design (Ray Dalio philosophy).',
+  },
 };

@@ -388,7 +388,7 @@ export function DashboardScreen() {
                 <div key={i} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(a.s)}>
                   <span className="tkr">{a.s}</span>
                   <span className="mid">{a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.to}</b></span>
-                  <span className="r">{analystDir(a.type)}</span>
+                  <span className="r">{analystDir(a.dir)}</span>
                 </div>
               ))}
             </div>
@@ -404,7 +404,7 @@ export function DashboardScreen() {
               {movers.slice(0, 5).map(m => (
                 <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
                   <span className="tkr">{m.s}</span>
-                  <span className="mid">{m.reason}</span>
+                  <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
                 </div>
               ))}

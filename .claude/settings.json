@@ -7,7 +7,10 @@
       "Read(//Users/surjeetgovindadash/Documents/Surjeet/**)",
       "Bash(find /Users/surjeetgovindadash/Downloads -name \"investiq*.html\" 2>/dev/null | head -5; find /Users/surjeetgovindadash/Desktop -name \"investiq*.html\" 2>/dev/null | head -5; ls /Users/surjeetgovindadash/Downloads/ 2>/dev/null | grep -i investiq)",
       "Read(//Users/surjeetgovindadash/Downloads/**)",
-      "Read(//Users/surjeetgovindadash/Desktop/**)"
+      "Read(//Users/surjeetgovindadash/Desktop/**)",
+      "Bash(find /Users/surjeetgovindadash -name \"investiq*v5*\" -o -name \"*v5*.html\" 2>/dev/null | head -10 && find /Users/surjeetgovindadash/Documents -name \"*.html\" -not -path \"*/node_modules/*\" -not -path \"*/.next/*\" 2>/dev/null | head -20)",
+      "Read(//Users/surjeetgovindadash/**)",
+      "Read(//Users/surjeetgovindadash/Documents/**)"
     ]
   }
 }
