@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
 import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList } from "../data";
-import { fmt, sign, cls, arr, Spark } from "../utils";
+import { fmt, sign, cls, arr, Spark, SemiGauge } from "../utils";
 
 const LIVE_FEED = [
   {
@@ -39,31 +39,6 @@ function analystDir(type: string) {
 }
 
 /** Circular progress gauge — number lives inside the ring */
-function CircleGauge({ value, color = "var(--up)" }: { value: number; color?: string }) {
-  const r = 30;
-  const circ = 2 * Math.PI * r;
-  const filled = circ * (value / 100);
-  return (
-    <div style={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
-      <svg viewBox="0 0 80 80" style={{ width: 80, height: 80 }}>
-        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--surface-3)" strokeWidth="7" />
-        <circle cx="40" cy="40" r={r} fill="none" stroke={color} strokeWidth="7"
-          strokeDasharray={`${filled.toFixed(2)} ${(circ - filled).toFixed(2)}`}
-          strokeLinecap="round"
-          transform="rotate(-90 40 40)" />
-      </svg>
-      <div style={{
-        position: "absolute", inset: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <span style={{
-          fontFamily: "var(--f-mono)", fontSize: 18, fontWeight: 700,
-          color: "var(--text-hi)", lineHeight: 1,
-        }}>{value}</span>
-      </div>
-    </div>
-  );
-}
 
 export function DashboardScreen() {
   const { openStock, openEarnings, openSector, setCopilot } = useIQActions();
@@ -288,21 +263,10 @@ export function DashboardScreen() {
                 <h3>Fear &amp; Greed</h3>
                 <span className="link">History →</span>
               </div>
-              <div className="card-b" style={{
-                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 18,
-              }}>
-                <CircleGauge value={62} color="var(--up)" />
-                <div>
-                  <div style={{
-                    fontSize: "1.4rem", fontWeight: 700, color: "var(--up)",
-                    fontFamily: "var(--f-display)", lineHeight: 1,
-                  }}>Greed</div>
-                  <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                    Fear &amp; Greed Index
-                  </div>
-                  <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 3 }}>
-                    Prev close: <b style={{ color: "var(--text)" }}>58</b>
-                  </div>
+              <div className="card-b gauge-wrap">
+                <SemiGauge val={62} label="Greed" id="fg" />
+                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                  Prev close: <b style={{ color: "var(--text)" }}>58</b>
                 </div>
               </div>
             </div>

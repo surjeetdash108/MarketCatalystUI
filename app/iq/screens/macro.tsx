@@ -43,9 +43,9 @@ export function MacroScreen() {
         </div>
       </div>
 
-      <div className="dash">
+      <div className="dash" style={{ alignItems: "stretch" }}>
         {/* col-4: Market regime + VIX */}
-        <div className="col-4">
+        <div className="col-4" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div className="card">
             <div className="card-h"><h3>Market regime</h3></div>
             <div className="card-b" style={{ textAlign: "center", padding: "22px 15px" }}>
@@ -56,7 +56,7 @@ export function MacroScreen() {
             </div>
           </div>
 
-          <div className="card vix" style={{ marginTop: 14 }}>
+          <div className="card vix" style={{ flex: 1 }}>
             <div className="card-h"><h3>VIX</h3></div>
             <div className="card-b">
               <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
@@ -72,10 +72,10 @@ export function MacroScreen() {
         </div>
 
         {/* col-8: Economic calendar */}
-        <div className="col-8">
-          <div className="card">
+        <div className="col-8" style={{ display: "flex", flexDirection: "column" }}>
+          <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             <div className="card-h"><h3>Economic calendar</h3></div>
-            <div className="tbl-wrap">
+            <div className="tbl-wrap" style={{ flex: 1 }}>
               <table className="tbl">
                 <thead>
                   <tr>

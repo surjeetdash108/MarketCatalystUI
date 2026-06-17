@@ -618,11 +618,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                       <Link key={item.slug} href={href} className={`navitem${isActive ? " active" : ""}`}>
                         <div className="nicon"><NavIcon slug={item.slug} /></div>
                         {item.label}
-                        {item.badge && (
-                          <span className={`navbadge${item.badge === "AI" ? " ai" : ""}`}>
-                            {item.badge}
-                          </span>
-                        )}
                       </Link>
                     );
                   })}

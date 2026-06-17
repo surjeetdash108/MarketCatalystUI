@@ -5,7 +5,7 @@ export const menuItems = [
   { label: 'Market Movers', slug: 'movers', group: 'Intelligence', icon: '📈', badge: null },
   { label: 'Market Heatmap', slug: 'heatmap', group: 'Intelligence', icon: '🟩', badge: null },
   { label: 'Analyst Actions', slug: 'analyst', group: 'Intelligence', icon: '🔔', badge: null },
-  { label: 'Screener', slug: 'screener', group: 'Intelligence', icon: '🔍', badge: 'NEW' },
+  { label: 'Stock Screener', slug: 'screener', group: 'Intelligence', icon: '🔍', badge: 'NEW' },
   // ---- My Money group ----
   { label: 'Portfolio Pulse', slug: 'portfolio', group: 'My Money', icon: '💼', badge: null },
   { label: 'Watchlist', slug: 'watchlist', group: 'My Money', icon: '⭐', badge: null },

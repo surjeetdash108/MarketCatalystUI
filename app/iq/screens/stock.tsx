@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useIQActions } from "../shell";
 import { stockInfo, watch, folio } from "../data";
-import { fmt, cls, arr, sign, Spark, Gauge } from "../utils";
+import { fmt, cls, arr, sign, Spark, SemiGauge } from "../utils";
 
 const SYMBOLS = [...Object.keys(stockInfo), ...watch.map(w => w.s), ...folio.map(f => f.s)]
   .filter((v, i, a) => a.indexOf(v) === i);
@@ -174,12 +174,11 @@ export function StockScreen() {
           {/* AI Confidence gauge */}
           <div className="card" style={{ marginBottom: 12 }}>
             <div className="card-h"><h3>AI Confidence Score</h3></div>
-            <div className="card-b" style={{ textAlign: "center" }}>
-              <Gauge
-                v={parseInt(data.ai_metrics[0]?.v ?? "50")}
-                label={data.ai_metrics[0]?.v?.split(" ")[0] ?? "50"}
-                color={parseInt(data.ai_metrics[0]?.v ?? "50") > 60 ? "var(--up)" : parseInt(data.ai_metrics[0]?.v ?? "50") > 40 ? "var(--warn)" : "var(--down)"}
-                sublabel={data.ai_call}
+            <div className="card-b gauge-wrap">
+              <SemiGauge
+                val={parseInt(data.ai_metrics[0]?.v ?? "50")}
+                label={data.ai_call}
+                id="ai-conf"
               />
             </div>
           </div>

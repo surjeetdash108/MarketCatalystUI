@@ -117,7 +117,7 @@ export function ScreenerScreen() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Screener</div>
+          <div className="eyebrow">Stock Screener</div>
           <div className="page-title">Find your next idea</div>
           <div className="page-sub">
             Fundamental + technical filters · {filtered.length} of {screenerStocks.length} stocks match
@@ -265,14 +265,13 @@ export function ScreenerScreen() {
               </tbody>
             </table>
           </div>
+          <p style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", padding: "10px 14px 14px" }}>
+            The &ldquo;Briefing growth screen&rdquo; preset mirrors a relative-strength + sales/EPS-growth + margin-expansion
+            filter. Technical Rating is computed from 11 oscillators and 15 moving averages — informational,
+            not investment advice.
+          </p>
         </div>
       </div>
-
-      <p style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", padding: "0 18px 14px" }}>
-        The "Briefing growth screen" preset mirrors a relative-strength + sales/EPS-growth + margin-expansion
-        filter. Technical Rating is computed from 11 oscillators and 15 moving averages — informational,
-        not investment advice.
-      </p>
     </>
   );
 }

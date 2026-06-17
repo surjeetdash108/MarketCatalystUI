@@ -57,35 +57,40 @@ export function Spark({ seed, up }: { seed: number; up: boolean }) {
   );
 }
 
-// ---- Semicircular gauge SVG ----
-export function gaugeSVG(v: number, label: string, color: string): string {
-  const r = 38, cx = 50, cy = 50, sw = 7;
-  const startAngle = -150 * Math.PI / 180;
-  const sweep = 300 * Math.PI / 180;
-  const angle = startAngle + (v / 100) * sweep;
-  const sx = cx + r * Math.cos(startAngle);
-  const sy = cy + r * Math.sin(startAngle);
-  const ex = cx + r * Math.cos(angle);
-  const ey = cy + r * Math.sin(angle);
-  const endFull = { x: cx + r * Math.cos(startAngle + sweep), y: cy + r * Math.sin(startAngle + sweep) };
-  const lf = (v / 100) > 0.5 ? 1 : 0;
-  return `<svg viewBox="0 0 100 60" width="100" height="60" style="overflow:visible">
-    <path d="M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${r} ${r} 0 1 1 ${endFull.x.toFixed(2)} ${endFull.y.toFixed(2)}"
-      fill="none" stroke="var(--border)" stroke-width="${sw}" stroke-linecap="round"/>
-    <path d="M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${r} ${r} 0 ${lf} 1 ${ex.toFixed(2)} ${ey.toFixed(2)}"
-      fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"/>
-    <text x="${cx}" y="${cy - 6}" text-anchor="middle" font-size="14" font-weight="700"
-      fill="${color}" font-family="var(--f-display)">${label}</text>
-  </svg>`;
+// ---- Semicircular gauge (matches HTML v5 gaugeSVG) ----
+export function SemiGauge({ val, label, id = "sg" }: { val: number; label: string; id?: string }) {
+  const cx = 70, cy = 66, r = 54;
+  const a = Math.PI * (1 - val / 100);
+  const nx = cx + r * Math.cos(a);
+  const ny = cy - r * Math.sin(a);
+  const arcLen = 170;
+  const dashOffset = arcLen - arcLen * val / 100;
+  const color = val >= 60 ? "var(--up)" : val >= 40 ? "var(--warn)" : "var(--down)";
+  const gradId = `${id}-grad`;
+  return (
+    <svg viewBox="0 0 140 90" width={150} style={{ display: "block" }}>
+      <defs>
+        <linearGradient id={gradId} x1="0" x2="1">
+          <stop offset="0" stopColor="#FF5470" />
+          <stop offset=".5" stopColor="#FFB547" />
+          <stop offset="1" stopColor="#2FE6A6" />
+        </linearGradient>
+      </defs>
+      <path d="M16 66 A54 54 0 0 1 124 66" fill="none" stroke="var(--surface-3)" strokeWidth="11" strokeLinecap="round" />
+      <path d="M16 66 A54 54 0 0 1 124 66" fill="none" stroke={`url(#${gradId})`} strokeWidth="11" strokeLinecap="round"
+        strokeDasharray={arcLen} strokeDashoffset={dashOffset} />
+      <circle cx={nx} cy={ny} r="6" fill="var(--text-hi)" stroke="var(--bg)" strokeWidth="3" />
+      <text x="70" y="53" textAnchor="middle" fontSize="22" fontWeight="700"
+        fontFamily="var(--f-mono)" fill={color}>{val}</text>
+      <text x="70" y="79" textAnchor="middle" fontSize="8" fontWeight="600"
+        letterSpacing="2" fontFamily="var(--f-display)" fill={color}>{label.toUpperCase()}</text>
+    </svg>
+  );
 }
 
+export function gaugeSVG(v: number, label: string, color: string): string { return ""; }
 export function Gauge({ v, label, color, sublabel }: { v: number; label: string; color: string; sublabel?: string }) {
-  return (
-    <div className="gauge-wrap">
-      <div dangerouslySetInnerHTML={{ __html: gaugeSVG(v, label, color) }} />
-      {sublabel && <div className="gauge-label">{sublabel}</div>}
-    </div>
-  );
+  return null;
 }
 
 // ---- Tag chip helper ----
