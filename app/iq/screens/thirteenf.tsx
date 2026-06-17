@@ -50,13 +50,13 @@ export function ThirteenFScreen() {
       {/* Fund cards */}
       <div className="dash" style={{ padding: "0 18px" }}>
         {funds.map((f, i) => (
-          <div key={f.name} className="col-4">
+          <div key={f.nm} className="col-4">
             <div className={`fundcard${activeFund === i ? " on" : ""}`}
               onClick={() => { setActiveFund(i); openFund(i); }}>
               <div style={{ display: "flex", gap: 11, alignItems: "center", marginBottom: 12 }}>
                 <div className="av">{f.av}</div>
                 <div>
-                  <div className="nm">{f.name}</div>
+                  <div className="nm">{f.nm}</div>
                   <div className="mgr">{f.mgr}</div>
                 </div>
               </div>
@@ -71,13 +71,13 @@ export function ThirteenFScreen() {
                 </div>
                 <div>
                   <div style={{ color: "var(--text-dim-solid)", fontSize: ".62rem", fontFamily: "var(--f-body)" }}>Top</div>
-                  <b style={{ color: "var(--text-hi)" }}>{f.top1}</b>
+                  <b style={{ color: "var(--text-hi)" }}>{f.top}</b>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 11, alignItems: "center" }}>
-                <span className="pill up">{f.newPos} new</span>
+                <span className="pill up">{f.newPos} new buys</span>
                 <span className="pill dn">{f.exits} exits</span>
-                <span className="pill amc">{f.quarter}</span>
+                <span className="pill amc">{f.q}</span>
                 <span className="link" style={{ marginLeft: "auto" }}
                   onClick={e => { e.stopPropagation(); openFund(i); }}>
                   Deep analysis →
@@ -95,7 +95,7 @@ export function ThirteenFScreen() {
         <div className="col-8">
           <div className="ai-block">
             <div className="card-h">
-              <h3 className="ai-c">◆ AI 13F Summary · {funds[activeFund]?.name} · {funds[activeFund]?.quarter}</h3>
+              <h3 className="ai-c">◆ AI 13F Summary · {funds[activeFund]?.nm} · {funds[activeFund]?.q}</h3>
               <span className="pill ai">Auto-generated</span>
             </div>
             <div className="card-b">

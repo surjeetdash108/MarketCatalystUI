@@ -162,9 +162,27 @@ IQ Shell & Component Architecture
 
 -   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav, topbar, drawer system (stock/earnings/sector/fund drawers), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`.
 
--   **`IQActionsContext`**: React context providing `openStock(sym)`, `openEarnings(sym)`, `openSector(name)`, `openFund(idx)`, `setCopilot(open)`, `theme`, `setTheme` to all child screens. Consumed via `useIQActions()` hook.
+-   **`IQActionsContext`**: React context providing `openStock(sym)`, `openStockFull(sym)`, `openEarnings(sym)`, `openSector(name)`, `openFund(idx)`, `openIndex(i)`, `openFearGreed()`, `setCopilot(open)`, `theme`, `setTheme` to all child screens. Consumed via `useIQActions()` hook.
+
+-   **Drawer union type**: `drawer` state in IQShell is `{ type: "stock" | "earnings" | "sector" | "fund" | "index" | "feargreed" } | null`. `IndexDrawer` renders OHLC/day-range/52wk-range/AI-note for market indices, plus leading/lagging sectors for equity indices. `FearGreedDrawer` renders SemiGauge, 5-value history metric-grid, 7-component progress bars, AI read note.
 
 -   **Theme system**: `theme: "dark" | "light"` state in `IQShell`. Applied as `data-theme={theme}` on `.iq-root` div. Initialized from `localStorage` synchronously (no flicker on navigation). Persisted to Firestore `settings/{uid}` collection (`darkMode: boolean` field) when user changes preference via Settings. `localStorage` acts as a fast cache so the correct theme is available on the first render of every page mount.
+
+Shared Utility Components (`app/iq/utils.tsx`)
+
+-   **`heatCol(p)`**: RGB color ramp matching HTML reference. Returns `{ bg, fg }`. Pale mint→deep green (positive), pale pink→deep red (negative). `fg` is `#ffffff` for dark tiles, `#0c1a13` for light tiles (threshold: saturation > 42%). Used by dashboard heatmap mini, heatmap treemap, and stock page key-stat cells.
+
+-   **`CandleChart({ sym, tf, px, showMA?, showVol? })`**: SVG candlestick chart. Deterministic OHLC generation via seeded RNG matching HTML's `genOHLC()` algorithm. Features: candles + wicks, MA20/MA50 overlays, volume bars, ER marker, hover crosshair tooltip. Rendered on stock detail page.
+
+-   **`RsiPane({ sym, tf })`**: SVG RSI oscillator sub-pane. 70/30 dashed reference lines. Shares seed with CandleChart so RSI is consistent with price data.
+
+-   **`TrGauge({ val, size })`**: Segmented semicircle SVG (5 colored arcs: Strong Sell → Strong Buy) with animated needle. Used on stock Technical Rating card.
+
+-   **`SemiGauge({ val, label, id })`**: Gradient arc SVG for Fear & Greed index (0–100). Used on dashboard F&G widget and FearGreedDrawer.
+
+-   **`Spark({ seed, up })`**: Deterministic sparkline SVG. Used on pulse strip cards.
+
+-   **`RATING_VAL`**: Map from rating string to gauge position — `{ "Strong Buy": 0.9, "Buy": 0.55, "Neutral": 0, "Sell": -0.55, "Strong Sell": -0.9 }`.
 
 Design System — InvestIQ (`iq.css`)
 
@@ -176,9 +194,11 @@ Design System — InvestIQ (`iq.css`)
 
 -   `.iq-root[data-theme="light"]` overrides with a light palette (`--bg: #EDF1F7` etc.).
 
--   Layout primitives: `.app` (CSS grid: sidebar + content), `.dash` (12-column content grid), `.col-4/6/8/12`, `.card`, `.card-h`, `.card-b`, `.page-head`, `.page-title`.
+-   Layout primitives: `.app` (CSS grid: sidebar + content), `.dash` (12-column content grid), `.col-3/4/5/6/7/8/12`, `.card`, `.card-h`, `.card-b`, `.page-head`, `.page-title`.
 
--   Component classes: `.wmn` (What Matters Now block), `.ai-block`, `.ai-sec`, `.heat` (sector heatmap grid), `.fundcard`, `.fin-row`, `.iq-toggle`, `.iq-toggle-row`, `.pill`, `.pill.up/dn/amc`, `.tr-badge`, `.iconbtn`, `.topbar-avatar`.
+-   Component classes: `.wmn` (What Matters Now block), `.ai-block`, `.ai-sec`, `.heat` (sector heatmap grid), `.fundcard`, `.fin-row`, `.iq-toggle`, `.iq-toggle-row`, `.pill`, `.pill.up/dn/amc/opt/bmo/beat/miss/raise/lower/hold`, `.tr-badge`, `.iconbtn`, `.topbar-avatar`, `.trseg`, `.trseg2`, `.tf-pills`, `.ind-tbl`, `.sd-grid`, `.sd-head`.
+
+-   Stock screener classes: `.filt`, `.filt .fh`, `.filt .fb`, `.fgroup .fl`, `.preset`, `.dd`, `.dd-menu`.
 
 -   Auth pages use the same CSS variables (imported globally) but are not wrapped in `.iq-root`; they use inline styles referencing `var(--*)`.
 
@@ -186,19 +206,19 @@ Screens (Current)
 
 | Slug | Screen File | Status |
 |---|---|---|
-| dashboard | screens/dashboard.tsx | UI complete — static data |
+| dashboard | screens/dashboard.tsx | UI complete — HTML-parity layout, heatCol mini, openIndex/openFearGreed, pmeta |
 | portfolio | screens/portfolio.tsx | UI complete — static data |
 | watchlist | screens/watchlist.tsx | UI complete — static data |
 | earnings | screens/earnings.tsx | UI complete — static data |
-| screener | screens/screener.tsx | UI complete — 20 presets, checkbox filters |
+| screener | screens/screener.tsx | UI complete — 20 presets, checkbox filters, native `<details>` dropdown |
 | analyst | screens/analyst.tsx | UI complete — static data |
 | thirteenf | screens/thirteenf.tsx | UI complete — static data |
 | movers | screens/movers.tsx | UI complete — static data |
-| heatmap | screens/heatmap.tsx | UI complete — static data |
+| heatmap | screens/heatmap.tsx | UI complete — heatCol() dynamic text color on treemap tiles |
 | macro | screens/macro.tsx | UI complete — static data |
 | commentary | screens/commentary.tsx | UI complete — static data |
 | recap | screens/recap.tsx | UI complete — static data |
-| stock | screens/stock.tsx | UI complete — static data |
+| stock | screens/stock.tsx | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout |
 | settings | screens/settings.tsx | Settings + dark mode wired to Firestore |
 | manage-plan | screens/manage-plan.tsx | UI scaffold |
 

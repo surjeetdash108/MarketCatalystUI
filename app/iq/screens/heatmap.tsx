@@ -3,19 +3,13 @@
 import { useState } from "react";
 import { useIQActions } from "../shell";
 import { sectorList } from "../data";
-import { sign, cls } from "../utils";
+import { sign, cls, heatCol } from "../utils";
 
 const SEC_PAGE = 10;
 const SEC_PAGES = Math.ceil(sectorList.length / SEC_PAGE);
 
 const TABS = ["Stocks", "S&P 500", "ETFs", "Crypto"];
 
-function hmColor(p: number): string {
-  const a = Math.min(Math.abs(p) / 3, 1);
-  return p >= 0
-    ? `rgba(28,170,112,${(0.22 + a * 0.62).toFixed(2)})`
-    : `rgba(208,52,76,${(0.22 + a * 0.62).toFixed(2)})`;
-}
 
 const k = 2.0;
 
@@ -88,15 +82,16 @@ export function HeatmapScreen() {
                       const w = Math.max(56, Math.sqrt(mc) * k);
                       const h = Math.max(42, Math.sqrt(mc) * k * 0.62);
                       const fs = Math.max(0.62, Math.min(1, Math.sqrt(mc) / 40));
+                      const hc = heatCol(chg);
                       return (
                         <div
                           key={sym}
                           className="tm-cell"
                           onClick={e => { e.stopPropagation(); openStock(sym); }}
-                          style={{ width: w, height: h, background: hmColor(chg) }}
+                          style={{ width: w, height: h, background: hc.bg }}
                         >
-                          <span className="tt" style={{ fontSize: `${fs}rem` }}>{sym}</span>
-                          <span className="tc" style={{ fontSize: `${fs * 0.8}rem` }}>{sign(chg)}</span>
+                          <span className="tt" style={{ fontSize: `${fs}rem`, color: hc.fg }}>{sym}</span>
+                          <span className="tc" style={{ fontSize: `${fs * 0.8}rem`, color: hc.fg, opacity: 0.85 }}>{sign(chg)}</span>
                         </div>
                       );
                     })}

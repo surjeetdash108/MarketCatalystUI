@@ -10,8 +10,8 @@ import { firebaseAuth, firebaseDb } from "../firebase";
 import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
-import { pulse, sectorByName, funds, fundDetail, folio, earnings as earningsData, type SectorRow, type Fund, type FundDetail } from "./data";
-import { fmt, sign, cls, arr } from "./utils";
+import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail } from "./data";
+import { fmt, sign, cls, arr, TrGauge, RATING_VAL, SemiGauge } from "./utils";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -21,18 +21,24 @@ function slugToHref(slug: string): string {
 // ---- IQ Actions context ----
 interface IQActions {
   openStock: (sym: string) => void;
+  openStockFull: (sym: string) => void;
   openEarnings: (sym: string) => void;
   openSector: (name: string) => void;
   openFund: (idx: number) => void;
+  openIndex: (i: number) => void;
+  openFearGreed: () => void;
   setCopilot: (open: boolean) => void;
   theme: "dark" | "light";
   setTheme: (t: "dark" | "light") => void;
 }
 export const IQActionsContext = createContext<IQActions>({
   openStock: () => {},
+  openStockFull: () => {},
   openEarnings: () => {},
   openSector: () => {},
   openFund: () => {},
+  openIndex: () => {},
+  openFearGreed: () => {},
   setCopilot: () => {},
   theme: "dark",
   setTheme: () => {},
@@ -65,8 +71,104 @@ function NavIcon({ slug }: { slug: string }) {
 }
 
 // ---- Drawers ----
+function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
+  const { openStockFull, setCopilot } = useIQActions();
+  const scr = screenerStocks.find(x => x.s === sym);
+  const mv = movers.find(x => x.s === sym);
+  const erEntry = earningsData.find(x => x.s === sym);
+  const p = mv?.p ?? 0;
+  const c = mv?.c ?? 0;
+  const mc = scr?.mc ?? 0;
+  const pe = scr?.pe ?? 0;
+  const rs = scr?.rs ?? 55;
+  const rvol = scr?.rvol ?? 1.0;
+  const rating = scr?.rating ?? "Neutral";
+  const eps = pe > 0 && p > 0 ? p / pe : 0;
+  const gv = RATING_VAL[rating] ?? 0;
+  const capStr = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : `$${v}B`;
+  const dollar = Math.abs(c / 100 * p);
+  // Peers: other tickers in same sector
+  const sectorRow = Object.values(sectorByName).find(s => s.items.some(it => it[0] === sym));
+  const peers = sectorRow ? sectorRow.items.filter(it => it[0] !== sym).slice(0, 4) : [];
+  const trend = c >= 0 && rs >= 70
+    ? "Strong uptrend — group leader, momentum confirmed."
+    : rs < 40 ? "Downtrend — lagging the tape, below key moving averages."
+    : "Range-bound — no decisive trend yet.";
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="drawer open">
+        <div className="drawer-h">
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3" }}>
+            {sym[0]}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>{sym}</div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
+              {scr?.n ?? sym} · {scr?.sec ?? "—"}
+            </div>
+          </div>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+        <div className="drawer-b">
+          {p > 0 && (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+              <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>${fmt(p, 2)}</div>
+              <div className={cls(c)} style={{ fontWeight: 600 }}>
+                {arr(c)} {c >= 0 ? "+" : ""}{fmt(dollar)} ({sign(c)})
+              </div>
+            </div>
+          )}
+          <div className="metric-grid" style={{ marginBottom: 14 }}>
+            <div className="m"><div className="k">Mkt cap</div><div className="v">{capStr(mc)}</div></div>
+            <div className="m"><div className="k">P/E</div><div className="v">{pe.toFixed(1)}</div></div>
+            <div className="m">
+              <div className="k">RS rank</div>
+              <div className={`v ${rs >= 70 ? "up" : rs < 40 ? "down" : ""}`}>{rs}/99</div>
+            </div>
+            <div className="m"><div className="k">Rel. volume</div><div className="v">{rvol.toFixed(1)}×</div></div>
+            <div className="m"><div className="k">EPS (TTM)</div><div className="v">{eps > 0 ? `$${eps.toFixed(2)}` : "—"}</div></div>
+            <div className="m">
+              <div className="k">Next ER</div>
+              <div className="v" style={{ fontSize: ".95rem" }}>{erEntry?.t ?? "—"}</div>
+            </div>
+          </div>
+          <div className="trgroup" style={{ borderColor: "var(--ai-dim)", margin: "0 0 14px" }}>
+            <div className="gl ai-c">Technical rating</div>
+            <TrGauge val={gv} label={rating} />
+          </div>
+          <div className="note" style={{ marginBottom: 12 }}>
+            <b style={{ color: "var(--text-hi)" }}>AI read:</b> {trend}
+          </div>
+          {peers.length > 0 && (
+            <div className="card" style={{ marginBottom: 14 }}>
+              <div className="card-h"><h3>Peers</h3></div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                {peers.map(([pt, , pc]) => (
+                  <div key={pt} className="minirow" style={{ cursor: "pointer" }}
+                    onClick={() => { onClose(); setTimeout(() => openStockFull(pt), 50); }}>
+                    <span className="tkr">{pt}</span>
+                    <span style={{ flex: 1 }} />
+                    <span className={`r ${cls(pc)}`}>{sign(pc)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button className="btn primary" style={{ flex: 1 }} onClick={() => { onClose(); openStockFull(sym); }}>
+              Open full Stock Detail →
+            </button>
+            <button className="btn ai" onClick={() => { setCopilot(true); }}>Ask Copilot</button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
-  const { openStock } = useIQActions();
+  const { openStockFull } = useIQActions();
   const e = earningsData.find(x => x.s === sym);
   const posted = e && e.epsA != null;
   const epsBeat = e && e.epsA != null ? ((e.epsA - e.epsE) / Math.abs(e.epsE) * 100) : null;
@@ -181,7 +283,7 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
           )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button className="btn primary" style={{ flex: 1 }} onClick={() => { onClose(); openStock(sym); }}>Open full stock page</button>
+            <button className="btn primary" style={{ flex: 1 }} onClick={() => { onClose(); openStockFull(sym); }}>Open full stock page</button>
             <button className="btn">Transcript</button>
             <button className="btn ai">▶ Call audio</button>
           </div>
@@ -247,7 +349,7 @@ function SectorDrawer({ name, onClose }: { name: string; onClose: () => void }) 
 function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
   const { openStock } = useIQActions();
   const fund: Fund | undefined = funds[idx];
-  const dt: FundDetail | undefined = fund ? fundDetail[fund.name] : undefined;
+  const dt: FundDetail | undefined = fund ? fundDetail[fund.nm] : undefined;
 
   return (
     <>
@@ -258,9 +360,9 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
             {fund?.av ?? "—"}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{fund?.name ?? "Fund"}</div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{fund?.nm ?? "Fund"}</div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-              {fund?.mgr} · 13F AUM {fund?.aum} · {fund?.pos} positions · {fund?.quarter}
+              {fund?.mgr} · 13F AUM {fund?.aum} · {fund?.pos} positions · {fund?.q}
             </div>
           </div>
           <button className="closebtn" onClick={onClose}>✕</button>
@@ -272,7 +374,7 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
               <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
                 <span className="pill up">{fund.newPos} new buys</span>
                 <span className="pill dn">{fund.exits} exits</span>
-                <span className="src-chip">{fund.quarter} 13F-HR</span>
+                <span className="src-chip">{fund.q} 13F-HR</span>
               </div>
 
               {dt && (
@@ -345,6 +447,130 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
               <button className="btn primary" style={{ width: "100%" }} onClick={onClose}>Back to 13F overview</button>
             </>
           )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---- Index drawer (openIndex) ----
+function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
+  const { openFund } = useIQActions();
+  const x = pulse[idx];
+  if (!x) return null;
+  const dec = x.v > 1000 ? 0 : 2;
+  const dollar = x.v - x.pc;
+  const c = x.c >= 0 ? "up" : "down";
+  const dayLow = Math.min(x.o, x.pc, x.v) * 0.997;
+  const dayHigh = Math.max(x.o, x.pc, x.v) * 1.003;
+  const y52lo = x.v * 0.82, y52hi = x.v * 1.06;
+  const eq = ["S&P 500", "Nasdaq", "Dow", "Russell 2K"].includes(x.l);
+  const lead = [...sectorList].sort((a, b) => b.chg - a.chg).slice(0, 3);
+  const lag = [...sectorList].sort((a, b) => b.chg - a.chg).slice(-3).reverse();
+  const note = x.l === "VIX" ? "Volatility is low and falling — a calm, risk-on tape with cheap hedging."
+    : x.l.includes("Yield") ? "Yields easing — supportive for long-duration growth and rate-sensitive sectors."
+    : x.l === "WTI Crude" ? "Crude softer — pressures energy names, eases input-cost worries elsewhere."
+    : x.l === "Gold" ? "Gold firmer — mild safe-haven bid alongside a softer dollar."
+    : x.l === "Dollar (DXY)" ? "Dollar steady — limited FX headwind for multinationals today."
+    : x.c >= 0 ? "Broad-based gains; breadth is positive and the tape reads risk-on." : "Mild risk-off; defensives are outpacing cyclicals.";
+  const sub = eq ? "Equity index" : x.l === "VIX" ? "Volatility index" : x.l.includes("Yield") ? "Treasury yield" : "Market benchmark";
+  return (
+    <>
+      <div className="scrim open" onClick={onClose} />
+      <div className="drawer open">
+        <div className="drawer-h">
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f4d6b,#0e2233)", color: "#7fd0ff" }}>{x.l[0]}</div>
+          <div><div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{x.l}</div><div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{sub} · delayed ≤15s</div></div>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+        <div className="drawer-b">
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+            <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>{fmt(x.v, dec)}</div>
+            <div className={c} style={{ fontWeight: 600 }}>{arr(x.c)} {x.c >= 0 ? "+" : ""}{fmt(Math.abs(dollar), dec)} ({sign(x.c)})</div>
+          </div>
+          <div className="metric-grid">
+            <div className="m"><div className="k">Open</div><div className="v">{fmt(x.o, dec)}</div></div>
+            <div className="m"><div className="k">Prev close</div><div className="v">{fmt(x.pc, dec)}</div></div>
+            <div className="m"><div className="k">Day range</div><div className="v" style={{ fontSize: ".92rem" }}>{fmt(dayLow, dec)} – {fmt(dayHigh, dec)}</div></div>
+            <div className="m"><div className="k">52-wk range</div><div className="v" style={{ fontSize: ".92rem" }}>{fmt(y52lo, dec)} – {fmt(y52hi, dec)}</div></div>
+          </div>
+          <div className="note" style={{ marginTop: 14 }}><b style={{ color: "var(--text-hi)" }}>AI read:</b> {note}</div>
+          {eq && (
+            <>
+              <div className="ai-sec" style={{ marginTop: 16 }}><div className="h">Leading sectors today</div></div>
+              {lead.map(g => (
+                <div key={g.name} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
+                  <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{g.name}</span>
+                  <span className="mid" />
+                  <span className="r up">{sign(g.chg)}</span>
+                </div>
+              ))}
+              <div className="ai-sec" style={{ marginTop: 12 }}><div className="h">Lagging sectors today</div></div>
+              {lag.map(g => (
+                <div key={g.name} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
+                  <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{g.name}</span>
+                  <span className="mid" />
+                  <span className="r down">{sign(g.chg)}</span>
+                </div>
+              ))}
+            </>
+          )}
+          <button className="btn primary" style={{ width: "100%", marginTop: 14 }} onClick={onClose}>
+            {eq ? "View market heatmap →" : "Go to Macro & VIX →"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---- Fear & Greed drawer ----
+function FearGreedDrawer({ onClose }: { onClose: () => void }) {
+  const comps = [
+    ["Market momentum", "Greed", 72], ["Stock price strength", "Greed", 66],
+    ["Stock price breadth", "Neutral", 54], ["Put / call ratio", "Greed", 68],
+    ["Market volatility (VIX)", "Calm", 60], ["Safe-haven demand", "Greed", 64],
+    ["Junk-bond demand", "Greed", 58],
+  ] as [string, string, number][];
+  return (
+    <>
+      <div className="scrim open" onClick={onClose} />
+      <div className="drawer open">
+        <div className="drawer-h">
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3" }}>62</div>
+          <div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>Fear &amp; Greed Index</div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Composite sentiment · 7 inputs · updates continuously</div>
+          </div>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+        <div className="drawer-b">
+          <div className="gauge-wrap" style={{ padding: "4px 0 10px" }}>
+            <SemiGauge val={62} label="Greed" id="fg-drawer" />
+          </div>
+          <div className="ai-sec"><div className="h">History</div></div>
+          <div className="metric-grid">
+            <div className="m"><div className="k">Previous close</div><div className="v up">58 · Greed</div></div>
+            <div className="m"><div className="k">1 week ago</div><div className="v">49 · Neutral</div></div>
+            <div className="m"><div className="k">1 month ago</div><div className="v up">71 · Greed</div></div>
+            <div className="m"><div className="k">1 year ago</div><div className="v down">39 · Fear</div></div>
+          </div>
+          <div className="ai-sec" style={{ marginTop: 16 }}><div className="h">Seven components</div></div>
+          {comps.map(([label, rating, val]) => (
+            <div key={label} style={{ margin: "9px 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".78rem", color: "var(--text)" }}>
+                <span>{label}</span>
+                <span style={{ color: val >= 60 ? "var(--up)" : val < 45 ? "var(--down)" : "var(--text-dim-solid)", fontWeight: 600 }}>{rating} · {val}</span>
+              </div>
+              <div style={{ height: 6, background: "var(--surface-3)", borderRadius: 4, marginTop: 4 }}>
+                <i style={{ display: "block", height: "100%", width: val + "%", borderRadius: 4, background: val >= 60 ? "var(--up)" : val < 45 ? "var(--down)" : "var(--warn)" }} />
+              </div>
+            </div>
+          ))}
+          <div className="note" style={{ marginTop: 16 }}>
+            <b style={{ color: "var(--text-hi)" }}>AI read:</b> Sentiment is in <b>Greed (62)</b> and rising vs last week (49). Risk appetite is healthy but not euphoric — a push above 75 (extreme greed) would be a contrarian caution flag.
+          </div>
+          <button className="btn primary" style={{ width: "100%", marginTop: 14 }} onClick={onClose}>Stay on Macro &amp; VIX</button>
         </div>
       </div>
     </>
@@ -458,9 +684,12 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [drawer, setDrawer] = useState<
+    | { type: "stock"; sym: string }
     | { type: "earnings"; sym: string }
     | { type: "sector"; name: string }
     | { type: "fund"; idx: number }
+    | { type: "index"; idx: number }
+    | { type: "feargreed" }
     | null
   >(null);
 
@@ -508,13 +737,16 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   // Action context
   const actions: IQActions = {
-    openStock: useCallback((sym) => {
+    openStock: useCallback((sym) => setDrawer({ type: "stock", sym }), []),
+    openStockFull: useCallback((sym) => {
       if (typeof window !== "undefined") localStorage.setItem("iq-stock", sym);
       router.push("/menu/stock");
     }, [router]),
     openEarnings: useCallback((sym) => setDrawer({ type: "earnings", sym }), []),
     openSector: useCallback((name) => setDrawer({ type: "sector", name }), []),
     openFund: useCallback((idx) => setDrawer({ type: "fund", idx }), []),
+    openIndex: useCallback((idx) => setDrawer({ type: "index", idx }), []),
+    openFearGreed: useCallback(() => setDrawer({ type: "feargreed" }), []),
     setCopilot: setCopilotOpen,
     theme,
     setTheme,
@@ -650,6 +882,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Drawers */}
+          {drawer?.type === "stock" && (
+            <StockDrawer sym={drawer.sym} onClose={() => setDrawer(null)} />
+          )}
           {drawer?.type === "earnings" && (
             <EarningsDrawer sym={drawer.sym} onClose={() => setDrawer(null)} />
           )}
@@ -658,6 +893,12 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           )}
           {drawer?.type === "fund" && (
             <FundDrawer idx={drawer.idx} onClose={() => setDrawer(null)} />
+          )}
+          {drawer?.type === "index" && (
+            <IndexDrawer idx={drawer.idx} onClose={() => setDrawer(null)} />
+          )}
+          {drawer?.type === "feargreed" && (
+            <FearGreedDrawer onClose={() => setDrawer(null)} />
           )}
 
           {/* Copilot FAB — visible when panel is closed */}

@@ -2,7 +2,7 @@
 // INVESTIQ — MOCK DATA (TypeScript)
 // ============================================================
 
-export interface PulseItem { l: string; v: number; c: number; }
+export interface PulseItem { l: string; v: number; c: number; o: number; pc: number; }
 export interface WMNItem { h: string; t: string; tag: 'macro' | 'earn' | 'sector'; }
 export interface Earning {
   s: string; n: string; t: string; mc: string; sec: string;
@@ -29,9 +29,9 @@ export interface FolioItem {
   evt: string;
 }
 export interface Fund {
-  name: string; av: string; mgr: string;
-  aum: string; pos: number; top1: string;
-  newPos: number; exits: number; quarter: string;
+  nm: string; av: string; mgr: string;
+  aum: string; pos: number; top: string;
+  newPos: number; exits: number; q: string;
 }
 export interface FundDetail {
   holdings: [string, number, string][];
@@ -80,16 +80,16 @@ export interface RecapData {
 
 // ---- Market Pulse (10 items) ----
 export const pulse: PulseItem[] = [
-  { l: 'S&P 500', v: 5312.08, c: 0.73 },
-  { l: 'Nasdaq', v: 16973.17, c: 1.02 },
-  { l: 'Dow', v: 39872.4, c: 0.41 },
-  { l: 'Russell 2K', v: 2061.3, c: -0.32 },
-  { l: 'VIX', v: 14.18, c: -2.51 },
-  { l: '10Y Yield', v: 4.32, c: -0.04 },
-  { l: 'WTI Crude', v: 78.64, c: -1.21 },
-  { l: 'Gold', v: 2344.10, c: 0.31 },
-  { l: 'Dollar (DXY)', v: 104.21, c: 0.12 },
-  { l: 'Bitcoin', v: 67840, c: 2.18 },
+  { l: 'S&P 500',     v: 5312.08,  c: 0.73,  o: 5281.4,  pc: 5273.66 },
+  { l: 'Nasdaq',      v: 16973.17, c: 1.02,  o: 16800.0, pc: 16801.7 },
+  { l: 'Dow',         v: 39872.4,  c: 0.41,  o: 39714.0, pc: 39709.6 },
+  { l: 'Russell 2K',  v: 2061.3,   c: -0.32, o: 2071.4,  pc: 2067.9  },
+  { l: 'VIX',         v: 14.18,    c: -2.51, o: 14.52,   pc: 14.54   },
+  { l: '10Y Yield',   v: 4.32,     c: -0.04, o: 4.36,    pc: 4.36    },
+  { l: 'WTI Crude',   v: 78.64,    c: -1.21, o: 79.42,   pc: 79.60   },
+  { l: 'Gold',        v: 2344.10,  c: 0.31,  o: 2337.0,  pc: 2336.8  },
+  { l: 'Dollar (DXY)',v: 104.21,   c: 0.12,  o: 104.08,  pc: 104.09  },
+  { l: 'Bitcoin',     v: 67840,    c: 2.18,  o: 66380,   pc: 66393   },
 ];
 
 // ---- What Matters Now ----
@@ -153,11 +153,11 @@ export const folio: FolioItem[] = [
 
 // ---- 13F Funds ----
 export const funds: Fund[] = [
-  { name: 'Berkshire Hathaway', av: 'BH', mgr: 'Warren Buffett',    aum: '$331B',  pos: 42,  top1: 'AAPL', newPos: 1,   exits: 2,  quarter: 'Q1 2024' },
-  { name: 'Pershing Square',    av: 'PS', mgr: 'Bill Ackman',       aum: '$10.4B', pos: 8,   top1: 'CMG',  newPos: 1,   exits: 1,  quarter: 'Q1 2024' },
-  { name: 'Tiger Global',       av: 'TG', mgr: 'Chase Coleman',     aum: '$24.9B', pos: 34,  top1: 'MSFT', newPos: 5,   exits: 6,  quarter: 'Q1 2024' },
-  { name: 'Scion Asset Mgmt',   av: 'SC', mgr: 'Michael Burry',     aum: '$1.6B',  pos: 11,  top1: 'BABA', newPos: 4,   exits: 3,  quarter: 'Q1 2024' },
-  { name: 'Bridgewater',        av: 'BW', mgr: 'Ray Dalio (fmr)',   aum: '$19.8B', pos: 680, top1: 'IVV',  newPos: 120, exits: 90, quarter: 'Q1 2024' },
+  { nm: 'Berkshire Hathaway', av: 'BH', mgr: 'Warren Buffett',    aum: '$331B',  pos: 42,  top: 'AAPL', newPos: 1,   exits: 2,  q: 'Q1 2024' },
+  { nm: 'Pershing Square',    av: 'PS', mgr: 'Bill Ackman',       aum: '$10.4B', pos: 8,   top: 'CMG',  newPos: 1,   exits: 1,  q: 'Q1 2024' },
+  { nm: 'Tiger Global',       av: 'TG', mgr: 'Chase Coleman',     aum: '$24.9B', pos: 34,  top: 'MSFT', newPos: 5,   exits: 6,  q: 'Q1 2024' },
+  { nm: 'Scion Asset Mgmt',   av: 'SC', mgr: 'Michael Burry',     aum: '$1.6B',  pos: 11,  top: 'BABA', newPos: 4,   exits: 3,  q: 'Q1 2024' },
+  { nm: 'Bridgewater',        av: 'BW', mgr: 'Ray Dalio (fmr)',   aum: '$19.8B', pos: 680, top: 'IVV',  newPos: 120, exits: 90, q: 'Q1 2024' },
 ];
 
 // ---- Watchlist ----

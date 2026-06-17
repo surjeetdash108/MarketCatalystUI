@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useIQActions } from "../shell";
 import { screenerStocks, screenerPresets } from "../data";
 import { cls, sign } from "../utils";
@@ -40,18 +40,6 @@ export function ScreenerScreen() {
 
   // ---- preset state ----
   const [activePreset, setActivePreset] = useState(0);
-  const [showAll, setShowAll] = useState(false);
-  const browseRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (browseRef.current && !browseRef.current.contains(e.target as Node)) {
-        setShowAll(false);
-      }
-    }
-    if (showAll) document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showAll]);
 
   // ---- checkbox filter state ----
   const [rs90,      setRs90]      = useState(false);
@@ -67,7 +55,6 @@ export function ScreenerScreen() {
   function applyPreset(idx: number) {
     const f = screenerPresets[idx].f;
     setActivePreset(idx);
-    setShowAll(false);
     // reset all checkboxes then apply preset's intended checkboxes
     setRs90(false); setRs7090(false); setRsLt40(false);
     setSalesGt20(false); setEpsGt25(false); setMarginPos(false);
@@ -135,74 +122,73 @@ export function ScreenerScreen() {
 
         {/* ---- Left filter panel ---- */}
         <div className="filt">
-          <div className="filt-hdr">
+          <div className="fh">
             Filters
             <span className="link" onClick={resetAll}>Reset</span>
           </div>
+          <div className="fb">
 
-          {/* Preset buttons */}
-          <div className="preset-list">
-            <div className="fgroup-lbl" style={{ padding: 0 }}>Saved &amp; preset screens</div>
-            {firstFour.map((p, i) => (
-              <button key={p.name}
-                className={`preset-btn${activePreset === i ? " on" : ""}`}
-                onClick={() => applyPreset(i)}>
-                {p.name}
-                <small>{p.desc}</small>
-              </button>
-            ))}
-
-            {/* Browse all 20 presets dropdown */}
-            <div style={{ position: "relative" }} ref={browseRef}>
-              <button className="browse-btn" onClick={() => setShowAll(o => !o)}>
-                <span>Browse all {allPresets.length} presets</span>
-                <span style={{ fontSize: ".7rem" }}>{showAll ? "▲" : "▾"}</span>
-              </button>
-              {showAll && (
-                <div className="browse-dropdown" style={{ position: "absolute", zIndex: 20, left: 0, right: 0 }}>
-                  {allPresets.map((p, i) => (
-                    <button key={p.name}
-                      className={`browse-item${activePreset === i ? " on" : ""}`}
-                      onClick={() => applyPreset(i)}>
-                      {p.name}
-                      <small>{p.desc}</small>
-                    </button>
-                  ))}
-                </div>
-              )}
+            {/* Preset buttons */}
+            <div className="fgroup">
+              <div className="fl">Saved &amp; preset screens</div>
+              <div className="preset">
+                {firstFour.map((p, i) => (
+                  <button key={p.name}
+                    className={activePreset === i ? "on" : ""}
+                    onClick={() => applyPreset(i)}>
+                    {p.name}
+                    <small>{p.desc}</small>
+                  </button>
+                ))}
+                <details className="dd">
+                  <summary style={{ cursor: "pointer", fontSize: ".78rem", padding: "8px 10px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", listStyle: "none" }}>
+                    Browse all {allPresets.length} presets ▾
+                    <small style={{ display: "block", color: "var(--text-dim-solid)", fontSize: ".66rem", marginTop: 2 }}>top screens analysts &amp; traders use</small>
+                  </summary>
+                  <div className="dd-menu">
+                    <div className="ddlbl">{allPresets.length} preset screens</div>
+                    {allPresets.map((p, i) => (
+                      <button key={p.name} onClick={() => applyPreset(i)}>
+                        {p.name}
+                        <small>{p.desc}</small>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              </div>
             </div>
-          </div>
 
-          {/* Relative Strength */}
-          <div className="fgroup">
-            <div className="fgroup-lbl">Relative strength (6-mo)</div>
-            <CheckOpt label="RS ≥ 90 (leaders)"  on={rs90}   onToggle={() => { setRs90(o => !o); setRs7090(false); setRsLt40(false); }} />
-            <CheckOpt label="RS 70–90"            on={rs7090} onToggle={() => { setRs7090(o => !o); setRs90(false); setRsLt40(false); }} />
-            <CheckOpt label="RS < 40 (laggards)"  on={rsLt40} onToggle={() => { setRsLt40(o => !o); setRs90(false); setRs7090(false); }} />
-          </div>
+            {/* Relative Strength */}
+            <div className="fgroup">
+              <div className="fl">Relative strength (6-mo)</div>
+              <CheckOpt label="RS ≥ 90 (leaders)"  on={rs90}   onToggle={() => { setRs90(o => !o); setRs7090(false); setRsLt40(false); }} />
+              <CheckOpt label="RS 70–90"            on={rs7090} onToggle={() => { setRs7090(o => !o); setRs90(false); setRsLt40(false); }} />
+              <CheckOpt label="RS < 40 (laggards)"  on={rsLt40} onToggle={() => { setRsLt40(o => !o); setRs90(false); setRs7090(false); }} />
+            </div>
 
-          {/* Growth */}
-          <div className="fgroup">
-            <div className="fgroup-lbl">Growth</div>
-            <CheckOpt label="Sales growth > 20%"  on={salesGt20} onToggle={() => setSalesGt20(o => !o)} />
-            <CheckOpt label="EPS growth > 25%"    on={epsGt25}   onToggle={() => setEpsGt25(o => !o)} />
-            <CheckOpt label="Expanding margins"   on={marginPos} onToggle={() => setMarginPos(o => !o)} />
-          </div>
+            {/* Growth */}
+            <div className="fgroup">
+              <div className="fl">Growth</div>
+              <CheckOpt label="Sales growth > 20%"  on={salesGt20} onToggle={() => setSalesGt20(o => !o)} />
+              <CheckOpt label="EPS growth > 25%"    on={epsGt25}   onToggle={() => setEpsGt25(o => !o)} />
+              <CheckOpt label="Expanding margins"   on={marginPos} onToggle={() => setMarginPos(o => !o)} />
+            </div>
 
-          {/* Technical rating */}
-          <div className="fgroup">
-            <div className="fgroup-lbl">Technical rating</div>
-            <CheckOpt label="Strong Buy / Buy"      on={ratingBuy} onToggle={() => setRatingBuy(o => !o)} />
-            <CheckOpt label="Above 50 & 200-DMA"    on={false}     onToggle={() => {}} />
-            <CheckOpt label="RSI 40–70"             on={false}     onToggle={() => {}} />
-          </div>
+            {/* Technical rating */}
+            <div className="fgroup">
+              <div className="fl">Technical rating</div>
+              <CheckOpt label="Strong Buy / Buy"      on={ratingBuy} onToggle={() => setRatingBuy(o => !o)} />
+              <CheckOpt label="Above 50 & 200-DMA"    on={false}     onToggle={() => {}} />
+              <CheckOpt label="RSI 40–70"             on={false}     onToggle={() => {}} />
+            </div>
 
-          {/* Liquidity & cap */}
-          <div className="fgroup">
-            <div className="fgroup-lbl">Liquidity &amp; cap</div>
-            <CheckOpt label="Market cap > $10B"   on={mcGt10}   onToggle={() => setMcGt10(o => !o)} />
-            <CheckOpt label="RVOL > 1.5×"         on={rvolGt15} onToggle={() => setRvolGt15(o => !o)} />
-            <CheckOpt label="Price > $5"           on={false}    onToggle={() => {}} />
+            {/* Liquidity & cap */}
+            <div className="fgroup">
+              <div className="fl">Liquidity &amp; cap</div>
+              <CheckOpt label="Market cap > $10B"   on={mcGt10}   onToggle={() => setMcGt10(o => !o)} />
+              <CheckOpt label="RVOL > 1.5×"         on={rvolGt15} onToggle={() => setRvolGt15(o => !o)} />
+              <CheckOpt label="Price > $5"           on={false}    onToggle={() => {}} />
+            </div>
           </div>
         </div>
 
