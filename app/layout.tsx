@@ -4,6 +4,7 @@ import { FirebaseAnalytics } from "./firebase-analytics";
 import { ReduxProvider } from "./store/redux-provider";
 import "./globals.css";
 import "./iq.css";
+import "./landing.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,8 +27,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "finapp26 Dashboard",
-  description: "Financial intelligence dashboard for markets and portfolios.",
+  title: "StockWise — Market Intelligence Terminal",
+  description: "From ticker to thesis in under 60 seconds. Earnings, movers, analyst actions, insider flows and your portfolio — all in one terminal.",
 };
 
 export default function RootLayout({

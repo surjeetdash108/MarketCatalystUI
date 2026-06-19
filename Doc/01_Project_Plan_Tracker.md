@@ -83,7 +83,7 @@ Frontend (Current)
 
 -   **Redux Toolkit** for global state (auth slice + profile slice); no Zustand, no React Query
 
--   **InvestIQ custom CSS design system** (`iq.css`) with CSS custom properties — no TailwindCSS for IQ screens
+-   **StockWise custom CSS design system** (`iq.css`) with CSS custom properties — no TailwindCSS for StockWise screens. Branding: "Stock**Wise**" wordmark with `--ai` cyan accent on "Wise"; logo uses brand→ai gradient with SVG bolt icon.
 
 -   Recharts / D3 for charts and heatmaps (Phase 2 — static data currently)
 

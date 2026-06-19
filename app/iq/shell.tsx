@@ -49,18 +49,19 @@ export function useIQActions() { return useContext(IQActionsContext); }
 function NavIcon({ slug }: { slug: string }) {
   const paths: Record<string, string> = {
     dashboard:   "M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z",
-    earnings:    "M4 5h16v14H4V5Zm4 4h8M8 13h5",
-    movers:      "M4 17 9 12l4 4 7-9M15 7h5v5",
-    heatmap:     "M3 3h7v3H3V3Zm11 0h7v3h-7V3ZM3 10h7v4H3v-4Zm11 0h7v4h-7v-4ZM3 18h7v3H3v-3Zm11 0h7v3h-7v-3Z",
-    analyst:     "M5 19V5m0 14h14M8 15l3-4 3 2 4-6",
-    screener:    "M4 6h16M7 12h10M10 18h4",
-    portfolio:   "M4 7h16v11H4V7Zm4 11V7m8 11V7",
-    watchlist:   "m12 4 2.4 5 5.6.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.6-.8L12 4Z",
-    stock:       "M3 17l4-5 3 3 4-7 5 4",
-    thirteenf:   "M6 4h9l3 3v13H6V4Zm8 0v4h4M9 12h6M9 16h6",
-    commentary:  "M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1Z",
-    recap:       "M12 4a8 8 0 1 1 0 16A8 8 0 0 1 12 4Zm0 4v4l3 2",
-    macro:       "M5 5h14v15H5V5Zm0 5h14M8 3v4m8-4v4",
+    earnings:    "M4 5h16v14H4V5Zm0 4h16M8 3v4m8-4v4",
+    movers:      "M3 17l5-5 4 3 7-9M16 6h6v6",
+    heatmap:     "M3 3h8v8H3V3Zm13 0h8v5h-8V3ZM13 10h8v11h-8V10ZM3 13h8v8H3v-8Z",
+    analyst:     "M12 2l2.5 6.5L21 9l-5 4.5L17.5 21 12 17l-5.5 4L8 13.5 3 9l6.5-.5z",
+    screener:    "M3 4h18l-7 8v6l-4 2V12z",
+    ipos:        "M3 17l6-6 4 4 8-8M14 7h7v7",
+    portfolio:   "M3 13a9 9 0 1 0 18 0 9 9 0 0 0-18 0ZM12 7v6l4 2",
+    watchlist:   "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7ZM12 12m-3 0a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
+    stock:       "M4 19V5M4 19h16M8 15l3-4 3 2 4-7",
+    insider:     "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-1a6 6 0 0 1 12 0v1M18 11l2 2 3-3",
+    commentary:  "M4 5h16v11H8l-4 4V5z",
+    recap:       "M4 3h16a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H4V3Zm0 0v18M8 8h8M8 12h8M8 16h5",
+    macro:       "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18ZM3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18",
   };
   return (
     <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
@@ -772,8 +773,12 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           <div className="app">
             {/* Brand cell */}
             <div className="brandcell">
-              <div className="logo">IQ</div>
-              <div className="wordmark">Invest<span>IQ</span></div>
+              <div className="logo">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
+                </svg>
+              </div>
+              <div className="wordmark">Stock<b>Wise</b><span>Market Intelligence</span></div>
             </div>
 
             {/* Topbar */}

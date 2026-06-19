@@ -153,14 +153,14 @@ Routing — Next.js App Router
 -   `/auth/signup` → Create Account
 -   `/auth/forgot-password` → Password Reset
 -   `/dashboard` → IQ Dashboard screen
--   `/menu/[slug]` → all IQ screens (portfolio, watchlist, earnings, screener, analyst, thirteenf, movers, heatmap, macro, commentary, recap, stock, manage-plan)
+-   `/menu/[slug]` → all StockWise screens (earnings, movers, heatmap, analyst, screener, ipos, portfolio, watchlist, stock, insider, commentary, recap, macro, manage-plan)
 -   `/settings` → Settings screen
 -   `/profile/edit` → Profile edit
 -   Protected routes: all IQ routes guarded by `AuthGuard` component (checks Redux `state.auth.status === "ready"` and `state.auth.user`; redirects to `/auth/login` if not authenticated).
 
-IQ Shell & Component Architecture
+StockWise Shell & Component Architecture
 
--   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav, topbar, drawer system (stock/earnings/sector/fund drawers), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`.
+-   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav (3 groups: Intelligence / My Money / Context), topbar with "Stock**Wise**" branding, drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`.
 
 -   **`IQActionsContext`**: React context providing `openStock(sym)`, `openStockFull(sym)`, `openEarnings(sym)`, `openSector(name)`, `openFund(idx)`, `openIndex(i)`, `openFearGreed()`, `setCopilot(open)`, `theme`, `setTheme` to all child screens. Consumed via `useIQActions()` hook.
 
@@ -184,7 +184,7 @@ Shared Utility Components (`app/iq/utils.tsx`)
 
 -   **`RATING_VAL`**: Map from rating string to gauge position — `{ "Strong Buy": 0.9, "Buy": 0.55, "Neutral": 0, "Sell": -0.55, "Strong Sell": -0.9 }`.
 
-Design System — InvestIQ (`iq.css`)
+Design System — StockWise (`iq.css`)
 
 -   All styling is via a custom CSS design system in `app/iq.css`, imported globally in `app/layout.tsx`.
 
@@ -202,25 +202,26 @@ Design System — InvestIQ (`iq.css`)
 
 -   Auth pages use the same CSS variables (imported globally) but are not wrapped in `.iq-root`; they use inline styles referencing `var(--*)`.
 
-Screens (Current)
+Screens (Current) — Navigation groups: Intelligence / My Money / Context
 
-| Slug | Screen File | Status |
-|---|---|---|
-| dashboard | screens/dashboard.tsx | UI complete — HTML-parity layout, heatCol mini, openIndex/openFearGreed, pmeta |
-| portfolio | screens/portfolio.tsx | UI complete — static data |
-| watchlist | screens/watchlist.tsx | UI complete — static data |
-| earnings | screens/earnings.tsx | UI complete — static data |
-| screener | screens/screener.tsx | UI complete — 20 presets, checkbox filters, native `<details>` dropdown |
-| analyst | screens/analyst.tsx | UI complete — static data |
-| thirteenf | screens/thirteenf.tsx | UI complete — static data |
-| movers | screens/movers.tsx | UI complete — static data |
-| heatmap | screens/heatmap.tsx | UI complete — heatCol() dynamic text color on treemap tiles |
-| macro | screens/macro.tsx | UI complete — static data |
-| commentary | screens/commentary.tsx | UI complete — static data |
-| recap | screens/recap.tsx | UI complete — static data |
-| stock | screens/stock.tsx | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout |
-| settings | screens/settings.tsx | Settings + dark mode wired to Firestore |
-| manage-plan | screens/manage-plan.tsx | UI scaffold |
+| Slug | Screen File | Nav Group | Status |
+|---|---|---|---|
+| dashboard | screens/dashboard.tsx | Intelligence | UI complete — HTML-parity layout, heatCol mini, openIndex/openFearGreed, pmeta |
+| earnings | screens/earnings.tsx | Intelligence | UI complete — static data |
+| movers | screens/movers.tsx | Intelligence | UI complete — static data |
+| heatmap | screens/heatmap.tsx | Intelligence | UI complete — heatCol() dynamic text color on treemap tiles |
+| analyst | screens/analyst.tsx | Intelligence | UI complete — static data |
+| screener | screens/screener.tsx | Intelligence | UI complete — 20 presets, checkbox filters, native `<details>` dropdown |
+| ipos | screens/ipos.tsx | Intelligence | UI complete — recent IPO table + upcoming pipeline tab; static data |
+| portfolio | screens/portfolio.tsx | My Money | UI complete — static data |
+| watchlist | screens/watchlist.tsx | My Money | UI complete — static data |
+| stock | screens/stock.tsx | My Money | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout |
+| insider | screens/insider.tsx | My Money | UI complete — tabbed: Insider activity (Form 4 feed) + 13F institutional view |
+| commentary | screens/commentary.tsx | Context | UI complete — static data |
+| recap | screens/recap.tsx | Context | UI complete — static data |
+| macro | screens/macro.tsx | Context | UI complete — static data |
+| settings | screens/settings.tsx | — | Settings + dark mode wired to Firestore |
+| manage-plan | screens/manage-plan.tsx | — | UI scaffold |
 
 Cmd+K Command Bar
 

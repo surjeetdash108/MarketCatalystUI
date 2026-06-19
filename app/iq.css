@@ -1,5 +1,5 @@
 /* ============================================================
-   INVESTIQ — DESIGN TOKENS + COMPONENT CSS
+   STOCKWISE — DESIGN TOKENS + COMPONENT CSS
    Scoped: CSS variables on :root; layout root on .iq-root
    ============================================================ */
 
@@ -136,17 +136,25 @@
 }
 .logo {
   width: 30px; height: 30px;
-  background: var(--brand);
+  background: linear-gradient(135deg, var(--brand), var(--ai));
   border-radius: var(--r-sm);
   display: grid; place-items: center;
-  font-family: var(--f-display); font-weight: 700; font-size: 13px; color: #fff;
+  color: #fff;
   flex-shrink: 0;
+  box-shadow: 0 4px 14px -4px var(--brand);
 }
+.logo svg { width: 16px; height: 16px; }
 .wordmark {
   font-family: var(--f-display); font-weight: 700; font-size: 15px;
   color: var(--text-hi); letter-spacing: -.3px;
 }
-.wordmark span { color: var(--brand); font-style: italic; }
+.wordmark b { color: var(--ai); font-weight: 700; }
+.wordmark span {
+  display: block;
+  font-family: var(--f-body); font-weight: 500; font-size: .58rem;
+  letter-spacing: .18em; text-transform: uppercase;
+  color: var(--text-dim-solid); margin-top: -2px;
+}
 
 /* topbar */
 .topbar {
@@ -986,6 +994,10 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 }
 .fopt.on .cb { background: var(--brand); border-color: var(--brand); }
 .tr-badge { font-size: .66rem; font-weight: 700; padding: 2px 8px; border-radius: 5px; font-family: var(--f-display); }
+.tr-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 6px 10px; cursor: pointer; transition: .13s; font-family: var(--f-body); }
+.tr-pill:hover { border-color: var(--brand); }
+.tr-tk { font-family: var(--f-mono); font-weight: 700; font-size: .78rem; color: var(--text-hi); }
+.tr-mt { font-size: .68rem; color: var(--text-dim-solid); }
 .preset-list { display: flex; flex-direction: column; gap: 5px; padding: 8px 13px 6px; border-bottom: 1px solid var(--border-soft); }
 .preset-btn {
   text-align: left; font-size: .78rem; color: var(--text);

@@ -6,10 +6,11 @@ import { MoversScreen } from "../../iq/screens/movers";
 import { HeatmapScreen } from "../../iq/screens/heatmap";
 import { AnalystScreen } from "../../iq/screens/analyst";
 import { ScreenerScreen } from "../../iq/screens/screener";
+import { IPOsScreen } from "../../iq/screens/ipos";
 import { PortfolioScreen } from "../../iq/screens/portfolio";
 import { WatchlistScreen } from "../../iq/screens/watchlist";
 import { StockScreen } from "../../iq/screens/stock";
-import { ThirteenFScreen } from "../../iq/screens/thirteenf";
+import { InsiderScreen } from "../../iq/screens/insider";
 import { CommentaryScreen } from "../../iq/screens/commentary";
 import { RecapScreen } from "../../iq/screens/recap";
 import { MacroScreen } from "../../iq/screens/macro";
@@ -26,10 +27,11 @@ const SCREENS: Record<string, React.ReactNode> = {
   heatmap:     <HeatmapScreen />,
   analyst:     <AnalystScreen />,
   screener:    <ScreenerScreen />,
+  ipos:        <IPOsScreen />,
   portfolio:   <PortfolioScreen />,
   watchlist:   <WatchlistScreen />,
   stock:       <StockScreen />,
-  thirteenf:   <ThirteenFScreen />,
+  insider:     <InsiderScreen />,
   commentary:  <CommentaryScreen />,
   recap:       <RecapScreen />,
   macro:       <MacroScreen />,
