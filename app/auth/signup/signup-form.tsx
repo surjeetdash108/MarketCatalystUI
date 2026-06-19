@@ -178,7 +178,7 @@ export function SignupForm() {
 
       <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
         Already have access?{" "}
-        <Link href="/auth/login" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
+        <Link href="/" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Sign in
         </Link>
       </p>

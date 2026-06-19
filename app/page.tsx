@@ -1,6 +1,7 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { LoginForm } from "./auth/login/login-form";
 
 const CHECK = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -114,6 +115,16 @@ const FrameChrome = () => (
 );
 
 export default function LandingPage() {
+  const [showLogin, setShowLogin] = useState(false);
+
+  // close modal on Escape key
+  useEffect(() => {
+    if (!showLogin) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setShowLogin(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showLogin]);
+
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => entries.forEach(e => {
@@ -150,7 +161,7 @@ export default function LandingPage() {
           </div>
 
           <div className="hw-nav-cta">
-            <Link href="/auth/login" className="hw-ghost">Log in</Link>
+            <button className="hw-ghost" onClick={() => setShowLogin(true)}>Log in</button>
             <Link href="/auth/signup" className="hw-solid">Sign up</Link>
           </div>
         </nav>
@@ -164,7 +175,7 @@ export default function LandingPage() {
               This is what StockWise feels like. You spot what is moving, open the full picture, check the context, see the signals line up — and make an informed call. Here is the journey, step by step.
             </p>
             <div className="hw-cta">
-              <Link href="/auth/login" className="hw-btn-lg hw-btn-primary">Open the research terminal →</Link>
+              <button className="hw-btn-lg hw-btn-primary" onClick={() => setShowLogin(true)}>Open the research terminal →</button>
               <a href="#steps" className="hw-btn-lg hw-btn-ghost">See the journey ↓</a>
             </div>
           </div>
@@ -428,7 +439,7 @@ export default function LandingPage() {
             Every workspace is connected and one click from the next — open the terminal and start exploring.
           </p>
           <div className="hw-cta" style={{ justifyContent:"center" }}>
-            <Link href="/auth/login" className="hw-btn-lg hw-btn-primary">Open the research terminal →</Link>
+            <button className="hw-btn-lg hw-btn-primary" onClick={() => setShowLogin(true)}>Open the research terminal →</button>
             <Link href="/dashboard" className="hw-btn-lg hw-btn-ghost">Explore all features →</Link>
           </div>
           <p style={s({ fontSize:".74rem", color:"var(--text-dim-solid)", marginTop:"16px" })}>
@@ -437,6 +448,30 @@ export default function LandingPage() {
         </div>
 
       </div>{/* end .hw */}
+
+      {/* ── LOGIN MODAL ── */}
+      {showLogin && (
+        <div className="lp-modal-backdrop" onClick={() => setShowLogin(false)}>
+          <div className="lp-modal-card" onClick={e => e.stopPropagation()}>
+            <button className="lp-modal-close" onClick={() => setShowLogin(false)} aria-label="Close">✕</button>
+
+            {/* Logo closes the modal — already on "/" so no navigation needed */}
+            <button onClick={() => setShowLogin(false)} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:20, background:"none", border:"none", cursor:"pointer", padding:0, textDecoration:"none" }}>
+              <span className="hw-logo" style={{ width:26, height:26, borderRadius:7 }}>
+                <svg viewBox="0 0 24 24" width={14} height={14} fill="none">
+                  <path d="M3 17l5-6 4 4 6-9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="20" cy="5.5" r="2.4" fill="#fff" />
+                </svg>
+              </span>
+              <span style={{ fontFamily:"var(--f-display)", fontWeight:700, fontSize:".95rem", color:"#fff" }}>
+                Stock<b style={{ color:"var(--ai)" }}>Wise</b>
+              </span>
+            </button>
+
+            <LoginForm />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# StockWise — Market Intelligence Terminal
 
-## Getting Started
+A subscription-based active-investor research platform that consolidates earnings, analyst actions, market movers, screening, insider/institutional flows, macro, and portfolio tools into a single dark-themed terminal. Built with Next.js 16 App Router (static export), Firebase Auth + Firestore, and Redux Toolkit.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Project Structure
+
+```
+app/
+├── page.tsx              # Landing page (/) — marketing page with inline login modal
+├── layout.tsx            # Root layout — imports global CSS, sets <html> attributes
+├── iq.css                # Design system — CSS custom properties, layout primitives, component classes
+├── landing.css           # Landing-page styles — hw-* classes, animations, modal overlay
+├── auth/
+│   ├── auth-layout.tsx   # Two-panel auth layout (left: marketing, right: glassmorphism card)
+│   ├── login/            # /auth/login — standalone login page (AuthLayout + LoginForm)
+│   ├── signup/           # /auth/signup — signup page (AuthLayout + SignupForm)
+│   └── forgot-password/  # /auth/forgot-password — password reset page
+├── dashboard/            # /dashboard — main app shell (IQShell)
+├── menu/[slug]/          # /menu/:slug — 14 workspace screens
+├── profile/edit/         # /profile/edit — investor profile setup
+└── settings/             # /settings — preferences (dark mode, etc.)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Auth Flow
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+Landing (/)
+  ├── "Log in" button  →  inline modal on landing page (LoginForm)
+  │     └── success    →  /dashboard
+  │     └── "Forgot?"  →  /auth/forgot-password  →  "Back to sign in"  →  /
+  │     └── "Sign up"  →  /auth/signup
+  └── "Sign up" button →  /auth/signup  →  success  →  /dashboard
+        └── "Sign in"  →  / (landing page, open modal manually)
 
-## Learn More
+Auth pages all carry StockWise logo → / (landing page)
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Navigation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The shell (`IQShell`) wraps every authenticated page with a left sidebar of 14 workspaces grouped into three categories:
 
-## Deploy on Vercel
+| Group | Workspace |
+|---|---|
+| Intelligence | Dashboard, Earnings, Market Movers, Market Heatmap, Analyst Actions, Screener, IPOs, Commentary |
+| My Money | Portfolio Pulse, Watchlist, Insider & Institutional |
+| Context | Recaps, Macro & VIX, Stock Detail |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Design System
+
+Defined in `app/iq.css` via CSS custom properties on `:root`:
+
+| Token | Value | Usage |
+|---|---|---|
+| `--brand` | `#7C6CF5` | Primary purple |
+| `--brand-2` | `#9B8BFF` | Lighter purple accent |
+| `--ai` | `#34E2F0` | AI teal / gradient endpoint |
+| `--up` | `#2FE6A6` | Positive / gain |
+| `--down` | `#FF5470` | Negative / loss |
+| `--bg` | `#080B11` | App background |
+| `--surface-0/1/2/3` | Dark surfaces | Card backgrounds |
+
+Key component classes: `.pill`, `.pill.up/.down/.ai/.hold/.dn/.amc`, `.card`, `.col-N`, `.tr-badge`, `.ai-block`, `.wmn`, `.filt`, `.dd`
+
+---
+
+## Development
+
+```bash
+npm run dev          # dev server (Turbopack)
+npm run build        # static export to /out
+firebase deploy      # deploy to Firebase Hosting
+```
+
+Runs on Next.js 16.2.9 with `output: 'export'`. All 24 routes are pre-rendered as static HTML.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 App Router (`output: 'export'`) |
+| Auth | Firebase Authentication (email/password + Google OAuth) |
+| Database | Cloud Firestore |
+| State | Redux Toolkit |
+| Styling | CSS custom properties (no Tailwind) |
+| Hosting | Firebase Hosting |
+| Data (planned) | Polygon.io, FMP, Benzinga, Unusual Whales, SEC EDGAR |
+| AI (planned) | Claude API (claude-sonnet-4-6) |
+| Payments (planned) | Stripe |

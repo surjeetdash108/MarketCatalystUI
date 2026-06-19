@@ -1,6 +1,6 @@
-**Market Intelligence Platform**
+**StockWise — Market Intelligence Terminal**
 
-System Architecture Document \| v1.0
+System Architecture Document \| v1.1 \| June 2026
 
 1\. Architecture Overview
 
@@ -124,7 +124,7 @@ AI Generation Workers (BullMQ)
 
 Framework & Build
 
--   **Next.js 14 (App Router)** with TypeScript. Output mode: `static export` (`next build` → `out/` directory). Deployed to Firebase Hosting.
+-   **Next.js 16.2.9 (App Router)** with TypeScript. Output mode: `static export` (`next build` → `out/` directory). Deployed to **Firebase Hosting** (not Vercel). 24 static routes pre-rendered as HTML.
 
 -   All IQ screens are client components (`"use client"`). Server components are only used for the root layout.
 
@@ -148,15 +148,31 @@ State Management — Redux Toolkit
 
 Routing — Next.js App Router
 
--   `/` → landing / redirect
--   `/auth/login` → Login (email/password + Google OAuth)
--   `/auth/signup` → Create Account
--   `/auth/forgot-password` → Password Reset
+-   `/` → **StockWise landing page** (marketing page, `app/page.tsx`). Animated dark background, full `hw-*` sections (hero, commitment, 5-step journey, 14 workspace cards, CTA). "Log in" opens an inline modal overlay (no navigation); "Sign up" navigates to `/auth/signup`.
+-   `/auth/login` → Standalone login page (AuthLayout two-panel + LoginForm). Logo → `/`.
+-   `/auth/signup` → Create Account (AuthLayout + SignupForm). "Sign in" link → `/`. Logo → `/`.
+-   `/auth/forgot-password` → Password Reset (AuthLayout + ForgotForm). "Back to sign in" → `/`. Logo → `/`.
 -   `/dashboard` → IQ Dashboard screen
 -   `/menu/[slug]` → all StockWise screens (earnings, movers, heatmap, analyst, screener, ipos, portfolio, watchlist, stock, insider, commentary, recap, macro, manage-plan)
 -   `/settings` → Settings screen
 -   `/profile/edit` → Profile edit
--   Protected routes: all IQ routes guarded by `AuthGuard` component (checks Redux `state.auth.status === "ready"` and `state.auth.user`; redirects to `/auth/login` if not authenticated).
+-   Protected routes: all IQ routes guarded by `AuthGuard` component (checks Redux `state.auth.status === "ready"` and `state.auth.user`; redirects to `/` if not authenticated).
+
+Auth Navigation Map
+
+```
+/ (landing)
+  ├─ "Log in" btn      → inline modal (LoginForm, no route change)
+  │    ├─ "Forgot?"    → /auth/forgot-password  →  "Back to sign in" → /
+  │    └─ "Sign up"    → /auth/signup
+  ├─ "Sign up" btn     → /auth/signup  →  success → /dashboard
+  │    └─ "Sign in"    → / (landing)
+  └─ Logo              → / (no-op, already on /)
+/auth/login  (standalone)
+  └─ Logo              → /
+/auth/forgot-password
+  └─ Logo              → /
+```
 
 StockWise Shell & Component Architecture
 

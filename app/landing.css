@@ -435,6 +435,57 @@
 }
 .reveal.in { opacity: 1; transform: none; }
 
+/* ---- LOGIN MODAL ---- */
+.lp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(4,6,11,.72);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  animation: lpFadeIn .22s ease;
+}
+@keyframes lpFadeIn { from{opacity:0} to{opacity:1} }
+
+.lp-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: rgba(10,15,26,.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(124,108,245,.32);
+  border-radius: 18px;
+  padding: 26px 26px 22px;
+  box-shadow: 0 32px 80px rgba(0,0,0,.75), 0 0 0 1px rgba(124,108,245,.08) inset;
+  animation: lpCardIn .28s cubic-bezier(.2,.8,.3,1);
+}
+@keyframes lpCardIn { from{opacity:0;transform:translateY(18px) scale(.97)} to{opacity:1;transform:none} }
+
+.lp-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--border, #212C3B);
+  border-radius: 7px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim-solid, #697486);
+  font-size: .9rem;
+  line-height: 1;
+  transition: background .15s, color .15s;
+}
+.lp-modal-close:hover { background: rgba(255,255,255,.12); color: var(--text-hi, #EAEFF6); }
+
 /* ---- SHARED GRADIENT ANIMATION ---- */
 @keyframes gradShift {
   0%   { background-position: 0% 50%; }

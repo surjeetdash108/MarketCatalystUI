@@ -6,13 +6,6 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { firebaseAuth } from "../../firebase";
 import { getAuthErrorMessage, showError } from "../auth-utils";
 
-const card: React.CSSProperties = {
-  background: "var(--surface-1)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-lg)",
-  boxShadow: "0 1px 0 rgba(255,255,255,.02) inset, 0 20px 60px -20px rgba(0,0,0,.8)",
-  padding: "28px 28px 24px",
-};
 const label: React.CSSProperties = {
   display: "block", fontSize: ".72rem", fontWeight: 600,
   letterSpacing: ".06em", textTransform: "uppercase",
@@ -39,7 +32,7 @@ export function ForgotForm() {
   }
 
   return (
-    <div style={card}>
+    <div>
       {/* Header */}
       <div style={{
         fontSize: ".64rem", fontWeight: 600, letterSpacing: ".14em",
@@ -112,7 +105,7 @@ export function ForgotForm() {
 
       <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
         Remembered it?{" "}
-        <Link href="/auth/login" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
+        <Link href="/" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Back to sign in
         </Link>
       </p>

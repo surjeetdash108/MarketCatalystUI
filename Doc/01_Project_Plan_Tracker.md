@@ -1,12 +1,12 @@
-**Market Intelligence Platform**
+**StockWise — Market Intelligence Terminal**
 
-Project Plan \| v1.0 \| June 2025
+Project Plan \| v1.1 \| June 2026
 
 1\. Executive Summary
 
 This document is the master project plan for building a subscription-based active investor intelligence platform that consolidates Briefing.com, Earnings Hub, and MarketSurge into a single product with AI-powered insights. The platform targets active retail investors, swing traders, and portfolio investors who need live market intelligence, earnings research, analyst actions, 13F tracking, and peer/group context in one workflow.
 
-The project is structured in two phases: MVP (18 weeks) delivering core market data, earnings workspace, and portfolio features; and Phase 2 (additional 20 weeks) adding institutional intelligence, AI Copilot, and mobile.
+The project (branded **StockWise**) is structured in two phases: MVP (18 weeks) delivering core market data, earnings workspace, and portfolio features; and Phase 2 (additional 20 weeks) adding institutional intelligence, AI Copilot, and mobile. The full UI shell, design system, auth pages, and marketing landing page are complete as of June 2026.
 
 2\. Project Phases
 
@@ -24,7 +24,7 @@ The project is structured in two phases: MVP (18 weeks) delivering core market d
   ------------------------ ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------- -------------- --------------
   **Epic / Area**          **Key Deliverables**                                                                                                                                                                                                                                                          **Duration**   **Owner**      **Priority**
   Data Layer               Polygon.io + FMP + Benzinga integrations, WebSocket real-time quotes, news feed ingestion, earnings calendar sync                                                                                                                                                             3 weeks        Backend        P0
-  Auth & Infra             Firebase Authentication + Firestore setup, Redis cache, CI/CD pipeline, staging env                                                                                                                                                                                 2 weeks        Infra          P0
+  Auth & Infra             Firebase Authentication + Firestore setup, Redis cache, CI/CD pipeline, staging env. **UI complete:** landing page (/), login modal, /auth/login, /auth/signup, /auth/forgot-password. All routes return to / on logo click.                                  2 weeks        Infra          P0
   Home Dashboard           \"What Matters Now\" AI card, Market Pulse strip, session tabs (Today/Premarket/Live/AH/This Week), widget grid scaffold                                                                                                                                                      3 weeks        Full Stack     P0
   Earnings Workspace       Earnings calendar (list + Kanban BMO/AMC views), dense data table, tag pills, drawer panel, EPS/Revenue history chart, AI earnings summary, Earnings Setup Card (pre-announce), Earnings Movers Board, Before the Bell & After the Close briefings                            4 weeks        Full Stack     P0
   Market Movers Board      Gainers/Losers/Volume/Gap/High RVol views, catalyst labeling, filter system (index/sector/cap/float/session), peer reactions, technical context (MA posture), Weekly Movers page                                                                                              2 weeks        Full Stack     P0
