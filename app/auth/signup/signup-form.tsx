@@ -22,13 +22,6 @@ import {
   showError,
 } from "../auth-utils";
 
-const card: React.CSSProperties = {
-  background: "var(--surface-1)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-lg)",
-  boxShadow: "0 1px 0 rgba(255,255,255,.02) inset, 0 20px 60px -20px rgba(0,0,0,.8)",
-  padding: "28px 28px 24px",
-};
 const divider: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 12,
   margin: "18px 0",
@@ -103,7 +96,7 @@ export function SignupForm() {
   };
 
   return (
-    <div style={card}>
+    <div>
       {/* Header */}
       <div style={{
         fontSize: ".64rem", fontWeight: 600, letterSpacing: ".14em",
@@ -113,9 +106,9 @@ export function SignupForm() {
       <h1 style={{
         fontFamily: "var(--f-display)", fontSize: "1.55rem",
         fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
-      }}>Start using InvestIQ</h1>
+      }}>Join StockWise</h1>
       <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
-        Create your analyst workspace in a few seconds.
+        Set up your market intelligence workspace in seconds.
       </p>
 
       {/* Google */}

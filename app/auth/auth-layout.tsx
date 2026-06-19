@@ -1,184 +1,137 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 
-const FEATURES = [
-  { label: "Live Signals",   value: "128",  detail: "+14 today",  color: "var(--up)" },
-  { label: "AI Copilot",     value: "On",   detail: "GPT-4o",     color: "var(--ai)" },
-  { label: "13F Funds",      value: "5",    detail: "tracked",    color: "var(--brand-2)" },
-];
-
-const BULLETS = [
-  { icon: "◆", c: "var(--ai)",      text: "AI-generated earnings briefs pushed before market open" },
-  { icon: "▲", c: "var(--up)",      text: "Institutional 13F flow parsed the day filings hit EDGAR" },
-  { icon: "★", c: "var(--brand-2)", text: "Screener with RS, sales growth, EPS expansion in one view" },
-  { icon: "●", c: "var(--warn)",    text: "Portfolio Pulse: AI summary of what moved your names today" },
+const PILLS = [
+  { label: "14 live workspaces",     d: ".30s" },
+  { label: "AI-generated briefs",    d: ".45s" },
+  { label: "Earnings hub",           d: ".60s" },
+  { label: "Analyst actions",        d: ".75s" },
+  { label: "Portfolio Pulse",        d: ".90s" },
+  { label: "Insider & 13F flows",    d: "1.05s" },
+  { label: "Market screener",        d: "1.20s" },
+  { label: "VIX & macro",            d: "1.35s" },
 ];
 
 interface AuthLayoutProps {
   children: ReactNode;
-  wide?: boolean;
 }
 
-export function AuthLayout({ children, wide = false }: Readonly<AuthLayoutProps>) {
-  const S: Record<string, React.CSSProperties> = {
-    root: {
-      minHeight: "100vh",
-      background: "var(--bg)",
-      fontFamily: "var(--f-body)",
-      color: "var(--text)",
-      WebkitFontSmoothing: "antialiased",
-      position: "relative",
-    },
-    glow: {
-      position: "fixed",
-      inset: 0,
-      background: [
-        "radial-gradient(ellipse 60% 40% at 70% -10%, rgba(124,108,245,.22) 0%, transparent 60%)",
-        "radial-gradient(ellipse 40% 30% at 100% 60%, rgba(52,226,240,.12) 0%, transparent 55%)",
-        "radial-gradient(ellipse 50% 50% at -5% 80%, rgba(124,108,245,.1) 0%, transparent 60%)",
-      ].join(","),
-      pointerEvents: "none",
-      zIndex: 0,
-    },
-    grid: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      minHeight: "100vh",
-      position: "relative",
-      zIndex: 1,
-    },
-    left: {
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "40px 32px",
-      minHeight: "100vh",
-    },
-    inner: {
-      width: "100%",
-      maxWidth: wide ? 720 : 420,
-    },
-    logo: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      marginBottom: 36,
-      textDecoration: "none",
-    },
-    logoOrb: {
-      width: 38,
-      height: 38,
-      borderRadius: 10,
-      background: "radial-gradient(circle at 35% 30%, var(--ai-2), var(--ai) 60%, #1d8d99)",
-      boxShadow: "0 0 20px -4px var(--ai)",
-      display: "grid",
-      placeItems: "center",
-    },
-    logoText: {
-      fontFamily: "var(--f-display)",
-      fontWeight: 700,
-      fontSize: "1.15rem",
-      color: "var(--text-hi)",
-      letterSpacing: "-.01em",
-    },
-    logoSub: {
-      fontSize: ".65rem",
-      color: "var(--text-dim-solid)",
-      marginTop: 1,
-      letterSpacing: ".08em",
-      textTransform: "uppercase" as const,
-    },
-    right: {
-      background: "linear-gradient(160deg, var(--surface-2) 0%, var(--surface-0) 100%)",
-      borderLeft: "1px solid var(--border)",
-      padding: "60px 48px",
-      display: "flex",
-      alignItems: "center",
-    },
-  };
-
+export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
   return (
-    <div style={S.root}>
-      <div style={S.glow} />
-      <div style={S.grid}>
+    <div className="lp-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
+      <div className="sp-grid" />
 
-        {/* ---- Left: Form panel ---- */}
-        <div style={S.left}>
-          <div style={S.inner}>
-            <Link href="/" style={S.logo}>
-              <div style={S.logoOrb}>
-                <svg viewBox="0 0 24 24" fill="none" style={{ width: 18, height: 18, color: "#05222a" }}>
-                  <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
-                  <circle cx="18.5" cy="17.5" r="2" fill="currentColor" />
+      <div style={{
+        display: "flex", gap: "46px", alignItems: "center",
+        justifyContent: "center", maxWidth: "1060px", width: "100%",
+        position: "relative", zIndex: 1,
+      }}>
+
+        {/* ── LEFT: marketing panel ── */}
+        <div style={{ flex: "1 1 0", maxWidth: "560px", textAlign: "center" }}>
+
+          {/* Logo */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "24px" }}>
+            <span className="hw-logo" style={{ width: 46, height: 46, borderRadius: 13, boxShadow: "0 0 28px -6px var(--brand)" }}>
+              <svg viewBox="0 0 24 24" width={22} height={22} fill="none">
+                <path d="M3 17l5-6 4 4 6-9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="20" cy="5.5" r="2.4" fill="#fff" />
+              </svg>
+            </span>
+          </div>
+
+          {/* Word mark */}
+          <div style={{
+            fontFamily: "var(--f-display)", fontSize: "2.7rem", fontWeight: 700,
+            color: "#fff", letterSpacing: "-.02em",
+            animation: "spUp .7s ease .5s both", opacity: 0,
+          }}>
+            Stock<b style={{ background: "linear-gradient(90deg,var(--brand-2),var(--ai))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Wise</b>
+          </div>
+
+          {/* Shimmer tag */}
+          <div style={{
+            fontFamily: "var(--f-display)", fontSize: "1.05rem", fontWeight: 600,
+            marginTop: 6,
+            background: "linear-gradient(90deg,#b3a8ff,var(--ai),var(--brand-2),var(--ai),#b3a8ff)",
+            backgroundSize: "220% auto",
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+            animation: "spUp .7s ease .8s both, tagShimmer 8s linear 1.2s infinite",
+            opacity: 0,
+          }}>
+            Market Intelligence Terminal
+          </div>
+
+          {/* Description */}
+          <div style={{
+            color: "#9aa6b8", fontSize: ".9rem", lineHeight: 1.65,
+            margin: "18px auto 0", maxWidth: 420,
+            animation: "spUp .7s ease 1.05s both", opacity: 0,
+          }}>
+            Everything you need to research a name — earnings, signals, movers and your portfolio — all in one terminal.
+          </div>
+
+          {/* Feature pills */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center", marginTop: "22px" }}>
+            {PILLS.map(p => (
+              <div
+                key={p.label}
+                style={{
+                  fontSize: ".72rem", fontWeight: 600, color: "#cdd6e6",
+                  background: "rgba(124,108,245,.12)", border: "1px solid rgba(124,108,245,.3)",
+                  padding: "6px 11px", borderRadius: "999px",
+                  display: "inline-flex", alignItems: "center", gap: "7px",
+                  opacity: 0, transform: "translateY(12px)",
+                  animation: `spUp .55s cubic-bezier(.2,.8,.3,1) ${p.d} both`,
+                }}
+              >
+                <i style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ai)", boxShadow: "0 0 7px var(--ai)", display: "inline-block" }} />
+                {p.label}
+              </div>
+            ))}
+          </div>
+
+        </div>
+
+        {/* ── RIGHT: form card ── */}
+        <div style={{ flex: "0 0 380px", maxWidth: "94vw" }}>
+          <div style={{
+            background: "rgba(12,18,32,.82)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(124,108,245,.28)",
+            borderRadius: "18px",
+            padding: "26px 26px 22px",
+            boxShadow: "0 26px 64px rgba(0,0,0,.6), 0 0 0 1px rgba(124,108,245,.08) inset",
+            animation: "spRightIn .7s cubic-bezier(.2,.8,.3,1) .3s both",
+            opacity: 0,
+          }}>
+            <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, textDecoration: "none" }}>
+              <span className="hw-logo" style={{ width: 26, height: 26, borderRadius: 7 }}>
+                <svg viewBox="0 0 24 24" width={14} height={14} fill="none">
+                  <path d="M3 17l5-6 4 4 6-9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="20" cy="5.5" r="2.4" fill="#fff" />
                 </svg>
-              </div>
-              <div>
-                <div style={S.logoText}>InvestIQ</div>
-                <div style={S.logoSub}>Market Intelligence</div>
-              </div>
+              </span>
+              <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: ".95rem", color: "#fff" }}>
+                Stock<b style={{ color: "var(--ai)" }}>Wise</b>
+              </span>
             </Link>
             {children}
           </div>
         </div>
 
-        {/* ---- Right: Brand panel ---- */}
-        <div style={S.right}>
-          <div style={{ width: "100%" }}>
-            <div style={{
-              fontSize: ".64rem", fontWeight: 600, letterSpacing: ".18em",
-              textTransform: "uppercase", color: "var(--brand-2)", marginBottom: 14,
-              fontFamily: "var(--f-display)",
-            }}>
-              Market Intelligence Platform
-            </div>
-            <h2 style={{
-              fontFamily: "var(--f-display)", fontWeight: 700,
-              fontSize: "2.2rem", lineHeight: 1.2, color: "var(--text-hi)",
-              letterSpacing: "-.02em", maxWidth: 380, marginBottom: 32,
-            }}>
-              Authenticated intelligence for faster portfolio decisions.
-            </h2>
-
-            {/* Stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 32 }}>
-              {FEATURES.map(f => (
-                <div key={f.label} style={{
-                  background: "var(--surface-1)", border: "1px solid var(--border)",
-                  borderRadius: "var(--r-lg)", padding: "14px 16px",
-                }}>
-                  <div style={{ fontSize: ".62rem", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-dim-solid)" }}>
-                    {f.label}
-                  </div>
-                  <div style={{ fontFamily: "var(--f-mono)", fontSize: "1.6rem", fontWeight: 700, color: "var(--text-hi)", margin: "6px 0 3px" }}>
-                    {f.value}
-                  </div>
-                  <div style={{ fontSize: ".72rem", fontWeight: 600, color: f.color }}>
-                    {f.detail}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Bullet features */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {BULLETS.map(b => (
-                <div key={b.text} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ color: b.c, fontSize: ".8rem", marginTop: 1, flexShrink: 0 }}>{b.icon}</span>
-                  <span style={{ fontSize: ".84rem", color: "var(--text)", lineHeight: 1.5 }}>{b.text}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{
-              marginTop: 36, paddingTop: 20, borderTop: "1px solid var(--border-soft)",
-              fontSize: ".7rem", color: "var(--text-dim-solid)",
-            }}>
-              AI-generated · not investment advice · data for informational purposes only
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* Keyframes injected inline (SSR-safe) */}
+      <style>{`
+        @keyframes spUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
+        @keyframes spRightIn { from{opacity:0;transform:translateX(34px)} to{opacity:1;transform:none} }
+        @keyframes tagShimmer { to{background-position:220% center} }
+        @media(max-width:900px){
+          .lp-auth-cols{flex-direction:column!important;gap:28px!important}
+        }
+      `}</style>
     </div>
   );
 }

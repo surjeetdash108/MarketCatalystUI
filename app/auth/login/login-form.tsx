@@ -18,13 +18,6 @@ import {
 } from "../auth-utils";
 
 /* ---- shared inline style helpers ---- */
-const card: React.CSSProperties = {
-  background: "var(--surface-1)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--r-lg)",
-  boxShadow: "0 1px 0 rgba(255,255,255,.02) inset, 0 20px 60px -20px rgba(0,0,0,.8)",
-  padding: "28px 28px 24px",
-};
 const label: React.CSSProperties = {
   display: "block",
   fontSize: ".72rem",
@@ -116,7 +109,7 @@ export function LoginForm() {
   });
 
   return (
-    <div style={card}>
+    <div>
       {/* Header */}
       <div style={{
         fontSize: ".64rem", fontWeight: 600, letterSpacing: ".14em",
@@ -126,7 +119,7 @@ export function LoginForm() {
       <h1 style={{
         fontFamily: "var(--f-display)", fontSize: "1.55rem",
         fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
-      }}>Sign in to InvestIQ</h1>
+      }}>Sign in to StockWise</h1>
       <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
         Access your market intelligence terminal.
       </p>
@@ -218,7 +211,7 @@ export function LoginForm() {
       </form>
 
       <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
-        New to InvestIQ?{" "}
+        New to StockWise?{" "}
         <Link href="/auth/signup" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Create an account
         </Link>

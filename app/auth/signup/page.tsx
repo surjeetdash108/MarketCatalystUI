@@ -3,7 +3,7 @@ import { SignupForm } from "./signup-form";
 
 export default function SignupPage() {
   return (
-    <AuthLayout wide>
+    <AuthLayout>
       <SignupForm />
     </AuthLayout>
   );
