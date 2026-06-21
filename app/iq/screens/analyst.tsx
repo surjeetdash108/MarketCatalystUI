@@ -49,6 +49,48 @@ export function AnalystScreen() {
         </div>
       </div>
 
+      {/* ── Signal cards ── */}
+      <div className="dash" style={{ marginBottom: 14 }}>
+        <div className="col-6">
+          <div className="card">
+            <div className="card-h">
+              <h3>◆ Cluster alert</h3>
+              <span className="pill ai">AI-detected</span>
+            </div>
+            <div className="card-b">
+              <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
+                <b style={{ color: "var(--text-hi)" }}>3 tier-1 firms</b> upgraded semis within 24 hrs — NVDA, AMD, AVGO all touched.
+                Cluster signals have historically led 5-day outperformance 71% of the time.
+              </p>
+              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                <span className="src-chip">NVDA ▲ MS</span>
+                <span className="src-chip">AMD ▲ GS</span>
+                <span className="src-chip">AVGO ▲ JPM</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="col-6">
+          <div className="card">
+            <div className="card-h">
+              <h3>Multiple upgrades · same stock</h3>
+              <span className="pill up">Consensus shift</span>
+            </div>
+            <div className="card-b">
+              <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
+                <b style={{ color: "var(--text-hi)" }}>CRM</b> received upgrades from Morgan Stanley, Bernstein, and RBC in the last 48 hours.
+                Three independent firms turning bullish simultaneously is a meaningful signal.
+              </p>
+              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                <span className="src-chip">MS ▲ Overweight</span>
+                <span className="src-chip">Bernstein ▲ Outperform</span>
+                <span className="src-chip">RBC ▲ Buy</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="fbar">
         {/* Dropdown filter — matches HTML <details class="dd"> */}
         <div className="dd" style={{ position: "relative", display: "inline-block" }}>

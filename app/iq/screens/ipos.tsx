@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useIQActions } from "../shell";
 import { cls, sign } from "../utils";
 
@@ -24,7 +23,6 @@ const PIPELINE = [
 
 export function IPOsScreen() {
   const { openStockFull } = useIQActions();
-  const [tab, setTab] = useState<"recent" | "pipeline">("recent");
 
   const winners = RECENT_IPOS.filter(r => r.cur > r.offer).length;
   const returns = RECENT_IPOS.map(r => (r.cur - r.offer) / r.offer * 100).sort((a, b) => a - b);
@@ -41,14 +39,6 @@ export function IPOsScreen() {
           <div className="page-sub">
             {RECENT_IPOS.length} recent IPOs tracked · {winners} trading above offer · returns measured from offer price
           </div>
-        </div>
-        <div className="tabs">
-          <button className={`tab${tab === "recent" ? " active" : ""}`} onClick={() => setTab("recent")}>
-            Recent performance
-          </button>
-          <button className={`tab${tab === "pipeline" ? " active" : ""}`} onClick={() => setTab("pipeline")}>
-            Upcoming pipeline
-          </button>
         </div>
       </div>
 
@@ -86,83 +76,79 @@ export function IPOsScreen() {
         </div>
       </div>
 
-      {tab === "recent" && (
-        <div className="card">
-          <div className="card-h">
-            <h3>Recent IPO performance</h3>
-            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>click any name to open its stock page</span>
-          </div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Company</th>
-                  <th>Sector</th>
-                  <th>IPO date</th>
-                  <th className="num">Offer</th>
-                  <th className="num">Current</th>
-                  <th className="num">Day 1</th>
-                  <th className="num">Since IPO</th>
-                </tr>
-              </thead>
-              <tbody>
-                {RECENT_IPOS.map(r => {
-                  const ret = (r.cur - r.offer) / r.offer * 100;
-                  return (
-                    <tr key={r.s} onClick={() => openStockFull(r.s)} style={{ cursor: "pointer" }}>
-                      <td>
-                        <div className="co">
-                          <span className="s">{r.s}</span>
-                          <span className="n">{r.n}</span>
-                        </div>
-                      </td>
-                      <td>{r.sec}</td>
-                      <td>{r.date}</td>
-                      <td className="num">${r.offer.toFixed(2)}</td>
-                      <td className="num">${r.cur.toFixed(2)}</td>
-                      <td className={`num ${cls(r.day1)}`}>{sign(r.day1)}</td>
-                      <td className={`num ${cls(ret)}`}>
-                        <b>{sign(ret)}</b>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-h">
+          <h3>Recent IPO performance</h3>
+          <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>click any name to open its stock page</span>
         </div>
-      )}
-
-      {tab === "pipeline" && (
-        <div className="card">
-          <div className="card-h">
-            <h3>Upcoming pipeline</h3>
-            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>expected new issues</span>
-          </div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Company</th>
-                  <th>Symbol</th>
-                  <th>Expected</th>
-                  <th>Sector</th>
-                </tr>
-              </thead>
-              <tbody>
-                {PIPELINE.map(p => (
-                  <tr key={p.s}>
-                    <td><b style={{ color: "var(--text-hi)" }}>{p.n}</b></td>
-                    <td style={{ fontFamily: "var(--f-mono)", fontWeight: 700, color: "var(--text-hi)" }}>{p.s}</td>
-                    <td>{p.expected}</td>
-                    <td>{p.sec}</td>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Sector</th>
+                <th>IPO date</th>
+                <th className="num">Offer</th>
+                <th className="num">Current</th>
+                <th className="num">Day 1</th>
+                <th className="num">Since IPO</th>
+              </tr>
+            </thead>
+            <tbody>
+              {RECENT_IPOS.map(r => {
+                const ret = (r.cur - r.offer) / r.offer * 100;
+                return (
+                  <tr key={r.s} onClick={() => openStockFull(r.s)} style={{ cursor: "pointer" }}>
+                    <td>
+                      <div className="co">
+                        <span className="s">{r.s}</span>
+                        <span className="n">{r.n}</span>
+                      </div>
+                    </td>
+                    <td>{r.sec}</td>
+                    <td>{r.date}</td>
+                    <td className="num">${r.offer.toFixed(2)}</td>
+                    <td className="num">${r.cur.toFixed(2)}</td>
+                    <td className={`num ${cls(r.day1)}`}>{sign(r.day1)}</td>
+                    <td className={`num ${cls(ret)}`}>
+                      <b>{sign(ret)}</b>
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
+
+      <div className="card">
+        <div className="card-h">
+          <h3>Upcoming pipeline</h3>
+          <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>expected new issues</span>
+        </div>
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Symbol</th>
+                <th>Expected</th>
+                <th>Sector</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PIPELINE.map(p => (
+                <tr key={p.s}>
+                  <td><b style={{ color: "var(--text-hi)" }}>{p.n}</b></td>
+                  <td style={{ fontFamily: "var(--f-mono)", fontWeight: 700, color: "var(--text-hi)" }}>{p.s}</td>
+                  <td>{p.expected}</td>
+                  <td>{p.sec}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <p style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 10 }}>
         Returns measured from IPO offer price. Source (production): SEC EDGAR + Polygon.io. Informational only — not investment advice.

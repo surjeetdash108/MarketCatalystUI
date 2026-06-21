@@ -35,6 +35,29 @@ export function WatchlistScreen() {
         </button>
       </div>
 
+      {/* ── AI EOD/EOW summary ── */}
+      <div className="ai-block" style={{ marginBottom: 14 }}>
+        <div className="card-h">
+          <h3 className="ai-c">◆ AI End-of-Day Summary · Your Watchlist</h3>
+          <span className="pill ai">Auto-generated</span>
+        </div>
+        <div className="card-b">
+          <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
+            <b style={{ color: "var(--text-hi)" }}>3 of your {watch.length} names</b> moved more than 2% today.{" "}
+            <b style={{ color: "var(--up)" }}>NVDA +4.1%</b> led after strong data-center commentary;{" "}
+            <b style={{ color: "var(--down)" }}>TSLA −2.8%</b> fell on volume concerns. Two names report earnings this week:{" "}
+            <b style={{ color: "var(--text-hi)" }}>AMZN (Thu BMO)</b> and{" "}
+            <b style={{ color: "var(--text-hi)" }}>GOOGL (Fri AMC)</b>. Options activity is elevated across 4 names.
+          </p>
+          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+            <span className="src-chip">EOD: {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+            <span className="src-chip">Movers: 3</span>
+            <span className="src-chip">Earnings this week: 2</span>
+            <span className="src-chip">Options active: 4</span>
+          </div>
+        </div>
+      </div>
+
       <div className="fbar" style={{ padding: "0 18px", marginBottom: 12 }}>
         {FILTER_TABS.map(t => (
           <button key={t} className={`chip${activeTab === t ? " on" : ""}`}

@@ -52,6 +52,23 @@ export function MoversScreen() {
         </button>
       </div>
 
+      {/* Sector tally chips */}
+      {(() => {
+        const tally: Record<string, number> = {};
+        filtered.forEach(m => { tally[m.cat] = (tally[m.cat] || 0) + 1; });
+        const sectors = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+        return sectors.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 0 12px" }}>
+            {sectors.map(([sector, count]) => (
+              <span key={sector} className="tr-pill" style={{ cursor: "default" }}>
+                <span className="tr-tk">{sector}</span>
+                <span className="tr-mt">{count}</span>
+              </span>
+            ))}
+          </div>
+        ) : null;
+      })()}
+
       <div className="card">
         <div className="tbl-wrap">
           <table className="tbl">

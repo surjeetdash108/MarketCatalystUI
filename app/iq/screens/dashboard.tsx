@@ -3,30 +3,33 @@
 import Link from "next/link";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
-import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList } from "../data";
+import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge } from "../utils";
 
 const LIVE_FEED = [
   {
     cat: "Earnings", col: "var(--up)", time: "9:31a",
-    t: '<b style="color:var(--text-hi)">NVDA</b> beats EPS by 18%, raises FY25 guidance',
-    why: "Confirms AI data-center demand is still accelerating — bullish read-through for the entire semis group.",
+    t: '<b style="color:var(--text-hi)">NVDA</b> beats EPS 18%, raises FY25',
+    why: "AI data-center demand still accelerating.",
   },
   {
     cat: "Analyst", col: "var(--brand-2)", time: "9:18a",
-    t: 'Morgan Stanley upgrades <b style="color:var(--text-hi)">CRM</b> to Overweight, PT $340',
-    why: "Third upgrade this week; sell-side is turning constructive after the margin-expansion story.",
-  },
-  {
-    cat: "Block Trade", col: "var(--ai)", time: "9:05a",
-    t: '4.2M-share block in <b style="color:var(--text-hi)">XLF</b> crossed above VWAP',
-    why: "Large institutional buyer in financials — aligns with the risk-on rotation today.",
+    t: 'MS upgrades <b style="color:var(--text-hi)">CRM</b> to Overweight, PT $340',
+    why: "Sell-side turning constructive on margins.",
   },
   {
     cat: "Macro", col: "var(--warn)", time: "8:30a",
-    t: 'May core CPI <b style="color:var(--text-hi)">+0.2%</b> m/m, below 0.3% est.',
-    why: "Softer inflation lifts September rate-cut odds; 10Y yield fell 4bps on the print.",
+    t: 'May core CPI <b style="color:var(--text-hi)">+0.2%</b> m/m, below est.',
+    why: "Lifts September rate-cut odds; yields fell.",
   },
+];
+
+const INSIDER_MINI = [
+  { s: "NVDA", role: "CEO",        dir: "buy",  val: "4.8M" },
+  { s: "MSFT", role: "CFO",        dir: "buy",  val: "2.2M" },
+  { s: "META", role: "Director",   dir: "buy",  val: "880K" },
+  { s: "AAPL", role: "10% owner",  dir: "sell", val: "12.1M" },
+  { s: "TSLA", role: "10% owner",  dir: "sell", val: "22.4M" },
 ];
 
 const TABS = ["Today", "Premarket", "Live", "After Hours", "This Week", "My Portfolio"];
@@ -37,8 +40,6 @@ function analystDir(type: string) {
   if (type === "initiation") return <span style={{ color: "var(--ai)" }}>◆ Init</span>;
   return <span style={{ color: "var(--text-dim-solid)" }}>Reit</span>;
 }
-
-/** Circular progress gauge — number lives inside the ring */
 
 export function DashboardScreen() {
   const { openStock, openEarnings, openSector, setCopilot } = useIQActions();
@@ -59,6 +60,19 @@ export function DashboardScreen() {
   const totalVal     = 128430;
   const totalGainPct = folio.reduce((s, f) => s + f.gl, 0) / folio.length;
 
+  // Screener leaders/laggards
+  const leaders  = [...screenerStocks].sort((a, b) => b.rs - a.rs).slice(0, 3);
+  const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);
+
+  function downloadRecap(which: string) {
+    if (typeof window === "undefined") return;
+    const blob = new Blob([`InvestIQ ${which} Recap`], { type: "text/plain" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = `InvestIQ-Recap-${which}.txt`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <>
       {/* ── Header ── */}
@@ -77,7 +91,7 @@ export function DashboardScreen() {
         </div>
       </div>
 
-      <div className="dash">
+      <div className="dash" style={{ alignItems: "stretch" }}>
 
         {/* ── 1. Pulse strip ── */}
         <div className="col-12">
@@ -93,98 +107,9 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── 2. At-a-glance row — all three cards equal height ── */}
-        <div className="col-12" style={{
-          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, alignItems: "stretch",
-        }}>
-
-          {/* Portfolio mini */}
-          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-            <div className="card-h">
-              <h3>My Portfolio</h3>
-              <Link className="link" href="/menu/portfolio">View all →</Link>
-            </div>
-            <div className="card-b" style={{ flex: 1, paddingTop: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                <span className="mono" style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-hi)" }}>
-                  ${fmt(totalVal, 0)}
-                </span>
-                <span className={`mono ${cls(totalGainPct)}`} style={{ fontWeight: 600, fontSize: ".8rem" }}>
-                  {arr(totalGainPct)} {Math.abs(totalGainPct).toFixed(1)}%
-                </span>
-              </div>
-              {folio.slice(0, 4).map(f => {
-                const dayC = movers.find(m => m.s === f.s)?.c ?? 0;
-                return (
-                  <div key={f.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(f.s)}>
-                    <span className="tkr">{f.s}<small>{f.n}</small></span>
-                    <span className="mid">{f.evt === "—" ? "" : f.evt}</span>
-                    <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Watchlist mini */}
-          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-            <div className="card-h">
-              <h3>Watchlist</h3>
-              <Link className="link" href="/menu/watchlist">View all →</Link>
-            </div>
-            <div className="card-b" style={{ flex: 1, paddingTop: 8 }}>
-              {watch.slice(0, 5).map(w => (
-                <div key={w.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
-                  <span className="tkr">{w.s}<small>{w.n}</small></span>
-                  <span className="mid">{w.headline === "—" ? "" : w.headline}</span>
-                  <span className={`r ${cls(w.c)}`}>{sign(w.c)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Heatmap mini — exactly 3 rows × 2 cols */}
-          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-            <div className="card-h">
-              <h3>Market Heatmap</h3>
-              <Link className="link" href="/menu/heatmap">View all →</Link>
-            </div>
-            <div className="card-b" style={{ flex: 1, display: "flex", flexDirection: "column", paddingTop: 10 }}>
-              <div style={{
-                display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
-                gap: 4, flex: 1,
-              }}>
-                {sectorList.slice(0, 8).map(sd => {
-                  const a = Math.min(Math.abs(sd.chg) / 2, 1);
-                  const bg = sd.chg >= 0
-                    ? `rgba(28,170,112,${(0.25 + a * 0.55).toFixed(2)})`
-                    : `rgba(208,52,76,${(0.25 + a * 0.55).toFixed(2)})`;
-                  return (
-                    <div key={sd.name} onClick={() => openSector(sd.name)}
-                      style={{
-                        cursor: "pointer", background: bg, borderRadius: 7,
-                        padding: "7px 9px", display: "flex", flexDirection: "column", justifyContent: "space-between",
-                      }}>
-                      <div style={{ fontSize: ".62rem", fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>{sd.name}</div>
-                      <div className="mono" style={{ fontSize: ".66rem", color: "#ffffffd0" }}>{sign(sd.chg)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                Tap a sector for stocks &amp; news.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── 3. WMN + VIX/F&G — paired so heights match ── */}
-        <div className="col-12" style={{
-          display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, alignItems: "stretch",
-        }}>
-
-          {/* WMN Signature block */}
-          <div className="wmn" style={{ display: "flex", flexDirection: "column" }}>
+        {/* ── 2. What Matters Now — full width ── */}
+        <div className="col-12">
+          <div className="wmn">
             <div className="wmn-h">
               <div className="t">
                 <div className="wmn-orb">
@@ -207,7 +132,7 @@ export function DashboardScreen() {
                 30-sec audio
               </button>
             </div>
-            <ul className="wmn-body" style={{ flex: 1 }}>
+            <ul className="wmn-body">
               {wmn.map((b, i) => (
                 <li key={i}>
                   <span className="bullet" />
@@ -229,95 +154,16 @@ export function DashboardScreen() {
               </span>
             </div>
           </div>
-
-          {/* VIX + Fear & Greed — stacked to match WMN height */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-            {/* VIX */}
-            <div className="card vix" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <h3>VIX · Volatility</h3>
-                <span className="pill up">Calm</span>
-              </div>
-              <div className="card-b" style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                    <span className="big">14.18</span>
-                    <span className="mono down" style={{ fontWeight: 600 }}>▼ -2.51%</span>
-                  </div>
-                  <div className="pctl" style={{ marginTop: 12 }}><i style={{ width: "22%" }} /></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
-                    <span>12-mo percentile: 22nd</span>
-                    <span>Trend: falling</span>
-                  </div>
-                </div>
-                <div className="note">
-                  VIX at 14 is low and historically corresponds to a calm, risk-on tape. Cheap hedging environment.
-                </div>
-              </div>
-            </div>
-
-            {/* Fear & Greed — circle with number, label to the right */}
-            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <h3>Fear &amp; Greed</h3>
-                <span className="link">History →</span>
-              </div>
-              <div className="card-b gauge-wrap">
-                <SemiGauge val={62} label="Greed" id="fg" />
-                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                  Prev close: <b style={{ color: "var(--text)" }}>58</b>
-                </div>
-              </div>
-            </div>
-
-          </div>
         </div>
 
-        {/* ── 4. Live Market Feed + Earnings Today — same height ── */}
-        <div className="col-12" style={{
-          display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, alignItems: "stretch",
-        }}>
-
-          {/* Live Market Feed */}
-          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-            <div className="card-h">
-              <h3>📡 Live Market Feed</h3>
-              <Link className="link" href="/menu/commentary">All-market commentary →</Link>
-            </div>
-            <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
-              {LIVE_FEED.map((f, i) => (
-                <div key={i} style={{
-                  display: "flex", gap: 12, padding: "11px 0",
-                  borderBottom: i < LIVE_FEED.length - 1 ? "1px solid var(--border-soft)" : undefined,
-                }}>
-                  <div style={{ flexShrink: 0, width: 84 }}>
-                    <span className="pill" style={{ background: "var(--surface-3)", color: f.col }}>{f.cat}</span>
-                    <div style={{ fontFamily: "var(--f-mono)", fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                      {f.time}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: ".86rem", color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: f.t }} />
-                    <div style={{
-                      fontSize: ".78rem", color: "var(--text-dim-solid)",
-                      borderLeft: `2px solid ${f.col}88`, paddingLeft: 9, marginTop: 5,
-                    }}>
-                      <b style={{ color: "var(--ai)", fontWeight: 600 }}>Why it matters · </b>{f.why}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Earnings Today */}
-          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+        {/* ── 3. Earnings Today ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Earnings Today</h3>
               <Link className="link" href="/menu/earnings">View all →</Link>
             </div>
-            <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
+            <div className="card-b" style={{ paddingTop: 4 }}>
               {earnings.slice(0, 5).map(e => (
                 <div key={e.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openEarnings(e.s)}>
                   <span className="tkr">{e.s}<small>{e.n}</small></span>
@@ -333,21 +179,81 @@ export function DashboardScreen() {
               ))}
             </div>
           </div>
-
         </div>
 
-        {/* ── 5. Analyst Actions + Top Movers — side by side, equal width & height ── */}
-        <div className="col-12" style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch",
-        }}>
+        {/* ── 4. Market Movers ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>Market Movers</h3>
+              <Link className="link" href="/menu/movers">View all →</Link>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
+                ▲ Top gainers
+              </div>
+              {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                  <span className="tkr">{m.s}</span>
+                  <span className="mid">{m.cat}</span>
+                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                </div>
+              ))}
+              <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px" }}>
+                ▼ Top losers
+              </div>
+              {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                  <span className="tkr">{m.s}</span>
+                  <span className="mid">{m.cat}</span>
+                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
-          {/* Analyst Actions */}
-          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+        {/* ── 5. Market Heatmap ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>Market Heatmap</h3>
+              <Link className="link" href="/menu/heatmap">View all →</Link>
+            </div>
+            <div className="card-b" style={{ paddingTop: 10, display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {sectorList.slice(0, 8).map(sd => {
+                  const a   = Math.min(Math.abs(sd.chg) / 2, 1);
+                  const bg  = sd.chg >= 0
+                    ? `rgba(28,170,112,${(0.25 + a * 0.55).toFixed(2)})`
+                    : `rgba(208,52,76,${(0.25 + a * 0.55).toFixed(2)})`;
+                  return (
+                    <div key={sd.name} onClick={() => openSector(sd.name)}
+                      style={{
+                        cursor: "pointer", background: bg, borderRadius: 7,
+                        padding: "8px 9px", flex: `${Math.max(1, sd.items.reduce((s, i) => s + i[1], 0) / 1400)} 1 70px`,
+                      }}>
+                      <div style={{ fontSize: ".6rem", fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>{sd.name}</div>
+                      <div className="mono" style={{ fontSize: ".64rem", color: "#ffffffd0" }}>{sign(sd.chg)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 9 }}>
+                Tap to open the full heatmap.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 6. Analyst Actions ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Analyst Actions</h3>
               <Link className="link" href="/menu/analyst">View all →</Link>
             </div>
-            <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
+            <div className="card-b" style={{ paddingTop: 4 }}>
               {analyst.slice(0, 5).map((a, i) => (
                 <div key={i} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(a.s)}>
                   <span className="tkr">{a.s}</span>
@@ -357,25 +263,216 @@ export function DashboardScreen() {
               ))}
             </div>
           </div>
+        </div>
 
-          {/* Top Movers */}
-          <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+        {/* ── 7. Screener · Leaders & Laggards ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
-              <h3>Top Movers</h3>
-              <Link className="link" href="/menu/movers">View all →</Link>
+              <h3>Screener · Leaders &amp; Laggards</h3>
+              <Link className="link" href="/menu/screener">View all →</Link>
             </div>
-            <div className="card-b" style={{ flex: 1, paddingTop: 4 }}>
-              {movers.slice(0, 5).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
-                  <span className="tkr">{m.s}</span>
-                  <span className="mid">{m.cat}</span>
-                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
+                ▲ Leaders
+              </div>
+              {leaders.map(s => (
+                <div key={s.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(s.s)}>
+                  <span className="tkr">{s.s}</span>
+                  <span className="mid">RS {s.rs} · {s.sec}</span>
+                  <span className={`r ${cls(s.salesG)}`}>{sign(s.salesG)}</span>
+                </div>
+              ))}
+              <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px" }}>
+                ▼ Laggards
+              </div>
+              {laggards.map(s => (
+                <div key={s.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(s.s)}>
+                  <span className="tkr">{s.s}</span>
+                  <span className="mid">RS {s.rs} · {s.sec}</span>
+                  <span className={`r ${cls(s.salesG)}`}>{sign(s.salesG)}</span>
                 </div>
               ))}
             </div>
           </div>
-
         </div>
+
+        {/* ── 8. Portfolio Pulse ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>Portfolio Pulse</h3>
+              <Link className="link" href="/menu/portfolio">View all →</Link>
+            </div>
+            <div className="card-b" style={{ paddingTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                <span className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>$128,430</span>
+                <span className="mono up" style={{ fontWeight: 600 }}>▲ +1.42%</span>
+              </div>
+              {folio.slice(0, 4).map(f => {
+                const dayC = movers.find(m => m.s === f.s)?.c ?? 0;
+                return (
+                  <div key={f.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(f.s)}>
+                    <span className="tkr">{f.s}</span>
+                    <span className="mid">{f.size} · {f.conv} conv.</span>
+                    <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 9. Watchlist ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>Watchlist</h3>
+              <Link className="link" href="/menu/watchlist">View all →</Link>
+            </div>
+            <div className="card-b" style={{ paddingTop: 8 }}>
+              {watch.slice(0, 5).map(w => (
+                <div key={w.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
+                  <span className="tkr">{w.s}<small>{w.n}</small></span>
+                  <span className="mid">
+                    {w.opt ? <span className="pill opt">⚡</span> : null}{" "}
+                    ER {w.er}
+                  </span>
+                  <span className={`r ${cls(w.c)}`}>{sign(w.c)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 10. Insider & Institutional ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>Insider &amp; Institutional</h3>
+              <Link className="link" href="/menu/insider">View all →</Link>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              {INSIDER_MINI.map(x => (
+                <div key={x.s + x.dir} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(x.s)}>
+                  <span className="tkr">{x.s}</span>
+                  <span className="mid">{x.dir === "buy" ? "Buy" : "Sell"} · {x.role.replace(/ \(.*\)/, "")}</span>
+                  <span className={`r ${x.dir === "buy" ? "up" : "down"}`}>
+                    {x.dir === "buy" ? "+" : "−"}${x.val}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 11. Live Market Feed ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>Live Market Feed</h3>
+              <Link className="link" href="/menu/commentary">Commentary →</Link>
+            </div>
+            <div className="card-b" style={{ paddingTop: 2 }}>
+              {LIVE_FEED.map((f, i) => (
+                <div key={i} style={{
+                  display: "flex", gap: 10, padding: "9px 0",
+                  borderBottom: i < LIVE_FEED.length - 1 ? "1px solid var(--border-soft)" : undefined,
+                }}>
+                  <div style={{ flexShrink: 0, width: 62 }}>
+                    <span className="pill" style={{ background: "var(--surface-3)", color: f.col }}>{f.cat}</span>
+                    <div style={{ fontFamily: "var(--f-mono)", fontSize: ".6rem", color: "var(--text-dim-solid)", marginTop: 5 }}>
+                      {f.time}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: ".8rem", color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: f.t }} />
+                    <div style={{
+                      fontSize: ".72rem", color: "var(--text-dim-solid)",
+                      borderLeft: `2px solid ${f.col}55`, paddingLeft: 8, marginTop: 4,
+                    }}>
+                      <b style={{ color: "var(--ai)", fontWeight: 600 }}>Why · </b>{f.why}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 12. Recaps ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>Recaps</h3>
+              <Link className="link" href="/menu/recap">All →</Link>
+            </div>
+            <div className="card-b">
+              <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
+                Structured executive-summary report (PDF).
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                <button className="btn" style={{ justifyContent: "flex-start" }} onClick={() => downloadRecap("today")}>
+                  <svg viewBox="0 0 24 24" fill="none" style={{ width: 13, height: 13 }}>
+                    <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Today (EOD)
+                </button>
+                <button className="btn" style={{ justifyContent: "flex-start" }} onClick={() => downloadRecap("yesterday")}>
+                  <svg viewBox="0 0 24 24" fill="none" style={{ width: 13, height: 13 }}>
+                    <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Yesterday
+                </button>
+                <button className="btn" style={{ justifyContent: "flex-start" }} onClick={() => downloadRecap("week")}>
+                  <svg viewBox="0 0 24 24" fill="none" style={{ width: 13, height: 13 }}>
+                    <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Last week
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 13. VIX · Volatility ── */}
+        <div className="col-4">
+          <div className="card vix" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>VIX · Volatility</h3>
+              <span className="pill up">Calm</span>
+            </div>
+            <div className="card-b">
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span className="big">14.18</span>
+                <span className="mono down" style={{ fontWeight: 600 }}>▼ -2.51%</span>
+              </div>
+              <div className="pctl" style={{ marginTop: 12 }}><i style={{ width: "22%" }} /></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
+                <span>12-mo pct: 22nd</span>
+                <span>Trend: falling</span>
+              </div>
+              <div className="note">VIX at 14 is low — a calm, risk-on tape.</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 14. Fear & Greed ── */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <h3>Fear &amp; Greed</h3>
+              <span className="link">History →</span>
+            </div>
+            <div className="card-b gauge-wrap">
+              <SemiGauge val={62} label="Greed" id="fg" />
+              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                Previous close: <b style={{ color: "var(--text)" }}>58</b>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </>
   );

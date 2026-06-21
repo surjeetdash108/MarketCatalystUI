@@ -12,13 +12,6 @@ const CAL: [string, string, string, string | number, string | number, string | n
   ['GDP (Q1, rev)', 'May 30', 'High',  1.6, 1.5,  '—', ''],
 ];
 
-const IPO_DATA = [
-  ['Reddit',       'RDDT', 'Priced', '$31–34', '$748M'],
-  ['Astera Labs',  'ALAB', 'Priced', '$32–36', '$534M'],
-  ['Rubrik',       'RBRK', 'May 23', '$28–31', '$713M'],
-  ['ServiceTitan', 'TTAN', 'TBD',    '—',      '—'    ],
-];
-
 const DIV_DATA = [
   ['AAPL', 'May 13', 'May 16', '$0.25', '0.53%'],
   ['MSFT', 'May 16', 'Jun 13', '$0.75', '0.72%'],
@@ -107,42 +100,9 @@ export function MacroScreen() {
         </div>
       </div>
 
-      {/* IPO + Dividend calendars */}
+      {/* Dividend calendar — full width */}
       <div className="dash" style={{ marginTop: 14 }}>
-        <div className="col-6">
-          <div className="card">
-            <div className="card-h">
-              <h3>IPO &amp; spin-off calendar</h3>
-              <span className="link">All →</span>
-            </div>
-            <div className="tbl-wrap">
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Company</th>
-                    <th>Symbol</th>
-                    <th>Date</th>
-                    <th className="num">Price range</th>
-                    <th className="num">Raise</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {IPO_DATA.map(([co, sym, date, range, raise]) => (
-                    <tr key={sym} style={{ cursor: "pointer" }}>
-                      <td><b style={{ color: "var(--text-hi)" }}>{co}</b></td>
-                      <td className="mono" style={{ fontWeight: 700 }}>{sym}</td>
-                      <td>{date}</td>
-                      <td className="num">{range}</td>
-                      <td className="num">{raise}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-6">
+        <div className="col-12">
           <div className="card">
             <div className="card-h">
               <h3>Dividend &amp; ex-div dates</h3>

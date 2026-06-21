@@ -122,6 +122,49 @@ export function RecapScreen() {
           </div>
         </div>
 
+        {/* Schedule & share */}
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="card-h">
+            <h3>Schedule &amp; share this recap</h3>
+            <span className="pill ai">Auto-delivery</span>
+          </div>
+          <div className="card-b" style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div style={{ flex: "1 1 200px" }}>
+              <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>
+                Recipient email
+              </label>
+              <input
+                type="email"
+                placeholder="colleague@firm.com"
+                className="inp"
+                style={{
+                  width: "100%", background: "var(--surface-3)", border: "1px solid var(--border-soft)",
+                  borderRadius: 8, padding: "8px 12px", color: "var(--text)", fontSize: ".84rem",
+                }}
+              />
+            </div>
+            <div style={{ flex: "1 1 130px" }}>
+              <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>
+                Delivery time
+              </label>
+              <select
+                className="inp"
+                style={{
+                  width: "100%", background: "var(--surface-3)", border: "1px solid var(--border-soft)",
+                  borderRadius: 8, padding: "8px 12px", color: "var(--text)", fontSize: ".84rem",
+                }}
+              >
+                <option>Daily EOD (4:30 PM ET)</option>
+                <option>Weekly (Fri 5 PM ET)</option>
+                <option>Send now</option>
+              </select>
+            </div>
+            <button className="btn primary" style={{ flexShrink: 0, alignSelf: "flex-end", marginBottom: 1 }}>
+              Schedule delivery
+            </button>
+          </div>
+        </div>
+
         {/* Sector heatmap */}
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
