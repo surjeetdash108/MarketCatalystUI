@@ -222,20 +222,20 @@ Screens (Current) — Navigation groups: Intelligence / My Money / Context
 
 | Slug | Screen File | Nav Group | Status |
 |---|---|---|---|
-| dashboard | screens/dashboard.tsx | Intelligence | UI complete — HTML-parity layout, heatCol mini, openIndex/openFearGreed, pmeta |
-| earnings | screens/earnings.tsx | Intelligence | UI complete — static data |
+| dashboard | screens/dashboard.tsx | Intelligence | UI complete — session tabs removed; modal/popover pattern; Market Movers widget (Winners/Losers tabs, hover popup, sector/cap filters); Trending Stocks col-12 widget |
+| earnings | screens/earnings.tsx | Intelligence | UI complete — side-by-side col-6 layout; inline accordion detail panel (no drawer) |
 | movers | screens/movers.tsx | Intelligence | UI complete — static data |
 | heatmap | screens/heatmap.tsx | Intelligence | UI complete — heatCol() dynamic text color on treemap tiles |
-| analyst | screens/analyst.tsx | Intelligence | UI complete — static data |
+| analyst | screens/analyst.tsx | Intelligence | UI complete — computeFlags() (5+ action alert); topUpgrades sidebar; static data |
 | screener | screens/screener.tsx | Intelligence | UI complete — 20 presets, checkbox filters, native `<details>` dropdown |
 | ipos | screens/ipos.tsx | Intelligence | UI complete — recent IPO table + upcoming pipeline tab; static data |
-| portfolio | screens/portfolio.tsx | My Money | UI complete — static data |
-| watchlist | screens/watchlist.tsx | My Money | UI complete — static data |
-| stock | screens/stock.tsx | My Money | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout |
+| portfolio | screens/portfolio.tsx | My Money | UI complete — useState holdings (add/remove/partial sell); AI drivers/laggards/leaders |
+| watchlist | screens/watchlist.tsx | My Money | UI complete — Alerts column (price move + analyst upgrade pills); per-stock AI toggle |
+| stock | screens/stock.tsx | My Money | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout; Firebase stock notes (stock_comments collection); Insider & Key Levels side-by-side |
 | insider | screens/insider.tsx | My Money | UI complete — tabbed: Insider activity (Form 4 feed) + 13F institutional view |
 | commentary | screens/commentary.tsx | Context | UI complete — static data |
 | recap | screens/recap.tsx | Context | UI complete — static data |
-| macro | screens/macro.tsx | Context | UI complete — static data |
+| macro | screens/macro.tsx | Context | UI complete — MacroEvent interface; 3-week calendar (CAL_LAST/THIS/NEXT); 8-column table |
 | settings | screens/settings.tsx | — | Settings + dark mode wired to Firestore |
 | manage-plan | screens/manage-plan.tsx | — | UI scaffold |
 
@@ -277,7 +277,7 @@ Cmd+K Command Bar
 
 -   **Firebase Authentication**: email/password + Google OAuth. Firebase ID tokens issued client-side; `FirebaseListener` monitors `onAuthStateChanged` and syncs to Redux store.
 
--   **Cloud Firestore**: primary data store. Collections live: `users/{uid}` (profile), `settings/{uid}` (user preferences including dark mode). Security rules enforced via `firestore.rules` (deployed via `firebase deploy --only firestore:rules`). Firebase project: `fin-app26`.
+-   **Cloud Firestore**: primary data store. Collections live: `users/{uid}` (profile), `settings/{uid}` (user preferences including dark mode), `stock_comments` (user chart notes — saved from Stock Detail page right-click context menu; schema: `{uid, sym, name, comment, createdAt: Timestamp}`). Security rules enforced via `firestore.rules` (deployed via `firebase deploy --only firestore:rules`). Firebase project: `fin-app26`.
 
 **Planned (Backend / Phase 2 — not yet deployed)**
 

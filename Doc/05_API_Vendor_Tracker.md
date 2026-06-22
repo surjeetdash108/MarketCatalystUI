@@ -512,7 +512,36 @@ Indexes needed:
 
 ---
 
-### 5.13 User Collections
+### 5.13 stock_comments
+
+User-generated chart notes. Written and read directly from the React client using the Firebase client SDK. No server worker — this is the first collection written directly by authenticated users (not via Admin SDK).
+
+```
+Collection: stock_comments
+Document ID: auto-generated
+
+{
+  uid:       string,     // Firebase Auth user ID — used to scope reads
+  sym:       string,     // stock ticker e.g. "NVDA"
+  name:      string,     // company name e.g. "NVIDIA Corp."
+  comment:   string,     // note text (max 2000 chars)
+  createdAt: Timestamp   // Firestore server timestamp
+}
+
+Indexes needed:
+  - uid ASC + sym ASC + createdAt ASC (composite — required for the query filter)
+```
+
+Client code (screens/stock.tsx):
+- `loadNotes(sym)`: query where uid + sym, orderBy createdAt desc
+- `saveNote(sym, name, comment)`: addDoc with Timestamp.now()
+- `deleteNote(id)`: deleteDoc by document ID
+
+Security rules: owner read/write/delete only; no update (immutable); create validates uid matches auth.uid.
+
+---
+
+### 5.14 User Collections
 
 ```
 Collection: users

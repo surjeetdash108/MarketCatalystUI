@@ -133,13 +133,27 @@ export const movers: Mover[] = [
 
 // ---- Analyst Actions ----
 export const analyst: AnalystAction[] = [
-  { s: 'CRM',  n: 'Salesforce',  firm: 'Morgan Stanley', dir: 'up',   from: 'Equal Weight', to: 'Overweight', ptF: 280,  ptT: 340,  react:  3.80, n30: 3, owned: false },
-  { s: 'NVDA', n: 'Nvidia',      firm: 'Goldman Sachs',  dir: 'up',   from: 'Buy',          to: 'Strong Buy', ptF: 1000, ptT: 1250, react:  8.23, n30: 1, owned: true  },
+  // CRM — 6 actions (consensus shift flagged)
+  { s: 'CRM',  n: 'Salesforce',  firm: 'Morgan Stanley', dir: 'up',   from: 'Equal Weight', to: 'Overweight', ptF: 280,  ptT: 340,  react:  3.80, n30: 6, owned: false },
+  { s: 'CRM',  n: 'Salesforce',  firm: 'Bernstein',      dir: 'up',   from: 'Market Perform',to: 'Outperform', ptF: 260,  ptT: 320,  react:  2.90, n30: 6, owned: false },
+  { s: 'CRM',  n: 'Salesforce',  firm: 'RBC Capital',    dir: 'up',   from: 'Sector Perform',to: 'Outperform', ptF: 270,  ptT: 330,  react:  3.10, n30: 6, owned: false },
+  { s: 'CRM',  n: 'Salesforce',  firm: 'Piper Sandler',  dir: 'up',   from: 'Neutral',      to: 'Overweight', ptF: 265,  ptT: 315,  react:  1.80, n30: 6, owned: false },
+  { s: 'CRM',  n: 'Salesforce',  firm: 'Wolfe Research', dir: 'up',   from: 'Peer Perform',  to: 'Outperform', ptF: 275,  ptT: 335,  react:  2.50, n30: 6, owned: false },
+  { s: 'CRM',  n: 'Salesforce',  firm: 'Barclays',       dir: 'init', from: '—',            to: 'Overweight', ptF: 0,    ptT: 350,  react:  4.20, n30: 6, owned: false },
+  // NVDA — 5 actions
+  { s: 'NVDA', n: 'Nvidia',      firm: 'Goldman Sachs',  dir: 'up',   from: 'Buy',          to: 'Strong Buy', ptF: 1000, ptT: 1250, react:  8.23, n30: 5, owned: true  },
+  { s: 'NVDA', n: 'Nvidia',      firm: 'JPMorgan',       dir: 'up',   from: 'Overweight',   to: 'Overweight', ptF: 950,  ptT: 1200, react:  5.10, n30: 5, owned: true  },
+  { s: 'NVDA', n: 'Nvidia',      firm: 'Wedbush',        dir: 'up',   from: 'Outperform',   to: 'Outperform', ptF: 900,  ptT: 1180, react:  6.40, n30: 5, owned: true  },
+  { s: 'NVDA', n: 'Nvidia',      firm: 'Bank of America',dir: 'up',   from: 'Buy',          to: 'Buy',        ptF: 1050, ptT: 1300, react:  7.80, n30: 5, owned: true  },
+  { s: 'NVDA', n: 'Nvidia',      firm: 'Mizuho',         dir: 'up',   from: 'Outperform',   to: 'Outperform', ptF: 980,  ptT: 1220, react:  4.60, n30: 5, owned: true  },
+  // Others
   { s: 'TSLA', n: 'Tesla',       firm: 'UBS',            dir: 'up',   from: 'Sell',         to: 'Neutral',    ptF: 120,  ptT: 135,  react:  3.45, n30: 2, owned: true  },
   { s: 'AAPL', n: 'Apple',       firm: 'Morgan Stanley', dir: 'up',   from: 'Neutral',      to: 'Buy',        ptF: 195,  ptT: 215,  react:  1.02, n30: 1, owned: true  },
   { s: 'AMZN', n: 'Amazon',      firm: 'Citi',           dir: 'hold', from: 'Buy',          to: 'Buy',        ptF: 205,  ptT: 225,  react:  2.11, n30: 2, owned: false },
   { s: 'INTC', n: 'Intel',       firm: 'Deutsche Bank',  dir: 'down', from: 'Buy',          to: 'Neutral',    ptF: 50,   ptT: 32,   react: -2.14, n30: 1, owned: false },
   { s: 'GOOG', n: 'Alphabet',    firm: 'BofA',           dir: 'hold', from: 'Buy',          to: 'Buy',        ptF: 195,  ptT: 210,  react:  1.30, n30: 2, owned: false },
+  { s: 'META', n: 'Meta',        firm: 'Wells Fargo',    dir: 'init', from: '—',            to: 'Overweight', ptF: 0,    ptT: 550,  react:  2.40, n30: 1, owned: true  },
+  { s: 'MSFT', n: 'Microsoft',   firm: 'Oppenheimer',    dir: 'up',   from: 'Perform',      to: 'Outperform', ptF: 380,  ptT: 450,  react:  1.90, n30: 1, owned: true  },
 ];
 
 // ---- Portfolio ----

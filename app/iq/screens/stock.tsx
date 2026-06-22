@@ -1,9 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useIQActions } from "../shell";
 import { stockInfo, watch, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail } from "../data";
 import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL } from "../utils";
+import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
+import { firebaseDb, firebaseAuth } from "../../firebase";
+
+interface StockNote {
+  id: string;
+  sym: string;
+  name: string;
+  comment: string;
+  createdAt: Date;
+}
+
+async function loadNotes(sym: string): Promise<StockNote[]> {
+  const uid = firebaseAuth.currentUser?.uid;
+  if (!uid) return [];
+  try {
+    const q = query(
+      collection(firebaseDb, "stock_comments"),
+      where("uid", "==", uid),
+      where("sym", "==", sym),
+      orderBy("createdAt", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({
+      id: d.id,
+      sym: d.data().sym,
+      name: d.data().name,
+      comment: d.data().comment,
+      createdAt: (d.data().createdAt as Timestamp).toDate(),
+    }));
+  } catch { return []; }
+}
+
+async function saveNote(sym: string, name: string, comment: string): Promise<string | null> {
+  const uid = firebaseAuth.currentUser?.uid;
+  if (!uid || !comment.trim()) return null;
+  try {
+    const ref = await addDoc(collection(firebaseDb, "stock_comments"), {
+      uid, sym, name, comment: comment.trim(),
+      createdAt: Timestamp.now(),
+    });
+    return ref.id;
+  } catch { return null; }
+}
+
+async function deleteNote(id: string): Promise<void> {
+  try { await deleteDoc(doc(firebaseDb, "stock_comments", id)); } catch { /* ignore */ }
+}
 
 const LOGO_BG: Record<string, [string, string]> = {
   AAPL: ["#1c4c73", "#cce8ff"], NVDA: ["#1f6b4d", "#c8f5e0"], MSFT: ["#003f8c", "#d0e8ff"],
@@ -57,6 +104,41 @@ export function StockScreen() {
   const [showMA, setShowMA] = useState(true);
   const [showVol, setShowVol] = useState(true);
   const [showRsi, setShowRsi] = useState(false);
+
+  // ── Notes (Firebase stock_comments) ──────────────────────────────────────
+  const [notes, setNotes]       = useState<StockNote[]>([]);
+  const [noteInput, setNoteInput] = useState("");
+  const [noteOpen, setNoteOpen]  = useState(false);
+  const [ctxMenu, setCtxMenu]    = useState<{ x: number; y: number } | null>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  const refreshNotes = useCallback(async () => {
+    setNotes(await loadNotes(sym));
+  }, [sym]);
+
+  useEffect(() => { void refreshNotes(); }, [refreshNotes]);
+
+  async function submitNote() {
+    const id = await saveNote(sym, data.name ?? sym, noteInput);
+    if (id) {
+      setNotes(prev => [{
+        id, sym, name: data.name ?? sym,
+        comment: noteInput.trim(),
+        createdAt: new Date(),
+      }, ...prev]);
+      setNoteInput(""); setNoteOpen(false);
+    }
+  }
+
+  async function removeNote(id: string) {
+    await deleteNote(id);
+    setNotes(prev => prev.filter(n => n.id !== id));
+  }
+
+  function handleChartRightClick(e: React.MouseEvent) {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  }
 
   const suggestions = SYMBOLS.filter(s =>
     search && s.toLowerCase().startsWith(search.toLowerCase())
@@ -255,7 +337,8 @@ export function StockScreen() {
               <div style={{ flex: 1 }} />
               <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>drag-free · hover for OHLC</span>
             </div>
-            <div id="chartHost" style={{ padding: "0 14px 0" }}>
+            <div id="chartHost" style={{ padding: "0 14px 0" }} ref={chartRef}
+              onContextMenu={handleChartRightClick}>
               <CandleChart sym={sym} tf={tfActive} px={p} showMA={showMA} showVol={showVol} />
             </div>
             {showRsi && (
@@ -274,6 +357,38 @@ export function StockScreen() {
                 {isUp ? "cup-with-handle breakout" : "breakdown below support"}
               </b> {isUp ? "on above-average volume." : "on rising volume."}
             </div>
+          </div>
+
+          {/* Notes */}
+          <div className="card">
+            <div className="card-h">
+              <h3>Chart notes</h3>
+              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>right-click chart to add · saved to your account</span>
+              <button className="chip ai-c" style={{ marginLeft: "auto", fontSize: ".7rem" }}
+                onClick={() => setNoteOpen(true)}>+ Add note</button>
+            </div>
+            {notes.length === 0 ? (
+              <div className="card-b" style={{ color: "var(--text-dim-solid)", fontSize: ".82rem" }}>
+                No notes yet. Right-click the chart or click &ldquo;Add note&rdquo; to record a trade decision.
+              </div>
+            ) : (
+              <div className="card-b" style={{ paddingTop: 4 }}>
+                {notes.map(n => (
+                  <div key={n.id} style={{ padding: "9px 0", borderBottom: "1px solid var(--border-soft)", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid)", marginBottom: 3 }}>
+                        {n.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {" "}
+                        {n.createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      </div>
+                      <div style={{ fontSize: ".85rem", color: "var(--text)", lineHeight: 1.5 }}>{n.comment}</div>
+                    </div>
+                    <button style={{ background: "none", border: "none", color: "var(--text-dim-solid)", cursor: "pointer", fontSize: ".8rem", flexShrink: 0 }}
+                      onClick={() => removeNote(n.id)}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Keystats */}
@@ -498,50 +613,113 @@ export function StockScreen() {
             </div>
           </div>
 
-          {/* Insider & institutional */}
-          <div className="card">
-            <div className="card-h">
-              <h3>Insider &amp; institutional</h3>
-              <span className="link">View all →</span>
+          {/* Insider & institutional  +  Key levels — side by side */}
+          <div style={{ display: "flex", gap: 14 }}>
+            <div className="card" style={{ flex: 1 }}>
+              <div className="card-h">
+                <h3>Insider &amp; institutional</h3>
+                <span className="link">View all →</span>
+              </div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                {([
+                  ["Insider sells (90d)", `$${nf(mc * 0.012)}M`,                                               "down"],
+                  ["Insider buys (90d)",  rating.includes("Sell") ? "$0" : `$${nf(mc * 0.004)}M`,             rating.includes("Sell") ? "dim" : "up"],
+                  ["Inst. ownership",     io + "%",                                                             "up"],
+                  ["Short interest",      si + "%",                                                             si > 10 ? "down" : "dim"],
+                  ["13F funds holding",   fundsHolding + " tracked",                                           "dim"],
+                ] as [string, string, string][]).map(x => (
+                  <div key={x[0]} className="minirow">
+                    <span className="mid">{x[0]}</span>
+                    <span className={`r ${x[2] === "dim" ? "" : x[2]}`}
+                      style={x[2] === "dim" ? { color: "var(--text-hi)" } : {}}>{x[1]}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="card-b" style={{ paddingTop: 6 }}>
-              {([
-                ["Insider sells (90d)", `$${nf(mc * 0.012)}M`,                                               "down"],
-                ["Insider buys (90d)",  rating.includes("Sell") ? "$0" : `$${nf(mc * 0.004)}M`,             rating.includes("Sell") ? "dim" : "up"],
-                ["Inst. ownership",     io + "%",                                                             "up"],
-                ["Short interest",      si + "%",                                                             si > 10 ? "down" : "dim"],
-                ["13F funds holding",   fundsHolding + " tracked",                                           "dim"],
-              ] as [string, string, string][]).map(x => (
-                <div key={x[0]} className="minirow">
-                  <span className="mid">{x[0]}</span>
-                  <span className={`r ${x[2] === "dim" ? "" : x[2]}`}
-                    style={x[2] === "dim" ? { color: "var(--text-hi)" } : {}}>{x[1]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Key levels (pivots) */}
-          <div className="card">
-            <div className="card-h">
-              <h3>Key levels (pivots)</h3>
-              <span className="link">View all →</span>
-            </div>
-            <div className="card-b" style={{ paddingTop: 6 }}>
-              {([["R2", R2, "down"], ["R1", R1, "down"], ["Pivot", p, "dim"], ["S1", S1, "up"], ["S2", S2, "up"]] as [string, number, string][]).map(x => (
-                <div key={x[0]} className="minirow">
-                  <span className="tkr" style={{ width: 50 }}>{x[0]}</span>
-                  <span className="mid" />
-                  <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
-                    ${nf(x[1])}
-                  </span>
-                </div>
-              ))}
+            <div className="card" style={{ flex: 1 }}>
+              <div className="card-h">
+                <h3>Key levels (pivots)</h3>
+                <span className="link">View all →</span>
+              </div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                {([["R2", R2, "down"], ["R1", R1, "down"], ["Pivot", p, "dim"], ["S1", S1, "up"], ["S2", S2, "up"]] as [string, number, string][]).map(x => (
+                  <div key={x[0]} className="minirow">
+                    <span className="tkr" style={{ width: 50 }}>{x[0]}</span>
+                    <span className="mid" />
+                    <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
+                      ${nf(x[1])}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
         </div>
       </div>
+
+      {/* ── Right-click context menu ── */}
+      {ctxMenu && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setCtxMenu(null)} />
+          <div style={{
+            position: "fixed", left: ctxMenu.x, top: ctxMenu.y,
+            background: "var(--surface-1)", border: "1px solid var(--border)",
+            borderRadius: 10, padding: "6px 0", minWidth: 160, zIndex: 91,
+            boxShadow: "0 8px 24px rgba(0,0,0,.4)",
+          }}>
+            <button style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 14px", background: "none", border: "none", color: "var(--text)", fontSize: ".84rem", cursor: "pointer" }}
+              onClick={() => { setCtxMenu(null); setNoteOpen(true); }}>
+              📝 Add chart note
+            </button>
+            <button style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 14px", background: "none", border: "none", color: "var(--text-dim-solid)", fontSize: ".84rem", cursor: "pointer" }}
+              onClick={() => setCtxMenu(null)}>
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ── Add note modal ── */}
+      {noteOpen && (
+        <>
+          <div className="scrim" onClick={() => setNoteOpen(false)} />
+          <div className="drawer" style={{ maxHeight: "min(340px,80vh)" }}>
+            <div className="drawer-h">
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "var(--text-hi)" }}>
+                  Add note · {sym}
+                </div>
+                <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                  Saved to your account with date &amp; time
+                </div>
+              </div>
+              <button className="closebtn" onClick={() => setNoteOpen(false)}>✕</button>
+            </div>
+            <div className="drawer-b">
+              <textarea
+                placeholder="Record your trading decision, price level, or observation…"
+                value={noteInput}
+                onChange={e => setNoteInput(e.target.value)}
+                rows={5}
+                style={{
+                  width: "100%", background: "var(--surface-3)", border: "1px solid var(--border-soft)",
+                  borderRadius: 8, padding: "10px 12px", color: "var(--text)", fontSize: ".85rem",
+                  lineHeight: 1.5, resize: "vertical", fontFamily: "var(--f-body)",
+                }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button className="btn primary" style={{ flex: 1 }} onClick={submitNote}
+                  disabled={!noteInput.trim()}>
+                  Save note
+                </button>
+                <button className="btn" onClick={() => { setNoteOpen(false); setNoteInput(""); }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }

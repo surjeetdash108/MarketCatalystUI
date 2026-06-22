@@ -21,11 +21,31 @@ function dirPill(dir: string) {
   return <span className="pill hold">Reiterate</span>;
 }
 
+// Front-end flag: stocks with 5+ analyst actions
+function computeFlags() {
+  const cnt: Record<string, { n: string; count: number; ups: string[]; downs: string[] }> = {};
+  analyst.forEach(a => {
+    if (!cnt[a.s]) cnt[a.s] = { n: a.n, count: 0, ups: [], downs: [] };
+    cnt[a.s].count++;
+    if (a.dir === "up" || a.dir === "init") cnt[a.s].ups.push(a.firm);
+    if (a.dir === "down") cnt[a.s].downs.push(a.firm);
+  });
+  return Object.entries(cnt)
+    .filter(([, v]) => v.count >= 5)
+    .map(([s, v]) => ({ s, ...v }));
+}
+
 export function AnalystScreen() {
   const { openStock } = useIQActions();
   const [tab, setTab] = useState(0);
   const [group, setGroup] = useState("All actions");
   const [ddOpen, setDdOpen] = useState(false);
+
+  const flags = computeFlags();
+  const topUpgrades = analyst
+    .filter(a => a.dir === "up")
+    .sort((a, b) => b.n30 - a.n30 || b.react - a.react)
+    .slice(0, 3);
 
   const filtered = analyst.filter(a => {
     if (tab === 1) return a.dir === "up";
@@ -51,41 +71,59 @@ export function AnalystScreen() {
 
       {/* ── Signal cards ── */}
       <div className="dash" style={{ marginBottom: 14 }}>
+        {/* Flagged stocks: 5+ actions */}
         <div className="col-6">
           <div className="card">
             <div className="card-h">
-              <h3>◆ Cluster alert</h3>
-              <span className="pill ai">AI-detected</span>
+              <h3>🚩 Consensus shift — 5+ actions</h3>
+              <span className="pill ai">Flagged</span>
             </div>
-            <div className="card-b">
-              <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
-                <b style={{ color: "var(--text-hi)" }}>3 tier-1 firms</b> upgraded semis within 24 hrs — NVDA, AMD, AVGO all touched.
-                Cluster signals have historically led 5-day outperformance 71% of the time.
-              </p>
-              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                <span className="src-chip">NVDA ▲ MS</span>
-                <span className="src-chip">AMD ▲ GS</span>
-                <span className="src-chip">AVGO ▲ JPM</span>
-              </div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              {flags.length === 0 ? (
+                <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)" }}>No stocks with 5+ actions today.</p>
+              ) : flags.map(f => (
+                <div key={f.s} className="minirow" style={{ cursor: "pointer", marginBottom: 8, alignItems: "flex-start" }}
+                  onClick={() => openStock(f.s)}>
+                  <span className="tkr" style={{ paddingTop: 2 }}>{f.s}<small>{f.n}</small></span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: ".78rem", color: "var(--text)", marginBottom: 4 }}>
+                      <b style={{ color: "var(--text-hi)" }}>{f.count} actions</b>
+                      {f.ups.length > 0 && <span className="up"> · {f.ups.length} upgrade{f.ups.length > 1 ? "s" : ""}</span>}
+                      {f.downs.length > 0 && <span className="down"> · {f.downs.length} downgrade{f.downs.length > 1 ? "s" : ""}</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {f.ups.slice(0, 3).map(firm => (
+                        <span key={firm} className="src-chip" style={{ color: "var(--up)" }}>{firm} ▲</span>
+                      ))}
+                      {f.downs.slice(0, 2).map(firm => (
+                        <span key={firm} className="src-chip" style={{ color: "var(--down)" }}>{firm} ▼</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
+        {/* Top 2-3 upgrades surfaced */}
         <div className="col-6">
           <div className="card">
             <div className="card-h">
-              <h3>Multiple upgrades · same stock</h3>
-              <span className="pill up">Consensus shift</span>
+              <h3>▲ Top upgrades today</h3>
+              <span className="pill up">Surfaced</span>
             </div>
-            <div className="card-b">
-              <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
-                <b style={{ color: "var(--text-hi)" }}>CRM</b> received upgrades from Morgan Stanley, Bernstein, and RBC in the last 48 hours.
-                Three independent firms turning bullish simultaneously is a meaningful signal.
-              </p>
-              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                <span className="src-chip">MS ▲ Overweight</span>
-                <span className="src-chip">Bernstein ▲ Outperform</span>
-                <span className="src-chip">RBC ▲ Buy</span>
-              </div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              {topUpgrades.map(a => (
+                <div key={a.s + a.firm} className="minirow" style={{ cursor: "pointer", marginBottom: 8 }}
+                  onClick={() => openStock(a.s)}>
+                  <span className="tkr">{a.s}<small>{a.n}</small></span>
+                  <span className="mid" style={{ fontSize: ".78rem" }}>
+                    {a.firm} · {a.from} → <b style={{ color: "var(--up)" }}>{a.to}</b>
+                    {a.ptF > 0 && <span style={{ color: "var(--text-dim-solid)" }}> · PT ${a.ptF}→${a.ptT}</span>}
+                  </span>
+                  <span className="r up">{a.react > 0 ? "+" : ""}{a.react.toFixed(1)}%</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

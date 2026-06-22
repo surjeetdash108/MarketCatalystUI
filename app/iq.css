@@ -530,8 +530,8 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .btn:hover { border-color: var(--brand); color: var(--brand-2); }
 .btn.primary { background: linear-gradient(135deg, var(--brand), #6354d6); border-color: transparent; color: #fff; }
 .btn.primary:hover { filter: brightness(1.08); }
-.btn.ai { background: var(--ai-dim); border-color: var(--ai-dim); color: var(--ai); }
-.btn.ai:hover { box-shadow: var(--glow-ai); }
+.btn.ai { background: linear-gradient(135deg, var(--ai), #1bbfcc); border-color: transparent; color: #071c1e; }
+.btn.ai:hover { filter: brightness(1.08); box-shadow: var(--glow-ai); }
 .btn svg { width: 14px; height: 14px; }
 
 /* link text */
@@ -982,19 +982,19 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .ai-c { color: var(--ai); }
 
 /* ---- Copilot FAB ---- */
-.copilot-fab {
+.iq-root .copilot-fab {
   position: fixed; right: 24px; bottom: 24px; z-index: 45;
   height: 48px; padding: 0 20px 0 14px;
   border-radius: 30px;
-  background: linear-gradient(135deg, var(--brand), var(--ai));
+  background: linear-gradient(135deg, var(--brand), var(--ai)) !important;
   color: #fff; font-weight: 600; font-size: .84rem;
   display: flex; align-items: center; gap: 10px;
   box-shadow: 0 10px 30px -8px var(--brand), 0 0 0 1px rgba(255,255,255,.14);
   cursor: pointer; border: none; font-family: var(--f-body);
   transition: filter .15s, transform .15s;
 }
-.copilot-fab svg { width: 18px; height: 18px; flex-shrink: 0; }
-.copilot-fab:hover { filter: brightness(1.1); transform: translateY(-2px); }
+.iq-root .copilot-fab svg { width: 18px; height: 18px; flex-shrink: 0; }
+.iq-root .copilot-fab:hover { filter: brightness(1.1); transform: translateY(-2px); }
 
 /* ---- Earnings table extras ---- */
 .tbl td.num { text-align: right; font-family: var(--f-mono); }

@@ -1,5 +1,5 @@
 # StockWise — Task Tracker
-v1.2 | June 2026
+v1.3 | June 2026
 
 **Status:** Not Started | In Progress | In Review | Done  
 **Priority:** P0 = MVP blocker | P1 = high quality | P2 = nice to have  
@@ -67,7 +67,7 @@ v1.2 | June 2026
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
 | T-020 | Build Market Pulse strip component: S&P, Nasdaq, Dow, Russell, VIX, yields, crude, gold, DXY, BTC | Frontend | 2d | P0 | FE Eng 1 | S-03 | Not Started | Color-coded, real-time via WebSocket, clickable to detail |
-| T-021 | Build session filter tabs (Today/Premarket/Live/AH/This Week/My Portfolio) — Zustand state | Frontend | 1d | P0 | FE Eng 1 | S-03 | Not Started | Tabs filter all dashboard widgets simultaneously |
+| T-021 | Build session filter tabs (Today/Premarket/Live/AH/This Week/My Portfolio) — removed from dashboard header per design decision | Frontend | 0d | P0 | FE Eng 1 | S-03 | **Done** | Session tabs removed from Dashboard header. Only "✦ AI Summary" button remains. |
 | T-022 | Build drag-and-drop widget grid (react-grid-layout); save/restore layout per user | Frontend | 2d | P0 | FE Eng 2 | S-03 | Not Started | Available widgets: 8 types; default layout for new users |
 | T-023 | Build 'What Matters Now' AI summary card component with auto-refresh | Frontend | 1d | P0 | FE Eng 1 | S-04 | Not Started | Polling every 5 min; skeleton loader while generating |
 | T-024 | Backend: generate 'What Matters Now' summary via Claude API (macro + portfolio context) | Backend | 2d | P0 | Backend | S-04 | Not Started | BullMQ queue; update every 10 min during market hours |
@@ -78,6 +78,10 @@ v1.2 | June 2026
 | T-084 | Build Dashboard screen: WMN block, Market Pulse strip, sector heatmap widget, top movers, portfolio summary, watchlist, earnings today widgets. | Frontend | 2d | P0 | FE Eng 1 | S-04 | **Done** | screens/dashboard.tsx. Static data from data.ts. openStock/openEarnings via IQActionsContext. |
 | T-097 | Extend IQShell drawers: add IndexDrawer (openIndex) and FearGreedDrawer (openFearGreed). IndexDrawer shows OHLC values, ranges, AI note, leading/lagging sectors for equity indices. FearGreedDrawer shows SemiGauge, historical metric grid, 7-component progress bars, AI read note. Extend drawer union type and IQActionsContext interface. | Frontend | 1d | P0 | FE Eng 1 | S-08 | **Done** | shell.tsx. IQActionsContext: openIndex(i: number) + openFearGreed(). Drawer union: + { type: "index"; idx: number } + { type: "feargreed" }. Wired to pulse cards and F&G widget. |
 | T-098 | Rewrite Dashboard to HTML-parity layout: col-12 pulse strip (pmeta O/PC, clickable openIndex), col-4×3 (Portfolio Pulse/Watchlist/Heatmap mini), col-8 (WMN + Live Feed stacked), col-4 flex-col (VIX/F&G/Earnings/Analyst/Movers). Portfolio mid shows size·conv. Watchlist mid shows opt pill + ER date. Heatmap mini uses heatCol() for bg and text. F&G card opens openFearGreed(). | Frontend | 1d | P0 | FE Eng 1 | S-04 | **Done** | screens/dashboard.tsx. Complete layout rewrite matching HTML reference. Uses .col-4/.col-8 CSS grid classes, not inline grids. |
+| T-104 | Replace right-side sliding drawer with centered modal/popover across all screens. Update `.drawer` CSS: position:fixed; inset:0; margin:auto; width:min(700px,96vw); max-height:min(88vh,860px); border-radius:16px; z-index:51; animation: iq-popIn .22s cubic-bezier(.34,1.18,.64,1). Add @keyframes iq-popIn. | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | **Done** | app/iq.css. All drawer/modal UIs now use centered popover pattern. Sessions tabs also removed from dashboard header. |
+| T-105 | Dashboard Market Movers widget: add Winners/Losers tabs (mvTab state), 15-row scrollable list, `.mv-dash-row` hover popup with Technical/News tabs (`:has(.mvt-n:hover)` CSS switching), sector filter select, market cap filter select. Compute mvSectors from movers data. | Frontend | 1d | P0 | FE Eng 1 | S-08 | **Done** | screens/dashboard.tsx + app/iq.css. Widget is col-4. Winners tab shows gainers sorted by pct, Losers tab shows losers. Popup shows 2 tabs via CSS :has selector. |
+| T-106 | Dashboard Market Movers filter: add `mvSector` + `mvCap` state, two compact `<select>` dropdowns in card header. Filter `movers` array before rendering winner/loser lists. Compute `mvSectors` from unique movers sectors. | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | screens/dashboard.tsx. Sector and market cap filters work on the compact dashboard widget. |
+| T-107 | Dashboard Trending Stocks widget: add col-12 row at bottom of grid. Inline `computeTrending()` cross-references movers (pct > 2%), analyst (upgrades), earnings (upcoming < 7d). Score: 2pts per move, 3pts per analyst upgrade, 2pts per upcoming ER. Render as horizontal scrollable pill row or compact table. | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | screens/dashboard.tsx. Trending score displayed with trend indicator + catalyst pills. |
 
 ### Earnings — `/menu/earnings`
 
@@ -94,6 +98,7 @@ v1.2 | June 2026
 | T-058 | Build Earnings Setup Card: implied move (from options), last 4 earnings reactions, analyst sentiment trend (30 days), peer performance pre-announcement, key questions for quarter | Frontend | 2d | P0 | FE Eng 1 | S-05 | Not Started | Show on each scheduled earnings row before results are posted |
 | T-059 | Build Earnings Movers Board: post-earnings moves table with ticker, % reaction, direction, beat/miss verdict, guidance status, sector, portfolio flag | Frontend | 1.5d | P0 | FE Eng 2 | S-06 | Not Started | Sorted by absolute move size; auto-updates as results come in |
 | T-072 | Build Earnings Call Audio Player: compact player in earnings detail drawer (play/pause, timestamp seek, speed control), sourced from Intrinio or equivalent | Frontend | 1.5d | P1 | FE Eng 1 | S-14 | Not Started | Phase 2; show player only when recording URL is available; reuse for recap audio (T-071) |
+| T-108 | Fix earnings layout: change both card wrappers from col-7 to col-6 (6+6=12 fits grid). Add inline detail panel below calendar: when selEarning is set, show card with logo, name, sector, timing pill, 4-metric grid (EPS est, EPS actual, guidance, reaction/implied), aiRead paragraph. Uses existing selEarning state and aiRead string. | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | **Done** | screens/earnings.tsx. Both col-7→col-6. Inline panel renders between {calNode} and EPS history. No new state needed — reuses existing selEarning + aiRead. |
 
 ### Market Movers — `/menu/movers`
 
@@ -118,6 +123,7 @@ v1.2 | June 2026
 | T-036 | Build Analyst Actions board: real-time table with direction arrows, AI note, portfolio filter | Frontend | 2d | P0 | FE Eng 2 | S-07 | Not Started | Color: green for upgrade, red for downgrade |
 | T-037 | Backend: AI note generation for each analyst action via Claude (async, BullMQ) | Backend | 1.5d | P1 | Backend | S-07 | Not Started | Consider: target change size, firm importance, trend direction |
 | T-090 | Build Analyst Actions screen: table with direction arrows, firm, rating change, PT change, action pills. | Frontend | 1d | P0 | FE Eng 2 | S-07 | **Done** | screens/analyst.tsx. |
+| T-109 | Add analyst flags to Analyst screen: computeFlags() counts actions per ticker from data.analyst; stocks ≥5 actions get a flag card. Add topUpgrades: sort data.analyst by n30/react, take top 3 upgrades. Add CRM (6 entries) + NVDA (5 entries) to data.analyst to demonstrate flag detection. Replace static signal cards with dynamic maps. | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | screens/analyst.tsx + app/iq/data.ts. computeFlags() counts per ticker; flag card shows firm list split by upgrades/downgrades. topUpgrades picks top 3 by n30 desc + react desc. |
 
 ### Screener — `/menu/screener`
 
@@ -149,6 +155,7 @@ v1.2 | June 2026
 | T-039 | Backend: Portfolio Pulse Card generation via Claude each morning at 7am ET | Backend | 2d | P0 | Backend | S-07 | Not Started | Summarize overnight events for each held ticker |
 | T-073 | Backend: Broker import via Plaid/SnapTrade OAuth — multi-brokerage support, position sync, reconcile against manually entered portfolio, auto-refresh on schedule | Backend | 3d | P1 | Backend | S-16 | Not Started | Phase 2; handle position mismatches; merge duplicate holdings; user confirms reconciliation |
 | T-085 | Build Portfolio screen: AI pulse block, holdings table (conviction pill, size pill, event column), alerts sidebar. | Frontend | 1.5d | P0 | FE Eng 1 | S-07 | **Done** | screens/portfolio.tsx. FolioItem interface: s/n/p/c/gl/size/conv/evt fields. |
+| T-110 | Extend Portfolio screen with AI summary + CRUD: (1) Add useState<FolioItem[]> seeded from folioData; (2) Add Holding modal (ticker/size/conviction inputs, addHolding() function); (3) Sell dialog (partialSell: reduce size+gl*0.5, removeHolding: filter out); (4) Dynamic AI summary grid computing drivers/laggards/leaders from holdings state. Fix TS error: change {folio.length} → {holdings.length}. | Frontend | 1d | P0 | FE Eng 1 | S-08 | **Done** | screens/portfolio.tsx. drivers = top 2 by gl desc. laggards = bottom 2 by gl asc. leaders = top 2 by c desc. Each section clickable openStock(). Holdings table rows have Sell + Remove buttons. |
 
 ### Watchlist — `/menu/watchlist`
 
@@ -158,6 +165,7 @@ v1.2 | June 2026
 | T-041 | Backend: alert engine — Redis pub/sub event listener; evaluate rules; BullMQ dispatch | Backend | 3d | P0 | Backend | S-08 | Not Started | SendGrid for email; in-app via user_notifications table |
 | T-063 | Build Watchlist management UI: add/remove tickers, 5-name limit for Free (enforced), unlimited for Pro+, multiple watchlists, colored indicators across all boards | Frontend | 1d | P0 | FE Eng 2 | S-07 | Not Started | Watchlist chip component shown on every ticker row across the platform |
 | T-086 | Build Watchlist screen: filter tabs (All/Reporting this week/Options active/Movers today), table with ER/analyst/options/headline/spark columns. | Frontend | 1.5d | P0 | FE Eng 2 | S-07 | **Done** | screens/watchlist.tsx. WatchItem interface: s/n/px/c/er/analyst/opt/headline fields. |
+| T-111 | Extend Watchlist with AI alerts column + per-stock AI toggle: (1) import analyst from data; (2) add aiOn: Record<string, boolean> state (all true by default); (3) toggleAi(sym) flips aiOn[sym]; (4) alerts(sym) checks data.movers pct > 3% and data.analyst upgrades for that ticker; (5) add Alerts column (price move pill + analyst upgrade pill); (6) add AI column with chip toggle button per row. | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | screens/watchlist.tsx. Alerts computed from existing mock data. AI toggle is purely front-end state for now. |
 
 ### Insider & Institutional — `/menu/insider`
 
@@ -193,6 +201,7 @@ v1.2 | June 2026
 | T-045 | Build VIX widget: level, 12-month percentile rank, trend indicator, plain-English label | Frontend | 1d | P1 | FE Eng 2 | S-09 | Not Started | Update every 5 min; sparkline for 30-day trend |
 | T-046 | Build Macro Calendar page: upcoming + recent events table, importance tiers, actuals vs estimates | Frontend | 1.5d | P1 | FE Eng 1 | S-09 | Not Started | Market regime label widget (Risk-On/Off/etc.) |
 | T-092 | Build Macro screen: macro calendar table, market regime widget, VIX section. | Frontend | 1d | P1 | FE Eng 1 | S-09 | **Done** | screens/macro.tsx. |
+| T-113 | Expand Macro screen to full 3-week economic calendar: (1) define MacroEvent interface {event,date,time,impact,prior,est,actual,surprise,note}; (2) create CAL_LAST/CAL_THIS/CAL_NEXT arrays with 5+ events each; (3) events include CPI, PPI, Retail Sales, FOMC Decision, FOMC Press Conference, Jobless Claims, Philadelphia Fed, Existing Home Sales, GDP, PCE Deflator, Consumer Confidence, Durable Goods, Chicago PMI; (4) add week tab selector (Last Week / This Week / Next Week); (5) 8-column table with surprise color coding. | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | screens/macro.tsx. MacroEvent interface. 3 calendar arrays. 8-column table renders all arrays. Impact pill: H=down, M=warn, L=hold color. Surprise column green/red coded. |
 
 ### Stock Detail — `/menu/stock`
 
@@ -205,6 +214,7 @@ v1.2 | June 2026
 | T-094 | Build CandleChart SVG component: deterministic OHLC generation (seeded RNG matching HTML genOHLC algorithm), candlestick wicks, MA20/MA50 overlays, volume bars, ER marker, hover tooltip (crosshair + card). Build RsiPane sub-pane with 70/30 dashed lines. Both added to utils.tsx. | Frontend | 2d | P0 | FE Eng 1 | S-08 | **Done** | utils.tsx: CandleChart({ sym, tf, px, showMA, showVol }) + RsiPane({ sym, tf }). Uses same genOHLC() bias formula and rescaling as HTML reference. Deterministic from sym+tf seed so renders consistently. |
 | T-095 | Build TrGauge SVG (5-color segmented semicircle: Strong Sell→Strong Buy with needle) and SemiGauge SVG (gradient arc for Fear & Greed index). Both in utils.tsx. | Frontend | 1d | P0 | FE Eng 1 | S-08 | **Done** | utils.tsx: TrGauge({ val, size }) + SemiGauge({ val, label, id }). RATING_VAL map: { "Strong Buy": 0.9, "Buy": 0.55, "Neutral": 0, "Sell": -0.55, "Strong Sell": -0.9 }. Used on stock page and F&G widget. |
 | T-096 | Build Stock Detail screen HTML-parity: sym selector bar (fbar), sd-head (logo/name/price/actions), sd-grid (chart col + ratings/peers/earnings col). Chart card with CandleChart + RsiPane + toolbar (MA/Vol/RSI toggles). Key stats grid. AI Technical Analysis (toneseg + ai-line rows). Financials bars. Technical Rating (TrGauge). Peers minirows. Industry Group rank. Earnings history. Insider/institutional. | Frontend | 3d | P0 | FE Eng 1 | S-08 | **Done** | screens/stock.tsx. Full rewrite. heatCol() for key-stat color coding. LOGO_BG/EXCHANGE/BEAT_STREAK/INST_OWN/SHORT_INT helper maps. Matches HTML stock detail exactly. |
+| T-112 | Add Firebase stock notes to Stock Detail: (1) StockNote interface {id,sym,name,comment,createdAt:Date}; (2) loadNotes(sym): query Firestore stock_comments where uid+sym; (3) saveNote(sym,name,comment): addDoc to stock_comments; (4) deleteNote(id): deleteDoc; (5) add notes,noteInput,noteOpen,ctxMenu,chartRef state; (6) refreshNotes useCallback + useEffect on sym change; (7) chart div gets onContextMenu={handleChartRightClick}+ref={chartRef}; (8) Notes card below chart; (9) right-click context menu (fixed positioned); (10) Add Note modal with textarea. | Frontend | 1.5d | P0 | FE Eng 1 | S-08 | **Done** | screens/stock.tsx. Firebase imports: collection,addDoc,getDocs,query,where,orderBy,Timestamp,deleteDoc,doc from firebase/firestore. Firestore collection: stock_comments. Schema: {uid,sym,name,comment,createdAt:Timestamp}. Notes load on mount + sym change. |
 
 ---
 
@@ -217,6 +227,7 @@ v1.2 | June 2026
 | T-077 | Build IQShell component: sidebar nav (3 groups: Intelligence/My Money/Context), topbar with StockWise branding (logo gradient + wordmark b=ai color), drawers (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, profile dropdown. IQActionsContext provider. | Frontend | 5d | P0 | FE Eng 1 | S-03 | **Done** | shell.tsx. Each page wraps its own IQShell instance (not a Next.js layout). Theme state lives in IQShell. Nav now has 14 screens including IPOs + Insider & Institutional. |
 | T-078 | Build StockWise design system (iq.css): CSS custom properties, dark/light themes, layout primitives (.dash, .col-*), card/pill/badge components, heatmap grid, fund card, tr-pill, toggle, topbar. Updated logo to gradient with SVG bolt icon; wordmark b tag uses var(--ai) for "Wise". | Frontend | 3d | P0 | FE Eng 1 | S-03 | **Done** | Imported globally in app/layout.tsx. .iq-root[data-theme="dark/light"] drives theme switching. |
 | T-082 | Wire dark mode toggle in Settings to Firestore settings/{uid} (darkMode: boolean). Custom in-app confirmation modal. Theme init from localStorage (eliminates page-nav flicker). Firestore read on shell mount syncs across sessions. | Frontend | 1d | P0 | FE Eng 1 | S-03 | **Done** | settings.tsx: ThemeConfirmModal component + pending state. shell.tsx: useState lazy init from localStorage + useEffect Firestore read + localStorage write. firestore.rules: added settings/{uid} read/write rule. |
+| T-114 | Extend Cmd+K with stock search + starred stocks: (1) add SEARCHABLE_STOCKS constant (20 tickers with name+sector); (2) in palette, filter SEARCHABLE_STOCKS by query; (3) render stock matches above page results with ticker + name; (4) add starred: Set<string> state + toggleStar(sym); (5) per-stock ☆/★ star button; (6) starred list in palette footer. | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | shell.tsx. SEARCHABLE_STOCKS constant with 20 tickers. Starred section appears in footer when starred.size > 0. toggleStar() adds/deletes from Set and triggers re-render via spread. |
 
 ### Subscription & Billing
 
@@ -242,7 +253,7 @@ v1.2 | June 2026
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
 | T-069 | Build Story Stocks section: story card component (what/why/what changed today/next catalyst/peer impact), curated feed, AI-tagged stories integrated | Frontend | 2d | P0 | FE Eng 2 | S-13 | Not Started | Phase 2; stories sourced from T-070 AI tagging pipeline + manual editorial curation |
-| T-070 | Backend: Story Stocks AI tagging pipeline — detect news cluster density + unusual price/volume behavior; auto-tag and publish story cards directly to feed (no editorial queue) | Backend | 2d | P1 | Backend | S-13 | Not Started | Phase 2; AI-only at launch (no manual curation); triggers: news cluster, AH/premarket move >5%, activist filing, FDA/regulatory event; auto-publishes to story stocks feed |
+| T-070 | Backend: Story Stocks AI tagging pipeline — detect news cluster density + unusual price/volume behavior; auto-tag and publish story cards directly to feed (no editorial queue) | Backend | 2d | P1 | Backend | S-13 | Not Started | Phase 2; AI-only at launch (no manual curation); triggers: news cluster, AH/premarket move >5%, activist filing, FDA/regulatory event; auto-publishes to story_stocks table |
 
 ### Learn in 60 Seconds
 
@@ -272,21 +283,21 @@ v1.2 | June 2026
 | Data Ingestion | 0 | 0 | 9 | 9 |
 | Landing Page | 1 | 0 | 0 | 1 |
 | Auth Pages | 2 | 0 | 2 | 4 |
-| Dashboard | 4 | 0 | 8 | 12 |
-| Earnings | 0 | 0 | 11 | 11 |
+| Dashboard | 7 | 0 | 7 | 14 |
+| Earnings | 1 | 0 | 11 | 12 |
 | Market Movers | 1 | 0 | 4 | 5 |
 | Market Heatmap | 1 | 0 | 0 | 1 |
-| Analyst Actions | 1 | 0 | 2 | 3 |
+| Analyst Actions | 2 | 0 | 2 | 4 |
 | Screener | 1 | 0 | 0 | 1 |
 | IPOs | 1 | 0 | 0 | 1 |
 | Commentary | 1 | 0 | 0 | 1 |
-| Portfolio Pulse | 1 | 0 | 3 | 4 |
-| Watchlist | 1 | 0 | 3 | 4 |
+| Portfolio Pulse | 2 | 0 | 3 | 5 |
+| Watchlist | 2 | 0 | 3 | 5 |
 | Insider & Inst. | 2 | 0 | 5 | 7 |
 | Recaps | 1 | 0 | 5 | 6 |
-| Macro & VIX | 1 | 0 | 2 | 3 |
-| Stock Detail | 3 | 0 | 4 | 7 |
-| Shell & Design | 3 | 0 | 0 | 3 |
+| Macro & VIX | 2 | 0 | 2 | 4 |
+| Stock Detail | 4 | 0 | 4 | 8 |
+| Shell & Design | 4 | 0 | 0 | 4 |
 | Subscription | 0 | 0 | 1 | 1 |
 | AI Copilot | 0 | 0 | 2 | 2 |
 | Cmd+K | 0 | 0 | 1 | 1 |
@@ -294,4 +305,4 @@ v1.2 | June 2026
 | Learn 60s | 0 | 0 | 1 | 1 |
 | Industry Alerts | 0 | 0 | 1 | 1 |
 | Mobile | 0 | 0 | 1 | 1 |
-| **TOTAL** | **28** | **0** | **75** | **103** |
+| **TOTAL** | **38** | **0** | **73** | **111** |

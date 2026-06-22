@@ -419,6 +419,55 @@ export function EarningsScreen() {
       {/* ── Calendar ───────────────────────────────────────────────────── */}
       {calNode}
 
+      {/* ── Selected company inline detail (below calendar, no drawer) ── */}
+      {selEarning && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="card-h">
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6", width: 36, height: 36, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: ".9rem", flexShrink: 0 }}>
+                {sel[0]}
+                <img src={`https://assets.parqet.com/logos/symbol/${sel}?format=png`}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} alt="" />
+              </span>
+              <div>
+                <span style={{ fontWeight: 700, color: "var(--text-hi)", fontSize: ".95rem" }}>{sel}</span>
+                <span style={{ color: "var(--text-dim-solid)", fontSize: ".78rem", marginLeft: 8 }}>{selEarning.n} · {selEarning.sec}</span>
+              </div>
+              <span className={`pill ${selEarning.t.includes("Before") || selEarning.t === "BMO" ? "bmo" : "amc"}`} style={{ marginLeft: 4 }}>
+                {selEarning.t}
+              </span>
+            </div>
+          </div>
+          <div className="card-b" style={{ paddingTop: 10 }}>
+            <div className="metric-grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 12 }}>
+              <div className="m">
+                <div className="k">EPS estimate</div>
+                <div className="v">${selEarning.epsE.toFixed(2)}</div>
+              </div>
+              <div className="m">
+                <div className="k">EPS actual</div>
+                {selEarning.epsA != null
+                  ? <div className={`v ${selEarning.epsA >= selEarning.epsE ? "up" : "down"}`}>${selEarning.epsA.toFixed(2)}</div>
+                  : <div className="v" style={{ color: "var(--text-dim-solid)" }}>Pending</div>}
+              </div>
+              <div className="m">
+                <div className="k">Guidance</div>
+                <div className={`v ${selEarning.guide === "Raised" ? "up" : selEarning.guide === "Lowered" ? "down" : ""}`} style={{ fontSize: ".95rem" }}>
+                  {selEarning.guide ?? "—"}
+                </div>
+              </div>
+              <div className="m">
+                <div className="k">{selEarning.react != null ? "Reaction" : "Implied move"}</div>
+                {selEarning.react != null
+                  ? <div className={`v ${cls(selEarning.react)}`}>{sign(selEarning.react)}</div>
+                  : <div className="v" style={{ color: "var(--warn)" }}>±{selEarning.implied}%</div>}
+              </div>
+            </div>
+            <p style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", margin: 0 }}>{aiRead}</p>
+          </div>
+        </div>
+      )}
+
       {/* ── Detail: EPS history + Income statement ─────────────────────── */}
       <div className="dash" style={{ marginTop: 16 }}>
         {/* col-6: 10-quarter EPS history */}

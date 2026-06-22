@@ -1,6 +1,6 @@
 # Market Intelligence Platform — Firestore Security Rules
 
-v1.0 | June 2026
+v1.1 | June 2026
 
 The deployable rules file is `firestore.rules` in this folder. Deploy with:
 
@@ -34,7 +34,10 @@ Every market data collection (`news`, `earnings_events`, `analyst_actions`, etc.
 **Principle 3 — User data is uid-scoped.**
 All user sub-collections (`portfolios`, `watchlists`, `alerts`, `notifications`) are readable and writable only by the owning user. No user can read another user's data.
 
-**Principle 4 — Field-level gating stays at the API layer.**
+**Principle 4 — User-generated content (stock_comments) is user-scoped.**
+The `stock_comments` collection stores user notes attached to stock charts. Each document has a `uid` field. Users can only read/write/delete their own notes. Other users cannot read another user's notes.
+
+**Principle 5 — Field-level gating stays at the API layer.**
 Firestore rules are all-or-nothing per document. They cannot strip individual fields before returning a document. Tier-gated fields (e.g. `aiNote` on analyst actions for Pro+ only) are stripped by the Fastify API middleware before the response reaches the client. Direct Firestore SDK reads from the client are not supported for field-level gates.
 
 ---
@@ -55,7 +58,9 @@ Firestore rules are all-or-nothing per document. They cannot strip individual fi
 | `fund_holdings` | ❌ | ✅ Read | ✅ Read | Server only |
 | `story_stocks` | ❌ | ❌ | ✅ Read | Server only |
 | `recaps` | ❌ | ✅ Read | ✅ Read | Server only |
+| `stock_comments` | Owner only | Owner only | Owner only | Owner (authenticated) |
 | `users/{uid}` | Owner only | Owner only | Owner only | Owner + server |
+| `settings/{uid}` | Owner only | Owner only | Owner only | Owner |
 | `users/{uid}/portfolios` | Owner only | Owner only | Owner only | Owner |
 | `users/{uid}/watchlists` | Owner only | Owner only | Owner only | Owner |
 | `users/{uid}/alerts` | Owner only | Owner only | Owner only | Owner |
@@ -63,7 +68,79 @@ Firestore rules are all-or-nothing per document. They cannot strip individual fi
 
 ---
 
-## 3. Subscription Tier Gating Details
+## 3. stock_comments Collection
+
+The `stock_comments` collection stores user notes on stock charts, written from the Stock Detail page (`screens/stock.tsx`) using the Firebase client SDK.
+
+### Schema
+```
+Collection: stock_comments
+Document ID: auto-generated
+
+{
+  uid:       string,     // Firebase Auth user ID
+  sym:       string,     // stock ticker (e.g. "NVDA")
+  name:      string,     // company name (e.g. "NVIDIA Corp.")
+  comment:   string,     // note text entered by user
+  createdAt: Timestamp   // Firestore server timestamp
+}
+```
+
+### Rule design
+```js
+// stock_comments: users can only read/write/delete their own notes
+match /stock_comments/{docId} {
+  allow read, delete: if request.auth != null
+                     && resource.data.uid == request.auth.uid;
+
+  allow create: if request.auth != null
+               && request.resource.data.uid == request.auth.uid
+               && request.resource.data.comment is string
+               && request.resource.data.comment.size() <= 2000
+               && request.resource.data.sym is string;
+
+  allow update: if false;  // notes are immutable — delete and re-create to edit
+}
+```
+
+### Firestore queries used
+```ts
+// Load notes for current user + ticker
+const q = query(
+  collection(db, 'stock_comments'),
+  where('uid', '==', currentUser.uid),
+  where('sym', '==', sym),
+  orderBy('createdAt', 'asc')
+);
+
+// Save a note
+await addDoc(collection(db, 'stock_comments'), {
+  uid: currentUser.uid,
+  sym,
+  name,
+  comment,
+  createdAt: Timestamp.now(),
+});
+
+// Delete a note
+await deleteDoc(doc(db, 'stock_comments', noteId));
+```
+
+### Composite index required
+```json
+{
+  "collectionGroup": "stock_comments",
+  "fields": [
+    { "fieldPath": "uid",  "order": "ASCENDING" },
+    { "fieldPath": "sym",  "order": "ASCENDING" },
+    { "fieldPath": "createdAt", "order": "ASCENDING" }
+  ]
+}
+```
+
+---
+
+## 4. Subscription Tier Gating Details
 
 ### What's gated at the rules level (collection-level block)
 
@@ -94,7 +171,7 @@ The client always calls the REST API (`/api/v1/...`), not Firestore directly, fo
 
 ---
 
-## 4. Notifications: Write Rules
+## 5. Notifications: Write Rules
 
 Notifications are created exclusively by the alert engine (server, Admin SDK). Clients can:
 - **Read** their notifications
@@ -111,7 +188,7 @@ allow update: if isOwner(uid)
 
 ---
 
-## 5. User Document: Tier Protection
+## 6. User Document: Tier Protection
 
 The `users/{uid}` document holds the `tier` field, which must only be updated by the server (Stripe webhook → Admin SDK). The `noTierOrUidChange()` helper blocks any client update that tries to modify `tier`, `uid`, `stripeCustomerId`, or `stripeSubId`:
 
@@ -126,7 +203,7 @@ This means a client cannot self-upgrade by writing `tier: 'premium'` directly to
 
 ---
 
-## 6. Deployment & Testing
+## 7. Deployment & Testing
 
 **Deploy:**
 ```bash
@@ -152,6 +229,12 @@ Test cases to cover:
 - Client cannot set `tier: 'premium'` on their own user document
 - Client can mark notification as read but cannot change any other field
 - Client cannot create a notification document
+- User can create a `stock_comments` document with their own uid
+- User cannot create a `stock_comments` document with another user's uid
+- User can read their own `stock_comments` notes
+- User cannot read another user's `stock_comments` notes
+- User can delete their own `stock_comments` note
+- User cannot update a `stock_comments` note (notes are immutable)
 
 **Testing a tier upgrade flow end-to-end:**
 1. Stripe webhook fires → backend calls `admin.auth().setCustomUserClaims(uid, { tier: 'pro' })`
@@ -160,7 +243,7 @@ Test cases to cover:
 
 ---
 
-## 7. Firestore Indexes (firestore.indexes.json)
+## 8. Firestore Indexes (firestore.indexes.json)
 
 Define these composite indexes alongside the rules deployment:
 
@@ -179,7 +262,8 @@ Define these composite indexes alongside the rules deployment:
     { "collectionGroup": "market_movers",    "fields": [{ "fieldPath": "date",       "order": "DESCENDING" }, { "fieldPath": "session",      "order": "ASCENDING"  }, { "fieldPath": "type", "order": "ASCENDING" }] },
     { "collectionGroup": "story_stocks",     "fields": [{ "fieldPath": "isActive",   "order": "ASCENDING"  }, { "fieldPath": "publishedAt",  "order": "DESCENDING" }] },
     { "collectionGroup": "companies",        "fields": [{ "fieldPath": "sector",     "order": "ASCENDING"  }, { "fieldPath": "marketCap",    "order": "DESCENDING" }] },
-    { "collectionGroup": "companies",        "fields": [{ "fieldPath": "industryGroup", "order": "ASCENDING" }, { "fieldPath": "updatedAt",  "order": "DESCENDING" }] }
+    { "collectionGroup": "companies",        "fields": [{ "fieldPath": "industryGroup", "order": "ASCENDING" }, { "fieldPath": "updatedAt",  "order": "DESCENDING" }] },
+    { "collectionGroup": "stock_comments",   "fields": [{ "fieldPath": "uid",        "order": "ASCENDING"  }, { "fieldPath": "sym",          "order": "ASCENDING"  }, { "fieldPath": "createdAt", "order": "ASCENDING" }] }
   ]
 }
 ```

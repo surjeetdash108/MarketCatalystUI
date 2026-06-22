@@ -1,4 +1,4 @@
-# InvestIQ Screen Data Sources
+# StockWise Screen Data Sources
 
 > **Legend**
 > - ✅ **Dynamic** — data comes from a live source (Firebase Auth, Firestore, real API)
@@ -15,8 +15,9 @@
 | User profile image | Firestore `profile_image` or Firebase Auth `photoURL` → Redux | ✅ Dynamic |
 | User tier (Free / Premium) | Firestore `profile.tier` → Redux | ✅ Dynamic |
 | Auth session / redirect | Firebase Auth `onAuthStateChanged` → Redux | ✅ Dynamic |
+| Theme preference | `IQShell` useState + Firestore `settings/{uid}` (darkMode) + localStorage cache | ✅ Dynamic |
 | Ticker strip prices | `app/iq/data.ts` — hardcoded `pulse[]` array | 🔴 Static |
-| Theme preference | Component `useState` (not persisted) | 🔴 Static |
+| Cmd+K starred stocks | `IQShell` useState `starred: Set<string>` — in-memory per session | 🔴 Static (session-only) |
 
 ---
 
@@ -28,7 +29,11 @@
 | What Matters Now cards | `data.wmn` — hardcoded | 🔴 Static |
 | AI Sentiment gauge | Hardcoded value `62` | 🔴 Static |
 | VIX card | Hardcoded `14.18` | 🔴 Static |
-| Today's Movers | `data.movers` — hardcoded | 🔴 Static |
+| Market Movers Widget — Winners tab | `data.movers` filtered/sorted — hardcoded | 🔴 Static |
+| Market Movers Widget — Losers tab | `data.movers` filtered/sorted — hardcoded | 🔴 Static |
+| Market Movers Widget — sector filter | `mvSectors` computed from `data.movers` | 🔴 Static |
+| Market Movers Widget — hover popup (Technical/News) | Derived from `data.movers` + `data.analyst` — hardcoded | 🔴 Static |
+| Trending Stocks Widget | `computeTrending()` cross-reference: `data.movers` + `data.analyst` + `data.earnings` | 🔴 Static |
 | Upcoming Earnings list | `data.earnings` — hardcoded | 🔴 Static |
 | Portfolio Snapshot (total value, positions) | `data.folio` — hardcoded | 🔴 Static |
 | Analyst Actions mini-list | `data.analyst` — hardcoded | 🔴 Static |
@@ -42,6 +47,8 @@
 | Earnings table rows | `data.earnings` — hardcoded | 🔴 Static |
 | Filter chips (All / Beat / Miss / Raised / Lowered / Owned) | Computed from `data.earnings.tags` | 🔴 Static |
 | EPS estimate, EPS actual, guidance, reaction | `data.earnings` — hardcoded | 🔴 Static |
+| Inline detail panel (logo, EPS metrics, AI read) | Derived from `selEarning` selection + `aiRead` string | 🔴 Static |
+| 10-quarter EPS history chart | `data.earnings` EPS history arrays | 🔴 Static |
 
 ---
 
@@ -70,6 +77,8 @@
 |---|---|---|
 | Analyst action rows | `data.analyst` — hardcoded | 🔴 Static |
 | Type filter (upgrade / downgrade / target raise) | Derived from `data.analyst` | 🔴 Static |
+| Analyst flags (stocks with 5+ actions) | `computeFlags()` — computed from `data.analyst` | 🔴 Static |
+| Top Upgrades sidebar | Sorted `data.analyst` by n30/react | 🔴 Static |
 
 ---
 
@@ -84,14 +93,25 @@
 
 ---
 
+## IPOs (`/menu/ipos`)
+
+| Element | Data | Status |
+|---|---|---|
+| Recent IPO performance table (8 rows) | Hardcoded inline in `screens/ipos.tsx` | 🔴 Static |
+| Upcoming pipeline table (4 rows) | Hardcoded inline in `screens/ipos.tsx` | 🔴 Static |
+| Stats strip (above-offer count, best performer, median) | Hardcoded inline in `screens/ipos.tsx` | 🔴 Static |
+
+---
+
 ## Portfolio Pulse (`/menu/portfolio`)
 
 | Element | Data | Status |
 |---|---|---|
-| Holdings (symbol, qty, avg cost, current price) | `data.folio` — hardcoded | 🔴 Static |
-| Total value, gain/loss calculations | Computed from `data.folio` | 🔴 Static |
-| Sector allocation bar | Computed from `data.folio` | 🔴 Static |
-| Day change estimate | Hardcoded multiplier (0.73%) | 🔴 Static |
+| Holdings list (symbol, price, day, G/L, size, conviction) | `useState<FolioItem[]>` seeded from `data.folio` — in-memory session state | 🟡 Hybrid |
+| Add Holding | Component `useState` (`newSym`, `newSize`, `newConv`) | 🔴 Static (session-only) |
+| Sell / Remove holding | `partialSell()` / `removeHolding()` on `useState` holdings | 🔴 Static (session-only) |
+| AI Summary — Drivers / Laggards / Leaders | Computed dynamically from `holdings` useState (sort by G/L and day change) | 🟡 Hybrid |
+| Active alerts sidebar | Hardcoded `ALERTS` constant | 🔴 Static |
 
 ---
 
@@ -101,6 +121,8 @@
 |---|---|---|
 | Watchlist rows (symbol, price, change, target, note) | `data.watch` — hardcoded | 🔴 Static |
 | Upside % | Computed from `data.watch` (tgt vs px) | 🔴 Static |
+| Alerts column (price move pill, analyst upgrade pill) | `alerts(sym)` computed from `data.movers` + `data.analyst` | 🔴 Static |
+| AI toggle (per-stock on/off) | `aiOn: Record<string, boolean>` useState — in-memory session | 🔴 Static (session-only) |
 
 ---
 
@@ -114,17 +136,21 @@
 | Recent news | `data.stockInfo[sym].news` — hardcoded | 🔴 Static |
 | Insider activity | `data.stockInfo[sym].ins` — hardcoded | 🔴 Static |
 | "Owned" badge | Checks against `data.folio` — hardcoded | 🔴 Static |
-| Sparkline trend | Deterministic SVG from symbol charCode seed | 🔴 Static |
+| CandleChart SVG | Deterministic OHLC from symbol + timeframe seed (seeded RNG) | 🔴 Static |
+| Chart right-click notes — save | Firebase Firestore `stock_comments` collection (`addDoc`) | ✅ Dynamic |
+| Chart right-click notes — load | Firebase Firestore `stock_comments` collection (`getDocs`, `query`, `where`, `orderBy`) | ✅ Dynamic |
+| Chart right-click notes — delete | Firebase Firestore `stock_comments` collection (`deleteDoc`) | ✅ Dynamic |
 
 ---
 
-## 13F Intelligence (`/menu/thirteenf`)
+## Insider & Institutional (`/menu/insider`)
 
 | Element | Data | Status |
 |---|---|---|
 | Fund cards (name, ticker, AUM, top holdings) | `data.funds` — hardcoded | 🔴 Static |
 | Notable Q1 moves table | Hardcoded inline in component | 🔴 Static |
 | AI insight blurb | Hardcoded string | 🔴 Static |
+| Insider Form 4 feed table | Hardcoded inline in `screens/insider.tsx` | 🔴 Static |
 
 ---
 
@@ -153,8 +179,10 @@
 | Element | Data | Status |
 |---|---|---|
 | VIX, 10Y yield, 2Y yield, Fed Funds Rate | Hardcoded inline in component | 🔴 Static |
-| Calendar events (date, name, sub-text, type) | `data.macro` — hardcoded | 🔴 Static |
-| Event type filter | Derived from `data.macro` | 🔴 Static |
+| Last Week calendar (CAL_LAST) | Hardcoded `MacroEvent[]` array in `screens/macro.tsx` | 🔴 Static |
+| This Week calendar (CAL_THIS) | Hardcoded `MacroEvent[]` array in `screens/macro.tsx` | 🔴 Static |
+| Next Week calendar (CAL_NEXT) | Hardcoded `MacroEvent[]` array in `screens/macro.tsx` | 🔴 Static |
+| Event type filter + week tab selector | Component `useState` | 🔴 Static |
 
 ---
 
@@ -162,7 +190,9 @@
 
 | Category | Count |
 |---|---|
-| Fully dynamic (Firebase / Redux) | 4 elements (auth, user name, profile image, tier) |
+| Fully dynamic (Firebase Auth / Redux) | 4 shell elements (auth, user name, profile image, tier) |
+| Fully dynamic (Firestore reads/writes) | 3 stock note operations (save, load, delete) |
+| Hybrid (state seeded from mock, computed dynamically) | Portfolio holdings state + AI summary |
 | Fully static mock data | All market data, prices, news, research |
 
 ---
@@ -173,18 +203,21 @@ To make screens fully dynamic, these integrations are needed:
 
 | Screen | What to replace | Suggested source |
 |---|---|---|
-| All screens — Ticker | `data.pulse` | Yahoo Finance API / Polygon.io / Alpha Vantage |
+| All screens — Ticker strip | `data.pulse` | Polygon.io WebSocket / Finnhub |
 | Dashboard — Market Pulse | `data.pulse` | Same as above |
-| Dashboard — WMN | `data.wmn` | OpenAI / news API + GPT summarisation |
-| Earnings Hub | `data.earnings` | Polygon.io Earnings Calendar |
+| Dashboard — WMN | `data.wmn` | Claude API + news API |
+| Dashboard — Market Movers Widget | `data.movers` | Polygon.io Gainers/Losers endpoint |
+| Dashboard — Trending Stocks | `computeTrending()` inline | Server-side calculation + Firestore `market_movers` |
+| Earnings Hub | `data.earnings` | FMP Earnings Calendar API |
 | Market Movers | `data.movers` | Polygon.io Gainers/Losers endpoint |
 | Heatmap | `data.sectorList` / `SEC[]` | Polygon.io sector aggregates |
-| Analyst Actions | `data.analyst` | Benzinga / Refinitiv analyst ratings API |
-| Screener | `data.screenerStocks` | Polygon.io Screener or Financials endpoint |
-| Portfolio Pulse | `data.folio` | Firestore (user's own portfolio collection) |
-| Watchlist | `data.watch` | Firestore (user's watchlist) + live prices |
-| Stock Detail | `data.stockInfo` | Polygon.io + OpenAI for AI thesis |
-| 13F Intelligence | `data.funds` | SEC EDGAR XBRL 13F endpoint |
-| Commentary | `data.commentary` | CMS (Contentful / Sanity) or Firestore |
-| Recaps | `data.recap` | Firestore (stored weekly by a Cloud Function) |
-| Macro Calendar | `data.macro` | Trading Economics / FRED API |
+| Analyst Actions | `data.analyst` | Benzinga analyst ratings API |
+| Screener | `data.screenerStocks` | Polygon.io Screener or FMP Screener |
+| Portfolio Pulse | `data.folio` + holdings state | Firestore `users/{uid}/portfolios` + live prices |
+| Watchlist | `data.watch` | Firestore `users/{uid}/watchlists` + live prices |
+| Stock Detail | `data.stockInfo` | Polygon.io REST + Claude API for AI thesis |
+| Stock Notes | Already live (Firestore `stock_comments`) | ✅ Already dynamic |
+| Insider & Institutional | `data.funds` + inline insider data | SEC EDGAR 13F + EDGAR Form 4 |
+| Commentary | `data.commentary` | Firestore `news` collection with categories |
+| Recaps | `data.recap` | Firestore `recaps` collection (written by BullMQ cron) |
+| Macro Calendar | `CAL_*` arrays in macro.tsx | Finnhub Economic Calendar API → Firestore `macro_events` |

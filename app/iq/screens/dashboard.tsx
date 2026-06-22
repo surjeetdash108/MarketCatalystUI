@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
-import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks } from "../data";
+import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks, type Mover } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge } from "../utils";
 
 const LIVE_FEED = [
@@ -203,6 +203,21 @@ export function DashboardScreen() {
   const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);
 
   const [mvTab, setMvTab] = useState<"win" | "lose">("win");
+  const [mvSector, setMvSector] = useState("All");
+  const [mvCap, setMvCap] = useState("All");
+  const mvSectors = ["All", ...Array.from(new Set(movers.map(m => m.sector))).sort()];
+
+  // Trending: stocks appearing in 2+ data sources over multiple entries
+  const trendingStocks = (() => {
+    const cnt: Record<string, { srcs: Set<string>; name: string }> = {};
+    movers.forEach(m  => { if (!cnt[m.s]) cnt[m.s] = { srcs: new Set(), name: m.n }; cnt[m.s].srcs.add("Movers"); });
+    analyst.forEach(a => { if (!cnt[a.s]) cnt[a.s] = { srcs: new Set(), name: a.n }; cnt[a.s].srcs.add("Analyst"); });
+    earnings.forEach(e => { if (!cnt[e.s]) cnt[e.s] = { srcs: new Set(), name: e.n }; cnt[e.s].srcs.add("Earnings"); });
+    return Object.entries(cnt)
+      .filter(([, v]) => v.srcs.size >= 2)
+      .map(([s, v]) => ({ s, name: v.name, srcs: [...v.srcs] }))
+      .slice(0, 8);
+  })();
 
   // ---- Dash pop hover ----
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -347,17 +362,32 @@ export function DashboardScreen() {
             <div className="card-h">
               <h3>Market Movers</h3>
               <div className="tabs" style={{ gap: 4, marginLeft: 8 }}>
-                <button className={`tab${mvTab === "win" ? " on" : ""}`} onClick={() => setMvTab("win")}>▲ Winners</button>
-                <button className={`tab${mvTab === "lose" ? " on" : ""}`} onClick={() => setMvTab("lose")}>▼ Losers</button>
+                <button className={`tab${mvTab === "win" ? " on" : ""}`} onClick={() => setMvTab("win")}>▲</button>
+                <button className={`tab${mvTab === "lose" ? " on" : ""}`} onClick={() => setMvTab("lose")}>▼</button>
               </div>
-              <Link className="link" href="/menu/movers" style={{ marginLeft: "auto" }}>View all →</Link>
+              <Link className="link" href="/menu/movers" style={{ marginLeft: "auto" }}>All →</Link>
             </div>
-            <div className="card-b" style={{ paddingTop: 4, maxHeight: 380, overflowY: "auto" }}>
+            {/* Filter row */}
+            <div style={{ display: "flex", gap: 6, padding: "0 12px 6px", flexWrap: "wrap" }}>
+              <select className="mv-sel" value={mvSector} onChange={e => setMvSector(e.target.value)}
+                style={{ fontSize: ".66rem", padding: "3px 6px" }}>
+                {mvSectors.map(s => <option key={s}>{s}</option>)}
+              </select>
+              <select className="mv-sel" value={mvCap} onChange={e => setMvCap(e.target.value)}
+                style={{ fontSize: ".66rem", padding: "3px 6px" }}>
+                {["All","Mega","Large","Mid","Small"].map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="card-b" style={{ paddingTop: 0, maxHeight: 320, overflowY: "auto" }}>
               {movers
-                .filter(m => mvTab === "win" ? m.c > 0 : m.c < 0)
-                .sort((a, b) => mvTab === "win" ? b.c - a.c : a.c - b.c)
+                .filter((m: Mover) => {
+                  if (mvSector !== "All" && m.sector !== mvSector) return false;
+                  if (mvCap    !== "All" && m.cap    !== mvCap)    return false;
+                  return mvTab === "win" ? m.c > 0 : m.c < 0;
+                })
+                .sort((a: Mover, b: Mover) => mvTab === "win" ? b.c - a.c : a.c - b.c)
                 .slice(0, 15)
-                .map(m => (
+                .map((m: Mover) => (
                   <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }}
                     onClick={() => openStock(m.s)}
                   >
@@ -661,6 +691,39 @@ export function DashboardScreen() {
             </div>
           </div>
         </div>
+
+        {/* ── 15. Trending Stocks ── */}
+        {trendingStocks.length > 0 && (
+          <div className="col-12">
+            <div className="card">
+              <div className="card-h">
+                <h3>🔥 Trending across reports</h3>
+                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                  {trendingStocks.length} names in 2+ of today&apos;s reports
+                </span>
+              </div>
+              <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {trendingStocks.map(t => {
+                  const mv = movers.find(m => m.s === t.s);
+                  return (
+                    <div key={t.s} className="tr-card" onClick={() => openStock(t.s)} style={{ cursor: "pointer", minWidth: 120 }}>
+                      <div className="tr-card-top">
+                        <span className="tr-tk">{t.s}</span>
+                        {mv && <span className={`pill ${mv.c >= 0 ? "up" : "dn"}`} style={{ fontSize: ".65rem" }}>{sign(mv.c)}</span>}
+                      </div>
+                      <div className="tr-nm">{t.name}</div>
+                      <div className="tr-srcs" style={{ marginTop: 4 }}>
+                        {t.srcs.map(src => (
+                          <span key={src} className={`tr-src tr-src-${src[0].toLowerCase()}`}>{src}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
 

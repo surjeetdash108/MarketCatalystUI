@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useIQActions } from "../shell";
-import { watch } from "../data";
+import { watch, analyst } from "../data";
 import { cls, arr, fmt, Spark } from "../utils";
 
 const FILTER_TABS = ["All", "Reporting this week", "Options active", "Movers today"];
@@ -10,6 +10,21 @@ const FILTER_TABS = ["All", "Reporting this week", "Options active", "Movers tod
 export function WatchlistScreen() {
   const { openStock } = useIQActions();
   const [activeTab, setActiveTab] = useState("All");
+  // AI parse toggle: sym → enabled (default all on)
+  const [aiOn, setAiOn] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(watch.map(w => [w.s, true]))
+  );
+
+  const toggleAi = (sym: string) =>
+    setAiOn(prev => ({ ...prev, [sym]: !prev[sym] }));
+
+  // Alerts: price alert (|c| >= 2%) or analyst upgrade
+  function alerts(sym: string) {
+    const w = watch.find(x => x.s === sym);
+    const hasMove = w && Math.abs(w.c) >= 2;
+    const hasUpgrade = analyst.some(a => a.s === sym && (a.dir === "up" || a.dir === "init"));
+    return { hasMove, hasUpgrade };
+  }
 
   const filtered = watch.filter(w => {
     if (activeTab === "Options active") return w.opt;
@@ -80,49 +95,82 @@ export function WatchlistScreen() {
                 <th>Company</th>
                 <th className="num">Price</th>
                 <th className="num">Day</th>
+                <th>Alerts</th>
                 <th>Next ER</th>
                 <th>Last analyst action</th>
                 <th style={{ textAlign: "center" }}>Options</th>
-                <th>Latest headline</th>
+                <th>Headline</th>
                 <th className="num">Intraday</th>
+                <th style={{ textAlign: "center" }}>AI</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((w, i) => (
-                <tr key={w.s} style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
-                  <td>
-                    <div className="co">
-                      <span className="s">{w.s}</span>
-                      <span className="n">{w.n}</span>
-                    </div>
-                  </td>
-                  <td className="num">${fmt(w.px)}</td>
-                  <td className={`num ${cls(w.c)}`}>
-                    {arr(w.c)} {Math.abs(w.c).toFixed(2)}%
-                  </td>
-                  <td style={{ color: "var(--text-dim-solid)", fontSize: ".82rem" }}>{w.er}</td>
-                  <td style={{ fontSize: ".82rem" }}>
-                    {w.analyst
-                      ? w.analyst
-                      : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    {w.opt
-                      ? <span className="pill opt">⚡ Active</span>
-                      : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                  </td>
-                  <td style={{
-                    fontSize: ".8rem",
-                    color: w.headline === "—" ? "var(--text-dim-solid)" : "var(--text)",
-                    maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis",
-                  }}>
-                    {w.headline}
-                  </td>
-                  <td className="num">
-                    <Spark seed={i + 20} up={w.c >= 0} />
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((w, i) => {
+                const al = alerts(w.s);
+                const aiEnabled = aiOn[w.s] !== false;
+                return (
+                  <tr key={w.s} style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
+                    <td>
+                      <div className="co">
+                        <span className="s">{w.s}</span>
+                        <span className="n">{w.n}</span>
+                      </div>
+                    </td>
+                    <td className="num">${fmt(w.px)}</td>
+                    <td className={`num ${cls(w.c)}`}>
+                      {arr(w.c)} {Math.abs(w.c).toFixed(2)}%
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {al.hasMove && (
+                          <span className={`pill ${w.c >= 0 ? "up" : "dn"}`} style={{ fontSize: ".62rem" }}>
+                            {w.c >= 0 ? "▲" : "▼"} Move
+                          </span>
+                        )}
+                        {al.hasUpgrade && (
+                          <span className="pill ai" style={{ fontSize: ".62rem" }}>▲ Upg</span>
+                        )}
+                        {!al.hasMove && !al.hasUpgrade && (
+                          <span style={{ color: "var(--text-dim-solid)" }}>—</span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ color: "var(--text-dim-solid)", fontSize: ".82rem" }}>{w.er}</td>
+                    <td style={{ fontSize: ".82rem" }}>
+                      {w.analyst
+                        ? w.analyst
+                        : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      {w.opt
+                        ? <span className="pill opt">⚡ Active</span>
+                        : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
+                    </td>
+                    <td style={{
+                      fontSize: ".8rem",
+                      color: w.headline === "—" ? "var(--text-dim-solid)" : "var(--text)",
+                      maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {aiEnabled
+                        ? w.headline
+                        : <span style={{ color: "var(--text-dim-solid)" }}>AI parsing off</span>}
+                    </td>
+                    <td className="num">
+                      <Spark seed={i + 20} up={w.c >= 0} />
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <button
+                        className={`pill${aiEnabled ? " ai" : ""}`}
+                        style={{ cursor: "pointer", fontSize: ".62rem", background: aiEnabled ? undefined : "var(--surface-3)", color: aiEnabled ? undefined : "var(--text-dim-solid)" }}
+                        onClick={e => { e.stopPropagation(); toggleAi(w.s); }}
+                        title={aiEnabled ? "Disable AI parsing" : "Enable AI parsing"}
+                      >
+                        {aiEnabled ? "✦ On" : "○ Off"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
