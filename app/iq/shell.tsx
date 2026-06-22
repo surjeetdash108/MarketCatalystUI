@@ -11,7 +11,7 @@ import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
 import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail } from "./data";
-import { fmt, sign, cls, arr, TrGauge, RATING_VAL, SemiGauge } from "./utils";
+import { fmt, sign, cls, arr, SemiGauge } from "./utils";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -73,94 +73,123 @@ function NavIcon({ slug }: { slug: string }) {
 
 // ---- Drawers ----
 function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
-  const { openStockFull, setCopilot } = useIQActions();
+  const { openStockFull, openSector } = useIQActions();
+  const mv  = movers.find(x => x.s === sym);
   const scr = screenerStocks.find(x => x.s === sym);
-  const mv = movers.find(x => x.s === sym);
-  const erEntry = earningsData.find(x => x.s === sym);
-  const p = mv?.p ?? 0;
-  const c = mv?.c ?? 0;
-  const mc = scr?.mc ?? 0;
-  const pe = scr?.pe ?? 0;
-  const rs = scr?.rs ?? 55;
-  const rvol = scr?.rvol ?? 1.0;
-  const rating = scr?.rating ?? "Neutral";
-  const eps = pe > 0 && p > 0 ? p / pe : 0;
-  const gv = RATING_VAL[rating] ?? 0;
-  const capStr = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : `$${v}B`;
-  const dollar = Math.abs(c / 100 * p);
-  // Peers: other tickers in same sector
-  const sectorRow = Object.values(sectorByName).find(s => s.items.some(it => it[0] === sym));
-  const peers = sectorRow ? sectorRow.items.filter(it => it[0] !== sym).slice(0, 4) : [];
-  const trend = c >= 0 && rs >= 70
-    ? "Strong uptrend — group leader, momentum confirmed."
-    : rs < 40 ? "Downtrend — lagging the tape, below key moving averages."
-    : "Range-bound — no decisive trend yet.";
+
+  const name   = mv?.n      ?? scr?.n   ?? sym;
+  const sector = mv?.sector ?? scr?.sec ?? "—";
+  const p      = mv?.p   ?? 0;
+  const c      = mv?.c   ?? 0;
+  const rvol   = mv?.rvol ?? scr?.rvol ?? 1;
+  const rs     = mv?.rs  ?? scr?.rs  ?? 50;
+  const wk     = mv?.wk  ?? 0;
+  const cat    = mv?.cat ?? "";
+  const ma     = mv?.ma  ?? "";
+  const tech   = mv?.tech ?? "";
+  const news   = mv?.news ?? "";
+  const mc     = scr?.mc ?? 0;
+  const mcTxt  = mc >= 1000 ? `$${(mc / 1000).toFixed(2)}T` : mc > 0 ? `$${mc}B` : mv?.cap ?? "—";
+
+  // Build "why it moved" narrative (HTML string — data is internal, never user input)
+  let why = `<b>${name}</b> is trading <b class="${cls(c)}">${sign(c)}</b> today`;
+  why += cat && cat !== "No known catalyst"
+    ? ` on <b style="color:var(--text-hi)">${cat.toLowerCase()}</b>.`
+    : ` with no single company headline — it is moving with its sector and the broad tape.`;
+  why += ` Volume is running <b>${rvol.toFixed(1)}×</b> its normal pace`;
+  why += rvol >= 2 ? ` — well above average, which confirms real participation behind the move.` : `.`;
+  if (ma) why += ` Price is <b>${ma}</b> with a relative-strength rank of <b>${rs}/99</b>, so the underlying trend is ${c >= 0 ? "constructive" : "weak"}.`;
+  const sec = sectorByName[sector] ?? null;
+  if (sec) {
+    why += ` Its group, <b>${sector}</b>, is ${sec.chg >= 0 ? "up" : "down"} <b class="${cls(sec.chg)}">${sign(sec.chg)}</b> today (${(sec.trend || "Flat").toLowerCase()}) — `;
+    why += (sec.chg >= 0) === (c >= 0) ? "in line with sector strength." : "bucking its sector today.";
+  }
+
   return (
     <>
       <div className="scrim" onClick={onClose} />
       <div className="drawer open">
         <div className="drawer-h">
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3" }}>
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)" }}>
             {sym[0]}
           </div>
           <div style={{ flex: 1 }}>
-            <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>{sym}</div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
+              {sym}
+            </div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-              {scr?.n ?? sym} · {scr?.sec ?? "—"}
+              {name} · {sector}
             </div>
           </div>
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
+
         <div className="drawer-b">
-          {p > 0 && (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
-              <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>${fmt(p, 2)}</div>
-              <div className={cls(c)} style={{ fontWeight: 600 }}>
-                {arr(c)} {c >= 0 ? "+" : ""}{fmt(dollar)} ({sign(c)})
+          {/* Pills */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+            <span className={`pill ${c >= 0 ? "up" : "dn"}`}>{arr(c)} {sign(c)} today</span>
+            {cat && cat !== "No known catalyst"
+              ? <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{cat}</span>
+              : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No known catalyst</span>
+            }
+            {rvol >= 2 && <span className="pill amc">{rvol.toFixed(1)}× volume</span>}
+          </div>
+
+          {/* Why it moved */}
+          {mv && (
+            <div className="ai-block" style={{ marginBottom: 14 }}>
+              <div className="card-h">
+                <h3 className="ai-c">◆ Why it moved</h3>
+              </div>
+              <div className="card-b">
+                <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)", margin: 0 }}
+                   dangerouslySetInnerHTML={{ __html: why }} />
               </div>
             </div>
           )}
-          <div className="metric-grid" style={{ marginBottom: 14 }}>
-            <div className="m"><div className="k">Mkt cap</div><div className="v">{capStr(mc)}</div></div>
-            <div className="m"><div className="k">P/E</div><div className="v">{pe.toFixed(1)}</div></div>
-            <div className="m">
-              <div className="k">RS rank</div>
-              <div className={`v ${rs >= 70 ? "up" : rs < 40 ? "down" : ""}`}>{rs}/99</div>
-            </div>
+
+          {/* Grid 1: Today · Rel. volume · 5-day */}
+          <div className="metric-grid" style={{ marginBottom: 12 }}>
+            <div className="m"><div className="k">Today</div><div className={`v ${cls(c)}`}>{sign(c)}</div></div>
             <div className="m"><div className="k">Rel. volume</div><div className="v">{rvol.toFixed(1)}×</div></div>
-            <div className="m"><div className="k">EPS (TTM)</div><div className="v">{eps > 0 ? `$${eps.toFixed(2)}` : "—"}</div></div>
-            <div className="m">
-              <div className="k">Next ER</div>
-              <div className="v" style={{ fontSize: ".95rem" }}>{erEntry?.t ?? "—"}</div>
-            </div>
+            <div className="m"><div className="k">5-day</div><div className={`v ${cls(wk)}`}>{sign(wk)}</div></div>
           </div>
-          <div className="trgroup" style={{ borderColor: "var(--ai-dim)", margin: "0 0 14px" }}>
-            <div className="gl ai-c">Technical rating</div>
-            <TrGauge val={gv} label={rating} />
+
+          {/* Grid 2: Last price · RS rank · Market cap */}
+          <div className="metric-grid" style={{ marginBottom: 14 }}>
+            <div className="m"><div className="k">Last price</div><div className="v">${fmt(p)}</div></div>
+            <div className="m"><div className="k">RS rank</div><div className="v">{rs}</div></div>
+            <div className="m"><div className="k">Market cap</div><div className="v" style={{ fontSize: ".92rem" }}>{mcTxt}</div></div>
           </div>
-          <div className="note" style={{ marginBottom: 12 }}>
-            <b style={{ color: "var(--text-hi)" }}>AI read:</b> {trend}
-          </div>
-          {peers.length > 0 && (
-            <div className="card" style={{ marginBottom: 14 }}>
-              <div className="card-h"><h3>Peers</h3></div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {peers.map(([pt, , pc]) => (
-                  <div key={pt} className="minirow" style={{ cursor: "pointer" }}
-                    onClick={() => { onClose(); setTimeout(() => openStockFull(pt), 50); }}>
-                    <span className="tkr">{pt}</span>
-                    <span style={{ flex: 1 }} />
-                    <span className={`r ${cls(pc)}`}>{sign(pc)}</span>
-                  </div>
-                ))}
-              </div>
+
+          {/* Technical posture */}
+          {tech && (
+            <div className="ai-sec">
+              <div className="h">Technical posture</div>
+              <p>{tech}</p>
             </div>
           )}
-          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button className="btn primary" style={{ flex: 1 }} onClick={() => { onClose(); openStockFull(sym); }}>
-              Open full Stock Detail →
+
+          {/* News & catalyst */}
+          {news && (
+            <div className="ai-sec" style={{ marginTop: 10 }}>
+              <div className="h">News &amp; catalyst</div>
+              <p>{news}</p>
+            </div>
+          )}
+
+          {/* CTA buttons */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+            {sec && (
+              <button className="btn" style={{ width: "100%" }}
+                onClick={() => { onClose(); openSector(sector); }}>
+                View {sector} in heatmap →
+              </button>
+            )}
+            <button className="btn primary" style={{ width: "100%" }}
+              onClick={() => { onClose(); openStockFull(sym); }}>
+              Open full stock page →
             </button>
-            <button className="btn ai" onClick={() => { setCopilot(true); }}>Ask Copilot</button>
           </div>
         </div>
       </div>
@@ -456,7 +485,6 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
 
 // ---- Index drawer (openIndex) ----
 function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
-  const { openFund } = useIQActions();
   const x = pulse[idx];
   if (!x) return null;
   const dec = x.v > 1000 ? 0 : 2;
@@ -594,8 +622,8 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  function send() {
-    const txt = input.trim();
+  function send(overrideText?: string) {
+    const txt = (overrideText ?? input).trim();
     if (!txt) return;
     const reply = aiReplies[messages.length % aiReplies.length];
     setMessages(prev => [...prev, { role: "user", text: txt }, { role: "ai", text: reply }]);
@@ -603,11 +631,23 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
     setTimeout(() => { bodyRef.current?.scrollTo({ top: 9999, behavior: "smooth" }); }, 50);
   }
 
+  const SUGGESTS = [
+    "Explain today's biggest mover",
+    "How's my portfolio positioned?",
+    "What's driving rates today?",
+  ];
+
   return (
     <div className="copilot">
       <div className="copilot-head">
         <div className="copilot-icon">✦</div>
-        <div className="copilot-title">AI Copilot</div>
+        <div>
+          <div className="copilot-title">Market Copilot</div>
+          <div className="copilot-sub">
+            <span className="dot" style={{ background: "var(--up)", width: 6, height: 6, borderRadius: "50%", display: "inline-block" }} />
+            Connected to your portfolio · live data
+          </div>
+        </div>
         <button className="copilot-close" onClick={onClose}>✕</button>
       </div>
       <div className="copilot-body" ref={bodyRef}>
@@ -617,15 +657,26 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </div>
+      {messages.length === 1 && (
+        <div className="cop-suggest">
+          {SUGGESTS.map(s => (
+            <button key={s} onClick={() => send(s)}>{s}</button>
+          ))}
+        </div>
+      )}
       <div className="copilot-inp">
         <input
-          placeholder="Ask about markets, portfolio, earnings…"
+          placeholder="Ask about markets, earnings, your portfolio…"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") send(); }}
           autoFocus
         />
-        <button className="copilot-send" onClick={send}>↑</button>
+        <button className="copilot-send" onClick={() => send()}>
+          <svg viewBox="0 0 24 24" width="16" fill="none">
+            <path d="M4 12l16-8-6 16-2-6-8-2z" fill="#fff" />
+          </svg>
+        </button>
       </div>
     </div>
   );

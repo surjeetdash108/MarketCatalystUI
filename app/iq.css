@@ -742,32 +742,70 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
   display: flex; align-items: center; gap: 8px;
   padding: 11px 13px; border-bottom: 1px solid var(--border-soft);
 }
-.copilot-icon { width: 26px; height: 26px; border-radius: var(--r-sm); background: var(--ai-dim); display: grid; place-items: center; font-size: 13px; }
-.copilot-title { font-family: var(--f-display); font-size: 12.5px; font-weight: 700; color: var(--ai); }
+.copilot-icon { width: 26px; height: 26px; border-radius: var(--r-sm); background: linear-gradient(135deg, var(--brand), var(--ai)); display: grid; place-items: center; font-size: 13px; color: #fff; }
+.copilot-title { font-family: var(--f-display); font-size: .9rem; font-weight: 600; color: var(--text-hi); }
+.copilot-sub { font-size: .68rem; color: var(--text-dim-solid); display: flex; align-items: center; gap: 5px; margin-top: 1px; }
 .copilot-close { margin-left: auto; cursor: pointer; color: var(--text-dim-solid); font-size: 17px; line-height: 1; }
 .copilot-close:hover { color: var(--text-hi); }
-.copilot-body { padding: 13px; max-height: 320px; overflow-y: auto; }
-.copilot-msg { margin-bottom: 10px; }
-.copilot-msg.user .cm-text { background: var(--brand-dim); border: 1px solid var(--brand); margin-left: 28px; border-radius: var(--r) var(--r) 0 var(--r); }
-.copilot-msg.ai .cm-text { background: var(--ai-dim); border: 1px solid rgba(52,226,240,.3); margin-right: 28px; border-radius: 0 var(--r) var(--r) var(--r); }
-.cm-text { padding: 9px 11px; font-size: 12px; color: var(--text-hi); line-height: 1.6; }
+.copilot-body { padding: 16px; max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.copilot-msg { display: flex; flex-direction: column; }
+.copilot-msg.user { align-items: flex-end; }
+.copilot-msg.ai { align-items: flex-start; }
+.copilot-msg.user .cm-text { background: var(--brand); color: #fff; margin-left: 28px; border-radius: 13px 13px 3px 13px; }
+.copilot-msg.ai .cm-text { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); margin-right: 28px; border-radius: 13px 13px 13px 3px; }
+.cm-text { padding: 9px 13px; font-size: .85rem; line-height: 1.55; }
+.cm-text b { color: var(--text-hi); }
+.cop-cite { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
+.cop-suggest { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 12px; }
+.cop-suggest button { font-size: .72rem; color: var(--ai); background: var(--ai-dim); border: 1px solid var(--ai-dim); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-family: var(--f-body); }
+.cop-suggest button:hover { box-shadow: var(--glow-ai); }
 .copilot-inp {
-  display: flex; align-items: center; gap: 7px;
-  padding: 9px 13px; border-top: 1px solid var(--border-soft);
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px; border-top: 1px solid var(--border);
 }
 .copilot-inp input {
   flex: 1; background: var(--surface-2); border: 1px solid var(--border);
-  border-radius: var(--r-sm); padding: 6px 9px; font-size: 12px; color: var(--text-hi);
+  border-radius: 10px; padding: 10px 12px; font-size: .84rem; color: var(--text-hi);
   outline: none; font-family: var(--f-body);
 }
 .copilot-inp input::placeholder { color: var(--text-dim-solid); }
-.copilot-inp input:focus { border-color: var(--ai); }
+.copilot-inp input:focus { border-color: var(--brand); }
 .copilot-send {
-  width: 28px; height: 28px; border-radius: var(--r-sm);
-  background: var(--ai); display: grid; place-items: center;
-  color: #000; font-size: 13px; flex-shrink: 0;
+  width: 38px; height: 38px; border-radius: 10px;
+  background: var(--brand); display: grid; place-items: center;
+  color: #fff; font-size: 16px; flex-shrink: 0; cursor: pointer;
 }
-.copilot-send:hover { background: var(--ai-2); }
+.copilot-send:hover { filter: brightness(1.1); }
+
+/* dashboard hover popup */
+.dash-pop { position: fixed; z-index: 400; width: 300px; max-width: 92vw; background: #121a2b; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 22px 60px rgba(0,0,0,.6); padding: 12px 13px; cursor: pointer; }
+.dash-pop .dp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; padding-bottom: 9px; border-bottom: 1px solid var(--border); }
+.dp-sym { font-weight: 800; color: var(--text-hi); font-size: .92rem; }
+.dp-nm { font-size: .72rem; color: var(--text-dim-solid); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-tag { font-size: .56rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--brand-2); background: rgba(124,108,245,.16); padding: 3px 7px; border-radius: 6px; white-space: nowrap; }
+.dp-row { display: flex; justify-content: space-between; gap: 12px; font-size: .78rem; padding: 3px 0; }
+.dp-row > span { color: var(--text-dim-solid); }
+.dp-row b { color: var(--text); font-weight: 600; text-align: right; }
+.dp-note { margin-top: 8px; font-size: .74rem; line-height: 1.45; color: var(--text); background: var(--surface-3); border-radius: 8px; padding: 7px 9px; }
+.dp-foot { margin-top: 9px; font-size: .66rem; color: var(--brand-2); font-weight: 600; }
+.minirow:hover { background: rgba(124,108,245,.06); border-radius: 6px; }
+
+/* movers popup */
+.mv-sel { background: var(--surface-3); color: var(--text-hi); border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; font-size: .78rem; font-family: var(--f-body); cursor: pointer; }
+.mv-reason { position: relative; }
+.mvpop { position: absolute; z-index: 60; left: 0; top: calc(100% + 6px); width: 290px; background: #131a2a; border: 1px solid var(--border); border-radius: 11px; box-shadow: 0 18px 44px rgba(0,0,0,.55); padding: 11px; display: none; white-space: normal; text-align: left; font-size: .78rem; line-height: 1.5; color: var(--text); }
+.mv-reason:hover .mvpop { display: block; }
+.mvtabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.mvt { font-size: .62rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 4px 9px; border-radius: 6px; cursor: default; }
+.mvt-t { color: var(--brand-2); background: rgba(124,108,245,.18); }
+.mvt-n { color: var(--text-dim-solid); background: var(--surface-3); }
+.mvp { font-size: .76rem; line-height: 1.5; }
+.mvp-n { display: none; }
+.mvpop:has(.mvt-n:hover) .mvt-t { color: var(--text-dim-solid); background: var(--surface-3); }
+.mvpop:has(.mvt-n:hover) .mvt-n { color: var(--ai); background: rgba(52,226,240,.18); }
+.mvpop:has(.mvt-n:hover) .mvp-t { display: none; }
+.mvpop:has(.mvt-n:hover) .mvp-n { display: block; }
+.mv-i { font-size: .72rem; color: var(--text-dim-solid); cursor: help; }
 
 /* command palette */
 .palette-scrim {
@@ -998,6 +1036,17 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .tr-pill:hover { border-color: var(--brand); }
 .tr-tk { font-family: var(--f-mono); font-weight: 700; font-size: .78rem; color: var(--text-hi); }
 .tr-mt { font-size: .68rem; color: var(--text-dim-solid); }
+/* trending card */
+.tr-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: border-color .13s; }
+.tr-card:hover { border-color: var(--brand); }
+.tr-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2px; }
+.tr-nm { font-size: .72rem; color: var(--text-dim-solid); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-card .spark { width: 100%; }
+.tr-srcs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.tr-src { font-size: .6rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: .04em; white-space: nowrap; }
+.tr-src-m { background: rgba(124,108,245,.18); color: var(--brand-2); }
+.tr-src-a { background: rgba(52,226,240,.15); color: var(--ai); }
+.tr-src-e { background: rgba(47,230,166,.15); color: var(--up); }
 .preset-list { display: flex; flex-direction: column; gap: 5px; padding: 8px 13px 6px; border-bottom: 1px solid var(--border-soft); }
 .preset-btn {
   text-align: left; font-size: .78rem; color: var(--text);

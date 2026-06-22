@@ -56,7 +56,7 @@ function earnIncome(s: string, mcStr: string): IncRow[] {
   const price = si?.px ?? 100;
   const rev0  = Math.max(2, mc * 0.02);
   const sh    = Math.max(0.3, mc / price);
-  const cols  = ["Q2 25","Q1 25","Q4 24","Q3 24"];
+  const cols  = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
   return cols.map((c, i) => {
     const rev  = rev0 * (1 - i * 0.05);
     const cogs = rev * 0.55;
@@ -152,10 +152,10 @@ function EpsChart({ hist }: { hist: HistRow[] }) {
 
 function IncChart({ inc }: { inc: IncRow[] }) {
   const d = [...inc].reverse();
-  const W = 380, H = 200, PADL = 8, PADR = 8, PADT = 14, PADB = 26;
+  const W = 580, H = 200, PADL = 8, PADR = 8, PADT = 14, PADB = 26;
   const iw = W - PADL - PADR, ih = H - PADT - PADB;
   const max = Math.max(...d.map(x => x.rev)) * 1.12 || 1;
-  const n = d.length, gw = iw / n, bw = gw * 0.2;
+  const n = d.length, gw = iw / n, bw = gw * 0.18;
 
   type IncKey = "rev" | "gp" | "ni";
   const series: [IncKey, string][] = [
@@ -172,7 +172,7 @@ function IncChart({ inc }: { inc: IncRow[] }) {
     series.forEach(([key, color], si) => {
       const v = x[key];
       const h = v / max * ih;
-      const bx = gx + gw * 0.16 + si * (bw + 5);
+      const bx = gx + gw * 0.1 + si * (bw + 3);
       bars.push(
         <rect key={`${i}${si}`} x={bx} y={PADT + ih - h} width={bw} height={h} rx={2}
           style={{ fill: color }} />
@@ -421,14 +421,18 @@ export function EarningsScreen() {
 
       {/* ── Detail: EPS history + Income statement ─────────────────────── */}
       <div className="dash" style={{ marginTop: 16 }}>
-        {/* col-7: 10-quarter EPS history */}
-        <div className="col-7">
+        {/* col-6: 10-quarter EPS history */}
+        <div className="col-6">
           <div className="card">
             <div className="card-h">
               <h3>{sel} · 10-quarter earnings history</h3>
               {selEarning?.react != null
                 ? <span className={`pill ${selEarning.react >= 0 ? "up" : "dn"}`}>{sign(selEarning.react)} last reaction</span>
-                : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats}/10 beats</span>}
+                : beats >= 7
+                  ? <span className="pill up">{beats}/10 beats</span>
+                  : beats < 5
+                  ? <span className="pill dn">{beats}/10 beats</span>
+                  : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats}/10 beats</span>}
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               <div className="ec-legend">
@@ -469,8 +473,8 @@ export function EarningsScreen() {
           </div>
         </div>
 
-        {/* col-5: Income statement */}
-        <div className="col-5">
+        {/* col-6: Income statement */}
+        <div className="col-6">
           <div className="card">
             <div className="card-h">
               <h3>Income statement</h3>

@@ -11,7 +11,12 @@ export interface Earning {
   guide: string | null; react: number | null;
   tags: string[]; owned: boolean; implied: number;
 }
-export interface Mover { s: string; n: string; p: number; c: number; rvol: number; cat: string; ma: string; owned: boolean; }
+export interface Mover {
+  s: string; n: string; p: number; c: number; rvol: number; rs: number;
+  cat: string; ma: string; owned: boolean;
+  sector: string; cap: 'Mega' | 'Large' | 'Mid' | 'Small';
+  wk: number; tech: string; news: string;
+}
 export interface AnalystAction {
   s: string; n: string; firm: string;
   dir: 'up' | 'down' | 'init' | 'hold';
@@ -116,16 +121,14 @@ export const earnings: Earning[] = [
 
 // ---- Market Movers ----
 export const movers: Mover[] = [
-  { s: 'NVDA', n: 'Nvidia',     p: 1181.75, c:  8.23, rvol: 5.8, cat: 'Earnings beat',     ma: 'Above all MAs',  owned: true  },
-  { s: 'ZIM',  n: 'ZIM Int\'l', p:   18.42, c:  9.97, rvol: 4.2, cat: 'Earnings beat',     ma: 'Above all MAs',  owned: false },
-  { s: 'PLTR', n: 'Palantir',   p:   24.88, c:  6.18, rvol: 3.4, cat: 'Guidance raise',    ma: 'Above all MAs',  owned: true  },
-  { s: 'AVGO', n: 'Broadcom',   p: 1402.50, c:  2.97, rvol: 1.9, cat: 'Peer read-through', ma: 'Above all MAs',  owned: false },
-  { s: 'META', n: 'Meta',       p:  415.32, c:  3.20, rvol: 1.6, cat: 'Earnings beat',     ma: 'Above all MAs',  owned: true  },
-  { s: 'WBA',  n: 'Walgreens',  p:   15.30, c: -5.80, rvol: 2.7, cat: 'Earnings miss',     ma: 'Below 200-DMA',  owned: false },
-  { s: 'DELL', n: 'Dell',       p:  161.80, c: -3.45, rvol: 3.1, cat: 'Earnings miss',     ma: 'Below 50-DMA',   owned: false },
-  { s: 'TGT',  n: 'Target',     p:  141.20, c: -7.80, rvol: 2.8, cat: 'Miss + guide cut',  ma: 'Below all MAs',  owned: false },
-  { s: 'SMCI', n: 'Super Micro',p:  812.40, c:  5.60, rvol: 3.8, cat: 'AI server demand',  ma: 'Above all MAs',  owned: false },
-  { s: 'TSLA', n: 'Tesla',      p:  171.40, c:  3.45, rvol: 2.1, cat: 'UBS upgrade',       ma: 'Above 50-DMA',   owned: true  },
+  { s: 'NVDA', n: 'Nvidia',     p: 1181.75, c:  8.23, rvol: 5.8, rs: 96, cat: 'Earnings beat',      ma: 'Above 50/200', owned: true,  sector: 'Semis',    cap: 'Mega',  wk: 18.9, tech: 'Above 50/200 · RVOL 5.8× · RS 96/99. Buyers in control — momentum positive.', news: 'Earnings beat is driving today\'s move.' },
+  { s: 'ZIM',  n: 'ZIM Int\'l', p:   18.42, c:  9.97, rvol: 4.2, rs: 81, cat: 'Earnings beat',      ma: 'Above 50/200', owned: false, sector: 'Shipping', cap: 'Small', wk: 22.1, tech: 'Above 50/200 · RVOL 4.2× · RS 81/99. Buyers in control — momentum positive.', news: 'Earnings beat is driving today\'s move.' },
+  { s: 'PLTR', n: 'Palantir',   p:   24.88, c:  6.18, rvol: 3.4, rs: 88, cat: 'Guidance raise',     ma: 'Above 50/200', owned: false, sector: 'Software', cap: 'Large', wk: 14.2, tech: 'Above 50/200 · RVOL 3.4× · RS 88/99. Buyers in control — momentum positive.', news: 'Guidance raise is driving today\'s move.' },
+  { s: 'AVGO', n: 'Broadcom',   p: 1402.50, c:  2.97, rvol: 1.9, rs: 77, cat: 'Sympathy (semis)',   ma: 'Above 50/200', owned: false, sector: 'Semis',    cap: 'Mega',  wk:  7.4, tech: 'Above 50/200 · RVOL 1.9× · RS 77/99. Buyers in control — momentum positive.', news: 'Sympathy (semis) is driving today\'s move.' },
+  { s: 'CRM',  n: 'Salesforce', p:  316.50, c:  4.21, rvol: 2.6, rs: 73, cat: 'Analyst upgrade',    ma: 'Above 50/200', owned: false, sector: 'Software', cap: 'Large', wk:  9.6, tech: 'Above 50/200 · RVOL 2.6× · RS 73/99. Buyers in control — momentum positive.', news: 'Analyst upgrade is driving today\'s move.' },
+  { s: 'DELL', n: 'Dell',       p:  161.80, c: -3.45, rvol: 3.1, rs: 42, cat: 'Margin miss',        ma: 'Below 50/200', owned: false, sector: 'Hardware', cap: 'Large', wk: -6.1, tech: 'Below 50/200 · RVOL 3.1× · RS 42/99. Under distribution — momentum negative.', news: 'Margin miss is driving today\'s move.' },
+  { s: 'WBA',  n: 'Walgreens',  p:   15.30, c: -5.80, rvol: 2.7, rs: 18, cat: 'Guidance cut',       ma: 'Below 50/200', owned: false, sector: 'Retail',   cap: 'Mid',   wk:-11.3, tech: 'Below 50/200 · RVOL 2.7× · RS 18/99. Under distribution — momentum negative.', news: 'Guidance cut is driving today\'s move.' },
+  { s: 'INTC', n: 'Intel',      p:   30.12, c: -1.80, rvol: 1.4, rs: 24, cat: 'No known catalyst',  ma: 'Below 50/200', owned: false, sector: 'Semis',    cap: 'Large', wk: -4.2, tech: 'Below 50/200 · RVOL 1.4× · RS 24/99. Under distribution — momentum negative.', news: 'No company-specific headline — trading with its sector and the broad tape.' },
 ];
 
 // ---- Analyst Actions ----

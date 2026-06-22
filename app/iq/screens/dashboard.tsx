@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
@@ -32,7 +33,145 @@ const INSIDER_MINI = [
   { s: "TSLA", role: "10% owner",  dir: "sell", val: "22.4M" },
 ];
 
-const TABS = ["Today", "Premarket", "Live", "After Hours", "This Week", "My Portfolio"];
+// ---- Dash hover popup ----
+type PopBlock = "earnings" | "movers" | "analyst" | "watchlist" | "portfolio" | "insider" | "screener";
+
+interface PopState {
+  sym: string;
+  block: PopBlock;
+  right: number;
+  top: number;
+  left: number;
+}
+
+const BLOCK_LABEL: Record<PopBlock, string> = {
+  earnings:  "Earnings",
+  movers:    "Market Movers",
+  analyst:   "Analyst action",
+  watchlist: "Watchlist",
+  portfolio: "Portfolio",
+  insider:   "Insider / 13F",
+  screener:  "Screener",
+};
+
+const BLOCK_NAV: Record<PopBlock, string> = {
+  earnings:  "earnings page",
+  movers:    "movers page",
+  analyst:   "analyst page",
+  watchlist: "watchlist",
+  portfolio: "portfolio",
+  insider:   "insider feed",
+  screener:  "screener",
+};
+
+function DpRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="dp-row">
+      <span>{label}</span>
+      <b>{children}</b>
+    </div>
+  );
+}
+
+function DashPopContent({ sym, block }: { sym: string; block: PopBlock }) {
+  const mv  = movers.find(x => x.s === sym);
+  const er  = earnings.find(x => x.s === sym);
+  const an  = analyst.find(x => x.s === sym);
+  const w   = watch.find(x => x.s === sym);
+  const pf  = folio.find(x => x.s === sym);
+  const scr = screenerStocks.find(x => x.s === sym);
+  const ins = INSIDER_MINI.find(x => x.s === sym);
+  const name = mv?.n ?? er?.n ?? an?.n ?? w?.n ?? scr?.n ?? sym;
+
+  let body: React.ReactNode;
+
+  if (block === "earnings") {
+    if (er) {
+      body = <>
+        <DpRow label="When">{er.t === "BMO" ? "Before open" : er.t === "AMC" ? "After close" : er.t}</DpRow>
+        <DpRow label="EPS est → act">
+          ${er.epsE}{er.epsA != null && <> → ${er.epsA} <span className={er.epsA >= er.epsE ? "up" : "down"}>({er.epsA >= er.epsE ? "beat" : "miss"})</span></>}
+        </DpRow>
+        <DpRow label="Guidance">
+          <span className={er.guide === "Raised" ? "up" : er.guide === "Lowered" ? "down" : ""}>{er.guide ?? "—"}</span>
+        </DpRow>
+        {er.react != null
+          ? <DpRow label="Reaction"><span className={cls(er.react)}>{sign(er.react)}</span></DpRow>
+          : <DpRow label="Implied move">±{er.implied}%</DpRow>
+        }
+        <div className="dp-note">Why it&apos;s here: reporting {er.t === "BMO" ? "before the open" : "after the close"}{er.guide === "Raised" ? " — and raised guidance." : "."}</div>
+      </>;
+    } else {
+      body = <div className="dp-note">On this week&apos;s earnings calendar.</div>;
+    }
+  } else if (block === "movers" && mv) {
+    body = <>
+      <DpRow label="Today"><span className={cls(mv.c)}>{sign(mv.c)}</span></DpRow>
+      <DpRow label="Rel. volume">{mv.rvol.toFixed(1)}×</DpRow>
+      <DpRow label="Catalyst">{mv.cat}</DpRow>
+      <DpRow label="Technicals">{mv.ma} · RS {mv.rs}</DpRow>
+      <div className="dp-note">Why it&apos;s moving: {mv.cat === "No known catalyst" ? "trading with its sector and the broad tape" : mv.cat.toLowerCase()}, on {mv.rvol.toFixed(1)}× normal volume.</div>
+    </>;
+  } else if (block === "analyst" && an) {
+    body = <>
+      <DpRow label="Action">
+        <span className={an.dir === "up" ? "up" : an.dir === "down" ? "down" : ""}>{an.dir === "up" ? "Upgrade" : an.dir === "down" ? "Downgrade" : "Reiterate"} · {an.firm}</span>
+      </DpRow>
+      <DpRow label="Rating">{an.from} → {an.to}</DpRow>
+      <DpRow label="Price target">{an.ptF ? `$${an.ptF} → ` : ""}${an.ptT}</DpRow>
+      <DpRow label="Reaction"><span className={cls(an.react)}>{sign(an.react)}</span></DpRow>
+      <div className="dp-note">Why it&apos;s here: {an.firm} changed its call — {an.n30} firm(s) active in 30d.</div>
+    </>;
+  } else if (block === "watchlist" && w) {
+    body = <>
+      <DpRow label="Day"><span className={cls(w.c)}>{sign(w.c)}</span></DpRow>
+      <DpRow label="Next ER">{w.er}</DpRow>
+      <DpRow label="Analyst">{w.analyst ?? "—"}</DpRow>
+      <div className="dp-note">Why it&apos;s here: a name you&apos;re tracking{w.headline && w.headline !== "—" ? ` — ${w.headline}.` : "."}</div>
+    </>;
+  } else if (block === "portfolio" && pf) {
+    body = <>
+      <DpRow label="Day"><span className={cls(pf.c)}>{sign(pf.c)}</span></DpRow>
+      <DpRow label="Unrealized"><span className={cls(pf.gl)}>{pf.gl > 0 ? "+" : ""}{pf.gl.toFixed(1)}%</span></DpRow>
+      <DpRow label="Conviction">{pf.conv}</DpRow>
+      <div className="dp-note">Why it&apos;s here: {pf.evt !== "—" ? pf.evt : "a position in your book"}.</div>
+    </>;
+  } else if (block === "insider" && ins) {
+    const buy = ins.dir === "buy";
+    body = <>
+      <DpRow label="Activity"><span className={buy ? "up" : "down"}>{buy ? "Insider buying" : "Insider selling"}</span></DpRow>
+      <DpRow label="Insider">{ins.role}</DpRow>
+      <DpRow label="Value"><span className={buy ? "up" : "down"}>{buy ? "+" : "−"}${ins.val}</span></DpRow>
+      <div className="dp-note">Why it&apos;s here: notable {buy ? "buying" : "selling"} flagged in the feed.</div>
+    </>;
+  } else if (block === "screener" && scr) {
+    body = <>
+      <DpRow label="RS rank">{scr.rs}/99</DpRow>
+      <DpRow label="Sector">{scr.sec}</DpRow>
+      <DpRow label="Rating">{scr.rating}</DpRow>
+      <DpRow label="Rev growth"><span className={cls(scr.salesG)}>{sign(scr.salesG)}</span></DpRow>
+      <div className="dp-note">Why it&apos;s here: clears the leaders screen — high relative strength + growth.</div>
+    </>;
+  } else {
+    const c = mv?.c ?? (w ? w.c : 0);
+    body = <>
+      <DpRow label="Price">{mv ? `$${fmt(mv.p)}` : "—"}</DpRow>
+      <DpRow label="Today"><span className={cls(c)}>{sign(c)}</span></DpRow>
+      <DpRow label="Sector">{mv?.sector ?? scr?.sec ?? "—"}</DpRow>
+      <DpRow label="Rating">{scr?.rating ?? "—"}</DpRow>
+    </>;
+  }
+
+  return <>
+    <div className="dp-head">
+      <span className="dp-sym">{sym}</span>
+      <span className="dp-nm">{name}</span>
+      <span className="dp-tag">{BLOCK_LABEL[block]}</span>
+    </div>
+    <div>{body}</div>
+    <div className="dp-foot">Click to open {BLOCK_NAV[block]} →</div>
+  </>;
+}
 
 function analystDir(type: string) {
   if (type === "upgrade")    return <span className="up">▲ Upg</span>;
@@ -60,9 +199,30 @@ export function DashboardScreen() {
   const totalVal     = 128430;
   const totalGainPct = folio.reduce((s, f) => s + f.gl, 0) / folio.length;
 
-  // Screener leaders/laggards
   const leaders  = [...screenerStocks].sort((a, b) => b.rs - a.rs).slice(0, 3);
   const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);
+
+  // ---- Dash pop hover ----
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pop, setPop] = useState<PopState | null>(null);
+
+  const showPop = (e: React.MouseEvent<HTMLElement>, sym: string, block: PopBlock) => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    const r = e.currentTarget.getBoundingClientRect();
+    setPop({ sym, block, right: r.right, top: r.top, left: r.left });
+  };
+  const hidePop = () => {
+    hideTimerRef.current = setTimeout(() => setPop(null), 150);
+  };
+  const cancelHide = () => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+  };
+
+  // Minirow props factory
+  const mr = (sym: string, block: PopBlock) => ({
+    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => showPop(e, sym, block),
+    onMouseLeave: hidePop,
+  });
 
   function downloadRecap(which: string) {
     if (typeof window === "undefined") return;
@@ -82,11 +242,6 @@ export function DashboardScreen() {
           <h1 className="page-title">{greeting}, {firstName}</h1>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div className="tabs">
-            {TABS.map((t, i) => (
-              <button key={t} className={`tab${i === 0 ? " active" : ""}`}>{t}</button>
-            ))}
-          </div>
           <button className="chip ai-c" onClick={() => setCopilot(true)}>✦ AI Summary</button>
         </div>
       </div>
@@ -107,7 +262,7 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── 2. What Matters Now — full width ── */}
+        {/* ── 2. What Matters Now ── */}
         <div className="col-12">
           <div className="wmn">
             <div className="wmn-h">
@@ -165,7 +320,10 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {earnings.slice(0, 5).map(e => (
-                <div key={e.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openEarnings(e.s)}>
+                <div key={e.s} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openEarnings(e.s)}
+                  {...mr(e.s, "earnings")}
+                >
                   <span className="tkr">{e.s}<small>{e.n}</small></span>
                   <span className="mid">
                     <span className={`pill ${e.t === "BMO" ? "bmo" : "amc"}`}>{e.t}</span>
@@ -193,7 +351,10 @@ export function DashboardScreen() {
                 ▲ Top gainers
               </div>
               {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openStock(m.s)}
+                  {...mr(m.s, "movers")}
+                >
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
@@ -203,7 +364,10 @@ export function DashboardScreen() {
                 ▼ Top losers
               </div>
               {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openStock(m.s)}
+                  {...mr(m.s, "movers")}
+                >
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
@@ -232,7 +396,11 @@ export function DashboardScreen() {
                       style={{
                         cursor: "pointer", background: bg, borderRadius: 7,
                         padding: "8px 9px", flex: `${Math.max(1, sd.items.reduce((s, i) => s + i[1], 0) / 1400)} 1 70px`,
-                      }}>
+                        transition: "filter .13s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.filter = "brightness(1.15)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.filter = ""}
+                    >
                       <div style={{ fontSize: ".6rem", fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>{sd.name}</div>
                       <div className="mono" style={{ fontSize: ".64rem", color: "#ffffffd0" }}>{sign(sd.chg)}</div>
                     </div>
@@ -255,7 +423,10 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {analyst.slice(0, 5).map((a, i) => (
-                <div key={i} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(a.s)}>
+                <div key={i} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openStock(a.s)}
+                  {...mr(a.s, "analyst")}
+                >
                   <span className="tkr">{a.s}</span>
                   <span className="mid">{a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.to}</b></span>
                   <span className="r">{analystDir(a.dir)}</span>
@@ -277,7 +448,10 @@ export function DashboardScreen() {
                 ▲ Leaders
               </div>
               {leaders.map(s => (
-                <div key={s.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(s.s)}>
+                <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openStock(s.s)}
+                  {...mr(s.s, "screener")}
+                >
                   <span className="tkr">{s.s}</span>
                   <span className="mid">RS {s.rs} · {s.sec}</span>
                   <span className={`r ${cls(s.salesG)}`}>{sign(s.salesG)}</span>
@@ -287,7 +461,10 @@ export function DashboardScreen() {
                 ▼ Laggards
               </div>
               {laggards.map(s => (
-                <div key={s.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(s.s)}>
+                <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openStock(s.s)}
+                  {...mr(s.s, "screener")}
+                >
                   <span className="tkr">{s.s}</span>
                   <span className="mid">RS {s.rs} · {s.sec}</span>
                   <span className={`r ${cls(s.salesG)}`}>{sign(s.salesG)}</span>
@@ -310,9 +487,12 @@ export function DashboardScreen() {
                 <span className="mono up" style={{ fontWeight: 600 }}>▲ +1.42%</span>
               </div>
               {folio.slice(0, 4).map(f => {
-                const dayC = movers.find(m => m.s === f.s)?.c ?? 0;
+                const dayC = movers.find(m => m.s === f.s)?.c ?? f.c;
                 return (
-                  <div key={f.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(f.s)}>
+                  <div key={f.s} className="minirow" style={{ cursor: "pointer" }}
+                    onClick={() => openStock(f.s)}
+                    {...mr(f.s, "portfolio")}
+                  >
                     <span className="tkr">{f.s}</span>
                     <span className="mid">{f.size} · {f.conv} conv.</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
@@ -332,7 +512,10 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               {watch.slice(0, 5).map(w => (
-                <div key={w.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
+                <div key={w.s} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openStock(w.s)}
+                  {...mr(w.s, "watchlist")}
+                >
                   <span className="tkr">{w.s}<small>{w.n}</small></span>
                   <span className="mid">
                     {w.opt ? <span className="pill opt">⚡</span> : null}{" "}
@@ -354,7 +537,10 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {INSIDER_MINI.map(x => (
-                <div key={x.s + x.dir} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(x.s)}>
+                <div key={x.s + x.dir} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openStock(x.s)}
+                  {...mr(x.s, "insider")}
+                >
                   <span className="tkr">{x.s}</span>
                   <span className="mid">{x.dir === "buy" ? "Buy" : "Sell"} · {x.role.replace(/ \(.*\)/, "")}</span>
                   <span className={`r ${x.dir === "buy" ? "up" : "down"}`}>
@@ -474,6 +660,26 @@ export function DashboardScreen() {
         </div>
 
       </div>
+
+      {/* ── Dash hover popup ── */}
+      {pop && (
+        <div
+          className="dash-pop"
+          style={{
+            left: Math.min(pop.right + 12, (typeof window !== "undefined" ? window.innerWidth : 1400) - 320),
+            top:  Math.max(8, Math.min(pop.top, (typeof window !== "undefined" ? window.innerHeight : 900) - 280)),
+          }}
+          onMouseEnter={cancelHide}
+          onMouseLeave={hidePop}
+          onClick={() => {
+            setPop(null);
+            if (pop.block === "earnings") openEarnings(pop.sym);
+            else openStock(pop.sym);
+          }}
+        >
+          <DashPopContent sym={pop.sym} block={pop.block} />
+        </div>
+      )}
     </>
   );
 }
