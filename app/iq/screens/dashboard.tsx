@@ -202,6 +202,8 @@ export function DashboardScreen() {
   const leaders  = [...screenerStocks].sort((a, b) => b.rs - a.rs).slice(0, 3);
   const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);
 
+  const [mvTab, setMvTab] = useState<"win" | "lose">("win");
+
   // ---- Dash pop hover ----
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pop, setPop] = useState<PopState | null>(null);
@@ -344,35 +346,36 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Market Movers</h3>
-              <Link className="link" href="/menu/movers">View all →</Link>
+              <div className="tabs" style={{ gap: 4, marginLeft: 8 }}>
+                <button className={`tab${mvTab === "win" ? " on" : ""}`} onClick={() => setMvTab("win")}>▲ Winners</button>
+                <button className={`tab${mvTab === "lose" ? " on" : ""}`} onClick={() => setMvTab("lose")}>▼ Losers</button>
+              </div>
+              <Link className="link" href="/menu/movers" style={{ marginLeft: "auto" }}>View all →</Link>
             </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
-              <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
-                ▲ Top gainers
-              </div>
-              {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(m.s)}
-                  {...mr(m.s, "movers")}
-                >
-                  <span className="tkr">{m.s}</span>
-                  <span className="mid">{m.cat}</span>
-                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
-                </div>
-              ))}
-              <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px" }}>
-                ▼ Top losers
-              </div>
-              {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(m.s)}
-                  {...mr(m.s, "movers")}
-                >
-                  <span className="tkr">{m.s}</span>
-                  <span className="mid">{m.cat}</span>
-                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
-                </div>
-              ))}
+            <div className="card-b" style={{ paddingTop: 4, maxHeight: 380, overflowY: "auto" }}>
+              {movers
+                .filter(m => mvTab === "win" ? m.c > 0 : m.c < 0)
+                .sort((a, b) => mvTab === "win" ? b.c - a.c : a.c - b.c)
+                .slice(0, 15)
+                .map(m => (
+                  <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }}
+                    onClick={() => openStock(m.s)}
+                  >
+                    <span className="tkr">{m.s}<small>{m.n}</small></span>
+                    <span className="mid">
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)", fontSize: ".65rem" }}>{m.cat}</span>
+                    </span>
+                    <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                    <div className="mv-dp">
+                      <div className="mvtabs">
+                        <span className="mvt mvt-t">Technical</span>
+                        <span className="mvt mvt-n">News</span>
+                      </div>
+                      <div className="mvp mvp-t">{m.tech}</div>
+                      <div className="mvp mvp-n">{m.news}</div>
+                    </div>
+                  </div>
+                ))}
             </div>
           </div>
         </div>
