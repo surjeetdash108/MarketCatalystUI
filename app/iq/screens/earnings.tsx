@@ -10,15 +10,16 @@ import { cls, sign } from "../utils";
 interface HistRow { q: string; e: number; a: number; surp: number; mv: number; }
 interface IncRow  { c: string; rev: number; cogs: number; gp: number; opex: number; oi: number; ni: number; eps: number; }
 
-type TabKey = "yest" | "today" | "tom" | "week" | "next" | "prev" | "month";
+type TabKey = "yest" | "today" | "tom" | "week" | "next" | "prev" | "month" | "lmonth";
 const RANGES: [TabKey, string][] = [
-  ["yest",  "Yesterday"],
-  ["today", "Today"],
-  ["tom",   "Tomorrow"],
-  ["week",  "This Week"],
-  ["next",  "Next Week"],
-  ["prev",  "Last Week"],
-  ["month", "Month"],
+  ["lmonth", "Last Month"],
+  ["prev",   "Last Week"],
+  ["yest",   "Yesterday"],
+  ["today",  "Today"],
+  ["tom",    "Tomorrow"],
+  ["week",   "This Week"],
+  ["next",   "Next Week"],
+  ["month",  "Month"],
 ];
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -220,8 +221,9 @@ export function EarningsScreen() {
   const [monthOff, setMonthOff] = useState(0);
   const [earnDay, setEarnDay]   = useState<number | null>(null);
 
-  const isDay  = tab === "today" || tab === "tom" || tab === "yest";
-  const isWeek = tab === "week"  || tab === "next" || tab === "prev";
+  const isDay   = tab === "today" || tab === "tom" || tab === "yest";
+  const isWeek  = tab === "week"  || tab === "next" || tab === "prev";
+  const isLMon  = tab === "lmonth";
 
   // Assign each earning a weekday + session from its `t` field
   const enriched = earnings.map(e => ({ ...e, ...parseT(e.t) }));
@@ -255,6 +257,24 @@ export function EarningsScreen() {
               ? amc.map(e => <EcChip key={e.s} sym={e.s} selected={sel === e.s} onSelect={setSel} />)
               : <span className="ec-none">None</span>}
           </div>
+        </div>
+      </div>
+    );
+  } else if (isLMon) {
+    const md = monthCalData(-1);
+    const lmonthLabel = `${MONTHS[md.M]} ${md.Y}`;
+    calNode = (
+      <div className="card">
+        <div className="card-h">
+          <h3>Last Month · {lmonthLabel} · earnings recap</h3>
+          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+            tap a logo for history
+          </span>
+        </div>
+        <div className="card-b" style={{ paddingTop: 10, display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {enriched.map(e => (
+            <EcChip key={e.s} sym={e.s} selected={sel === e.s} onSelect={setSel} />
+          ))}
         </div>
       </div>
     );
@@ -526,7 +546,7 @@ export function EarningsScreen() {
         <div className="col-6">
           <div className="card">
             <div className="card-h">
-              <h3>Income statement</h3>
+              <h3>{sel} · Income statement</h3>
               <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
                 Quarterly
               </span>
