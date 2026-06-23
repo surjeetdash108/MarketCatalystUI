@@ -142,6 +142,7 @@ v1.3 | June 2026
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
 | T-088 | Build Commentary screen: Live/Premarket/After Hours/My names/Macro tabs, live feed with cat pill + dangerouslySetInnerHTML text + Why it matters annotation, Before Bell / After Close sidebar cards. | Frontend | 1.5d | P0 | FE Eng 2 | S-03 | **Done** | screens/commentary.tsx. CommentaryItem interface: cat/accent/time/text/why fields. |
+| T-116 | Implement Commentary tab filtering: (1) PREMARKET array (6 items: Futures, Macro, Earnings, Analyst, Overnight, Pre-open); (2) AFTERHOURS array (6 items: Earnings, AH moves, Macro close, AMC reporters); (3) Live tab shows all commentary; (4) My names tab filters commentary.text for portfolio+watchlist symbol HTML tags + renders tracked-names chip row; (5) Macro tab filters to Macro/Fed-Rates categories; (6) FeedItem extracted as shared component; (7) feedLabel dynamically sets title + badge per tab. | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | **Done** | screens/commentary.tsx. mySymbols = union of watch + folio tickers. Tab badge changes per active tab. "My names" card shows all tracked chips below the feed. |
 
 ---
 
@@ -166,6 +167,7 @@ v1.3 | June 2026
 | T-063 | Build Watchlist management UI: add/remove tickers, 5-name limit for Free (enforced), unlimited for Pro+, multiple watchlists, colored indicators across all boards | Frontend | 1d | P0 | FE Eng 2 | S-07 | Not Started | Watchlist chip component shown on every ticker row across the platform |
 | T-086 | Build Watchlist screen: filter tabs (All/Reporting this week/Options active/Movers today), table with ER/analyst/options/headline/spark columns. | Frontend | 1.5d | P0 | FE Eng 2 | S-07 | **Done** | screens/watchlist.tsx. WatchItem interface: s/n/px/c/er/analyst/opt/headline fields. |
 | T-111 | Extend Watchlist with AI alerts column + per-stock AI toggle: (1) import analyst from data; (2) add aiOn: Record<string, boolean> state (all true by default); (3) toggleAi(sym) flips aiOn[sym]; (4) alerts(sym) checks data.movers pct > 3% and data.analyst upgrades for that ticker; (5) add Alerts column (price move pill + analyst upgrade pill); (6) add AI column with chip toggle button per row. | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | screens/watchlist.tsx. Alerts computed from existing mock data. AI toggle is purely front-end state for now. |
+| T-115 | Rewrite Watchlist as Google Finance two-panel layout: left panel (280px, `.wl-left`, filter chips, `.wl-items` scrollable list with sparklines), right panel (`.wl-right`, breadcrumb, company header, price+day change block, chart area with `bigChartSVG()`+period selector+toolbar, tab bar Overview/Earnings/Analyst/Financials, metrics table `.wl-metrics-tbl`). Append `.wl-*` CSS to `app/iq.css`. | Frontend | 1.5d | P1 | FE Eng 1 | S-09 | **Done** | screens/watchlist.tsx + app/iq.css. bigChartSVG() generates 800×160 area chart SVG seeded from charCodeAt. Replaces old alert-column table layout. |
 
 ### Insider & Institutional — `/menu/insider`
 
@@ -193,6 +195,8 @@ v1.3 | June 2026
 | T-071 | Backend: Audio recap TTS pipeline — Claude generates 60-second script from EOD/weekly recap content, TTS converts to MP3, uploads to S3, notifies in-app player | Backend | 2d | P1 | Backend | S-14 | Not Started | Phase 2; reuse recap_generation BullMQ queue; add audio delivery channel to recap record |
 | T-075 | Build Social Sharing: recap card image generation (Canvas/Puppeteer), share-to-Twitter and share-to-LinkedIn buttons, branded card format with key stats | Frontend | 1.5d | P2 | FE Eng 2 | S-17 | Not Started | Phase 2; card includes: index performance, top mover, date, platform branding |
 | T-089 | Build Recap screen: recap-hero (WMN orb + headline + indices + stories/up-next), sector heatmap (.heat grid with inline background), movers + internals columns. | Frontend | 1.5d | P0 | FE Eng 1 | S-10 | **Done** | screens/recap.tsx. RecapData interface + heatColor() helper. PDF download buttons. |
+| T-117 | Implement Recap "This Week" tab: (1) static WEEKLY object (range, headline, 4 index returns, topStories[], sectorLeaders[], sectorLaggards[], biggestMoves[], nextWeek[]); (2) conditional render — activeTab===0 shows EOD block, activeTab===1 shows WEEKLY block; (3) weekly hero with indices + audio + PDF downloads; (4) top stories + next week (2-col), sector leaders/laggards/biggest moves (3-col), weekly sector heatmap. Dynamic page-title/sub in page-head. | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | **Done** | screens/recap.tsx. WEEKLY constant added above RecapScreen function. Both tabs share page-head + padding wrapper. |
+| T-118 | Add AI Pulse card to Portfolio screen: renders static PULSE string array as bullet-note list inside `.card` block (placed between AI Summary WMN block and Holdings table). Each note is a plain-English insight per holding. Disclaimer footer: AI-generated · informational only. | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | **Done** | screens/portfolio.tsx. PULSE array was already defined but unused. Now rendered in col-8 left column. |
 
 ### Macro & VIX — `/menu/macro`
 
@@ -290,11 +294,11 @@ v1.3 | June 2026
 | Analyst Actions | 2 | 0 | 2 | 4 |
 | Screener | 1 | 0 | 0 | 1 |
 | IPOs | 1 | 0 | 0 | 1 |
-| Commentary | 1 | 0 | 0 | 1 |
-| Portfolio Pulse | 2 | 0 | 3 | 5 |
-| Watchlist | 2 | 0 | 3 | 5 |
+| Commentary | 2 | 0 | 0 | 2 |
+| Portfolio Pulse | 3 | 0 | 2 | 5 |
+| Watchlist | 3 | 0 | 2 | 5 |
 | Insider & Inst. | 2 | 0 | 5 | 7 |
-| Recaps | 1 | 0 | 5 | 6 |
+| Recaps | 3 | 0 | 3 | 6 |
 | Macro & VIX | 2 | 0 | 2 | 4 |
 | Stock Detail | 4 | 0 | 4 | 8 |
 | Shell & Design | 4 | 0 | 0 | 4 |
@@ -305,4 +309,4 @@ v1.3 | June 2026
 | Learn 60s | 0 | 0 | 1 | 1 |
 | Industry Alerts | 0 | 0 | 1 | 1 |
 | Mobile | 0 | 0 | 1 | 1 |
-| **TOTAL** | **38** | **0** | **73** | **111** |
+| **TOTAL** | **44** | **0** | **70** | **114** |

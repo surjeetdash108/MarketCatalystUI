@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useIQActions } from "../shell";
-import { movers, analyst, earnings } from "../data";
-import { fmt, sign, cls, arr, Spark } from "../utils";
+import { movers, analyst, earnings, watch, folio } from "../data";
+import { fmt, sign, cls, arr, Spark, StockLogo } from "../utils";
 
 const TABS = [
   ["win",  "Top Gainers"],
@@ -23,6 +23,8 @@ function computeTrending() {
   movers.forEach(m  => add(m.s, "Movers"));
   analyst.forEach(a => add(a.s, "Analyst"));
   earnings.forEach(e => add(e.s, "Earnings"));
+  watch.forEach(w   => add(w.s, "Watchlist"));
+  folio.forEach(f   => add(f.s, "Portfolio"));
   return Object.entries(srcs)
     .map(([s, set]) => ({ s, n: set.size, srcs: [...set], days: 2 + (s.charCodeAt(0) % 4) }))
     .filter(o => o.n >= 2)
@@ -88,30 +90,17 @@ export function MoversScreen() {
               {trending.length} names · in 2+ of today&apos;s reports
             </span>
           </div>
-          <div className="card-b" style={{ paddingTop: 8, display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
+          <div className="card-b" style={{ paddingTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
             {trending.map(o => {
-              const mv = movers.find(m  => m.s === o.s);
-              const an = analyst.find(a  => a.s === o.s);
-              const er = earnings.find(e => e.s === o.s);
-              const name   = mv?.n ?? an?.n ?? er?.n ?? "—";
-              const change = mv?.c ?? an?.react ?? er?.react ?? null;
+              const mv = movers.find(m => m.s === o.s);
+              const isUp = (mv?.c ?? 0) >= 0;
               return (
-                <div key={o.s} className="tr-card" onClick={() => openStock(o.s)}>
-                  <div className="tr-card-top">
-                    <span className="tr-tk">{o.s}</span>
-                    {change !== null && (
-                      <span className={`pill ${change >= 0 ? "up" : "dn"}`} style={{ fontSize: ".68rem" }}>{sign(change)}</span>
-                    )}
-                  </div>
-                  <div className="tr-nm">{name}</div>
-                  <Spark seed={o.s.charCodeAt(0)} up={change !== null ? change >= 0 : true} />
-                  <div className="tr-mt" style={{ marginTop: 6 }}>{o.n} reports · {o.days}d</div>
-                  <div className="tr-srcs">
-                    {o.srcs.map(src => (
-                      <span key={src} className={`tr-src tr-src-${src[0].toLowerCase()}`}>{src}</span>
-                    ))}
-                  </div>
-                </div>
+                <button key={o.s} className="tr-pill" onClick={() => openStock(o.s)}>
+                  <StockLogo sym={o.s} size={18} />
+                  <span className="tr-tk">{o.s}</span>
+                  <span className="tr-mt">{o.n} reports · {o.days}d</span>
+                  <Spark seed={o.s.charCodeAt(0)} up={isUp} w={52} h={16} />
+                </button>
               );
             })}
           </div>
@@ -166,12 +155,15 @@ export function MoversScreen() {
               return (
                 <tr key={m.s} className={m.owned ? "owned" : ""} onClick={() => openStock(m.s)} style={{ cursor: "pointer" }}>
                   <td>
-                    <div className="co">
-                      <span className="s">
-                        {m.owned && <span className="own-dot" />}
-                        {m.s}
-                      </span>
-                      <span className="n">{m.n}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <StockLogo sym={m.s} size={26} />
+                      <div className="co">
+                        <span className="s">
+                          {m.owned && <span className="own-dot" />}
+                          {m.s}
+                        </span>
+                        <span className="n">{m.n}</span>
+                      </div>
                     </div>
                   </td>
                   <td className="num">${fmt(m.p)}</td>

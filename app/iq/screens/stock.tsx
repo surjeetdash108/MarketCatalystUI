@@ -92,6 +92,58 @@ const ac = (a: string) => a === "Buy" ? "var(--up)" : a === "Sell" ? "var(--down
 const SYMBOLS = [...Object.keys(stockInfo), ...watch.map(w => w.s), ...folio.map(f => f.s)]
   .filter((v, i, a) => a.indexOf(v) === i);
 
+type IncRow = { c: string; rev: number; gp: number; ni: number };
+
+function earnIncome(mc: number, mg: number): IncRow[] {
+  const rev0 = Math.max(2, mc * 0.02);
+  const cols = ["Q2 25", "Q1 25", "Q4 24", "Q3 24"];
+  return cols.map((c, i) => {
+    const rev = rev0 * (1 - i * 0.05);
+    const gp = rev * (mg / 100 + 0.1);
+    const ni = Math.max(0.01, gp * 0.82 - rev * 0.22);
+    return { c, rev, gp, ni };
+  });
+}
+
+function EarnIncChart({ inc }: { inc: IncRow[] }) {
+  const d = [...inc].reverse();
+  const W = 380, H = 200, PADL = 8, PADR = 8, PADT = 14, PADB = 26;
+  const iw = W - PADL - PADR, ih = H - PADT - PADB;
+  const max = Math.max(...d.map(x => x.rev)) * 1.12 || 1;
+  const gw = iw / d.length, bw = gw * 0.2;
+  const series: Array<{ key: "rev" | "gp" | "ni"; color: string }> = [
+    { key: "rev", color: "var(--brand)" },
+    { key: "gp",  color: "var(--ai)" },
+    { key: "ni",  color: "var(--up)" },
+  ];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: W, display: "block" }}>
+      {d.map((x, i) => {
+        const gx = PADL + gw * i;
+        return (
+          <g key={x.c}>
+            {series.map((se, si) => {
+              const v = x[se.key];
+              const h = Math.max(2, v / max * ih);
+              const bx = gx + gw * 0.16 + si * (bw + 5);
+              return (
+                <rect key={se.key}
+                  x={bx.toFixed(1)} y={(PADT + ih - h).toFixed(1)}
+                  width={bw.toFixed(1)} height={h.toFixed(1)} rx="2"
+                  style={{ fill: se.color }} />
+              );
+            })}
+            <text x={(gx + gw / 2).toFixed(1)} y={H - 8} textAnchor="middle"
+              style={{ fill: "var(--text-dim-solid)", fontSize: "9px" }}>
+              {x.c}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 export function StockScreen() {
   const { openEarnings, openStock } = useIQActions();
   const [sym, setSym] = useState(() => {
@@ -101,9 +153,11 @@ export function StockScreen() {
   const [search, setSearch] = useState("");
   const [tfActive, setTfActive] = useState("1M");
   const [toneActive, setToneActive] = useState("Swing");
-  const [showMA, setShowMA] = useState(true);
   const [showVol, setShowVol] = useState(true);
   const [showRsi, setShowRsi] = useState(false);
+  const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
+  const [maStep, setMaStep] = useState(0);
+  const [emaStep, setEmaStep] = useState(0);
 
   // ── Notes (Firebase stock_comments) ──────────────────────────────────────
   const [notes, setNotes]       = useState<StockNote[]>([]);
@@ -317,6 +371,13 @@ export function StockScreen() {
             </button>
           </div>
         </div>
+
+        {!info && (
+          <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "10px 14px", marginBottom: 14, fontSize: ".8rem", color: "var(--text-dim-solid)", display: "flex", alignItems: "center", gap: 8 }}>
+            <span>ℹ</span>
+            <span><b style={{ color: "var(--text-hi)" }}>{sym}</b> is outside our curated coverage set — AI analysis, earnings and insider data may be limited.</span>
+          </div>
+        )}
       </div>
 
       <div className="sd-grid">
@@ -330,8 +391,27 @@ export function StockScreen() {
                 <button key={r} className={`rng tfbtn${tfActive === r ? " on" : ""}`} onClick={() => setTfActive(r)}>{r}</button>
               ))}
               <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
-              <button className="rng indbtn on">Candles</button>
-              <button className={`rng indbtn${showMA ? " on" : ""}`} onClick={() => setShowMA(v => !v)}>MA 20/50</button>
+              {(["Candles", "Hollow", "Bars", "Line", "Area"] as const).map(ct => (
+                <button key={ct} className={`rng ctype-btn${chartType === ct ? " on" : ""}`}
+                  onClick={() => setChartType(ct)}>{ct}</button>
+              ))}
+              <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+              <button className={`rng indbtn${maStep > 0 ? " on" : ""}`}
+                onClick={() => setMaStep(s => (s + 1) % 5)}>
+                MA {[9,21,50,200].map((p, i) => (
+                  <span key={p} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>
+                    {i > 0 ? '/' : ''}{p}
+                  </span>
+                ))}
+              </button>
+              <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`}
+                onClick={() => setEmaStep(s => (s + 1) % 5)}>
+                EMA {[9,21,50,200].map((p, i) => (
+                  <span key={p} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>
+                    {i > 0 ? '/' : ''}{p}
+                  </span>
+                ))}
+              </button>
               <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
               <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
               <div style={{ flex: 1 }} />
@@ -339,7 +419,9 @@ export function StockScreen() {
             </div>
             <div id="chartHost" style={{ padding: "0 14px 0" }} ref={chartRef}
               onContextMenu={handleChartRightClick}>
-              <CandleChart sym={sym} tf={tfActive} px={p} showMA={showMA} showVol={showVol} />
+              <CandleChart sym={sym} tf={tfActive} px={p}
+                maStep={maStep} emaStep={emaStep}
+                showVol={showVol} chartType={chartType.toLowerCase()} />
             </div>
             {showRsi && (
               <div id="rsiHost">
@@ -357,38 +439,35 @@ export function StockScreen() {
                 {isUp ? "cup-with-handle breakout" : "breakdown below support"}
               </b> {isUp ? "on above-average volume." : "on rising volume."}
             </div>
-          </div>
 
-          {/* Notes */}
-          <div className="card">
-            <div className="card-h">
-              <h3>Chart notes</h3>
-              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>right-click chart to add · saved to your account</span>
-              <button className="chip ai-c" style={{ marginLeft: "auto", fontSize: ".7rem" }}
-                onClick={() => setNoteOpen(true)}>+ Add note</button>
-            </div>
-            {notes.length === 0 ? (
-              <div className="card-b" style={{ color: "var(--text-dim-solid)", fontSize: ".82rem" }}>
-                No notes yet. Right-click the chart or click &ldquo;Add note&rdquo; to record a trade decision.
+            {/* Chart notes — inline inside chart card */}
+            <div className="cn-wrap">
+              <div className="cn-h">
+                Chart notes
+                <span className="cn-hint">right-click to add · saved to your account</span>
+                <button className="chip ai-c" style={{ marginLeft: "auto", fontSize: ".7rem" }}
+                  onClick={() => setNoteOpen(true)}>+ Add note</button>
               </div>
-            ) : (
-              <div className="card-b" style={{ paddingTop: 4 }}>
-                {notes.map(n => (
-                  <div key={n.id} style={{ padding: "9px 0", borderBottom: "1px solid var(--border-soft)", display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid)", marginBottom: 3 }}>
-                        {n.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              {notes.length === 0 ? (
+                <div className="cn-empty">No notes yet. Right-click the chart or click &ldquo;Add note&rdquo; to record a trade decision.</div>
+              ) : (
+                notes.map(n => (
+                  <div key={n.id} className="cn-row">
+                    <div className="cn-dot" />
+                    <div className="cn-tx">
+                      {n.comment}
+                      <span className="cn-ts">
+                        {" · "}
+                        {n.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         {" "}
                         {n.createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                      </div>
-                      <div style={{ fontSize: ".85rem", color: "var(--text)", lineHeight: 1.5 }}>{n.comment}</div>
+                      </span>
                     </div>
-                    <button style={{ background: "none", border: "none", color: "var(--text-dim-solid)", cursor: "pointer", fontSize: ".8rem", flexShrink: 0 }}
-                      onClick={() => removeNote(n.id)}>✕</button>
+                    <button className="icon-x" onClick={() => removeNote(n.id)}>✕</button>
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </div>
 
           {/* Keystats */}
@@ -442,38 +521,43 @@ export function StockScreen() {
             </div>
           </div>
 
-          {/* Financials with bar charts */}
-          <div className="card">
-            <div className="card-h">
-              <h3>Financials</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div className="tf-pills">
-                  <button className="rng">Quarterly</button>
-                  <button className="rng on">Annual</button>
-                </div>
-                <span className="link" onClick={() => openEarnings(sym)}>View all →</span>
-              </div>
-            </div>
-            <div className="card-b">
-              {finRows.map(fr => {
-                const mx2 = Math.max(...fr[1].map(Math.abs)) || 1;
-                return (
-                  <div key={fr[0]} className="fin-row-bar">
-                    <span className="k">{fr[0]}</span>
-                    <div className="fin-bars">
-                      {fr[1].map((v, i) => (
-                        <i key={i} style={{ height: Math.max(8, Math.abs(v) / mx2 * 100) + "%", background: fr[3] }} />
-                      ))}
+          {/* Financials — grouped bar chart */}
+          {(() => {
+            const inc = earnIncome(mc, mg);
+            const capFmt = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : v >= 10 ? `$${Math.round(v)}B` : `$${v.toFixed(1)}B`;
+            return (
+              <div className="card">
+                <div className="card-h">
+                  <h3>Financials</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div className="tf-pills">
+                      <button className="rng on">Quarterly</button>
+                      <button className="rng">Annual</button>
                     </div>
-                    <span className="v">{fr[2]}</span>
+                    <span className="link" onClick={() => openEarnings(sym)}>View all →</span>
                   </div>
-                );
-              })}
-              <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                FY21 → FY24 trend · derived from market cap, P/E and margin. Source: company filings.
+                </div>
+                <div className="card-b">
+                  <EarnIncChart inc={inc} />
+                  <div className="ec-legend">
+                    <span><i style={{ background: "var(--brand)" }} />Revenue</span>
+                    <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
+                    <span><i style={{ background: "var(--up)" }} />Net income</span>
+                  </div>
+                  <details className="ec-det">
+                    <summary>Quarterly detail</summary>
+                    {inc.map(q => (
+                      <div key={q.c} className="minirow">
+                        <span className="tkr" style={{ width: 55 }}>{q.c}</span>
+                        <span className="mid">Rev <b>{capFmt(q.rev)}</b></span>
+                        <span className="r up">NI {capFmt(q.ni)}</span>
+                      </div>
+                    ))}
+                  </details>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {/* RIGHT COLUMN */}
@@ -613,46 +697,71 @@ export function StockScreen() {
             </div>
           </div>
 
-          {/* Insider & institutional  +  Key levels — side by side */}
-          <div style={{ display: "flex", gap: 14 }}>
-            <div className="card" style={{ flex: 1 }}>
-              <div className="card-h">
-                <h3>Insider &amp; institutional</h3>
-                <span className="link">View all →</span>
-              </div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {([
-                  ["Insider sells (90d)", `$${nf(mc * 0.012)}M`,                                               "down"],
-                  ["Insider buys (90d)",  rating.includes("Sell") ? "$0" : `$${nf(mc * 0.004)}M`,             rating.includes("Sell") ? "dim" : "up"],
-                  ["Inst. ownership",     io + "%",                                                             "up"],
-                  ["Short interest",      si + "%",                                                             si > 10 ? "down" : "dim"],
-                  ["13F funds holding",   fundsHolding + " tracked",                                           "dim"],
-                ] as [string, string, string][]).map(x => (
-                  <div key={x[0]} className="minirow">
-                    <span className="mid">{x[0]}</span>
-                    <span className={`r ${x[2] === "dim" ? "" : x[2]}`}
-                      style={x[2] === "dim" ? { color: "var(--text-hi)" } : {}}>{x[1]}</span>
-                  </div>
-                ))}
-              </div>
+          {/* Insider & institutional */}
+          <div className="card">
+            <div className="card-h">
+              <h3>Insider &amp; institutional</h3>
+              <span className="link">View all →</span>
             </div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                Recent insider transactions
+              </div>
+              {data.ins.length > 0 ? (
+                data.ins.map((n, idx) => {
+                  const isSell = /sale|sold|exercis/i.test(n.a);
+                  const valEst = (Math.abs(data.c) * 0.0015 * mc + 0.5).toFixed(1);
+                  return (
+                    <div key={idx} className="minirow" style={{ cursor: "pointer", alignItems: "flex-start", gap: 10 }}>
+                      <span className="tkr" style={{ flex: "none" }}>{sym}</span>
+                      <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
+                        {n.n} {n.a} <span style={{ color: "var(--text-dim-solid)" }}>({n.dt})</span>
+                      </span>
+                      <span className={`r ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
+                        {isSell ? "−" : "+"}${valEst}M
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "4px 0 8px" }}>
+                  No recent Form 4 activity.
+                </div>
+              )}
+              <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
+              <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                Institutional
+              </div>
+              {([
+                ["Inst. ownership",   io + "%",                 "up"],
+                ["Short interest",    si + "%",                 si > 10 ? "down" : "dim"],
+                ["13F funds holding", fundsHolding + " tracked","dim"],
+              ] as [string, string, string][]).map(x => (
+                <div key={x[0]} className="minirow">
+                  <span className="mid">{x[0]}</span>
+                  <span className={`r ${x[2] === "dim" ? "" : x[2]}`}
+                    style={x[2] === "dim" ? { color: "var(--text-hi)" } : {}}>{x[1]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-            <div className="card" style={{ flex: 1 }}>
-              <div className="card-h">
-                <h3>Key levels (pivots)</h3>
-                <span className="link">View all →</span>
-              </div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {([["R2", R2, "down"], ["R1", R1, "down"], ["Pivot", p, "dim"], ["S1", S1, "up"], ["S2", S2, "up"]] as [string, number, string][]).map(x => (
-                  <div key={x[0]} className="minirow">
-                    <span className="tkr" style={{ width: 50 }}>{x[0]}</span>
-                    <span className="mid" />
-                    <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
-                      ${nf(x[1])}
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {/* Key levels */}
+          <div className="card">
+            <div className="card-h">
+              <h3>Key levels (pivots)</h3>
+              <span className="link">View all →</span>
+            </div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              {([["R2", R2, "down"], ["R1", R1, "down"], ["Pivot", p, "dim"], ["S1", S1, "up"], ["S2", S2, "up"]] as [string, number, string][]).map(x => (
+                <div key={x[0]} className="minirow">
+                  <span className="tkr" style={{ width: 50 }}>{x[0]}</span>
+                  <span className="mid" />
+                  <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
+                    ${nf(x[1])}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 

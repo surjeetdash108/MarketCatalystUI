@@ -25,7 +25,7 @@ export function arr(n: number): string {
 // ---- Sparkline SVG (deterministic from seed) ----
 function _hash3(s: number): number { return s * s * s % 7; }
 
-export function sparkSVG(seed: number, up: boolean): string {
+export function sparkSVG(seed: number, up: boolean, w = 80, h = 26): string {
   let p = 50;
   const pts = Array.from({ length: 20 }, (_, i) => {
     p = Math.min(90, Math.max(10, p + (_hash3(seed * (i + 3)) % 11) - 5));
@@ -33,13 +33,12 @@ export function sparkSVG(seed: number, up: boolean): string {
   });
   if (up) pts[pts.length - 1] = Math.max(pts[pts.length - 2], pts[pts.length - 1]);
   else pts[pts.length - 1] = Math.min(pts[pts.length - 2], pts[pts.length - 1]);
-  const w = 80, h = 26;
   const xs = (i: number) => (i / (pts.length - 1)) * w;
   const ys = (v: number) => (1 - v / 100) * h;
   const d = 'M' + pts.map((v, i) => `${xs(i).toFixed(1)},${ys(v).toFixed(1)}`).join('L');
   const fill = `${d}L${w},${h}L0,${h}Z`;
   const color = up ? '#2FE6A6' : '#FF5470';
-  const id = `sg${seed}`;
+  const id = `sg${seed}w${w}`;
   return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px">
     <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${color}" stop-opacity=".3"/>
@@ -50,12 +49,29 @@ export function sparkSVG(seed: number, up: boolean): string {
   </svg>`;
 }
 
-export function Spark({ seed, up }: { seed: number; up: boolean }) {
+export function Spark({ seed, up, w = 80, h = 26 }: { seed: number; up: boolean; w?: number; h?: number }) {
   return (
     <div
       className="spark"
-      dangerouslySetInnerHTML={{ __html: sparkSVG(seed, up) }}
+      dangerouslySetInnerHTML={{ __html: sparkSVG(seed, up, w, h) }}
     />
+  );
+}
+
+// ---- Stock logo avatar (letter + color derived from ticker) ----
+const _LP = ['#6366f1','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f59e0b','#ef4444','#22c55e','#0ea5e9','#f97316'];
+export function StockLogo({ sym, size = 22 }: { sym: string; size?: number }) {
+  const idx = sym.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % _LP.length;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: size, height: size, borderRadius: Math.round(size * 0.3),
+      background: _LP[idx], color: '#fff',
+      fontSize: Math.round(size * 0.44), fontWeight: 800,
+      fontFamily: 'var(--f-display)', flexShrink: 0, lineHeight: 1,
+    }}>
+      {sym[0]}
+    </span>
   );
 }
 
@@ -162,6 +178,26 @@ function _sma(data: OHLCBar[], p: number): (number | null)[] {
   });
 }
 
+function _ema(data: OHLCBar[], p: number): (number | null)[] {
+  const k = 2 / (p + 1);
+  let prev: number | null = null;
+  return data.map((d, i) => {
+    if (prev === null) {
+      if (i < p - 1) return null;
+      let sum = 0;
+      for (let j = 0; j < p; j++) sum += data[j].c;
+      prev = sum / p;
+      return prev;
+    }
+    prev = d.c * k + prev * (1 - k);
+    return prev;
+  });
+}
+
+const MA_PERS = [9, 21, 50, 200];
+const MA_COLS = ['#f5b14c', '#34E2F0', '#7C6CF5', '#ff79c6'];
+const EMA_COLS = ['#5ff0b3', '#22b8d6', '#a78bfa', '#ff9aab'];
+
 function genOHLC(sym: string, tf: string, px: number): OHLCBar[] {
   const C: Record<string, [number, number]> = {
     "1D": [78, 0.5], "1W": [65, 0.9], "1M": [44, 1.5],
@@ -188,8 +224,12 @@ function genOHLC(sym: string, tf: string, px: number): OHLCBar[] {
 }
 
 export function CandleChart({
-  sym, tf, px, showMA = true, showVol = true,
-}: { sym: string; tf: string; px: number; showMA?: boolean; showVol?: boolean }) {
+  sym, tf, px, maStep = 0, emaStep = 0, showVol = true, chartType = "candles",
+}: {
+  sym: string; tf: string; px: number;
+  maStep?: number; emaStep?: number;
+  showVol?: boolean; chartType?: string;
+}) {
   const [tip, setTip] = useState<{ html: string; left: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -201,9 +241,19 @@ export function CandleChart({
   const cw = plotW / n;
   const X = (i: number) => 6 + i * cw + cw / 2;
   const mn = Math.min(...data.map(x => x.l)), mx2 = Math.max(...data.map(x => x.h)), rng = (mx2 - mn) || 1;
-  const Y = (p: number) => PADT + PH * (1 - (p - mn) / rng);
+  const Y = (v: number) => PADT + PH * (1 - (v - mn) / rng);
   const vmax = Math.max(...data.map(x => x.v)) || 1;
   const VY0 = PADT + PH + GAP, VYb = VY0 + VH;
+
+  const buildPath = (vals: (number | null)[]): string => {
+    let d = '', started = false;
+    vals.forEach((v, i) => {
+      if (v == null) return;
+      d += (started ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1) + ' ';
+      started = true;
+    });
+    return d;
+  };
 
   const gridLines = Array.from({ length: 5 }, (_, g) => {
     const yy = PADT + PH * g / 4;
@@ -211,12 +261,15 @@ export function CandleChart({
     return { yy, val };
   });
 
-  const m20 = showMA ? _sma(data, 20) : [];
-  const m50 = showMA ? _sma(data, 50) : [];
-  const ma20Path = showMA ? m20.map((v, i) => v == null ? "" : `${m20.slice(0, i).every(x => x == null) ? "M" : "L"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).filter(Boolean).join(" ") : "";
-  const ma50Path = showMA ? m50.map((v, i) => v == null ? "" : `${m50.slice(0, i).every(x => x == null) ? "M" : "L"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).filter(Boolean).join(" ") : "";
-
   const erIdx = Math.round(n * 0.82);
+  const ct = chartType.toLowerCase();
+  const trendUp = data[n - 1].c >= data[0].c;
+  const lineColor = trendUp ? 'var(--up)' : 'var(--down)';
+  const linePts = data.map((d, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(d.c).toFixed(1)}`).join(' ');
+  const areaFill = linePts + ` L${X(n - 1).toFixed(1)} ${(PADT + PH).toFixed(1)} L${X(0).toFixed(1)} ${(PADT + PH).toFixed(1)} Z`;
+
+  const maPaths = MA_PERS.slice(0, maStep).map(p => buildPath(_sma(data, p)));
+  const emaPaths = MA_PERS.slice(0, emaStep).map(p => buildPath(_ema(data, p)));
 
   const handleMove = useCallback((e: React.MouseEvent<SVGRectElement>) => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -253,35 +306,70 @@ export function CandleChart({
         {/* Volume bars */}
         {showVol && data.map((d, i) => {
           const bh = Math.max(1, (d.v / vmax) * (VH - 4));
-          const bw = Math.max(1.2, cw * 0.62);
-          return (
-            <rect key={`v${i}`} x={X(i) - bw / 2} y={VYb - bh} width={bw} height={bh}
-              fill={d.c >= d.o ? "var(--up)" : "var(--down)"} opacity={0.34} />
-          );
+          const bw2 = Math.max(1.2, cw * 0.62);
+          return <rect key={`v${i}`} x={X(i) - bw2 / 2} y={VYb - bh} width={bw2} height={bh}
+            fill={d.c >= d.o ? "var(--up)" : "var(--down)"} opacity={0.34} />;
         })}
         {showVol && <text className="caxis" x="6" y={VY0 + 10}>Vol</text>}
-        {/* Candles */}
-        {data.map((d, i) => {
-          const isUp = d.c >= d.o;
-          const col = isUp ? "var(--up)" : "var(--down)";
+
+        {/* Area fill */}
+        {ct === 'area' && (
+          <>
+            <defs>
+              <linearGradient id="cArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor={lineColor} stopOpacity={0.28} />
+                <stop offset="1" stopColor={lineColor} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <path d={areaFill} fill="url(#cArea)" stroke="none" />
+          </>
+        )}
+        {/* Line / Area line */}
+        {(ct === 'line' || ct === 'area') && (
+          <path d={linePts} fill="none" stroke={lineColor} strokeWidth="1.8" />
+        )}
+        {/* OHLC Bars */}
+        {ct === 'bars' && data.map((d, i) => {
+          const up2 = d.c >= d.o;
+          const col = up2 ? 'var(--up)' : 'var(--down)';
+          const tw = Math.max(2, cw * 0.3);
+          return (
+            <g key={i}>
+              <line x1={X(i)} x2={X(i)} y1={Y(d.h)} y2={Y(d.l)} stroke={col} strokeWidth="1.2" />
+              <line x1={X(i) - tw} x2={X(i)} y1={Y(d.o)} y2={Y(d.o)} stroke={col} strokeWidth="1.2" />
+              <line x1={X(i)} x2={X(i) + tw} y1={Y(d.c)} y2={Y(d.c)} stroke={col} strokeWidth="1.2" />
+            </g>
+          );
+        })}
+        {/* Candles + Hollow */}
+        {(ct === 'candles' || ct === 'hollow') && data.map((d, i) => {
+          const up2 = d.c >= d.o;
+          const col = up2 ? 'var(--up)' : 'var(--down)';
           const bt = Y(Math.max(d.o, d.c)), bb = Y(Math.min(d.o, d.c));
-          const bw = Math.max(1.2, cw * 0.62);
+          const bw2 = Math.max(1.2, cw * 0.62);
+          const fill = ct === 'hollow' && up2 ? 'transparent' : col;
           return (
             <g key={i}>
               <line x1={X(i)} x2={X(i)} y1={Y(d.h)} y2={Y(d.l)} stroke={col} strokeWidth="1" />
-              <rect x={X(i) - bw / 2} y={bt} width={bw} height={Math.max(1, bb - bt)} fill={col} />
+              <rect x={X(i) - bw2 / 2} y={bt} width={bw2} height={Math.max(1, bb - bt)}
+                fill={fill} stroke={col} strokeWidth={ct === 'hollow' ? 1 : 0} />
             </g>
           );
         })}
         {/* MA overlays */}
-        {showMA && ma20Path && <path d={ma20Path} fill="none" stroke="var(--ai)" strokeWidth="1.4" opacity={0.95} />}
-        {showMA && ma50Path && <path d={ma50Path} fill="none" stroke="var(--brand-2)" strokeWidth="1.4" opacity={0.95} />}
-        {showMA && (
-          <>
-            <text className="caxis" x={W - axisW - 86} y={PADT + 11} fill="var(--ai)">— MA20</text>
-            <text className="caxis" x={W - axisW - 44} y={PADT + 11} fill="var(--brand-2)">— MA50</text>
-          </>
-        )}
+        {maPaths.map((d, idx) => d && (
+          <g key={`ma${idx}`}>
+            <path d={d} fill="none" stroke={MA_COLS[idx]} strokeWidth="1.4" opacity={0.95} />
+            <text className="caxis" x={10} y={PADT + 11 + idx * 12} fill={MA_COLS[idx]}>— MA{MA_PERS[idx]}</text>
+          </g>
+        ))}
+        {/* EMA overlays */}
+        {emaPaths.map((d, idx) => d && (
+          <g key={`ema${idx}`}>
+            <path d={d} fill="none" stroke={EMA_COLS[idx]} strokeWidth="1.4" strokeDasharray="4 3" opacity={0.95} />
+            <text className="caxis" x={10} y={PADT + 11 + (maStep + idx) * 12} fill={EMA_COLS[idx]}>·· EMA{MA_PERS[idx]}</text>
+          </g>
+        ))}
         {/* ER event marker */}
         {erIdx < n && (
           <>

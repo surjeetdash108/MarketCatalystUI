@@ -506,7 +506,7 @@ function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
   return (
     <>
       <div className="scrim open" onClick={onClose} />
-      <div className="drawer open">
+      <div className="side-drawer">
         <div className="drawer-h">
           <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f4d6b,#0e2233)", color: "#7fd0ff" }}>{x.l[0]}</div>
           <div><div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{x.l}</div><div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{sub} · delayed ≤15s</div></div>
@@ -564,7 +564,7 @@ function FearGreedDrawer({ onClose }: { onClose: () => void }) {
   return (
     <>
       <div className="scrim open" onClick={onClose} />
-      <div className="drawer open">
+      <div className="side-drawer">
         <div className="drawer-h">
           <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3" }}>62</div>
           <div>

@@ -2,209 +2,433 @@
 
 import { useState } from "react";
 import { useIQActions } from "../shell";
-import { folio as folioData, FolioItem } from "../data";
-import { cls, arr, sign } from "../utils";
+import { folio as folioData, FolioItem, stockInfo, screenerStocks, analyst } from "../data";
+import { cls, arr, sign, fmt, Spark, CandleChart } from "../utils";
 
-const ALERTS = [
-  { title: "Earnings posted",       subs: "NVDA, AAPL" },
-  { title: "Move > 5% post-ER",     subs: "All holdings" },
-  { title: "Analyst up/downgrade",  subs: "All holdings" },
-  { title: "Unusual options",       subs: "NVDA, TSLA" },
-  { title: "13F change",            subs: "Tracked funds" },
-];
+const DEFAULT_SHARES: Record<string, number> = {
+  NVDA: 15, AAPL: 120, TSLA: 40, META: 30,
+  HD: 15, MSFT: 60, AMZN: 80, PLTR: 1000,
+};
 
-const PULSE = [
-  "NVDA is your standout, up +8.2% after a beat-and-raise. It's now your largest position by weight — consider whether you want to trim into strength.",
-  "AAPL reports after close. Options imply a ±4.8% move. You hold a large position with high conviction — set a post-earnings alert.",
-  "TSLA caught a UBS upgrade (Sell → Neutral). The stock is your only red year-to-date holding at -8.1%.",
-  "HD lowered guidance — down -1.1%. Low conviction, small size; not a portfolio risk today.",
-];
+function usd(v: number) {
+  return v >= 1000 ? `$${(v / 1000).toFixed(1)}K` : `$${v.toFixed(2)}`;
+}
 
 function convPill(conv: string) {
   const c = conv === "High" ? "up" : conv === "Low" ? "dn" : "amc";
   return <span className={`pill ${c}`}>{conv}</span>;
 }
 
+function capFmt(v: number) {
+  return v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : v >= 10 ? `$${Math.round(v)}B` : `$${v.toFixed(1)}B`;
+}
+
+/* ── Inline stock detail embedded in the right panel ── */
+function StockDetail({ sym, px, c }: { sym: string; px: number; c: number }) {
+  const { openStock, openEarnings } = useIQActions();
+  const [tf, setTf] = useState("1M");
+
+  const info = stockInfo[sym];
+  const ss   = screenerStocks.find(x => x.s === sym);
+  const an   = analyst.find(a => a.s === sym);
+
+  const fallbackFin = ss ? [
+    { l: "Revenue Growth", v: `+${ss.salesG.toFixed(1)}%` },
+    { l: "EPS Growth",     v: `+${ss.epsG.toFixed(1)}%` },
+    { l: "Gross Margin",   v: `${ss.mgn.toFixed(1)}%` },
+    { l: "P/E ratio",      v: ss.pe > 0 ? `${ss.pe.toFixed(1)}×` : "—" },
+  ] : [];
+
+  const data = info ?? {
+    name: sym, px, c, mkt: "—",
+    pe: ss?.pe ?? 0, eps: 0,
+    wkh52: px * 1.25, wkl52: px * 0.72,
+    div: 0, beta: 1.0, sec: ss?.sec ?? "—",
+    ai_call: ss?.rating ?? "Neutral",
+    ai_thesis: "", ai_risk: "",
+    ai_metrics: [] as { l: string; v: string }[],
+    fin: fallbackFin,
+    news: [] as { h: string; dt: string }[],
+    ins:  [] as { n: string; a: string; dt: string }[],
+  };
+
+  const isUp   = c >= 0;
+  const p      = px;
+  const rating = ss?.rating ?? data.ai_call ?? "Neutral";
+  const rs     = ss?.rs   ?? 55;
+  const mg     = ss?.mgn  ?? 20;
+  const rv     = ss?.rvol ?? 1.2;
+  const mc     = ss?.mc   ?? 100;
+  const eps    = p / (data.pe || ss?.pe || 25);
+  const lo     = p * (rs > 60 ? 0.78 : 0.72);
+  const hi     = p * 1.22;
+  const nf     = (x: number) => Math.round(x).toLocaleString("en-US");
+
+  return (
+    <>
+      {/* Chart */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="chart-toolbar">
+          {["1D","1W","1M","3M","6M","1Y"].map(r => (
+            <button key={r} className={`rng tfbtn${tf === r ? " on" : ""}`} onClick={() => setTf(r)}>{r}</button>
+          ))}
+        </div>
+        <div style={{ padding: "0 14px 0" }}>
+          <CandleChart sym={sym} tf={tf} px={p} maStep={2} showVol />
+        </div>
+        <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+          Pattern:{" "}
+          <b style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
+            {isUp ? "cup-with-handle breakout" : "breakdown below support"}
+          </b>{" "}
+          {isUp ? "on above-average volume." : "on rising volume."}
+        </div>
+      </div>
+
+      {/* Key stats */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="keystats">
+          {([
+            ["Mkt Cap",       mc ? capFmt(mc) : "—"],
+            ["P/E",           data.pe > 0 ? data.pe.toFixed(1) : ss?.pe ? ss.pe.toFixed(1) : "—"],
+            ["EPS (TTM)",     `$${eps.toFixed(2)}`],
+            ["52W Range",     `$${nf(lo)} – $${nf(hi)}`],
+            ["Gross Margin",  mg + "%"],
+            ["Rel. Volume",   rv.toFixed(1) + "×"],
+            ["AI Rating",     rating],
+            ["RS Rank",       rs ? `${rs}/99` : "—"],
+          ] as [string, string][]).map(k => (
+            <div key={k[0]} className="kstat">
+              <div className="k">{k[0]}</div>
+              <div className="v">{k[1]}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* AI analysis */}
+      <div className="ai-block" style={{ marginBottom: 14 }}>
+        <div className="card-h">
+          <h3 className="ai-c">◆ AI analysis · {data.name}</h3>
+          <span className="pill ai">{rating}</span>
+        </div>
+        <div className="card-b">
+          {data.ai_thesis ? (
+            <>
+              <div style={{ fontSize: ".62rem", textTransform: "uppercase", letterSpacing: ".07em", color: "var(--up)", fontWeight: 700, marginBottom: 5 }}>Bull thesis</div>
+              <p style={{ fontSize: ".84rem", lineHeight: 1.55, color: "var(--text)", marginBottom: 12 }}>{data.ai_thesis}</p>
+              {data.ai_risk && (
+                <>
+                  <div style={{ fontSize: ".62rem", textTransform: "uppercase", letterSpacing: ".07em", color: "var(--down)", fontWeight: 700, marginBottom: 5 }}>Key risks</div>
+                  <p style={{ fontSize: ".84rem", lineHeight: 1.55, color: "var(--text)" }}>{data.ai_risk}</p>
+                </>
+              )}
+            </>
+          ) : (
+            <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)" }}>
+              Rating: <b style={{ color: "var(--text-hi)" }}>{rating}</b> — RS rank {rs}/99, gross margin {mg}%, rel. volume {rv.toFixed(1)}×.
+            </p>
+          )}
+          {data.ai_metrics.length > 0 && (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+              {data.ai_metrics.map(m => (
+                <div key={m.l} style={{ background: "var(--surface-3)", borderRadius: 8, padding: "6px 10px" }}>
+                  <div style={{ fontSize: ".6rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>{m.l}</div>
+                  <div style={{ fontSize: ".84rem", fontWeight: 700, color: "var(--text-hi)" }}>{m.v}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Financials */}
+      {data.fin.length > 0 && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card-h">
+            <h3>Financials</h3>
+            <span className="link" onClick={() => openEarnings(sym)}>View earnings →</span>
+          </div>
+          <div className="card-b" style={{ paddingTop: 6 }}>
+            {data.fin.map(f => (
+              <div key={f.l} className="minirow">
+                <span className="mid" style={{ color: "var(--text-dim-solid)", fontSize: ".82rem" }}>{f.l}</span>
+                <span className="r" style={{ fontFamily: "var(--f-mono)", fontWeight: 700 }}>{f.v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Analyst action */}
+      {an && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card-h"><h3>Recent analyst action</h3></div>
+          <div className="card-b" style={{ paddingTop: 6 }}>
+            <div className="minirow">
+              <span className="mid">{an.firm}</span>
+              <span className={`r ${an.dir === "up" ? "up" : an.dir === "down" ? "down" : ""}`}>
+                {an.from} → {an.to}
+              </span>
+            </div>
+            <div className="minirow">
+              <span className="mid" style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Price target</span>
+              <span className="r mono">{an.ptF ? `$${an.ptF} → ` : ""}${an.ptT}</span>
+            </div>
+            <div className="minirow">
+              <span className="mid" style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Reaction</span>
+              <span className={`r ${an.react >= 0 ? "up" : "down"}`}>{an.react >= 0 ? "+" : ""}{fmt(an.react, 2)}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* News */}
+      {data.news.length > 0 && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card-h"><h3>Recent news</h3></div>
+          <div className="card-b" style={{ paddingTop: 6 }}>
+            {data.news.map((n, i) => (
+              <div key={i} style={{
+                padding: "8px 0",
+                borderBottom: i < data.news.length - 1 ? "1px solid var(--border-soft)" : "none",
+              }}>
+                <div style={{ fontSize: ".84rem", color: "var(--text)", lineHeight: 1.45 }}>{n.h}</div>
+                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 3 }}>{n.dt}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button className="btn primary" style={{ width: "100%" }} onClick={() => openStock(sym)}>
+        Open full analysis →
+      </button>
+    </>
+  );
+}
+
+/* ── Main portfolio screen ── */
 export function PortfolioScreen() {
   const { openStock } = useIQActions();
   const [holdings, setHoldings] = useState<FolioItem[]>(folioData);
+  const [pfSel, setPfSel] = useState(folioData[0]?.s ?? "");
+  const [shares, setShares] = useState<Record<string, number>>(() => {
+    const base = { ...DEFAULT_SHARES };
+    folioData.forEach(f => { if (!(f.s in base)) base[f.s] = 10; });
+    return base;
+  });
   const [addOpen, setAddOpen] = useState(false);
-  const [sellSym, setSellSym] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importDone, setImportDone] = useState(false);
   const [newSym, setNewSym] = useState("");
   const [newSize, setNewSize] = useState<"Small"|"Medium"|"Large">("Small");
   const [newConv, setNewConv] = useState<"High"|"Medium"|"Low">("Medium");
 
-  const drivers  = [...holdings].sort((a, b) => b.gl - a.gl).slice(0, 2);
-  const laggards = [...holdings].sort((a, b) => a.gl - b.gl).slice(0, 2);
-  const leaders  = [...holdings].sort((a, b) => b.c - a.c).slice(0, 2);
+  const sel      = holdings.find(h => h.s === pfSel);
+  const totalVal = holdings.reduce((s, h) => s + (shares[h.s] ?? 10) * h.p, 0);
+  const dayPL    = holdings.reduce((s, h) => s + (shares[h.s] ?? 10) * h.p * h.c / 100, 0);
+  const green    = holdings.filter(h => h.c > 0).length;
+  const driver   = [...holdings].sort((a, b) => (shares[b.s] ?? 10) * b.p - (shares[a.s] ?? 10) * a.p)[0];
+  const leader   = [...holdings].sort((a, b) => b.c - a.c)[0];
+  const laggard  = [...holdings].sort((a, b) => a.c - b.c)[0];
+  const driverWt = driver && totalVal > 0
+    ? ((shares[driver.s] ?? 10) * driver.p / totalVal * 100).toFixed(0) : "0";
 
   function addHolding() {
     if (!newSym.trim()) return;
     const s = newSym.trim().toUpperCase();
     if (holdings.find(h => h.s === s)) { setAddOpen(false); return; }
-    setHoldings(prev => [...prev, {
-      s, n: s, p: 100, c: 0, gl: 0,
-      size: newSize, conv: newConv, evt: "—",
-    }]);
+    setHoldings(prev => [...prev, { s, n: s, p: 100, c: 0, gl: 0, size: newSize, conv: newConv, evt: "—" }]);
+    setShares(prev => ({ ...prev, [s]: 10 }));
     setNewSym(""); setAddOpen(false);
   }
 
   function removeHolding(sym: string) {
+    const next = holdings.find(h => h.s !== sym);
     setHoldings(prev => prev.filter(h => h.s !== sym));
-    setSellSym(null);
+    if (pfSel === sym) setPfSel(next?.s ?? "");
   }
 
-  function partialSell(sym: string) {
-    setHoldings(prev => prev.map(h =>
-      h.s === sym ? { ...h, size: h.size === "Large" ? "Medium" : h.size === "Medium" ? "Small" : "Small", gl: h.gl * 0.5 } : h
-    ));
-    setSellSym(null);
+  function trimHolding(sym: string) {
+    setShares(prev => ({ ...prev, [sym]: Math.max(1, Math.floor((prev[sym] ?? 10) / 2)) }));
   }
+
+  function startImport() {
+    setImporting(true);
+    setTimeout(() => { setImporting(false); setImportDone(true); }, 1400);
+  }
+
+  const PARSED = [{ s: "NVDA", sh: 15 }, { s: "AAPL", sh: 120 }, { s: "MSFT", sh: 60 }];
 
   return (
     <>
+      {/* Page header */}
       <div className="page-head">
         <div>
-          <div className="eyebrow">My Portfolio</div>
+          <div className="eyebrow">Portfolio Pulse</div>
           <div className="page-title">Portfolio Pulse</div>
           <div className="page-sub">
-            {holdings.length} holdings · $128,430 ·{" "}
-            <span className="up">+1.42% today (+$1,798)</span>
+            {holdings.length} holdings · {usd(totalVal)} ·{" "}
+            <span className={cls(dayPL)}>
+              {dayPL >= 0 ? "+" : ""}{usd(Math.abs(dayPL))} today
+            </span>
           </div>
         </div>
-        <button className="btn primary" onClick={() => setAddOpen(true)}>
-          <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
-            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Add holding
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn" onClick={() => setImportOpen(true)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M4 16l5-5 4 4 3-3 4 4" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+            </svg>
+            Import from photo
+          </button>
+          <button className="btn primary" onClick={() => setAddOpen(true)}>
+            <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
+              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            Add holding
+          </button>
+        </div>
       </div>
 
-      <div className="dash" style={{ padding: "0 18px 18px" }}>
-        {/* col-8: WMN + holdings */}
-        <div className="col-8" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ padding: "0 18px 18px" }}>
 
-          {/* AI Portfolio Summary — drivers, laggards, leaders */}
-          <div className="wmn">
-            <div className="wmn-h">
-              <div className="t">
-                <div className="wmn-orb">
-                  <svg viewBox="0 0 24 24" fill="none" style={{ width: 16, height: 16 }}>
-                    <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
-                  </svg>
-                </div>
-                <div>
-                  <h2>AI Portfolio Summary · Today</h2>
-                  <div className="meta">
-                    <span className="live"><span className="dot" />Live</span>
-                    · {holdings.length} holdings tracked
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, padding: "14px 18px 4px" }}>
-              <div>
-                <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--up)", marginBottom: 6 }}>▲ Drivers</div>
-                {drivers.map(d => (
-                  <div key={d.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(d.s)}>
-                    <span className="tkr">{d.s}</span>
-                    <span className={`r ${cls(d.gl)}`}>{sign(d.gl)} G/L</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--down)", marginBottom: 6 }}>▼ Laggards</div>
-                {laggards.map(l => (
-                  <div key={l.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(l.s)}>
-                    <span className="tkr">{l.s}</span>
-                    <span className={`r ${cls(l.gl)}`}>{sign(l.gl)} G/L</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--brand-2)", marginBottom: 6 }}>◆ Leaders today</div>
-                {leaders.map(l => (
-                  <div key={l.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(l.s)}>
-                    <span className="tkr">{l.s}</span>
-                    <span className={`r ${cls(l.c)}`}>{sign(l.c)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="wmn-foot">
-              <span style={{ color: "var(--ai)" }}>AI-generated · not investment advice</span>
-            </div>
+        {/* AI portfolio summary */}
+        <div className="ai-block" style={{ marginBottom: 14 }}>
+          <div className="card-h">
+            <h3 className="ai-c">◆ AI portfolio summary</h3>
+            <span className="pill ai">drivers · leaders · laggards</span>
           </div>
-
-          {/* Holdings table */}
-          <div className="card">
-            <div className="card-h">
-              <h3>Holdings · {holdings.length}</h3>
-              <span className="link">Manage alerts →</span>
-            </div>
-            <div className="tbl-wrap">
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Stock</th>
-                    <th className="num">Price</th>
-                    <th className="num">Day</th>
-                    <th className="num">G/L</th>
-                    <th>Size</th>
-                    <th>Conviction</th>
-                    <th>Today's event</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {holdings.map(f => (
-                    <tr key={f.s} style={{ cursor: "pointer" }} onClick={() => openStock(f.s)}>
-                      <td>
-                        <div className="co">
-                          <span className="s">{f.s}</span>
-                          <span className="n">{f.n}</span>
-                        </div>
-                      </td>
-                      <td className="num">${f.p.toFixed(2)}</td>
-                      <td className={`num ${cls(f.c)}`}>{sign(f.c)}</td>
-                      <td className={`num ${cls(f.gl)}`}>{sign(f.gl)}</td>
-                      <td><span className="pill hold">{f.size}</span></td>
-                      <td>{convPill(f.conv)}</td>
-                      <td style={{ color: f.evt === "—" ? "var(--text-dim-solid)" : "var(--text)", fontSize: ".8rem" }}>{f.evt}</td>
-                      <td onClick={e => e.stopPropagation()}>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button className="pill amc" style={{ cursor: "pointer", fontSize: ".62rem" }}
-                            onClick={() => setSellSym(f.s)}>Sell</button>
-                          <button className="pill dn" style={{ cursor: "pointer", fontSize: ".62rem" }}
-                            onClick={() => removeHolding(f.s)}>Remove</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="card-b">
+            <ul className="wmn-body" style={{ columns: 2 }}>
+              <li>
+                <span className="bullet" />
+                <span>
+                  <b>Biggest driver:</b>{" "}
+                  <b style={{ color: "var(--text-hi)" }}>{driver?.s ?? "—"}</b> — {sign(driver?.c ?? 0)} at {driverWt}% weight.
+                </span>
+              </li>
+              <li>
+                <span className="bullet" />
+                <span>
+                  <b>Leader:</b> <b className="up">{leader?.s} {sign(leader?.c ?? 0)}</b>;{" "}
+                  <b>laggard:</b> <b className="down">{laggard?.s} {sign(laggard?.c ?? 0)}</b>.
+                </span>
+              </li>
+              <li>
+                <span className="bullet" />
+                <span>
+                  <b>Net:</b> {green} of {holdings.length} green; day P/L{" "}
+                  <b className={cls(dayPL)}>{dayPL >= 0 ? "+" : ""}{usd(Math.abs(dayPL))}</b>.
+                </span>
+              </li>
+              <li>
+                <span className="bullet" />
+                <span>Click any holding on the left to open its full detail →</span>
+              </li>
+            </ul>
           </div>
         </div>
 
-        {/* col-4: Active alerts */}
-        <div className="col-4">
-          <div className="card">
-            <div className="card-h">
-              <h3>Active alerts</h3>
-              <span className="link">Edit →</span>
+        {/* Two-panel master-detail */}
+        <div className="pf-master">
+
+          {/* LEFT: holdings list */}
+          <div className="pf-side">
+            <div className="card">
+              <div className="card-h">
+                <h3>Holdings</h3>
+                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{holdings.length} names</span>
+              </div>
+              <div className="pf-list">
+                {holdings.length === 0 ? (
+                  <div style={{ padding: 16, fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
+                    No holdings — click &ldquo;Add holding&rdquo;.
+                  </div>
+                ) : holdings.map((f, i) => (
+                  <div
+                    key={f.s}
+                    className={`pf-li${pfSel === f.s ? " active" : ""}`}
+                    onClick={() => setPfSel(f.s)}
+                  >
+                    <div>
+                      <span className="s">{f.s}</span>
+                      <span className="n">{f.n}</span>
+                    </div>
+                    <div className="pf-spark">
+                      <Spark seed={i + 3} up={f.c >= 0} />
+                    </div>
+                    <div>
+                      <span className="px">{f.p >= 1000 ? `$${(f.p / 1000).toFixed(2)}K` : `$${f.p.toFixed(2)}`}</span>
+                      <span className={`ch ${cls(f.c)}`}>{arr(f.c)} {sign(f.c)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="card-b">
-              {ALERTS.map(a => (
-                <div key={a.title} className="minirow">
-                  <span className="mid">
-                    <b style={{ color: "var(--text-hi)" }}>{a.title}</b>
-                    <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{a.subs}</div>
-                  </span>
-                  <span className="r"><span className="pill up">On</span></span>
+          </div>
+
+          {/* RIGHT: selected holding context + full stock detail */}
+          <div className="pf-detail">
+            {sel ? (
+              <>
+                {/* Context metrics bar */}
+                <div className="pf-ctx">
+                  <div className="m">
+                    <span className="k">Shares</span>
+                    <span className="v">
+                      <input
+                        className="sh-edit"
+                        type="number"
+                        value={shares[sel.s] ?? 10}
+                        onChange={e => setShares(prev => ({
+                          ...prev,
+                          [sel.s]: Math.max(1, parseInt(e.target.value) || 1),
+                        }))}
+                        style={{ width: 64 }}
+                      />
+                    </span>
+                  </div>
+                  <div className="m">
+                    <span className="k">Market value</span>
+                    <span className="v">{usd((shares[sel.s] ?? 10) * sel.p)}</span>
+                  </div>
+                  <div className="m">
+                    <span className="k">Weight</span>
+                    <span className="v">
+                      {totalVal > 0 ? ((shares[sel.s] ?? 10) * sel.p / totalVal * 100).toFixed(1) : "0"}%
+                    </span>
+                  </div>
+                  <div className="m">
+                    <span className="k">Day</span>
+                    <span className={`v ${cls(sel.c)}`}>{sign(sel.c)}</span>
+                  </div>
+                  <div className="m">
+                    <span className="k">Unrealized G/L</span>
+                    <span className={`v ${cls(sel.gl)}`}>{sign(sel.gl)}</span>
+                  </div>
+                  <div className="m">
+                    <span className="k">Conviction</span>
+                    <span className="v">{convPill(sel.conv)}</span>
+                  </div>
+                  <div className="sp" />
+                  <button className="btn" onClick={() => trimHolding(sel.s)}>Trim ½</button>
+                  <button className="btn" style={{ color: "var(--down)" }} onClick={() => removeHolding(sel.s)}>Sell all</button>
                 </div>
-              ))}
-            </div>
+
+                {/* Full stock detail */}
+                <StockDetail sym={sel.s} px={sel.p} c={sel.c} />
+              </>
+            ) : (
+              <div className="card">
+                <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
+                  Add a holding to see its detail here.
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -215,16 +439,15 @@ export function PortfolioScreen() {
           <div className="scrim" onClick={() => setAddOpen(false)} />
           <div className="drawer" style={{ maxHeight: "min(360px,85vh)" }}>
             <div className="drawer-h">
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Add Holding</div>
-              </div>
+              <div style={{ flex: 1, fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Add Holding</div>
               <button className="closebtn" onClick={() => setAddOpen(false)}>✕</button>
             </div>
             <div className="drawer-b" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Ticker</label>
-                <input className="inp" placeholder="e.g. NVDA"
+                <input className="inp"
                   style={{ width: "100%", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)", fontSize: ".9rem" }}
+                  placeholder="e.g. NVDA"
                   value={newSym} onChange={e => setNewSym(e.target.value.toUpperCase())} />
               </div>
               <div>
@@ -249,27 +472,51 @@ export function PortfolioScreen() {
         </>
       )}
 
-      {/* ── Sell dialog ── */}
-      {sellSym && (
+      {/* ── Import from photo modal ── */}
+      {importOpen && (
         <>
-          <div className="scrim" onClick={() => setSellSym(null)} />
-          <div className="drawer" style={{ maxHeight: "min(280px,80vh)" }}>
+          <div className="scrim" onClick={() => { setImportOpen(false); setImportDone(false); setImporting(false); }} />
+          <div className="drawer" style={{ maxHeight: "min(480px,88vh)" }}>
             <div className="drawer-h">
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Sell {sellSym}</div>
-              </div>
-              <button className="closebtn" onClick={() => setSellSym(null)}>✕</button>
+              <div style={{ flex: 1, fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Import from photo</div>
+              <button className="closebtn" onClick={() => { setImportOpen(false); setImportDone(false); setImporting(false); }}>✕</button>
             </div>
-            <div className="drawer-b" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)" }}>
-                Choose how much of your {sellSym} position to close.
-              </p>
-              <button className="btn primary" style={{ width: "100%" }} onClick={() => partialSell(sellSym)}>
-                Partial sell (reduce size by half)
-              </button>
-              <button className="btn" style={{ width: "100%", color: "var(--down)" }} onClick={() => removeHolding(sellSym)}>
-                Full exit (remove from portfolio)
-              </button>
+            <div className="drawer-b" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {!importing && !importDone && (
+                <div className="imp-drop" onClick={startImport}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ width: 30, height: 30, color: "var(--brand-2)", flexShrink: 0 }}>
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M4 16l5-5 4 4 3-3 4 4" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                  </svg>
+                  <div>
+                    <div style={{ fontWeight: 600, color: "var(--text-hi)" }}>Upload a screenshot</div>
+                    <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Tap to pick a photo of your brokerage holdings</div>
+                  </div>
+                </div>
+              )}
+              {importing && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0", color: "var(--text-dim-solid)" }}>
+                  <span className="imp-spin" />
+                  <span>Scanning image with AI…</span>
+                </div>
+              )}
+              {importDone && (
+                <>
+                  <div style={{ fontSize: ".82rem", color: "var(--up)", fontWeight: 600 }}>✓ Found {PARSED.length} holdings</div>
+                  {PARSED.map(row => (
+                    <div key={row.s} className="imp-row">
+                      <span className="s" style={{ flex: 1, fontWeight: 700 }}>{row.s}</span>
+                      <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Shares:</span>
+                      <input className="sh-edit" type="number" defaultValue={row.sh} />
+                    </div>
+                  ))}
+                  <button className="btn primary" style={{ width: "100%" }}
+                    onClick={() => { setImportOpen(false); setImportDone(false); }}>
+                    Add to portfolio
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </>

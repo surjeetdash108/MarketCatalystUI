@@ -2,183 +2,171 @@
 
 import { useState } from "react";
 import { useIQActions } from "../shell";
-import { watch, analyst } from "../data";
-import { cls, arr, fmt, Spark } from "../utils";
+import { watch as watchData, WatchItem } from "../data";
+import { cls, arr, sign, fmt, StockLogo } from "../utils";
 
-const FILTER_TABS = ["All", "Reporting this week", "Options active", "Movers today"];
+type WlRange = "eod" | "eow";
+type Filter = "All" | "Has alert" | "Options active";
+
+function wlAlerts(w: WatchItem): Array<[string, string, string]> {
+  const a: Array<[string, string, string]> = [];
+  if (Math.abs(w.c) >= 3) a.push(["Price", w.c >= 0 ? "up" : "down", (w.c >= 0 ? "+" : "") + w.c.toFixed(1) + "%"]);
+  if (w.analyst && /upgrade|→ (Buy|Overweight|Outperform)/i.test(w.analyst)) a.push(["Analyst", "up", "upgrade"]);
+  if (w.analyst && /downgrade|→ (Sell|Underweight|Neutral)/i.test(w.analyst)) a.push(["Analyst", "down", "downgrade"]);
+  if (w.opt) a.push(["Options", "warn", "unusual"]);
+  return a;
+}
 
 export function WatchlistScreen() {
   const { openStock } = useIQActions();
-  const [activeTab, setActiveTab] = useState("All");
-  // AI parse toggle: sym → enabled (default all on)
-  const [aiOn, setAiOn] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(watch.map(w => [w.s, true]))
-  );
+  const [wlRange, setWlRange] = useState<WlRange>("eod");
+  const [aiOn, setAiOn] = useState<Set<string>>(() => new Set(watchData.map(w => w.s)));
+  const [watching, setWatching] = useState<Set<string>>(() => new Set(watchData.map(w => w.s)));
+  const [filter, setFilter] = useState<Filter>("All");
 
-  const toggleAi = (sym: string) =>
-    setAiOn(prev => ({ ...prev, [sym]: !prev[sym] }));
-
-  // Alerts: price alert (|c| >= 2%) or analyst upgrade
-  function alerts(sym: string) {
-    const w = watch.find(x => x.s === sym);
-    const hasMove = w && Math.abs(w.c) >= 2;
-    const hasUpgrade = analyst.some(a => a.s === sym && (a.dir === "up" || a.dir === "init"));
-    return { hasMove, hasUpgrade };
+  function toggleAI(sym: string) {
+    setAiOn(prev => {
+      const next = new Set(prev);
+      next.has(sym) ? next.delete(sym) : next.add(sym);
+      return next;
+    });
   }
 
-  const filtered = watch.filter(w => {
-    if (activeTab === "Options active") return w.opt;
-    if (activeTab === "Movers today") return Math.abs(w.c) >= 2;
+  function toggleWatch(sym: string) {
+    setWatching(prev => {
+      const next = new Set(prev);
+      next.has(sym) ? next.delete(sym) : next.add(sym);
+      return next;
+    });
+  }
+
+  const list = watchData.filter(w => {
+    if (filter === "Has alert") return wlAlerts(w).length > 0;
+    if (filter === "Options active") return w.opt;
     return true;
   });
+
+  const up = list.filter(w => w.c > 0).length;
+  const dn = list.filter(w => w.c < 0).length;
+  const best = [...list].sort((a, b) => b.c - a.c)[0];
+  const worst = [...list].sort((a, b) => a.c - b.c)[0];
+  const aiCount = aiOn.size;
+
+  const eodText =
+    `Your ${list.length} watched names finished <b class="up">${up} up</b> / <b class="down">${dn} down</b> today.` +
+    (best ? ` <b>${best.s}</b> led (${sign(best.c)})` : "") +
+    (worst && worst.s !== best?.s ? `, <b>${worst.s}</b> lagged (${sign(worst.c)})` : "") +
+    `. Broad market: Nasdaq <b class="up">+1.02%</b>, S&P 500 <b class="up">+0.73%</b> — a risk-on tape favoring your tech-heavy list.`;
+
+  const eowText =
+    `On the week the list tracked the broad market — Nasdaq <b class="up">+2.6%</b>, S&P 500 <b class="up">+1.8%</b>. Momentum names (${list.slice(0, 2).map(w => w.s).join(", ")}) carried; watch for mean-reversion into next week's data.`;
+
+  const sumTxt = wlRange === "eod" ? eodText : eowText;
 
   return (
     <>
       <div className="page-head">
         <div>
           <div className="eyebrow">My Watchlist</div>
-          <div className="page-title">Names I'm tracking</div>
+          <div className="page-title">Names I&apos;m tracking</div>
           <div className="page-sub">
-            {watch.length} names · not held · price, next earnings, last analyst action, options flag &amp; latest headline at a glance
+            {list.length} names · AI parsing on for {aiCount} · alerts fire on price moves &amp; analyst upgrades
           </div>
         </div>
-        <button className="btn primary">
-          <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
-            <path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Add to watchlist
-        </button>
+        <div className="tabs">
+          <button className={`tab${wlRange === "eod" ? " on" : ""}`} onClick={() => setWlRange("eod")}>EOD summary</button>
+          <button className={`tab${wlRange === "eow" ? " on" : ""}`} onClick={() => setWlRange("eow")}>EOW summary</button>
+        </div>
       </div>
 
-      {/* ── AI EOD/EOW summary ── */}
-      <div className="ai-block" style={{ marginBottom: 14 }}>
-        <div className="card-h">
-          <h3 className="ai-c">◆ AI End-of-Day Summary · Your Watchlist</h3>
-          <span className="pill ai">Auto-generated</span>
+      <div style={{ padding: "0 18px 18px" }}>
+
+        {/* AI Watchlist Summary */}
+        <div className="ai-block" style={{ marginBottom: 14 }}>
+          <div className="card-h">
+            <h3 className="ai-c">◆ Watchlist {wlRange === "eod" ? "end-of-day" : "end-of-week"} summary</h3>
+            <span className="pill ai">AI</span>
+          </div>
+          <div className="card-b">
+            <p dangerouslySetInnerHTML={{ __html: sumTxt }}
+              style={{ marginBottom: 10, fontSize: ".88rem", lineHeight: 1.55 }} />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <span className="src-chip">Up {up}/{list.length}</span>
+              <span className="src-chip">AI parsing: {aiCount}</span>
+              <span className="src-chip">Nasdaq +1.02%</span>
+              <span className="src-chip">S&amp;P +0.73%</span>
+            </div>
+          </div>
         </div>
-        <div className="card-b">
-          <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
-            <b style={{ color: "var(--text-hi)" }}>3 of your {watch.length} names</b> moved more than 2% today.{" "}
-            <b style={{ color: "var(--up)" }}>NVDA +4.1%</b> led after strong data-center commentary;{" "}
-            <b style={{ color: "var(--down)" }}>TSLA −2.8%</b> fell on volume concerns. Two names report earnings this week:{" "}
-            <b style={{ color: "var(--text-hi)" }}>AMZN (Thu BMO)</b> and{" "}
-            <b style={{ color: "var(--text-hi)" }}>GOOGL (Fri AMC)</b>. Options activity is elevated across 4 names.
-          </p>
-          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-            <span className="src-chip">EOD: {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-            <span className="src-chip">Movers: 3</span>
-            <span className="src-chip">Earnings this week: 2</span>
-            <span className="src-chip">Options active: 4</span>
+
+        {/* Filter bar */}
+        <div className="fbar" style={{ marginBottom: 12 }}>
+          {(["All", "Has alert", "Options active"] as Filter[]).map(f => (
+            <button key={f} className={`chip${filter === f ? " on" : ""}`} onClick={() => setFilter(f)}>{f}</button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Add names with the ⭐ in search (⌘K)</span>
+        </div>
+
+        {/* Watchlist table */}
+        <div className="card">
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Price</th>
+                  <th>Day</th>
+                  <th>Next ER</th>
+                  <th>Alerts</th>
+                  <th>AI parse</th>
+                  <th>Watch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map(w => {
+                  const al = wlAlerts(w);
+                  const ai = aiOn.has(w.s);
+                  return (
+                    <tr key={w.s}>
+                      <td onClick={() => openStock(w.s)} style={{ cursor: "pointer" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <StockLogo sym={w.s} size={26} />
+                          <div className="co">
+                            <span className="s">{w.s}</span>
+                            <span className="n">{w.n}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="num">{fmt(w.px)}</td>
+                      <td className={`num ${cls(w.c)}`}>{arr(w.c)} {sign(w.c)}</td>
+                      <td style={{ fontSize: ".8rem" }}>{w.er}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        {al.length > 0
+                          ? al.map((a, i) => (
+                              <span key={i} className={`pill ${a[1]}`} style={{ fontSize: ".66rem", marginRight: 3 }}>
+                                {a[0]}: {a[2]}
+                              </span>
+                            ))
+                          : <span style={{ color: "var(--text-dim-solid)", fontSize: ".8rem" }}>—</span>
+                        }
+                      </td>
+                      <td>
+                        <button className={`ai-toggle${ai ? " on" : ""}`} onClick={() => toggleAI(w.s)}>
+                          {ai ? "AI ✓" : "AI"}
+                        </button>
+                      </td>
+                      <td>
+                        <button className={`wl-star${watching.has(w.s) ? " on" : ""}`} onClick={() => toggleWatch(w.s)}>★</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
-
-      <div className="fbar" style={{ padding: "0 18px", marginBottom: 12 }}>
-        {FILTER_TABS.map(t => (
-          <button key={t} className={`chip${activeTab === t ? " on" : ""}`}
-            onClick={() => setActiveTab(t)}>{t}</button>
-        ))}
-        <div className="spacer" />
-        <button className="chip" style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <svg viewBox="0 0 24 24" fill="none" style={{ width: 13, height: 13 }}>
-            <path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Sort: Day change
-        </button>
-      </div>
-
-      <div className="card" style={{ margin: "0 18px 18px" }}>
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th className="num">Price</th>
-                <th className="num">Day</th>
-                <th>Alerts</th>
-                <th>Next ER</th>
-                <th>Last analyst action</th>
-                <th style={{ textAlign: "center" }}>Options</th>
-                <th>Headline</th>
-                <th className="num">Intraday</th>
-                <th style={{ textAlign: "center" }}>AI</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((w, i) => {
-                const al = alerts(w.s);
-                const aiEnabled = aiOn[w.s] !== false;
-                return (
-                  <tr key={w.s} style={{ cursor: "pointer" }} onClick={() => openStock(w.s)}>
-                    <td>
-                      <div className="co">
-                        <span className="s">{w.s}</span>
-                        <span className="n">{w.n}</span>
-                      </div>
-                    </td>
-                    <td className="num">${fmt(w.px)}</td>
-                    <td className={`num ${cls(w.c)}`}>
-                      {arr(w.c)} {Math.abs(w.c).toFixed(2)}%
-                    </td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {al.hasMove && (
-                          <span className={`pill ${w.c >= 0 ? "up" : "dn"}`} style={{ fontSize: ".62rem" }}>
-                            {w.c >= 0 ? "▲" : "▼"} Move
-                          </span>
-                        )}
-                        {al.hasUpgrade && (
-                          <span className="pill ai" style={{ fontSize: ".62rem" }}>▲ Upg</span>
-                        )}
-                        {!al.hasMove && !al.hasUpgrade && (
-                          <span style={{ color: "var(--text-dim-solid)" }}>—</span>
-                        )}
-                      </div>
-                    </td>
-                    <td style={{ color: "var(--text-dim-solid)", fontSize: ".82rem" }}>{w.er}</td>
-                    <td style={{ fontSize: ".82rem" }}>
-                      {w.analyst
-                        ? w.analyst
-                        : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      {w.opt
-                        ? <span className="pill opt">⚡ Active</span>
-                        : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                    </td>
-                    <td style={{
-                      fontSize: ".8rem",
-                      color: w.headline === "—" ? "var(--text-dim-solid)" : "var(--text)",
-                      maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis",
-                    }}>
-                      {aiEnabled
-                        ? w.headline
-                        : <span style={{ color: "var(--text-dim-solid)" }}>AI parsing off</span>}
-                    </td>
-                    <td className="num">
-                      <Spark seed={i + 20} up={w.c >= 0} />
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <button
-                        className={`pill${aiEnabled ? " ai" : ""}`}
-                        style={{ cursor: "pointer", fontSize: ".62rem", background: aiEnabled ? undefined : "var(--surface-3)", color: aiEnabled ? undefined : "var(--text-dim-solid)" }}
-                        onClick={e => { e.stopPropagation(); toggleAi(w.s); }}
-                        title={aiEnabled ? "Disable AI parsing" : "Enable AI parsing"}
-                      >
-                        {aiEnabled ? "✦ On" : "○ Off"}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <p style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", padding: "0 18px 14px" }}>
-        Click any name to open its stock page. Watchlist names are highlighted across the product (movers, earnings, analyst actions) just like portfolio holdings.
-      </p>
     </>
   );
 }
