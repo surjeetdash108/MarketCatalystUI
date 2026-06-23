@@ -151,7 +151,7 @@ export function StockScreen() {
     return "NVDA";
   });
   const [search, setSearch] = useState("");
-  const [tfActive, setTfActive] = useState("1M");
+  const [tfActive, setTfActive] = useState("3M");
   const [toneActive, setToneActive] = useState("Swing");
   const [showVol, setShowVol] = useState(true);
   const [showRsi, setShowRsi] = useState(false);

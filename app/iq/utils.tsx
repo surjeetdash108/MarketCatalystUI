@@ -201,7 +201,7 @@ const EMA_COLS = ['#5ff0b3', '#22b8d6', '#a78bfa', '#ff9aab'];
 function genOHLC(sym: string, tf: string, px: number): OHLCBar[] {
   const C: Record<string, [number, number]> = {
     "1D": [78, 0.5], "1W": [65, 0.9], "1M": [44, 1.5],
-    "3M": [64, 1.1], "6M": [78, 1.3], "1Y": [90, 1.8], "5Y": [90, 2.6],
+    "3M": [64, 1.1], "6M": [120, 1.3], "1Y": [252, 1.8], "5Y": [260, 2.6],
   };
   const [n, volat] = C[tf] ?? [64, 1.1];
   const rnd = _seed(_hash(sym + tf) + 7);

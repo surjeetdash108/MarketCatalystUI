@@ -713,7 +713,7 @@ function CommandPalette({ onClose, onNavigate }: { onClose: () => void; onNaviga
         <div className="palette-input">
           <span className="palette-icon">⌕</span>
           <input
-            placeholder="Search pages, stocks, commands…"
+            placeholder="Jump to a ticker, fund or stock…"
             value={q}
             onChange={e => setQ(e.target.value)}
             autoFocus
@@ -742,19 +742,13 @@ function CommandPalette({ onClose, onNavigate }: { onClose: () => void; onNaviga
               </button>
             </div>
           ))}
-          {/* Page navigation items */}
-          {filtered.map(item => (
-            <div key={item.slug} className="palette-item"
-              onClick={() => { onNavigate(slugToHref(item.slug)); onClose(); }}>
-              <div className="palette-item-icon"><NavIcon slug={item.slug} /></div>
-              <div>
-                <div className="palette-item-label">{item.label}</div>
-                <div className="palette-item-sub">{item.group}</div>
-              </div>
+          {q.length === 0 && (
+            <div style={{ padding: "14px 16px", color: "var(--text-dim-solid)", fontSize: 13 }}>
+              Type a ticker symbol to search stocks…
             </div>
-          ))}
-          {filtered.length === 0 && stockMatches.length === 0 && (
-            <div style={{ padding: "14px 16px", color: "var(--text-dim-solid)", fontSize: 13 }}>No results for &ldquo;{q}&rdquo;</div>
+          )}
+          {q.length > 0 && stockMatches.length === 0 && (
+            <div style={{ padding: "14px 16px", color: "var(--text-dim-solid)", fontSize: 13 }}>No stocks matching &ldquo;{q}&rdquo;</div>
           )}
         </div>
         {starred.size > 0 && (
@@ -881,8 +875,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             {/* Topbar */}
             <div className="topbar">
               <button className="cmd" onClick={() => setPaletteOpen(true)}>
-                ⌕ Search or navigate…
-                <kbd>⌘K</kbd>
+                ⌕ Search tickers and stocks…
               </button>
               <div className="statuspill">
                 <div className="dot" />

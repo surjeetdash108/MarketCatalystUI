@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
-import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks, type Mover } from "../data";
+import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo } from "../utils";
 
 const LIVE_FEED = [
@@ -208,10 +208,6 @@ export function DashboardScreen() {
   const leaders  = [...screenerStocks].sort((a, b) => b.rs - a.rs).slice(0, 3);
   const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);
 
-  const [mvTab, setMvTab] = useState<"win" | "lose">("win");
-  const [mvSector, setMvSector] = useState("All");
-  const [mvCap, setMvCap] = useState("All");
-  const mvSectors = ["All", ...Array.from(new Set(movers.map(m => m.sector))).sort()];
 
   // ---- Dash pop hover ----
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -356,52 +352,31 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Market Movers</h3>
-              <div className="tabs" style={{ gap: 4, marginLeft: 8 }}>
-                <button className={`tab${mvTab === "win" ? " on" : ""}`} onClick={() => setMvTab("win")}>▲</button>
-                <button className={`tab${mvTab === "lose" ? " on" : ""}`} onClick={() => setMvTab("lose")}>▼</button>
+              <Link className="link" href="/menu/movers">All →</Link>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
+                ▲ Top gainers
               </div>
-              <Link className="link" href="/menu/movers" style={{ marginLeft: "auto" }}>All →</Link>
-            </div>
-            {/* Filter row */}
-            <div style={{ display: "flex", gap: 6, padding: "0 12px 6px", flexWrap: "wrap" }}>
-              <select className="mv-sel" value={mvSector} onChange={e => setMvSector(e.target.value)}
-                style={{ fontSize: ".66rem", padding: "3px 6px" }}>
-                {mvSectors.map(s => <option key={s}>{s}</option>)}
-              </select>
-              <select className="mv-sel" value={mvCap} onChange={e => setMvCap(e.target.value)}
-                style={{ fontSize: ".66rem", padding: "3px 6px" }}>
-                {["All","Mega","Large","Mid","Small"].map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="card-b" style={{ paddingTop: 0, maxHeight: 320, overflowY: "auto" }}>
-              {movers
-                .filter((m: Mover) => {
-                  if (mvSector !== "All" && m.sector !== mvSector) return false;
-                  if (mvCap    !== "All" && m.cap    !== mvCap)    return false;
-                  return mvTab === "win" ? m.c > 0 : m.c < 0;
-                })
-                .sort((a: Mover, b: Mover) => mvTab === "win" ? b.c - a.c : a.c - b.c)
-                .slice(0, 15)
-                .map((m: Mover) => (
-                  <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }}
-                    onClick={() => openStock(m.s)}
-                  >
-                    <StockLogo sym={m.s} size={20} />
-                    <span className="tkr">{m.s}<small>{m.n}</small></span>
-                    <span className="mid">
-                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)", fontSize: ".65rem" }}>{m.cat}</span>
-                    </span>
-                    <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
-                    <div className="mv-dp">
-                      <div className="mvtabs">
-                        <span className="mvt mvt-t">Technical</span>
-                        <span className="mvt mvt-n">News</span>
-                      </div>
-                      <div className="mvp mvp-t">{m.tech}</div>
-                      <div className="mvp mvp-n">{m.news}</div>
-                    </div>
-                  </div>
-                ))}
+              {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                  <StockLogo sym={m.s} size={20} />
+                  <span className="tkr">{m.s}</span>
+                  <span className="mid">{m.cat}</span>
+                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                </div>
+              ))}
+              <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px" }}>
+                ▼ Top losers
+              </div>
+              {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                  <StockLogo sym={m.s} size={20} />
+                  <span className="tkr">{m.s}</span>
+                  <span className="mid">{m.cat}</span>
+                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
