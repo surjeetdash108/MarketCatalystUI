@@ -294,7 +294,7 @@ export function DashboardScreen() {
                 30-sec audio
               </button>
             </div>
-            <ul className="wmn-body" style={{ maxHeight: 220, overflowY: "auto" }}>
+            <ul className="wmn-body" style={{ maxHeight: 220, overflowY: "scroll" }}>
               {wmn.map((b, i) => (
                 <li key={i}>
                   <span className="bullet" />

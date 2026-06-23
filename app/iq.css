@@ -427,7 +427,10 @@
 .wmn-h .meta { font-size: .68rem; color: var(--text-dim-solid); display: flex; align-items: center; gap: 7px; margin-top: 1px; }
 .live { display: inline-flex; align-items: center; gap: 5px; color: var(--ai); font-weight: 600; font-size: .66rem; }
 .live .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ai); flex-shrink: 0; }
-.wmn-body { padding: 6px 18px 16px; columns: 2; column-gap: 34px; list-style: none; }
+.wmn-body { padding: 6px 18px 16px; list-style: none; }
+.wmn-body::-webkit-scrollbar { width: 6px; }
+.wmn-body::-webkit-scrollbar-track { background: var(--surface-2); border-radius: 99px; }
+.wmn-body::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
 .wmn-body li { break-inside: avoid; display: flex; gap: 9px; padding: 8px 0; font-size: .83rem; line-height: 1.5; border-bottom: 1px solid var(--border-soft); }
 .wmn-body li .bullet { flex: none; margin-top: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--ai); box-shadow: 0 0 7px var(--ai); }
 .wmn-body li b { color: var(--text-hi); font-weight: 600; }

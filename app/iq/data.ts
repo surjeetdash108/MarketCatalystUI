@@ -105,6 +105,8 @@ export const wmn: WMNItem[] = [
   { h: 'Target misses and guides down', t: '<span class="sym down">TGT</span> Q1 EPS missed by 11%; full-year guidance cut. Consumer discretionary facing <b class="warn">margin pressure</b>.', tag: 'earn' },
   { h: 'Oil slides on demand concerns', t: 'Brent crude fell below $80 as OPEC+ compliance data disappointed. Energy sector <b class="down">−1.8%</b>.', tag: 'sector' },
   { h: 'Semis rally on AI capex data', t: 'AMD, AVGO, MRVL all up 3–5% on strong hyperscaler spending signals from MSFT and GOOG earnings guidance.', tag: 'sector' },
+  { h: 'Dollar weakens on soft data', t: 'DXY slipped to 104.1 after softer jobs and CPI prints. Emerging-market equities and commodities caught a bid.', tag: 'macro' },
+  { h: 'JPM raises S&P 500 target', t: '<span class="sym">JPM</span> strategists lifted their year-end S&P 500 target to <b>5,800</b>, citing stronger-than-expected earnings resilience.', tag: 'macro' },
 ];
 
 // ---- Earnings ----
