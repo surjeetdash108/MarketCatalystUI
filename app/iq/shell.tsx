@@ -562,19 +562,25 @@ function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
   );
 }
 
-// ---- Mover Modal — full stock page in a modal overlay ----
+// ---- Mover Drawer — full stock page in a right-side sliding drawer ----
 function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <div className="stock-full-modal">
-        <div className="stock-full-modal-bar">
-          <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, color: "var(--text-hi)", fontSize: ".9rem" }}>
-            {sym} · Stock Details
-          </span>
+      <div className="stock-side-drawer">
+        <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1a2640,#0d1520)", color: "var(--brand-2)", fontSize: ".9rem" }}>
+            {sym[0]}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+              {sym} · Stock Details
+            </div>
+            <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Full analysis · chart · technicals · peers</div>
+          </div>
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
-        <div className="stock-full-modal-body">
+        <div className="drawer-b">
           <StockScreenEmbed initialSym={sym} />
         </div>
       </div>

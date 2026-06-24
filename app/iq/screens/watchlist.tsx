@@ -21,8 +21,15 @@ export function WatchlistScreen() {
   const { openStock } = useIQActions();
   const [wlRange, setWlRange] = useState<WlRange>("eod");
   const [aiOn, setAiOn] = useState<Set<string>>(() => new Set(watchData.map(w => w.s)));
-  const [watching, setWatching] = useState<Set<string>>(() => new Set(watchData.map(w => w.s)));
+  const [watching, setWatching] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("iq-watchlist");
+      if (saved) { try { return new Set(JSON.parse(saved) as string[]); } catch { /* ignore */ } }
+    }
+    return new Set(watchData.map(w => w.s));
+  });
   const [filter, setFilter] = useState<Filter>("All");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   function toggleAI(sym: string) {
     setAiOn(prev => {
@@ -36,8 +43,23 @@ export function WatchlistScreen() {
     setWatching(prev => {
       const next = new Set(prev);
       next.has(sym) ? next.delete(sym) : next.add(sym);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("iq-watchlist", JSON.stringify([...next]));
+      }
       return next;
     });
+  }
+
+  function deleteFromWatchlist(sym: string) {
+    setWatching(prev => {
+      const next = new Set(prev);
+      next.delete(sym);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("iq-watchlist", JSON.stringify([...next]));
+      }
+      return next;
+    });
+    setConfirmDelete(null);
   }
 
   const list = watchData.filter(w => {
@@ -108,6 +130,32 @@ export function WatchlistScreen() {
           <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Add names with the ⭐ in search (⌘K)</span>
         </div>
 
+        {/* Delete confirmation popup */}
+        {confirmDelete && (
+          <>
+            <div className="scrim" style={{ zIndex: 60 }} onClick={() => setConfirmDelete(null)} />
+            <div style={{
+              position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+              background: "var(--surface-1)", border: "1px solid var(--border)",
+              borderRadius: "var(--r-lg)", padding: 24, zIndex: 61,
+              minWidth: 320, boxShadow: "0 16px 48px rgba(0,0,0,.5)",
+            }}>
+              <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)", marginBottom: 8 }}>
+                Remove from watchlist
+              </div>
+              <div style={{ fontSize: ".88rem", color: "var(--text)", marginBottom: 20 }}>
+                Are you sure want to delete{" "}
+                <b style={{ color: "var(--text-hi)" }}>{confirmDelete}</b>{" "}
+                from your watchlist?
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button className="btn" onClick={() => setConfirmDelete(null)}>Cancel</button>
+                <button className="btn primary" onClick={() => deleteFromWatchlist(confirmDelete)}>OK</button>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Watchlist table */}
         <div className="card">
           <div className="tbl-wrap">
@@ -121,6 +169,7 @@ export function WatchlistScreen() {
                   <th>Alerts</th>
                   <th>AI parse</th>
                   <th>Watch</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -158,6 +207,26 @@ export function WatchlistScreen() {
                       </td>
                       <td>
                         <button className={`wl-star${watching.has(w.s) ? " on" : ""}`} onClick={() => toggleWatch(w.s)}>★</button>
+                      </td>
+                      <td>
+                        <button
+                          onClick={() => setConfirmDelete(w.s)}
+                          title="Remove from watchlist"
+                          style={{
+                            background: "none", border: "1px solid var(--border)", borderRadius: 6,
+                            padding: "4px 8px", cursor: "pointer", color: "var(--down)",
+                            lineHeight: 1, transition: ".15s",
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--down-dim)"; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14, display: "block" }}>
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6l-1 14H6L5 6" />
+                            <path d="M10 11v6M14 11v6" />
+                            <path d="M9 6V4h6v2" />
+                          </svg>
+                        </button>
                       </td>
                     </tr>
                   );

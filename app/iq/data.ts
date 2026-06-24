@@ -318,6 +318,8 @@ export const screenerStocks: ScreenerStock[] = [
   { s: 'INTC', n: 'Intel',        sec: 'Semis',    mc: 128,  pe: 32.1, rs: 34, salesG: -9,  epsG: -40, mgn: 5,  rvol: 1.9, rating: 'Sell' },
   { s: 'SMCI', n: 'Super Micro',  sec: 'Hardware', mc: 48,   pe: 38.4, rs: 95, salesG: 200, epsG: 308, mgn: 14, rvol: 4.8, rating: 'Strong Buy' },
   { s: 'WBA',  n: 'Walgreens',    sec: 'Retail',   mc: 14,   pe: 6.2,  rs: 9,  salesG: 6,   epsG: -60, mgn: 2,  rvol: 2.7, rating: 'Strong Sell' },
+  { s: 'ZIM',  n: 'ZIM Shipping', sec: 'Shipping', mc: 3,    pe: 5.0,  rs: 81, salesG: 30,  epsG: 120, mgn: 12, rvol: 4.2, rating: 'Buy' },
+  { s: 'DELL', n: 'Dell Tech',    sec: 'Hardware', mc: 90,   pe: 18.0, rs: 42, salesG: 6,   epsG: 10,  mgn: 6,  rvol: 3.1, rating: 'Neutral' },
 ];
 
 export interface ScreenerPreset {

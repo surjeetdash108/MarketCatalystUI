@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useIQActions } from "../shell";
-import { stockInfo, watch, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail } from "../data";
+import { stockInfo, watch, movers as moversData, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail } from "../data";
 import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL } from "../utils";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
@@ -58,22 +58,36 @@ const LOGO_BG: Record<string, [string, string]> = {
   TSLA: ["#6b0000", "#ffd0d0"], JPM: ["#003a6b", "#cce0ff"], V: ["#0d3b6b", "#cce0ff"],
   UNH: ["#006b4d", "#c8f5e0"],
 };
-const logoBg = (s: string) => LOGO_BG[s]?.[0] ?? "#1a2640";
-const logoFg = (s: string) => LOGO_BG[s]?.[1] ?? "#8fd6ff";
+const _PAL: [string, string][] = [
+  ["#1f6b4d","#5ff0b3"],["#3a2f6b","#b6a6ff"],["#1f4d6b","#7fd0ff"],["#6b1f2f","#ff9ab0"],
+  ["#1f5a6b","#7fe0f0"],["#6b4a1f","#ffce8f"],["#2f2f6b","#aab0ff"],["#1f6b5a","#6ff0d0"],
+  ["#444a52","#cfd6e0"],["#5a1f6b","#e0a6ff"],
+];
+function hashPal(s: string): [string, string] {
+  let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return _PAL[h % _PAL.length];
+}
+const logoBg = (s: string) => (LOGO_BG[s] ?? hashPal(s))[0];
+const logoFg = (s: string) => (LOGO_BG[s] ?? hashPal(s))[1];
 
 const EXCHANGE: Record<string, string> = {
   AAPL: "NASDAQ", NVDA: "NASDAQ", MSFT: "NASDAQ", GOOGL: "NASDAQ", META: "NASDAQ",
   AMZN: "NASDAQ", TSLA: "NASDAQ", JPM: "NYSE", V: "NYSE", UNH: "NYSE",
+  AVGO: "NASDAQ", CRM: "NYSE", PLTR: "NYSE", INTC: "NASDAQ", WBA: "NASDAQ",
+  DELL: "NYSE", ZIM: "NYSE", AMD: "NASDAQ", MU: "NASDAQ", SMCI: "NASDAQ",
 };
 
 const BEAT_STREAK: Record<string, number> = {
-  AAPL: 4, NVDA: 6, MSFT: 5, GOOGL: 3, META: 4, AMZN: 3, TSLA: -1, JPM: 5, V: 4, UNH: 3,
+  AAPL: 4, NVDA: 7, MSFT: 5, GOOGL: 3, META: 4, AMZN: 3, TSLA: -1, JPM: 5, V: 4, UNH: 3,
+  AVGO: 5, CRM: 6, PLTR: 6, INTC: -2, WBA: -3, DELL: -1, ZIM: 1, AMD: 3, MU: 3, SMCI: 5,
 };
 const INST_OWN: Record<string, number> = {
   AAPL: 61, NVDA: 66, MSFT: 72, GOOGL: 68, META: 63, AMZN: 59, TSLA: 44, JPM: 72, V: 81, UNH: 82,
+  AVGO: 78, CRM: 82, PLTR: 48, INTC: 64, WBA: 60, DELL: 45, ZIM: 22, AMD: 68, MU: 79, SMCI: 55,
 };
 const SHORT_INT: Record<string, number> = {
   AAPL: 0.7, NVDA: 1.1, MSFT: 0.6, GOOGL: 0.8, META: 1.3, AMZN: 1.0, TSLA: 3.2, JPM: 0.4, V: 0.5, UNH: 0.6,
+  AVGO: 1.4, CRM: 1.6, PLTR: 4.2, INTC: 2.6, WBA: 9.4, DELL: 2.8, ZIM: 18.0, AMD: 2.3, MU: 2.0, SMCI: 12.0,
 };
 
 function ratingCounts(rt: string) {
@@ -92,17 +106,78 @@ const ac = (a: string) => a === "Buy" ? "var(--up)" : a === "Sell" ? "var(--down
 const SYMBOLS = [...Object.keys(stockInfo), ...watch.map(w => w.s), ...folio.map(f => f.s)]
   .filter((v, i, a) => a.indexOf(v) === i);
 
-type IncRow = { c: string; rev: number; gp: number; ni: number };
+type IncRow = { c: string; rev: number; cogs: number; gp: number; opex: number; oi: number; ni: number; eps: number };
 
-function earnIncome(mc: number, mg: number): IncRow[] {
+function earnIncome(mc: number, mg: number, px: number): IncRow[] {
   const rev0 = Math.max(2, mc * 0.02);
+  const sh = Math.max(0.3, mc / Math.max(1, px));
   const cols = ["Q2 25", "Q1 25", "Q4 24", "Q3 24"];
   return cols.map((c, i) => {
-    const rev = rev0 * (1 - i * 0.05);
-    const gp = rev * (mg / 100 + 0.1);
-    const ni = Math.max(0.01, gp * 0.82 - rev * 0.22);
-    return { c, rev, gp, ni };
+    const rev  = rev0 * (1 - i * 0.05);
+    const cogs = rev * (1 - Math.min(0.95, mg / 100));
+    const gp   = rev - cogs;
+    const opex = rev * 0.22;
+    const oi   = gp - opex;
+    const ni   = Math.max(0.01, oi * 0.82);
+    const eps  = ni / sh;
+    return { c, rev, cogs, gp, opex, oi, ni, eps };
   });
+}
+
+// ── Earnings history: 10-quarter seeded deterministic data ──────────────────
+function _erH(s: string, i: number): number {
+  return (Math.abs(s.charCodeAt(0) * 31 + (s.charCodeAt(1) || 7) * 17 + i * 13) % 97) / 97;
+}
+interface EarnQ { q: string; e: number; a: number; surp: number; mv: number; }
+function earnHistory(sym: string, base: number): EarnQ[] {
+  const qs = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
+  return qs.map((q, i) => {
+    const r    = _erH(sym, i);
+    const e    = parseFloat((base * (1 - i * 0.03)).toFixed(2));
+    const surp = parseFloat(((r - 0.4) * 18).toFixed(1));
+    const a    = parseFloat((e * (1 + surp / 100)).toFixed(2));
+    const mv   = parseFloat(((r - 0.45) * 22).toFixed(1));
+    return { q, e, a, surp, mv };
+  });
+}
+
+function EarnEpsChart({ hist }: { hist: EarnQ[] }) {
+  const d = [...hist].reverse();
+  const W = 560, H = 210, PADL = 30, PADR = 18, PADT = 14, PADB = 30;
+  const iw = W - PADL - PADR, ih = H - PADT - PADB;
+  const maxE = Math.max(...d.map(x => Math.max(x.e, Math.abs(x.a)))) * 1.15 || 1;
+  const maxM = Math.max(1, ...d.map(x => Math.abs(x.mv)));
+  const n = d.length, gw = iw / n, bw = gw * 0.28;
+  const pts = d.map((x, i) => {
+    const cx = PADL + gw * i + gw / 2;
+    const my = PADT + ih / 2 - (x.mv / maxM) * (ih / 2 - 8);
+    return `${cx.toFixed(1)},${my.toFixed(1)}`;
+  }).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: W, display: "block" }}>
+      <line x1={PADL} y1={PADT + ih / 2} x2={W - PADR} y2={PADT + ih / 2}
+        stroke="var(--border)" strokeDasharray="3 3" />
+      {d.map((x, i) => {
+        const cx = PADL + gw * i + gw / 2;
+        const eh = Math.max(2, (x.e / maxE) * ih);
+        const ah = Math.max(2, (Math.abs(x.a) / maxE) * ih);
+        const my = PADT + ih / 2 - (x.mv / maxM) * (ih / 2 - 8);
+        return (
+          <g key={x.q}>
+            <rect x={(cx - bw - 2).toFixed(1)} y={(PADT + ih - eh).toFixed(1)} width={bw.toFixed(1)} height={eh.toFixed(1)} rx="2" style={{ fill: "var(--surface-3)" }} />
+            <rect x={(cx + 2).toFixed(1)} y={(PADT + ih - ah).toFixed(1)} width={bw.toFixed(1)} height={ah.toFixed(1)} rx="2" style={{ fill: x.surp >= 0 ? "var(--up)" : "var(--down)" }} />
+            <circle cx={cx.toFixed(1)} cy={my.toFixed(1)} r="2.6" style={{ fill: "var(--brand-2)" }} />
+            {(i % 2 === 0 || i === n - 1) && (
+              <text x={cx.toFixed(1)} y={H - 10} textAnchor="middle" style={{ fill: "var(--text-dim-solid)", fontSize: "9px" }}>
+                {x.q.replace(" ", "'")}
+              </text>
+            )}
+          </g>
+        );
+      })}
+      <polyline points={pts} fill="none" stroke="var(--brand-2)" strokeWidth="1.6" />
+    </svg>
+  );
 }
 
 function EarnIncChart({ inc }: { inc: IncRow[] }) {
@@ -145,7 +220,7 @@ function EarnIncChart({ inc }: { inc: IncRow[] }) {
 }
 
 export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
-  const { openEarnings, openStock } = useIQActions();
+  const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
     if (typeof window !== "undefined") return localStorage.getItem("iq-stock") || "NVDA";
@@ -171,6 +246,16 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
   const [noteInput, setNoteInput] = useState("");
   const [noteOpen, setNoteOpen]  = useState(false);
   const [ctxMenu, setCtxMenu]    = useState<{ x: number; y: number } | null>(null);
+
+  type InnerDrawer = "techrating" | "peers" | "industry" | "insider" | "keylevels" | "earnings" | "financials" | null;
+  const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
+
+  const [watchedSet, setWatchedSet] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set(watch.map(w => w.s));
+    const saved = localStorage.getItem("iq-watchlist");
+    if (saved) { try { return new Set(JSON.parse(saved) as string[]); } catch { /* ignore */ } }
+    return new Set(watch.map(w => w.s));
+  });
   const chartRef = useRef<HTMLDivElement>(null);
 
   const refreshNotes = useCallback(async () => {
@@ -208,11 +293,23 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
   const info = stockInfo[sym];
   const ss = screenerStocks.find(x => x.s === sym);
   const erEntry = earningsData.find(e => e.s === sym);
+  const moverEntry = moversData.find(m => m.s === sym);
+  const watchEntry = watch.find(w => w.s === sym);
+
+  const _baseP   = moverEntry?.p   ?? watchEntry?.px ?? 162;
+  const _baseC   = moverEntry?.c   ?? watchEntry?.c  ?? 2.4;
+  const _baseName = moverEntry?.n  ?? watchEntry?.n  ?? sym;
+  const _baseSec  = ss?.sec ?? moverEntry?.sector ?? "Technology";
+  const _basePe   = ss?.pe ?? 46;
+  const _baseMc   = ss?.mc ?? 100;
+  const _baseMkt  = _baseMc >= 1000 ? `$${(_baseMc/1000).toFixed(2)}T` : _baseMc >= 10 ? `$${Math.round(_baseMc)}B` : `$${_baseMc.toFixed(1)}B`;
 
   const fallbackData = {
-    name: sym, px: 162, c: 2.4, mkt: "$262B", pe: 46, eps: 3.52,
-    wkh52: 220, wkl52: 80, div: 0, beta: 1.45, sec: "Semiconductors",
-    ai_call: "Neutral", ai_thesis: "", ai_risk: "",
+    name: _baseName, px: _baseP, c: _baseC, mkt: _baseMkt,
+    pe: _basePe, eps: _baseP / _basePe,
+    wkh52: _baseP * 1.35, wkl52: _baseP * 0.65,
+    div: 0, beta: 1.45, sec: _baseSec,
+    ai_call: ss?.rating ?? "Neutral", ai_thesis: "", ai_risk: "",
     ai_metrics: [] as { l: string; v: string }[],
     fin: [] as { l: string; v: string }[],
     news: [] as { h: string; dt: string }[],
@@ -291,6 +388,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
     ["Q3 24", qeps * 0.95, 6  * beatSign],
     ["Q2 24", qeps * 0.9,  5  * beatSign],
   ];
+  const hist10 = earnHistory(sym, qeps);
 
   const sectorInfo = sectorByName[group];
   const sectorTrend = sectorInfo?.trend ?? "Flat";
@@ -312,14 +410,22 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
     if (typeof window !== "undefined") localStorage.setItem("iq-stock", s);
   }
 
+  function toggleWatchlist(s: string) {
+    setWatchedSet(prev => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s); else next.add(s);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("iq-watchlist", JSON.stringify([...next]));
+      }
+      return next;
+    });
+  }
+
   return (
     <>
-      {/* Symbol bar */}
+      {/* Symbol bar — search left, chips right */}
       <div className="fbar" style={{ position: "relative" }}>
-        {Object.keys(stockInfo).map(s => (
-          <button key={s} className={`chip${sym === s ? " active" : ""}`} onClick={() => selectSym(s)}>{s}</button>
-        ))}
-        <div style={{ marginLeft: "auto", position: "relative" }}>
+        <div style={{ position: "relative", flexShrink: 0 }}>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -333,20 +439,33 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
           />
           {suggestions.length > 0 && (
             <div style={{
-              position: "absolute", top: "100%", right: 0, background: "var(--surface-1)",
+              position: "absolute", top: "100%", left: 0, background: "var(--surface-1)",
               border: "1px solid var(--border)", borderRadius: "var(--r-sm)", zIndex: 20,
-              minWidth: 140, marginTop: 2,
+              minWidth: 180, marginTop: 2,
             }}>
               {suggestions.slice(0, 6).map(s => (
-                <div key={s} style={{ padding: "7px 12px", cursor: "pointer", fontSize: 12.5, color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}
-                  onMouseDown={() => selectSym(s)}
+                <div key={s} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 6px 12px" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "")}
-                >{s}</div>
+                  onMouseLeave={e => (e.currentTarget.style.background = "")}>
+                  <div onMouseDown={() => selectSym(s)}
+                    style={{ flex: 1, cursor: "pointer", fontSize: 12.5, color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>
+                    {s}
+                  </div>
+                  <button
+                    onMouseDown={e => { e.preventDefault(); toggleWatchlist(s); }}
+                    title={watchedSet.has(s) ? "Remove from watchlist" : "Add to watchlist"}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 4px",
+                      color: watchedSet.has(s) ? "var(--warn)" : "var(--text-dim-solid)", lineHeight: 1 }}>
+                    {watchedSet.has(s) ? "★" : "☆"}
+                  </button>
+                </div>
               ))}
             </div>
           )}
         </div>
+        {Object.keys(stockInfo).map(s => (
+          <button key={s} className={`chip${sym === s ? " active" : ""}`} onClick={() => selectSym(s)}>{s}</button>
+        ))}
       </div>
 
       <div style={{ padding: "14px 18px 0" }}>
@@ -364,11 +483,13 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
             <div className={`c ${cls(data.c)}`}>{arr(data.c)} {data.c >= 0 ? "+" : ""}${fmt(dollar, 2)} ({sign(data.c)})</div>
           </div>
           <div className="sd-actions">
-            <button className="btn">
+            <button className="btn" onClick={() => toggleWatchlist(sym)}
+              style={watchedSet.has(sym) ? { borderColor: "var(--warn)", color: "var(--warn)" } : {}}>
               <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
-                <path d="M5 5h14v14l-7-4-7 4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                <path d="M5 5h14v14l-7-4-7 4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
+                  fill={watchedSet.has(sym) ? "currentColor" : "none"} />
               </svg>
-              Watch
+              {watchedSet.has(sym) ? "★ Watching" : "Watch"}
             </button>
             <button className="btn ai">
               <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
@@ -530,37 +651,29 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
 
           {/* Financials — grouped bar chart */}
           {(() => {
-            const inc = earnIncome(mc, mg);
-            const capFmt = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : v >= 10 ? `$${Math.round(v)}B` : `$${v.toFixed(1)}B`;
+            const inc = earnIncome(mc, mg, p);
             return (
               <div className="card">
                 <div className="card-h">
                   <h3>Financials</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div className="tf-pills">
-                      <button className="rng on">Quarterly</button>
-                      <button className="rng">Annual</button>
+                      <button className="rng">Quarterly</button>
+                      <button className="rng on">Annual</button>
                     </div>
-                    <span className="link" onClick={() => openEarnings(sym)}>View all →</span>
+                    <span className="link" onClick={() => setInnerDrawer("financials")}>View all →</span>
                   </div>
                 </div>
-                <div className="card-b">
-                  <EarnIncChart inc={inc} />
+                <div className="card-b" style={{ paddingTop: 8 }}>
                   <div className="ec-legend">
                     <span><i style={{ background: "var(--brand)" }} />Revenue</span>
                     <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
                     <span><i style={{ background: "var(--up)" }} />Net income</span>
                   </div>
-                  <details className="ec-det">
-                    <summary>Quarterly detail</summary>
-                    {inc.map(q => (
-                      <div key={q.c} className="minirow">
-                        <span className="tkr" style={{ width: 55 }}>{q.c}</span>
-                        <span className="mid">Rev <b>{capFmt(q.rev)}</b></span>
-                        <span className="r up">NI {capFmt(q.ni)}</span>
-                      </div>
-                    ))}
-                  </details>
+                  <EarnIncChart inc={inc} />
+                  <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
+                    Last 4 quarters · revenue, gross profit &amp; net income · tap &ldquo;View all&rdquo; for the full statement &amp; 10-quarter EPS history.
+                  </div>
                 </div>
               </div>
             );
@@ -580,7 +693,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                     <button key={t} className={`rng${i === 2 ? " on" : ""}`}>{t}</button>
                   ))}
                 </div>
-                <span className="link">View all →</span>
+                <span className="link" onClick={() => setInnerDrawer("techrating")}>View all →</span>
               </div>
             </div>
             <div className="card-b">
@@ -629,7 +742,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
           <div className="card">
             <div className="card-h">
               <h3>Peers · who's leading</h3>
-              <span className="link">View all →</span>
+              <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>
             </div>
             <div className="card-b" style={{ paddingTop: 6 }}>
               {peers.length ? peers.map(peer => {
@@ -652,7 +765,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
               <h3>Industry Group rank</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span className={`pill ${trendPill}`}>{sectorTrend}</span>
-                <span className="link">View all →</span>
+                <span className="link" onClick={() => setInnerDrawer("industry")}>View all →</span>
               </div>
             </div>
             <div className="card-b">
@@ -676,7 +789,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
               <h3>Earnings history</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span className={`pill ${st >= 0 ? "up" : "dn"}`}>{Math.abs(st)}-qtr {st >= 0 ? "beat" : "miss"} streak</span>
-                <span className="link" onClick={() => openEarnings(sym)}>View all →</span>
+                <span className="link" onClick={() => setInnerDrawer("earnings")}>View all →</span>
               </div>
             </div>
             <div className="card-b" style={{ paddingTop: 6 }}>
@@ -708,7 +821,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
           <div className="card">
             <div className="card-h">
               <h3>Insider &amp; institutional</h3>
-              <span className="link">View all →</span>
+              <span className="link" onClick={() => setInnerDrawer("insider")}>View all →</span>
             </div>
             <div className="card-b" style={{ paddingTop: 6 }}>
               <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
@@ -757,7 +870,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
           <div className="card">
             <div className="card-h">
               <h3>Key levels (pivots)</h3>
-              <span className="link">View all →</span>
+              <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
             </div>
             <div className="card-b" style={{ paddingTop: 6 }}>
               {([["R2", R2, "down"], ["R1", R1, "down"], ["Pivot", p, "dim"], ["S1", S1, "up"], ["S2", S2, "up"]] as [string, number, string][]).map(x => (
@@ -797,11 +910,417 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
         </>
       )}
 
+      {/* ── Inner drawers (View all) ── */}
+      {innerDrawer && (
+        <>
+          <div className="scrim" style={{ zIndex: 52 }} onClick={() => setInnerDrawer(null)} />
+
+          {/* Technical Rating */}
+          {innerDrawer === "techrating" && (
+            <div className="side-drawer" style={{ zIndex: 52 }}>
+              <div className="drawer-h">
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Technical Rating · {sym}</div>
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>11 oscillators · 15 moving averages</div>
+                </div>
+                <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
+              </div>
+              <div className="drawer-b">
+                <div className="trgroup" style={{ borderColor: "var(--ai-dim)", marginBottom: 14 }}>
+                  <div className="gl ai-c">Summary · {rating}</div>
+                  <TrGauge val={gv} label={rating} />
+                </div>
+                <div className="ai-sec"><div className="h">Oscillators</div></div>
+                <table className="ind-tbl">
+                  <tbody>
+                    {([
+                      ["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
+                      ["Stoch %K", (50 + data.c * 4).toFixed(1), (50 + data.c * 4) > 80 ? "Sell" : "Buy"],
+                      ["CCI (14)", (data.c * 15).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["MACD (12,26)", (data.c * 2.6).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["Williams %R", String(-(100 - rsi).toFixed(0)), rsi > 70 ? "Overbought" : "Neutral"],
+                      ["Bull/Bear Power", (data.c * 3.2).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["ADX (14)", (20 + Math.abs(data.c) * 2).toFixed(1), Math.abs(data.c) > 2 ? "Strong" : "Weak"],
+                      ["Ultimate Osc.", (45 + data.c * 3).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["ROC", (data.c * 1.8).toFixed(2), isUp ? "Buy" : "Sell"],
+                      ["Stoch RSI", (0.5 + data.c * 0.05).toFixed(2), isUp ? "Overbought" : "Oversold"],
+                      ["ATR (14)", (p * 0.018).toFixed(2), "Neutral"],
+                    ] as [string, string, string][]).map(r => (
+                      <tr key={r[0]}>
+                        <td>{r[0]}</td><td className="v">{r[1]}</td>
+                        <td className="a" style={{ color: ac(r[2]) }}>{r[2]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">Moving Averages</div></div>
+                <table className="ind-tbl">
+                  <tbody>
+                    {([
+                      ["SMA 10",  nf(p * 0.982), isUp ? "Buy" : "Sell"],
+                      ["SMA 20",  nf(p * 0.964), isUp ? "Buy" : "Sell"],
+                      ["SMA 30",  nf(p * 0.944), isUp ? "Buy" : "Sell"],
+                      ["SMA 50",  nf(p * 0.906), isUp ? "Buy" : "Sell"],
+                      ["SMA 100", nf(p * 0.822), isUp ? "Buy" : "Sell"],
+                      ["SMA 200", nf(p * 0.740), rs > 50 ? "Buy" : "Sell"],
+                      ["EMA 10",  nf(p * 0.988), isUp ? "Buy" : "Sell"],
+                      ["EMA 20",  nf(p * 0.968), isUp ? "Buy" : "Sell"],
+                      ["EMA 30",  nf(p * 0.948), isUp ? "Buy" : "Sell"],
+                      ["EMA 50",  nf(p * 0.938), isUp ? "Buy" : "Sell"],
+                      ["EMA 100", nf(p * 0.848), isUp ? "Buy" : "Sell"],
+                      ["EMA 200", nf(p * 0.762), rs > 50 ? "Buy" : "Sell"],
+                      ["Ichimoku Base", nf(p * 0.970), isUp ? "Buy" : "Sell"],
+                      ["VWAP",    nf(p * 0.994), isUp ? "Above" : "Below"],
+                      ["Hull MA (9)", nf(p * 0.991), isUp ? "Buy" : "Sell"],
+                    ] as [string, string, string][]).map(r => (
+                      <tr key={r[0]}>
+                        <td>{r[0]}</td><td className="v">{r[1]}</td>
+                        <td className="a" style={{ color: ac(r[2]) }}>{r[2]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                  Computed from 11 oscillators + 15 moving averages. Not investment advice.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Peers */}
+          {innerDrawer === "peers" && (
+            <div className="side-drawer" style={{ zIndex: 52 }}>
+              <div className="drawer-h">
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Peers · {group}</div>
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>All tracked stocks in this group</div>
+                </div>
+                <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
+              </div>
+              <div className="drawer-b">
+                {screenerStocks
+                  .filter(x => x.sec === group)
+                  .sort((a, b) => b.rs - a.rs)
+                  .map(x => {
+                    const chg = (x.rs - 50) / 10;
+                    return (
+                      <div key={x.s} className="minirow" style={{ cursor: "pointer" }}
+                        onClick={() => { setInnerDrawer(null); openStock(x.s); }}>
+                        <span className="mono" style={{
+                          fontWeight: 700, minWidth: 52,
+                          color: x.s === sym ? "var(--brand-2)" : "var(--text-hi)",
+                        }}>{x.s}</span>
+                        <span className="mid" style={{ fontSize: ".76rem" }}>{x.n}</span>
+                        <span className="pill" style={{ fontSize: ".66rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>RS {x.rs}</span>
+                        <span className={`mono ${cls(chg)}`} style={{ fontSize: ".82rem" }}>{sign(chg)}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* Industry Group rank */}
+          {innerDrawer === "industry" && (
+            <div className="side-drawer" style={{ zIndex: 52 }}>
+              <div className="drawer-h">
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Industry Group Rank</div>
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>All groups by relative strength</div>
+                </div>
+                <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
+              </div>
+              <div className="drawer-b">
+                {sectorList.map(g => (
+                  <div key={g.name} className="grouprow" style={{ cursor: "pointer" }}
+                    onClick={() => { setInnerDrawer(null); openSector(g.name); }}>
+                    <span className="rk">{g.rank}</span>
+                    <span className="gn" style={{
+                      color: g.name === group ? "var(--brand-2)" : undefined,
+                      fontWeight: g.name === group ? 700 : undefined,
+                    }}>{g.name}</span>
+                    <div className="bar"><i style={{ width: Math.max(8, 100 - g.rank * 1.6) + "%" }} /></div>
+                    <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.chg)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Insider & institutional */}
+          {innerDrawer === "insider" && (
+            <div className="side-drawer" style={{ zIndex: 52 }}>
+              <div className="drawer-h">
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Insider &amp; Institutional · {sym}</div>
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Form 4 filings · 13F institutional data</div>
+                </div>
+                <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
+              </div>
+              <div className="drawer-b">
+                <div className="metric-grid" style={{ marginBottom: 14 }}>
+                  <div className="m"><div className="k">Inst. ownership</div><div className="v up">{io}%</div></div>
+                  <div className="m"><div className="k">Short interest</div><div className={`v ${si > 10 ? "down" : ""}`}>{si}%</div></div>
+                  <div className="m"><div className="k">13F funds</div><div className="v">{fundsHolding} tracked</div></div>
+                </div>
+                <div className="ai-sec"><div className="h">Recent insider transactions (Form 4)</div></div>
+                {data.ins.length > 0 ? data.ins.map((n, i) => {
+                  const isSell = /sale|sold|exercis/i.test(n.a);
+                  const valEst = (Math.abs(data.c) * 0.0015 * mc + 0.5).toFixed(1);
+                  return (
+                    <div key={i} className="minirow" style={{ alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                      <span className={`pill ${isSell ? "dn" : "up"}`} style={{ flex: "none", fontSize: ".66rem" }}>{isSell ? "SELL" : "BUY"}</span>
+                      <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
+                        <b style={{ color: "var(--text-hi)" }}>{n.n}</b> {n.a}{" "}
+                        <span style={{ color: "var(--text-dim-solid)" }}>({n.dt})</span>
+                      </span>
+                      <span className={`r mono ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
+                        {isSell ? "−" : "+"}${valEst}M
+                      </span>
+                    </div>
+                  );
+                }) : (
+                  <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "6px 0 12px" }}>
+                    No recent Form 4 activity found.
+                  </div>
+                )}
+                {(() => {
+                  const holdingFunds = Object.entries(fundDetail)
+                    .filter(([, fd]) => fd.holdings.some(h => h[0] === sym))
+                    .slice(0, 8);
+                  return holdingFunds.length > 0 ? (
+                    <>
+                      <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">Top institutional holders (13F)</div></div>
+                      {holdingFunds.map(([nm, fd]) => {
+                        const h = fd.holdings.find(x => x[0] === sym);
+                        return (
+                          <div key={nm} className="minirow">
+                            <span className="mid">{nm}</span>
+                            <span className="r" style={{ color: "var(--text-hi)" }}>{h ? h[1] + "%" : "—"}</span>
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : null;
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Key levels */}
+          {innerDrawer === "keylevels" && (
+            <div className="side-drawer" style={{ zIndex: 52 }}>
+              <div className="drawer-h">
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Key Levels · {sym}</div>
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Pivot points · support &amp; resistance</div>
+                </div>
+                <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
+              </div>
+              <div className="drawer-b">
+                <div className="ai-sec"><div className="h">Classic pivot (daily)</div></div>
+                {([
+                  ["R3", p * 1.09, "Resistance 3", "down"],
+                  ["R2", R2,       "Resistance 2", "down"],
+                  ["R1", R1,       "Resistance 1", "down"],
+                  ["Pivot", p,     "Pivot point",  "dim"],
+                  ["S1", S1,       "Support 1",    "up"],
+                  ["S2", S2,       "Support 2",    "up"],
+                  ["S3", p * 0.91, "Support 3",    "up"],
+                ] as [string, number, string, string][]).map(x => (
+                  <div key={x[0]} className="minirow">
+                    <span className="tkr" style={{ width: 50 }}>{x[0]}</span>
+                    <span className="mid" style={{ fontSize: ".76rem", color: "var(--text-dim-solid)" }}>{x[2]}</span>
+                    <span className="r mono" style={{ color: x[3] === "dim" ? "var(--text-hi)" : x[3] === "up" ? "var(--up)" : "var(--down)" }}>
+                      ${nf(x[1])}
+                    </span>
+                  </div>
+                ))}
+                <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">52-week levels</div></div>
+                <div className="metric-grid">
+                  <div className="m"><div className="k">52W High</div><div className="v up">${nf(hi)}</div></div>
+                  <div className="m"><div className="k">52W Low</div><div className="v down">${nf(lo)}</div></div>
+                  <div className="m"><div className="k">From High</div><div className={`v ${cls((p - hi) / hi * 100)}`}>{sign((p - hi) / hi * 100)}</div></div>
+                  <div className="m"><div className="k">From Low</div><div className={`v ${cls((p - lo) / lo * 100)}`}>{sign((p - lo) / lo * 100)}</div></div>
+                </div>
+                <div className="note" style={{ marginTop: 14 }}>
+                  <b style={{ color: "var(--text-hi)" }}>AI read:</b> {sym} is ${nf(Math.abs(p - S1))} above S1 (${nf(S1)}) and ${nf(Math.abs(R1 - p))} below R1 (${nf(R1)}). Risk/reward {((R1 - p) / (p - S1)).toFixed(1)}×.
+                </div>
+                <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                  Pivot levels derived from recent OHLC data. Not investment advice.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Earnings History */}
+          {innerDrawer === "earnings" && (
+            <div className="side-drawer" style={{ zIndex: 52 }}>
+              <div className="drawer-h">
+                <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)", flexShrink: 0 }}>
+                  {sym[0]}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>{sym}</div>
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Earnings history · last 10 quarters</div>
+                </div>
+                <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
+              </div>
+              <div className="drawer-b">
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                  <div className="streak">
+                    {chips.map((b, i) => (
+                      <b key={i} style={{ background: b ? "var(--up)" : "var(--down)" }}>{b ? "B" : "M"}</b>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{Math.abs(st)}-qtr {st >= 0 ? "beat" : "miss"} streak</span>
+                </div>
+                <div className="ec-legend">
+                  <span><i style={{ background: "var(--surface-3)" }} />EPS estimate</span>
+                  <span><i style={{ background: "var(--up)" }} />Beat</span>
+                  <span><i style={{ background: "var(--down)" }} />Miss</span>
+                  <span><i className="ln" style={{ background: "var(--brand-2)" }} />Stock move %</span>
+                </div>
+                <EarnEpsChart hist={hist10} />
+                <div style={{ overflowX: "auto", marginTop: 12 }}>
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th>Quarter</th>
+                        <th className="num">EPS est</th>
+                        <th className="num">EPS act</th>
+                        <th className="num">Surprise</th>
+                        <th className="num">Move</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hist10.map(q => (
+                        <tr key={q.q}>
+                          <td><b style={{ color: "var(--text-hi)" }}>{q.q}</b></td>
+                          <td className="num">${q.e.toFixed(2)}</td>
+                          <td className="num">${q.a.toFixed(2)}</td>
+                          <td className={`num ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "+" : ""}{q.surp}%</td>
+                          <td className={`num ${q.mv >= 0 ? "up" : "down"}`}>{q.mv >= 0 ? "+" : ""}{q.mv}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                  {hist10.filter(h => h.surp >= 0).length}/{hist10.length} beats over the last 10 quarters · illustrative.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Financials */}
+          {innerDrawer === "financials" && (() => {
+            const inc = earnIncome(mc, mg, p);
+            const fb = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
+            const beats10 = hist10.filter(h => h.surp >= 0).length;
+            const avgMv = (hist10.reduce((a, h) => a + Math.abs(h.mv), 0) / hist10.length).toFixed(1);
+            const erEnt = earningsData.find(e => e.s === sym);
+            const aiRead = erEnt
+              ? `${sym} ${erEnt.epsA != null ? (erEnt.epsA >= erEnt.epsE ? "beat" : "missed") + " EPS estimates" : "reports " + erEnt.t}. Guidance ${erEnt.guide === "Raised" ? "was raised — bullish" : erEnt.guide === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${erEnt.react != null ? "Shares reacted " + (erEnt.react >= 0 ? "+" : "") + erEnt.react + "% on the print." : `Options imply a ±${erEnt.implied}% move.`}`
+              : `${data.name} reports around ${erDate !== "—" ? erDate : "next quarter"}.`;
+            return (
+              <div className="side-drawer" style={{ zIndex: 52 }}>
+                <div className="drawer-h">
+                  <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)", flexShrink: 0 }}>
+                    {sym[0]}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>{sym}</div>
+                    <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Financials · income statement</div>
+                  </div>
+                  <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
+                </div>
+                <div className="drawer-b">
+                  {/* 10-quarter EPS chart */}
+                  <div className="card" style={{ marginBottom: 14 }}>
+                    <div className="card-h">
+                      <h3>{sym} · 10-quarter earnings history</h3>
+                      {erEnt?.react != null
+                        ? <span className={`pill ${erEnt.react >= 0 ? "up" : "dn"}`}>{erEnt.react >= 0 ? "+" : ""}{erEnt.react}% last reaction</span>
+                        : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats10}/10 beats</span>
+                      }
+                    </div>
+                    <div className="card-b" style={{ paddingTop: 8 }}>
+                      <div className="ec-legend">
+                        <span><i style={{ background: "var(--surface-3)" }} />EPS estimate</span>
+                        <span><i style={{ background: "var(--up)" }} />Beat</span>
+                        <span><i style={{ background: "var(--down)" }} />Miss</span>
+                        <span><i className="ln" style={{ background: "var(--brand-2)" }} />Stock move %</span>
+                      </div>
+                      <EarnEpsChart hist={hist10} />
+                    </div>
+                  </div>
+                  {/* Income statement */}
+                  <div className="card" style={{ marginBottom: 14 }}>
+                    <div className="card-h">
+                      <h3>Income statement</h3>
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Quarterly</span>
+                    </div>
+                    <div className="card-b" style={{ paddingTop: 8 }}>
+                      <div className="ec-legend">
+                        <span><i style={{ background: "var(--brand)" }} />Revenue</span>
+                        <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
+                        <span><i style={{ background: "var(--up)" }} />Net income</span>
+                      </div>
+                      <EarnIncChart inc={inc} />
+                      <div style={{ overflowX: "auto", marginTop: 12 }}>
+                        <table className="tbl">
+                          <thead>
+                            <tr>
+                              <th>Item</th>
+                              {inc.map(c => <th key={c.c} className="num">{c.c}</th>)}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {([
+                              ["Revenue",           "rev",  true],
+                              ["Cost of revenue",   "cogs", false],
+                              ["Gross profit",      "gp",   true],
+                              ["Operating expenses","opex", false],
+                              ["Operating income",  "oi",   true],
+                              ["Net income",        "ni",   true],
+                              ["Diluted EPS",       "eps",  false],
+                            ] as [string, keyof IncRow, boolean][]).map(([lbl, key, bold]) => (
+                              <tr key={lbl}>
+                                <td style={bold ? { fontWeight: 700, color: "var(--text-hi)" } : {}}>{lbl}</td>
+                                {inc.map(c => (
+                                  <td key={c.c} className="num" style={bold ? { fontWeight: 700, color: "var(--text-hi)" } : {}}>
+                                    {key === "eps" ? `$${(c[key] as number).toFixed(2)}` : fb(c[key] as number)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                  {/* AI read */}
+                  <div className="ai-block">
+                    <div className="card-h"><h3 className="ai-c">◆ AI earnings read · {sym}</h3></div>
+                    <div className="card-b">
+                      <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>
+                        {aiRead} History shows <b style={{ color: "var(--text-hi)" }}>{beats10}/10 beats</b> and an average post-print move of <b style={{ color: "var(--text-hi)" }}>{avgMv}%</b>. Watch revenue growth and forward guidance most.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </>
+      )}
+
       {/* ── Add note modal ── */}
       {noteOpen && (
         <>
-          <div className="scrim" onClick={() => setNoteOpen(false)} />
-          <div className="drawer" style={{ maxHeight: "min(340px,80vh)" }}>
+          <div className="scrim" style={{ zIndex: 53 }} onClick={() => setNoteOpen(false)} />
+          <div className="side-drawer" style={{ zIndex: 53, width: "min(420px, 98vw)" }}>
             <div className="drawer-h">
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: "1.05rem", color: "var(--text-hi)" }}>
