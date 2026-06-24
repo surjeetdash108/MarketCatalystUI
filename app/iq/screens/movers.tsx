@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useIQActions } from "../shell";
+import dynamic from "next/dynamic";
 import { movers, analyst, earnings, watch, folio } from "../data";
 import { fmt, sign, cls, arr, Spark, StockLogo } from "../utils";
+
+const StockScreenEmbed = dynamic<{ initialSym?: string }>(
+  () => import("./stock").then(m => ({ default: m.StockScreen })),
+  { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
+);
 
 const TABS = [
   ["win",  "Top Gainers"],
@@ -32,10 +37,10 @@ function computeTrending() {
 }
 
 export function MoversScreen() {
-  const { openStock } = useIQActions();
-  const [tab,    setTab]    = useState<TabKey>("win");
-  const [sector, setSector] = useState("All");
-  const [cap,    setCap]    = useState("All");
+  const [tab,        setTab]        = useState<TabKey>("win");
+  const [sector,     setSector]     = useState("All");
+  const [cap,        setCap]        = useState("All");
+  const [selectedSym, setSelectedSym] = useState<string | null>(null);
 
   const pool    = movers;
   const sectors = ["All", ...Array.from(new Set(pool.map(m => m.sector))).sort()];
@@ -95,7 +100,7 @@ export function MoversScreen() {
               const mv = movers.find(m => m.s === o.s);
               const isUp = (mv?.c ?? 0) >= 0;
               return (
-                <button key={o.s} className="tr-pill" onClick={() => openStock(o.s)}>
+                <button key={o.s} className="tr-pill" onClick={() => setSelectedSym(o.s)}>
                   <StockLogo sym={o.s} size={18} />
                   <span className="tr-tk">{o.s}</span>
                   <span className="tr-mt">{o.n} reports · {o.days}d</span>
@@ -132,7 +137,7 @@ export function MoversScreen() {
         </div>
       )}
 
-      <div className="card" style={{ overflow: "visible" }}>
+      <div className="card">
         <table className="tbl">
           <thead>
             <tr>
@@ -153,7 +158,12 @@ export function MoversScreen() {
             ) : filtered.map(m => {
               const v = val(m);
               return (
-                <tr key={m.s} className={m.owned ? "owned" : ""} onClick={() => openStock(m.s)} style={{ cursor: "pointer" }}>
+                <tr
+                  key={m.s}
+                  className={m.owned ? "owned" : ""}
+                  onClick={() => setSelectedSym(m.s)}
+                  style={{ cursor: "pointer" }}
+                >
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <StockLogo sym={m.s} size={26} />
@@ -183,15 +193,6 @@ export function MoversScreen() {
                       ? <span style={{ color: "var(--text-dim-solid)" }}>{m.cat}</span>
                       : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{m.cat}</span>
                     }
-                    {" "}<span className="mv-i">ⓘ</span>
-                    <div className="mvpop">
-                      <div className="mvtabs">
-                        <span className="mvt mvt-t">Technical</span>
-                        <span className="mvt mvt-n">News</span>
-                      </div>
-                      <div className="mvp mvp-t">{m.tech}</div>
-                      <div className="mvp mvp-n">{m.news}</div>
-                    </div>
                   </td>
                   <td className="num">
                     <Spark seed={m.s.charCodeAt(0)} up={v >= 0} />
@@ -202,6 +203,30 @@ export function MoversScreen() {
           </tbody>
         </table>
       </div>
+
+      {/* Sliding stock detail drawer */}
+      {selectedSym && (
+        <>
+          <div className="scrim" onClick={() => setSelectedSym(null)} />
+          <div className="stock-side-drawer">
+            <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
+              <StockLogo sym={selectedSym} size={32} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+                  {selectedSym} · Stock Details
+                </div>
+                <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                  Full analysis · chart · technicals · peers
+                </div>
+              </div>
+              <button className="closebtn" onClick={() => setSelectedSym(null)}>✕</button>
+            </div>
+            <div className="drawer-b">
+              <StockScreenEmbed initialSym={selectedSym} />
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
