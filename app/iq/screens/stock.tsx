@@ -144,12 +144,19 @@ function EarnIncChart({ inc }: { inc: IncRow[] }) {
   );
 }
 
-export function StockScreen() {
+export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
   const { openEarnings, openStock } = useIQActions();
   const [sym, setSym] = useState(() => {
+    if (initialSym) return initialSym;
     if (typeof window !== "undefined") return localStorage.getItem("iq-stock") || "NVDA";
     return "NVDA";
   });
+
+  // Sync when the parent passes a new ticker (e.g. user clicks a different mover)
+  useEffect(() => {
+    if (initialSym && initialSym !== sym) setSym(initialSym);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSym]);
   const [search, setSearch] = useState("");
   const [tfActive, setTfActive] = useState("3M");
   const [toneActive, setToneActive] = useState("Swing");

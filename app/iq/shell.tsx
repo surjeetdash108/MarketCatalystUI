@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 
 // Dynamic import breaks the circular dep: stock.tsx → shell.tsx → stock.tsx
-const StockScreenEmbed = dynamic(
+const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
@@ -564,11 +564,6 @@ function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
 
 // ---- Mover Modal — full stock page in a modal overlay ----
 function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
-  // Set symbol synchronously so StockScreenEmbed picks it up on mount
-  if (typeof window !== "undefined") {
-    localStorage.setItem("iq-stock", sym);
-  }
-
   return (
     <>
       <div className="scrim" onClick={onClose} />
@@ -580,7 +575,7 @@ function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
         <div className="stock-full-modal-body">
-          <StockScreenEmbed />
+          <StockScreenEmbed initialSym={sym} />
         </div>
       </div>
     </>
@@ -1017,7 +1012,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <StockDrawer sym={drawer.sym} onClose={() => setDrawer(null)} />
           )}
           {drawer?.type === "mover-modal" && (
-            <MoverModal sym={drawer.sym} onClose={() => setDrawer(null)} />
+            <MoverModal key={drawer.sym} sym={drawer.sym} onClose={() => setDrawer(null)} />
           )}
           {drawer?.type === "earnings" && (
             <EarningsDrawer sym={drawer.sym} onClose={() => setDrawer(null)} />
