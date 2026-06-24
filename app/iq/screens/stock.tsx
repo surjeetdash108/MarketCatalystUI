@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useIQActions } from "../shell";
 import { stockInfo, watch, movers as moversData, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail } from "../data";
-import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, earnHistory, EarnQ } from "../utils";
+import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, earnHistory, EarnQ, EarningsGrowthChart } from "../utils";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 
@@ -75,6 +75,29 @@ const EXCHANGE: Record<string, string> = {
   AMZN: "NASDAQ", TSLA: "NASDAQ", JPM: "NYSE", V: "NYSE", UNH: "NYSE",
   AVGO: "NASDAQ", CRM: "NYSE", PLTR: "NYSE", INTC: "NASDAQ", WBA: "NASDAQ",
   DELL: "NYSE", ZIM: "NYSE", AMD: "NASDAQ", MU: "NASDAQ", SMCI: "NASDAQ",
+};
+
+const STOCK_DESC: Record<string, string> = {
+  NVDA: "Designs and sells GPUs, networking chips, and AI computing platforms. Its CUDA software stack has become the default infrastructure for AI model training and inference at hyperscale.",
+  TSLA: "Manufactures electric vehicles and develops autonomous driving software (FSD). Also sells energy storage systems and solar products; a growing robotics initiative (Optimus) is in early development.",
+  AAPL: "Designs and markets consumer electronics, software, and services. The iPhone-anchored hardware business is complemented by a fast-growing, high-margin services segment including the App Store, iCloud, and Apple TV+.",
+  MSFT: "Develops cloud computing (Azure), enterprise software (Microsoft 365), and professional social networking (LinkedIn). An OpenAI partnership has embedded Copilot AI across its entire product suite.",
+  GOOGL: "Operates the world's dominant search engine and YouTube. Generates revenue almost entirely from digital advertising, with Google Cloud as a rapidly growing second business and DeepMind driving AI research.",
+  META: "Runs the world's largest social platforms — Facebook, Instagram, and WhatsApp. Revenue is nearly all digital advertising; heavy investment in AI infrastructure and Reality Labs (VR/AR) headsets.",
+  AMZN: "The world's largest e-commerce marketplace and the leading cloud-computing provider through AWS. Also operates a high-margin digital advertising business, Prime Video, and a growing healthcare segment.",
+  JPM:  "The largest U.S. bank by assets, with businesses spanning consumer banking, investment banking, commercial lending, and asset management. A key beneficiary of the higher-for-longer interest-rate environment.",
+  V:    "Operates a global payments network connecting cardholders, merchants, and financial institutions. Earns fees on transaction volume rather than extending credit, insulating it from consumer-credit risk.",
+  UNH:  "A diversified healthcare conglomerate: UnitedHealthcare provides health insurance plans while Optum delivers pharmacy benefits, data analytics, and care delivery services.",
+  AVGO: "Designs semiconductors and infrastructure software for networking, storage, and broadband. Major AI revenue driver through custom accelerators for hyperscalers; software business adds recurring revenue via VMware.",
+  CRM:  "Provides cloud-based customer-relationship-management (CRM) software. Its platform spans sales, service, marketing, and analytics; the Einstein AI layer is being woven through every product.",
+  PLTR: "Builds data-analytics and AI platforms for government intelligence agencies (Gotham) and commercial enterprises (Foundry, AIP). Known for deep integrations into mission-critical workflows.",
+  INTC: "Designs and manufactures CPUs for PCs, servers, and embedded systems. Executing a multi-year foundry turnaround (Intel Foundry Services) to regain process-node leadership lost to TSMC and Samsung.",
+  WBA:  "Operates one of the largest U.S. pharmacy chains and provides pharmacy-benefit and healthcare services. Navigating store closures and margin compression amid structural pharmacy-reimbursement headwinds.",
+  DELL: "Designs and sells PCs, servers, networking gear, and storage systems. Its Infrastructure Solutions Group is a direct beneficiary of AI-driven server demand, particularly for NVIDIA-GPU-based configurations.",
+  ZIM:  "An Israel-based container shipping company that carries cargo across global trade lanes. Earnings are highly cyclical, tracking global container freight rates and supply-chain volumes.",
+  AMD:  "Designs high-performance CPUs (EPYC) and GPUs (Instinct), competing directly with Intel in data-center compute and NVIDIA in AI accelerators. Gained meaningful AI-chip market share with MI300X.",
+  MU:   "Manufactures DRAM and NAND flash memory — the primary storage building blocks inside smartphones, PCs, and data centers. Pricing is cyclical; the AI memory supercycle (HBM) is a key near-term catalyst.",
+  SMCI: "Designs and assembles high-density server and storage systems, specialising in AI-optimised racks built around NVIDIA GPUs. Competes on speed-to-market and customisation for hyperscaler and enterprise buyers.",
 };
 
 const BEAT_STREAK: Record<string, number> = {
@@ -485,6 +508,21 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
         )}
       </div>
 
+      {/* Stock description — full width, above the chart grid */}
+      <div style={{ padding: "0 18px 16px" }}>
+        <div style={{
+          background: "var(--surface-1)", border: "1px solid var(--border-soft)",
+          borderRadius: "var(--r-sm)", padding: "13px 16px",
+        }}>
+          <div style={{ fontSize: ".65rem", fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--text-dim-solid)", marginBottom: 6 }}>
+            About {data.name}
+          </div>
+          <p style={{ fontSize: ".85rem", lineHeight: 1.7, color: "var(--text)", margin: 0 }}>
+            {STOCK_DESC[sym] ?? `${data.name} is a ${group} company listed on ${ex}.`}
+          </p>
+        </div>
+      </div>
+
       <div className="sd-grid">
         {/* LEFT COLUMN */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -650,6 +688,34 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                   <EarnIncChart inc={inc} />
                   <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
                     Last 4 quarters · revenue, gross profit &amp; net income · tap &ldquo;View all&rdquo; for the full statement &amp; 10-quarter EPS history.
+                  </div>
+
+                  <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border-soft)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                      <div style={{ fontSize: ".78rem", fontWeight: 700, color: "var(--text-hi)" }}>Earnings Growth (EPS)</div>
+                      <span className="ec-legend" style={{ margin: 0 }}>
+                        <span><i style={{ background: "var(--up)" }} />Beat</span>
+                        <span><i style={{ background: "var(--down)" }} />Miss</span>
+                        <span><i className="ln" style={{ background: "var(--brand-2)" }} />Trend</span>
+                      </span>
+                    </div>
+                    <EarningsGrowthChart hist={hist10} />
+                    <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
+                      <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                        <b style={{ color: "var(--text-hi)" }}>{hist10.filter(h => h.surp >= 0).length}/8</b> beats last 8 qtrs
+                      </div>
+                      <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                        Latest EPS <b style={{ color: "var(--text-hi)" }}>${hist10[0]?.a.toFixed(2)}</b>
+                      </div>
+                      {hist10.length >= 5 && (() => {
+                        const yoy = ((hist10[0].a - hist10[4].a) / Math.abs(hist10[4].a || 1)) * 100;
+                        return (
+                          <div style={{ fontSize: ".7rem" }}>
+                            YoY <b style={{ color: yoy >= 0 ? "var(--up)" : "var(--down)" }}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</b>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -182,6 +182,79 @@ export function earnHistory(sym: string, base: number): EarnQ[] {
   });
 }
 
+export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
+  const d = [...hist].slice(0, 8).reverse();
+  const W = 560, H = 190, PADL = 36, PADR = 12, PADT = 28, PADB = 26;
+  const iw = W - PADL - PADR, ih = H - PADT - PADB;
+  const vals = d.map(x => x.a);
+  const maxV = Math.max(...vals, 0.01) * 1.25;
+  const minV = Math.min(...vals, 0);
+  const range = maxV - minV || 1;
+  const n = d.length, gw = iw / n, bw = gw * 0.44;
+  const cy = (v: number) => PADT + ih - ((v - minV) / range) * ih;
+  const pts = d.map((x, i) => `${(PADL + gw * i + gw / 2).toFixed(1)},${cy(x.a).toFixed(1)}`).join(" ");
+  const yTicks = [minV, minV + range / 2, maxV].map(v => ({
+    v, y: cy(v),
+    label: v >= 1 ? `$${v.toFixed(1)}` : `$${v.toFixed(2)}`,
+  }));
+  const yoyMap: Record<string, number> = {};
+  d.forEach((q, i) => {
+    if (i >= 4) yoyMap[q.q] = ((q.a - d[i - 4].a) / Math.abs(d[i - 4].a || 1)) * 100;
+  });
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: W, display: "block" }}>
+      {minV < 0 && (
+        <line x1={PADL} y1={cy(0).toFixed(1)} x2={W - PADR} y2={cy(0).toFixed(1)}
+          stroke="var(--border)" strokeDasharray="3 3" />
+      )}
+      {yTicks.map(t => (
+        <g key={t.v}>
+          <line x1={PADL} y1={t.y.toFixed(1)} x2={W - PADR} y2={t.y.toFixed(1)}
+            stroke="var(--border-soft)" strokeDasharray="2 4" />
+          <text x={(PADL - 4).toFixed(1)} y={(t.y + 3.5).toFixed(1)} textAnchor="end"
+            style={{ fill: "var(--text-dim-solid)", fontSize: "8px" }}>
+            {t.label}
+          </text>
+        </g>
+      ))}
+      {d.map((x, i) => {
+        const cx = PADL + gw * i + gw / 2;
+        const barH = Math.max(2, (Math.abs(x.a - minV) / range) * ih);
+        const barY = cy(Math.max(x.a, minV));
+        const beat = x.surp >= 0;
+        const yoy = yoyMap[x.q];
+        return (
+          <g key={x.q}>
+            <rect x={(cx - bw / 2).toFixed(1)} y={barY.toFixed(1)}
+              width={bw.toFixed(1)} height={barH.toFixed(1)} rx="3"
+              style={{ fill: beat ? "var(--up)" : "var(--down)", opacity: 0.85 }} />
+            <text x={cx.toFixed(1)} y={(barY - 4).toFixed(1)} textAnchor="middle"
+              style={{ fill: "var(--text-hi)", fontSize: "8.5px", fontWeight: 600 }}>
+              ${x.a.toFixed(2)}
+            </text>
+            {yoy !== undefined && (
+              <text x={cx.toFixed(1)} y={(barY - 14).toFixed(1)} textAnchor="middle"
+                style={{ fill: yoy >= 0 ? "var(--up)" : "var(--down)", fontSize: "7.5px", fontWeight: 700 }}>
+                {yoy >= 0 ? "+" : ""}{yoy.toFixed(0)}% YoY
+              </text>
+            )}
+            <text x={cx.toFixed(1)} y={H - 8} textAnchor="middle"
+              style={{ fill: "var(--text-dim-solid)", fontSize: "8.5px" }}>
+              {x.q.replace(" ", "'")}
+            </text>
+          </g>
+        );
+      })}
+      <polyline points={pts} fill="none" stroke="var(--brand-2)" strokeWidth="1.8"
+        strokeLinejoin="round" style={{ opacity: 0.85 }} />
+      {d.map((x, i) => (
+        <circle key={x.q} cx={(PADL + gw * i + gw / 2).toFixed(1)} cy={cy(x.a).toFixed(1)} r="2.8"
+          style={{ fill: "var(--brand-2)" }} />
+      ))}
+    </svg>
+  );
+}
+
 // ---- Candlestick chart (matches HTML genOHLC + candleChart) ----
 type OHLCBar = { o: number; h: number; l: number; c: number; v: number };
 

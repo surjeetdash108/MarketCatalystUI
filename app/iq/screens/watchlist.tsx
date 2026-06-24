@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { watch as watchData, WatchItem } from "../data";
+import { watch as watchData, WatchItem, screenerStocks, movers as moversData } from "../data";
 import { cls, arr, sign, fmt, StockLogo } from "../utils";
 
 const StockScreenEmbed = dynamic<{ initialSym?: string }>(
@@ -243,28 +243,64 @@ export function WatchlistScreen() {
       )}
 
       {/* Sliding stock detail drawer */}
-      {selectedSym && (
-        <>
-          <div className="scrim" onClick={() => setSelectedSym(null)} />
-          <div className="stock-side-drawer">
-            <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
-              <StockLogo sym={selectedSym} size={32} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
-                  {selectedSym} · Stock Details
+      {selectedSym && (() => {
+        const w  = watchData.find(x => x.s === selectedSym);
+        const ss = screenerStocks.find(x => x.s === selectedSym);
+        const mv = moversData.find(x => x.s === selectedSym);
+        const px = mv?.p ?? w?.px ?? 0;
+        const c  = mv?.c ?? w?.c ?? 0;
+        const sector = mv?.sector ?? ss?.sec ?? "—";
+        const rs = ss?.rs ?? "—";
+        return (
+          <>
+            <div className="scrim" onClick={() => setSelectedSym(null)} />
+            <div className="stock-side-drawer">
+              <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
+                <StockLogo sym={selectedSym} size={32} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+                    {selectedSym} · {w?.n ?? selectedSym}
+                  </div>
+                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                    {sector}
+                  </div>
                 </div>
-                <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                  Full analysis · chart · technicals · peers
-                </div>
+                <button className="closebtn" onClick={() => setSelectedSym(null)}>✕</button>
               </div>
-              <button className="closebtn" onClick={() => setSelectedSym(null)}>✕</button>
+              <div className="drawer-b" style={{ padding: "14px 14px 0" }}>
+                {/* Watchlist context bar — mirrors portfolio's pf-ctx */}
+                <div className="pf-ctx" style={{ marginBottom: 14 }}>
+                  <div className="m">
+                    <span className="k">Price</span>
+                    <span className="v">${fmt(px)}</span>
+                  </div>
+                  <div className="m">
+                    <span className="k">Day</span>
+                    <span className={`v ${cls(c)}`}>{sign(c)}</span>
+                  </div>
+                  {w?.er && (
+                    <div className="m">
+                      <span className="k">Next ER</span>
+                      <span className="v" style={{ fontSize: ".8rem" }}>{w.er}</span>
+                    </div>
+                  )}
+                  <div className="m">
+                    <span className="k">RS Rank</span>
+                    <span className="v">{rs}</span>
+                  </div>
+                  {w?.analyst && (
+                    <div className="m" style={{ flex: 1 }}>
+                      <span className="k">Analyst</span>
+                      <span className="v" style={{ fontSize: ".72rem" }}>{w.analyst}</span>
+                    </div>
+                  )}
+                </div>
+                <StockScreenEmbed initialSym={selectedSym} />
+              </div>
             </div>
-            <div className="drawer-b">
-              <StockScreenEmbed initialSym={selectedSym} />
-            </div>
-          </div>
-        </>
-      )}
+          </>
+        );
+      })()}
     </>
   );
 }
