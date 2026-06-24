@@ -491,12 +491,6 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
               </svg>
               {watchedSet.has(sym) ? "★ Watching" : "Watch"}
             </button>
-            <button className="btn ai">
-              <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
-                <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
-              </svg>
-              Ask Copilot
-            </button>
           </div>
         </div>
 

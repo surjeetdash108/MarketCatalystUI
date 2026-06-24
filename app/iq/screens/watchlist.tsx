@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useIQActions } from "../shell";
+import dynamic from "next/dynamic";
 import { watch as watchData, WatchItem } from "../data";
 import { cls, arr, sign, fmt, StockLogo } from "../utils";
+
+const StockScreenEmbed = dynamic<{ initialSym?: string }>(
+  () => import("./stock").then(m => ({ default: m.StockScreen })),
+  { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
+);
 
 type WlRange = "eod" | "eow";
 type Filter = "All" | "Has alert" | "Options active";
@@ -18,18 +23,18 @@ function wlAlerts(w: WatchItem): Array<[string, string, string]> {
 }
 
 export function WatchlistScreen() {
-  const { openStock } = useIQActions();
-  const [wlRange, setWlRange] = useState<WlRange>("eod");
-  const [aiOn, setAiOn] = useState<Set<string>>(() => new Set(watchData.map(w => w.s)));
-  const [watching, setWatching] = useState<Set<string>>(() => {
+  const [wlRange,       setWlRange]       = useState<WlRange>("eod");
+  const [aiOn,          setAiOn]          = useState<Set<string>>(() => new Set(watchData.map(w => w.s)));
+  const [watching,      setWatching]      = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("iq-watchlist");
       if (saved) { try { return new Set(JSON.parse(saved) as string[]); } catch { /* ignore */ } }
     }
     return new Set(watchData.map(w => w.s));
   });
-  const [filter, setFilter] = useState<Filter>("All");
+  const [filter,        setFilter]        = useState<Filter>("All");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [selectedSym,   setSelectedSym]   = useState<string | null>(null);
 
   function toggleAI(sym: string) {
     setAiOn(prev => {
@@ -68,10 +73,10 @@ export function WatchlistScreen() {
     return true;
   });
 
-  const up = list.filter(w => w.c > 0).length;
-  const dn = list.filter(w => w.c < 0).length;
-  const best = [...list].sort((a, b) => b.c - a.c)[0];
-  const worst = [...list].sort((a, b) => a.c - b.c)[0];
+  const up      = list.filter(w => w.c > 0).length;
+  const dn      = list.filter(w => w.c < 0).length;
+  const best    = [...list].sort((a, b) => b.c - a.c)[0];
+  const worst   = [...list].sort((a, b) => a.c - b.c)[0];
   const aiCount = aiOn.size;
 
   const eodText =
@@ -130,32 +135,6 @@ export function WatchlistScreen() {
           <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Add names with the ⭐ in search (⌘K)</span>
         </div>
 
-        {/* Delete confirmation popup */}
-        {confirmDelete && (
-          <>
-            <div className="scrim" style={{ zIndex: 60 }} onClick={() => setConfirmDelete(null)} />
-            <div style={{
-              position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-              background: "var(--surface-1)", border: "1px solid var(--border)",
-              borderRadius: "var(--r-lg)", padding: 24, zIndex: 61,
-              minWidth: 320, boxShadow: "0 16px 48px rgba(0,0,0,.5)",
-            }}>
-              <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)", marginBottom: 8 }}>
-                Remove from watchlist
-              </div>
-              <div style={{ fontSize: ".88rem", color: "var(--text)", marginBottom: 20 }}>
-                Are you sure want to delete{" "}
-                <b style={{ color: "var(--text-hi)" }}>{confirmDelete}</b>{" "}
-                from your watchlist?
-              </div>
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button className="btn" onClick={() => setConfirmDelete(null)}>Cancel</button>
-                <button className="btn primary" onClick={() => deleteFromWatchlist(confirmDelete)}>OK</button>
-              </div>
-            </div>
-          </>
-        )}
-
         {/* Watchlist table */}
         <div className="card">
           <div className="tbl-wrap">
@@ -178,7 +157,7 @@ export function WatchlistScreen() {
                   const ai = aiOn.has(w.s);
                   return (
                     <tr key={w.s}>
-                      <td onClick={() => openStock(w.s)} style={{ cursor: "pointer" }}>
+                      <td onClick={() => setSelectedSym(w.s)} style={{ cursor: "pointer" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <StockLogo sym={w.s} size={26} />
                           <div className="co">
@@ -236,6 +215,56 @@ export function WatchlistScreen() {
           </div>
         </div>
       </div>
+
+      {/* Delete confirmation popup */}
+      {confirmDelete && (
+        <>
+          <div className="scrim" style={{ zIndex: 60 }} onClick={() => setConfirmDelete(null)} />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            background: "var(--surface-1)", border: "1px solid var(--border)",
+            borderRadius: "var(--r-lg)", padding: 24, zIndex: 61,
+            minWidth: 320, boxShadow: "0 16px 48px rgba(0,0,0,.5)",
+          }}>
+            <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)", marginBottom: 8 }}>
+              Remove from watchlist
+            </div>
+            <div style={{ fontSize: ".88rem", color: "var(--text)", marginBottom: 20 }}>
+              Are you sure want to delete{" "}
+              <b style={{ color: "var(--text-hi)" }}>{confirmDelete}</b>{" "}
+              from your watchlist?
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button className="btn primary" onClick={() => deleteFromWatchlist(confirmDelete)}>OK</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Sliding stock detail drawer */}
+      {selectedSym && (
+        <>
+          <div className="scrim" onClick={() => setSelectedSym(null)} />
+          <div className="stock-side-drawer">
+            <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
+              <StockLogo sym={selectedSym} size={32} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+                  {selectedSym} · Stock Details
+                </div>
+                <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                  Full analysis · chart · technicals · peers
+                </div>
+              </div>
+              <button className="closebtn" onClick={() => setSelectedSym(null)}>✕</button>
+            </div>
+            <div className="drawer-b">
+              <StockScreenEmbed initialSym={selectedSym} />
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
