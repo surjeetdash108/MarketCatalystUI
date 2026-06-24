@@ -187,7 +187,7 @@ function analystDir(type: string) {
 }
 
 export function DashboardScreen() {
-  const { openStock, openEarnings, openSector, setCopilot, openIndex } = useIQActions();
+  const { openStock, openMoverModal, openEarnings, openSector, setCopilot, openIndex } = useIQActions();
   const { user } = useAppSelector(s => s.auth);
   const { data: profile } = useAppSelector(s => s.profile);
 
@@ -359,7 +359,7 @@ export function DashboardScreen() {
                 ▲ Top gainers
               </div>
               {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
                   <StockLogo sym={m.s} size={20} />
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
@@ -370,7 +370,7 @@ export function DashboardScreen() {
                 ▼ Top losers
               </div>
               {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
+                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
                   <StockLogo sym={m.s} size={20} />
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
@@ -685,6 +685,7 @@ export function DashboardScreen() {
           onClick={() => {
             setPop(null);
             if (pop.block === "earnings") openEarnings(pop.sym);
+            else if (pop.block === "movers") openMoverModal(pop.sym);
             else openStock(pop.sym);
           }}
         >

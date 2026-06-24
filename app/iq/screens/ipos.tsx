@@ -22,19 +22,16 @@ const PIPELINE = [
   { s: "DBRX", n: "Databricks",    expected: "2025 (expected)",    sec: "Data / AI" },
 ];
 
-const SECTORS = ["All", ...Array.from(new Set(RECENT_IPOS.map(r => r.sec))).sort()];
+const SECTOR_OPTIONS = [
+  "All", "Consumer", "Data / AI", "Fintech", "Healthcare",
+  "Internet", "Media", "Retail", "Semis", "Software",
+];
 
 export function IPOsScreen() {
   const { openStock } = useIQActions();
-  const [search,  setSearch]  = useState("");
-  const [sector,  setSector]  = useState("All");
+  const [sector, setSector] = useState("All");
 
-  const q = search.trim().toLowerCase();
-  const filtered = RECENT_IPOS.filter(r => {
-    if (sector !== "All" && r.sec !== sector) return false;
-    if (q) return r.s.toLowerCase().includes(q) || r.n.toLowerCase().includes(q) || r.sec.toLowerCase().includes(q);
-    return true;
-  });
+  const filtered = RECENT_IPOS.filter(r => sector === "All" || r.sec === sector);
 
   const winners = filtered.filter(r => r.cur > r.offer).length;
   const returns = filtered.map(r => (r.cur - r.offer) / r.offer * 100).sort((a, b) => a - b);
@@ -88,24 +85,19 @@ export function IPOsScreen() {
         </div>
       </div>
 
-      {/* ── Search + Sector filter ── */}
-      <div className="fbar" style={{ marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search ticker, name or sector…"
-          style={{
-            background: "var(--surface-3)", border: "1px solid var(--border-soft)",
-            borderRadius: 8, padding: "6px 12px", color: "var(--text)",
-            fontSize: ".82rem", width: 220, outline: "none",
-          }}
-        />
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {SECTORS.map(s => (
-            <button key={s} className={`chip${sector === s ? " on" : ""}`} onClick={() => setSector(s)}>{s}</button>
-          ))}
-        </div>
+      {/* ── Sector filter ── */}
+      <div className="fbar" style={{ marginBottom: 10, gap: 10 }}>
+        <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", fontWeight: 600, alignSelf: "center" }}>
+          Sector
+        </span>
+        <select
+          className="iq-select"
+          value={sector}
+          onChange={e => setSector(e.target.value)}
+          style={{ width: "auto", minWidth: 160, padding: "5px 10px", fontSize: ".82rem" }}
+        >
+          {SECTOR_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
         <div className="spacer" />
         <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center" }}>
           {filtered.length} of {RECENT_IPOS.length} shown

@@ -3,7 +3,14 @@
 // iq.css is imported globally via app/layout.tsx
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import Link from "next/link";
+
+// Dynamic import breaks the circular dep: stock.tsx → shell.tsx → stock.tsx
+const StockScreenEmbed = dynamic(
+  () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
+  { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
+);
 import { signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { firebaseAuth, firebaseDb } from "../firebase";
@@ -22,6 +29,7 @@ function slugToHref(slug: string): string {
 interface IQActions {
   openStock: (sym: string) => void;
   openStockFull: (sym: string) => void;
+  openMoverModal: (sym: string) => void;
   openEarnings: (sym: string) => void;
   openSector: (name: string) => void;
   openFund: (idx: number) => void;
@@ -34,6 +42,7 @@ interface IQActions {
 export const IQActionsContext = createContext<IQActions>({
   openStock: () => {},
   openStockFull: () => {},
+  openMoverModal: () => {},
   openEarnings: () => {},
   openSector: () => {},
   openFund: () => {},
@@ -553,6 +562,31 @@ function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
   );
 }
 
+// ---- Mover Modal — full stock page in a modal overlay ----
+function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
+  // Set symbol synchronously so StockScreenEmbed picks it up on mount
+  if (typeof window !== "undefined") {
+    localStorage.setItem("iq-stock", sym);
+  }
+
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="stock-full-modal">
+        <div className="stock-full-modal-bar">
+          <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, color: "var(--text-hi)", fontSize: ".9rem" }}>
+            {sym} · Stock Details
+          </span>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+        <div className="stock-full-modal-body">
+          <StockScreenEmbed />
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ---- Fear & Greed drawer ----
 function FearGreedDrawer({ onClose }: { onClose: () => void }) {
   const comps = [
@@ -777,6 +811,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [drawer, setDrawer] = useState<
     | { type: "stock"; sym: string }
+    | { type: "mover-modal"; sym: string }
     | { type: "earnings"; sym: string }
     | { type: "sector"; name: string }
     | { type: "fund"; idx: number }
@@ -830,6 +865,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // Action context
   const actions: IQActions = {
     openStock: useCallback((sym) => setDrawer({ type: "stock", sym }), []),
+    openMoverModal: useCallback((sym) => setDrawer({ type: "mover-modal", sym }), []),
     openStockFull: useCallback((sym) => {
       if (typeof window !== "undefined") localStorage.setItem("iq-stock", sym);
       router.push("/menu/stock");
@@ -979,6 +1015,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           {/* Drawers */}
           {drawer?.type === "stock" && (
             <StockDrawer sym={drawer.sym} onClose={() => setDrawer(null)} />
+          )}
+          {drawer?.type === "mover-modal" && (
+            <MoverModal sym={drawer.sym} onClose={() => setDrawer(null)} />
           )}
           {drawer?.type === "earnings" && (
             <EarningsDrawer sym={drawer.sym} onClose={() => setDrawer(null)} />

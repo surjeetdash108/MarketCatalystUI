@@ -615,10 +615,10 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 
 /* recap */
 .recap-hero {
-  background: linear-gradient(135deg, var(--brand-dim), var(--ai-dim));
+  background: linear-gradient(180deg, var(--surface-2), var(--surface-0));
   border: 1px solid var(--border); border-radius: var(--r-xl);
   padding: 22px; margin-bottom: 14px;
-  box-shadow: var(--glow-brand);
+  position: relative; overflow: hidden;
 }
 .recap-date { font-size: 11px; color: var(--brand-2); font-weight: 600; letter-spacing: .05em; margin-bottom: 7px; }
 .recap-title { font-family: var(--f-display); font-size: 19px; font-weight: 700; color: var(--text-hi); margin-bottom: 7px; }
@@ -637,6 +637,23 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .recap-item-date { font-size: 10.5px; color: var(--text-dim-solid); margin-bottom: 4px; }
 .recap-item-title { font-size: 13px; font-weight: 700; color: var(--text-hi); font-family: var(--f-display); margin-bottom: 5px; }
 .recap-item-body { font-size: 12px; color: var(--text); line-height: 1.6; }
+
+/* rcp index boxes */
+.rcp-idx { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.rcp-box { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
+.rcp-bl { font-size: .72rem; color: var(--text-dim-solid); margin-bottom: 2px; }
+.rcp-bv { font-size: 1.28rem; font-weight: 700; color: var(--text-hi); font-family: var(--f-mono); line-height: 1.2; }
+.rcp-bc { font-size: .82rem; font-weight: 600; font-family: var(--f-mono); }
+.rcp-bs { margin-top: 4px; }
+
+/* rcp story slides */
+.rcp-stories-wrap { margin-bottom: 16px; }
+.rcp-stories { display: flex; gap: 14px; overflow-x: auto; padding: 6px 2px 12px; scrollbar-width: none; }
+.rcp-stories::-webkit-scrollbar { display: none; }
+.rcp-card-wrap { flex: none; cursor: pointer; transition: transform .15s; }
+.rcp-card-wrap:hover { transform: translateY(-4px); }
+.rcp-arrow { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-hi); cursor: pointer; font-size: 1.1rem; display: inline-flex; align-items: center; justify-content: center; transition: background .1s; }
+.rcp-arrow:hover { background: var(--surface-3); }
 
 /* macro */
 .macro-row {
@@ -1630,3 +1647,20 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .cn-empty{font-size:.74rem;color:var(--text-dim-solid);padding:4px 0}
 .icon-x{background:none;border:0;color:var(--text-dim-solid);font-size:.95rem;cursor:pointer;padding:2px 7px;border-radius:6px}
 .icon-x:hover{color:var(--down);background:rgba(208,52,76,.12)}
+
+/* Full stock modal — opened from Market Movers */
+.stock-full-modal{
+  position:fixed;top:2vh;left:50%;
+  transform:translateX(-50%);
+  width:min(1400px,96vw);max-height:96vh;
+  background:var(--surface-0);border:1px solid var(--border);
+  border-radius:16px;z-index:51;
+  box-shadow:0 24px 64px rgba(0,0,0,.65);
+  display:flex;flex-direction:column;overflow:hidden;
+  animation:iq-popIn .22s cubic-bezier(.34,1.18,.64,1);
+}
+.stock-full-modal-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.stock-full-modal-body{overflow-y:auto;flex:1;}
