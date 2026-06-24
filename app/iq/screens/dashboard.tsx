@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
-import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks } from "../data";
+import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks, Mover } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo } from "../utils";
 
 const LIVE_FEED = [
@@ -177,6 +177,33 @@ function DashPopContent({ sym, block }: { sym: string; block: PopBlock }) {
     <div>{body}</div>
     <div className="dp-foot">Click to open {BLOCK_NAV[block]} →</div>
   </>;
+}
+
+function MoverPopup({ m }: { m: Mover }) {
+  return (
+    <div className="mv-dp" onClick={e => e.stopPropagation()}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
+        <span style={{ fontWeight: 800, color: "var(--text-hi)", fontSize: ".9rem" }}>{m.s}</span>
+        <span style={{ flex: 1, fontSize: ".72rem", color: "var(--text-dim-solid)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.n}</span>
+        <span className={`r ${cls(m.c)}`} style={{ fontSize: ".78rem" }}>{sign(m.c)}</span>
+      </div>
+      <div className="mvtabs">
+        <span className="mvt mvt-t">Technical</span>
+        <span className="mvt mvt-n">News</span>
+      </div>
+      <div className="mvp mvp-t">
+        <div className="dp-row"><span>Price</span><b>${fmt(m.p)}</b></div>
+        <div className="dp-row"><span>RVOL</span><b>{m.rvol}×</b></div>
+        <div className="dp-row"><span>RS Rating</span><b>{m.rs}/99</b></div>
+        <div className="dp-row"><span>4-Week</span><b className={cls(m.wk)}>{m.wk > 0 ? "+" : ""}{m.wk}%</b></div>
+        <div className="dp-note" style={{ marginTop: 6 }}>{m.tech}</div>
+      </div>
+      <div className="mvp mvp-n">
+        <span className="dp-tag" style={{ display: "inline-block", marginBottom: 6 }}>{m.cat}</span>
+        <div className="dp-note">{m.news}</div>
+      </div>
+    </div>
+  );
 }
 
 function analystDir(type: string) {
@@ -353,22 +380,24 @@ export function DashboardScreen() {
                 ▲ Top gainers
               </div>
               {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
+                <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
                   <StockLogo sym={m.s} size={20} />
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                  <MoverPopup m={m} />
                 </div>
               ))}
               <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px" }}>
                 ▼ Top losers
               </div>
               {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
+                <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
                   <StockLogo sym={m.s} size={20} />
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                  <MoverPopup m={m} />
                 </div>
               ))}
             </div>
