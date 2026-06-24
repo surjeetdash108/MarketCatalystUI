@@ -411,7 +411,7 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
           {fund && (
             <>
               <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-                <span className="pill up">{fund.newPos} new buys</span>
+                <span className="pill up">{fund.newPos} new</span>
                 <span className="pill dn">{fund.exits} exits</span>
                 <span className="src-chip">{fund.q} 13F-HR</span>
               </div>

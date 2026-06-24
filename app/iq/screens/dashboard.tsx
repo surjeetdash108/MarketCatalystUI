@@ -187,7 +187,7 @@ function analystDir(type: string) {
 }
 
 export function DashboardScreen() {
-  const { openStock, openMoverModal, openEarnings, openSector, setCopilot, openIndex } = useIQActions();
+  const { openStock, openMoverModal, openEarnings, openSector, openIndex } = useIQActions();
   const { user } = useAppSelector(s => s.auth);
   const { data: profile } = useAppSelector(s => s.profile);
 
@@ -244,9 +244,6 @@ export function DashboardScreen() {
         <div>
           <div className="eyebrow">{dateStr}</div>
           <h1 className="page-title">{greeting}, {firstName}</h1>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <button className="chip ai-c" onClick={() => setCopilot(true)}>✦ AI Summary</button>
         </div>
       </div>
 
