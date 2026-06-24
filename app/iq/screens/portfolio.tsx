@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useIQActions } from "../shell";
-import { folio as folioData, FolioItem, stockInfo, screenerStocks, analyst } from "../data";
-import { cls, arr, sign, fmt, Spark, CandleChart } from "../utils";
+import dynamic from "next/dynamic";
+import { folio as folioData, FolioItem } from "../data";
+import { cls, arr, sign, fmt, Spark } from "../utils";
+
+const StockScreenEmbed = dynamic<{ initialSym?: string }>(
+  () => import("./stock").then(m => ({ default: m.StockScreen })),
+  { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
+);
 
 const DEFAULT_SHARES: Record<string, number> = {
   NVDA: 15, AAPL: 120, TSLA: 40, META: 30,
@@ -19,198 +24,8 @@ function convPill(conv: string) {
   return <span className={`pill ${c}`}>{conv}</span>;
 }
 
-function capFmt(v: number) {
-  return v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : v >= 10 ? `$${Math.round(v)}B` : `$${v.toFixed(1)}B`;
-}
-
-/* ── Inline stock detail embedded in the right panel ── */
-function StockDetail({ sym, px, c }: { sym: string; px: number; c: number }) {
-  const { openStock, openEarnings } = useIQActions();
-  const [tf, setTf] = useState("1M");
-
-  const info = stockInfo[sym];
-  const ss   = screenerStocks.find(x => x.s === sym);
-  const an   = analyst.find(a => a.s === sym);
-
-  const fallbackFin = ss ? [
-    { l: "Revenue Growth", v: `+${ss.salesG.toFixed(1)}%` },
-    { l: "EPS Growth",     v: `+${ss.epsG.toFixed(1)}%` },
-    { l: "Gross Margin",   v: `${ss.mgn.toFixed(1)}%` },
-    { l: "P/E ratio",      v: ss.pe > 0 ? `${ss.pe.toFixed(1)}×` : "—" },
-  ] : [];
-
-  const data = info ?? {
-    name: sym, px, c, mkt: "—",
-    pe: ss?.pe ?? 0, eps: 0,
-    wkh52: px * 1.25, wkl52: px * 0.72,
-    div: 0, beta: 1.0, sec: ss?.sec ?? "—",
-    ai_call: ss?.rating ?? "Neutral",
-    ai_thesis: "", ai_risk: "",
-    ai_metrics: [] as { l: string; v: string }[],
-    fin: fallbackFin,
-    news: [] as { h: string; dt: string }[],
-    ins:  [] as { n: string; a: string; dt: string }[],
-  };
-
-  const isUp   = c >= 0;
-  const p      = px;
-  const rating = ss?.rating ?? data.ai_call ?? "Neutral";
-  const rs     = ss?.rs   ?? 55;
-  const mg     = ss?.mgn  ?? 20;
-  const rv     = ss?.rvol ?? 1.2;
-  const mc     = ss?.mc   ?? 100;
-  const eps    = p / (data.pe || ss?.pe || 25);
-  const lo     = p * (rs > 60 ? 0.78 : 0.72);
-  const hi     = p * 1.22;
-  const nf     = (x: number) => Math.round(x).toLocaleString("en-US");
-
-  return (
-    <>
-      {/* Chart */}
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div className="chart-toolbar">
-          {["1D","1W","1M","3M","6M","1Y"].map(r => (
-            <button key={r} className={`rng tfbtn${tf === r ? " on" : ""}`} onClick={() => setTf(r)}>{r}</button>
-          ))}
-        </div>
-        <div style={{ padding: "0 14px 0" }}>
-          <CandleChart sym={sym} tf={tf} px={p} maStep={2} showVol />
-        </div>
-        <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-          Pattern:{" "}
-          <b style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
-            {isUp ? "cup-with-handle breakout" : "breakdown below support"}
-          </b>{" "}
-          {isUp ? "on above-average volume." : "on rising volume."}
-        </div>
-      </div>
-
-      {/* Key stats */}
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div className="keystats">
-          {([
-            ["Mkt Cap",       mc ? capFmt(mc) : "—"],
-            ["P/E",           data.pe > 0 ? data.pe.toFixed(1) : ss?.pe ? ss.pe.toFixed(1) : "—"],
-            ["EPS (TTM)",     `$${eps.toFixed(2)}`],
-            ["52W Range",     `$${nf(lo)} – $${nf(hi)}`],
-            ["Gross Margin",  mg + "%"],
-            ["Rel. Volume",   rv.toFixed(1) + "×"],
-            ["AI Rating",     rating],
-            ["RS Rank",       rs ? `${rs}/99` : "—"],
-          ] as [string, string][]).map(k => (
-            <div key={k[0]} className="kstat">
-              <div className="k">{k[0]}</div>
-              <div className="v">{k[1]}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* AI analysis */}
-      <div className="ai-block" style={{ marginBottom: 14 }}>
-        <div className="card-h">
-          <h3 className="ai-c">◆ AI analysis · {data.name}</h3>
-          <span className="pill ai">{rating}</span>
-        </div>
-        <div className="card-b">
-          {data.ai_thesis ? (
-            <>
-              <div style={{ fontSize: ".62rem", textTransform: "uppercase", letterSpacing: ".07em", color: "var(--up)", fontWeight: 700, marginBottom: 5 }}>Bull thesis</div>
-              <p style={{ fontSize: ".84rem", lineHeight: 1.55, color: "var(--text)", marginBottom: 12 }}>{data.ai_thesis}</p>
-              {data.ai_risk && (
-                <>
-                  <div style={{ fontSize: ".62rem", textTransform: "uppercase", letterSpacing: ".07em", color: "var(--down)", fontWeight: 700, marginBottom: 5 }}>Key risks</div>
-                  <p style={{ fontSize: ".84rem", lineHeight: 1.55, color: "var(--text)" }}>{data.ai_risk}</p>
-                </>
-              )}
-            </>
-          ) : (
-            <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)" }}>
-              Rating: <b style={{ color: "var(--text-hi)" }}>{rating}</b> — RS rank {rs}/99, gross margin {mg}%, rel. volume {rv.toFixed(1)}×.
-            </p>
-          )}
-          {data.ai_metrics.length > 0 && (
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              {data.ai_metrics.map(m => (
-                <div key={m.l} style={{ background: "var(--surface-3)", borderRadius: 8, padding: "6px 10px" }}>
-                  <div style={{ fontSize: ".6rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>{m.l}</div>
-                  <div style={{ fontSize: ".84rem", fontWeight: 700, color: "var(--text-hi)" }}>{m.v}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Financials */}
-      {data.fin.length > 0 && (
-        <div className="card" style={{ marginBottom: 14 }}>
-          <div className="card-h">
-            <h3>Financials</h3>
-            <span className="link" onClick={() => openEarnings(sym)}>View earnings →</span>
-          </div>
-          <div className="card-b" style={{ paddingTop: 6 }}>
-            {data.fin.map(f => (
-              <div key={f.l} className="minirow">
-                <span className="mid" style={{ color: "var(--text-dim-solid)", fontSize: ".82rem" }}>{f.l}</span>
-                <span className="r" style={{ fontFamily: "var(--f-mono)", fontWeight: 700 }}>{f.v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Analyst action */}
-      {an && (
-        <div className="card" style={{ marginBottom: 14 }}>
-          <div className="card-h"><h3>Recent analyst action</h3></div>
-          <div className="card-b" style={{ paddingTop: 6 }}>
-            <div className="minirow">
-              <span className="mid">{an.firm}</span>
-              <span className={`r ${an.dir === "up" ? "up" : an.dir === "down" ? "down" : ""}`}>
-                {an.from} → {an.to}
-              </span>
-            </div>
-            <div className="minirow">
-              <span className="mid" style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Price target</span>
-              <span className="r mono">{an.ptF ? `$${an.ptF} → ` : ""}${an.ptT}</span>
-            </div>
-            <div className="minirow">
-              <span className="mid" style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Reaction</span>
-              <span className={`r ${an.react >= 0 ? "up" : "down"}`}>{an.react >= 0 ? "+" : ""}{fmt(an.react, 2)}%</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* News */}
-      {data.news.length > 0 && (
-        <div className="card" style={{ marginBottom: 14 }}>
-          <div className="card-h"><h3>Recent news</h3></div>
-          <div className="card-b" style={{ paddingTop: 6 }}>
-            {data.news.map((n, i) => (
-              <div key={i} style={{
-                padding: "8px 0",
-                borderBottom: i < data.news.length - 1 ? "1px solid var(--border-soft)" : "none",
-              }}>
-                <div style={{ fontSize: ".84rem", color: "var(--text)", lineHeight: 1.45 }}>{n.h}</div>
-                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 3 }}>{n.dt}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <button className="btn primary" style={{ width: "100%" }} onClick={() => openStock(sym)}>
-        Open full analysis →
-      </button>
-    </>
-  );
-}
-
 /* ── Main portfolio screen ── */
 export function PortfolioScreen() {
-  const { openStock } = useIQActions();
   const [holdings, setHoldings] = useState<FolioItem[]>(folioData);
   const [pfSel, setPfSel] = useState(folioData[0]?.s ?? "");
   const [shares, setShares] = useState<Record<string, number>>(() => {
@@ -327,7 +142,7 @@ export function PortfolioScreen() {
               </li>
               <li>
                 <span className="bullet" />
-                <span>Click any holding on the left to open its full detail →</span>
+                <span>Click any holding on the left to see its full analysis →</span>
               </li>
             </ul>
           </div>
@@ -371,12 +186,12 @@ export function PortfolioScreen() {
             </div>
           </div>
 
-          {/* RIGHT: selected holding context + full stock detail */}
+          {/* RIGHT: portfolio context bar + full stock detail */}
           <div className="pf-detail">
             {sel ? (
               <>
-                {/* Context metrics bar */}
-                <div className="pf-ctx">
+                {/* Portfolio-specific context metrics */}
+                <div className="pf-ctx" style={{ marginBottom: 14 }}>
                   <div className="m">
                     <span className="k">Shares</span>
                     <span className="v">
@@ -419,8 +234,8 @@ export function PortfolioScreen() {
                   <button className="btn" style={{ color: "var(--down)" }} onClick={() => removeHolding(sel.s)}>Sell all</button>
                 </div>
 
-                {/* Full stock detail */}
-                <StockDetail sym={sel.s} px={sel.p} c={sel.c} />
+                {/* Full stock detail — same as stock details page */}
+                <StockScreenEmbed initialSym={pfSel} />
               </>
             ) : (
               <div className="card">

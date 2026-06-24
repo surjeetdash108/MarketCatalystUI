@@ -1,30 +1,156 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
-import { commentary, watch, folio } from "../data";
+import { commentary, watch, folio, movers, analyst, screenerStocks, stockInfo, sectorByName } from "../data";
+import { sign, cls, fmt } from "../utils";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
 const PREMARKET = [
-  { cat: "Futures",     accent: "var(--brand-2)", time: "6:14a", text: "S&P futures <b>+0.4%</b>, Nasdaq futures <b>+0.7%</b> pre-open", why: "Risk-on sentiment building ahead of the open; CPI catalyst overnight." },
-  { cat: "Macro",       accent: "var(--warn)",    time: "5:55a", text: "10-year Treasury yield drops to <b>4.32%</b> from 4.41% close", why: "Bond market front-running a rate-cut repricing on the inflation miss." },
-  { cat: "Earnings",    accent: "var(--up)",      time: "6:01a", text: "<b>NVDA</b> Q1 results: EPS $6.12 vs $5.18 est. (+18% beat)", why: "Revenue guidance of $28B vs $26.7B consensus — the number the market was watching most." },
-  { cat: "Analyst",     accent: "var(--brand-2)", time: "5:30a", text: "Wedbush raises <b>AAPL</b> PT to $250, Outperform reiterated", why: "Services momentum is reaccelerating; AI device cycle could lift upgrade rates." },
-  { cat: "Overnight",   accent: "var(--ai)",      time: "4:47a", text: "Asian markets: Nikkei <b>+1.2%</b>, Hang Seng <b>+0.8%</b>", why: "NVDA's AI print lifted semiconductor names globally; tech-led rally." },
-  { cat: "Pre-open",    accent: "var(--up)",      time: "8:12a", text: "BMO reporters: <b>HD</b> (8:30a), <b>DELL</b> (8:30a) · Watch guidance language", why: "HD margins sensitive to housing slowdown; DELL AI server demand is the key read." },
+  { cat: "Futures",   accent: "var(--brand-2)", time: "6:14a", text: "S&P futures <b>+0.4%</b>, Nasdaq futures <b>+0.7%</b> pre-open",                    why: "Risk-on sentiment building ahead of the open; CPI catalyst overnight." },
+  { cat: "Macro",     accent: "var(--warn)",    time: "5:55a", text: "10-year Treasury yield drops to <b>4.32%</b> from 4.41% close",                      why: "Bond market front-running a rate-cut repricing on the inflation miss." },
+  { cat: "Earnings",  accent: "var(--up)",      time: "6:01a", text: "<b>NVDA</b> Q1 results: EPS $6.12 vs $5.18 est. (+18% beat)",                         why: "Revenue guidance of $28B vs $26.7B consensus — the number the market was watching most." },
+  { cat: "Analyst",   accent: "var(--brand-2)", time: "5:30a", text: "Wedbush raises <b>AAPL</b> PT to $250, Outperform reiterated",                        why: "Services momentum is reaccelerating; AI device cycle could lift upgrade rates." },
+  { cat: "Overnight", accent: "var(--ai)",      time: "4:47a", text: "Asian markets: Nikkei <b>+1.2%</b>, Hang Seng <b>+0.8%</b>",                          why: "NVDA's AI print lifted semiconductor names globally; tech-led rally." },
+  { cat: "Pre-open",  accent: "var(--up)",      time: "8:12a", text: "BMO reporters: <b>HD</b> (8:30a), <b>DELL</b> (8:30a) · Watch guidance language",     why: "HD margins sensitive to housing slowdown; DELL AI server demand is the key read." },
 ];
 
 const AFTERHOURS = [
-  { cat: "Earnings",    accent: "var(--up)",   time: "4:01p", text: "<b>AAPL</b> Q2 results: EPS $1.53 vs $1.50 est; services rev +14% YoY", why: "Beat is narrow but services reacceleration is the real story — highest multiple business." },
-  { cat: "Earnings",    accent: "var(--up)",   time: "4:05p", text: "<b>NVDA</b> extended hours <b>+7.1%</b> after the close", why: "Market still pricing in further data-center capex acceleration into H2." },
-  { cat: "Analyst",     accent: "var(--brand-2)", time: "4:18p", text: "GS raises <b>NVDA</b> PT to $1,200 following blowout quarter", why: "Blackwell shipments ahead of schedule — raises confidence in FY26 estimates." },
-  { cat: "Macro",       accent: "var(--warn)", time: "4:30p", text: "Markets close: S&P +0.73%, Nasdaq +1.02%, Dow +0.41%", why: "Broad advance on cool inflation + NVDA; defensive sectors lagged as risk appetite returned." },
-  { cat: "AMC",         accent: "var(--ai)",   time: "4:45p", text: "Reporting after-close: <b>SNOW</b>, <b>WDAY</b>, <b>PANW</b>", why: "Enterprise software results will test whether AI spending trickles into SaaS growth." },
-  { cat: "AH Move",     accent: "var(--down)", time: "5:10p", text: "<b>WDAY</b> AH −4.2% after subscription rev in-line but FY guidance light", why: "Growth stock held to a high bar post-CPI; anything not materially above estimates sold off." },
+  { cat: "Earnings",  accent: "var(--up)",      time: "4:01p", text: "<b>AAPL</b> Q2 results: EPS $1.53 vs $1.50 est; services rev +14% YoY",               why: "Beat is narrow but services reacceleration is the real story — highest multiple business." },
+  { cat: "Earnings",  accent: "var(--up)",      time: "4:05p", text: "<b>NVDA</b> extended hours <b>+7.1%</b> after the close",                              why: "Market still pricing in further data-center capex acceleration into H2." },
+  { cat: "Analyst",   accent: "var(--brand-2)", time: "4:18p", text: "GS raises <b>NVDA</b> PT to $1,200 following blowout quarter",                        why: "Blackwell shipments ahead of schedule — raises confidence in FY26 estimates." },
+  { cat: "Macro",     accent: "var(--warn)",    time: "4:30p", text: "Markets close: S&P +0.73%, Nasdaq +1.02%, Dow +0.41%",                                 why: "Broad advance on cool inflation + NVDA; defensive sectors lagged as risk appetite returned." },
+  { cat: "AMC",       accent: "var(--ai)",      time: "4:45p", text: "Reporting after-close: <b>SNOW</b>, <b>WDAY</b>, <b>PANW</b>",                        why: "Enterprise software results will test whether AI spending trickles into SaaS growth." },
+  { cat: "AH Move",   accent: "var(--down)",    time: "5:10p", text: "<b>WDAY</b> AH −4.2% after subscription rev in-line but FY guidance light",            why: "Growth stock held to a high bar post-CPI; anything not materially above estimates sold off." },
 ];
 
+/* ── Deterministic seed helper ── */
+function _dseed(s: string): number {
+  let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+/* ── Date helper: n days before May 21 2026 ── */
+function nd(days: number): string {
+  const MQ = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const dt = new Date(2026, 4, 21);
+  dt.setDate(dt.getDate() - days);
+  return MQ[dt.getMonth()] + " " + dt.getDate();
+}
+
+/* ── Earnings history (same deterministic logic as stock.tsx) ── */
+function _erH(s: string, i: number): number {
+  return (Math.abs(s.charCodeAt(0) * 31 + (s.charCodeAt(1) || 7) * 17 + i * 13) % 97) / 97;
+}
+function earnHistory(sym: string, baseEps = 1.5) {
+  const qs = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
+  return qs.map((q, i) => {
+    const r = _erH(sym, i);
+    const e = +(baseEps * (0.8 + r * 0.4)).toFixed(2);
+    const surpPct = Math.round(r * 30 - 8);
+    const a = +(e * (1 + surpPct / 100)).toFixed(2);
+    const mv = +(r * 14 - 4).toFixed(1);
+    return { q, e, a, surp: surpPct, mv };
+  });
+}
+
+/* ── Ticker search suggestion list ── */
+const SEARCH_SYMS = [
+  ...Object.keys(stockInfo),
+  ...screenerStocks.map(s => s.s),
+  ...movers.map(m => m.s),
+].filter((v, i, a) => a.indexOf(v) === i).sort();
+
+function catCol(c: string): string {
+  if (c === "Catalyst") return "var(--brand-2)";
+  if (c === "Analyst" || c === "Coverage") return "var(--ai)";
+  if (c === "Earnings") return "var(--warn)";
+  if (c === "Technical") return "var(--up)";
+  return "var(--text-dim-solid)";
+}
+
+/* ── Build the news-history items for a ticker ── */
+type NewsItem = { daysAgo: number; cat: string; source: string; html: string };
+
+function buildNewsHistory(sym: string): NewsItem[] {
+  const H: NewsItem[] = [];
+  const ss = screenerStocks.find(x => x.s === sym);
+  const info = stockInfo[sym];
+  const nm = info?.name ?? ss?.n ?? sym;
+  const mv = movers.find(m => m.s === sym);
+  const sec = ss ? sectorByName[ss.sec] : null;
+  const sd = _dseed(sym + "news");
+  const rs = ss?.rs ?? 55;
+  const p = mv?.p ?? info?.px ?? 100;
+  const c = mv?.c ?? info?.c ?? 0;
+
+  // Catalyst
+  if (mv?.news) H.push({ daysAgo: 0, cat: "Catalyst", source: mv.cat ?? "Market", html: mv.news });
+  // Technical
+  if (mv) {
+    H.push({
+      daysAgo: 0, cat: "Technical", source: mv.ma ?? "Trend",
+      html: `${nm} is ${c >= 0 ? `<b class="up">up ${sign(c)}</b>` : `<b class="down">down ${sign(c)}</b>`} today on <b>${(mv.rvol ?? 1).toFixed(1)}×</b> volume. ${mv.tech ?? ""}`,
+    });
+  }
+  // Sector
+  if (sec) {
+    H.push({
+      daysAgo: 1, cat: "Sector", source: ss?.sec ?? "Group",
+      html: `The ${ss?.sec ?? "group"} is ${sec.chg >= 0 ? `<b class="up">${sign(sec.chg)}</b>` : `<b class="down">${sign(sec.chg)}</b>`} (${(sec.trend ?? "flat").toLowerCase()}).`,
+    });
+  }
+  // Analyst actions
+  analyst.filter(a => a.s === sym).slice(0, 3).forEach((a, i) => {
+    const verb = a.dir === "up" ? "raised to" : a.dir === "down" ? "cut to" : a.dir === "init" ? "initiated at" : "reiterated";
+    H.push({
+      daysAgo: 3 + i * 4, cat: "Analyst", source: a.firm,
+      html: `<b>${a.firm}</b> ${verb} <b style="color:var(--text-hi)">${a.to}</b>${a.ptT ? `, PT $${a.ptT}` : ""}.`,
+    });
+  });
+  // Last earnings
+  const qeps = p / ((info?.pe ?? ss?.pe ?? 25) || 25) / 4;
+  const hist = earnHistory(sym, qeps);
+  if (hist.length) {
+    const q = hist[0];
+    H.push({
+      daysAgo: 6, cat: "Earnings", source: "Report",
+      html: `${nm} posted ${q.q} EPS $${fmt(q.a)} vs $${fmt(q.e)} est (${q.surp >= 0 ? "beat" : "miss"}); shares ${q.mv >= 0 ? `<b class="up">${sign(q.mv)}</b>` : `<b class="down">${sign(q.mv)}</b>`} on the print.`,
+    });
+  }
+  // Next ER (from watch data)
+  const wEntry = watch.find(w => w.s === sym);
+  if (wEntry?.er && wEntry.er !== "—") {
+    const streak = Math.abs(sd % 7) + 2;
+    const beatStreak = (sd % 3) !== 0;
+    H.push({
+      daysAgo: 0, cat: "Earnings", source: "Calendar",
+      html: `${nm} next reports <b style="color:var(--text-hi)">${wEntry.er}</b>. Riding a ${streak}-qtr ${beatStreak ? "beat" : "miss"} streak.`,
+    });
+  }
+  // Coverage (deterministic)
+  H.push({
+    daysAgo: (sd % 6) + 10, cat: "Coverage", source: "Desk",
+    html: `${nm} added to a sell-side ${(sd % 2) ? "best ideas" : "conviction"} list; analysts cite ${rs >= 60 ? "durable demand" : "a turnaround setup"}.`,
+  });
+  // Product
+  H.push({
+    daysAgo: (sd % 7) + 16, cat: "Product", source: "Company",
+    html: `${nm} unveiled a new ${(ss?.sec ?? "").toLowerCase().includes("semi") ? "product line" : "initiative"}; the Street called it ${(sd % 2) ? "incremental" : "a needle-mover"}.`,
+  });
+  // Guidance
+  H.push({
+    daysAgo: (sd % 5) + 23, cat: "Guidance", source: "IR",
+    html: `${nm} ${c >= 0 ? "reaffirmed" : "tempered"} full-year guidance at an investor event.`,
+  });
+
+  H.sort((a, b) => a.daysAgo - b.daysAgo);
+  return H;
+}
+
+/* ── Feed item component ── */
 function FeedItem({ item, i, total }: { item: typeof commentary[0]; i: number; total: number }) {
   return (
     <div style={{
@@ -47,10 +173,77 @@ function FeedItem({ item, i, total }: { item: typeof commentary[0]; i: number; t
   );
 }
 
+/* ── News Drawer ── */
+function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
+  const { openStockFull } = useIQActions();
+  const info = stockInfo[sym];
+  const ss   = screenerStocks.find(x => x.s === sym);
+  const nm   = info?.name ?? ss?.n ?? sym;
+  const items = buildNewsHistory(sym);
+
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="drawer open">
+        <div className="drawer-h">
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)" }}>
+            {sym[0]}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
+              {sym}
+            </div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
+              {nm} · news history
+            </div>
+          </div>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="drawer-b">
+          <div className="ai-sec"><div className="h">{sym} · recent headlines</div></div>
+
+          {items.map((item, i) => (
+            <div key={i} className="minirow" style={{ alignItems: "flex-start", gap: 10, cursor: "default", marginBottom: 12 }}>
+              <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: "50%", background: "var(--surface-3)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: ".75rem", color: "var(--brand-2)", fontFamily: "var(--f-mono)" }}>
+                {sym[0]}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ lineHeight: 1.5 }}>
+                  <span className="pill" style={{ background: "var(--surface-3)", color: catCol(item.cat), marginRight: 6, fontSize: ".66rem" }}>
+                    {item.cat}
+                  </span>
+                  <span style={{ fontSize: ".84rem", color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: item.html }} />
+                </div>
+                <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 3 }}>
+                  {item.source} · {item.daysAgo === 0 ? "Today" : nd(item.daysAgo)}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button className="btn primary" style={{ width: "100%", marginTop: 14 }}
+            onClick={() => { onClose(); openStockFull(sym); }}>
+            Open full stock page →
+          </button>
+          <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8, textAlign: "center" }}>
+            Aggregated, illustrative news history · not investment advice.
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ── Main commentary screen ── */
 export function CommentaryScreen() {
   const router = useRouter();
   const { openStock } = useIQActions();
   const [activeTab, setActiveTab] = useState(0);
+  const [search, setSearch] = useState("");
+  const [newsDrawer, setNewsDrawer] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [suggOpen, setSuggOpen] = useState(false);
 
   const mySymbols = new Set([
     ...watch.map(w => w.s),
@@ -83,6 +276,17 @@ export function CommentaryScreen() {
     return { title: "Commentary", badge: null };
   })();
 
+  const q = search.trim().toUpperCase();
+  const suggestions = q.length >= 1
+    ? SEARCH_SYMS.filter(s => s.startsWith(q) || s.includes(q)).slice(0, 8)
+    : [];
+
+  function openNews(sym: string) {
+    setSearch("");
+    setSuggOpen(false);
+    setNewsDrawer(sym);
+  }
+
   return (
     <>
       <div className="page-head">
@@ -99,95 +303,172 @@ export function CommentaryScreen() {
         </div>
       </div>
 
-      <div className="dash" style={{ padding: "0 18px 18px" }}>
+      <div style={{ padding: "0 18px 18px" }}>
 
-        {/* col-8: Feed (content changes per tab) */}
-        <div className="col-8">
-          <div className="card">
-            <div className="card-h">
-              <h3>{feedLabel.title}</h3>
-              {feedLabel.badge}
-            </div>
-            <div className="card-b" style={{ paddingTop: 2 }}>
-              {tabFeed.length === 0 ? (
-                <div style={{ padding: "18px 0", color: "var(--text-dim-solid)", fontSize: ".84rem" }}>
-                  {activeTab === 3
-                    ? "No commentary items match your portfolio or watchlist names right now."
-                    : "No items in this category right now."}
-                </div>
-              ) : tabFeed.map((item, i) => (
-                <FeedItem key={i} item={item} i={i} total={tabFeed.length} />
-              ))}
-            </div>
-          </div>
-
-          {/* My names: show the stocks being tracked */}
-          {activeTab === 3 && (
-            <div className="card" style={{ marginTop: 14 }}>
-              <div className="card-h">
-                <h3>Tracked names</h3>
-                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-                  {mySymbols.size} stocks
-                </span>
+        {/* Ticker search bar */}
+        <div className="fbar" style={{ marginBottom: 12, position: "relative" }}>
+          <div style={{ position: "relative", minWidth: 260 }}>
+            <input
+              ref={searchRef}
+              className="mv-sel"
+              placeholder="Search a stock for its news…"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setSuggOpen(true); }}
+              onFocus={() => setSuggOpen(true)}
+              onBlur={() => setTimeout(() => setSuggOpen(false), 160)}
+              autoComplete="off"
+              style={{ width: "100%" }}
+            />
+            {suggOpen && suggestions.length > 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, zIndex: 30,
+                background: "var(--surface-1)", border: "1px solid var(--border)",
+                borderRadius: "var(--r-sm)", marginTop: 2,
+                minWidth: 220, width: "100%",
+              }}>
+                {suggestions.map(sym => {
+                  const ss  = screenerStocks.find(x => x.s === sym);
+                  const inf = stockInfo[sym];
+                  const nm  = inf?.name ?? ss?.n ?? "";
+                  return (
+                    <div
+                      key={sym}
+                      className="sugg-row"
+                      onMouseDown={() => openNews(sym)}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", cursor: "pointer" }}
+                    >
+                      <b style={{ fontFamily: "var(--f-mono)", color: "var(--text-hi)", minWidth: 52 }}>{sym}</b>
+                      <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", flex: 1 }}>{nm}</span>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {[...mySymbols].map(sym => (
-                  <button key={sym} className="chip" onClick={() => openStock(sym)}>{sym}</button>
+            )}
+            {suggOpen && q.length >= 1 && suggestions.length === 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, zIndex: 30,
+                background: "var(--surface-1)", border: "1px solid var(--border)",
+                borderRadius: "var(--r-sm)", marginTop: 2, minWidth: 220, width: "100%",
+                padding: "10px 12px", fontSize: ".78rem", color: "var(--text-dim-solid)",
+              }}>
+                No match for &ldquo;{search.toUpperCase()}&rdquo;
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+            Type a ticker, then click it to open a side panel of its news
+          </span>
+        </div>
+
+        <div className="dash">
+
+          {/* col-8: Feed */}
+          <div className="col-8">
+            <div className="card">
+              <div className="card-h">
+                <h3>{feedLabel.title}</h3>
+                {feedLabel.badge}
+              </div>
+              <div className="card-b" style={{ paddingTop: 2 }}>
+                {tabFeed.length === 0 ? (
+                  <div style={{ padding: "18px 0", color: "var(--text-dim-solid)", fontSize: ".84rem" }}>
+                    {activeTab === 3
+                      ? "No commentary items match your portfolio or watchlist names right now."
+                      : "No items in this category right now."}
+                  </div>
+                ) : tabFeed.map((item, i) => (
+                  <FeedItem key={i} item={item} i={i} total={tabFeed.length} />
                 ))}
               </div>
             </div>
-          )}
-        </div>
 
-        {/* col-4: sidecards (unchanged regardless of tab) */}
-        <div className="col-4" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-          <div className="wmn">
-            <div className="wmn-h">
-              <div className="t">
-                <div className="wmn-orb">
-                  <svg viewBox="0 0 24 24" fill="none" style={{ width: 16, height: 16 }}>
-                    <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
-                  </svg>
+            {/* My names: tracked stocks chips */}
+            {activeTab === 3 && (
+              <div className="card" style={{ marginTop: 14 }}>
+                <div className="card-h">
+                  <h3>Tracked names</h3>
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                    {mySymbols.size} stocks
+                  </span>
                 </div>
-                <div>
-                  <h2 style={{ fontSize: ".92rem" }}>Before the Bell</h2>
-                  <div className="meta">pushed 8:30a ET</div>
+                <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[...mySymbols].map(sym => (
+                    <button key={sym} className="chip" onClick={() => openNews(sym)}>{sym}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* col-4: side cards */}
+          <div className="col-4" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+            <div className="wmn">
+              <div className="wmn-h">
+                <div className="t">
+                  <div className="wmn-orb">
+                    <svg viewBox="0 0 24 24" fill="none" style={{ width: 16, height: 16 }}>
+                      <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: ".92rem" }}>Before the Bell</h2>
+                    <div className="meta">pushed 8:30a ET</div>
+                  </div>
+                </div>
+              </div>
+              <ul className="wmn-body" style={{ columns: 1, padding: "6px 18px 14px" }}>
+                <li><span className="bullet" /><span>Futures point higher after a <b>cooler CPI</b> print; rate-cut odds for September rose.</span></li>
+                <li><span className="bullet" /><span>Overnight: Asian semis rallied on NVDA; European luxury slipped on China demand.</span></li>
+                <li><span className="bullet" /><span>Before open: <b>HD</b>, <b>DELL</b> report; watch guidance commentary.</span></li>
+              </ul>
+            </div>
+
+            <div className="card">
+              <div className="card-h">
+                <h3>After the Close</h3>
+                <span className="pill amc">within 30 min</span>
+              </div>
+              <div className="card-b">
+                <p style={{ fontSize: ".82rem", lineHeight: 1.55, color: "var(--text-dim-solid)" }}>
+                  A pushed summary of final index performance, the day&apos;s top stories, and what&apos;s scheduled for tomorrow will appear here within 30 minutes of the close.
+                </p>
+                <button className="btn ai" style={{ marginTop: 10, width: "100%" }} onClick={() => router.push("/menu/recap")}>
+                  See today&apos;s EOD recap →
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-h"><h3>General perspective</h3></div>
+              <div className="card-b">
+                <div className="note">
+                  Regime reads <b style={{ color: "var(--text-hi)" }}>Risk-On Rally</b>: breadth strong, yields easing, cyclicals leading defensives. Cheap-hedging environment with VIX at 14.
                 </div>
               </div>
             </div>
-            <ul className="wmn-body" style={{ columns: 1, padding: "6px 18px 14px" }}>
-              <li><span className="bullet" /><span>Futures point higher after a <b>cooler CPI</b> print; rate-cut odds for September rose.</span></li>
-              <li><span className="bullet" /><span>Overnight: Asian semis rallied on NVDA; European luxury slipped on China demand.</span></li>
-              <li><span className="bullet" /><span>Before open: <b>HD</b>, <b>DELL</b> report; watch guidance commentary.</span></li>
-            </ul>
-          </div>
 
-          <div className="card">
-            <div className="card-h">
-              <h3>After the Close</h3>
-              <span className="pill amc">within 30 min</span>
-            </div>
-            <div className="card-b">
-              <p style={{ fontSize: ".82rem", lineHeight: 1.55, color: "var(--text-dim-solid)" }}>
-                A pushed summary of final index performance, the day's top stories, and what's scheduled for tomorrow will appear here within 30 minutes of the close.
-              </p>
-              <button className="btn ai" style={{ marginTop: 10, width: "100%" }} onClick={() => router.push("/menu/recap")}>
-                See today's EOD recap →
-              </button>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-h"><h3>General perspective</h3></div>
-            <div className="card-b">
-              <div className="note">
-                Regime reads <b style={{ color: "var(--text-hi)" }}>Risk-On Rally</b>: breadth strong, yields easing, cyclicals leading defensives. Cheap-hedging environment with VIX at 14.
+            {/* Quick ticker search shortcuts */}
+            <div className="card">
+              <div className="card-h">
+                <h3>Quick news lookup</h3>
+                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>tap to open</span>
+              </div>
+              <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {["NVDA","AAPL","TSLA","META","MSFT","AMZN","AMD","AVGO"].map(sym => (
+                  <button key={sym} className="chip" onClick={() => openNews(sym)}>{sym}</button>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* News history sliding drawer */}
+      {newsDrawer && (
+        <NewsDrawer sym={newsDrawer} onClose={() => setNewsDrawer(null)} />
+      )}
     </>
   );
 }
