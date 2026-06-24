@@ -98,7 +98,6 @@ export function ScreenerScreen() {
   });
 
   const firstFour = screenerPresets.slice(0, 4);
-  const allPresets = screenerPresets;
 
   return (
     <>
@@ -142,12 +141,12 @@ export function ScreenerScreen() {
                 ))}
                 <details className="dd">
                   <summary style={{ cursor: "pointer", fontSize: ".78rem", padding: "8px 10px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", listStyle: "none" }}>
-                    Browse all {allPresets.length} presets ▾
+                    Browse all {screenerPresets.length} presets ▾
                     <small style={{ display: "block", color: "var(--text-dim-solid)", fontSize: ".66rem", marginTop: 2 }}>top screens analysts &amp; traders use</small>
                   </summary>
                   <div className="dd-menu">
-                    <div className="ddlbl">{allPresets.length} preset screens</div>
-                    {allPresets.map((p, i) => (
+                    <div className="ddlbl">{screenerPresets.length} preset screens</div>
+                    {screenerPresets.map((p, i) => (
                       <button key={p.name} onClick={() => applyPreset(i)}>
                         {p.name}
                         <small>{p.desc}</small>

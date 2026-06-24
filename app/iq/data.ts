@@ -70,7 +70,6 @@ export interface ScreenerStock {
   rvol: number;   // relative volume
   rating: string; // Strong Buy | Buy | Neutral | Sell | Strong Sell
 }
-export interface MacroEvent { dt: string; ev: string; sub?: string; type: string; }
 export interface CommentaryItem {
   cat: string; accent: string; time: string; text: string; why: string;
 }
@@ -349,19 +348,6 @@ export const screenerPresets: ScreenerPreset[] = [
   { name: 'Golden cross (50>200)',       desc: '50-DMA crossing above 200-DMA',                          f: { rs_min: 65 } },
   { name: 'Bollinger squeeze breakout', desc: 'low volatility → expansion',                              f: { rvol_min: 2 } },
   { name: 'Cup-with-handle setups',     desc: 'classic base · breakout pivot',                           f: { rs_min: 80 } },
-];
-
-// ---- Macro Events ----
-export const macro: MacroEvent[] = [
-  { dt: 'Mon May 27', ev: 'Memorial Day — US Markets Closed', type: 'holiday' },
-  { dt: 'Tue May 28', ev: 'Consumer Confidence (May)', sub: 'Prev: 97.0 | Est: 98.5', type: 'data' },
-  { dt: 'Tue May 28', ev: 'Fed Governor Waller Speech', sub: 'Topic: Economic Outlook', type: 'fed' },
-  { dt: 'Wed May 29', ev: 'GDP (Q1 2nd Estimate)', sub: 'Prev: 1.6% | Est: 1.5%', type: 'data' },
-  { dt: 'Wed May 29', ev: 'FOMC Minutes Release', sub: 'April 30 – May 1 meeting', type: 'fed' },
-  { dt: 'Thu May 30', ev: 'PCE Price Index (April)', sub: 'Prev: 0.3% | Est: 0.2%', type: 'data' },
-  { dt: 'Thu May 30', ev: 'Jobless Claims', sub: 'Prev: 215K | Est: 218K', type: 'data' },
-  { dt: 'Fri May 31', ev: 'ISM Manufacturing (May)', sub: 'Prev: 49.2 | Est: 49.8', type: 'survey' },
-  { dt: 'Fri May 31', ev: 'Fed Chair Powell Speech', sub: 'Annual Economic Conference', type: 'speech' },
 ];
 
 // ---- Commentary (live intraday feed) ----

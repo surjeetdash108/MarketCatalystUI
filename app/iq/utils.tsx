@@ -116,11 +116,6 @@ export function SemiGauge({ val, label, id = "sg" }: { val: number; label: strin
   );
 }
 
-export function gaugeSVG(v: number, label: string, color: string): string { return ""; }
-export function Gauge({ v, label, color, sublabel }: { v: number; label: string; color: string; sublabel?: string }) {
-  return null;
-}
-
 // ---- Technical rating gauge (TradingView-style segmented semicircle) ----
 const TR_TONE: Record<string, string> = {
   "Strong Buy": "var(--up)", "Buy": "#7bdcae", "Neutral": "var(--text-dim-solid)",
@@ -165,13 +160,33 @@ export function heatCol(p: number): { bg: string; fg: string } {
   return { bg: `rgb(${r},${g},${b})`, fg: a > 0.42 ? "#ffffff" : "#0c1a13" };
 }
 
+// ---- Shared deterministic hash (used for seeded chart/earnings/news data) ----
+export function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+// ---- Shared 10-quarter earnings history (deterministic, seed = ticker symbol) ----
+export interface EarnQ { q: string; e: number; a: number; surp: number; mv: number; }
+
+export function earnHistory(sym: string, base: number): EarnQ[] {
+  const qs = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
+  return qs.map((q, i) => {
+    const r    = (Math.abs(sym.charCodeAt(0) * 31 + (sym.charCodeAt(1) || 7) * 17 + i * 13) % 97) / 97;
+    const e    = parseFloat((base * (1 - i * 0.03)).toFixed(2));
+    const surp = parseFloat(((r - 0.4) * 18).toFixed(1));
+    const a    = parseFloat((e * (1 + surp / 100)).toFixed(2));
+    const mv   = parseFloat(((r - 0.45) * 22).toFixed(1));
+    return { q, e, a, surp, mv };
+  });
+}
+
 // ---- Candlestick chart (matches HTML genOHLC + candleChart) ----
 type OHLCBar = { o: number; h: number; l: number; c: number; v: number };
 
 function _hash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
+  return hashStr(s);
 }
 
 function _seed(n: number) {

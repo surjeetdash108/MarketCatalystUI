@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { useIQActions } from "../shell";
 import { earnings, stockInfo } from "../data";
-import { cls, sign } from "../utils";
+import { cls, sign, earnHistory, EarnQ } from "../utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface HistRow { q: string; e: number; a: number; surp: number; mv: number; }
 interface IncRow  { c: string; rev: number; cogs: number; gp: number; opex: number; oi: number; ni: number; eps: number; }
 
 type TabKey = "yest" | "today" | "tom" | "week" | "next" | "prev" | "month" | "lmonth";
@@ -33,22 +32,6 @@ function parseMcNum(mc: string): number {
   if (m.endsWith("B")) return parseFloat(m);
   if (m.endsWith("M")) return parseFloat(m) / 1000;
   return parseFloat(m) || 60;
-}
-
-function earnHistory(s: string): HistRow[] {
-  const si = stockInfo[s];
-  const p  = si?.px  ?? 100;
-  const pe = si?.pe   ?? 25;
-  const base = Math.max(0.05, (p / pe) / 4);
-  const qs = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
-  return qs.map((q, i) => {
-    const r    = (Math.abs(s.charCodeAt(0) * 31 + (s.charCodeAt(1) || 7) * 17 + i * 13) % 97) / 97;
-    const e    = +(base * (1 - i * 0.03)).toFixed(2);
-    const surp = +((r - 0.4) * 18).toFixed(1);
-    const a    = +(e * (1 + surp / 100)).toFixed(2);
-    const mv   = +((r - 0.45) * 22).toFixed(1);
-    return { q, e, a, surp, mv };
-  });
 }
 
 function earnIncome(s: string, mcStr: string): IncRow[] {
@@ -101,7 +84,7 @@ function monthCalData(off: number): { Y: number; M: number; first: number; days:
 
 // ── SVG Charts ───────────────────────────────────────────────────────────────
 
-function EpsChart({ hist }: { hist: HistRow[] }) {
+function EpsChart({ hist }: { hist: EarnQ[] }) {
   const d = [...hist].reverse();
   const W = 580, H = 210, PADL = 30, PADR = 18, PADT = 14, PADB = 30;
   const iw = W - PADL - PADR, ih = H - PADT - PADB;
@@ -397,7 +380,9 @@ export function EarningsScreen() {
   // ── Detail section ────────────────────────────────────────────────────────
 
   const selEarning = earnings.find(e => e.s === sel) ?? earnings[0];
-  const hist = earnHistory(sel);
+  const _si   = stockInfo[sel];
+  const _base = Math.max(0.05, ((_si?.px ?? 100) / (_si?.pe ?? 25)) / 4);
+  const hist  = earnHistory(sel, _base);
   const inc  = earnIncome(sel, selEarning?.mc ?? "$60B");
   const beats = hist.filter(h => h.surp > 0).length;
   const avgMv = (hist.reduce((a, h) => a + Math.abs(h.mv), 0) / hist.length).toFixed(1);

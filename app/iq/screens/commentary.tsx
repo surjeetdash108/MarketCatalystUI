@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { commentary, watch, folio, movers, analyst, screenerStocks, stockInfo, sectorByName } from "../data";
-import { sign, cls, fmt } from "../utils";
+import { sign, cls, fmt, hashStr, earnHistory } from "../utils";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
@@ -26,34 +26,12 @@ const AFTERHOURS = [
   { cat: "AH Move",   accent: "var(--down)",    time: "5:10p", text: "<b>WDAY</b> AH −4.2% after subscription rev in-line but FY guidance light",            why: "Growth stock held to a high bar post-CPI; anything not materially above estimates sold off." },
 ];
 
-/* ── Deterministic seed helper ── */
-function _dseed(s: string): number {
-  let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
-}
-
 /* ── Date helper: n days before May 21 2026 ── */
 function nd(days: number): string {
   const MQ = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const dt = new Date(2026, 4, 21);
   dt.setDate(dt.getDate() - days);
   return MQ[dt.getMonth()] + " " + dt.getDate();
-}
-
-/* ── Earnings history (same deterministic logic as stock.tsx) ── */
-function _erH(s: string, i: number): number {
-  return (Math.abs(s.charCodeAt(0) * 31 + (s.charCodeAt(1) || 7) * 17 + i * 13) % 97) / 97;
-}
-function earnHistory(sym: string, baseEps = 1.5) {
-  const qs = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
-  return qs.map((q, i) => {
-    const r = _erH(sym, i);
-    const e = +(baseEps * (0.8 + r * 0.4)).toFixed(2);
-    const surpPct = Math.round(r * 30 - 8);
-    const a = +(e * (1 + surpPct / 100)).toFixed(2);
-    const mv = +(r * 14 - 4).toFixed(1);
-    return { q, e, a, surp: surpPct, mv };
-  });
 }
 
 /* ── Ticker search suggestion list ── */
@@ -81,7 +59,7 @@ function buildNewsHistory(sym: string): NewsItem[] {
   const nm = info?.name ?? ss?.n ?? sym;
   const mv = movers.find(m => m.s === sym);
   const sec = ss ? sectorByName[ss.sec] : null;
-  const sd = _dseed(sym + "news");
+  const sd = hashStr(sym + "news");
   const rs = ss?.rs ?? 55;
   const p = mv?.p ?? info?.px ?? 100;
   const c = mv?.c ?? info?.c ?? 0;
@@ -238,7 +216,6 @@ function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
 /* ── Main commentary screen ── */
 export function CommentaryScreen() {
   const router = useRouter();
-  const { openStock } = useIQActions();
   const [activeTab, setActiveTab] = useState(0);
   const [search, setSearch] = useState("");
   const [newsDrawer, setNewsDrawer] = useState<string | null>(null);

@@ -58,6 +58,7 @@
 |---|---|---|
 | Mover rows (symbol, change %, volume, reason) | `data.movers` — hardcoded | 🔴 Static |
 | Sector / direction filters | Derived from `data.movers` | 🔴 Static |
+| Sliding drawer — StockScreen content | Same sources as Stock Detail page (`data.stockInfo`, deterministic charts) | 🔴 Static |
 
 ---
 
@@ -112,6 +113,7 @@
 | Sell / Remove holding | `partialSell()` / `removeHolding()` on `useState` holdings | 🔴 Static (session-only) |
 | AI Summary — Drivers / Laggards / Leaders | Computed dynamically from `holdings` useState (sort by G/L and day change) | 🟡 Hybrid |
 | Active alerts sidebar | Hardcoded `ALERTS` constant | 🔴 Static |
+| Right panel — StockScreen for selected holding | Same sources as Stock Detail page (`data.stockInfo`, deterministic charts, Firebase notes) | 🟡 Hybrid |
 
 ---
 
@@ -120,9 +122,11 @@
 | Element | Data | Status |
 |---|---|---|
 | Watchlist rows (symbol, price, change, target, note) | `data.watch` — hardcoded | 🔴 Static |
+| Watchlist list (persisted) | `localStorage("iq-watchlist")` — JSON string array | 🟡 Hybrid (persists across sessions) |
 | Upside % | Computed from `data.watch` (tgt vs px) | 🔴 Static |
 | Alerts column (price move pill, analyst upgrade pill) | `alerts(sym)` computed from `data.movers` + `data.analyst` | 🔴 Static |
 | AI toggle (per-stock on/off) | `aiOn: Record<string, boolean>` useState — in-memory session | 🔴 Static (session-only) |
+| Sliding drawer — StockScreen content | Same sources as Stock Detail page (`data.stockInfo`, deterministic charts) | 🔴 Static |
 
 ---
 
@@ -160,6 +164,9 @@
 |---|---|---|
 | Commentary cards (author, date, title, blurb, tag) | `data.commentary` — hardcoded | 🔴 Static |
 | Tag filter | Derived from `data.commentary` | 🔴 Static |
+| Ticker search bar suggestions | `SEARCH_SYMS` constant (20 tickers) — hardcoded in screen | 🔴 Static |
+| NewsDrawer history items | `buildNewsHistory(sym)` — derived from `data.movers`, `data.analyst`, `sectorByName`, `data.watch`, `earnHistory()` from utils | 🔴 Static |
+| Quick news lookup chips | 8 hardcoded ticker chips in sidebar | 🔴 Static |
 
 ---
 
@@ -192,8 +199,9 @@
 |---|---|
 | Fully dynamic (Firebase Auth / Redux) | 4 shell elements (auth, user name, profile image, tier) |
 | Fully dynamic (Firestore reads/writes) | 3 stock note operations (save, load, delete) |
-| Hybrid (state seeded from mock, computed dynamically) | Portfolio holdings state + AI summary |
-| Fully static mock data | All market data, prices, news, research |
+| Hybrid (localStorage — session-persistent) | Watchlist list (`localStorage("iq-watchlist")`) |
+| Hybrid (state seeded from mock, computed dynamically) | Portfolio holdings state + AI summary; right-panel StockScreen |
+| Fully static mock data | All market data, prices, news, research; sliding drawer StockScreen content; NewsDrawer history |
 
 ---
 

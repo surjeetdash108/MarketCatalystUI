@@ -50,7 +50,7 @@ v1.3 | June 2026
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-10 | Market Movers Board | MVP | Free+ | **In Progress** | 25% | Full Stack | View tabs: Top Gainers, Top Losers, Unusual Volume, Gap Ups, Gap Downs, High Relative Volume, Large-Cap Movers, Weekly Movers. Mover card: ticker, price, % change, $ change, volume vs 30d avg (ratio), catalyst label (earnings/analyst/news/macro/no known), peer reactions, MA context (above/below 20/50/200-day). Filter by: index, sector, industry group, cap, price range, float, session. |
+| F-10 | Market Movers Board | MVP | Free+ | **In Progress** | 40% | Full Stack | View tabs: Top Gainers, Top Losers, Unusual Volume, Gap Ups, Gap Downs, High Relative Volume, Large-Cap Movers, Weekly Movers. Row/trending-pill click opens `stock-side-drawer` with full embedded StockScreen (dynamic import, no modal). Removed mvpop hover tooltip. Remaining: real API data, weekly tab, filters. File: `screens/movers.tsx`. |
 | F-11 | Weekly Movers Page | MVP | Free+ | **Not Started** | 0% | Full Stack | Published Friday, available through weekend. Top 10 up + top 10 down for the week. Each: ticker, weekly % change, short catalyst (earnings/analyst/macro/news). |
 
 ### Market Heatmap — `/menu/heatmap`
@@ -82,7 +82,7 @@ v1.3 | June 2026
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-07 | Live Market Feed | MVP | Free+ | **In Progress** | 65% | Full Stack | Commentary screen has 5 functional filter tabs: Live (all items), Premarket (6 pre-market entries with Futures/Overnight/Earnings/Analyst/Pre-open categories), After Hours (6 AH entries), My names (filters commentary.text for portfolio+watchlist tickers, shows tracked-names chip row), Macro (filters to Macro/Fed-Rates categories). FeedItem component shared across all tabs. Right-panel sidecards remain static across tabs (Before Bell, After Close, General Perspective). File: `screens/commentary.tsx`. Remaining: WebSocket real-time data, pin/mark-read, push delivery. |
+| F-07 | Live Market Feed | MVP | Free+ | **In Progress** | 75% | Full Stack | Commentary screen has 5 functional filter tabs: Live (all items), Premarket, After Hours, My names, Macro. FeedItem component shared across tabs. Ticker search bar (SEARCH_SYMS autocomplete dropdown): typing a symbol opens `NewsDrawer` sliding panel with `buildNewsHistory()` categorized items (Catalyst, Technical, Sector, Analyst, Earnings, Calendar, Coverage, Product, Guidance). Quick news lookup card in sidebar with 8 ticker chips. "Open full stock page →" button in NewsDrawer calls `openStockFull(sym)`. File: `screens/commentary.tsx`. Remaining: WebSocket real-time data, pin/mark-read, push delivery. |
 | F-33 | Story Stocks Section | Phase 2 | Pro+ | **Not Started** | 0% | Full Stack | Curated section for stocks with active narrative. AI-tagged via news cluster density + price/volume anomaly. Card: what/why/what changed today/next catalyst date/affected peers+ETFs+sectors. |
 
 ---
@@ -93,7 +93,7 @@ v1.3 | June 2026
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-13 | Portfolio Creation & Management | MVP | Free+ | **In Progress** | 55% | Full Stack | Manual portfolio with React `useState` (seeded from mock data, changes persist in session). Add Holding modal (ticker, size, conviction). Sell dialog (partial: reduce size / full exit: remove). Per-holding: current price, day change, position size bucket, G/L, next earnings date, last analyst action, event column. Broker import Phase 2. File: `screens/portfolio.tsx`. |
+| F-13 | Portfolio Creation & Management | MVP | Free+ | **In Progress** | 65% | Full Stack | Left pf-list panel: holdings `useState` (add/partial sell/remove), seeded from mock data. Right panel: full StockScreen embedded via dynamic import for `pfSel` ticker — same layout as Stock Detail page. Clicking a holding row sets `pfSel`. Per-holding: current price, day change, position size bucket, G/L, next earnings date, last analyst action. Broker import Phase 2. File: `screens/portfolio.tsx`. |
 | F-52 | AI Portfolio Summary — Drivers / Laggards / Leaders | MVP | Pro+ | **Complete** | 100% | Full Stack | Dynamic 3-column grid computed from `holdings` useState: Drivers (top G/L), Laggards (bottom G/L), Leaders today (top day change). Each row clickable → openStock(). AI disclaimer footer. Updates live as holdings are added/removed. **AI Pulse card added**: renders `PULSE` string array as bullet notes below the WMN block (before the holdings table) — each note is a plain-English AI insight for a specific holding, with disclaimer. File: `screens/portfolio.tsx`. |
 | F-14 | Portfolio Pulse Card | MVP | Pro+ | **Not Started** | 0% | AI + Backend | AI summary generated at 7am ET + updated at market close. In plain English: what changed in holdings today and why. Flags names with material events (earnings, analyst action, unusual move). |
 | F-37 | Broker Import (Plaid/SnapTrade) | Phase 2 | Pro+ | **Not Started** | 0% | Backend | Plaid or SnapTrade OAuth. Multi-brokerage support. Pull current positions, reconcile against manually entered portfolio. |
@@ -102,7 +102,7 @@ v1.3 | June 2026
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-15 | Watchlist Management | MVP | Free (5 max) | **In Progress** | 30% | Full Stack | Free: up to 5 names. Pro+: unlimited. Multiple watchlists. Watchlist indicators across all boards. |
+| F-15 | Watchlist Management | MVP | Free (5 max) | **In Progress** | 50% | Full Stack | Company name click opens `stock-side-drawer` with full embedded StockScreen (dynamic import). Delete confirmation modal: "Are you sure want to delete {sym}?" with OK/Cancel (state: `confirmDelete`). `localStorage("iq-watchlist")` persists list as JSON array of strings across sessions. Free: up to 5 names. Pro+: unlimited. File: `screens/watchlist.tsx`. |
 | F-51 | AI Watchlist Alerts — Per-Stock Toggle | MVP | Pro+ | **Complete** | 100% | Full Stack | Two-panel Google Finance layout: left panel (280px, filter chips All/Options active/Movers today, scrollable wl-item list with sparklines), right panel (breadcrumb, company header with icon+price, area chart with period selector + toolbar, tabs Overview/Earnings/Analyst/Financials, metrics table). `bigChartSVG()` generates 800×160 SVG area chart seeded from ticker. CSS: `.wl-*` classes in iq.css. File: `screens/watchlist.tsx`. |
 | F-16 | Alert Engine — Core Rules | MVP | Pro+ | **Not Started** | 0% | Backend | In-app + email (Phase 1); SMS + push Phase 2. 12 alert types: earnings posted, post-ER move >5%, analyst up/down, unusual options, block trade, price move, volume spike >3×, 52-wk breakout, macro event, peer sympathy move, 13F filing, group RS rank. |
 | F-38 | Industry Rotation Alerts | Phase 2 | Premium | **Not Started** | 0% | Backend | Detection: industry subgroup enters or exits top 20 RS rankings. Push + email delivery. |

@@ -200,6 +200,12 @@ Shared Utility Components (`app/iq/utils.tsx`)
 
 -   **`RATING_VAL`**: Map from rating string to gauge position — `{ "Strong Buy": 0.9, "Buy": 0.55, "Neutral": 0, "Sell": -0.55, "Strong Sell": -0.9 }`.
 
+-   **`hashStr(s)`**: Exported deterministic string hash using `Math.imul(31, h)`. Shared by commentary.tsx and data.ts (internal `_hash` delegates to this). Centralises the seeding algorithm so all deterministic data generation stays consistent.
+
+-   **`EarnQ`**: Exported interface — `{ q: string; e: number; a: number; surp: number; mv: number }`. Used by stock.tsx, earnings.tsx, and commentary.tsx's `buildNewsHistory`.
+
+-   **`earnHistory(sym, base)`**: Exported function returning 10-quarter deterministic EPS history. Formula: `(Math.abs(s.charCodeAt(0)*31 + (s.charCodeAt(1)||7)*17 + i*13) % 97) / 97`. Shared by stock.tsx, earnings.tsx, and commentary.tsx — eliminates three separate identical implementations.
+
 Design System — StockWise (`iq.css`)
 
 -   All styling is via a custom CSS design system in `app/iq.css`, imported globally in `app/layout.tsx`.
@@ -214,6 +220,8 @@ Design System — StockWise (`iq.css`)
 
 -   Component classes: `.wmn` (What Matters Now block), `.ai-block`, `.ai-sec`, `.heat` (sector heatmap grid), `.fundcard`, `.fin-row`, `.iq-toggle`, `.iq-toggle-row`, `.pill`, `.pill.up/dn/amc/opt/bmo/beat/miss/raise/lower/hold`, `.tr-badge`, `.iconbtn`, `.topbar-avatar`, `.trseg`, `.trseg2`, `.tf-pills`, `.ind-tbl`, `.sd-grid`, `.sd-head`.
 
+-   Sliding drawer pattern: `.stock-side-drawer` — `position:fixed; right:0; top:0; height:100vh; width:min(680px,100vw); z-index:51; overflow:hidden auto`. Used by movers.tsx, watchlist.tsx, and portfolio.tsx to embed a full `StockScreen` without navigation. Header row uses `.drawer-h`; body uses `.drawer-b` (overflow auto, flex-grow). Paired with `.scrim` for click-away dismiss.
+
 -   Stock screener classes: `.filt`, `.filt .fh`, `.filt .fb`, `.fgroup .fl`, `.preset`, `.dd`, `.dd-menu`.
 
 -   Auth pages use the same CSS variables (imported globally) but are not wrapped in `.iq-root`; they use inline styles referencing `var(--*)`.
@@ -224,16 +232,16 @@ Screens (Current) — Navigation groups: Intelligence / My Money / Context
 |---|---|---|---|
 | dashboard | screens/dashboard.tsx | Intelligence | UI complete — session tabs removed; modal/popover pattern; Market Movers widget (Winners/Losers tabs, hover popup, sector/cap filters); Trending Stocks col-12 widget |
 | earnings | screens/earnings.tsx | Intelligence | UI complete — side-by-side col-6 layout; inline accordion detail panel (no drawer) |
-| movers | screens/movers.tsx | Intelligence | UI complete — static data |
+| movers | screens/movers.tsx | Intelligence | UI complete — row/pill click opens `stock-side-drawer` with embedded StockScreen (dynamic import); removed mvpop hover tooltip |
 | heatmap | screens/heatmap.tsx | Intelligence | UI complete — heatCol() dynamic text color on treemap tiles |
 | analyst | screens/analyst.tsx | Intelligence | UI complete — computeFlags() (5+ action alert); topUpgrades sidebar; static data |
 | screener | screens/screener.tsx | Intelligence | UI complete — 20 presets, checkbox filters, native `<details>` dropdown |
 | ipos | screens/ipos.tsx | Intelligence | UI complete — recent IPO table + upcoming pipeline tab; static data |
-| portfolio | screens/portfolio.tsx | My Money | UI complete — useState holdings (add/remove/partial sell); AI drivers/laggards/leaders |
-| watchlist | screens/watchlist.tsx | My Money | UI complete — Alerts column (price move + analyst upgrade pills); per-stock AI toggle |
-| stock | screens/stock.tsx | My Money | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout; Firebase stock notes (stock_comments collection); Insider & Key Levels side-by-side |
+| portfolio | screens/portfolio.tsx | My Money | UI complete — left pf-list panel (holdings add/remove/sell); right panel embeds full StockScreen via dynamic import for `pfSel` ticker; AI drivers/laggards/leaders |
+| watchlist | screens/watchlist.tsx | My Money | UI complete — Google Finance two-panel layout; company name click opens `stock-side-drawer` with embedded StockScreen; delete confirmation modal; `localStorage("iq-watchlist")` persists list |
+| stock | screens/stock.tsx | My Money | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout; Firebase stock notes (stock_comments collection); Insider & Key Levels side-by-side; Ask Copilot button removed from sd-actions |
 | insider | screens/insider.tsx | My Money | UI complete — tabbed: Insider activity (Form 4 feed) + 13F institutional view |
-| commentary | screens/commentary.tsx | Context | UI complete — static data |
+| commentary | screens/commentary.tsx | Context | UI complete — Live/Premarket/AH/My names/Macro tabs; ticker search bar (SEARCH_SYMS autocomplete); `NewsDrawer` slides in with `buildNewsHistory()` categorized items (Catalyst/Technical/Sector/Analyst/Earnings/Calendar/Coverage/Product/Guidance); Quick news lookup chip sidebar |
 | recap | screens/recap.tsx | Context | UI complete — static data |
 | macro | screens/macro.tsx | Context | UI complete — MacroEvent interface; 3-week calendar (CAL_LAST/THIS/NEXT); 8-column table |
 | settings | screens/settings.tsx | — | Settings + dark mode wired to Firestore |

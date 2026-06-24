@@ -725,9 +725,6 @@ function CommandPalette({ onClose, onNavigate }: { onClose: () => void; onNaviga
   const [q, setQ] = useState("");
   const [starred, setStarred] = useState<Set<string>>(() => new Set());
 
-  const filtered = menuItems.filter(m =>
-    m.label.toLowerCase().includes(q.toLowerCase())
-  );
   const stockMatches = q.length >= 1
     ? SEARCHABLE_STOCKS.filter(s => s.toLowerCase().startsWith(q.toLowerCase()))
     : [];

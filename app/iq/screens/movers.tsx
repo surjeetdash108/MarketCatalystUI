@@ -42,10 +42,9 @@ export function MoversScreen() {
   const [cap,        setCap]        = useState("All");
   const [selectedSym, setSelectedSym] = useState<string | null>(null);
 
-  const pool    = movers;
-  const sectors = ["All", ...Array.from(new Set(pool.map(m => m.sector))).sort()];
+  const sectors = ["All", ...Array.from(new Set(movers.map(m => m.sector))).sort()];
 
-  const filtered = pool
+  const filtered = movers
     .filter(m => {
       if (sector !== "All" && m.sector !== sector) return false;
       if (cap    !== "All" && m.cap    !== cap)    return false;
@@ -66,7 +65,7 @@ export function MoversScreen() {
   const sectorTally = Object.entries(tally).sort((a, b) => b[1] - a[1]);
 
   const trending = computeTrending();
-  const val = (m: typeof pool[0]) => tab === "week" ? m.wk : m.c;
+  const val = (m: typeof movers[0]) => tab === "week" ? m.wk : m.c;
 
   return (
     <>

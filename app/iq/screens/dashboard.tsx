@@ -180,9 +180,9 @@ function DashPopContent({ sym, block }: { sym: string; block: PopBlock }) {
 }
 
 function analystDir(type: string) {
-  if (type === "upgrade")    return <span className="up">▲ Upg</span>;
-  if (type === "downgrade")  return <span className="down">▼ Dng</span>;
-  if (type === "initiation") return <span style={{ color: "var(--ai)" }}>◆ Init</span>;
+  if (type === "up"   || type === "upgrade")    return <span className="up">▲ Upg</span>;
+  if (type === "down" || type === "downgrade")  return <span className="down">▼ Dng</span>;
+  if (type === "init" || type === "initiation") return <span style={{ color: "var(--ai)" }}>◆ Init</span>;
   return <span style={{ color: "var(--text-dim-solid)" }}>Reit</span>;
 }
 
@@ -201,9 +201,6 @@ export function DashboardScreen() {
   const datePart = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const timePart = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const dateStr  = `${dayName} · ${datePart} · ${timePart} ET`;
-
-  const totalVal     = 128430;
-  const totalGainPct = folio.reduce((s, f) => s + f.gl, 0) / folio.length;
 
   const leaders  = [...screenerStocks].sort((a, b) => b.rs - a.rs).slice(0, 3);
   const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);

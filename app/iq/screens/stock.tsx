@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useIQActions } from "../shell";
 import { stockInfo, watch, movers as moversData, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail } from "../data";
-import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL } from "../utils";
+import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, earnHistory, EarnQ } from "../utils";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 
@@ -121,23 +121,6 @@ function earnIncome(mc: number, mg: number, px: number): IncRow[] {
     const ni   = Math.max(0.01, oi * 0.82);
     const eps  = ni / sh;
     return { c, rev, cogs, gp, opex, oi, ni, eps };
-  });
-}
-
-// ── Earnings history: 10-quarter seeded deterministic data ──────────────────
-function _erH(s: string, i: number): number {
-  return (Math.abs(s.charCodeAt(0) * 31 + (s.charCodeAt(1) || 7) * 17 + i * 13) % 97) / 97;
-}
-interface EarnQ { q: string; e: number; a: number; surp: number; mv: number; }
-function earnHistory(sym: string, base: number): EarnQ[] {
-  const qs = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
-  return qs.map((q, i) => {
-    const r    = _erH(sym, i);
-    const e    = parseFloat((base * (1 - i * 0.03)).toFixed(2));
-    const surp = parseFloat(((r - 0.4) * 18).toFixed(1));
-    const a    = parseFloat((e * (1 + surp / 100)).toFixed(2));
-    const mv   = parseFloat(((r - 0.45) * 22).toFixed(1));
-    return { q, e, a, surp, mv };
   });
 }
 
