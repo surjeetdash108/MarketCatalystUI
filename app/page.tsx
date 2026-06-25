@@ -850,7 +850,6 @@ export default function LandingPage() {
               {/* "And many more" card */}
               <div className="mq-card mq-more" onClick={() => openAuth("signup")}>
                 <div className="mq-more-inner">
-                  <div className="mq-more-plus">14+</div>
                   <h3>And many more</h3>
                   <p>Screener, IPOs, Watchlist, Insider & 13F, Commentary, Macro & VIX — fourteen connected workspaces in all.</p>
                   <div className="mq-go">See everything →</div>

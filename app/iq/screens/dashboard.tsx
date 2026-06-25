@@ -416,7 +416,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Market Movers</h3>
-              <button className="link" onClick={() => setDrawer("movers")}>All →</button>
+              <button className="link" onClick={() => setDrawer("movers")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
@@ -507,35 +507,41 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Screener · Leaders &amp; Laggards</h3>
-              <button className="link" onClick={() => setDrawer("analyst")}>View all →</button>
+              <Link className="link" href="/menu/screener">View all →</Link>
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
                 ▲ Leaders
               </div>
-              {leaders.map(s => (
-                <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(s.s)}
-                  {...mr(s.s, "screener")}
-                >
-                  <span className="tkr">{s.s}</span>
-                  <span className="mid">RS {s.rs} · {s.sec}</span>
-                  <span className={`r ${cls(s.salesG)}`}>{sign(s.salesG)}</span>
-                </div>
-              ))}
+              {leaders.map(s => {
+                const dayC = movers.find(m => m.s === s.s)?.c ?? 0;
+                return (
+                  <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
+                    onClick={() => openStock(s.s)}
+                    {...mr(s.s, "screener")}
+                  >
+                    <span className="tkr">{s.s}</span>
+                    <span className="mid">RS {s.rs} · {s.sec}</span>
+                    <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
+                  </div>
+                );
+              })}
               <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px" }}>
                 ▼ Laggards
               </div>
-              {laggards.map(s => (
-                <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(s.s)}
-                  {...mr(s.s, "screener")}
-                >
-                  <span className="tkr">{s.s}</span>
-                  <span className="mid">RS {s.rs} · {s.sec}</span>
-                  <span className={`r ${cls(s.salesG)}`}>{sign(s.salesG)}</span>
-                </div>
-              ))}
+              {laggards.map(s => {
+                const dayC = movers.find(m => m.s === s.s)?.c ?? 0;
+                return (
+                  <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
+                    onClick={() => openStock(s.s)}
+                    {...mr(s.s, "screener")}
+                  >
+                    <span className="tkr">{s.s}</span>
+                    <span className="mid">RS {s.rs} · {s.sec}</span>
+                    <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -582,10 +588,9 @@ export function DashboardScreen() {
                   onClick={() => openStock(w.s)}
                   {...mr(w.s, "watchlist")}
                 >
-                  <span className="tkr">{w.s}<small>{w.n}</small></span>
+                  <span className="tkr">{w.s}</span>
                   <span className="mid">
-                    {w.opt ? <span className="pill opt">⚡</span> : null}{" "}
-                    ER {w.er}
+                    {w.opt ? <span className="pill opt">⚡</span> : null}{w.opt ? " " : ""}ER {w.er}
                   </span>
                   <span className={`r ${cls(w.c)}`}>{sign(w.c)}</span>
                 </div>
