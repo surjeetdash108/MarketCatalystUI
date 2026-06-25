@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { signInWithPopup, signInWithRedirect } from "firebase/auth";
+import { firebaseAuth, googleAuthProvider } from "./firebase";
+import { completeGoogleLogin, getAuthErrorMessage } from "./auth/auth-utils";
 import { LoginForm } from "./auth/login/login-form";
 import { pulse, wmn, movers, earnings, analyst, folio, sectorList, recap } from "./iq/data";
 import { fmt, sign, cls, heatCol, StockLogo } from "./iq/utils";
@@ -891,6 +894,20 @@ export default function LandingPage() {
     setAuthOpen(true);
   }
 
+  async function handleLandingGoogle() {
+    try {
+      const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
+      await completeGoogleLogin(result);
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+        await signInWithRedirect(firebaseAuth, googleAuthProvider);
+      } else {
+        window.alert(getAuthErrorMessage(err));
+      }
+    }
+  }
+
   const glanceWs = glanceIdx !== null ? WS_LIST[glanceIdx] : null;
 
   return (
@@ -1015,7 +1032,7 @@ export default function LandingPage() {
                   <h3 className="au-title">Create your free account</h3>
                   <Link href="/auth/signup" className="au-cta">Create account →</Link>
                   <div className="au-or">or</div>
-                  <button className="au-google"><GoogleIcon />Continue with Google</button>
+                  <button className="au-google" onClick={handleLandingGoogle}><GoogleIcon />Continue with Google</button>
                   <p className="au-fine">Free to start. No credit card required.</p>
                 </>
               ) : (

@@ -1004,6 +1004,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
+            {/* Mobile nav scrim — inside .app so it shares .app's stacking context with the rail */}
+            {navOpen && <div className="mob-nav-scrim" onClick={() => setNavOpen(false)} />}
+
             {/* Rail / Sidebar */}
             <nav className={`rail${navOpen ? " mob-open" : ""}`}>
               {/* Mobile rail header — hidden on desktop via CSS */}
@@ -1057,9 +1060,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               {children}
             </main>
           </div>
-
-          {/* Mobile nav scrim */}
-          {navOpen && <div className="mob-nav-scrim" onClick={() => setNavOpen(false)} />}
 
           {/* Drawers */}
           {drawer?.type === "stock" && (

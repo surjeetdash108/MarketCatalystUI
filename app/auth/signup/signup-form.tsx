@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   createUserWithEmailAndPassword,
+  getRedirectResult,
   signInWithPopup,
   signInWithRedirect,
   updateProfile,
@@ -18,7 +19,6 @@ import {
 import {
   completeGoogleLogin,
   getAuthErrorMessage,
-  shouldUseGoogleRedirect,
   showError,
 } from "../auth-utils";
 
@@ -42,6 +42,27 @@ export function SignupForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState("");
+
+  // Pick up any pending redirect result (fallback for when popup was blocked
+  // and signInWithRedirect was used instead).
+  useEffect(() => {
+    let isMounted = true;
+    void (async () => {
+      try {
+        const cred = await getRedirectResult(firebaseAuth);
+        if (!isMounted || !cred) return;
+        setIsSubmitting(true);
+        await completeGoogleLogin(cred);
+      } catch (err) {
+        if (!isMounted) return;
+        const msg = getAuthErrorMessage(err);
+        setError(msg); showError(msg);
+      } finally {
+        if (isMounted) setIsSubmitting(false);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, []);
 
   function handleProfileChange(field: keyof InvestorProfile, value: string | string[]) {
     setProfile(cur => ({ ...cur, [field]: value }));
@@ -75,14 +96,24 @@ export function SignupForm() {
   async function handleGoogle() {
     setError(""); setIsSubmitting(true);
     try {
-      if (shouldUseGoogleRedirect()) {
-        await signInWithRedirect(firebaseAuth, googleAuthProvider); return;
-      }
-      await completeGoogleLogin(await signInWithPopup(firebaseAuth, googleAuthProvider));
+      const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
+      await completeGoogleLogin(result);
     } catch (err) {
-      const msg = getAuthErrorMessage(err);
-      setError(msg); showError(msg);
-    } finally { setIsSubmitting(false); }
+      const code = (err as { code?: string }).code;
+      if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+        try {
+          await signInWithRedirect(firebaseAuth, googleAuthProvider);
+        } catch (redirectErr) {
+          const msg = getAuthErrorMessage(redirectErr);
+          setError(msg); showError(msg);
+          setIsSubmitting(false);
+        }
+      } else {
+        const msg = getAuthErrorMessage(err);
+        setError(msg); showError(msg);
+        setIsSubmitting(false);
+      }
+    }
   }
 
   const pwStyle: React.CSSProperties = {

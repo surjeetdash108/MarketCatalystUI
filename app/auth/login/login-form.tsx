@@ -13,7 +13,6 @@ import {
   checkAndRedirectIfLoggedIn,
   completeGoogleLogin,
   getAuthErrorMessage,
-  shouldUseGoogleRedirect,
   showError,
 } from "../auth-utils";
 
@@ -92,14 +91,27 @@ export function LoginForm() {
   async function handleGoogle() {
     setError(""); setIsSubmitting(true);
     try {
-      if (shouldUseGoogleRedirect()) {
-        await signInWithRedirect(firebaseAuth, googleAuthProvider); return;
-      }
-      await completeGoogleLogin(await signInWithPopup(firebaseAuth, googleAuthProvider));
+      // signInWithPopup works on iOS Safari when called directly from a user gesture.
+      // signInWithRedirect is unreliable on iOS due to Safari ITP blocking cross-origin cookies.
+      const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
+      await completeGoogleLogin(result);
     } catch (err) {
-      const msg = getAuthErrorMessage(err);
-      setError(msg); showError(msg);
-    } finally { setIsSubmitting(false); }
+      const code = (err as { code?: string }).code;
+      if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+        // Popup was blocked (rare in modern browsers) — fall back to redirect
+        try {
+          await signInWithRedirect(firebaseAuth, googleAuthProvider);
+        } catch (redirectErr) {
+          const msg = getAuthErrorMessage(redirectErr);
+          setError(msg); showError(msg);
+          setIsSubmitting(false);
+        }
+      } else {
+        const msg = getAuthErrorMessage(err);
+        setError(msg); showError(msg);
+        setIsSubmitting(false);
+      }
+    }
   }
 
   const focusStyle = (id: string): React.CSSProperties => ({

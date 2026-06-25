@@ -1828,12 +1828,13 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
   }
   .mob-nav-close:hover { background: var(--surface-3); color: var(--text-hi); }
 
-  /* Scrim behind open nav */
+  /* Scrim behind open nav — z-index 100 beats .main (auto) but loses to .rail (200).
+     Must live inside .app so it shares .app's stacking context with the rail. */
   .mob-nav-scrim {
     display: block;
     position: fixed; inset: 0;
     background: rgba(0,0,0,.55);
-    z-index: 199;
+    z-index: 100;
     animation: iq-fadeIn .2s ease;
   }
 

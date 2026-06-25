@@ -1,6 +1,13 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import {
+  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+  GoogleAuthProvider,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -17,7 +24,21 @@ export const firebaseApp = getApps().length
   ? getApp()
   : initializeApp(firebaseConfig);
 
-export const firebaseAuth = getAuth(firebaseApp);
+// Use initializeAuth with IndexedDB persistence so Safari ITP (which blocks
+// cross-origin cookies) cannot clear the auth state between navigations.
+// Falls back to getAuth if the instance was already created (e.g. hot reload).
+function createAuth() {
+  try {
+    return initializeAuth(firebaseApp, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+  } catch {
+    return getAuth(firebaseApp);
+  }
+}
+
+export const firebaseAuth = createAuth();
 export const firebaseDb = getFirestore(firebaseApp);
 export const googleAuthProvider = new GoogleAuthProvider();
 
