@@ -311,7 +311,7 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
               <div className="card" style={{ marginBottom: 14 }}>
                 <div className="card-h"><h3>Peer reactions</h3></div>
                 <div className="card-b">
-                  {[{ s: "Sector ETF", c: parseFloat(((e.react ?? 0) * 0.3).toFixed(2)) }, { s: "Direct peers", c: parseFloat(((e.react ?? 0) * 0.5).toFixed(2)) }].map(p => (
+                  {[{ s: "Sector index", c: parseFloat(((e.react ?? 0) * 0.3).toFixed(2)) }, { s: "Direct peers", c: parseFloat(((e.react ?? 0) * 0.5).toFixed(2)) }].map(p => (
                     <div key={p.s} className="minirow">
                       <span className="mono" style={{ fontWeight: 700, color: "var(--text-hi)" }}>{p.s}</span>
                       <span className={`mono ${cls(p.c)}`} style={{ marginLeft: "auto" }}>{sign(p.c)}</span>
@@ -376,7 +376,7 @@ function SectorDrawer({ name, onClose }: { name: string; onClose: () => void }) 
           <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">Big news across the sector</div></div>
           {[
             { t: `Rotation into ${name} continues as valuations stay supported`, dt: "Today" },
-            { t: `Sector ETF sees notable inflows amid broad risk-on positioning`, dt: "Yesterday" },
+            { t: `Sector sees notable inflows amid broad risk-on positioning`, dt: "Yesterday" },
             { t: `Analyst consensus turns constructive — multiple PT upgrades`, dt: "2 days ago" },
           ].map((item, i) => (
             <div key={i} style={{ padding: "8px 0", borderBottom: i < 2 ? "1px solid var(--border-soft)" : "none" }}>
@@ -659,7 +659,7 @@ const aiReplies = [
 
 function CopilotPanel({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<CopilotMsg[]>([
-    { role: "ai", text: "Hello! I'm your InvestIQ AI Copilot. Ask me about markets, your portfolio, earnings, or any stock." },
+    { role: "ai", text: "Hello! I'm your StockWise AI Copilot. Ask me about markets, your portfolio, earnings, or any stock." },
   ]);
   const [input, setInput] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);

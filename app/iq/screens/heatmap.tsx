@@ -8,7 +8,7 @@ import { sign, cls, heatCol } from "../utils";
 const SEC_PAGE = 10;
 const SEC_PAGES = Math.ceil(sectorList.length / SEC_PAGE);
 
-const TABS = ["Stocks", "S&P 500", "ETFs", "Crypto"];
+const TABS = ["Stocks", "S&P 500"];
 
 
 const k = 2.0;

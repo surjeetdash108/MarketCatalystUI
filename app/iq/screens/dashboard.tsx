@@ -33,6 +33,48 @@ const INSIDER_MINI = [
   { s: "TSLA", role: "10% owner",  dir: "sell", val: "22.4M" },
 ];
 
+const MARKET_INTERNALS = [
+  { k: "Advancing",      v: "2,186",  note: "NYSE+NASDAQ",         up: true  },
+  { k: "Declining",      v: "1,247",  note: "",                    up: false },
+  { k: "New 52W Highs",  v: "124",    note: "",                    up: true  },
+  { k: "New 52W Lows",   v: "38",     note: "",                    up: false },
+  { k: "Up Volume",      v: "68%",    note: "bullish",             up: true  },
+  { k: "Down Volume",    v: "32%",    note: "",                    up: false },
+  { k: "NYSE TICK",      v: "+420",   note: "bullish",             up: true  },
+  { k: "TRIN (Arms)",    v: "0.74",   note: "< 1 = bullish",       up: true  },
+  { k: "McClellan Osc",  v: "+38.5",  note: "breadth expanding",  up: true  },
+  { k: "Put/Call Ratio", v: "0.82",   note: "neutral",             up: null  },
+] as { k: string; v: string; note: string; up: boolean | null }[];
+
+const EARN_MOVERS = [...earnings]
+  .filter(e => e.react !== null)
+  .sort((a, b) => Math.abs(b.react!) - Math.abs(a.react!));
+
+const FG_HISTORY = [
+  { date: "Jun 25", val: 62, label: "Greed"       },
+  { date: "Jun 18", val: 58, label: "Greed"       },
+  { date: "Jun 11", val: 52, label: "Neutral"     },
+  { date: "Jun 4",  val: 45, label: "Neutral"     },
+  { date: "May 28", val: 38, label: "Fear"        },
+  { date: "May 21", val: 32, label: "Fear"        },
+  { date: "May 14", val: 28, label: "Fear"        },
+  { date: "May 7",  val: 41, label: "Neutral"     },
+  { date: "Apr 30", val: 55, label: "Neutral"     },
+  { date: "Apr 23", val: 63, label: "Greed"       },
+  { date: "Apr 16", val: 71, label: "Extreme Greed"},
+  { date: "Apr 9",  val: 68, label: "Greed"       },
+  { date: "Apr 2",  val: 60, label: "Greed"       },
+  { date: "Mar 26", val: 48, label: "Neutral"     },
+  { date: "Mar 19", val: 36, label: "Fear"        },
+  { date: "Mar 12", val: 22, label: "Extreme Fear"},
+  { date: "Mar 5",  val: 29, label: "Fear"        },
+  { date: "Feb 26", val: 44, label: "Neutral"     },
+  { date: "Feb 19", val: 61, label: "Greed"       },
+  { date: "Feb 12", val: 74, label: "Extreme Greed"},
+];
+
+type DrawerKey = "earnings" | "movers" | "analyst" | "earn-movers" | "internals" | "watchlist" | "portfolio" | "insider" | "fg-history" | null;
+
 // ---- Dash hover popup ----
 type PopBlock = "earnings" | "movers" | "analyst" | "watchlist" | "portfolio" | "insider" | "screener";
 
@@ -233,6 +275,8 @@ export function DashboardScreen() {
   const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);
 
 
+  const [drawer, setDrawer] = useState<DrawerKey>(null);
+
   // ---- Dash pop hover ----
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pop, setPop] = useState<PopState | null>(null);
@@ -257,10 +301,10 @@ export function DashboardScreen() {
 
   function downloadRecap(which: string) {
     if (typeof window === "undefined") return;
-    const blob = new Blob([`InvestIQ ${which} Recap`], { type: "text/plain" });
+    const blob = new Blob([`StockWise ${which} Recap`], { type: "text/plain" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = `InvestIQ-Recap-${which}.txt`; a.click();
+    a.href = url; a.download = `StockWise-Recap-${which}.txt`; a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -344,7 +388,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Earnings Today</h3>
-              <Link className="link" href="/menu/earnings">View all →</Link>
+              <button className="link" onClick={() => setDrawer("earnings")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {earnings.slice(0, 5).map(e => (
@@ -373,7 +417,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Market Movers</h3>
-              <Link className="link" href="/menu/movers">All →</Link>
+              <button className="link" onClick={() => setDrawer("movers")}>All →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
@@ -446,7 +490,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Analyst Actions</h3>
-              <Link className="link" href="/menu/analyst">View all →</Link>
+              <button className="link" onClick={() => setDrawer("analyst")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {analyst.slice(0, 5).map((a, i) => (
@@ -469,7 +513,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Screener · Leaders &amp; Laggards</h3>
-              <Link className="link" href="/menu/screener">View all →</Link>
+              <button className="link" onClick={() => setDrawer("analyst")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
@@ -509,7 +553,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Portfolio Pulse</h3>
-              <Link className="link" href="/menu/portfolio">View all →</Link>
+              <button className="link" onClick={() => setDrawer("portfolio")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
@@ -539,7 +583,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Watchlist</h3>
-              <Link className="link" href="/menu/watchlist">View all →</Link>
+              <button className="link" onClick={() => setDrawer("watchlist")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               {watch.slice(0, 5).map(w => (
@@ -565,7 +609,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Insider &amp; Institutional</h3>
-              <Link className="link" href="/menu/insider">View all →</Link>
+              <button className="link" onClick={() => setDrawer("insider")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {INSIDER_MINI.map(x => (
@@ -681,7 +725,7 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Fear &amp; Greed</h3>
-              <span className="link">History →</span>
+              <button className="link" onClick={() => setDrawer("fg-history")}>History →</button>
             </div>
             <div className="card-b gauge-wrap">
               <SemiGauge val={62} label="Greed" id="fg" />
@@ -694,6 +738,260 @@ export function DashboardScreen() {
 
 
       </div>
+
+      {/* ── Sliding drawer ── */}
+      {drawer && (
+        <>
+          <div className="scrim" onClick={() => setDrawer(null)} />
+          <div className="side-drawer">
+            <div className="drawer-h">
+              <div style={{ flex: 1 }}>
+                <div className="drawer-title">
+                  {drawer === "earnings"    && "Earnings Calendar"}
+                  {drawer === "movers"      && "Market Movers"}
+                  {drawer === "analyst"     && "Analyst Actions"}
+                  {drawer === "earn-movers" && "Biggest Earnings Movers"}
+                  {drawer === "internals"   && "Market Internals"}
+                  {drawer === "watchlist"   && "Watchlist"}
+                  {drawer === "portfolio"   && "Portfolio Pulse"}
+                  {drawer === "insider"     && "Insider & Institutional"}
+                  {drawer === "fg-history"  && "Fear & Greed · History"}
+                </div>
+              </div>
+              <button className="closebtn" onClick={() => setDrawer(null)}>&#x2715;</button>
+            </div>
+            <div className="drawer-b">
+
+              {/* Earnings */}
+              {drawer === "earnings" && earnings.map(e => (
+                <div key={e.s} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
+                  onClick={() => { openEarnings(e.s); setDrawer(null); }}>
+                  <StockLogo sym={e.s} size={22} />
+                  <span className="tkr">{e.s}<small>{e.n}</small></span>
+                  <span className="mid">
+                    <span className={`pill ${e.t.includes("pre") ? "bmo" : "amc"}`}>{e.t}</span>
+                  </span>
+                  <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                    EPS est <span className="mono">${e.epsE}</span>
+                    {e.epsA != null && <> &rarr; <span className={`mono ${e.epsA >= e.epsE ? "up" : "down"}`}>${e.epsA}</span></>}
+                  </span>
+                  <span className={`r ${e.react != null ? cls(e.react) : ""}`}>
+                    {e.react != null ? sign(e.react) : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}
+                  </span>
+                </div>
+              ))}
+
+              {/* Movers */}
+              {drawer === "movers" && (
+                <>
+                  <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 6px" }}>&#x25B2; Top gainers</div>
+                  {movers.filter(m => m.c > 0).sort((a,b) => b.c - a.c).map(m => (
+                    <div key={m.s} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                      onClick={() => { openMoverModal(m.s); setDrawer(null); }}>
+                      <StockLogo sym={m.s} size={22} />
+                      <span className="tkr">{m.s}<small>{m.n}</small></span>
+                      <span className="mid">{m.cat}</span>
+                      <span className={`r mono ${cls(m.c)}`}>{sign(m.c)}</span>
+                    </div>
+                  ))}
+                  <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "14px 0 6px" }}>&#x25BC; Top losers</div>
+                  {movers.filter(m => m.c < 0).sort((a,b) => a.c - b.c).map(m => (
+                    <div key={m.s} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                      onClick={() => { openMoverModal(m.s); setDrawer(null); }}>
+                      <StockLogo sym={m.s} size={22} />
+                      <span className="tkr">{m.s}<small>{m.n}</small></span>
+                      <span className="mid">{m.cat}</span>
+                      <span className={`r mono ${cls(m.c)}`}>{sign(m.c)}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* Analyst */}
+              {drawer === "analyst" && analyst.map((a, i) => (
+                <div key={i} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                  onClick={() => { openStock(a.s); setDrawer(null); }}>
+                  <StockLogo sym={a.s} size={22} />
+                  <span className="tkr">{a.s}<small>{a.n}</small></span>
+                  <span className="mid" style={{ fontSize: ".74rem" }}>{a.firm} <b style={{ color: "var(--text-hi)" }}>{a.from} &rarr; {a.to}</b></span>
+                  <span className="r">{analystDir(a.dir)}</span>
+                </div>
+              ))}
+
+              {/* Earn movers */}
+              {drawer === "earn-movers" && EARN_MOVERS.map(e => (
+                <div key={e.s} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
+                  onClick={() => { openEarnings(e.s); setDrawer(null); }}>
+                  <StockLogo sym={e.s} size={22} />
+                  <span className="tkr">{e.s}<small>{e.n}</small></span>
+                  <span className="mid">
+                    <span className={`pill ${e.react! >= 0 ? "beat" : "miss"}`}>{e.react! >= 0 ? "Beat" : "Miss"}</span>
+                    {e.guide && e.guide !== "In-line" && (
+                      <span className={`pill ${e.guide === "Raised" ? "beat" : "miss"}`} style={{ marginLeft: 4 }}>{e.guide}</span>
+                    )}
+                    <span style={{ marginLeft: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>EPS: ${e.epsE} &rarr; ${e.epsA}</span>
+                  </span>
+                  <span className={`r mono ${e.react! >= 0 ? "up" : "down"}`} style={{ fontWeight: 700 }}>
+                    {e.react! >= 0 ? "+" : ""}{e.react}%
+                  </span>
+                </div>
+              ))}
+
+              {/* Market internals */}
+              {drawer === "internals" && (
+                <>
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".8rem", marginBottom: 5 }}>
+                      <span className="up mono" style={{ fontWeight: 700 }}>&#x25B2; 2,186 advancing</span>
+                      <span className="down mono" style={{ fontWeight: 700 }}>&#x25BC; 1,247 declining</span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: "var(--surface-3)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: "63.7%", background: "var(--up)", borderRadius: 4 }} />
+                    </div>
+                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
+                      A/D Ratio: 1.75 &middot; 89 unchanged &middot; NYSE + NASDAQ composite
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {MARKET_INTERNALS.filter(x => !["Advancing","Declining"].includes(x.k)).map(x => (
+                      <div key={x.k} style={{
+                        background: "var(--surface-1)", border: "1px solid var(--border)",
+                        borderRadius: 10, padding: "11px 13px",
+                      }}>
+                        <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em" }}>{x.k}</div>
+                        <div className={`mono ${x.up === true ? "up" : x.up === false ? "down" : ""}`}
+                          style={{ fontSize: "1.1rem", fontWeight: 700, marginTop: 3 }}>{x.v}</div>
+                        {x.note && <div style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", marginTop: 1 }}>{x.note}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Watchlist */}
+              {drawer === "watchlist" && watch.map(w => (
+                <div key={w.s} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                  onClick={() => { openStock(w.s); setDrawer(null); }}>
+                  <StockLogo sym={w.s} size={22} />
+                  <span className="tkr">{w.s}<small>{w.n}</small></span>
+                  <span className="mid">ER {w.er}{w.opt ? <span className="pill opt" style={{ marginLeft: 4 }}>&#x26A1;</span> : null}</span>
+                  <span className={`r ${cls(w.c)}`}>{sign(w.c)}</span>
+                </div>
+              ))}
+
+              {/* Portfolio */}
+              {drawer === "portfolio" && folio.map(f => {
+                const dayC = movers.find(m => m.s === f.s)?.c ?? f.c;
+                return (
+                  <div key={f.s} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                    onClick={() => { openStock(f.s); setDrawer(null); }}>
+                    <StockLogo sym={f.s} size={22} />
+                    <span className="tkr">{f.s}</span>
+                    <span className="mid">{f.size} &middot; {f.conv} conv.</span>
+                    <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
+                    <span className={`mono ${cls(f.gl)}`} style={{ fontSize: ".74rem", marginLeft: 6 }}>
+                      {f.gl > 0 ? "+" : ""}{f.gl.toFixed(1)}% total
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Insider */}
+              {drawer === "insider" && INSIDER_MINI.map(x => (
+                <div key={x.s + x.dir} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                  onClick={() => { openStock(x.s); setDrawer(null); }}>
+                  <StockLogo sym={x.s} size={22} />
+                  <span className="tkr">{x.s}</span>
+                  <span className="mid">{x.dir === "buy" ? "Buy" : "Sell"} &middot; {x.role}</span>
+                  <span className={`r ${x.dir === "buy" ? "up" : "down"}`}>
+                    {x.dir === "buy" ? "+" : "−"}${x.val}
+                  </span>
+                </div>
+              ))}
+
+              {/* Fear & Greed History */}
+              {drawer === "fg-history" && (
+                <>
+                  {/* Sparkline */}
+                  <div style={{ marginBottom: 16 }}>
+                    <svg viewBox="0 0 440 90" style={{ width: "100%", display: "block" }}>
+                      {/* Zone bands */}
+                      <rect x="0" y="0"  width="440" height="18" fill="rgba(208,52,76,.12)" />
+                      <rect x="0" y="18" width="440" height="18" fill="rgba(208,52,76,.06)" />
+                      <rect x="0" y="36" width="440" height="18" fill="rgba(169,181,198,.04)" />
+                      <rect x="0" y="54" width="440" height="18" fill="rgba(47,230,166,.06)" />
+                      <rect x="0" y="72" width="440" height="18" fill="rgba(47,230,166,.12)" />
+                      {/* Zone labels */}
+                      <text x="4" y="12"  fill="rgba(208,52,76,.7)"  fontSize="7" fontFamily="JetBrains Mono,monospace">Extreme Fear</text>
+                      <text x="4" y="30"  fill="rgba(208,52,76,.5)"  fontSize="7" fontFamily="JetBrains Mono,monospace">Fear</text>
+                      <text x="4" y="48"  fill="rgba(169,181,198,.6)" fontSize="7" fontFamily="JetBrains Mono,monospace">Neutral</text>
+                      <text x="4" y="66"  fill="rgba(47,230,166,.6)" fontSize="7" fontFamily="JetBrains Mono,monospace">Greed</text>
+                      <text x="4" y="84"  fill="rgba(47,230,166,.8)" fontSize="7" fontFamily="JetBrains Mono,monospace">Extreme Greed</text>
+                      {/* Line */}
+                      {(() => {
+                        const pts = [...FG_HISTORY].reverse();
+                        const n = pts.length;
+                        const toY = (v: number) => 90 - (v / 100) * 90;
+                        const toX = (i: number) => 60 + i * ((440 - 70) / (n - 1));
+                        const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)} ${toY(p.val).toFixed(1)}`).join(" ");
+                        return (
+                          <>
+                            <path d={d} fill="none" stroke="var(--brand-2)" strokeWidth="2" strokeLinejoin="round" />
+                            {pts.map((p, i) => (
+                              <circle key={i} cx={toX(i).toFixed(1)} cy={toY(p.val).toFixed(1)} r="3"
+                                fill={p.val >= 60 ? "var(--up)" : p.val >= 40 ? "var(--warn)" : "var(--down)"} />
+                            ))}
+                          </>
+                        );
+                      })()}
+                    </svg>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".62rem", color: "var(--text-dim-solid)", marginTop: 2, paddingLeft: 60 }}>
+                      <span>{FG_HISTORY[FG_HISTORY.length - 1].date}</span>
+                      <span>Today</span>
+                    </div>
+                  </div>
+
+                  {/* History rows */}
+                  {FG_HISTORY.map((h, i) => {
+                    const col = h.val >= 60 ? "var(--up)" : h.val >= 40 ? "var(--warn)" : "var(--down)";
+                    const prev = FG_HISTORY[i + 1];
+                    const delta = prev ? h.val - prev.val : 0;
+                    return (
+                      <div key={h.date} style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        padding: "9px 14px", marginBottom: 4,
+                        background: i === 0 ? "color-mix(in srgb, var(--brand) 8%, var(--surface-1))" : "var(--surface-1)",
+                        border: `1px solid ${i === 0 ? "var(--brand)" : "var(--border)"}`,
+                        borderRadius: 10,
+                      }}>
+                        {/* Bar */}
+                        <div style={{ width: 48, height: 6, background: "var(--surface-3)", borderRadius: 3, overflow: "hidden", flexShrink: 0 }}>
+                          <div style={{ height: "100%", width: `${h.val}%`, background: col, borderRadius: 3 }} />
+                        </div>
+                        {/* Date */}
+                        <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", width: 48, flexShrink: 0 }}>
+                          {i === 0 ? <b style={{ color: "var(--text-hi)" }}>Today</b> : h.date}
+                        </span>
+                        {/* Label */}
+                        <span style={{ flex: 1, fontSize: ".8rem", fontWeight: 600, color: col }}>{h.label}</span>
+                        {/* Value */}
+                        <span className="mono" style={{ fontWeight: 700, color: col, fontSize: ".9rem" }}>{h.val}</span>
+                        {/* Delta */}
+                        {delta !== 0 && (
+                          <span className={`mono ${delta > 0 ? "up" : "down"}`} style={{ fontSize: ".72rem", width: 36, textAlign: "right" }}>
+                            {delta > 0 ? "+" : ""}{delta}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Dash hover popup ── */}
       {pop && (

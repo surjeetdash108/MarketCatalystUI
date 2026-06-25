@@ -18,8 +18,9 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
   return (
+    <>
+    <div className="sp-grid" />
     <div className="lp-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
-      <div className="sp-grid" />
 
       <div style={{
         display: "flex", gap: "46px", alignItems: "center",
@@ -133,5 +134,6 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         }
       `}</style>
     </div>
+    </>
   );
 }

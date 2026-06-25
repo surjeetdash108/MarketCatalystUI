@@ -38,7 +38,7 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
           color: "#697486",
           animation: "iq-fade 1.6s ease-in-out infinite",
         }}>
-          InvestIQ
+          StockWise
         </div>
       </div>
     );

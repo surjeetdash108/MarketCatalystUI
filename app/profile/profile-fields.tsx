@@ -50,7 +50,7 @@ export const investmentHorizonOptions = [
   "10+ years",
 ];
 
-export const assetClassOptions = ["Stocks", "Mutual Funds", "ETFs", "Bonds"];
+export const assetClassOptions = ["Stocks", "Mutual Funds", "Bonds"];
 
 export const emptyInvestorProfile: InvestorProfile = {
   profile_image: "",

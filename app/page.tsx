@@ -792,8 +792,9 @@ export default function LandingPage() {
   const glanceWs = glanceIdx !== null ? WS_LIST[glanceIdx] : null;
 
   return (
+    <>
+    <div className="sp-grid" />
     <div className="lp-root mq-root">
-      <div className="sp-grid" />
       <div className="sp-aurora">
         <i className="a1" /><i className="a2" /><i className="a3" />
       </div>
@@ -982,5 +983,6 @@ export default function LandingPage() {
 
       </div>
     </div>
+    </>
   );
 }

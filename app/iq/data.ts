@@ -1,5 +1,5 @@
 // ============================================================
-// INVESTIQ — MOCK DATA (TypeScript)
+// STOCKWISE — MOCK DATA (TypeScript)
 // ============================================================
 
 export interface PulseItem { l: string; v: number; c: number; o: number; pc: number; }
@@ -93,7 +93,6 @@ export const pulse: PulseItem[] = [
   { l: 'WTI Crude',   v: 78.64,    c: -1.21, o: 79.42,   pc: 79.60   },
   { l: 'Gold',        v: 2344.10,  c: 0.31,  o: 2337.0,  pc: 2336.8  },
   { l: 'Dollar (DXY)',v: 104.21,   c: 0.12,  o: 104.08,  pc: 104.09  },
-  { l: 'Bitcoin',     v: 67840,    c: 2.18,  o: 66380,   pc: 66393   },
 ];
 
 // ---- What Matters Now ----
@@ -183,7 +182,6 @@ export const watch: WatchItem[] = [
   { s: 'AMD',  n: 'Adv Micro Dev',  px: 165.20,   c: -2.10, er: 'Jul 30', analyst: 'JPM → Neutral',      opt: true,  headline: 'Downgraded on AI-share concerns' },
   { s: 'AVGO', n: 'Broadcom',       px: 1402.50,  c:  2.97, er: 'Jun 12', analyst: null,                  opt: true,  headline: 'Semis rally on NVDA read-through' },
   { s: 'SMCI', n: 'Super Micro',    px:  812.40,  c:  5.60, er: 'Aug 06', analyst: 'Barclays PT $1,000',  opt: true,  headline: 'Server demand commentary lifts shares' },
-  { s: 'COIN', n: 'Coinbase',       px:  241.80,  c:  4.20, er: 'Aug 01', analyst: null,                  opt: false, headline: 'Bitcoin breakout boosts exchanges' },
   { s: 'UBER', n: 'Uber',           px:   64.50,  c:  0.80, er: 'Aug 06', analyst: 'GS reiterates Buy',   opt: false, headline: '—' },
   { s: 'PLTR', n: 'Palantir',       px:   24.88,  c:  6.18, er: 'Aug 05', analyst: null,                  opt: true,  headline: 'Guidance raise drives momentum' },
 ];

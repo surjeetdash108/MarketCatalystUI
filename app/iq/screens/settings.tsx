@@ -324,7 +324,7 @@ export function SettingsScreen() {
           <div className="card-b">
             <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 12 }}>
               {isPremium
-                ? "You have access to all InvestIQ features."
+                ? "You have access to all StockWise features."
                 : "Upgrade to Premium to unlock AI Copilot, full screener, portfolio tools, and more."}
             </div>
             <button className="planbtn" style={{ maxWidth: 180 }} onClick={() => window.location.href = "/manage-plan"}>

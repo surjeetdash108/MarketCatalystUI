@@ -263,14 +263,16 @@ export function EarningsScreen() {
     );
   } else if (isWeek) {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    const selDayIdx = enriched.find(e => e.s === sel)?.d ?? -1;
     calNode = (
       <div className="ec-grid">
         {days.map((dn, di) => {
           const bmo = enriched.filter(e => e.d === di && e.sess === "BMO");
           const amc = enriched.filter(e => e.d === di && e.sess === "AMC");
           const isToday = tab === "week" && di === 1;
+          const isSel   = di === selDayIdx;
           return (
-            <div key={dn} className={`ec-day${isToday ? " is-today" : ""}`}>
+            <div key={dn} className={`ec-day${isToday ? " is-today" : ""}${isSel && !isToday ? " is-sel" : ""}`}>
               <div className="ec-dh">{dn}{isToday ? " · Today" : ""}</div>
               <div className="ec-sess">
                 <div className="ec-lbl">Before open</div>

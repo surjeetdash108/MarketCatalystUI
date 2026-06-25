@@ -247,6 +247,58 @@ function EarnIncChart({ inc }: { inc: IncRow[] }) {
   );
 }
 
+function EarnPane({ sym, base }: { sym: string; base: number }) {
+  const hist = earnHistory(sym, Math.max(0.5, base)).slice(0, 8).reverse();
+  const W = 720, H = 80, PADL = 40, PADR = 20, PADT = 10, PADB = 18;
+  const iw = W - PADL - PADR;
+  const ih = H - PADT - PADB;
+  const mid = PADT + ih / 2;
+  const gw = iw / hist.length;
+  const bw = Math.min(gw * 0.45, 26);
+  const maxS = Math.max(8, ...hist.map(x => Math.abs(x.surp)));
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      {/* Zero line */}
+      <line x1={PADL} y1={mid} x2={W - PADR} y2={mid}
+        stroke="var(--border)" strokeDasharray="3 3" strokeWidth="1" />
+
+      {hist.map((q, i) => {
+        const beat = q.surp >= 0;
+        const cx = PADL + gw * i + gw / 2;
+        const barH = Math.max(4, (Math.abs(q.surp) / maxS) * (ih / 2 - 4));
+        const rx = (cx - bw / 2).toFixed(1);
+        const ry = beat ? (mid - barH).toFixed(1) : mid.toFixed(1);
+        const color = beat ? "var(--up)" : "var(--down)";
+        const labelY = beat
+          ? (mid - barH - 4).toFixed(1)
+          : (mid + barH + 9).toFixed(1);
+
+        return (
+          <g key={q.q}>
+            <rect x={rx} y={ry} width={bw.toFixed(1)} height={barH.toFixed(1)}
+              rx="2" fill={color} opacity="0.88" />
+            <text x={cx.toFixed(1)} y={labelY} textAnchor="middle"
+              fill={color} fontSize="7.5" fontFamily="JetBrains Mono,monospace">
+              {beat ? "+" : ""}{q.surp.toFixed(1)}%
+            </text>
+            <text x={cx.toFixed(1)} y={(H - 3).toFixed(1)} textAnchor="middle"
+              fill="#69748680" fontSize="7.5" fontFamily="JetBrains Mono,monospace">
+              {q.q.replace(" ", "'")}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Beat/miss labels on Y axis */}
+      <text x={PADL - 4} y={(mid - 2).toFixed(1)} textAnchor="end"
+        fill="#69748680" fontSize="7" fontFamily="JetBrains Mono,monospace">BEAT</text>
+      <text x={PADL - 4} y={(mid + 10).toFixed(1)} textAnchor="end"
+        fill="#69748680" fontSize="7" fontFamily="JetBrains Mono,monospace">MISS</text>
+    </svg>
+  );
+}
+
 export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
@@ -265,6 +317,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
   const [toneActive, setToneActive] = useState("Swing");
   const [showVol, setShowVol] = useState(true);
   const [showRsi, setShowRsi] = useState(false);
+  const [showEarnings, setShowEarnings] = useState(false);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [maStep, setMaStep] = useState(0);
   const [emaStep, setEmaStep] = useState(0);
@@ -580,6 +633,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
               </button>
               <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
               <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
+              <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
               <div style={{ flex: 1 }} />
               <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>drag-free · hover for OHLC</span>
             </div>
@@ -598,6 +652,18 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                   </span>
                 </div>
                 <div style={{ padding: "0 14px 4px" }}><RsiPane sym={sym} tf={tfActive} /></div>
+              </div>
+            )}
+            {showEarnings && (
+              <div id="earnHost" style={{ borderTop: "1px solid var(--border)" }}>
+                <div style={{ padding: "6px 14px 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>Earnings · EPS Surprise</span>
+                  <span>
+                    <span className="mono" style={{ color: "var(--text-dim-solid)" }}>Next: </span>
+                    <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>{erDate}</span>
+                  </span>
+                </div>
+                <div style={{ padding: "0 14px 8px" }}><EarnPane sym={sym} base={eps} /></div>
               </div>
             )}
             <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>

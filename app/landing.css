@@ -15,7 +15,8 @@
 .lp-root.mq-root { background: #000; }
 
 /* ---- Animated perspective grid ---- */
-.lp-root .sp-grid {
+/* Rendered as a sibling of .lp-root (not inside it) to avoid overflow-x:clip containment */
+.sp-grid {
   position: fixed;
   top: -40vh; left: -40vw;
   width: 180vw; height: 180vh;
@@ -27,9 +28,9 @@
   -webkit-mask-image: radial-gradient(75% 60% at 50% 38%, #000 40%, rgba(0,0,0,.4) 70%, transparent 100%);
   mask-image: radial-gradient(75% 60% at 50% 38%, #000 40%, rgba(0,0,0,.4) 70%, transparent 100%);
   pointer-events: none;
-  z-index: 1;
+  opacity: .75;
+  z-index: 0;
 }
-.mq-root .sp-grid { opacity: .75; }
 @keyframes spPan { to { transform: translate(46px, 46px); } }
 
 /* ---- Aurora ---- */

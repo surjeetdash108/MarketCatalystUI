@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
-import { recap, sectorList, pulse, movers } from "../data";
+import { recap, sectorList, pulse, movers, earnings } from "../data";
 import { cls, arr, sign, fmt, Spark, StockLogo } from "../utils";
 
 const SEC_PAGE = 10;
@@ -112,6 +112,7 @@ export function RecapScreen() {
   const { openStock, openSector } = useIQActions();
   const [activeTab, setActiveTab] = useState(0);
   const [recapPage, setRecapPage] = useState(0);
+  const [drawer, setDrawer] = useState<"earn-movers" | "internals" | null>(null);
   const storiesRef = useRef<HTMLDivElement>(null);
 
   const moversMap = Object.fromEntries(movers.map(m => [m.s, m]));
@@ -125,11 +126,11 @@ export function RecapScreen() {
   }
 
   function downloadRecap(which: string) {
-    const blob = new Blob([`InvestIQ ${which} Recap — ${recap.date}`], { type: "text/plain" });
+    const blob = new Blob([`StockWise ${which} Recap — ${recap.date}`], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `InvestIQ-Recap-${which}.txt`;
+    a.download = `StockWise-Recap-${which}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -325,7 +326,7 @@ export function RecapScreen() {
               <div className="card">
                 <div className="card-h">
                   <h3>Biggest earnings movers</h3>
-                  <span className="link">View all →</span>
+                  <button className="link" onClick={() => setDrawer("earn-movers")}>View all →</button>
                 </div>
                 <div className="card-b" style={{ paddingTop: 6 }}>
                   {recap.movers.map(m => (
@@ -343,7 +344,7 @@ export function RecapScreen() {
               <div className="card">
                 <div className="card-h">
                   <h3>Market internals</h3>
-                  <span className="link">View all →</span>
+                  <button className="link" onClick={() => setDrawer("internals")}>View all →</button>
                 </div>
                 <div className="card-b" style={{ paddingTop: 6 }}>
                   {recap.internals.map(r => (
@@ -543,6 +544,140 @@ export function RecapScreen() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Sliding drawer ── */}
+      {drawer && (
+        <>
+          <div className="scrim" onClick={() => setDrawer(null)} />
+          <div className="side-drawer">
+            <div className="drawer-h">
+              <div style={{ flex: 1 }}>
+                <div className="drawer-title">
+                  {drawer === "earn-movers" ? "Biggest Earnings Movers" : "Market Internals"}
+                </div>
+                <div className="drawer-sub">
+                  {drawer === "earn-movers"
+                    ? "Post-earnings reactions ranked by magnitude"
+                    : "Breadth, volume & sentiment indicators"}
+                </div>
+              </div>
+              <button className="closebtn" onClick={() => setDrawer(null)}>✕</button>
+            </div>
+            <div className="drawer-b">
+
+              {/* ── Earnings movers ── */}
+              {drawer === "earn-movers" && (
+                <>
+                  {/* recap.movers first */}
+                  {recap.movers.map(m => (
+                    <div key={m.s} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
+                      onClick={() => { openStock(m.s); setDrawer(null); }}>
+                      <StockLogo sym={m.s} size={22} />
+                      <span className="tkr">{m.s}</span>
+                      <span className="mid">{m.reason}</span>
+                      <span className={`r mono ${cls(m.c)}`} style={{ fontWeight: 700 }}>{sign(m.c)}</span>
+                    </div>
+                  ))}
+                  {/* divider then full earnings with react */}
+                  <div style={{ height: 1, background: "var(--border)", margin: "12px 0 10px" }} />
+                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>
+                    Full earnings calendar · reported reactions
+                  </div>
+                  {[...earnings]
+                    .filter(e => e.react !== null)
+                    .sort((a, b) => Math.abs(b.react!) - Math.abs(a.react!))
+                    .map(e => (
+                      <div key={e.s} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
+                        onClick={() => { openStock(e.s); setDrawer(null); }}>
+                        <StockLogo sym={e.s} size={22} />
+                        <span className="tkr">{e.s}<small>{e.n}</small></span>
+                        <span className="mid">
+                          <span className={`pill ${e.react! >= 0 ? "beat" : "miss"}`}>
+                            {e.react! >= 0 ? "Beat" : "Miss"}
+                          </span>
+                          {e.guide && e.guide !== "In-line" && (
+                            <span className={`pill ${e.guide === "Raised" ? "beat" : "miss"}`} style={{ marginLeft: 4 }}>
+                              {e.guide}
+                            </span>
+                          )}
+                          <span style={{ marginLeft: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                            EPS ${e.epsE} → ${e.epsA}
+                          </span>
+                        </span>
+                        <span className={`r mono ${e.react! >= 0 ? "up" : "down"}`} style={{ fontWeight: 700 }}>
+                          {e.react! >= 0 ? "+" : ""}{e.react}%
+                        </span>
+                      </div>
+                    ))}
+                </>
+              )}
+
+              {/* ── Market internals ── */}
+              {drawer === "internals" && (
+                <>
+                  {/* A/D bar */}
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".8rem", marginBottom: 6 }}>
+                      <span className="up mono" style={{ fontWeight: 700 }}>▲ 2,810 advancing</span>
+                      <span className="down mono" style={{ fontWeight: 700 }}>▼ 1,140 declining</span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: "var(--surface-3)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: "71%", background: "var(--up)", borderRadius: 4 }} />
+                    </div>
+                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
+                      A/D Ratio: 2.47 · NYSE + NASDAQ composite
+                    </div>
+                  </div>
+
+                  {/* recap.internals rows */}
+                  {recap.internals.map(r => (
+                    <div key={r.l} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "10px 14px", marginBottom: 6,
+                      background: "var(--surface-1)", border: "1px solid var(--border)",
+                      borderRadius: 10,
+                    }}>
+                      <span style={{ fontSize: ".82rem", color: "var(--text)" }}>{r.l}</span>
+                      <span className={`mono ${r.c > 0 ? "up" : r.c < 0 ? "down" : ""}`}
+                        style={{ fontWeight: 700, fontSize: ".9rem" }}>
+                        {r.v}
+                      </span>
+                    </div>
+                  ))}
+
+                  {/* extended internals */}
+                  <div style={{ height: 1, background: "var(--border)", margin: "12px 0 10px" }} />
+                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
+                    Extended breadth data
+                  </div>
+                  {[
+                    { l: "NYSE TICK",       v: "+420",  c:  1 },
+                    { l: "TRIN (Arms)",     v: "0.74",  c:  1 },
+                    { l: "McClellan Osc",   v: "+38.5", c:  1 },
+                    { l: "Put/Call Ratio",  v: "0.82",  c:  0 },
+                    { l: "New 52W Highs",   v: "184",   c:  1 },
+                    { l: "New 52W Lows",    v: "39",    c: -1 },
+                  ].map(r => (
+                    <div key={r.l} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "10px 14px", marginBottom: 6,
+                      background: "var(--surface-1)", border: "1px solid var(--border)",
+                      borderRadius: 10,
+                    }}>
+                      <span style={{ fontSize: ".82rem", color: "var(--text)" }}>{r.l}</span>
+                      <span className={`mono ${r.c > 0 ? "up" : r.c < 0 ? "down" : ""}`}
+                        style={{ fontWeight: 700, fontSize: ".9rem" }}>
+                        {r.v}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+
+            </div>
+          </div>
+        </>
       )}
     </>
   );
