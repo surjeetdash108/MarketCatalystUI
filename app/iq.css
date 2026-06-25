@@ -73,6 +73,16 @@
   --shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 4px 16px -4px rgba(0,0,50,.08);
 }
 
+/* ---- Font theme overrides ---- */
+.iq-root[data-font="geist"]         { --f-body: var(--font-geist-sans, 'Geist Sans', sans-serif); }
+.iq-root[data-font="inter"]         { --f-body: var(--font-inter, 'Inter', sans-serif); }
+.iq-root[data-font="dm-sans"]       { --f-body: var(--font-dm-sans, 'DM Sans', sans-serif); }
+.iq-root[data-font="space-grotesk"]    { --f-body: var(--font-space-grotesk, 'Space Grotesk', sans-serif); }
+.iq-root[data-font="plus-jakarta-sans"] { --f-body: var(--font-plus-jakarta-sans, 'Plus Jakarta Sans', sans-serif); }
+.iq-root[data-font="ibm-plex-sans"]    { --f-body: var(--font-ibm-plex-sans, 'IBM Plex Sans', sans-serif); }
+.iq-root[data-font="outfit"]           { --f-body: var(--font-outfit, 'Outfit', sans-serif); }
+.iq-root[data-font="manrope"]          { --f-body: var(--font-manrope, 'Manrope', sans-serif); }
+
 /* ---- RESET ---- */
 .iq-root *, .iq-root *::before, .iq-root *::after {
   box-sizing: border-box;

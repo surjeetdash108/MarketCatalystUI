@@ -6,24 +6,36 @@ import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { firebaseAuth, firebaseDb } from "../../firebase";
 import { useAppSelector } from "../../store/hooks";
-import { useIQActions } from "../shell";
+import { useIQActions, type FontKey } from "../shell";
 
-function ThemeConfirmModal({
-  dark,
+const FONTS: { key: FontKey; label: string; desc: string; stack: string }[] = [
+  { key: "geist",         label: "Geist",         desc: "Clean & neutral · Minimal sans",      stack: "var(--font-geist-sans,'Geist Sans',sans-serif)" },
+  { key: "inter",         label: "Inter",          desc: "Balanced & highly readable",          stack: "var(--font-inter,'Inter',sans-serif)" },
+  { key: "dm-sans",       label: "DM Sans",        desc: "Geometric · Modern & friendly · Default", stack: "var(--font-dm-sans,'DM Sans',sans-serif)" },
+  { key: "space-grotesk",    label: "Space Grotesk",    desc: "Bold geometric · Dashboard feel",        stack: "var(--font-space-grotesk,'Space Grotesk',sans-serif)" },
+  { key: "plus-jakarta-sans", label: "Plus Jakarta Sans", desc: "Refined & versatile · UI favourite",      stack: "var(--font-plus-jakarta-sans,'Plus Jakarta Sans',sans-serif)" },
+  { key: "ibm-plex-sans",    label: "IBM Plex Sans",    desc: "Technical & trustworthy · Finance fit",   stack: "var(--font-ibm-plex-sans,'IBM Plex Sans',sans-serif)" },
+  { key: "outfit",           label: "Outfit",           desc: "Sharp geometric · Minimal & confident",   stack: "var(--font-outfit,'Outfit',sans-serif)" },
+  { key: "manrope",          label: "Manrope",          desc: "Elegant & airy · Premium editorial feel", stack: "var(--font-manrope,'Manrope',sans-serif)" },
+];
+
+function ConfirmModal({
+  icon,
+  title,
+  body,
   saving,
   error,
   onConfirm,
   onCancel,
 }: {
-  dark: boolean;
+  icon: string;
+  title: string;
+  body: string;
   saving: boolean;
   error: string;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const label = dark ? "Dark" : "Light";
-  const icon = dark ? "☽" : "☀";
-
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 9999,
@@ -36,7 +48,6 @@ function ThemeConfirmModal({
         boxShadow: "0 24px 64px -12px rgba(0,0,0,.8)",
         padding: "28px 28px 24px",
       }}>
-        {/* Icon */}
         <div style={{
           width: 44, height: 44, borderRadius: 12,
           background: "var(--surface-3)", border: "1px solid var(--border-strong)",
@@ -44,17 +55,13 @@ function ThemeConfirmModal({
           fontSize: "1.3rem", marginBottom: 16,
         }}>{icon}</div>
 
-        {/* Title */}
         <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)", marginBottom: 8 }}>
-          Switch to {label} mode?
+          {title}
         </div>
-
-        {/* Body */}
         <div style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", lineHeight: 1.6, marginBottom: 20 }}>
-          This will apply {label.toLowerCase()} mode across all screens and save your preference.
+          {body}
         </div>
 
-        {/* Error */}
         {error && (
           <div style={{
             marginBottom: 14, padding: "8px 12px",
@@ -63,7 +70,6 @@ function ThemeConfirmModal({
           }}>{error}</div>
         )}
 
-        {/* Buttons */}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button
             onClick={onCancel}
@@ -95,15 +101,20 @@ function ThemeConfirmModal({
   );
 }
 
+
 export function SettingsScreen() {
   const router = useRouter();
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
-  const { theme, setTheme } = useIQActions();
+  const { theme, setTheme, font, setFont } = useIQActions();
 
   const [pending, setPending] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+
+  const [pendingFont, setPendingFont] = useState<FontKey | null>(null);
+  const [fontSaving, setFontSaving] = useState(false);
+  const [fontError, setFontError] = useState("");
 
   const isPremium = profile?.tier !== "free";
 
@@ -131,20 +142,57 @@ export function SettingsScreen() {
     setSaveError("");
   }
 
+  async function confirmFont() {
+    if (!pendingFont) return;
+    setFontError("");
+    setFontSaving(true);
+    try {
+      if (user?.uid) {
+        await setDoc(doc(firebaseDb, "settings", user.uid), { font: pendingFont }, { merge: true });
+      }
+      localStorage.setItem("iq-font", pendingFont);
+      setFont(pendingFont);
+      setPendingFont(null);
+    } catch (err) {
+      setFontError("Failed to save font: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setFontSaving(false);
+    }
+  }
+
+  function cancelFont() {
+    setPendingFont(null);
+    setFontError("");
+  }
+
   async function handleSignOut() {
     await signOut(firebaseAuth);
-    window.location.href = "/auth/login";
+    window.location.href = "/";
   }
 
   return (
     <>
       {pending !== null && (
-        <ThemeConfirmModal
-          dark={pending}
+        <ConfirmModal
+          icon={pending ? "☽" : "☀"}
+          title={`Switch to ${pending ? "Dark" : "Light"} mode?`}
+          body={`This will apply ${pending ? "dark" : "light"} mode across all screens and save your preference.`}
           saving={saving}
           error={saveError}
           onConfirm={() => void applyTheme()}
           onCancel={cancelTheme}
+        />
+      )}
+
+      {pendingFont !== null && (
+        <ConfirmModal
+          icon="Aa"
+          title={`Switch to ${FONTS.find(f => f.key === pendingFont)?.label}?`}
+          body={`This will apply ${FONTS.find(f => f.key === pendingFont)?.label} across all screens and save your font preference.`}
+          saving={fontSaving}
+          error={fontError}
+          onConfirm={() => void confirmFont()}
+          onCancel={cancelFont}
         />
       )}
 
@@ -200,6 +248,62 @@ export function SettingsScreen() {
                 <span className="iq-toggle-slider" />
               </label>
             </div>
+          </div>
+        </div>
+
+        {/* Font */}
+        <div className="card col-12">
+          <div className="card-h">
+            <h3>Font</h3>
+          </div>
+          <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {FONTS.map(f => (
+              <label
+                key={f.key}
+                onClick={() => { if (f.key !== font) setPendingFont(f.key); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: "14px 16px", borderRadius: "var(--r)",
+                  border: `1px solid ${font === f.key ? "var(--brand)" : "var(--border)"}`,
+                  background: font === f.key ? "color-mix(in srgb, var(--brand) 8%, var(--surface-1))" : "var(--surface-2)",
+                  cursor: "pointer", transition: "border-color .15s, background .15s",
+                }}
+              >
+                {/* Radio indicator */}
+                <div style={{
+                  width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                  border: `2px solid ${font === f.key ? "var(--brand)" : "var(--border-strong)"}`,
+                  background: font === f.key ? "var(--brand)" : "transparent",
+                  display: "grid", placeItems: "center",
+                }}>
+                  {font === f.key && (
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff" }} />
+                  )}
+                </div>
+
+                {/* Label + description */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 14.5, fontWeight: 700,
+                    color: font === f.key ? "var(--brand-2)" : "var(--text-hi)",
+                    fontFamily: f.stack,
+                    marginBottom: 2,
+                  }}>
+                    {f.label}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-dim-solid)" }}>{f.desc}</div>
+                </div>
+
+                {/* Live preview */}
+                <div style={{
+                  fontSize: 13, color: "var(--text)",
+                  fontFamily: f.stack, whiteSpace: "nowrap",
+                  opacity: 0.72,
+                }}>
+                  Aa 0123 · Markets
+                </div>
+              </label>
+            ))}
           </div>
         </div>
 

@@ -11,7 +11,7 @@ export function SignOutButton() {
     setIsSigningOut(true);
     try {
       await signOut(firebaseAuth);
-      window.location.href = "/auth/login";
+      window.location.href = "/";
     } catch (error) {
       const message =
         error instanceof Error

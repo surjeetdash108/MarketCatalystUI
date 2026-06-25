@@ -25,6 +25,9 @@ function slugToHref(slug: string): string {
   return slug === "dashboard" ? "/dashboard" : `/menu/${slug}`;
 }
 
+// ---- Font type ----
+export type FontKey = "geist" | "inter" | "dm-sans" | "space-grotesk" | "plus-jakarta-sans" | "ibm-plex-sans" | "outfit" | "manrope";
+
 // ---- IQ Actions context ----
 interface IQActions {
   openStock: (sym: string) => void;
@@ -38,6 +41,8 @@ interface IQActions {
   setCopilot: (open: boolean) => void;
   theme: "dark" | "light";
   setTheme: (t: "dark" | "light") => void;
+  font: FontKey;
+  setFont: (f: FontKey) => void;
 }
 export const IQActionsContext = createContext<IQActions>({
   openStock: () => {},
@@ -51,6 +56,8 @@ export const IQActionsContext = createContext<IQActions>({
   setCopilot: () => {},
   theme: "dark",
   setTheme: () => {},
+  font: "dm-sans",
+  setFont: () => {},
 });
 export function useIQActions() { return useContext(IQActionsContext); }
 
@@ -804,6 +811,10 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return "dark";
     return (localStorage.getItem("iq-theme") as "dark" | "light") || "dark";
   });
+  const [font, setFont] = useState<FontKey>(() => {
+    if (typeof window === "undefined") return "dm-sans";
+    return (localStorage.getItem("iq-font") as FontKey) || "dm-sans";
+  });
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -820,7 +831,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load saved theme from Firestore on mount
+  // Load saved theme + font from Firestore on mount
   useEffect(() => {
     if (!user?.uid) return;
     const uid = user.uid;
@@ -834,8 +845,12 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             localStorage.setItem("iq-theme", resolved);
             setTheme(resolved);
           }
+          if (typeof data.font === "string") {
+            localStorage.setItem("iq-font", data.font);
+            setFont(data.font as FontKey);
+          }
         }
-      } catch { /* keep default dark theme on error */ }
+      } catch { /* keep defaults on error */ }
     })();
   }, [user?.uid]);
 
@@ -876,6 +891,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     setCopilot: setCopilotOpen,
     theme,
     setTheme,
+    font,
+    setFont,
   };
 
   const displayName = profile?.name || user?.displayName || user?.email || "User";
@@ -885,7 +902,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   async function handleSignOut() {
     await signOut(firebaseAuth);
-    window.location.href = "/auth/login";
+    window.location.href = "/";
   }
 
   // Ticker content (doubled for infinite scroll)
@@ -894,7 +911,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
       <IQActionsContext.Provider value={actions}>
-        <div className="iq-root" data-theme={theme}>
+        <div className="iq-root" data-theme={theme} data-font={font}>
           <div className="app">
             {/* Brand cell */}
             <div className="brandcell">
