@@ -12,10 +12,12 @@
   font-family: var(--f-body, 'Inter', sans-serif);
   -webkit-font-smoothing: antialiased;
 }
-.lp-root.mq-root { background: #000; }
+.lp-root.mq-root { background: transparent; }
 
 /* ---- Animated perspective grid ---- */
 /* Rendered as a sibling of .lp-root (not inside it) to avoid overflow-x:clip containment */
+.sp-glbg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; pointer-events: none; }
+
 .sp-grid {
   position: fixed;
   top: -40vh; left: -40vw;
