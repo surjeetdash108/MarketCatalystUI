@@ -17,21 +17,19 @@
 /* ---- Animated perspective grid ---- */
 .lp-root .sp-grid {
   position: fixed;
-  /* explicit viewport units so inset works correctly regardless of parent height */
   top: -40vh; left: -40vw;
   width: 180vw; height: 180vh;
   background-image:
-    linear-gradient(rgba(124,108,245,.18) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(52,226,240,.13) 1px, transparent 1px);
+    linear-gradient(rgba(124,108,245,.55) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(52,226,240,.38) 1px, transparent 1px);
   background-size: 46px 46px;
   animation: spPan 16s linear infinite;
-  -webkit-mask-image: radial-gradient(65% 65% at 50% 42%, #000 30%, transparent 100%);
-  mask-image: radial-gradient(65% 65% at 50% 42%, #000 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(75% 60% at 50% 38%, #000 40%, rgba(0,0,0,.4) 70%, transparent 100%);
+  mask-image: radial-gradient(75% 60% at 50% 38%, #000 40%, rgba(0,0,0,.4) 70%, transparent 100%);
   pointer-events: none;
-  z-index: 0;
+  z-index: 1;
 }
-/* On the black landing background we raise the grid opacity so it's actually visible */
-.mq-root .sp-grid { opacity: .55; }
+.mq-root .sp-grid { opacity: .75; }
 @keyframes spPan { to { transform: translate(46px, 46px); } }
 
 /* ---- Aurora ---- */

@@ -6,244 +6,558 @@ import { pulse, wmn, movers, earnings, analyst, folio, sectorList, recap } from 
 import { fmt, sign, cls, heatCol, StockLogo } from "./iq/utils";
 
 // ---- Workspace thumbnail components ----
-// Renders at 340×444 px inside .mq-shot; uses iq.css classes + actual data.
+// Rendered at 1200 px, CSS-scaled to fit 340x444 card -- identical to the HTML marquee approach.
+// Scale = 340/1200 = 0.2834
 
-function TH({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "var(--surface-0)", color: "var(--text)", fontSize: 12, fontFamily: "var(--f-body,'Inter',sans-serif)" }}>
-      {children}
-    </div>
-  );
-}
+const SC = 0.2834;
 
-function THHead({ label, right, col }: { label: string; right: string; col?: string }) {
+function ScaledScreen({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px 8px", borderBottom: "1px solid var(--border)", background: "rgba(12,16,23,.96)", flexShrink: 0 }}>
-      <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: 11, color: "var(--text-hi)", letterSpacing: ".03em" }}>{label}</span>
-      <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, color: col ?? "var(--text-dim-solid)" }}>{right}</span>
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "var(--surface-0)" }}>
+      <div style={{ width: 1200, minHeight: 1567, transformOrigin: "top left", transform: `scale(${SC})` }}>
+        {children}
+      </div>
     </div>
   );
 }
 
 function DashThumb() {
   return (
-    <TH>
-      <div style={{ padding: "9px 12px 6px", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ fontSize: 9, color: "var(--text-dim-solid)", marginBottom: 3 }}>Tuesday · May 21 · 10:24 ET</div>
-        <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: 15, color: "var(--text-hi)" }}>Good morning</div>
+    <ScaledScreen>
+      <div className="page-head" style={{ padding: "28px 40px 20px" }}>
+        <div className="eyebrow">Dashboard</div>
+        <h1 className="page-title">Good morning</h1>
+        <p className="page-sub">Tuesday &middot; May 21 &middot; 09:34 ET &mdash; Markets open</p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 5, padding: "7px 10px" }}>
-        {pulse.slice(0, 6).map(p => (
-          <div key={p.l} className="p" style={{ padding: "5px 7px" }}>
-            <div className="lbl" style={{ fontSize: 8 }}>{p.l}</div>
-            <div className="val" style={{ fontSize: "0.85rem" }}>{p.v >= 100 ? fmt(p.v, 0) : fmt(p.v, 2)}</div>
-            <div className={cls(p.c)} style={{ fontFamily: "var(--f-mono)", fontSize: 8, fontWeight: 600 }}>{sign(p.c)}</div>
+      <div className="dash" style={{ padding: "0 32px 20px" }}>
+        <div className="col-12">
+          <div style={{ display: "flex", gap: 6, paddingBottom: 16 }}>
+            {pulse.slice(0, 8).map(p => (
+              <div key={p.l} className="p" style={{ flex: 1 }}>
+                <div className="lbl">{p.l}</div>
+                <div className="val">{p.v >= 1000 ? fmt(p.v, 0) : fmt(p.v, 2)}</div>
+                <div className={`chg ${cls(p.c)}`}>{sign(p.c)}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div style={{ margin: "0 10px", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8 }}>
-        <div style={{ padding: "5px 10px 4px", borderBottom: "1px solid var(--border)" }}>
-          <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: 10, color: "var(--text-hi)" }}>What Matters Now</span>
         </div>
-        <div style={{ padding: "4px 10px 6px" }}>
-          {wmn.slice(0, 3).map((b, i) => (
-            <div key={i} style={{ display: "flex", gap: 5, padding: "3px 0", borderBottom: i < 2 ? "1px solid var(--border-soft,#1a2535)" : "none", fontSize: 9 }}>
-              <span style={{ color: "var(--brand)", flexShrink: 0 }}>·</span>
-              <span style={{ color: "var(--text-hi)", fontWeight: 600 }}>{b.h}.</span>
+        <div className="col-12" style={{ marginBottom: 16 }}>
+          <div className="card">
+            <div className="card-h">What Matters Now</div>
+            <div className="card-b">
+              {wmn.slice(0, 4).map((b, i) => (
+                <div key={i} style={{ padding: "10px 16px", borderBottom: i < 3 ? "1px solid var(--border)" : "none" }}>
+                  <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: 15, color: "var(--text-hi)", marginBottom: 3 }}>{b.h}</div>
+                  <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }} dangerouslySetInnerHTML={{ __html: b.t }} />
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+        </div>
+        <div className="col-4">
+          <div className="card">
+            <div className="card-h">Top Movers</div>
+            <div className="card-b">
+              {movers.slice(0, 5).map(m => (
+                <div key={m.s} className="minirow">
+                  <StockLogo sym={m.s} size={26} />
+                  <span className="tkr">{m.s}</span>
+                  <span className="mid">{m.n}</span>
+                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                </div>
+              ))}
+              <div className="more">View all movers</div>
+            </div>
+          </div>
+        </div>
+        <div className="col-4">
+          <div className="card">
+            <div className="card-h">Earnings Today</div>
+            <div className="card-b">
+              {earnings.slice(0, 5).map(e => (
+                <div key={e.s} className="minirow">
+                  <StockLogo sym={e.s} size={26} />
+                  <span className="tkr">{e.s}</span>
+                  <span className="mid">{e.epsA !== null ? `EPS $${e.epsA}` : `Est $${e.epsE}`}</span>
+                  {e.epsA !== null && <span className={`pill ${e.tags.includes("Beat") ? "beat" : "miss"}`}>{e.tags.includes("Beat") ? "Beat" : "Miss"}</span>}
+                </div>
+              ))}
+              <div className="more">Full calendar</div>
+            </div>
+          </div>
+        </div>
+        <div className="col-4">
+          <div className="card">
+            <div className="card-h">Analyst Actions</div>
+            <div className="card-b">
+              {analyst.slice(0, 5).map((a, i) => (
+                <div key={i} className="minirow">
+                  <StockLogo sym={a.s} size={26} />
+                  <span className="tkr">{a.s}</span>
+                  <span className="mid">{a.firm}</span>
+                  <span className={`r ${a.dir === "down" ? "down" : "up"}`}>{a.to}</span>
+                </div>
+              ))}
+              <div className="more">All actions</div>
+            </div>
+          </div>
         </div>
       </div>
-    </TH>
+    </ScaledScreen>
   );
 }
 
 function MoversThumb() {
   return (
-    <TH>
-      <THHead label="Market Movers" right="LIVE" col="var(--up)" />
-      <div style={{ display: "flex", gap: 4, padding: "6px 10px 4px" }}>
-        {["All", "Large Cap", "Tech"].map((f, i) => (
-          <span key={f} style={{ padding: "2px 7px", borderRadius: 999, border: `1px solid ${i === 0 ? "var(--brand)" : "var(--border)"}`, background: i === 0 ? "rgba(124,108,245,.15)" : "transparent", color: i === 0 ? "var(--brand)" : "var(--text-dim-solid)", fontSize: 8, fontFamily: "var(--f-mono)", fontWeight: 600 }}>{f}</span>
-        ))}
+    <ScaledScreen>
+      <div className="page-head" style={{ padding: "28px 40px 20px" }}>
+        <div className="eyebrow">Market Movers</div>
+        <h1 className="page-title">Top winners &amp; losers</h1>
+        <p className="page-sub">Ranked by move &mdash; with the catalyst behind each one</p>
       </div>
-      <div style={{ padding: "0 10px" }}>
-        {movers.map(m => (
-          <div key={m.s} className="minirow">
-            <StockLogo sym={m.s} size={20} />
-            <span className="tkr" style={{ width: 38, fontSize: 10 }}>{m.s}</span>
-            <span className="mid" style={{ fontSize: 9 }}>{m.cat}</span>
-            <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+      <div style={{ padding: "0 32px" }}>
+        <div className="tabs" style={{ marginBottom: 12 }}>
+          {["Top Gainers","Top Losers","Volume","Weekly"].map((t, i) => (
+            <button key={t} className={`tab${i === 0 ? " active" : ""}`}>{t}</button>
+          ))}
+        </div>
+        <div className="fbar" style={{ marginBottom: 14 }}>
+          {["All","Large Cap","Mid Cap","Small Cap"].map((c, i) => (
+            <span key={c} className={`chip${i === 0 ? " on" : ""}`}>{c}</span>
+          ))}
+          <span style={{ flex: 1 }} />
+          {["Tech","Finance","Health"].map(s => (
+            <span key={s} className="chip">{s}</span>
+          ))}
+        </div>
+        <div className="card">
+          <div className="tbl">
+            <div style={{ padding: "8px 16px", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.6fr", gap: 8, fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--text-dim-solid)", borderBottom: "1px solid var(--border)" }}>
+              <span>Company</span><span>Price</span><span>Change</span><span>RVOL</span><span>Cap</span><span>Catalyst</span>
+            </div>
+            {movers.map((m, i) => (
+              <div key={m.s} style={{ padding: "11px 16px", display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.6fr", gap: 8, alignItems: "center", borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <StockLogo sym={m.s} size={28} />
+                  <div>
+                    <div className="co s" style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 14, color: "var(--text-hi)" }}>{m.s}</div>
+                    <div className="co n" style={{ fontSize: 12, color: "var(--text-dim-solid)" }}>{m.n}</div>
+                  </div>
+                </div>
+                <span className="num">{fmt(m.p, 2)}</span>
+                <span className={`num ${cls(m.c)}`}>{sign(m.c)}</span>
+                <span className="num">{m.rvol}x</span>
+                <span style={{ fontSize: 12, color: "var(--text-dim-solid)" }}>{m.cap}</span>
+                <span style={{ fontSize: 12, color: "var(--text)", background: "var(--surface-2)", borderRadius: 6, padding: "3px 9px", display: "inline-block" }}>{m.cat}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
-    </TH>
+    </ScaledScreen>
   );
 }
 
 function StockThumb() {
-  const pts = [38,42,40,45,43,48,46,50,49,54,51,56,54,59,57,62,60,64,62,66];
-  const max = 66, min = 38, SH = 72, SW = 290;
-  const path = pts.map((v,i) => `${i===0?"M":"L"}${(i/(pts.length-1))*SW},${SH-((v-min)/(max-min))*SH}`).join(" ");
+  const pts = [38,42,40,45,43,49,47,52,50,55,52,58,55,60,58,63,61,65,63,67,65,70];
+  const SH = 220, SW = 700, min = 38, max = 70;
+  const path = pts.map((v, i) =>
+    `${i === 0 ? "M" : "L"}${(i / (pts.length - 1)) * SW},${SH - ((v - min) / (max - min)) * SH}`
+  ).join(" ");
+  const stock = { name: "NVIDIA Corporation", sym: "NVDA", exc: "NASDAQ", sec: "Semiconductors" };
   return (
-    <TH>
-      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <StockLogo sym="NVDA" size={28} />
-          <div>
-            <div style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 14, color: "var(--text-hi)" }}>NVDA</div>
-            <div style={{ fontSize: 9, color: "var(--text-dim-solid)" }}>NVIDIA · NASDAQ</div>
+    <ScaledScreen>
+      <div className="sd-head" style={{ padding: "20px 40px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 18 }}>
+        <div className="sd-logo"><StockLogo sym={stock.sym} size={52} /></div>
+        <div>
+          <div style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 26, color: "var(--text-hi)", letterSpacing: "-.02em" }}>{stock.sym}</div>
+          <div style={{ fontSize: 13, color: "var(--text-dim-solid)" }}>{stock.name} &middot; {stock.exc} &middot; {stock.sec}</div>
+        </div>
+        <div style={{ marginLeft: "auto", textAlign: "right" }}>
+          <div style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 30, color: "var(--text-hi)" }}>$1,025.60</div>
+          <div className="up" style={{ fontFamily: "var(--f-mono)", fontSize: 14, fontWeight: 600 }}>+8.23% &nbsp;+$78.04 today</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, marginLeft: 20 }}>
+          <button className="btn">+ Watch</button>
+          <button className="btn ai">AI Read</button>
+        </div>
+      </div>
+      <div className="sd-grid" style={{ display: "grid", gridTemplateColumns: "1fr 300px", height: 1340 }}>
+        <div style={{ padding: "20px 32px", borderRight: "1px solid var(--border)", overflowY: "hidden" }}>
+          <div className="chart-toolbar" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {["1D","5D","1M","3M","6M","1Y","5Y"].map((t, i) => (
+              <button key={t} className={`chip${i === 0 ? " on" : ""}`}>{t}</button>
+            ))}
+            <span style={{ flex: 1 }} />
+            {["Line","Candle","Area"].map(t => <button key={t} className="chip">{t}</button>)}
           </div>
-          <div style={{ marginLeft: "auto", textAlign: "right" }}>
-            <div style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 14, color: "var(--text-hi)" }}>$1,025</div>
-            <div className="up" style={{ fontSize: 9, fontFamily: "var(--f-mono)", fontWeight: 600 }}>+8.23% today</div>
+          <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: "16px", marginBottom: 18 }}>
+            <svg viewBox={`0 0 ${SW} ${SH}`} width="100%" height={SH} preserveAspectRatio="none" style={{ display: "block" }}>
+              <defs>
+                <linearGradient id="sdg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity=".28" />
+                  <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d={`${path} L${SW},${SH} L0,${SH} Z`} fill="url(#sdg)" />
+              <path d={path} fill="none" stroke="#22c55e" strokeWidth="2.2" />
+            </svg>
+          </div>
+          <div className="keystats">
+            {[["Mkt Cap","$2.91T"],["P/E Ratio","78×"],["EPS TTM","$13.14"],["52W High","$1,255"],["52W Low","$350.00"],["Beta","1.72"],["Rev TTM","$60.9B"],["Div Yield","—"]].map(([k, v]) => (
+              <div key={k} className="kstat">
+                <div className="k">{k}</div>
+                <div className="v">{v}</div>
+              </div>
+            ))}
+          </div>
+          <div className="ai-block" style={{ marginTop: 20 }}>
+            <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--ai)", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 12 }}>AI Analysis</div>
+            {[
+              ["Why it moved", "Blowout Q1 earnings with data center revenue up 427% YoY smashed estimates and triggered a wave of target raises across the sell-side."],
+              ["What to watch", "Next earnings in ~60 days. Watch the 1-year channel support around $920 as a key level on any pullback."],
+              ["Verdict", "Trend intact, momentum extended. Buyers still in control but overextension risk into the next print."],
+            ].map(([k, v]) => (
+              <div key={k} className="ai-line" style={{ marginBottom: 12 }}>
+                <div className="k">{k}</div>
+                <div className="v">{v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ padding: "20px 24px", overflowY: "hidden" }}>
+          <div className="card" style={{ marginBottom: 14 }}>
+            <div className="card-h">Technical Rating</div>
+            <div className="card-b" style={{ padding: "16px" }}>
+              <div style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 22, color: "#22c55e", marginBottom: 4 }}>Strong Buy</div>
+              <div style={{ fontSize: 13, color: "var(--text-dim-solid)", marginBottom: 10 }}>12 of 14 indicators bullish</div>
+              <div style={{ display: "flex", gap: 3 }}>
+                {Array.from({ length: 14 }, (_, i) => (
+                  <div key={i} style={{ flex: 1, height: 5, borderRadius: 2, background: i < 12 ? "#22c55e" : "var(--border)" }} />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-h">Peers</div>
+            <div className="card-b">
+              {[["AMD","$165.20",2.1],["INTC","$30.12",-1.8],["QCOM","$168.50",1.3],["TSM","$162.80",3.2],["AVGO","$1,402",2.97]].map(([s, p, c]) => (
+                <div key={s} className="minirow">
+                  <StockLogo sym={String(s)} size={26} />
+                  <span className="tkr">{s}</span>
+                  <span className="mid">{p}</span>
+                  <span className={`r ${(c as number) >= 0 ? "up" : "down"}`}>{sign(c as number)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-      <div style={{ margin: "8px 12px", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 7, padding: "6px 8px", overflow: "hidden" }}>
-        <svg viewBox={`0 0 ${SW} ${SH}`} width="100%" height={SH} preserveAspectRatio="none" style={{ display: "block" }}>
-          <defs>
-            <linearGradient id="tsg" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22c55e" stopOpacity=".32"/>
-              <stop offset="100%" stopColor="#22c55e" stopOpacity="0"/>
-            </linearGradient>
-          </defs>
-          <path d={`${path} L${SW},${SH} L0,${SH} Z`} fill="url(#tsg)"/>
-          <path d={path} fill="none" stroke="#22c55e" strokeWidth="1.8"/>
-        </svg>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, padding: "0 12px" }}>
-        {[["Mkt Cap","$2.91T"],["P/E","78×"],["EPS","$13.14"],["52W H","$1,250"],["52W L","$350"],["Beta","1.72"]].map(([k,v]) => (
-          <div key={k} className="p" style={{ padding: "4px 6px" }}>
-            <div className="lbl" style={{ fontSize: 7 }}>{k}</div>
-            <div className="val" style={{ fontSize: "0.75rem" }}>{v}</div>
-          </div>
-        ))}
-      </div>
-    </TH>
+    </ScaledScreen>
   );
 }
 
 function HeatmapThumb() {
+  const k = 2.0;
   return (
-    <TH>
-      <THHead label="Market Heatmap" right="S&P 500" col="var(--ai)" />
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 3, padding: "8px 10px", alignContent: "flex-start" }}>
-        {sectorList.slice(0, 14).map(s => {
-          const { bg, fg } = heatCol(s.chg);
-          const w = Math.abs(s.chg) > 1.5 ? 3 : Math.abs(s.chg) > 0.5 ? 2 : 1.5;
-          return (
-            <div key={s.name} style={{ background: bg, color: fg, borderRadius: 5, padding: "4px 5px", fontSize: 8, fontWeight: 700, flexGrow: w, flexBasis: `${w * 20}%`, minWidth: 40, fontFamily: "var(--f-mono)" }}>
-              <div style={{ fontSize: 7, marginBottom: 1, opacity: .85 }}>{s.name.replace("Mega-Cap ","").replace("Cloud ","")}</div>
-              <div style={{ fontSize: 9 }}>{sign(s.chg)}</div>
-            </div>
-          );
-        })}
+    <ScaledScreen>
+      <div className="page-head" style={{ padding: "28px 40px 20px" }}>
+        <div className="eyebrow">Market Heatmap</div>
+        <h1 className="page-title">Where the day is leaning</h1>
+        <p className="page-sub">Market cap weighted by sector &mdash; colored by performance</p>
       </div>
-    </TH>
+      <div style={{ padding: "0 32px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--text-dim-solid)" }}>
+          <span>-3%</span>
+          {([-3,-1.5,-0.5,0,0.5,1.5,3] as number[]).map(v => {
+            const { bg } = heatCol(v);
+            return <i key={v} style={{ display: "inline-block", width: 32, height: 14, background: bg, borderRadius: 3 }} />;
+          })}
+          <span>+3%</span>
+          <span style={{ flex: 1 }} />
+          {["All","S&P 500","NDX","Russell"].map((f, i) => (
+            <span key={f} className={`chip${i === 0 ? " on" : ""}`}>{f}</span>
+          ))}
+        </div>
+        <div className="treemap">
+          {sectorList.slice(0, 9).map(g => {
+            const tot = g.items.reduce((s, it) => s + it[1], 0);
+            const flex = Math.min(5, Math.max(1.2, tot / 2500));
+            return (
+              <div key={g.name} className="tm-sector" style={{ flex: `${flex} 1 110px` }}>
+                <div className="sl">
+                  <span>
+                    {g.name.replace("Mega-Cap ", "").replace("Cloud ", "")}{" "}
+                    <span className={cls(g.chg)} style={{ fontFamily: "var(--f-mono)", fontWeight: 600 }}>{sign(g.chg)}</span>
+                  </span>
+                </div>
+                <div className="tm-cells">
+                  {g.items.map(it => {
+                    const w = Math.max(56, Math.sqrt(it[1]) * k);
+                    const h = Math.max(42, w * 0.62);
+                    const fs = Math.max(.62, Math.min(1, Math.sqrt(it[1]) / 40));
+                    const { bg, fg } = heatCol(it[2]);
+                    return (
+                      <div key={it[0]} className="tm-cell" style={{ width: w, height: h, background: bg }}>
+                        <span className="tt" style={{ fontSize: `${fs}rem`, color: fg }}>{it[0]}</span>
+                        <span className="tc" style={{ fontSize: `${fs * 0.82}rem`, color: fg }}>{sign(it[2])}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </ScaledScreen>
   );
 }
 
 function EarningsThumb() {
+  const days = ["Mon","Tue","Wed","Thu","Fri"];
   return (
-    <TH>
-      <THHead label="Earnings" right="Q2 2024 · 4 today" col="#f59e0b" />
-      <div style={{ padding: "0 10px" }}>
-        {earnings.map(e => (
-          <div key={e.s} className="minirow">
-            <StockLogo sym={e.s} size={20} />
-            <span className="tkr" style={{ width: 40, fontSize: 10 }}>{e.s}</span>
-            <span className="mid" style={{ fontSize: 9 }}>{e.epsA !== null ? `EPS $${e.epsA}` : `Est $${e.epsE}`}</span>
-            {e.epsA !== null ? (
-              <span className={`pill ${e.tags.includes("Beat") ? "beat" : "miss"}`}>{e.tags.includes("Beat") ? "Beat" : "Miss"}</span>
-            ) : (
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: "var(--text-dim-solid)" }}>pending</span>
-            )}
-          </div>
-        ))}
+    <ScaledScreen>
+      <div className="page-head" style={{ padding: "28px 40px 20px" }}>
+        <div className="eyebrow">Earnings</div>
+        <h1 className="page-title">Who reports &mdash; and how</h1>
+        <p className="page-sub">Calendar &middot; beat/miss history &middot; income statements</p>
       </div>
-    </TH>
+      <div style={{ padding: "0 32px" }}>
+        <div className="tabs" style={{ marginBottom: 14 }}>
+          {["Yesterday","Today","Tomorrow","This Week","Next Week","Last Week","Month"].map((t, i) => (
+            <button key={t} className={`tab${i === 1 ? " active" : ""}`}>{t}</button>
+          ))}
+        </div>
+        <div className="ec-grid">
+          {days.map((day, di) => (
+            <div key={day} className={`ec-day${di === 1 ? " is-today" : ""}`}>
+              <div className="ec-dh">{day}</div>
+              <div className="ec-sess">
+                <span className="ec-chip" style={{ background: "rgba(251,191,36,.14)", color: "#f59e0b", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, marginBottom: 8, display: "inline-block" }}>BMO</span>
+                {earnings.slice(di, di + 1).map(e => (
+                  <div key={e.s} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", marginBottom: 5, background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8 }}>
+                    <StockLogo sym={e.s} size={22} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 13, color: "var(--text-hi)" }}>{e.s}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-dim-solid)" }}>{e.n}</div>
+                    </div>
+                    {e.epsA !== null && <span className={`pill ${e.tags.includes("Beat") ? "beat" : "miss"}`} style={{ fontSize: 11 }}>{e.tags.includes("Beat") ? "Beat" : "Miss"}</span>}
+                  </div>
+                ))}
+              </div>
+              <div className="ec-sess" style={{ marginTop: 10 }}>
+                <span className="ec-chip" style={{ background: "rgba(124,108,245,.14)", color: "var(--brand)", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, marginBottom: 8, display: "inline-block" }}>AMC</span>
+                {earnings.slice(di + 3, di + 5).map(e => (
+                  <div key={e.s} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", marginBottom: 5, background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8 }}>
+                    <StockLogo sym={e.s} size={22} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 13, color: "var(--text-hi)" }}>{e.s}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-dim-solid)" }}>{e.n}</div>
+                    </div>
+                    {e.epsA !== null && <span className={`pill ${e.tags.includes("Beat") ? "beat" : "miss"}`} style={{ fontSize: 11 }}>{e.tags.includes("Beat") ? "Beat" : "Miss"}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </ScaledScreen>
   );
 }
 
 function AnalystThumb() {
-  const dirIcon = (d: string) => d === "up" ? "↑" : d === "down" ? "↓" : d === "init" ? "+" : "→";
+  const upCount = analyst.filter(a => a.dir === "up" || a.dir === "init").length;
+  const dnCount = analyst.filter(a => a.dir === "down").length;
   return (
-    <TH>
-      <THHead label="Analyst Actions" right="★ cluster" col="var(--ai)" />
-      <div style={{ padding: "0 10px" }}>
-        {analyst.slice(0, 7).map((a, i) => (
-          <div key={i} className="minirow">
-            <span className="tkr" style={{ width: 40, fontSize: 10 }}>{a.s}</span>
-            <span className="mid" style={{ fontSize: 9 }}>{a.firm}</span>
-            <span className={`r ${a.dir === "down" ? "down" : "up"}`} style={{ fontSize: 9 }}>
-              {dirIcon(a.dir)} {a.to}
-            </span>
-          </div>
-        ))}
+    <ScaledScreen>
+      <div className="page-head" style={{ padding: "28px 40px 20px" }}>
+        <div className="eyebrow">Analyst Actions</div>
+        <h1 className="page-title">Upgrades, downgrades, targets</h1>
+        <p className="page-sub">Rating changes &middot; price target moves &middot; cluster detection</p>
       </div>
-    </TH>
+      <div style={{ padding: "0 32px" }}>
+        <div className="tabs" style={{ marginBottom: 14 }}>
+          {["All Actions","Upgrades","Downgrades","Initiations","Clusters"].map((t, i) => (
+            <button key={t} className={`tab${i === 0 ? " active" : ""}`}>{t}</button>
+          ))}
+        </div>
+        <div className="dash" style={{ marginBottom: 16 }}>
+          <div className="col-3">
+            <div className="card">
+              <div className="card-h">Today</div>
+              <div className="card-b" style={{ padding: "14px 16px" }}>
+                <div style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 34, color: "var(--text-hi)", marginBottom: 4 }}>{analyst.length}</div>
+                <div style={{ display: "flex", gap: 14, fontSize: 13 }}>
+                  <span className="up">{upCount} upgrades</span>
+                  <span className="down">{dnCount} downgrades</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="col-3">
+            <div className="card">
+              <div className="card-h">Cluster Alert</div>
+              <div className="card-b" style={{ padding: "14px 16px" }}>
+                <div style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 22, color: "var(--ai)", marginBottom: 6 }}>NVDA</div>
+                <div style={{ fontSize: 13, color: "var(--text-dim-solid)" }}>6 firms upgraded in 48h</div>
+              </div>
+            </div>
+          </div>
+          <div className="col-6">
+            <div className="card ai-block" style={{ background: "rgba(52,226,240,.05)", borderColor: "rgba(52,226,240,.18)" }}>
+              <div className="card-h" style={{ color: "var(--ai)" }}>AI Take &middot; NVDA Cluster</div>
+              <div className="card-b" style={{ padding: "12px 16px", fontSize: 14, color: "var(--text)", lineHeight: 1.6 }}>
+                6 Wall Street firms upgraded NVDA in under 48 hours after the data-center beat. Target consensus moved from $850 to $1,150. Clusters of this size historically precede 30-day outperformance.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="tbl">
+            <div style={{ padding: "8px 16px", display: "grid", gridTemplateColumns: "2fr 1.6fr 1fr 1fr 1fr 1fr", gap: 8, fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--text-dim-solid)", borderBottom: "1px solid var(--border)" }}>
+              <span>Stock</span><span>Firm</span><span>Action</span><span>From</span><span>To</span><span>PT</span>
+            </div>
+            {analyst.slice(0, 10).map((a, i) => (
+              <div key={i} style={{ padding: "11px 16px", display: "grid", gridTemplateColumns: "2fr 1.6fr 1fr 1fr 1fr 1fr", gap: 8, alignItems: "center", borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <StockLogo sym={a.s} size={26} />
+                  <div>
+                    <div style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 14, color: "var(--text-hi)" }}>{a.s}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-dim-solid)" }}>{a.n}</div>
+                  </div>
+                </div>
+                <span style={{ fontSize: 13, color: "var(--text-dim-solid)" }}>{a.firm}</span>
+                <span className={a.dir === "down" ? "down" : "up"} style={{ fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 600, textTransform: "capitalize" }}>{a.dir}</span>
+                <span style={{ fontSize: 13, color: "var(--text-dim-solid)" }}>{a.from}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-hi)" }}>{a.to}</span>
+                <span className={a.ptT > a.ptF ? "up" : "down"} style={{ fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 600 }}>${a.ptT}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </ScaledScreen>
   );
 }
 
 function PortfolioThumb() {
-  const totalGL = folio.reduce((s, f) => s + f.c, 0) / folio.length;
+  const totalPct = folio.reduce((s, f) => s + f.c, 0) / folio.length;
   return (
-    <TH>
-      <THHead label="Portfolio Pulse" right={sign(totalGL) + " today"} col={totalGL >= 0 ? "var(--up)" : "var(--down)"} />
-      <div style={{ padding: "8px 10px 4px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 18, color: "var(--text-hi)" }}>$142,843</span>
-        <span className="up" style={{ fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700 }}>+$4,218 today</span>
+    <ScaledScreen>
+      <div className="page-head" style={{ padding: "28px 40px 20px" }}>
+        <div className="eyebrow">Portfolio Pulse</div>
+        <h1 className="page-title">Your book, explained</h1>
+        <p className="page-sub">AI-narrated day P&amp;L &mdash; what moved, why, and what to watch</p>
       </div>
-      <div style={{ padding: "0 10px" }}>
-        {folio.slice(0, 5).map(f => (
-          <div key={f.s} className="minirow">
-            <StockLogo sym={f.s} size={20} />
-            <span className="tkr" style={{ width: 40, fontSize: 10 }}>{f.s}</span>
-            <span className="mid" style={{ fontSize: 9 }}>{f.evt}</span>
-            <span className={`r ${cls(f.c)}`}>{sign(f.c)}</span>
+      <div style={{ padding: "0 32px" }}>
+        <div className="ai-block" style={{ marginBottom: 18 }}>
+          <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--ai)", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 12 }}>AI Portfolio Summary</div>
+          <div className="ai-line" style={{ marginBottom: 12 }}>
+            <div className="k">Today</div>
+            <div className="v">NVDA led gains (+8.2%) after the data-center beat. META added 2.3% on ad-revenue upgrades. HD dragged the book -1.1% on lowered guidance.</div>
           </div>
-        ))}
+          <div className="ai-line">
+            <div className="k">Watch</div>
+            <div className="v">AAPL reports after close today &mdash; largest holding by weight. NVDA approaching 52-week high; consider trimming at $1,100.</div>
+          </div>
+        </div>
+        <div className="pf-master" style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 0, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+          <div className="pf-side" style={{ borderRight: "1px solid var(--border)" }}>
+            <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 22, color: "var(--text-hi)" }}>$142,843</span>
+              <span className={cls(totalPct)} style={{ fontFamily: "var(--f-mono)", fontSize: 14, fontWeight: 700 }}>{sign(totalPct)}</span>
+            </div>
+            <div className="pf-list">
+              {folio.map(f => (
+                <div key={f.s} className="pf-li" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border-soft,#1a2535)" }}>
+                  <StockLogo sym={f.s} size={28} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 14, color: "var(--text-hi)" }}>{f.s}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-dim-solid)" }}>{f.n}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div className={cls(f.c)} style={{ fontFamily: "var(--f-mono)", fontSize: 14, fontWeight: 600 }}>{sign(f.c)}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-dim-solid)" }}>{f.evt}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ padding: "20px 24px" }}>
+            <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: 16, color: "var(--text-hi)", marginBottom: 12 }}>NVDA Detail</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[["Shares","48"],["Avg Cost","$687.40"],["Day P/L","+$4,582"],["Total G/L","+$23,188"],["Weight","28.4%"],["Conv","High"]].map(([k, v]) => (
+                <div key={k} className="kstat">
+                  <div className="k">{k}</div>
+                  <div className="v">{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-      <div style={{ margin: "5px 10px", background: "rgba(124,108,245,.1)", border: "1px solid rgba(124,108,245,.22)", borderRadius: 7, padding: "6px 9px", fontSize: 9, color: "var(--text)", lineHeight: 1.5 }}>
-        <span style={{ color: "var(--brand)", fontWeight: 700 }}>AI · </span>NVDA and META led gains. Watch TSLA drag on margin concerns.
-      </div>
-    </TH>
+    </ScaledScreen>
   );
 }
 
 function RecapsThumb() {
-  const sections = ["What Happened","Why It Moved","Technicals","Macro View","AI Verdict"];
   return (
-    <TH>
-      <THHead label="Recaps" right="NVDA · May 21" col="#f59e0b" />
-      <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ position: "relative", height: 158 }}>
-          {sections.map((label, i) => (
-            <div key={label} style={{
-              position: "absolute", left: `${i * 9}px`, right: 0, top: `${i * 8}px`,
-              background: i === 0 ? "var(--surface-1)" : "var(--surface-0)",
-              border: `1px solid ${i === 0 ? "var(--brand)" : "var(--border)"}`,
-              borderRadius: 10, padding: "9px 11px",
-              opacity: 1 - i * 0.16, zIndex: sections.length - i,
-            }}>
-              <div style={{ fontFamily: "var(--f-mono)", color: i === 0 ? "var(--brand)" : "var(--text-dim-solid)", fontSize: 8, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: i === 0 ? 5 : 0 }}>{label}</div>
-              {i === 0 && <div style={{ fontSize: 9, color: "var(--text)", lineHeight: 1.55 }}>{recap.stories[0]}</div>}
+    <ScaledScreen>
+      <div className="page-head" style={{ padding: "28px 40px 20px" }}>
+        <div className="eyebrow">Recaps</div>
+        <h1 className="page-title">The day, in seven cards</h1>
+        <p className="page-sub">Executive briefings &mdash; swipe through or schedule by email</p>
+      </div>
+      <div style={{ padding: "0 32px" }}>
+        <div className="rcp-idx" style={{ marginBottom: 16 }}>
+          {recap.indices.map(idx => (
+            <div key={idx.l} className="rcp-box">
+              <div className="rcp-bl">{idx.l}</div>
+              <div className={`rcp-bv ${cls(idx.v)}`}>{sign(idx.v)}</div>
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 3 }}>
-          {sections.map((_, i) => (
-            <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i === 0 ? "var(--brand)" : "var(--border)" }}/>
-          ))}
+        <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 14, padding: "24px 28px", marginBottom: 16 }}>
+          <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--text-dim-solid)", marginBottom: 8 }}>Today &middot; End of Day Brief</div>
+          <h2 className="recap-title" style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 26, color: "var(--text-hi)", margin: "0 0 12px", lineHeight: 1.2 }}>{recap.headline}</h2>
+          <div style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.65, marginBottom: 16 }}>
+            {recap.stories[0]} {recap.stories[1]}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["What Happened","Why It Moved","Technicals","Macro","AI Verdict"].map((s, i) => (
+              <span key={s} style={{ padding: "4px 12px", borderRadius: 999, background: i === 0 ? "rgba(124,108,245,.2)" : "var(--surface-2)", border: `1px solid ${i === 0 ? "rgba(124,108,245,.38)" : "var(--border)"}`, fontSize: 12, color: i === 0 ? "var(--brand)" : "var(--text-dim-solid)", fontFamily: "var(--f-mono)", fontWeight: 600 }}>{s}</span>
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: 9, color: "var(--text-dim-solid)", display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {recap.indices.map(idx => (
-            <span key={idx.l}><span className={cls(idx.v)}>{sign(idx.v)}</span>{" "}<span style={{ fontSize: 8 }}>{idx.l}</span></span>
-          ))}
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card-h">Market Internals</div>
+          <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {recap.internals.map(r => (
+              <div key={r.l}>
+                <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginBottom: 4 }}>{r.l}</div>
+                <div className={r.c > 0 ? "up" : "down"} style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 16 }}>{r.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-h">Sector Heat</div>
+          <div style={{ padding: "6px 16px 10px" }}>
+            {sectorList.slice(0, 10).map(g => (
+              <div key={g.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--border-soft,#1a2535)" }}>
+                <div style={{ flex: 1, fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.name}</div>
+                <div className={cls(g.chg)} style={{ fontFamily: "var(--f-mono)", fontSize: 13, fontWeight: 600, width: 55, textAlign: "right", flexShrink: 0 }}>{sign(g.chg)}</div>
+                <div style={{ width: 80, height: 5, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden", flexShrink: 0 }}>
+                  <div style={{ height: "100%", width: `${Math.min(100, Math.abs(g.chg) * 28)}%`, background: g.chg >= 0 ? "var(--up)" : "var(--down)", borderRadius: 3 }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </TH>
+    </ScaledScreen>
   );
 }
 
