@@ -36,11 +36,384 @@ function computeTrending() {
     .sort((a, b) => b.n - a.n || b.days - a.days);
 }
 
+/* ── Earnings Calls data ── */
+interface CallEntry {
+  sym: string;
+  name: string;
+  price: number;
+  change: number;
+  callDate: string;
+  callTime: string;
+  session: "BMO" | "AMC";
+  title: string;
+  duration?: string;
+  epsEst: number | null;
+  epsAct: number | null;
+  revEst: string | null;
+  revAct: string | null;
+  guide: "Up" | "In-line" | "Down" | null;
+  react: number | null;
+  summary: string;
+  points: string[];
+}
+
+const CALLS_DATA: CallEntry[] = [
+  {
+    sym: "NVDA", name: "NVIDIA Corporation", price: 135.82, change: 3.14,
+    callDate: "Jun 4, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q1 2026 Earnings Call", duration: "62 min",
+    epsEst: 0.89, epsAct: 1.04, revEst: "28.2B", revAct: "30.1B", guide: "Up", react: 8.2,
+    summary: "NVIDIA posted a blowout quarter driven by relentless demand for its Blackwell GPU architecture across cloud hyperscalers and enterprise AI deployments. Data center revenue hit $26.3B, up 93% YoY. Management raised Q2 guidance significantly above consensus.",
+    points: ["Data center revenue +93% YoY to $26.3B", "Blackwell backlog remains 'several quarters' long", "Q2 revenue guide $32–34B vs. $29.8B consensus", "Gross margin expanded 80bps to 73.5%", "Gaming revenue recovered +18% sequentially"],
+  },
+  {
+    sym: "AAPL", name: "Apple Inc.", price: 211.45, change: 1.87,
+    callDate: "May 1, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q2 FY2026 Earnings Call", duration: "55 min",
+    epsEst: 1.58, epsAct: 1.65, revEst: "94.1B", revAct: "95.4B", guide: "Up", react: 2.4,
+    summary: "Apple beat on both EPS and revenue, led by Services revenue hitting a new record of $26.9B. iPhone volumes came in ahead of expectations on strength in emerging markets. The company announced a $110B buyback authorization.",
+    points: ["Services revenue record $26.9B, +15% YoY", "iPhone revenue $46.2B, beat by $1.4B", "New $110B share repurchase program authorized", "India and Southeast Asia drove unit upside", "Gross margin 46.6%, above 46.2% guide"],
+  },
+  {
+    sym: "MSFT", name: "Microsoft Corporation", price: 432.10, change: 2.31,
+    callDate: "Apr 30, 2026", callTime: "5:30 PM ET", session: "AMC", title: "Q3 FY2026 Earnings Call", duration: "68 min",
+    epsEst: 3.21, epsAct: 3.46, revEst: "68.7B", revAct: "70.1B", guide: "Up", react: 4.6,
+    summary: "Microsoft delivered strong beats across all three segments. Azure growth re-accelerated to 35% CC, materially ahead of the 31% consensus. Copilot monetization is ramping with $6B in ARR. Management guided next quarter well above street on continued AI infrastructure build-out.",
+    points: ["Azure +35% CC vs. 31% consensus estimate", "Copilot ARR reached $6B, ahead of schedule", "Commercial bookings +23% on multi-year AI deals", "Operating margin expanded 120bps to 44.4%", "LinkedIn revenue +11%, gaming flat YoY"],
+  },
+  {
+    sym: "AMZN", name: "Amazon.com Inc.", price: 198.73, change: 5.02,
+    callDate: "May 1, 2026", callTime: "4:30 PM ET", session: "AMC", title: "Q1 2026 Earnings Call", duration: "74 min",
+    epsEst: 1.29, epsAct: 1.59, revEst: "155.3B", revAct: "157.2B", guide: "Up", react: 6.8,
+    summary: "Amazon's Q1 showed AWS re-acceleration to 21% growth and Advertising crossing $16B for the first time. North America retail returned to double-digit operating margins. Management increased FY2026 capex to $100B+ for AI infrastructure, signaling confidence in demand.",
+    points: ["AWS revenue +21% YoY, re-acceleration from 17%", "Advertising $16.0B, +19% YoY", "North America operating margin 6.4%, best in 6 quarters", "Q2 op income guide $13–17.5B vs. $12.9B est.", "Capex raised to $100B+ for 2026"],
+  },
+  {
+    sym: "GOOGL", name: "Alphabet Inc.", price: 174.50, change: -0.83,
+    callDate: "Apr 29, 2026", callTime: "4:30 PM ET", session: "AMC", title: "Q1 2026 Earnings Call", duration: "65 min",
+    epsEst: 2.01, epsAct: 2.12, revEst: "89.3B", revAct: "90.2B", guide: "In-line", react: 1.2,
+    summary: "Alphabet reported solid but not spectacular results. Search revenue held steady with AI Overviews monetizing better than feared. YouTube Shorts ad load is approaching long-form levels. Google Cloud reached 30% growth. The $70B buyback announcement was the key post-market catalyst.",
+    points: ["Search & Other $50.7B, +9% YoY — fears overdone", "YouTube ads $8.9B, +10% YoY — Shorts monetizing", "Google Cloud $12.3B, +30% YoY", "Announced $70B incremental buyback", "AI Overviews cost per query declining ahead of plan"],
+  },
+  {
+    sym: "META", name: "Meta Platforms Inc.", price: 522.34, change: 4.55,
+    callDate: "Apr 30, 2026", callTime: "4:30 PM ET", session: "AMC", title: "Q1 2026 Earnings Call", duration: "57 min",
+    epsEst: 5.14, epsAct: 6.43, revEst: "41.2B", revAct: "42.3B", guide: "Up", react: 7.1,
+    summary: "Meta delivered a spectacular quarter. Ad revenue accelerated on AI-driven Advantage+ campaigns, which now represent 42% of total ad spend. Llama 4 is powering recommendations and reducing content moderation costs. Reality Labs losses narrowed more than expected.",
+    points: ["Ad revenue +19% YoY; Advantage+ = 42% of spend", "Daily active people 3.43B, +7% YoY", "Llama 4 deployment reducing infra costs by 20%", "Reality Labs op loss narrowed to -$3.4B (est. -$4.1B)", "Q2 revenue guide $42.5–45.5B — well above est."],
+  },
+  {
+    sym: "TSLA", name: "Tesla Inc.", price: 178.92, change: -3.26,
+    callDate: "Apr 22, 2026", callTime: "5:30 PM ET", session: "AMC", title: "Q1 2026 Earnings Call", duration: "72 min",
+    epsEst: 0.41, epsAct: 0.27, revEst: "21.8B", revAct: "19.3B", guide: "Down", react: -8.4,
+    summary: "Tesla missed across the board as automotive margins compressed to 12.5%, the lowest since 2019, amid aggressive price cuts in China and Europe. Deliveries were below even lowered expectations. Management focused heavily on autonomous and Optimus robot timelines, which offered limited near-term financial clarity.",
+    points: ["Automotive gross margin 12.5% vs. 14.2% expected", "Deliveries 336K, -16% YoY — 5th consecutive decline", "FSD take rate only 4.2% of new buyers", "Optimus production target 1M units by 2030 reiterated", "Energy storage revenue $2.7B — bright spot"],
+  },
+  {
+    sym: "JPM", name: "JPMorgan Chase & Co.", price: 224.60, change: 1.44,
+    callDate: "Apr 11, 2026", callTime: "8:30 AM ET", session: "BMO", title: "Q1 2026 Earnings Call", duration: "61 min",
+    epsEst: 4.12, epsAct: 4.44, revEst: "42.6B", revAct: "43.9B", guide: "Up", react: 3.1,
+    summary: "JPMorgan crushed Q1 estimates. Net interest income came in ahead of expectations as the rate environment held favorable. Investment banking revenue surged 46% on a reopening deal pipeline. Management raised full-year NII guidance by $2B.",
+    points: ["Net interest income $23.4B, +5% vs. est. $22.1B", "Investment banking fees +46% YoY to $2.7B", "Credit card net charge-offs stabilized at 3.6%", "Full-year NII guidance raised to $94B (+$2B)", "CET1 ratio 15.7% — excess capital building"],
+  },
+  {
+    sym: "BAC", name: "Bank of America Corp.", price: 42.18, change: 0.34,
+    callDate: "Apr 15, 2026", callTime: "6:30 AM ET", session: "BMO", title: "Q1 2026 Earnings Call", duration: "58 min",
+    epsEst: 0.82, epsAct: 0.90, revEst: "25.4B", revAct: "26.1B", guide: "In-line", react: 1.7,
+    summary: "BofA posted a solid beat driven by stronger NII and better-than-feared consumer credit quality. Wealth management AUM hit a record $4.1T. Management guided for flat NII sequentially in Q2, roughly in line with consensus.",
+    points: ["NII $14.2B, beat by $400M on deposit repricing", "Merrill Lynch AUM record $4.1T, +12% YoY", "Consumer credit card losses declined 20bps QoQ", "Efficiency ratio improved to 63.8% vs. 65.1% prior", "Common equity Tier 1 ratio 13.4%"],
+  },
+  {
+    sym: "AMD", name: "Advanced Micro Devices", price: 156.44, change: 6.23,
+    callDate: "Apr 29, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q1 2026 Earnings Call", duration: "66 min",
+    epsEst: 0.68, epsAct: 0.96, revEst: "7.1B", revAct: "7.7B", guide: "Up", react: 9.5,
+    summary: "AMD shattered expectations. MI300X GPU sales are exceeding AMD's own forecasts with data center GPU revenue hitting $2.3B — a new record and triple the prior-year quarter. Client and embedded segments are recovering. Management raised the FY2026 data center GPU forecast to $10B+.",
+    points: ["Data center GPU revenue $2.3B, triple YoY", "FY2026 data center GPU target raised to $10B+", "MI300X outperforming H100 in memory bandwidth benchmarks", "PC client segment +29% on Ryzen AI refresh", "Embedded recovery accelerating, +22% QoQ"],
+  },
+  {
+    sym: "INTC", name: "Intel Corporation", price: 21.38, change: -4.12,
+    callDate: "Apr 24, 2026", callTime: "4:30 PM ET", session: "AMC", title: "Q1 2026 Earnings Call", duration: "78 min",
+    epsEst: 0.01, epsAct: -0.17, revEst: "12.8B", revAct: "12.7B", guide: "Down", react: -7.3,
+    summary: "Intel's Q1 showed continued margin pressure as the foundry segment posted a $1.4B operating loss. PC client revenue held up but server share losses to AMD are ongoing. Management trimmed workforce by a further 3,000 and reduced the FY2026 capex plan. A Foundry strategic review is ongoing.",
+    points: ["Foundry segment op loss -$1.4B, wider than -$1.1B est.", "Server (DCAI) revenue -8% YoY; AMD share gains accelerating", "FY2026 capex reduced to $18B (from $21B)", "Additional 3,000 headcount reduction announced", "Intel 18A process yield still below internal targets"],
+  },
+  {
+    sym: "CRM", name: "Salesforce Inc.", price: 298.44, change: 2.77,
+    callDate: "May 28, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q1 FY2027 Earnings Call", duration: "63 min",
+    epsEst: 2.61, epsAct: 2.98, revEst: "9.12B", revAct: "9.38B", guide: "Up", react: 4.4,
+    summary: "Salesforce had a standout quarter as Agentforce AI adoption drove a 17% beat in professional services and accelerated upsell across the existing base. RPO grew 22% to $63B — the strongest in six quarters. Management raised FY2027 revenue guide by $400M.",
+    points: ["Agentforce deployed at 4,000+ customers, up from 200 in Q4", "RPO +22% to $63B — six-quarter high", "Operating margin 32.1%, +280bps YoY", "FY2027 revenue guide raised to $37.7–37.9B", "Data Cloud users +35% — new monetization layer emerging"],
+  },
+  {
+    sym: "NFLX", name: "Netflix Inc.", price: 892.45, change: 3.88,
+    callDate: "Apr 15, 2026", callTime: "4:00 PM ET", session: "AMC", title: "Q1 2026 Earnings Call", duration: "48 min",
+    epsEst: 5.68, epsAct: 6.61, revEst: "10.4B", revAct: "10.5B", guide: "Up", react: 5.2,
+    summary: "Netflix delivered a strong quarter with operating margin expanding to 29.2%, new subscriber disclosure replaced by engagement disclosures. Advertising tier now has 94M monthly active users. Live events strategy — sports and WWE — is driving a step-up in total viewing hours.",
+    points: ["Ad-supported tier: 94M MAUs, 40% of new sign-ups", "Operating margin 29.2%, guide for 29.5% in Q2", "Engagement up 14% YoY to 98M hours/day globally", "WWE Raw and NFL Christmas games boosted Q1 hours", "Password-sharing enforcement now complete — tailwinds fading"],
+  },
+  {
+    sym: "V", name: "Visa Inc.", price: 287.33, change: 1.22,
+    callDate: "Apr 23, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q2 FY2026 Earnings Call", duration: "52 min",
+    epsEst: 2.68, epsAct: 2.88, revEst: "9.0B", revAct: "9.3B", guide: "In-line", react: 2.0,
+    summary: "Visa posted steady growth driven by cross-border travel volumes that remained 10% above 2019 levels. US consumer spending was resilient despite macro uncertainty. New flows and value-added services are the incremental growth drivers, now comprising 22% of net revenue.",
+    points: ["Cross-border volume +14% YoY, still above 2019", "US consumer spending +7% — resilient through rate pressure", "New flows (B2B, gov) +20% YoY", "Value-added services 22% of net revenue — fastest growing segment", "Buyback $4.0B in Q2; $14B remaining authorization"],
+  },
+  {
+    sym: "JNJ", name: "Johnson & Johnson", price: 157.82, change: 0.44,
+    callDate: "Apr 15, 2026", callTime: "8:00 AM ET", session: "BMO", title: "Q1 2026 Earnings Call", duration: "56 min",
+    epsEst: 2.55, epsAct: 2.71, revEst: "21.6B", revAct: "21.9B", guide: "In-line", react: 1.3,
+    summary: "J&J delivered a solid in-line quarter. MedTech segment outperformed with robotic surgery driving procedure volumes higher. The pharmaceutical segment saw Darzalex continue its dominance in multiple myeloma while TREMFYA posted strong psoriasis share gains. Management reaffirmed FY2026 guidance.",
+    points: ["Darzalex revenue $3.0B, +22% YoY — market share 57%", "MedTech +8% on robotic surgery and Abiomed strength", "TREMFYA $1.5B, gaining on Humira biosimilar entrants", "FY2026 EPS guidance reaffirmed at $10.50–10.70", "Innovative Med pipeline: 6 new FDA submissions in Q2"],
+  },
+  {
+    sym: "WMT", name: "Walmart Inc.", price: 98.44, change: 2.11,
+    callDate: "May 15, 2026", callTime: "8:00 AM ET", session: "BMO", title: "Q1 FY2027 Earnings Call", duration: "59 min",
+    epsEst: 0.58, epsAct: 0.61, revEst: "168.0B", revAct: "169.6B", guide: "Up", react: 3.4,
+    summary: "Walmart outperformed on all metrics. US comparable sales rose 5.0% led by grocery market share gains from higher-income households and strong private label penetration. Walmart+ membership is approaching 40M. Advertising revenue hit $1.6B — an 18-month consecutive record.",
+    points: ["US comp sales +5.0% — 8th consecutive acceleration quarter", "Higher-income (>$100K) shopper growth driving mix", "Walmart+ approaching 40M members", "Advertising revenue $1.6B, +26% YoY", "FY2027 EPS guide raised by $0.10 to $2.52–2.57"],
+  },
+  {
+    sym: "DIS", name: "The Walt Disney Company", price: 111.20, change: -2.55,
+    callDate: "May 7, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q2 FY2026 Earnings Call", duration: "64 min",
+    epsEst: 1.20, epsAct: 1.04, revEst: "22.6B", revAct: "22.1B", guide: "Down", react: -4.8,
+    summary: "Disney missed consensus with weaker-than-expected Parks & Experiences revenue as domestic park attendance softened on macro pressures and rising competition. Streaming reached profitability but below the seasonal high. Management lowered Parks segment operating income guidance for the full year.",
+    points: ["Parks & Experiences op income -9% on attendance softness", "Disney+ net adds 4.3M, slightly below 5.1M est.", "Streaming combined profit $0.9B — below Q1's $0.97B", "Parks full-year op income guide cut by ~$500M", "Content impairments $0.8B related to legacy IP writedowns"],
+  },
+  /* ── Upcoming calls ── */
+  {
+    sym: "ORCL", name: "Oracle Corporation", price: 148.30, change: 0.88,
+    callDate: "Jun 9, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q4 FY2026 Earnings Call",
+    epsEst: 1.62, epsAct: null, revEst: "14.7B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "ADBE", name: "Adobe Inc.", price: 396.10, change: -0.41,
+    callDate: "Jun 11, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q2 FY2026 Earnings Call",
+    epsEst: 4.98, epsAct: null, revEst: "5.84B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "FDX", name: "FedEx Corporation", price: 282.44, change: 1.03,
+    callDate: "Jun 24, 2026", callTime: "5:30 PM ET", session: "AMC", title: "Q4 FY2026 Earnings Call",
+    epsEst: 5.41, epsAct: null, revEst: "21.8B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "COST", name: "Costco Wholesale", price: 918.75, change: 2.14,
+    callDate: "Jun 26, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q3 FY2026 Earnings Call",
+    epsEst: 4.01, epsAct: null, revEst: "61.4B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "TGT", name: "Target Corporation", price: 138.90, change: -0.72,
+    callDate: "Jun 18, 2026", callTime: "8:00 AM ET", session: "BMO", title: "Q1 FY2027 Earnings Call",
+    epsEst: 1.88, epsAct: null, revEst: "24.0B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "NKE", name: "Nike Inc.", price: 82.14, change: 0.31,
+    callDate: "Jun 26, 2026", callTime: "4:15 PM ET", session: "AMC", title: "Q4 FY2026 Earnings Call",
+    epsEst: 0.29, epsAct: null, revEst: "11.2B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "SBUX", name: "Starbucks Corporation", price: 89.22, change: 0.57,
+    callDate: "Jul 29, 2026", callTime: "5:00 PM ET", session: "AMC", title: "Q3 FY2026 Earnings Call",
+    epsEst: 0.52, epsAct: null, revEst: "9.2B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "GS", name: "Goldman Sachs Group", price: 544.80, change: 1.92,
+    callDate: "Jul 14, 2026", callTime: "8:30 AM ET", session: "BMO", title: "Q2 2026 Earnings Call",
+    epsEst: 9.18, epsAct: null, revEst: "13.8B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+];
+
+const CALLS_PER_PAGE = 9;
+
+/* ── CallDrawer ── */
+function CallDrawer({ call, onClose }: { call: CallEntry; onClose: () => void }) {
+  const [playing,   setPlaying]   = useState(false);
+  const [activeTab, setActiveTab] = useState<"summary" | "transcript">("summary");
+
+  const beat = call.epsAct !== null && call.epsEst !== null && call.epsAct > call.epsEst;
+  const miss = call.epsAct !== null && call.epsEst !== null && call.epsAct < call.epsEst;
+
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="side-drawer">
+        {/* Header */}
+        <div className="drawer-h">
+          <StockLogo sym={call.sym} size={38} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+              {call.sym} · {call.name}
+            </div>
+            <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+              ${fmt(call.price)}{" "}
+              <span className={cls(call.change)}>{sign(call.change)}</span>
+              {" · "}{call.callDate} · {call.session}
+            </div>
+          </div>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="drawer-b">
+          {/* Call title + play button */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 12, marginBottom: 14,
+            background: "var(--surface-1)", borderRadius: 12, padding: 14,
+            border: "1px solid var(--border-soft)",
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, color: "var(--text-hi)", fontSize: ".95rem" }}>{call.title}</div>
+              <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 3 }}>
+                {call.callTime}{call.duration ? ` · ${call.duration}` : ""}
+                {call.epsAct === null && (
+                  <span className="pill" style={{ background: "var(--warn-dim, rgba(255,186,0,.15))", color: "var(--warn)", marginLeft: 6, fontSize: ".64rem" }}>
+                    Upcoming
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setPlaying(p => !p)}
+              style={{
+                width: 42, height: 42, borderRadius: "50%",
+                background: playing ? "var(--brand-2)" : "var(--surface-2)",
+                border: `1px solid ${playing ? "var(--brand-2)" : "var(--border)"}`,
+                color: playing ? "#000" : "var(--text-hi)",
+                fontSize: "1rem", cursor: "pointer", display: "flex",
+                alignItems: "center", justifyContent: "center", flexShrink: 0,
+                transition: ".18s",
+              }}
+            >
+              {playing ? "⏸" : "▶"}
+            </button>
+          </div>
+
+          {/* Mock audio progress bar */}
+          {playing && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ height: 4, background: "var(--border-soft)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ width: "22%", height: "100%", background: "var(--brand-2)", borderRadius: 2 }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
+                <span>12:43</span>
+                <span>{call.duration ?? "—"}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Tabs */}
+          <div className="tabs" style={{ marginBottom: 16 }}>
+            <button className={`tab${activeTab === "summary" ? " on" : ""}`} onClick={() => setActiveTab("summary")}>AI Summary</button>
+            <button className={`tab${activeTab === "transcript" ? " on" : ""}`} onClick={() => setActiveTab("transcript")}>Full Transcript</button>
+          </div>
+
+          {activeTab === "summary" && (
+            <>
+              {/* EPS / Rev metric grid */}
+              {call.epsAct !== null && (
+                <div className="metric-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+                  <div className="m">
+                    <div className="k">EPS Est</div>
+                    <div className="v">{call.epsEst ?? "—"}</div>
+                  </div>
+                  <div className="m">
+                    <div className="k">EPS Act</div>
+                    <div className={`v ${beat ? "up" : miss ? "dn" : ""}`}>{call.epsAct}</div>
+                    {beat && <div className="s up">Beat</div>}
+                    {miss && <div className="s dn">Miss</div>}
+                  </div>
+                  <div className="m">
+                    <div className="k">Rev Est</div>
+                    <div className="v" style={{ fontSize: ".9rem" }}>{call.revEst ?? "—"}</div>
+                  </div>
+                  <div className="m">
+                    <div className="k">Rev Act</div>
+                    <div className="v" style={{ fontSize: ".9rem" }}>{call.revAct ?? "—"}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Guidance + Reaction pills */}
+              {(call.guide || call.react !== null) && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                  {call.guide && (
+                    <span className="pill" style={{
+                      background: call.guide === "Up" ? "var(--up-dim)" : call.guide === "Down" ? "var(--down-dim)" : "var(--surface-3)",
+                      color: call.guide === "Up" ? "var(--up)" : call.guide === "Down" ? "var(--down)" : "var(--text-dim-solid)",
+                    }}>
+                      Guidance: {call.guide}
+                    </span>
+                  )}
+                  {call.react !== null && (
+                    <span className={`pill ${call.react >= 0 ? "up" : "dn"}`}>
+                      Reaction: {call.react > 0 ? "+" : ""}{call.react}%
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Summary */}
+              {call.summary ? (
+                <>
+                  <p style={{ fontSize: ".88rem", color: "var(--text)", lineHeight: 1.65, marginBottom: 14 }}>
+                    {call.summary}
+                  </p>
+                  <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
+                    Main Points
+                  </div>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {call.points.map((pt, i) => (
+                      <li key={i} style={{ display: "flex", gap: 10, fontSize: ".85rem", color: "var(--text)", lineHeight: 1.5 }}>
+                        <span style={{ width: 18, height: 18, borderRadius: 5, background: "var(--brand-2)", color: "#000", fontWeight: 800, fontSize: ".65rem", display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>
+                          {i + 1}
+                        </span>
+                        {pt}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <div style={{ padding: "28px 0", textAlign: "center", color: "var(--text-dim-solid)", fontSize: ".88rem" }}>
+                  Call summary will be available after the call.
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === "transcript" && (
+            <div style={{ fontSize: ".82rem", color: "var(--text)", lineHeight: 1.75 }}>
+              {call.epsAct === null ? (
+                <div style={{ padding: "28px 0", textAlign: "center", color: "var(--text-dim-solid)" }}>
+                  Transcript will be available after the call.
+                </div>
+              ) : (
+                <>
+                  <p><b style={{ color: "var(--text-dim-solid)" }}>Operator:</b> Good {"BMO" === call.session ? "morning" : "afternoon"} and welcome to the {call.title} for {call.name}. As a reminder, this conference call is being recorded. I will now turn the call over to the Investor Relations team. Please go ahead.</p>
+                  <p style={{ marginTop: 12 }}><b style={{ color: "var(--text-dim-solid)" }}>IR:</b> Thank you. Good {"BMO" === call.session ? "morning" : "afternoon"} everyone. Joining us today are our Chief Executive Officer and Chief Financial Officer. Before we begin, I would like to remind you that this call contains forward-looking statements that are subject to risks and uncertainties. Please refer to our most recent SEC filings for a description of the risk factors that may affect our results. We will now begin with prepared remarks.</p>
+                  <p style={{ marginTop: 12 }}><b style={{ color: "var(--text-dim-solid)" }}>CEO:</b> Thank you, and good {"BMO" === call.session ? "morning" : "afternoon"} to everyone joining us. We are pleased to report strong results for the quarter. {call.summary.split(".")[0]}. Our team continues to execute exceptionally well against our long-term strategic priorities.</p>
+                  <p style={{ marginTop: 12 }}><b style={{ color: "var(--text-dim-solid)" }}>CFO:</b> Thank you. Let me take you through the financial details. {call.points[0] ?? "We delivered solid results across all segments."}. {call.points[1] ?? "Margins expanded as we continue to optimize our cost structure."}. We remain confident in our guidance for the balance of the year.</p>
+                  <p style={{ marginTop: 12, color: "var(--text-dim-solid)", fontStyle: "italic", fontSize: ".76rem" }}>— Transcript continues. Q&A session follows prepared remarks. —</p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function MoversScreen() {
-  const [tab,        setTab]        = useState<TabKey>("win");
-  const [sector,     setSector]     = useState("All");
-  const [cap,        setCap]        = useState("All");
-  const [selectedSym, setSelectedSym] = useState<string | null>(null);
+  const [tab,          setTab]          = useState<TabKey>("win");
+  const [sector,       setSector]       = useState("All");
+  const [cap,          setCap]          = useState("All");
+  const [selectedSym,  setSelectedSym]  = useState<string | null>(null);
+  const [selectedCall, setSelectedCall] = useState<CallEntry | null>(null);
+  const [callsPage,    setCallsPage]    = useState(0);
 
   const sectors = ["All", ...Array.from(new Set(movers.map(m => m.sector))).sort()];
 
@@ -66,6 +439,11 @@ export function MoversScreen() {
 
   const trending = computeTrending();
   const val = (m: typeof movers[0]) => tab === "week" ? m.wk : m.c;
+
+  const upcomingCalls = CALLS_DATA.filter(c => c.epsAct === null);
+  const recentCalls   = CALLS_DATA.filter(c => c.epsAct !== null);
+  const callsPages    = Math.ceil(recentCalls.length / CALLS_PER_PAGE);
+  const callsSlice    = recentCalls.slice(callsPage * CALLS_PER_PAGE, (callsPage + 1) * CALLS_PER_PAGE);
 
   return (
     <>
@@ -202,6 +580,133 @@ export function MoversScreen() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Earnings Calls ── */}
+      <div className="card" style={{ marginTop: 14 }}>
+        <div className="card-h">
+          <h3>Earnings Calls</h3>
+          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+            {CALLS_DATA.length} calls · {upcomingCalls.length} upcoming
+          </span>
+        </div>
+
+        {/* Upcoming Calls logo strip */}
+        {upcomingCalls.length > 0 && (
+          <div style={{ padding: "4px 16px 0" }}>
+            <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
+              Upcoming Calls
+            </div>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 14 }}>
+              {upcomingCalls.map(c => (
+                <button
+                  key={c.sym}
+                  onClick={() => setSelectedCall(c)}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                    padding: "10px 14px", borderRadius: 12,
+                    background: "var(--surface-1)", border: "1px solid var(--border-soft)",
+                    cursor: "pointer", flexShrink: 0, transition: ".15s",
+                    minWidth: 80,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--brand-2)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-soft)"; }}
+                >
+                  <StockLogo sym={c.sym} size={34} />
+                  <span style={{ fontSize: ".7rem", fontWeight: 700, color: "var(--text-hi)" }}>{c.sym}</span>
+                  <span style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>{c.callDate}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Divider */}
+        <div style={{ borderTop: "1px solid var(--border-soft)", margin: "0 16px 14px" }} />
+
+        {/* Recent Calls header */}
+        <div style={{ padding: "0 16px", marginBottom: 12 }}>
+          <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".06em" }}>
+            Recent Calls
+          </div>
+        </div>
+
+        {/* 3-col card grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, padding: "0 16px 16px" }}>
+          {callsSlice.map(c => {
+            const beat = c.epsAct !== null && c.epsEst !== null && c.epsAct > c.epsEst;
+            const miss = c.epsAct !== null && c.epsEst !== null && c.epsAct < c.epsEst;
+            return (
+              <button
+                key={c.sym}
+                onClick={() => setSelectedCall(c)}
+                style={{
+                  display: "flex", flexDirection: "column", gap: 10, padding: 12,
+                  background: "var(--surface-1)", border: "1px solid var(--border-soft)",
+                  borderRadius: 12, cursor: "pointer", textAlign: "left",
+                  transition: ".15s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--brand-2)"; (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-2)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-soft)"; (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-1)"; }}
+              >
+                {/* Top row: logo + play */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                  <StockLogo sym={c.sym} size={36} />
+                  <div style={{
+                    width: 30, height: 30, borderRadius: "50%",
+                    background: "var(--surface-3)", border: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: ".7rem", color: "var(--text-dim-solid)", flexShrink: 0,
+                  }}>
+                    ▶
+                  </div>
+                </div>
+                {/* Company + title */}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: ".82rem", color: "var(--text-hi)" }}>{c.sym}</div>
+                  <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", marginTop: 1, lineHeight: 1.3 }}>{c.title}</div>
+                </div>
+                {/* Date + beat/miss */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto" }}>
+                  <span style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{c.callDate}</span>
+                  {beat && <span className="pill up" style={{ fontSize: ".62rem" }}>Beat</span>}
+                  {miss && <span className="pill dn" style={{ fontSize: ".62rem" }}>Miss</span>}
+                  {!beat && !miss && c.epsAct !== null && <span className="pill" style={{ fontSize: ".62rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>In-line</span>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Pagination */}
+        {callsPages > 1 && (
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", padding: "0 16px 16px", alignItems: "center" }}>
+            <button
+              className="ecm-nav"
+              onClick={() => setCallsPage(p => Math.max(0, p - 1))}
+              disabled={callsPage === 0}
+              style={{ opacity: callsPage === 0 ? 0.4 : 1 }}
+            >←</button>
+            {Array.from({ length: callsPages }, (_, i) => (
+              <button
+                key={i}
+                className={`ecm-nav${callsPage === i ? " on" : ""}`}
+                onClick={() => setCallsPage(i)}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              className="ecm-nav"
+              onClick={() => setCallsPage(p => Math.min(callsPages - 1, p + 1))}
+              disabled={callsPage === callsPages - 1}
+              style={{ opacity: callsPage === callsPages - 1 ? 0.4 : 1 }}
+            >→</button>
+          </div>
+        )}
+      </div>
+
+      {/* Earnings call detail drawer */}
+      {selectedCall && <CallDrawer call={selectedCall} onClose={() => setSelectedCall(null)} />}
 
       {/* Sliding stock detail drawer */}
       {selectedSym && (

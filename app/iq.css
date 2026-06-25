@@ -1269,6 +1269,7 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .ecm-month { font-family: var(--f-display); font-weight: 700; color: var(--text-hi); font-size: 1.02rem; }
 .ecm-nav { background: var(--surface-3); border: 1px solid var(--border); color: var(--text-hi); border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 1rem; line-height: 1; flex: none; }
 .ecm-nav:hover { border-color: var(--brand-2); }
+.ecm-nav.on { background: var(--brand-2); border-color: var(--brand-2); color: #000; font-weight: 700; }
 .ecm-head { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 6px; }
 .ecm-head > div { font-size: .6rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim-solid); font-weight: 700; text-align: center; }
 .ecm-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }

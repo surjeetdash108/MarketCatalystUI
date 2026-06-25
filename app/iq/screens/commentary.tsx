@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { commentary, watch, folio, movers, analyst, screenerStocks, stockInfo, sectorByName } from "../data";
-import { sign, cls, fmt, hashStr, earnHistory } from "../utils";
+import { sign, cls, fmt, hashStr, earnHistory, StockLogo } from "../utils";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
@@ -129,23 +129,50 @@ function buildNewsHistory(sym: string): NewsItem[] {
 }
 
 /* ── Feed item component ── */
-function FeedItem({ item, i, total }: { item: typeof commentary[0]; i: number; total: number }) {
+function FeedItem({ item, i, total, onItemClick }: {
+  item: typeof commentary[0];
+  i: number;
+  total: number;
+  onItemClick: (ticker: string | null) => void;
+}) {
+  const tickerM = item.text.match(/<b>([A-Z]{2,5})<\/b>/);
+  const ticker  = tickerM ? tickerM[1] : null;
   return (
-    <div style={{
-      display: "flex", gap: 12,
-      padding: "12px 0",
-      borderBottom: i < total - 1 ? "1px solid var(--border-soft)" : "none",
-    }}>
-      <div style={{ flexShrink: 0, width: 84 }}>
-        <span className="pill" style={{ background: "var(--surface-3)", color: item.accent }}>{item.cat}</span>
-        <div className="mono" style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 6 }}>{item.time}</div>
+    <div
+      onClick={() => onItemClick(ticker)}
+      style={{
+        display: "flex", gap: 12,
+        padding: "12px 0",
+        borderBottom: i < total - 1 ? "1px solid var(--border-soft)" : "none",
+        cursor: "pointer",
+        borderRadius: 8,
+        transition: "background .14s",
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--surface-1)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+    >
+      <div style={{ flexShrink: 0, width: 90, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5 }}>
+        {ticker ? (
+          <StockLogo sym={ticker} size={28} />
+        ) : (
+          <div style={{ width: 28, height: 28, borderRadius: 7, background: `${item.accent}22`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: ".65rem", fontWeight: 800, color: item.accent }}>◆</span>
+          </div>
+        )}
+        <span className="pill" style={{ background: "var(--surface-3)", color: item.accent, marginTop: 1 }}>{item.cat}</span>
+        <div className="mono" style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{item.time}</div>
       </div>
-      <div>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: ".88rem", color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: item.text }} />
         <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", borderLeft: `2px solid ${item.accent}55`, paddingLeft: 9, marginTop: 5 }}>
           <b style={{ color: "var(--ai)", fontWeight: 600 }}>Why it matters · </b>
           {item.why}
         </div>
+        {ticker && (
+          <div style={{ marginTop: 6, fontSize: ".68rem", color: "var(--brand-2)", fontWeight: 600 }}>
+            View {ticker} news history →
+          </div>
+        )}
       </div>
     </div>
   );
@@ -162,17 +189,15 @@ function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <div className="drawer open">
+      <div className="side-drawer">
         <div className="drawer-h">
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)" }}>
-            {sym[0]}
-          </div>
+          <StockLogo sym={sym} size={38} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
-              {sym}
+            <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+              {sym} · {nm}
             </div>
-            <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-              {nm} · news history
+            <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+              News history
             </div>
           </div>
           <button className="closebtn" onClick={onClose}>✕</button>
@@ -183,9 +208,7 @@ function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
 
           {items.map((item, i) => (
             <div key={i} className="minirow" style={{ alignItems: "flex-start", gap: 10, cursor: "default", marginBottom: 12 }}>
-              <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: "50%", background: "var(--surface-3)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: ".75rem", color: "var(--brand-2)", fontFamily: "var(--f-mono)" }}>
-                {sym[0]}
-              </div>
+              <StockLogo sym={sym} size={28} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ lineHeight: 1.5 }}>
                   <span className="pill" style={{ background: "var(--surface-3)", color: catCol(item.cat), marginRight: 6, fontSize: ".66rem" }}>
@@ -216,9 +239,10 @@ function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
 /* ── Main commentary screen ── */
 export function CommentaryScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState(0);
-  const [search, setSearch] = useState("");
-  const [newsDrawer, setNewsDrawer] = useState<string | null>(null);
+  const [activeTab,     setActiveTab]     = useState(0);
+  const [search,        setSearch]        = useState("");
+  const [newsDrawer,    setNewsDrawer]    = useState<string | null>(null);
+  const [noCompanyOpen, setNoCompanyOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [suggOpen, setSuggOpen] = useState(false);
 
@@ -262,6 +286,14 @@ export function CommentaryScreen() {
     setSearch("");
     setSuggOpen(false);
     setNewsDrawer(sym);
+  }
+
+  function handleItemClick(ticker: string | null) {
+    if (ticker) {
+      setNewsDrawer(ticker);
+    } else {
+      setNoCompanyOpen(true);
+    }
   }
 
   return (
@@ -355,7 +387,7 @@ export function CommentaryScreen() {
                       : "No items in this category right now."}
                   </div>
                 ) : tabFeed.map((item, i) => (
-                  <FeedItem key={i} item={item} i={i} total={tabFeed.length} />
+                  <FeedItem key={i} item={item} i={i} total={tabFeed.length} onItemClick={handleItemClick} />
                 ))}
               </div>
             </div>
@@ -441,6 +473,68 @@ export function CommentaryScreen() {
           </div>
         </div>
       </div>
+
+      {/* No company associated — sliding drawer */}
+      {noCompanyOpen && (
+        <>
+          <div className="scrim" onClick={() => setNoCompanyOpen(false)} />
+          <div className="side-drawer">
+            <div className="drawer-h">
+              <div style={{
+                width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+                background: "var(--surface-3)", border: "1px solid var(--border-soft)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: ".9rem", color: "var(--text-dim-solid)", fontWeight: 700,
+              }}>
+                ◆
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+                  Macro / Market news
+                </div>
+                <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                  No company associated with this item
+                </div>
+              </div>
+              <button className="closebtn" onClick={() => setNoCompanyOpen(false)}>✕</button>
+            </div>
+
+            <div className="drawer-b">
+              <div className="ai-sec"><div className="h">No company associated</div></div>
+
+              <div style={{
+                background: "var(--surface-1)", border: "1px solid var(--border-soft)",
+                borderRadius: 10, padding: 16, marginBottom: 18,
+                fontSize: ".85rem", color: "var(--text-dim-solid)", lineHeight: 1.65,
+              }}>
+                This news item covers <b style={{ color: "var(--text-hi)" }}>macro conditions</b>,
+                {" "}market-wide price action, or rates — it is not tied to a specific public company.
+                News in this category includes Fed commentary, index moves, sector rotations, and economic data releases.
+              </div>
+
+              <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
+                Browse a stock&apos;s news history instead
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                {["NVDA","AAPL","MSFT","META","AMZN","TSLA","AMD","GOOGL"].map(sym => (
+                  <button
+                    key={sym}
+                    className="chip"
+                    onClick={() => { setNoCompanyOpen(false); setNewsDrawer(sym); }}
+                  >
+                    {sym}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
+                Or use the search bar at the top to look up any ticker.
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* News history sliding drawer */}
       {newsDrawer && (
