@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
 import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks, Mover } from "../data";
-import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo } from "../utils";
+import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol } from "../utils";
 
 const LIVE_FEED = [
   {
@@ -396,7 +396,6 @@ export function DashboardScreen() {
                   onClick={() => openEarnings(e.s)}
                   {...mr(e.s, "earnings")}
                 >
-                  <StockLogo sym={e.s} size={20} />
                   <span className="tkr">{e.s}<small>{e.n}</small></span>
                   <span className="mid">
                     <span className={`pill ${e.t === "BMO" ? "bmo" : "amc"}`}>{e.t}</span>
@@ -425,7 +424,6 @@ export function DashboardScreen() {
               </div>
               {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
                 <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
-                  <StockLogo sym={m.s} size={20} />
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
@@ -437,7 +435,6 @@ export function DashboardScreen() {
               </div>
               {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
                 <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
-                  <StockLogo sym={m.s} size={20} />
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
@@ -458,22 +455,20 @@ export function DashboardScreen() {
             <div className="card-b" style={{ paddingTop: 10, display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {sectorList.slice(0, 8).map(sd => {
-                  const a   = Math.min(Math.abs(sd.chg) / 2, 1);
-                  const bg  = sd.chg >= 0
-                    ? `rgba(28,170,112,${(0.25 + a * 0.55).toFixed(2)})`
-                    : `rgba(208,52,76,${(0.25 + a * 0.55).toFixed(2)})`;
+                  const hc  = heatCol(sd.chg);
+                  const tot = sd.items.reduce((s, i) => s + i[1], 0);
                   return (
                     <div key={sd.name} onClick={() => openSector(sd.name)}
                       style={{
-                        cursor: "pointer", background: bg, borderRadius: 7,
-                        padding: "8px 9px", flex: `${Math.max(1, sd.items.reduce((s, i) => s + i[1], 0) / 1400)} 1 70px`,
+                        cursor: "pointer", background: hc.bg, borderRadius: 7,
+                        padding: "8px 9px", flex: `${Math.max(1, tot / 1400)} 1 70px`,
                         transition: "filter .13s",
                       }}
                       onMouseEnter={e => (e.currentTarget as HTMLElement).style.filter = "brightness(1.15)"}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.filter = ""}
                     >
-                      <div style={{ fontSize: ".6rem", fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>{sd.name}</div>
-                      <div className="mono" style={{ fontSize: ".64rem", color: "#ffffffd0" }}>{sign(sd.chg)}</div>
+                      <div style={{ fontSize: ".6rem", fontWeight: 700, color: hc.fg, lineHeight: 1.1 }}>{sd.name}</div>
+                      <div className="mono" style={{ fontSize: ".64rem", color: hc.fg, opacity: .88 }}>{sign(sd.chg)}</div>
                     </div>
                   );
                 })}
@@ -498,7 +493,6 @@ export function DashboardScreen() {
                   onClick={() => openStock(a.s)}
                   {...mr(a.s, "analyst")}
                 >
-                  <StockLogo sym={a.s} size={20} />
                   <span className="tkr">{a.s}</span>
                   <span className="mid">{a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.to}</b></span>
                   <span className="r">{analystDir(a.dir)}</span>
@@ -524,7 +518,6 @@ export function DashboardScreen() {
                   onClick={() => openStock(s.s)}
                   {...mr(s.s, "screener")}
                 >
-                  <StockLogo sym={s.s} size={20} />
                   <span className="tkr">{s.s}</span>
                   <span className="mid">RS {s.rs} · {s.sec}</span>
                   <span className={`r ${cls(s.salesG)}`}>{sign(s.salesG)}</span>
@@ -538,7 +531,6 @@ export function DashboardScreen() {
                   onClick={() => openStock(s.s)}
                   {...mr(s.s, "screener")}
                 >
-                  <StockLogo sym={s.s} size={20} />
                   <span className="tkr">{s.s}</span>
                   <span className="mid">RS {s.rs} · {s.sec}</span>
                   <span className={`r ${cls(s.salesG)}`}>{sign(s.salesG)}</span>
@@ -567,7 +559,6 @@ export function DashboardScreen() {
                     onClick={() => openStock(f.s)}
                     {...mr(f.s, "portfolio")}
                   >
-                    <StockLogo sym={f.s} size={20} />
                     <span className="tkr">{f.s}</span>
                     <span className="mid">{f.size} · {f.conv} conv.</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
@@ -591,7 +582,6 @@ export function DashboardScreen() {
                   onClick={() => openStock(w.s)}
                   {...mr(w.s, "watchlist")}
                 >
-                  <StockLogo sym={w.s} size={20} />
                   <span className="tkr">{w.s}<small>{w.n}</small></span>
                   <span className="mid">
                     {w.opt ? <span className="pill opt">⚡</span> : null}{" "}
@@ -617,7 +607,6 @@ export function DashboardScreen() {
                   onClick={() => openStock(x.s)}
                   {...mr(x.s, "insider")}
                 >
-                  <StockLogo sym={x.s} size={20} />
                   <span className="tkr">{x.s}</span>
                   <span className="mid">{x.dir === "buy" ? "Buy" : "Sell"} · {x.role.replace(/ \(.*\)/, "")}</span>
                   <span className={`r ${x.dir === "buy" ? "up" : "down"}`}>

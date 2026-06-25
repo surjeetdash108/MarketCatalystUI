@@ -14,6 +14,7 @@ import { InsiderScreen } from "../../iq/screens/insider";
 import { CommentaryScreen } from "../../iq/screens/commentary";
 import { RecapScreen } from "../../iq/screens/recap";
 import { MacroScreen } from "../../iq/screens/macro";
+import { OptionsScreen } from "../../iq/screens/options";
 
 export function generateStaticParams() {
   return menuItems
@@ -31,6 +32,7 @@ const SCREENS: Record<string, React.ReactNode> = {
   portfolio:   <PortfolioScreen />,
   watchlist:   <WatchlistScreen />,
   stock:       <StockScreen />,
+  options:     <OptionsScreen />,
   insider:     <InsiderScreen />,
   commentary:  <CommentaryScreen />,
   recap:       <RecapScreen />,

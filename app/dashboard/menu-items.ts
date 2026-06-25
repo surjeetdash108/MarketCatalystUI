@@ -11,6 +11,7 @@ export const menuItems = [
   { label: 'Portfolio Pulse', slug: 'portfolio', group: 'My Money', icon: '💼', badge: null },
   { label: 'Watchlist', slug: 'watchlist', group: 'My Money', icon: '⭐', badge: null },
   { label: 'Stock Detail', slug: 'stock', group: 'My Money', icon: '📊', badge: null },
+  { label: 'Options', slug: 'options', group: 'My Money', icon: '◈', badge: null },
   { label: 'Insider & Institutional', slug: 'insider', group: 'My Money', icon: '📄', badge: null },
   // ---- Context group ----
   { label: 'Commentary', slug: 'commentary', group: 'Context', icon: '💬', badge: null },

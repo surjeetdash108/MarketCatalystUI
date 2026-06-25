@@ -1,0 +1,217 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { movers } from "../data";
+import { fmt, sign, cls, arr, StockLogo } from "../utils";
+
+// ---- Expiry dates ----
+const EXPS = [
+  { label: "Jun 27", days: 2 },
+  { label: "Jul 18", days: 23 },
+  { label: "Aug 15", days: 51 },
+  { label: "Sep 19", days: 86 },
+  { label: "Dec 19", days: 177 },
+];
+
+// ---- Strike increment by price ----
+function optNice(p: number): number {
+  return p < 25 ? 1 : p < 60 ? 2.5 : p < 150 ? 5 : p < 400 ? 10 : p < 1000 ? 25 : 50;
+}
+
+// ---- Deterministic pseudo-random (seeded) ----
+function optRand(seed: number): number {
+  const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+interface OptionSide {
+  last: number; bid: number; ask: number;
+  iv: number; vol: number; oi: number; itm: boolean;
+}
+interface OptionRow {
+  k: number; atm: boolean;
+  call: OptionSide; put: OptionSide;
+}
+
+function buildChain(sym: string, p: number, ei: number): OptionRow[] {
+  const exp = EXPS[ei] ?? EXPS[0];
+  const T   = Math.max(exp.days, 1) / 365;
+  const ivb = 0.30;
+  const step = optNice(p);
+  const atmK = Math.round(p / step) * step;
+  const sb   = sym.charCodeAt(0) * 7 + exp.days;
+  const sig  = p * ivb * Math.sqrt(T) + 1e-6;
+  const rows: OptionRow[] = [];
+
+  for (let i = -7; i <= 7; i++) {
+    const k = +(atmK + i * step).toFixed(2);
+    if (k <= 0) continue;
+    const dist = Math.abs(k - p) / p;
+    const iv   = ivb * (1 + dist * 1.3) * (0.92 + 0.16 * optRand(sb + k));
+    const d    = (k - p) / sig;
+    const tv   = sig * Math.exp(-(d * d) / 2) * 0.55;
+    const cL   = Math.max(0, p - k) + tv;
+    const pL   = Math.max(0, k - p) + tv;
+    const volC = Math.round(40 + optRand(sb + k + 1) * 5000 * Math.exp(-dist * 7));
+    const volP = Math.round(40 + optRand(sb + k + 2) * 5000 * Math.exp(-dist * 7));
+    const oiC  = Math.round(150 + optRand(sb + k + 3) * 22000 * Math.exp(-dist * 4));
+    const oiP  = Math.round(150 + optRand(sb + k + 4) * 22000 * Math.exp(-dist * 4));
+    rows.push({
+      k, atm: Math.abs(k - atmK) < 1e-6,
+      call: { last: cL, bid: cL * 0.985, ask: cL * 1.015, iv, vol: volC, oi: oiC, itm: k < p },
+      put:  { last: pL, bid: pL * 0.985, ask: pL * 1.015, iv, vol: volP, oi: oiP, itm: k > p },
+    });
+  }
+  return rows;
+}
+
+function f2(x: number) { return (Math.round(x * 100) / 100).toFixed(2); }
+function fK(k: number) { return k % 1 === 0 ? k.toFixed(0) : k.toFixed(1); }
+function fOI(x: number) { return fmt(x, 0); }
+
+export function OptionsScreen() {
+  const stockList = useMemo(
+    () => [...movers].map(m => ({ s: m.s, n: m.n, p: m.p, c: m.c })).sort((a, b) => a.s < b.s ? -1 : 1),
+    []
+  );
+
+  const [selSym, setSelSym] = useState(stockList[0]?.s ?? "NVDA");
+  const [expIdx, setExpIdx] = useState(0);
+  const [query,  setQuery]  = useState("");
+
+  const cur     = stockList.find(s => s.s === selSym) ?? stockList[0];
+  const rows    = useMemo(() => buildChain(cur.s, cur.p, expIdx), [cur.s, cur.p, expIdx]);
+  const exp     = EXPS[expIdx];
+  const atmK    = Math.round(cur.p / optNice(cur.p)) * optNice(cur.p);
+  const filtered = query
+    ? stockList.filter(s => (s.s + " " + s.n).toLowerCase().includes(query.toLowerCase()))
+    : stockList;
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <div className="eyebrow">Options</div>
+          <h1 className="page-title">Options Chain</h1>
+          <div className="page-sub">
+            Live calls &amp; puts · search any stock on the left and tap it to load its chain
+          </div>
+        </div>
+      </div>
+
+      <div className="opt-wrap">
+        {/* ─── Left sidebar ─── */}
+        <aside className="opt-side">
+          <div className="opt-search">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" />
+            </svg>
+            <input
+              placeholder="Search stocks"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          <div className="opt-list">
+            {filtered.map(o => (
+              <div
+                key={o.s}
+                className={`opt-li${o.s === selSym ? " sel" : ""}`}
+                onClick={() => { setSelSym(o.s); setExpIdx(0); }}
+              >
+                <StockLogo sym={o.s} size={26} />
+                <div className="opt-li-tx">
+                  <div className="opt-li-s">{o.s}</div>
+                  <div className="opt-li-n">{o.n}</div>
+                </div>
+                <div className={`opt-li-r ${cls(o.c)}`}>{sign(o.c)}</div>
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: "14px 10px", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
+                No stocks match &ldquo;{query}&rdquo;
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* ─── Main chain ─── */}
+        <div className="opt-main">
+          {/* Stock header */}
+          <div className="opt-h">
+            <StockLogo sym={cur.s} size={36} />
+            <div className="opt-h-tx">
+              <div className="opt-h-s">
+                {cur.s} <span className="opt-h-n">{cur.n}</span>
+              </div>
+              <div className="opt-h-p">
+                ${fmt(cur.p)}{" "}
+                <span className={cls(cur.c)}>{arr(cur.c)} {sign(cur.c)}</span>
+              </div>
+            </div>
+            <div className="opt-h-meta">
+              Expiry <b style={{ color: "var(--text-hi)" }}>{exp.label}</b> · {exp.days}d · ATM {atmK}
+            </div>
+          </div>
+
+          {/* Expiry tabs */}
+          <div className="opt-exps">
+            {EXPS.map((x, i) => (
+              <button
+                key={x.label}
+                className={`opt-exp${i === expIdx ? " on" : ""}`}
+                onClick={() => setExpIdx(i)}
+              >
+                {x.label}<span>{x.days}d</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Chain table */}
+          <div className="opt-chain-wrap">
+            <span className="opt-cap opt-cap-c">▲ CALLS</span>
+            <span className="opt-cap opt-cap-p">PUTS ▼</span>
+            <div className="opt-chain-scroll">
+              <table className="opt-chain">
+                <thead>
+                  <tr>
+                    <th>OI</th><th>Vol</th><th>IV</th>
+                    <th>Last</th><th>Bid</th><th>Ask</th>
+                    <th className="opt-strike-h">Strike</th>
+                    <th>Bid</th><th>Ask</th><th>Last</th>
+                    <th>IV</th><th>Vol</th><th>OI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.k} className={r.atm ? "opt-atm" : ""}>
+                      <td className={r.call.itm ? "opt-itm" : ""}>{fOI(r.call.oi)}</td>
+                      <td>{fOI(r.call.vol)}</td>
+                      <td>{(r.call.iv * 100).toFixed(0)}%</td>
+                      <td className="opt-last">{f2(r.call.last)}</td>
+                      <td>{f2(r.call.bid)}</td>
+                      <td>{f2(r.call.ask)}</td>
+                      <td className="opt-strike">{fK(r.k)}</td>
+                      <td>{f2(r.put.bid)}</td>
+                      <td>{f2(r.put.ask)}</td>
+                      <td className="opt-last">{f2(r.put.last)}</td>
+                      <td>{(r.put.iv * 100).toFixed(0)}%</td>
+                      <td>{fOI(r.put.vol)}</td>
+                      <td className={r.put.itm ? "opt-itm" : ""}>{fOI(r.put.oi)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 10 }}>
+            Simulated data for informational purposes only — not investment advice. OI &amp; volume are illustrative.
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

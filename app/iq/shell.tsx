@@ -78,6 +78,7 @@ function NavIcon({ slug }: { slug: string }) {
     commentary:  "M4 5h16v11H8l-4 4V5z",
     recap:       "M4 3h16a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H4V3Zm0 0v18M8 8h8M8 12h8M8 16h5",
     macro:       "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18ZM3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18",
+    options:     "M12 3l8 4.5-8 4.5-8-4.5L12 3zM4 12l8 4.5 8-4.5M4 16.5L12 21l8-4.5",
   };
   return (
     <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
@@ -996,6 +997,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                       <Link key={item.slug} href={href} className={`navitem${isActive ? " active" : ""}`}>
                         <div className="nicon"><NavIcon slug={item.slug} /></div>
                         {item.label}
+                        {item.badge && <span className="nav-tag">{item.badge}</span>}
                       </Link>
                     );
                   })}
