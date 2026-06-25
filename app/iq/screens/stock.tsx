@@ -131,12 +131,16 @@ const SYMBOLS = [...Object.keys(stockInfo), ...watch.map(w => w.s), ...folio.map
 
 type IncRow = { c: string; rev: number; cogs: number; gp: number; opex: number; oi: number; ni: number; eps: number };
 
-function earnIncome(mc: number, mg: number, px: number): IncRow[] {
+function earnIncome(mc: number, mg: number, px: number, period: "Q" | "A"): IncRow[] {
   const rev0 = Math.max(2, mc * 0.02);
-  const sh = Math.max(0.3, mc / Math.max(1, px));
-  const cols = ["Q2 25", "Q1 25", "Q4 24", "Q3 24"];
+  const sh   = Math.max(0.3, mc / Math.max(1, px));
+  const cols = period === "Q"
+    ? ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"]
+    : ["FY 25e","FY 2024","FY 2023","FY 2022","FY 2021"];
+  const scale = period === "A" ? 4 : 1;
+  const step  = period === "A" ? 0.08 : 0.025;
   return cols.map((c, i) => {
-    const rev  = rev0 * (1 - i * 0.05);
+    const rev  = rev0 * scale * (1 - i * step);
     const cogs = rev * (1 - Math.min(0.95, mg / 100));
     const gp   = rev - cogs;
     const opex = rev * 0.22;
@@ -145,6 +149,24 @@ function earnIncome(mc: number, mg: number, px: number): IncRow[] {
     const eps  = ni / sh;
     return { c, rev, cogs, gp, opex, oi, ni, eps };
   });
+}
+
+function earnHistAnnual(hist10: import("../utils").EarnQ[]): import("../utils").EarnQ[] {
+  const byYear: Record<string, import("../utils").EarnQ[]> = {};
+  hist10.forEach(q => {
+    const yr = q.q.split(" ")[1];
+    if (!byYear[yr]) byYear[yr] = [];
+    byYear[yr].push(q);
+  });
+  return Object.entries(byYear)
+    .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
+    .map(([yr, qs]) => {
+      const e    = qs.reduce((s, q) => s + q.e, 0);
+      const a    = qs.reduce((s, q) => s + q.a, 0);
+      const surp = ((a - e) / Math.abs(e || 1)) * 100;
+      const mv   = qs.reduce((s, q) => s + q.mv, 0) / qs.length;
+      return { q: parseInt(yr) >= 25 ? "FY 25e" : `FY 20${yr}`, e, a, surp, mv };
+    });
 }
 
 function EarnEpsChart({ hist }: { hist: EarnQ[] }) {
@@ -255,6 +277,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
 
   type InnerDrawer = "techrating" | "peers" | "industry" | "insider" | "keylevels" | "earnings" | "financials" | null;
   const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
+  const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
 
   const [watchedSet, setWatchedSet] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set(watch.map(w => w.s));
@@ -666,15 +689,26 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
 
           {/* Financials — grouped bar chart */}
           {(() => {
-            const inc = earnIncome(mc, mg, p);
+            const inc     = earnIncome(mc, mg, p, finPeriod);
+            const histEps = finPeriod === "Q" ? hist10 : earnHistAnnual(hist10);
+            const beatsOf = histEps.filter(h => h.surp >= 0).length;
+            const latestA = histEps[0]?.a ?? 0;
+            const prevA   = histEps[finPeriod === "Q" ? 4 : 1]?.a;
+            const yoy     = prevA != null ? ((latestA - prevA) / Math.abs(prevA || 1)) * 100 : null;
             return (
               <div className="card">
                 <div className="card-h">
                   <h3>Financials</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div className="tf-pills">
-                      <button className="rng">Quarterly</button>
-                      <button className="rng on">Annual</button>
+                      <button
+                        className={`rng${finPeriod === "Q" ? " on" : ""}`}
+                        onClick={() => setFinPeriod("Q")}
+                      >Quarterly</button>
+                      <button
+                        className={`rng${finPeriod === "A" ? " on" : ""}`}
+                        onClick={() => setFinPeriod("A")}
+                      >Annual</button>
                     </div>
                     <span className="link" onClick={() => setInnerDrawer("financials")}>View all →</span>
                   </div>
@@ -687,7 +721,10 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                   </div>
                   <EarnIncChart inc={inc} />
                   <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                    Last 4 quarters · revenue, gross profit &amp; net income · tap &ldquo;View all&rdquo; for the full statement &amp; 10-quarter EPS history.
+                    {finPeriod === "Q"
+                      ? "Last 10 quarters · revenue, gross profit & net income"
+                      : "Last 5 fiscal years · revenue, gross profit & net income"}
+                    {" · tap "}&#8220;View all&#8221; for the full statement.
                   </div>
 
                   <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border-soft)" }}>
@@ -699,22 +736,19 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                         <span><i className="ln" style={{ background: "var(--brand-2)" }} />Trend</span>
                       </span>
                     </div>
-                    <EarningsGrowthChart hist={hist10} />
+                    <EarningsGrowthChart hist={histEps} />
                     <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
                       <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                        <b style={{ color: "var(--text-hi)" }}>{hist10.filter(h => h.surp >= 0).length}/8</b> beats last 8 qtrs
+                        <b style={{ color: "var(--text-hi)" }}>{beatsOf}/{histEps.length}</b> beats
                       </div>
                       <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                        Latest EPS <b style={{ color: "var(--text-hi)" }}>${hist10[0]?.a.toFixed(2)}</b>
+                        {finPeriod === "Q" ? "Latest qtr" : "Latest FY"} EPS <b style={{ color: "var(--text-hi)" }}>${latestA.toFixed(2)}</b>
                       </div>
-                      {hist10.length >= 5 && (() => {
-                        const yoy = ((hist10[0].a - hist10[4].a) / Math.abs(hist10[4].a || 1)) * 100;
-                        return (
-                          <div style={{ fontSize: ".7rem" }}>
-                            YoY <b style={{ color: yoy >= 0 ? "var(--up)" : "var(--down)" }}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</b>
-                          </div>
-                        );
-                      })()}
+                      {yoy !== null && (
+                        <div style={{ fontSize: ".7rem" }}>
+                          {finPeriod === "Q" ? "YoY" : "YoY"} <b style={{ color: yoy >= 0 ? "var(--up)" : "var(--down)" }}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</b>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1258,7 +1292,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
 
           {/* Financials */}
           {innerDrawer === "financials" && (() => {
-            const inc = earnIncome(mc, mg, p);
+            const inc = earnIncome(mc, mg, p, finPeriod);
             const fb = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
             const beats10 = hist10.filter(h => h.surp >= 0).length;
             const avgMv = (hist10.reduce((a, h) => a + Math.abs(h.mv), 0) / hist10.length).toFixed(1);
