@@ -1,477 +1,607 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LoginForm } from "./auth/login/login-form";
+import { pulse, wmn, movers, earnings, analyst, folio, sectorList, recap } from "./iq/data";
+import { fmt, sign, cls, heatCol, StockLogo } from "./iq/utils";
 
-const CHECK = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 6L9 17l-5-5" />
-  </svg>
-);
+// ---- Workspace thumbnail components ----
+// Renders at 340×444 px inside .mq-shot; uses iq.css classes + actual data.
 
-const TABS = [
+function TH({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "var(--surface-0)", color: "var(--text)", fontSize: 12, fontFamily: "var(--f-body,'Inter',sans-serif)" }}>
+      {children}
+    </div>
+  );
+}
+
+function THHead({ label, right, col }: { label: string; right: string; col?: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px 8px", borderBottom: "1px solid var(--border)", background: "rgba(12,16,23,.96)", flexShrink: 0 }}>
+      <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: 11, color: "var(--text-hi)", letterSpacing: ".03em" }}>{label}</span>
+      <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, color: col ?? "var(--text-dim-solid)" }}>{right}</span>
+    </div>
+  );
+}
+
+function DashThumb() {
+  return (
+    <TH>
+      <div style={{ padding: "9px 12px 6px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 9, color: "var(--text-dim-solid)", marginBottom: 3 }}>Tuesday · May 21 · 10:24 ET</div>
+        <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: 15, color: "var(--text-hi)" }}>Good morning</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 5, padding: "7px 10px" }}>
+        {pulse.slice(0, 6).map(p => (
+          <div key={p.l} className="p" style={{ padding: "5px 7px" }}>
+            <div className="lbl" style={{ fontSize: 8 }}>{p.l}</div>
+            <div className="val" style={{ fontSize: "0.85rem" }}>{p.v >= 100 ? fmt(p.v, 0) : fmt(p.v, 2)}</div>
+            <div className={cls(p.c)} style={{ fontFamily: "var(--f-mono)", fontSize: 8, fontWeight: 600 }}>{sign(p.c)}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ margin: "0 10px", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8 }}>
+        <div style={{ padding: "5px 10px 4px", borderBottom: "1px solid var(--border)" }}>
+          <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: 10, color: "var(--text-hi)" }}>What Matters Now</span>
+        </div>
+        <div style={{ padding: "4px 10px 6px" }}>
+          {wmn.slice(0, 3).map((b, i) => (
+            <div key={i} style={{ display: "flex", gap: 5, padding: "3px 0", borderBottom: i < 2 ? "1px solid var(--border-soft,#1a2535)" : "none", fontSize: 9 }}>
+              <span style={{ color: "var(--brand)", flexShrink: 0 }}>·</span>
+              <span style={{ color: "var(--text-hi)", fontWeight: 600 }}>{b.h}.</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </TH>
+  );
+}
+
+function MoversThumb() {
+  return (
+    <TH>
+      <THHead label="Market Movers" right="LIVE" col="var(--up)" />
+      <div style={{ display: "flex", gap: 4, padding: "6px 10px 4px" }}>
+        {["All", "Large Cap", "Tech"].map((f, i) => (
+          <span key={f} style={{ padding: "2px 7px", borderRadius: 999, border: `1px solid ${i === 0 ? "var(--brand)" : "var(--border)"}`, background: i === 0 ? "rgba(124,108,245,.15)" : "transparent", color: i === 0 ? "var(--brand)" : "var(--text-dim-solid)", fontSize: 8, fontFamily: "var(--f-mono)", fontWeight: 600 }}>{f}</span>
+        ))}
+      </div>
+      <div style={{ padding: "0 10px" }}>
+        {movers.map(m => (
+          <div key={m.s} className="minirow">
+            <StockLogo sym={m.s} size={20} />
+            <span className="tkr" style={{ width: 38, fontSize: 10 }}>{m.s}</span>
+            <span className="mid" style={{ fontSize: 9 }}>{m.cat}</span>
+            <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+          </div>
+        ))}
+      </div>
+    </TH>
+  );
+}
+
+function StockThumb() {
+  const pts = [38,42,40,45,43,48,46,50,49,54,51,56,54,59,57,62,60,64,62,66];
+  const max = 66, min = 38, SH = 72, SW = 290;
+  const path = pts.map((v,i) => `${i===0?"M":"L"}${(i/(pts.length-1))*SW},${SH-((v-min)/(max-min))*SH}`).join(" ");
+  return (
+    <TH>
+      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <StockLogo sym="NVDA" size={28} />
+          <div>
+            <div style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 14, color: "var(--text-hi)" }}>NVDA</div>
+            <div style={{ fontSize: 9, color: "var(--text-dim-solid)" }}>NVIDIA · NASDAQ</div>
+          </div>
+          <div style={{ marginLeft: "auto", textAlign: "right" }}>
+            <div style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: 14, color: "var(--text-hi)" }}>$1,025</div>
+            <div className="up" style={{ fontSize: 9, fontFamily: "var(--f-mono)", fontWeight: 600 }}>+8.23% today</div>
+          </div>
+        </div>
+      </div>
+      <div style={{ margin: "8px 12px", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 7, padding: "6px 8px", overflow: "hidden" }}>
+        <svg viewBox={`0 0 ${SW} ${SH}`} width="100%" height={SH} preserveAspectRatio="none" style={{ display: "block" }}>
+          <defs>
+            <linearGradient id="tsg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22c55e" stopOpacity=".32"/>
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d={`${path} L${SW},${SH} L0,${SH} Z`} fill="url(#tsg)"/>
+          <path d={path} fill="none" stroke="#22c55e" strokeWidth="1.8"/>
+        </svg>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, padding: "0 12px" }}>
+        {[["Mkt Cap","$2.91T"],["P/E","78×"],["EPS","$13.14"],["52W H","$1,250"],["52W L","$350"],["Beta","1.72"]].map(([k,v]) => (
+          <div key={k} className="p" style={{ padding: "4px 6px" }}>
+            <div className="lbl" style={{ fontSize: 7 }}>{k}</div>
+            <div className="val" style={{ fontSize: "0.75rem" }}>{v}</div>
+          </div>
+        ))}
+      </div>
+    </TH>
+  );
+}
+
+function HeatmapThumb() {
+  return (
+    <TH>
+      <THHead label="Market Heatmap" right="S&P 500" col="var(--ai)" />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 3, padding: "8px 10px", alignContent: "flex-start" }}>
+        {sectorList.slice(0, 14).map(s => {
+          const { bg, fg } = heatCol(s.chg);
+          const w = Math.abs(s.chg) > 1.5 ? 3 : Math.abs(s.chg) > 0.5 ? 2 : 1.5;
+          return (
+            <div key={s.name} style={{ background: bg, color: fg, borderRadius: 5, padding: "4px 5px", fontSize: 8, fontWeight: 700, flexGrow: w, flexBasis: `${w * 20}%`, minWidth: 40, fontFamily: "var(--f-mono)" }}>
+              <div style={{ fontSize: 7, marginBottom: 1, opacity: .85 }}>{s.name.replace("Mega-Cap ","").replace("Cloud ","")}</div>
+              <div style={{ fontSize: 9 }}>{sign(s.chg)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </TH>
+  );
+}
+
+function EarningsThumb() {
+  return (
+    <TH>
+      <THHead label="Earnings" right="Q2 2024 · 4 today" col="#f59e0b" />
+      <div style={{ padding: "0 10px" }}>
+        {earnings.map(e => (
+          <div key={e.s} className="minirow">
+            <StockLogo sym={e.s} size={20} />
+            <span className="tkr" style={{ width: 40, fontSize: 10 }}>{e.s}</span>
+            <span className="mid" style={{ fontSize: 9 }}>{e.epsA !== null ? `EPS $${e.epsA}` : `Est $${e.epsE}`}</span>
+            {e.epsA !== null ? (
+              <span className={`pill ${e.tags.includes("Beat") ? "beat" : "miss"}`}>{e.tags.includes("Beat") ? "Beat" : "Miss"}</span>
+            ) : (
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: "var(--text-dim-solid)" }}>pending</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </TH>
+  );
+}
+
+function AnalystThumb() {
+  const dirIcon = (d: string) => d === "up" ? "↑" : d === "down" ? "↓" : d === "init" ? "+" : "→";
+  return (
+    <TH>
+      <THHead label="Analyst Actions" right="★ cluster" col="var(--ai)" />
+      <div style={{ padding: "0 10px" }}>
+        {analyst.slice(0, 7).map((a, i) => (
+          <div key={i} className="minirow">
+            <span className="tkr" style={{ width: 40, fontSize: 10 }}>{a.s}</span>
+            <span className="mid" style={{ fontSize: 9 }}>{a.firm}</span>
+            <span className={`r ${a.dir === "down" ? "down" : "up"}`} style={{ fontSize: 9 }}>
+              {dirIcon(a.dir)} {a.to}
+            </span>
+          </div>
+        ))}
+      </div>
+    </TH>
+  );
+}
+
+function PortfolioThumb() {
+  const totalGL = folio.reduce((s, f) => s + f.c, 0) / folio.length;
+  return (
+    <TH>
+      <THHead label="Portfolio Pulse" right={sign(totalGL) + " today"} col={totalGL >= 0 ? "var(--up)" : "var(--down)"} />
+      <div style={{ padding: "8px 10px 4px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <span style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 18, color: "var(--text-hi)" }}>$142,843</span>
+        <span className="up" style={{ fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700 }}>+$4,218 today</span>
+      </div>
+      <div style={{ padding: "0 10px" }}>
+        {folio.slice(0, 5).map(f => (
+          <div key={f.s} className="minirow">
+            <StockLogo sym={f.s} size={20} />
+            <span className="tkr" style={{ width: 40, fontSize: 10 }}>{f.s}</span>
+            <span className="mid" style={{ fontSize: 9 }}>{f.evt}</span>
+            <span className={`r ${cls(f.c)}`}>{sign(f.c)}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ margin: "5px 10px", background: "rgba(124,108,245,.1)", border: "1px solid rgba(124,108,245,.22)", borderRadius: 7, padding: "6px 9px", fontSize: 9, color: "var(--text)", lineHeight: 1.5 }}>
+        <span style={{ color: "var(--brand)", fontWeight: 700 }}>AI · </span>NVDA and META led gains. Watch TSLA drag on margin concerns.
+      </div>
+    </TH>
+  );
+}
+
+function RecapsThumb() {
+  const sections = ["What Happened","Why It Moved","Technicals","Macro View","AI Verdict"];
+  return (
+    <TH>
+      <THHead label="Recaps" right="NVDA · May 21" col="#f59e0b" />
+      <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ position: "relative", height: 158 }}>
+          {sections.map((label, i) => (
+            <div key={label} style={{
+              position: "absolute", left: `${i * 9}px`, right: 0, top: `${i * 8}px`,
+              background: i === 0 ? "var(--surface-1)" : "var(--surface-0)",
+              border: `1px solid ${i === 0 ? "var(--brand)" : "var(--border)"}`,
+              borderRadius: 10, padding: "9px 11px",
+              opacity: 1 - i * 0.16, zIndex: sections.length - i,
+            }}>
+              <div style={{ fontFamily: "var(--f-mono)", color: i === 0 ? "var(--brand)" : "var(--text-dim-solid)", fontSize: 8, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: i === 0 ? 5 : 0 }}>{label}</div>
+              {i === 0 && <div style={{ fontSize: 9, color: "var(--text)", lineHeight: 1.55 }}>{recap.stories[0]}</div>}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 3 }}>
+          {sections.map((_, i) => (
+            <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i === 0 ? "var(--brand)" : "var(--border)" }}/>
+          ))}
+        </div>
+        <div style={{ fontSize: 9, color: "var(--text-dim-solid)", display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {recap.indices.map(idx => (
+            <span key={idx.l}><span className={cls(idx.v)}>{sign(idx.v)}</span>{" "}<span style={{ fontSize: 8 }}>{idx.l}</span></span>
+          ))}
+        </div>
+      </div>
+    </TH>
+  );
+}
+
+// ---- Workspace list ----
+type WS = { n: string; d: string; long: string; chips: string[]; feats: string[]; Thumb: React.FC };
+
+const WS_LIST: WS[] = [
   {
-    slug: "dashboard",
-    label: "Dashboard",
-    desc: "Your morning brief — indices, What Matters Now, and every workspace at a glance.",
-    d: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
+    n: "Dashboard", d: "Your morning brief at a glance.",
+    long: "The first thing you see each morning: live indices, a What-Matters-Now AI brief, and a launchpad into every other workspace — the whole market in one screen.",
+    chips: ["Indices", "What Matters Now", "AI brief"],
+    feats: ["Live index pulse with count-up tickers and sparklines","An AI 'what matters now' brief parsed from the tape","Quick cards into movers, earnings and analyst flow","Animated, glanceable, refreshed through the day"],
+    Thumb: DashThumb,
   },
   {
-    slug: "earnings",
-    label: "Earnings",
-    desc: "An Earnings-Hub-style calendar with logos, 10-quarter history and income statements.",
-    d: "M4 5h16v15H4zM4 9h16M8 3v4M16 3v4",
+    n: "Market Movers", d: "Top winners & losers, with the why.",
+    long: "The day's biggest movers ranked, each with the catalyst behind the move — filter by sector or market cap and hover any name to see why it is running.",
+    chips: ["Gainers", "Losers", "Catalysts"],
+    feats: ["Top 15 winners and losers, ranked by move","Plain-English catalyst on every row","Sector and market-cap filters","Hover a ticker for the reason in context"],
+    Thumb: MoversThumb,
   },
   {
-    slug: "movers",
-    label: "Market Movers",
-    desc: "Top 15 winners & losers with catalysts, sector / market-cap filters and hover reasons.",
-    d: "M3 17l5-5 4 3 7-9M16 6h6v6",
+    n: "Stock Detail", d: "One page, the whole story.",
+    long: "Everything on one name in a single view: an interactive chart with overlays, fundamentals, ratings, key levels and an AI read that explains what actually moved it.",
+    chips: ["Charting", "Fundamentals", "AI read"],
+    feats: ["Interactive chart — candles, MA/EMA, 5 chart types","Fundamentals, ratings and analyst targets","Key levels, peers and earnings-history trays","An AI read explaining the move in plain English"],
+    Thumb: StockThumb,
   },
   {
-    slug: "heatmap",
-    label: "Market Heatmap",
-    desc: "The whole market by sector and size, colored by performance.",
-    d: "M3 4h7v7H3zM13 4h8v4h-8zM13 10h8v11h-8zM3 13h7v8H3z",
+    n: "Market Heatmap", d: "The whole market in one glance.",
+    long: "A treemap of the entire market by sector and size, colored by performance — spot leadership, rotation and breadth in a single look.",
+    chips: ["By sector", "By size", "Performance"],
+    feats: ["Every sector sized by market cap","Colored by performance, green to red","Instantly see leadership and rotation","Tap a tile to drill into the name"],
+    Thumb: HeatmapThumb,
   },
   {
-    slug: "analyst",
-    label: "Analyst Actions",
-    desc: "Upgrades, downgrades and price targets — with 5+ action cluster detection.",
-    d: "M12 3l2.5 6.5L21 10l-5 4.5L17.5 21 12 17l-5.5 4L8 14.5 3 10l6.5-.5z",
+    n: "Earnings", d: "Who reports, and how they have done.",
+    long: "An earnings hub with a logo calendar, ten quarters of beat/miss history and graphical income statements — see the setup before the print.",
+    chips: ["Calendar", "10-qtr history", "Income"],
+    feats: ["Calendar of upcoming reports with logos","10-quarter EPS beat/miss history","Graphical income statements","Surprise and reaction at a glance"],
+    Thumb: EarningsThumb,
   },
   {
-    slug: "screener",
-    label: "Screener",
-    desc: "Fundamental + technical filters with ready-made preset screens.",
-    d: "M3 4h18l-7 8v6l-4 2v-8z",
+    n: "Analyst Actions", d: "Upgrades, downgrades, targets.",
+    long: "Every rating change and price-target move in one feed, with detection of clusters where five or more analysts move on the same name in a window.",
+    chips: ["Ratings", "Price targets", "Clusters"],
+    feats: ["Upgrades, downgrades and initiations","From/to ratings and price-target deltas","5+ action cluster detection","Implied upside vs the current price"],
+    Thumb: AnalystThumb,
   },
   {
-    slug: "ipos",
-    label: "IPOs",
-    desc: "Recent IPO performance since the offer price, plus the upcoming pipeline.",
-    d: "M4 18l6-6 4 3 6-9M16 6h6v5",
+    n: "Portfolio Pulse", d: "Your book, explained.",
+    long: "An AI read of your holdings — what drove the day, who led and lagged, and your P/L — with one click into the detail on any position.",
+    chips: ["Drivers", "Day P/L", "AI summary"],
+    feats: ["AI summary of what moved your book","Day P/L with leaders and laggards","Drill into any holding's full detail","Concentration and driver breakdown"],
+    Thumb: PortfolioThumb,
   },
   {
-    slug: "portfolio",
-    label: "Portfolio Pulse",
-    desc: "An AI summary of your book — drivers, leaders, laggards and day P/L.",
-    d: "M12 3v9h9a9 9 0 11-9-9z",
-  },
-  {
-    slug: "watchlist",
-    label: "Watchlist",
-    desc: "AI-parsed names with price & analyst alerts and EOD / EOW summaries.",
-    d: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 9a3 3 0 100 6 3 3 0 000-6",
-  },
-  {
-    slug: "stock",
-    label: "Stock Detail",
-    desc: "Interactive chart, fundamentals, ratings and an AI read — all on one page.",
-    d: "M6 4v16M18 4v16M10 9h4v6h-4z",
-  },
-  {
-    slug: "insider",
-    label: "Insider & Institutional",
-    desc: "Form 4 insider flows and 13F fund positioning, side by side.",
-    d: "M16 8a4 4 0 11-8 0 4 4 0 018 0zM4 21a8 8 0 0116 0",
-  },
-  {
-    slug: "commentary",
-    label: "Commentary",
-    desc: "A live, Briefing-style stream of market-moving headlines.",
-    d: "M4 5h16v11H8l-4 4z",
-  },
-  {
-    slug: "recap",
-    label: "Recaps",
-    desc: "Executive end-of-day recaps you can read, download or schedule by email.",
-    d: "M6 3h9l4 4v14H6zM8 9h8M8 13h8M8 17h5",
-  },
-  {
-    slug: "macro",
-    label: "Macro & VIX",
-    desc: "Rates, the economic calendar, the VIX regime and the dividend calendar.",
-    d: "M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 4 3 14 0 18M12 3c-3 4-3 14 0 18",
+    n: "Recaps", d: "The day, in seven cards.",
+    long: "Executive end-of-day recaps you swipe through — what happened, why, technicals, fundamentals, macro and the AI verdict — read, download or schedule by email.",
+    chips: ["Swipeable", "7 sections", "Schedulable"],
+    feats: ["Seven-card swipeable briefing per name","What happened → why → technical → verdict","Download or schedule by email","Day and week modes"],
+    Thumb: RecapsThumb,
   },
 ];
 
-const s = (obj: Record<string, string | number>) => obj as React.CSSProperties;
+// ---- Logo SVG ----
+function LogoMark({ size = 17 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+      <path d="M3 17l5-6 4 4 6-9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="20" cy="5.5" r="2.4" fill="#fff"/>
+    </svg>
+  );
+}
 
-const Row = ({ sym, chg, up }: { sym: string; chg: string; up: boolean }) => (
-  <div style={s({ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"7px 0", borderBottom:"1px solid var(--border)" })}>
-    <span style={s({ fontWeight:700, color:"var(--text-hi)", fontSize:".82rem" })}>{sym}</span>
-    <span style={s({ color: up ? "var(--up)" : "var(--down)", fontWeight:700, fontSize:".82rem" })}>
-      {up ? "▲" : "▼"} {chg}
-    </span>
-  </div>
-);
+// ---- Google SVG ----
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16">
+      <path fill="#fff" d="M21.35 11.1h-9.18v2.96h5.3c-.23 1.4-1.65 4.1-5.3 4.1-3.19 0-5.8-2.64-5.8-5.9s2.61-5.9 5.8-5.9c1.82 0 3.04.78 3.74 1.45l2.55-2.46C16.9 3.6 14.76 2.7 12.17 2.7 7.03 2.7 2.9 6.84 2.9 12s4.13 9.3 9.27 9.3c5.35 0 8.9-3.76 8.9-9.06 0-.61-.07-1.07-.16-1.54z"/>
+    </svg>
+  );
+}
 
-const FrameChrome = () => (
-  <div className="hw-chrome">
-    <i /><i /><i />
-    <span className="hw-url">app.stockwise.com</span>
-  </div>
-);
-
+// ---- Main component ----
 export default function LandingPage() {
-  const [showLogin, setShowLogin] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLElement>(null);
+  const capRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
 
-  // close modal on Escape key
-  useEffect(() => {
-    if (!showLogin) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setShowLogin(false); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [showLogin]);
+  const [glanceIdx, setGlanceIdx] = useState<number | null>(null);
+  const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
+  const [authOpen, setAuthOpen] = useState(false);
 
+  // Scroll-driven marquee animation
   useEffect(() => {
-    const obs = new IntersectionObserver(
-      (entries) => entries.forEach(e => {
-        if (e.isIntersecting) { e.target.classList.add("in"); obs.unobserve(e.target); }
-      }),
-      { threshold: 0.1 }
-    );
-    document.querySelectorAll(".reveal").forEach(el => obs.observe(el));
-    return () => obs.disconnect();
+    function tick() {
+      const track = trackRef.current;
+      const row = rowRef.current;
+      if (track && row) {
+        const r = track.getBoundingClientRect();
+        const range = track.offsetHeight - window.innerHeight;
+        const p = range > 0 ? Math.min(1, Math.max(0, -r.top / range)) : 0;
+
+        const cards = Array.from(row.children) as HTMLElement[];
+        const N = cards.length;
+        if (N > 0) {
+          const f = p * (N - 1);
+          const cardW = cards[0].offsetWidth || 340;
+          const step = cardW + 40;
+          const stageW = window.innerWidth;
+          row.style.transform = `translateX(${(stageW / 2 - (f * step + cardW / 2)).toFixed(1)}px)`;
+
+          const fi = Math.round(f);
+          cards.forEach((c, i) => {
+            const dist = Math.abs(i - f);
+            c.style.transform = `scale(${Math.max(0.62, 1.13 - dist * 0.26).toFixed(3)})`;
+            c.style.opacity = Math.max(0.24, 1 - dist * 0.3).toFixed(2);
+            (c.style as CSSStyleDeclaration & { zIndex: string }).zIndex = i === fi ? "5" : "1";
+            if (i === fi) c.classList.add("front");
+            else c.classList.remove("front");
+          });
+
+          if (capRef.current) {
+            capRef.current.textContent = fi < WS_LIST.length ? WS_LIST[fi].n : "And many more";
+          }
+          if (barRef.current) {
+            barRef.current.style.width = `${(p * 100).toFixed(1)}%`;
+          }
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
+  // Reveal on scroll
+  useEffect(() => {
+    const els = document.querySelectorAll<HTMLElement>(".reveal");
+    if (!("IntersectionObserver" in window)) {
+      els.forEach(e => e.classList.add("in"));
+      return;
+    }
+    const io = new IntersectionObserver(
+      entries => entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } }),
+      { threshold: 0.12 }
+    );
+    els.forEach(e => io.observe(e));
+    return () => io.disconnect();
+  }, []);
+
+  // Body scroll lock when modal open
+  useEffect(() => {
+    document.body.style.overflow = glanceIdx !== null || authOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [glanceIdx, authOpen]);
+
+  function openAuth(mode: "signup" | "login") {
+    setGlanceIdx(null);
+    setAuthMode(mode);
+    setAuthOpen(true);
+  }
+
+  const glanceWs = glanceIdx !== null ? WS_LIST[glanceIdx] : null;
+
   return (
-    <div className="lp-root">
+    <div className="lp-root mq-root">
       <div className="sp-grid" />
+      <div className="sp-aurora">
+        <i className="a1" /><i className="a2" /><i className="a3" />
+      </div>
 
       <div className="hw">
-        {/* ── NAVBAR ── */}
+
+        {/* ---- NAV ---- */}
         <nav className="hw-nav">
           <Link href="/" className="hw-brand">
-            <span className="hw-logo">
-              <svg viewBox="0 0 24 24" width={17} height={17} fill="none">
-                <path d="M3 17l5-6 4 4 6-9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="20" cy="5.5" r="2.4" fill="#fff" />
-              </svg>
-            </span>
+            <span className="hw-logo"><LogoMark /></span>
             Stock<b>Wise</b>
           </Link>
-
-          <div className="hw-nav-links">
-            <Link href="#steps">How it works</Link>
-            <Link href="/menu/screener">Features</Link>
-            <Link href="/menu/macro">Markets</Link>
-            <Link href="/menu/recap">Recaps</Link>
-          </div>
-
           <div className="hw-nav-cta">
-            <button className="hw-ghost" onClick={() => setShowLogin(true)}>Log in</button>
-            <Link href="/auth/signup" className="hw-solid">Sign up</Link>
+            <button className="hw-ghost" onClick={() => openAuth("login")}>Log in</button>
+            <button className="hw-solid" onClick={() => openAuth("signup")}>Sign up</button>
           </div>
         </nav>
 
-        {/* ── HERO ── */}
-        <div className="hw-hero">
-          <div className="reveal">
-            <div className="hw-eyebrow">Your research journey</div>
-            <h1 className="hw-h1">From <span className="g">ticker to thesis</span> in under 60 seconds</h1>
-            <p className="hw-sub">
-              This is what StockWise feels like. You spot what is moving, open the full picture, check the context, see the signals line up — and make an informed call. Here is the journey, step by step.
-            </p>
-            <div className="hw-cta">
-              <button className="hw-btn-lg hw-btn-primary" onClick={() => setShowLogin(true)}>Open the research terminal →</button>
-              <a href="#steps" className="hw-btn-lg hw-btn-ghost">See the journey ↓</a>
-            </div>
+        {/* ---- HERO ---- */}
+        <section className="mq-hero">
+          <div className="mq-kicker">StockWise · Market Intelligence</div>
+          <h1 className="mq-title">Every market view.<br />One scroll.</h1>
+          <p className="mq-sub">
+            The entire market, narrated. Scroll through every research view — movers, earnings, analysts, your book — each with an AI read that tells you <em>what</em> moved, and <em>why</em>. Ticker to thesis, without leaving the page.
+          </p>
+          <div className="mq-scrollcue">
+            <span>Scroll</span>
+            <i />
           </div>
+        </section>
 
-          <div className="reveal" style={{ transitionDelay: ".12s" }}>
-            <div className="hw-frame">
-              <FrameChrome />
-              <div className="hw-body">
-                <div style={s({ display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px" })}>
-                  <span style={s({ width:"22px", height:"22px", borderRadius:"6px", background:"linear-gradient(135deg,var(--brand),var(--ai))", display:"inline-flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:".72rem" })}>◆</span>
-                  <b style={s({ color:"var(--text-hi)", fontSize:".9rem" })}>What Matters Now</b>
-                  <span style={s({ marginLeft:"auto", fontSize:".6rem", color:"var(--ai)", fontWeight:700 })}>● LIVE</span>
-                </div>
-                <div style={s({ fontSize:".8rem", color:"var(--text)", lineHeight:"1.55", marginBottom:"12px" })}>
-                  Cooler CPI lifted rate-cut hopes and semis led the tape. <b style={s({ color:"var(--text-hi)" })}>NVDA</b>&apos;s beat-and-raise powered a <b style={s({ color:"var(--up)" })}>+3%</b> rally across chips.
-                </div>
-                <Row sym="ZIM" chg="+9.97%" up />
-                <Row sym="NVDA" chg="+8.23%" up />
-                <Row sym="PLTR" chg="+6.18%" up />
-                <Row sym="WBA" chg="-5.80%" up={false} />
-                <div style={s({ marginTop:"10px", display:"flex", gap:"6px", flexWrap:"wrap" })}>
-                  <span className="pill ai">AI parsed</span>
-                  <span className="pill up">Breadth 78%</span>
-                  <span className="pill" style={s({ background:"var(--surface-3)", color:"var(--text-dim-solid)" })}>VIX 14.2</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── COMMITMENT ── */}
-        <div className="hw-commit reveal">
-          <div className="hw-commit-badge">◆ The StockWise commitment</div>
-          <h2 className="hw-commit-h">AI in every view · one terminal, everything under one roof</h2>
-          <div className="hw-commit-grid">
-            <div className="hw-commit-card">
-              <div className="hw-ic">◆</div>
-              <h3>AI context, everywhere</h3>
-              <p>Every screen carries an AI read in the same voice — earnings, movers, analyst actions, your portfolio. Hover any ticker and StockWise explains <i>why it is there</i> in the context of that view. Not a black box: the reasoning sits next to the number, in plain language.</p>
-            </div>
-            <div className="hw-commit-card">
-              <div className="hw-ic">▣</div>
-              <h3>One unified experience, under one roof</h3>
-              <p>Earnings, movers, screening, analyst calls, insider &amp; 13F flows, macro, your portfolio and watchlist all share one design system and one data layer. No switching between five tools — research a name from headline to thesis without ever leaving StockWise.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── 5-STEP JOURNEY ── */}
-        <div className="hw-steps" id="steps">
-
-          {/* Step 1 */}
-          <div className="hw-step reveal">
-            <div className="hw-step-txt">
-              <div className="hw-stepnum"><b>1</b><span>Step 1 · The Signal</span></div>
-              <h2 className="hw-h2">You spot what is moving — and why</h2>
-              <p className="hw-p">You open StockWise. Winners &amp; Losers is live: the top 15 gainers and losers, with relative volume and a one-line catalyst on every name.</p>
-              <p className="hw-p">A name jumps out — heavy volume, a clean breakout. Hover the catalyst and a Technical vs News popover tells you the story before you even click.</p>
-              <div className="hw-feat">{CHECK}<span><b>Sector &amp; market-cap filters</b> cut the list to exactly what you trade.</span></div>
-              <div className="hw-feat">{CHECK}<span><b>Hover reasons</b> — technical posture and the news behind the move.</span></div>
-              <Link href="/menu/movers" className="hw-link">Explore Market Movers →</Link>
-            </div>
-            <div className="hw-step-img">
-              <div className="hw-frame">
-                <FrameChrome />
-                <div className="hw-body">
-                  <div style={s({ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"8px" })}>
-                    <b style={s({ color:"var(--text-hi)", fontSize:".86rem" })}>Winners &amp; Losers · Top Gainers</b>
-                    <span className="pill" style={s({ background:"var(--surface-3)", color:"var(--text-dim-solid)" })}>Semis 3</span>
-                  </div>
-                  <Row sym="ZIM"  chg="+9.97%" up />
-                  <Row sym="NVDA" chg="+8.23%" up />
-                  <Row sym="PLTR" chg="+6.18%" up />
-                  <Row sym="SMCI" chg="+5.60%" up />
-                  <Row sym="CRM"  chg="+4.21%" up />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Step 2 (reversed) */}
-          <div className="hw-step rev reveal">
-            <div className="hw-step-img">
-              <div className="hw-frame">
-                <FrameChrome />
-                <div className="hw-body">
-                  <div style={s({ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:"8px" })}>
-                    <b style={s({ color:"var(--text-hi)", fontSize:".95rem" })}>NVDA <span style={s({ color:"var(--text-dim-solid)", fontWeight:500, fontSize:".78rem" })}>NVIDIA Corp</span></b>
-                    <span style={s({ color:"var(--up)", fontWeight:700, fontSize:".82rem" })}>▲ +8.23%</span>
-                  </div>
-                  <svg viewBox="0 0 320 90" style={{ width:"100%", height:"78px" }}>
-                    <defs>
-                      <linearGradient id="hwA" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stopColor="#34E2F0" stopOpacity=".34" />
-                        <stop offset="1" stopColor="#34E2F0" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <path d="M0 70 L40 64 L80 66 L120 52 L160 46 L200 34 L240 30 L280 18 L320 12 L320 90 L0 90 Z" fill="url(#hwA)" />
-                    <path d="M0 70 L40 64 L80 66 L120 52 L160 46 L200 34 L240 30 L280 18 L320 12" fill="none" stroke="#34E2F0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <div style={s({ marginTop:"8px", fontSize:".78rem", color:"var(--text)", lineHeight:"1.5" })}>
-                    <b style={s({ color:"var(--ai)" })}>◆ AI read:</b> Beat-and-raise; guidance raised. 6 analyst actions in 30d. Above 50/200-DMA, RS 88.
-                  </div>
-                  <div style={s({ marginTop:"9px", display:"flex", gap:"6px" })}>
-                    <span className="pill up">Strong Buy 28</span>
-                    <span className="pill hold">Hold 4</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="hw-step-txt">
-              <div className="hw-stepnum"><b>2</b><span>Step 2 · The Deep Dive</span></div>
-              <h2 className="hw-h2">One click opens the full Stock Detail</h2>
-              <p className="hw-p">Click any ticker — anywhere, or from search — and the full Stock Detail page opens in the workspace. No side pop-up, no tool-switching.</p>
-              <p className="hw-p">Interactive candles, moving averages and RSI sit beside an AI read that ties together fundamentals, technicals and analyst posture.</p>
-              <div className="hw-feat">{CHECK}<span><b>Right-click the chart</b> to log a purchase price or a trading decision.</span></div>
-              <div className="hw-feat">{CHECK}<span><b>AI read</b> explains what is driving the stock and what to watch.</span></div>
-              <Link href="/menu/stock" className="hw-link">Open a Stock Detail →</Link>
-            </div>
-          </div>
-
-          {/* Step 3 */}
-          <div className="hw-step reveal">
-            <div className="hw-step-txt">
-              <div className="hw-stepnum"><b>3</b><span>Step 3 · The Context</span></div>
-              <h2 className="hw-h2">Earnings, 10-quarter history &amp; financials</h2>
-              <p className="hw-p">Switch to the Earnings calendar — an Earnings-Hub-style week grid with company logos, split before-open and after-close across every range.</p>
-              <p className="hw-p">Select a company and its history opens right below: 10 quarters of EPS and post-print moves, plus a Google-Finance-style income statement.</p>
-              <div className="hw-feat">{CHECK}<span><b>Beat/miss track record</b> at a glance — surprises and stock reactions.</span></div>
-              <div className="hw-feat">{CHECK}<span><b>Income statement</b> — revenue through diluted EPS, quarter by quarter.</span></div>
-              <Link href="/menu/earnings" className="hw-link">Explore Earnings →</Link>
-            </div>
-            <div className="hw-step-img">
-              <div className="hw-frame">
-                <FrameChrome />
-                <div className="hw-body">
-                  <b style={s({ color:"var(--text-hi)", fontSize:".86rem" })}>NVDA · Income statement</b>
-                  <div style={s({ marginTop:"8px" })}>
-                    {[
-                      { k:"Revenue",         v:"$58.2B", bold:true },
-                      { k:"Gross profit",    v:"$26.2B", bold:false },
-                      { k:"Operating income",v:"$13.4B", bold:true },
-                      { k:"Diluted EPS",     v:"$4.46",  bold:false },
-                    ].map(({ k, v, bold }, i) => (
-                      <div key={i} style={s({ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom: i < 3 ? "1px solid var(--border)" : "none", fontSize:".8rem" })}>
-                        <span style={s({ color: bold ? "var(--text-hi)" : "var(--text-dim-solid)", fontWeight: bold ? 700 : 400 })}>{k}</span>
-                        <span className="num" style={s({ color: bold ? "var(--text-hi)" : "inherit", fontWeight: bold ? 700 : 400 })}>{v}</span>
+        {/* ---- MARQUEE TRACK ---- */}
+        <section className="mq-track" ref={trackRef}>
+          <div className="mq-stage">
+            <div className="mq-progress"><i ref={barRef as React.RefObject<HTMLElement>} /></div>
+            <div className="mq-row" ref={rowRef}>
+              {WS_LIST.map((ws, i) => {
+                const Thumb = ws.Thumb;
+                return (
+                  <div key={ws.n} className="mq-card" onClick={() => setGlanceIdx(i)}>
+                    <div className="mq-shot"><Thumb /></div>
+                    <div className="mq-label">
+                      <h3>{ws.n}</h3>
+                      <p>{ws.d}</p>
+                      <div className="mq-chips">
+                        {ws.chips.map(c => <span key={c} className="mq-chip">{c}</span>)}
                       </div>
-                    ))}
-                  </div>
-                  <div style={s({ marginTop:"9px", display:"flex", gap:"6px", flexWrap:"wrap" })}>
-                    <span className="pill up">7/10 beats</span>
-                    <span className="pill ai">10-qtr history</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Step 4 (reversed) */}
-          <div className="hw-step rev reveal">
-            <div className="hw-step-img">
-              <div className="hw-frame">
-                <FrameChrome />
-                <div className="hw-body">
-                  <div style={s({ border:"1px solid var(--warn)", borderRadius:"9px", padding:"10px", marginBottom:"10px" })}>
-                    <div style={s({ fontSize:".78rem", color:"var(--text-hi)", fontWeight:700, marginBottom:"6px" })}>🔥 Cluster alert · 5+ in 30d</div>
-                    <div style={s({ display:"flex", justifyContent:"space-between", fontSize:".8rem" })}>
-                      <span style={s({ fontWeight:700, color:"var(--text-hi)" })}>NVDA</span>
-                      <span style={s({ color:"var(--warn)", fontWeight:700 })}>6 actions / 30d</span>
+                      <div className="mq-go">View at a glance →</div>
                     </div>
                   </div>
-                  <div style={s({ fontSize:".74rem", color:"var(--text-dim-solid)", marginBottom:"6px" })}>Watchlist alerts</div>
-                  <div style={s({ display:"flex", gap:"6px", flexWrap:"wrap" })}>
-                    <span className="pill dn">AMD: downgrade</span>
-                    <span className="pill up">SMCI: +5.6%</span>
-                    <span className="pill amc">COIN: unusual options</span>
-                  </div>
+                );
+              })}
+              {/* "And many more" card */}
+              <div className="mq-card mq-more" onClick={() => openAuth("signup")}>
+                <div className="mq-more-inner">
+                  <div className="mq-more-plus">14+</div>
+                  <h3>And many more</h3>
+                  <p>Screener, IPOs, Watchlist, Insider & 13F, Commentary, Macro & VIX — fourteen connected workspaces in all.</p>
+                  <div className="mq-go">See everything →</div>
                 </div>
+                <div className="mq-more-hint">Keep scrolling ↓</div>
               </div>
             </div>
-            <div className="hw-step-txt">
-              <div className="hw-stepnum"><b>4</b><span>Step 4 · The Confluence</span></div>
-              <h2 className="hw-h2">Signals align across the tape</h2>
-              <p className="hw-p">StockWise flags confluence for you. The back-end surfaces stocks drawing 5+ analyst actions in 30 days, and names catching 2–3 upgrades at once.</p>
-              <p className="hw-p">Your AI watchlist fires alerts on price moves and analyst upgrades, with a per-name AI-parse toggle. When the layers agree, you see it forming.</p>
-              <div className="hw-feat">{CHECK}<span><b>Cluster detection</b> — dense coverage that often precedes momentum.</span></div>
-              <div className="hw-feat">{CHECK}<span><b>Watchlist alerts</b> on price moves &amp; rating changes, per name.</span></div>
-              <Link href="/menu/analyst" className="hw-link">Explore Analyst Actions →</Link>
-            </div>
+            <div className="mq-cap" ref={capRef}>Dashboard</div>
+            <div className="mq-hint">scroll — or tap a card to open it</div>
           </div>
+        </section>
 
-          {/* Step 5 */}
-          <div className="hw-step reveal">
-            <div className="hw-step-txt">
-              <div className="hw-stepnum"><b>5</b><span>Step 5 · The Result</span></div>
-              <h2 className="hw-h2">Your book, summarized — and your recap, scheduled</h2>
-              <p className="hw-p">Portfolio Pulse reads your holdings back to you: the biggest driver, your leader and laggard, and net day P/L — recomputed as you add, trim or sell.</p>
-              <p className="hw-p">Every session ends with an executive recap you can read, download as a PDF, or schedule to your inbox daily or weekly.</p>
-              <div className="hw-feat">{CHECK}<span><b>AI portfolio summary</b> — drivers, leaders, laggards, in plain language.</span></div>
-              <div className="hw-feat">{CHECK}<span><b>Executive recaps</b> — clickable, downloadable, email-schedulable.</span></div>
-              <Link href="/menu/portfolio" className="hw-link">Explore Portfolio Pulse →</Link>
-            </div>
-            <div className="hw-step-img">
-              <div className="hw-frame">
-                <FrameChrome />
-                <div className="hw-body">
-                  <div style={s({ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"8px" })}>
-                    <b style={s({ color:"var(--text-hi)", fontSize:".86rem" })}>◆ AI portfolio summary</b>
-                    <span style={s({ color:"var(--up)", fontWeight:700, fontSize:".82rem" })}>+$20,940</span>
+        {/* ---- GLANCE MODAL ---- */}
+        {glanceIdx !== null && glanceWs && (
+          <div className="mq-glance open">
+            <div className="mqg-scrim" onClick={() => setGlanceIdx(null)} />
+            <div className="mqg-panel">
+              <button className="mqg-x" onClick={() => setGlanceIdx(null)}>✕</button>
+              <div className="mqg-body">
+                <div className="mqg-shot">
+                  <glanceWs.Thumb />
+                </div>
+                <div className="mqg-info">
+                  <div className="mqg-kicker">
+                    Workspace {String(glanceIdx + 1).padStart(2, "0")} / {String(WS_LIST.length).padStart(2, "0")}
                   </div>
-                  <div style={s({ fontSize:".79rem", color:"var(--text)", lineHeight:"1.6" })}>
-                    <div style={s({ margin:"4px 0" })}><b style={s({ color:"var(--text-hi)" })}>Driver:</b> NVDA +8.2% at 55% weight</div>
-                    <div style={s({ margin:"4px 0" })}><b style={s({ color:"var(--up)" })}>Leader:</b> NVDA · <b style={s({ color:"var(--down)" })}>Laggard:</b> HD −1.1%</div>
-                    <div style={s({ margin:"4px 0" })}><b style={s({ color:"var(--text-hi)" })}>Net:</b> 5 of 6 holdings green</div>
-                  </div>
-                  <div style={s({ marginTop:"9px", display:"flex", gap:"6px" })}>
-                    <span className="pill ai">Auto EOD recap</span>
-                    <span className="pill up">PDF ready</span>
+                  <h2>{glanceWs.n}</h2>
+                  <p>{glanceWs.long}</p>
+                  <ul className="mqg-feat">
+                    {glanceWs.feats.map(f => <li key={f}>{f}</li>)}
+                  </ul>
+                  <div className="mqg-cta">
+                    <button className="mqp-btn solid" onClick={() => openAuth("signup")}>
+                      Open {glanceWs.n} →
+                    </button>
+                    <button className="mqp-btn" onClick={() => setGlanceIdx(null)}>Back to tour</button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+        )}
 
-        </div>{/* end hw-steps */}
-
-        {/* ── WORKSPACE CARDS ── */}
-        <div className="hw-tabs-sec reveal">
-          <div className="hw-eyebrow" style={{ textAlign:"center" }}>What is inside</div>
-          <h2 className="hw-h1" style={{ fontSize:"2.1rem", textAlign:"center", marginBottom:"8px" }}>Every workspace, explained</h2>
-          <p className="hw-sub" style={{ margin:"0 auto 22px", textAlign:"center" }}>
-            Fourteen connected views — each one click from the next. Tap any card to jump straight in.
-          </p>
-          <div className="hw-tabs">
-            {TABS.map(({ slug, label, desc, d }) => (
-              <Link
-                key={slug}
-                href={slug === "dashboard" ? "/dashboard" : `/menu/${slug}`}
-                className="hw-tab reveal"
-              >
-                <span className="hw-tab-ic">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={d} />
-                  </svg>
-                </span>
-                <span className="hw-tab-tx">
-                  <b>{label}</b>
-                  <span>{desc}</span>
-                </span>
-              </Link>
-            ))}
+        {/* ---- AUTH MODAL ---- */}
+        {authOpen && (
+          <div className="auth-modal open">
+            <div className="auth-scrim" onClick={() => setAuthOpen(false)} />
+            <div className="auth-panel">
+              <button className="mqg-x" onClick={() => setAuthOpen(false)}>✕</button>
+              <div className="au-head">
+                <span className="hw-logo"><LogoMark size={15} /></span>
+                Stock<b>Wise</b>
+              </div>
+              <div className="au-tabs">
+                <button className={`au-tab${authMode === "signup" ? " on" : ""}`} onClick={() => setAuthMode("signup")}>Sign up</button>
+                <button className={`au-tab${authMode === "login" ? " on" : ""}`} onClick={() => setAuthMode("login")}>Log in</button>
+              </div>
+              {authMode === "signup" ? (
+                <>
+                  <h3 className="au-title">Create your free account</h3>
+                  <Link href="/auth/signup" className="au-cta">Create account →</Link>
+                  <div className="au-or">or</div>
+                  <button className="au-google"><GoogleIcon />Continue with Google</button>
+                  <p className="au-fine">Free to start. No credit card required.</p>
+                </>
+              ) : (
+                <LoginForm />
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* ── FINAL CTA ── */}
-        <div className="hw-final reveal">
-          <div className="hw-badge">One terminal · everything under one roof</div>
-          <h2 className="hw-h1" style={{ fontSize:"2.2rem" }}>Start your research in one place</h2>
-          <p className="hw-sub" style={{ margin:"16px auto 0" }}>
-            Every workspace is connected and one click from the next — open the terminal and start exploring.
-          </p>
-          <div className="hw-cta" style={{ justifyContent:"center" }}>
-            <button className="hw-btn-lg hw-btn-primary" onClick={() => setShowLogin(true)}>Open the research terminal →</button>
-            <Link href="/dashboard" className="hw-btn-lg hw-btn-ghost">Explore all features →</Link>
+        {/* ---- PRICING ---- */}
+        <section className="mq-pricing">
+          <div className="mq-kicker" style={{ textAlign: "center" }}>Pricing</div>
+          <h2 className="mqp-title">One terminal. Simple plans.</h2>
+          <div className="mqp-grid">
+            <div className="mqp-card">
+              <div className="mqp-tier">Starter</div>
+              <div className="mqp-price">$0<span>/mo</span></div>
+              <p className="mqp-d">Explore the whole terminal with delayed data.</p>
+              <ul className="mqp-feat">
+                <li>All 14 workspaces</li>
+                <li>Delayed market data</li>
+                <li>Daily EOD recap</li>
+              </ul>
+              <button className="mqp-btn" onClick={() => openAuth("signup")}>Start free</button>
+            </div>
+            <div className="mqp-card hot">
+              <div className="mqp-flag">Most popular</div>
+              <div className="mqp-tier">Pro</div>
+              <div className="mqp-price">$29<span>/mo</span></div>
+              <p className="mqp-d">Real-time research for active investors.</p>
+              <ul className="mqp-feat">
+                <li>Real-time data &amp; alerts</li>
+                <li>AI read in every view</li>
+                <li>Portfolio &amp; watchlist AI</li>
+                <li>Scheduled recaps</li>
+              </ul>
+              <button className="mqp-btn solid" onClick={() => openAuth("signup")}>Go Pro</button>
+            </div>
+            <div className="mqp-card">
+              <div className="mqp-tier">Elite</div>
+              <div className="mqp-price">$79<span>/mo</span></div>
+              <p className="mqp-d">Maximum firepower for serious investors.</p>
+              <ul className="mqp-feat">
+                <li>Everything in Pro</li>
+                <li>Multi-portfolio &amp; 13F tracking</li>
+                <li>Custom alert rules</li>
+                <li>API &amp; data export</li>
+                <li>Priority support</li>
+              </ul>
+              <button className="mqp-btn" onClick={() => openAuth("signup")}>Go Elite</button>
+            </div>
           </div>
-          <p style={s({ fontSize:".74rem", color:"var(--text-dim-solid)", marginTop:"16px" })}>
+        </section>
+
+        {/* ---- FINAL CTA ---- */}
+        <div className="hw-final" style={{ borderTop: "1px solid #1c1c1c" }}>
+          <h2 className="mqp-title" style={{ fontSize: "2rem" }}>Start your research in one place</h2>
+          <div className="hw-cta" style={{ justifyContent: "center", marginTop: "18px" }}>
+            <button className="mqp-btn solid" style={{ minWidth: "230px" }} onClick={() => openAuth("signup")}>
+              Open the terminal →
+            </button>
+          </div>
+          <p style={{ fontSize: ".74rem", color: "#666", marginTop: "16px" }}>
             StockWise is a research terminal for informational purposes — not investment advice.
           </p>
         </div>
 
-      </div>{/* end .hw */}
-
-      {/* ── LOGIN MODAL ── */}
-      {showLogin && (
-        <div className="lp-modal-backdrop" onClick={() => setShowLogin(false)}>
-          <div className="lp-modal-card" onClick={e => e.stopPropagation()}>
-            <button className="lp-modal-close" onClick={() => setShowLogin(false)} aria-label="Close">✕</button>
-
-            {/* Logo closes the modal — already on "/" so no navigation needed */}
-            <button onClick={() => setShowLogin(false)} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:20, background:"none", border:"none", cursor:"pointer", padding:0, textDecoration:"none" }}>
-              <span className="hw-logo" style={{ width:26, height:26, borderRadius:7 }}>
-                <svg viewBox="0 0 24 24" width={14} height={14} fill="none">
-                  <path d="M3 17l5-6 4 4 6-9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="20" cy="5.5" r="2.4" fill="#fff" />
-                </svg>
-              </span>
-              <span style={{ fontFamily:"var(--f-display)", fontWeight:700, fontSize:".95rem", color:"#fff" }}>
-                Stock<b style={{ color:"var(--ai)" }}>Wise</b>
-              </span>
-            </button>
-
-            <LoginForm />
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
