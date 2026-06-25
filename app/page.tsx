@@ -6,15 +6,26 @@ import { pulse, wmn, movers, earnings, analyst, folio, sectorList, recap } from 
 import { fmt, sign, cls, heatCol, StockLogo } from "./iq/utils";
 
 // ---- Workspace thumbnail components ----
-// Rendered at 1200 px, CSS-scaled to fit 340x444 card -- identical to the HTML marquee approach.
-// Scale = 340/1200 = 0.2834
-
-const SC = 0.2834;
+// Content is authored at 1200px virtual width then CSS-scaled to fill whatever container it lives in
+// (carousel card ~340px, glance modal ~572px, mobile stacked ~320px, etc.)
 
 function ScaledScreen({ children }: { children: React.ReactNode }) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.2834); // initial guess for 340px card
+
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => {
+      setScale(e.contentRect.width / 1200);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "var(--surface-0)" }}>
-      <div style={{ width: 1200, minHeight: 1567, transformOrigin: "top left", transform: `scale(${SC})` }}>
+    <div ref={outerRef} style={{ position: "absolute", inset: 0, overflow: "hidden", background: "var(--surface-0)" }}>
+      <div style={{ width: 1200, minHeight: 1567, transformOrigin: "top left", transform: `scale(${scale})` }}>
         {children}
       </div>
     </div>

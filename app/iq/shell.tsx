@@ -819,6 +819,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [drawer, setDrawer] = useState<
     | { type: "stock"; sym: string }
     | { type: "mover-modal"; sym: string }
@@ -866,11 +867,14 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [profileDropdownOpen]);
 
+  // Close mobile nav on route change
+  useEffect(() => { setNavOpen(false); }, [pathname]);
+
   // Keyboard shortcuts
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setPaletteOpen(true); }
-      if (e.key === "Escape") { setPaletteOpen(false); setDrawer(null); setCopilotOpen(false); setProfileDropdownOpen(false); }
+      if (e.key === "Escape") { setPaletteOpen(false); setDrawer(null); setCopilotOpen(false); setProfileDropdownOpen(false); setNavOpen(false); }
     }
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -926,6 +930,21 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
             {/* Topbar */}
             <div className="topbar">
+              {/* Mobile hamburger — hidden on desktop via CSS */}
+              <button className="mob-ham" onClick={() => setNavOpen(o => !o)} aria-label="Open navigation">
+                <svg viewBox="0 0 24 24" width="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M3 7h18M3 12h18M3 17h18" />
+                </svg>
+              </button>
+              {/* Mobile brand — hidden on desktop via CSS */}
+              <div className="mob-brand">
+                <div className="logo" style={{ width: 26, height: 26 }}>
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
+                  </svg>
+                </div>
+                <div className="wordmark">Stock<b>Wise</b><span>Market Intelligence</span></div>
+              </div>
               <button className="cmd" onClick={() => setPaletteOpen(true)}>
                 ⌕ Search tickers and stocks…
               </button>
@@ -986,7 +1005,17 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Rail / Sidebar */}
-            <nav className="rail">
+            <nav className={`rail${navOpen ? " mob-open" : ""}`}>
+              {/* Mobile rail header — hidden on desktop via CSS */}
+              <div className="mob-rail-head">
+                <div className="logo" style={{ width: 26, height: 26 }}>
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
+                  </svg>
+                </div>
+                <div className="wordmark">Stock<b>Wise</b><span>Market Intelligence</span></div>
+                <button className="mob-nav-close" onClick={() => setNavOpen(false)} aria-label="Close navigation">✕</button>
+              </div>
               {(["Intelligence", "My Money", "Context"] as const).map(group => (
                 <div key={group}>
                   <div className="sec-lbl">{group}</div>
@@ -1029,6 +1058,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             </main>
           </div>
 
+          {/* Mobile nav scrim */}
+          {navOpen && <div className="mob-nav-scrim" onClick={() => setNavOpen(false)} />}
+
           {/* Drawers */}
           {drawer?.type === "stock" && (
             <StockDrawer sym={drawer.sym} onClose={() => setDrawer(null)} />
@@ -1059,7 +1091,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
                 <circle cx="18.5" cy="17.5" r="2" fill="currentColor" />
               </svg>
-              Market Copilot
+              <span className="fab-label">Market Copilot</span>
             </button>
           )}
 
