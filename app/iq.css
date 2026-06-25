@@ -775,6 +775,7 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .takeaway .verdict { font-size: .96rem; font-weight: 700; color: var(--text-hi); margin-left: auto; }
 
 /* Treemap heatmap — matches stockwise v5 HTML */
+/* treemap — legacy selectors kept for safety */
 .treemap { display: flex; flex-wrap: wrap; gap: 3px; align-content: flex-start; }
 .tm-sector { border: 1px solid var(--border-soft); border-radius: 8px; padding: 5px; background: var(--surface-0); }
 .tm-sector .sl { font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim-solid); padding: 2px 4px 5px; display: flex; justify-content: space-between; }

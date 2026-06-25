@@ -4,13 +4,51 @@ import { useState } from "react";
 import { StockLogo } from "../utils";
 
 // ── Economic calendar ────────────────────────────────────────────────────────
-const ECO_TABS = ["Last week", "This week", "Next week"];
+const ECO_TABS = ["Last month", "Last week", "This week", "Next week", "This month"];
 
 interface MacroEvent {
   ev: string; date: string; day: string; tier: "High" | "Med" | "Low";
   prev: string; est: string; actual: string; surprise: "up" | "down" | "";
   note: string;
 }
+
+const CAL_LAST_MONTH: MacroEvent[] = [
+  { ev: "ISM Manufacturing",    date: "May 1",  day: "Fri", tier: "Med",  prev: "49.0",  est: "48.5",  actual: "48.7",  surprise: "up",   note: "Still in contraction but beat estimates" },
+  { ev: "Nonfarm Payrolls",     date: "May 2",  day: "Fri", tier: "High", prev: "228K",  est: "195K",  actual: "177K",  surprise: "down", note: "Softest print since Jan; unemployment ticked up" },
+  { ev: "Unemployment Rate",    date: "May 2",  day: "Fri", tier: "High", prev: "4.2%",  est: "4.2%",  actual: "4.3%",  surprise: "down", note: "Highest since late 2021" },
+  { ev: "JOLTS Job Openings",   date: "May 7",  day: "Wed", tier: "Med",  prev: "7.57M", est: "7.40M", actual: "7.19M", surprise: "down", note: "Labour demand continues to cool" },
+  { ev: "CPI (Apr)",            date: "May 13", day: "Tue", tier: "High", prev: "2.4%",  est: "2.4%",  actual: "2.3%",  surprise: "up",   note: "First sub-2.4% print in 3 months" },
+  { ev: "PPI (Apr)",            date: "May 14", day: "Wed", tier: "Med",  prev: "0.4%",  est: "0.3%",  actual: "0.2%",  surprise: "up",   note: "Wholesale disinflation accelerating" },
+  { ev: "Retail Sales (Apr)",   date: "May 15", day: "Thu", tier: "High", prev: "0.4%",  est: "0.3%",  actual: "0.1%",  surprise: "down", note: "Control group flat; consumption slowing" },
+  { ev: "Industrial Production",date: "May 15", day: "Thu", tier: "Low",  prev: "0.3%",  est: "0.2%",  actual: "0.3%",  surprise: "up",   note: "Manufacturing output held steady" },
+  { ev: "FOMC Minutes",         date: "May 21", day: "Wed", tier: "High", prev: "—",     est: "—",     actual: "Released", surprise: "", note: "Patient tone; members want 2+ good CPI prints" },
+  { ev: "Durable Goods (Apr)",  date: "May 28", day: "Wed", tier: "Med",  prev: "0.9%",  est: "0.4%",  actual: "-1.3%", surprise: "down", note: "Ex-transport weak; capex signals soft" },
+  { ev: "GDP Q1 (2nd est.)",    date: "May 29", day: "Thu", tier: "High", prev: "1.6%",  est: "1.7%",  actual: "1.6%",  surprise: "down", note: "Consumer revised lower; no real change to outlook" },
+  { ev: "PCE Deflator (Apr)",   date: "May 30", day: "Fri", tier: "High", prev: "2.7%",  est: "2.6%",  actual: "2.6%",  surprise: "up",   note: "Fed's preferred gauge hit estimate — on track" },
+  { ev: "UMich Sentiment (May)",date: "May 30", day: "Fri", tier: "Med",  prev: "65.6",  est: "68.0",  actual: "69.1",  surprise: "up",   note: "Inflation expectations eased slightly" },
+];
+
+const CAL_THIS_MONTH: MacroEvent[] = [
+  { ev: "ISM Manufacturing",    date: "Jun 3",  day: "Tue", tier: "Med",  prev: "48.7",  est: "49.0",  actual: "48.5",  surprise: "down", note: "Still contracting; new orders weak" },
+  { ev: "Nonfarm Payrolls",     date: "Jun 6",  day: "Fri", tier: "High", prev: "177K",  est: "190K",  actual: "206K",  surprise: "up",   note: "Labour market re-accelerated; wage growth 3.9%" },
+  { ev: "Unemployment Rate",    date: "Jun 6",  day: "Fri", tier: "High", prev: "4.3%",  est: "4.2%",  actual: "4.2%",  surprise: "up",   note: "Rate ticked back down with payrolls beat" },
+  { ev: "PPI (May)",            date: "Jun 11", day: "Wed", tier: "Med",  prev: "0.5%",  est: "0.3%",  actual: "0.2%",  surprise: "up",   note: "Wholesale prices cooling" },
+  { ev: "Jobless Claims",       date: "Jun 12", day: "Thu", tier: "Med",  prev: "222K",  est: "218K",  actual: "215K",  surprise: "up",   note: "Labour market still resilient" },
+  { ev: "CPI (May)",            date: "Jun 12", day: "Thu", tier: "High", prev: "3.4%",  est: "3.3%",  actual: "3.3%",  surprise: "up",   note: "In-line; September cut odds up" },
+  { ev: "Retail Sales (May)",   date: "Jun 14", day: "Fri", tier: "High", prev: "0.4%",  est: "0.2%",  actual: "0.1%",  surprise: "down", note: "Consumer spending softening" },
+  { ev: "UMich Sentiment",      date: "Jun 14", day: "Fri", tier: "Med",  prev: "69.1",  est: "72",    actual: "65.6",  surprise: "down", note: "Inflation expectations ticked up" },
+  { ev: "FOMC Decision",        date: "Jun 18", day: "Wed", tier: "High", prev: "5.50%", est: "5.50%", actual: "5.50%", surprise: "",     note: "Hold expected; dot-plot key" },
+  { ev: "FOMC Press Conf.",     date: "Jun 18", day: "Wed", tier: "High", prev: "—",     est: "—",     actual: "—",     surprise: "",     note: "Powell tone drives reaction" },
+  { ev: "Jobless Claims",       date: "Jun 20", day: "Thu", tier: "Med",  prev: "215K",  est: "220K",  actual: "—",     surprise: "",     note: "" },
+  { ev: "Philadelphia Fed",     date: "Jun 20", day: "Thu", tier: "Med",  prev: "4.5",   est: "5.0",   actual: "—",     surprise: "",     note: "" },
+  { ev: "Existing Home Sales",  date: "Jun 21", day: "Fri", tier: "Low",  prev: "4.14M", est: "4.10M", actual: "—",     surprise: "",     note: "" },
+  { ev: "Consumer Confidence",  date: "Jun 25", day: "Tue", tier: "Med",  prev: "102.0", est: "100.5", actual: "—",     surprise: "",     note: "" },
+  { ev: "Durable Goods",        date: "Jun 26", day: "Wed", tier: "Med",  prev: "-0.8%", est: "0.5%",  actual: "—",     surprise: "",     note: "" },
+  { ev: "GDP Q1 (3rd est.)",    date: "Jun 27", day: "Thu", tier: "High", prev: "1.6%",  est: "1.5%",  actual: "—",     surprise: "",     note: "Final revision rarely moves markets" },
+  { ev: "Jobless Claims",       date: "Jun 27", day: "Thu", tier: "Med",  prev: "220K",  est: "218K",  actual: "—",     surprise: "",     note: "" },
+  { ev: "PCE Deflator (May)",   date: "Jun 28", day: "Fri", tier: "High", prev: "2.7%",  est: "2.6%",  actual: "—",     surprise: "",     note: "Fed's preferred inflation gauge" },
+  { ev: "Chicago PMI",          date: "Jun 28", day: "Fri", tier: "Low",  prev: "35.4",  est: "40.0",  actual: "—",     surprise: "",     note: "" },
+];
 
 const CAL_LAST: MacroEvent[] = [
   { ev: "Jobless Claims",     date: "Jun 12", day: "Thu", tier: "Med",  prev: "222K",  est: "218K",  actual: "215K",  surprise: "up",   note: "Labour market still resilient" },
@@ -34,7 +72,7 @@ const CAL_NEXT: MacroEvent[] = [
   { ev: "Jobless Claims",     date: "Jun 27", day: "Thu", tier: "Med",  prev: "220K",  est: "218K",  actual: "—", surprise: "", note: "" },
   { ev: "Chicago PMI",        date: "Jun 28", day: "Fri", tier: "Low",  prev: "35.4",  est: "40.0",  actual: "—", surprise: "", note: "" },
 ];
-const ECO_CALS = [CAL_LAST, CAL_THIS, CAL_NEXT];
+const ECO_CALS = [CAL_LAST_MONTH, CAL_LAST, CAL_THIS, CAL_NEXT, CAL_THIS_MONTH];
 
 // ── Dividend calendar data ───────────────────────────────────────────────────
 type DivTabKey = "lmonth" | "prev" | "yest" | "today" | "tom" | "week" | "next" | "month";
@@ -305,7 +343,7 @@ function divMonthCal(year: number, month1: number) {
 
 // ── Main screen ──────────────────────────────────────────────────────────────
 export function MacroScreen() {
-  const [ecoTab,    setEcoTab]    = useState(1);
+  const [ecoTab,    setEcoTab]    = useState(2);
   const [divTab,    setDivTab]    = useState<DivTabKey>("week");
   const [monthOff,  setMonthOff]  = useState(0);
   const [selStock,  setSelStock]  = useState<DivStock | null>(null);
@@ -492,38 +530,6 @@ export function MacroScreen() {
     );
   }
 
-  // ── Selected stock inline detail (shows below calendar) ─────────────────
-  const selDivDetail = selStock && (
-    <div className="card" style={{ marginTop: 14 }}>
-      <div className="card-h">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6", width: 34, height: 34, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: ".9rem", flexShrink: 0, position: "relative", overflow: "hidden" }}>
-            {selStock.sym[0]}
-            <img src={`https://assets.parqet.com/logos/symbol/${selStock.sym}?format=png`}
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} alt="" />
-          </span>
-          <div>
-            <span style={{ fontWeight: 700, color: "var(--text-hi)", fontSize: ".95rem" }}>{selStock.sym}</span>
-            <span style={{ color: "var(--text-dim-solid)", fontSize: ".78rem", marginLeft: 8 }}>{selStock.name} · {selStock.sector}</span>
-          </div>
-          <span className="pill amc" style={{ marginLeft: 4 }}>Ex {selStock.exDate}</span>
-          <span className="pill bmo" style={{ marginLeft: 0 }}>Pays {selStock.payDate}</span>
-        </div>
-        <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setSelStock(selStock)}>
-          10-yr history →
-        </button>
-      </div>
-      <div className="card-b" style={{ paddingTop: 10 }}>
-        <div className="metric-grid" style={{ gridTemplateColumns: "repeat(5, 1fr)", marginBottom: 0 }}>
-          <div className="m"><div className="k">Quarterly div</div><div className="v">${selStock.amount.toFixed(2)}</div></div>
-          <div className="m"><div className="k">Annual div</div><div className="v">${(selStock.amount * 4).toFixed(2)}</div></div>
-          <div className="m"><div className="k">Yield</div><div className="v up">{selStock.yld > 0 ? selStock.yld.toFixed(2) + "%" : "—"}</div></div>
-          <div className="m"><div className="k">Frequency</div><div className="v" style={{ fontSize: ".85rem" }}>{selStock.freq}</div></div>
-          <div className="m"><div className="k">Div streak</div><div className="v">{selStock.streak > 0 ? selStock.streak + " yrs" : "—"}</div></div>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <>
@@ -642,7 +648,6 @@ export function MacroScreen() {
         </div>
 
         {divCalNode}
-        {selDivDetail}
       </div>
 
       {/* ── VIX Sensitive Stocks ── */}
