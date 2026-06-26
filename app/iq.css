@@ -943,22 +943,40 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
   position: fixed;
   top: 54px;
   right: 12px;
-  width: 210px;
+  width: 220px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: 0 8px 32px rgba(0,0,0,.55);
   z-index: 30;
   overflow: hidden;
-  animation: iq-scaleIn .15s ease;
+  animation: iq-dropdownIn .15s ease both;
   transform-origin: top right;
 }
+@keyframes iq-dropdownIn {
+  from { opacity: 0; transform: scale(.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
 .pd-user {
-  padding: 12px 14px;
+  padding: 16px 14px 14px;
   border-bottom: 1px solid var(--border-soft);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+}
+.pd-avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--brand);
+  font-family: var(--f-display); font-weight: 700; font-size: 18px; color: #fff;
+  border: 2px solid var(--border-strong);
+  position: relative; display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.pd-avatar img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; border-radius: 50%;
 }
 .pd-name { font-size: 13px; font-weight: 600; color: var(--text-hi); }
-.pd-email { font-size: 11px; color: var(--text-dim-solid); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd-email { font-size: 11px; color: var(--text-dim-solid); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
 .pd-item {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; font-size: 13px; color: var(--text);

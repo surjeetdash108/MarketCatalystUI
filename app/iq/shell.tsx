@@ -971,6 +971,10 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   <div className="profile-dropdown">
                     {/* User info */}
                     <div className="pd-user">
+                      <div className="pd-avatar">
+                        {initials}
+                        {profileImage && <img src={profileImage} alt={displayName} />}
+                      </div>
                       <div className="pd-name">{displayName}</div>
                       <div className="pd-email">{user?.email ?? ""}</div>
                     </div>
