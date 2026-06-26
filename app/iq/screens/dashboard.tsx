@@ -2,9 +2,8 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { useAppSelector } from "../../store/hooks";
 import { useIQActions } from "../shell";
-import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks, Mover } from "../data";
+import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks, Mover, SectorRow } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol } from "../utils";
 
 const LIVE_FEED = [
@@ -257,19 +256,6 @@ function analystDir(type: string) {
 
 export function DashboardScreen() {
   const { openStock, openMoverModal, openEarnings, openSector, openIndex } = useIQActions();
-  const { user } = useAppSelector(s => s.auth);
-  const { data: profile } = useAppSelector(s => s.profile);
-
-  const displayName = profile?.name || user?.displayName || "Investor";
-  const firstName = displayName.split(" ")[0];
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-
-  const now = new Date();
-  const dayName  = now.toLocaleDateString("en-US", { weekday: "long" });
-  const datePart = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const timePart = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const dateStr  = `${dayName} · ${datePart} · ${timePart} ET`;
 
   const leaders  = [...screenerStocks].sort((a, b) => b.rs - a.rs).slice(0, 3);
   const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);
@@ -280,6 +266,19 @@ export function DashboardScreen() {
   // ---- Dash pop hover ----
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pop, setPop] = useState<PopState | null>(null);
+
+  // ---- Heatmap hover popup ----
+  type HeatPop = { sd: SectorRow; x: number; y: number };
+  const heatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [heatPop, setHeatPop] = useState<HeatPop | null>(null);
+  const [heatSym, setHeatSym] = useState<string | null>(null);
+  const showHeatPop = (e: React.MouseEvent, sd: SectorRow) => {
+    if (heatTimerRef.current) clearTimeout(heatTimerRef.current);
+    const r = e.currentTarget.getBoundingClientRect();
+    setHeatPop({ sd, x: r.left, y: r.bottom });
+  };
+  const hideHeatPop = () => { heatTimerRef.current = setTimeout(() => setHeatPop(null), 300); };
+  const cancelHideHeat = () => { if (heatTimerRef.current) clearTimeout(heatTimerRef.current); };
 
   const showPop = (e: React.MouseEvent<HTMLElement>, sym: string, block: PopBlock) => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
@@ -313,8 +312,7 @@ export function DashboardScreen() {
       {/* ── Header ── */}
       <div className="page-head">
         <div>
-          <div className="eyebrow">{dateStr}</div>
-          <h1 className="page-title">{greeting}, {firstName}</h1>
+          <h1 className="page-title">Dashboard</h1>
         </div>
       </div>
 
@@ -396,6 +394,7 @@ export function DashboardScreen() {
                   onClick={() => openEarnings(e.s)}
                   {...mr(e.s, "earnings")}
                 >
+                  <StockLogo sym={e.s} size={26} />
                   <span className="tkr">{e.s}<small>{e.n}</small></span>
                   <span className="mid">
                     <span className={`pill ${e.t === "BMO" ? "bmo" : "amc"}`}>{e.t}</span>
@@ -424,6 +423,7 @@ export function DashboardScreen() {
               </div>
               {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
                 <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
+                  <StockLogo sym={m.s} size={26} />
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
@@ -435,6 +435,7 @@ export function DashboardScreen() {
               </div>
               {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
                 <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
+                  <StockLogo sym={m.s} size={26} />
                   <span className="tkr">{m.s}</span>
                   <span className="mid">{m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
@@ -458,14 +459,15 @@ export function DashboardScreen() {
                   const hc  = heatCol(sd.chg);
                   const tot = sd.items.reduce((s, i) => s + i[1], 0);
                   return (
-                    <div key={sd.name} onClick={() => openSector(sd.name)}
+                    <div key={sd.name}
+                      onClick={() => openSector(sd.name)}
+                      onMouseEnter={e => showHeatPop(e, sd)}
+                      onMouseLeave={hideHeatPop}
                       style={{
                         cursor: "pointer", background: hc.bg, borderRadius: 7,
                         padding: "8px 9px", flex: `${Math.max(1, tot / 1400)} 1 70px`,
                         transition: "filter .13s",
                       }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.filter = "brightness(1.15)"}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.filter = ""}
                     >
                       <div style={{ fontSize: ".6rem", fontWeight: 700, color: hc.fg, lineHeight: 1.1 }}>{sd.name}</div>
                       <div className="mono" style={{ fontSize: ".64rem", color: hc.fg, opacity: .88 }}>{sign(sd.chg)}</div>
@@ -493,6 +495,7 @@ export function DashboardScreen() {
                   onClick={() => openStock(a.s)}
                   {...mr(a.s, "analyst")}
                 >
+                  <StockLogo sym={a.s} size={26} />
                   <span className="tkr">{a.s}</span>
                   <span className="mid">{a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.to}</b></span>
                   <span className="r">{analystDir(a.dir)}</span>
@@ -520,6 +523,7 @@ export function DashboardScreen() {
                     onClick={() => openStock(s.s)}
                     {...mr(s.s, "screener")}
                   >
+                    <StockLogo sym={s.s} size={26} />
                     <span className="tkr">{s.s}</span>
                     <span className="mid">RS {s.rs} · {s.sec}</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
@@ -536,6 +540,7 @@ export function DashboardScreen() {
                     onClick={() => openStock(s.s)}
                     {...mr(s.s, "screener")}
                   >
+                    <StockLogo sym={s.s} size={26} />
                     <span className="tkr">{s.s}</span>
                     <span className="mid">RS {s.rs} · {s.sec}</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
@@ -565,6 +570,7 @@ export function DashboardScreen() {
                     onClick={() => openStock(f.s)}
                     {...mr(f.s, "portfolio")}
                   >
+                    <StockLogo sym={f.s} size={26} />
                     <span className="tkr">{f.s}</span>
                     <span className="mid">{f.size} · {f.conv} conv.</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
@@ -588,6 +594,7 @@ export function DashboardScreen() {
                   onClick={() => openStock(w.s)}
                   {...mr(w.s, "watchlist")}
                 >
+                  <StockLogo sym={w.s} size={26} />
                   <span className="tkr">{w.s}</span>
                   <span className="mid">
                     {w.opt ? <span className="pill opt">⚡</span> : null}{w.opt ? " " : ""}ER {w.er}
@@ -612,6 +619,7 @@ export function DashboardScreen() {
                   onClick={() => openStock(x.s)}
                   {...mr(x.s, "insider")}
                 >
+                  <StockLogo sym={x.s} size={26} />
                   <span className="tkr">{x.s}</span>
                   <span className="mid">{x.dir === "buy" ? "Buy" : "Sell"} · {x.role.replace(/ \(.*\)/, "")}</span>
                   <span className={`r ${x.dir === "buy" ? "up" : "down"}`}>
@@ -985,6 +993,62 @@ export function DashboardScreen() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── Heatmap hover popup ── */}
+      {heatPop && (
+        <div
+          className="heat-pop"
+          style={{
+            left: Math.min(heatPop.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 260),
+            top: heatPop.y,
+            padding: "11px 13px",
+          }}
+          onMouseEnter={cancelHideHeat}
+          onMouseLeave={hideHeatPop}
+        >
+          <div className="heat-pop-h">
+            <span>{heatPop.sd.name}</span>
+            <span className={`pill ${heatPop.sd.chg >= 0 ? "up" : "dn"}`}>{sign(heatPop.sd.chg)}</span>
+          </div>
+          <div className="heat-pop-trend">{heatPop.sd.trend}</div>
+          {heatPop.sd.items.slice(0, 4).map(([sym, mcap, chg]) => {
+            const mv  = movers.find(m => m.s === sym);
+            const scr = screenerStocks.find(s => s.s === sym);
+            const cap = mcap >= 1000 ? `$${(mcap / 1000).toFixed(1)}T` : `$${Math.round(mcap)}B`;
+            const isActive = heatSym === sym;
+            return (
+              <div key={sym} className={`heat-pop-stock${isActive ? " active" : ""}`}
+                onMouseEnter={() => { cancelHideHeat(); setHeatSym(sym); }}
+                onMouseLeave={() => setHeatSym(null)}
+                onClick={() => { openStock(sym); setHeatPop(null); }}
+              >
+                <div className="heat-pop-row">
+                  <StockLogo sym={sym} size={20} />
+                  <span className="tkr">{sym}</span>
+                  <span className={`r ${cls(chg)}`}>{sign(chg)}</span>
+                </div>
+                {isActive && (
+                  <div className="heat-pop-detail">
+                    <span>Mkt Cap <b>{cap}</b></span>
+                    {mv  ? <span>Price <b>${fmt(mv.p)}</b></span> : null}
+                    {mv  ? <span>RVOL <b>{mv.rvol}×</b></span>   : null}
+                    {scr ? <span>RS <b>{scr.rs}/99</b></span>     : null}
+                    {mv  ? <span className={mv.ma.startsWith("Above") ? "up" : "down"} style={{ fontSize: ".6rem" }}>{mv.ma}</span> : null}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <div className="heat-pop-foot">
+            <button className="btn" onClick={() => { openSector(heatPop.sd.name); setHeatPop(null); }}>
+              Open Sector
+            </button>
+            <Link className="btn" href="/menu/heatmap" onClick={() => setHeatPop(null)}>
+              Full Heatmap →
+            </Link>
+          </div>
+        </div>
       )}
 
       {/* ── Dash hover popup ── */}

@@ -135,14 +135,22 @@
 .brandcell {
   grid-area: brand;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
   padding: 0 16px;
   border-right: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);
-  gap: 10px;
+  gap: 8px;
   position: relative;
   z-index: 10;
   background: var(--surface-0);
+}
+.brand-top { display: flex; align-items: center; gap: 10px; }
+.nav-clock {
+  font-size: .62rem; color: var(--text-dim-solid);
+  font-family: var(--f-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-top: 6px; border-top: 1px solid var(--border-soft); width: 100%;
 }
 .logo {
   width: 30px; height: 30px;
@@ -158,7 +166,6 @@
   font-family: var(--f-display); font-weight: 700; font-size: 15px;
   color: var(--text-hi); letter-spacing: -.3px;
 }
-.wordmark b { color: var(--ai); font-weight: 700; }
 .wordmark span {
   display: block;
   font-family: var(--f-body); font-weight: 500; font-size: .58rem;
@@ -863,6 +870,24 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .copilot-send:hover { filter: brightness(1.1); }
 
 /* dashboard hover popup */
+/* heatmap click modal */
+.hm-modal-overlay {
+  position: fixed; inset: 0; z-index: 600;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.hm-modal {
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: 16px; padding: 20px;
+  width: 360px; max-width: calc(100vw - 32px);
+  box-shadow: 0 32px 80px rgba(0,0,0,.6);
+  animation: iq-slideUp .18s ease both;
+}
+.hm-modal-head {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 4px;
+}
+
 .dash-pop { position: fixed; z-index: 400; width: 300px; max-width: 92vw; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,.2); padding: 12px 13px; cursor: pointer; }
 .dash-pop .dp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; padding-bottom: 9px; border-bottom: 1px solid var(--border); }
 .dp-sym { font-weight: 800; color: var(--text-hi); font-size: .92rem; }
@@ -874,6 +899,35 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .dp-note { margin-top: 8px; font-size: .74rem; line-height: 1.45; color: var(--text); background: var(--surface-3); border-radius: 8px; padding: 7px 9px; }
 .dp-foot { margin-top: 9px; font-size: .66rem; color: var(--brand-2); font-weight: 600; }
 .minirow:hover { background: rgba(124,108,245,.06); border-radius: 6px; }
+
+/* heatmap hover popup */
+.heat-pop {
+  position: fixed; z-index: 1000; pointer-events: auto;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 12px; min-width: 210px; max-width: 250px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.35);
+  animation: iq-dropdownIn .12s ease both;
+}
+/* invisible bridge between tile and popup so mouse doesn't leave hover area */
+.heat-pop::before {
+  content: ''; position: absolute; top: -10px; left: 0; right: 0; height: 10px;
+}
+.heat-pop-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+.heat-pop-h span:first-child { font-size: .82rem; font-weight: 700; color: var(--text-hi); }
+.heat-pop-trend { font-size: .62rem; color: var(--text-dim-solid); margin-bottom: 9px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.heat-pop-stock { border-radius: 6px; cursor: pointer; transition: background .1s; }
+.heat-pop-stock:hover, .heat-pop-stock.active { background: rgba(124,108,245,.1); }
+.heat-pop-row { display: flex; align-items: center; gap: 6px; padding: 4px 5px; }
+.heat-pop-row .tkr { font-size: 11px; width: 44px; flex-shrink: 0; }
+.heat-pop-row .r { font-size: .75rem; font-family: var(--f-mono); font-weight: 600; margin-left: auto; }
+.heat-pop-detail {
+  display: flex; flex-wrap: wrap; gap: 2px 10px;
+  padding: 2px 5px 5px 31px; font-size: .66rem;
+}
+.heat-pop-detail span { display: flex; gap: 4px; align-items: center; color: var(--text-dim-solid); }
+.heat-pop-detail b { color: var(--text-hi); font-weight: 600; }
+.heat-pop-foot { display: flex; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-soft); }
+.heat-pop-foot .btn { flex: 1; font-size: .68rem; padding: 4px 8px; justify-content: center; }
 
 /* movers popup */
 .mv-sel { background: var(--surface-3); color: var(--text-hi); border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; font-size: .78rem; font-family: var(--f-body); cursor: pointer; }

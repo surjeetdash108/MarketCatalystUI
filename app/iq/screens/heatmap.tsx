@@ -1,18 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useIQActions } from "../shell";
-import { sectorList } from "../data";
-import { sign, heatCol } from "../utils";
+import { sectorList, movers, screenerStocks } from "../data";
+import { sign, heatCol, fmt, cls, StockLogo } from "../utils";
 
 const TABS = ["Stocks", "S&P 500"];
-const HEADER_H = 24; // px height of each sector's label bar
-const APPROX_W = 1100; // used only for font-size estimation
+const HEADER_H = 24;
+const APPROX_W = 1100;
 const APPROX_H = 620;
 
-// ---- Recursive bisection treemap layout ----
 interface LItem { key: string; weight: number; }
-interface LRect { key: string; x: number; y: number; w: number; h: number; }
+interface LRect  { key: string; x: number; y: number; w: number; h: number; }
 
 function bisect(items: LItem[], x: number, y: number, w: number, h: number): LRect[] {
   if (items.length === 0) return [];
@@ -25,37 +24,45 @@ function bisect(items: LItem[], x: number, y: number, w: number, h: number): LRe
       : [{ key: items[0].key, x, y, w, h: h * f }, { key: items[1].key, x, y: y + h * f, w, h: h * (1 - f) }];
   }
   const total = items.reduce((s, i) => s + i.weight, 0);
-  let cum = 0;
-  let split = 0;
-  const half = total / 2;
+  let cum = 0; let split = 0;
   for (let i = 0; i < items.length - 1; i++) {
-    cum += items[i].weight;
-    split = i;
-    if (cum >= half) break;
+    cum += items[i].weight; split = i;
+    if (cum >= total / 2) break;
   }
   const first = items.slice(0, split + 1);
-  const rest = items.slice(split + 1);
-  const frac = first.reduce((s, i) => s + i.weight, 0) / total;
+  const rest  = items.slice(split + 1);
+  const frac  = first.reduce((s, i) => s + i.weight, 0) / total;
   return w >= h
     ? [...bisect(first, x, y, w * frac, h), ...bisect(rest, x + w * frac, y, w * (1 - frac), h)]
     : [...bisect(first, x, y, w, h * frac), ...bisect(rest, x, y + h * frac, w, h * (1 - frac))];
 }
 
-export function HeatmapScreen() {
-  const { openSector, openStock } = useIQActions();
-  const [tab, setTab] = useState(0);
+function capFmt(mcap: number) {
+  return mcap >= 1000 ? `$${(mcap / 1000).toFixed(1)}T` : `$${Math.round(mcap)}B`;
+}
 
-  // Sort sectors by weight descending for better layout
+interface HoverStock { sym: string; chg: number; mcap: number; x: number; y: number; }
+
+export function HeatmapScreen() {
+  const { openSector, openStockFull } = useIQActions();
+  const [tab, setTab]     = useState(0);
+  const [hover, setHover] = useState<HoverStock | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showHover = (e: React.MouseEvent, sym: string, chg: number, mcap: number) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = r.right + 8 + 310 > window.innerWidth ? r.left - 318 : r.right + 8;
+    setHover({ sym, chg, mcap, x: Math.max(8, x), y: Math.min(r.top, window.innerHeight - 300) });
+  };
+  const hideHover   = () => { hoverTimer.current = setTimeout(() => setHover(null), 200); };
+  const cancelHover = () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); };
+
   const sorted = [...sectorList].sort(
     (a, b) => b.items.reduce((s, i) => s + i[1], 0) - a.items.reduce((s, i) => s + i[1], 0)
   );
-
-  const sectorItems: LItem[] = sorted.map(g => ({
-    key: g.name,
-    weight: g.items.reduce((s, i) => s + i[1], 0),
-  }));
-
-  const sectorLayout = bisect(sectorItems, 0, 0, 100, 100);
+  const sectorItems   = sorted.map(g => ({ key: g.name, weight: g.items.reduce((s, i) => s + i[1], 0) }));
+  const sectorLayout  = bisect(sectorItems, 0, 0, 100, 100);
   const sectorRectMap = Object.fromEntries(sectorLayout.map(r => [r.key, r]));
 
   return (
@@ -65,7 +72,7 @@ export function HeatmapScreen() {
           <div className="eyebrow">Market Heatmap</div>
           <h1 className="page-title">Where the day is leaning</h1>
           <div className="page-sub">
-            {sectorList.length} sectors · size = market cap · color = % change · click a tile to open the stock
+            {sectorList.length} sectors · size = market cap · color = % change · hover for data · click to open stock
           </div>
         </div>
         <div className="tabs">
@@ -80,158 +87,104 @@ export function HeatmapScreen() {
         <div className="spacer" />
         <div className="legend" style={{ gap: 4 }}>
           <span style={{ fontSize: ".66rem", color: "var(--down)" }}>−3%</span>
-          <i style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: "rgba(208,52,76,.85)" }} />
-          <i style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: "rgba(208,52,76,.4)" }} />
-          <i style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: "#3a4658" }} />
-          <i style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: "rgba(28,170,112,.4)" }} />
-          <i style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: "rgba(28,170,112,.85)" }} />
+          {(["rgba(208,52,76,.85)", "rgba(208,52,76,.4)", "#3a4658", "rgba(28,170,112,.4)", "rgba(28,170,112,.85)"] as const).map((bg, i) => (
+            <i key={i} style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: bg }} />
+          ))}
           <span style={{ fontSize: ".66rem", color: "var(--up)" }}>+3%</span>
         </div>
       </div>
 
-      {/* ── Full-viewport treemap ── */}
+      {/* ── Treemap ── */}
       <div style={{
-        position: "relative",
-        width: "100%",
-        height: "calc(100vh - 220px)",
-        minHeight: 520,
-        borderRadius: 10,
-        overflow: "hidden",
-        border: "1px solid var(--border)",
-        background: "var(--bg)",
+        position: "relative", width: "100%",
+        height: "calc(100vh - 220px)", minHeight: 520,
+        borderRadius: 10, overflow: "hidden",
+        border: "1px solid var(--border)", background: "var(--bg)",
       }}>
         {sorted.map(g => {
           const lr = sectorRectMap[g.name];
           if (!lr) return null;
-
-          // Sort stocks within sector largest first
           const stocksSorted = [...g.items].sort((a, b) => b[1] - a[1]);
-          const stockItems: LItem[] = stocksSorted.map(([sym, mc]) => ({ key: sym, weight: mc }));
-          const stockLayout = bisect(stockItems, 0, 0, 100, 100);
-          const stockMap = Object.fromEntries(stockLayout.map(r => [r.key, r]));
-
-          // Approx pixel size of this sector for font sizing
-          const sectPxW = (lr.w / 100) * APPROX_W;
-          const sectPxH = (lr.h / 100) * APPROX_H;
+          const stockLayout  = bisect(stocksSorted.map(([sym, mc]) => ({ key: sym, weight: mc })), 0, 0, 100, 100);
+          const stockMap     = Object.fromEntries(stockLayout.map(r => [r.key, r]));
+          const sectPxW      = (lr.w / 100) * APPROX_W;
+          const sectPxH      = (lr.h / 100) * APPROX_H;
 
           return (
-            <div
-              key={g.name}
-              style={{
-                position: "absolute",
-                left: `${lr.x}%`,
-                top: `${lr.y}%`,
-                width: `${lr.w}%`,
-                height: `${lr.h}%`,
-                padding: 2,
-                boxSizing: "border-box",
-              }}
-            >
+            <div key={g.name} style={{
+              position: "absolute",
+              left: `${lr.x}%`, top: `${lr.y}%`,
+              width: `${lr.w}%`, height: `${lr.h}%`,
+              padding: 2, boxSizing: "border-box",
+            }}>
               <div style={{
-                width: "100%",
-                height: "100%",
-                borderRadius: 6,
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,.07)",
-                position: "relative",
-                background: "var(--surface-0)",
-                display: "flex",
-                flexDirection: "column",
+                width: "100%", height: "100%", borderRadius: 6,
+                overflow: "hidden", border: "1px solid rgba(255,255,255,.07)",
+                position: "relative", background: "var(--surface-0)",
+                display: "flex", flexDirection: "column",
               }}>
                 {/* Sector header */}
-                <div
-                  onClick={() => openSector(g.name)}
-                  style={{
-                    height: HEADER_H,
-                    minHeight: HEADER_H,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0 7px",
-                    cursor: "pointer",
-                    background: "rgba(0,0,0,.3)",
-                    borderBottom: "1px solid rgba(255,255,255,.06)",
-                    gap: 4,
-                    flexShrink: 0,
-                  }}
-                >
+                <div onClick={() => openSector(g.name)} style={{
+                  height: HEADER_H, minHeight: HEADER_H, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "0 7px", cursor: "pointer",
+                  background: "rgba(0,0,0,.3)", borderBottom: "1px solid rgba(255,255,255,.06)", gap: 4,
+                }}>
                   <span style={{
-                    fontSize: ".6rem", fontWeight: 700,
-                    letterSpacing: ".05em", textTransform: "uppercase",
-                    color: "var(--text-dim-solid)",
+                    fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em",
+                    textTransform: "uppercase", color: "var(--text-dim-solid)",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}>
-                    {g.name}
-                  </span>
+                  }}>{g.name}</span>
                   <span style={{
                     fontSize: ".62rem", fontFamily: "var(--f-mono)", fontWeight: 700,
-                    color: g.chg >= 0 ? "var(--up)" : "var(--down)",
-                    flexShrink: 0,
-                  }}>
-                    {sign(g.chg)}
-                  </span>
+                    color: g.chg >= 0 ? "var(--up)" : "var(--down)", flexShrink: 0,
+                  }}>{sign(g.chg)}</span>
                 </div>
 
-                {/* Stock cells — relative container */}
+                {/* Stock cells */}
                 <div style={{ position: "relative", flex: 1 }}>
-                  {stocksSorted.map(([sym, , chg]) => {
+                  {stocksSorted.map(([sym, mcap, chg]) => {
                     const sr = stockMap[sym];
                     if (!sr) return null;
-                    const hc = heatCol(chg);
-
-                    // Approximate pixel size of this cell
+                    const hc      = heatCol(chg);
                     const cellPxW = (sr.w / 100) * sectPxW;
                     const cellPxH = (sr.h / 100) * (sectPxH - HEADER_H);
-                    const minDim = Math.min(cellPxW, cellPxH);
-                    const showText = minDim > 18 && cellPxW > 24;
+                    const minDim  = Math.min(cellPxW, cellPxH);
+                    const showText   = minDim > 18 && cellPxW > 24;
                     const showChange = minDim > 32 && cellPxW > 40;
                     const fs = Math.max(0.56, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 72));
 
                     return (
-                      <div
-                        key={sym}
-                        onClick={e => { e.stopPropagation(); openStock(sym); }}
+                      <div key={sym}
+                        onClick={e => { e.stopPropagation(); openStockFull(sym); }}
+                        onMouseEnter={e => showHover(e, sym, chg, mcap)}
+                        onMouseLeave={hideHover}
                         title={`${sym}  ${sign(chg)}`}
                         style={{
                           position: "absolute",
-                          left: `${sr.x}%`,
-                          top: `${sr.y}%`,
-                          width: `${sr.w}%`,
-                          height: `${sr.h}%`,
-                          background: hc.bg,
-                          display: "flex",
-                          flexDirection: "column",
-                          justifyContent: "center",
-                          alignItems: "center",
-                          cursor: "pointer",
-                          boxSizing: "border-box",
-                          border: "1px solid rgba(0,0,0,.18)",
-                          overflow: "hidden",
-                          padding: 2,
-                          transition: "filter .1s",
+                          left: `${sr.x}%`, top: `${sr.y}%`,
+                          width: `${sr.w}%`, height: `${sr.h}%`,
+                          background: hc.bg, cursor: "pointer",
+                          display: "flex", flexDirection: "column",
+                          justifyContent: "center", alignItems: "center",
+                          boxSizing: "border-box", border: "1px solid rgba(0,0,0,.18)",
+                          overflow: "hidden", padding: 2, transition: "filter .1s",
                         }}
-                        onMouseEnter={e => (e.currentTarget.style.filter = "brightness(1.25)")}
-                        onMouseLeave={e => (e.currentTarget.style.filter = "")}
+                        onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
+                        onMouseOut={e => (e.currentTarget.style.filter = "")}
                       >
                         {showText && (
                           <>
                             <span style={{
                               fontFamily: "var(--f-mono)", fontWeight: 700,
                               color: hc.fg, fontSize: `${fs}rem`,
-                              lineHeight: 1, textAlign: "center",
-                              whiteSpace: "nowrap",
-                            }}>
-                              {sym}
-                            </span>
+                              lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
+                            }}>{sym}</span>
                             {showChange && (
                               <span style={{
-                                fontFamily: "var(--f-mono)",
-                                color: hc.fg, opacity: .82,
-                                fontSize: `${fs * 0.82}rem`,
-                                lineHeight: 1, marginTop: 3,
-                              }}>
-                                {sign(chg)}
-                              </span>
+                                fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
+                                fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 3,
+                              }}>{sign(chg)}</span>
                             )}
                           </>
                         )}
@@ -244,6 +197,36 @@ export function HeatmapScreen() {
           );
         })}
       </div>
+
+      {/* ── Hover tooltip ── */}
+      {hover && (() => {
+        const mv  = movers.find(m => m.s === hover.sym);
+        const scr = screenerStocks.find(s => s.s === hover.sym);
+        return (
+          <div className="dash-pop"
+            style={{ left: hover.x, top: hover.y }}
+            onMouseEnter={cancelHover}
+            onMouseLeave={hideHover}
+            onClick={() => { setHover(null); openStockFull(hover.sym); }}
+          >
+            <div className="dp-head">
+              <StockLogo sym={hover.sym} size={28} />
+              <span className="dp-sym">{hover.sym}</span>
+              <span className={`pill ${hover.chg >= 0 ? "up" : "dn"}`}>{sign(hover.chg)}</span>
+            </div>
+            <div className="dp-row"><span>Mkt Cap</span><b>{capFmt(hover.mcap)}</b></div>
+            {mv  && <div className="dp-row"><span>Price</span><b>${fmt(mv.p)}</b></div>}
+            {mv  && <div className="dp-row"><span>RVOL</span><b className={mv.rvol >= 2 ? "up" : ""}>{mv.rvol}×</b></div>}
+            {scr && <div className="dp-row"><span>RS Rating</span><b>{scr.rs}/99</b></div>}
+            {mv?.ma && <div className="dp-row"><span>MA Status</span><b className={cls(mv.c)}>{mv.ma}</b></div>}
+            {mv?.tech && <div className="dp-note">{mv.tech}</div>}
+            <button className="dp-foot" style={{ cursor: "pointer", background: "none", border: "none", padding: 0, width: "100%", textAlign: "left" }}
+              onClick={() => { setHover(null); openStockFull(hover.sym); }}>
+              Open full stock details →
+            </button>
+          </div>
+        );
+      })()}
     </>
   );
 }

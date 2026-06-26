@@ -816,6 +816,25 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return "dm-sans";
     return (localStorage.getItem("iq-font") as FontKey) || "dm-sans";
   });
+  const [navTime, setNavTime] = useState(() => {
+    const d = new Date();
+    const day = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return { day, time };
+  });
+
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      setNavTime({
+        day: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+        time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+      });
+    };
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -920,12 +939,17 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           <div className="app">
             {/* Brand cell */}
             <div className="brandcell">
-              <div className="logo">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
-                </svg>
+              <div className="brand-top">
+                <div className="logo">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
+                  </svg>
+                </div>
+                <div className="wordmark">StockWise<span>Market Intelligence</span></div>
               </div>
-              <div className="wordmark">Stock<b>Wise</b><span>Market Intelligence</span></div>
+              <div className="nav-clock">
+                {navTime.day} · <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{navTime.time} ET</span>
+              </div>
             </div>
 
             {/* Topbar */}
@@ -943,7 +967,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
                   </svg>
                 </div>
-                <div className="wordmark">Stock<b>Wise</b><span>Market Intelligence</span></div>
+                <div className="wordmark">StockWise<span>Market Intelligence</span></div>
               </div>
               <button className="cmd" onClick={() => setPaletteOpen(true)}>
                 ⌕ Search tickers and stocks…
@@ -1020,7 +1044,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
                   </svg>
                 </div>
-                <div className="wordmark">Stock<b>Wise</b><span>Market Intelligence</span></div>
+                <div className="wordmark">StockWise<span>Market Intelligence</span></div>
                 <button className="mob-nav-close" onClick={() => setNavOpen(false)} aria-label="Close navigation">✕</button>
               </div>
               {(["Intelligence", "My Money", "Context"] as const).map(group => (

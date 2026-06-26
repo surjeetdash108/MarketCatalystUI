@@ -925,7 +925,7 @@ export default function LandingPage() {
         <nav className="hw-nav">
           <Link href="/" className="hw-brand">
             <span className="hw-logo"><LogoMark /></span>
-            Stock<b>Wise</b>
+            StockWise
           </Link>
           <div className="hw-nav-cta">
             <button className="hw-ghost" onClick={() => openAuth("login")}>Log in</button>
@@ -1021,7 +1021,7 @@ export default function LandingPage() {
               <button className="mqg-x" onClick={() => setAuthOpen(false)}>✕</button>
               <div className="au-head">
                 <span className="hw-logo"><LogoMark size={15} /></span>
-                Stock<b>Wise</b>
+                StockWise
               </div>
               <div className="au-tabs">
                 <button className={`au-tab${authMode === "signup" ? " on" : ""}`} onClick={() => setAuthMode("signup")}>Sign up</button>
