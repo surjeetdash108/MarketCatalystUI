@@ -1908,4 +1908,8 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
   /* ---- Ticker: tighter items ---- */
   .tk { padding: 0 10px; }
 }
-@media(max-width:860px){.opt-wrap{flex-direction:column}.opt-side{width:100%;max-height:230px}}
+/* Tablet (768–860px): options sidebar stacks above chain; sidebar still visible */
+@media (max-width: 860px) {
+  .opt-wrap { flex-direction: column; }
+  .opt-side { width: 100%; max-height: 230px; }
+}

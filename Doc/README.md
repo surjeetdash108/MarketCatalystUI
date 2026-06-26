@@ -41,6 +41,17 @@ Auth pages all carry StockWise logo → / (landing page)
 
 ---
 
+## Mobile Responsive
+
+The web app is fully responsive at `≤767px` (mobile) and `≤900px` (auth pages):
+
+- **Shell**: Grid collapses to single-column. Rail becomes a fixed slide-in drawer triggered by a hamburger button (`.mob-ham`). The scrim (`.mob-nav-scrim`) is placed inside `.app` to share the same CSS stacking context as the rail (z-200), preventing it from blocking nav taps.
+- **Drawers & Copilot**: Drawers become bottom-sheets (`border-radius` on top corners). Copilot FAB becomes an icon-only 48px circle.
+- **Options page**: Expiry tabs scroll horizontally (`flex-wrap: nowrap; overflow-x: auto`). Stock header meta wraps below price at narrow widths.
+- **Auth pages**: Two-panel `AuthLayout` collapses at `≤900px` (stacks vertically) and at `≤600px` the marketing panel is hidden — only the form card is shown, full-width.
+
+---
+
 ## Navigation
 
 The shell (`IQShell`) wraps every authenticated page with a left sidebar of 14 workspaces grouped into three categories:
@@ -69,6 +80,8 @@ Defined in `app/iq.css` via CSS custom properties on `:root`:
 
 Key component classes: `.pill`, `.pill.up/.down/.ai/.hold/.dn/.amc`, `.card`, `.col-N`, `.tr-badge`, `.ai-block`, `.wmn`, `.filt`, `.dd`
 
+**Mobile classes** (desktop-hidden by default, activated in `@media (max-width: 767px)`): `.mob-ham`, `.mob-brand`, `.mob-rail-head`, `.mob-nav-close`, `.mob-nav-scrim`, `.mob-open` (on `.rail`)
+
 ---
 
 ## Development
@@ -88,7 +101,7 @@ Runs on Next.js 16.2.9 with `output: 'export'`. All 24 routes are pre-rendered a
 | Layer | Technology |
 |---|---|
 | Framework | Next.js 16 App Router (`output: 'export'`) |
-| Auth | Firebase Authentication (email/password + Google OAuth) |
+| Auth | Firebase Authentication (email/password + Google OAuth, iOS Safari-safe via `indexedDBLocalPersistence` + popup-first) |
 | Database | Cloud Firestore |
 | State | Redux Toolkit |
 | Styling | CSS custom properties (no Tailwind) |

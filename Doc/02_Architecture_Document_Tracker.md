@@ -152,6 +152,7 @@ Routing — Next.js App Router
 -   `/auth/login` → Standalone login page (AuthLayout two-panel + LoginForm). Logo → `/`.
 -   `/auth/signup` → Create Account (AuthLayout + SignupForm). "Sign in" link → `/`. Logo → `/`.
 -   `/auth/forgot-password` → Password Reset (AuthLayout + ForgotForm). "Back to sign in" → `/`. Logo → `/`.
+-   **AuthLayout mobile fix** (`app/auth/auth-layout.tsx`): classes `lp-auth-cols`, `lp-auth-left`, and `lp-auth-form` are now correctly applied to the JSX container elements, enabling the inline `<style>` media queries to take effect. At `≤900px` the two columns stack vertically; at `≤600px` the marketing panel (`lp-auth-left`) is hidden and the form card becomes full-width. Previously `lp-auth-cols` was absent from the JSX so the layout never collapsed on any device.
 -   `/dashboard` → IQ Dashboard screen
 -   `/menu/[slug]` → all StockWise screens (earnings, movers, heatmap, analyst, screener, ipos, portfolio, watchlist, stock, insider, commentary, recap, macro, manage-plan)
 -   `/settings` → Settings screen
@@ -176,7 +177,7 @@ Auth Navigation Map
 
 StockWise Shell & Component Architecture
 
--   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav (3 groups: Intelligence / My Money / Context), topbar with "Stock**Wise**" branding, drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`.
+-   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav (3 groups: Intelligence / My Money / Context), topbar with "Stock**Wise**" branding, drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`. **Mobile nav**: on `≤767px` the sidebar rail becomes `position:fixed; left:0; width:min(260px,80vw); transform:translateX(-100%)` and slides in when the `.mob-open` class is applied. New shell elements: `.mob-ham` (hamburger button in topbar), `.mob-brand` (logo in topbar), `.mob-rail-head` (rail header with close button), `.mob-nav-close`, `.mob-nav-scrim`. The scrim (`.mob-nav-scrim`, z-index 100) is placed **inside** the `.app` div so it shares `.app`'s stacking context with the rail (z-index 200) — prevents z-index bleed to unrelated layers.
 
 -   **`IQActionsContext`**: React context providing `openStock(sym)`, `openStockFull(sym)`, `openEarnings(sym)`, `openSector(name)`, `openFund(idx)`, `openIndex(i)`, `openFearGreed()`, `setCopilot(open)`, `theme`, `setTheme` to all child screens. Consumed via `useIQActions()` hook.
 
@@ -208,7 +209,7 @@ Shared Utility Components (`app/iq/utils.tsx`)
 
 Design System — StockWise (`iq.css`)
 
--   All styling is via a custom CSS design system in `app/iq.css`, imported globally in `app/layout.tsx`.
+-   All styling is via a custom CSS design system in `app/iq.css`, imported globally in `app/layout.tsx`. Two mobile responsive breakpoints are defined: `@media (max-width: 767px)` (mobile) and `@media (max-width: 860px)` (tablet, options sidebar).
 
 -   CSS custom properties on `:root` define the dark-mode palette (default): `--bg`, `--surface-0/1/2/3`, `--border`, `--border-soft`, `--border-strong`, `--text-hi`, `--text`, `--text-dim-solid`, `--brand`, `--brand-2`, `--brand-dim`, `--ai`, `--ai-2`, `--ai-dim`, `--up`, `--up-dim`, `--down`, `--down-dim`, `--warn`, `--warn-dim`, `--f-display`, `--f-body`, `--f-mono`, `--r-sm`, `--r`, `--r-lg`, `--r-xl`, `--shadow`.
 
@@ -216,11 +217,11 @@ Design System — StockWise (`iq.css`)
 
 -   `.iq-root[data-theme="light"]` overrides with a light palette (`--bg: #EDF1F7` etc.).
 
--   Layout primitives: `.app` (CSS grid: sidebar + content), `.dash` (12-column content grid), `.col-3/4/5/6/7/8/12`, `.card`, `.card-h`, `.card-b`, `.page-head`, `.page-title`.
+-   Layout primitives: `.app` (CSS grid: sidebar + content; collapses to `grid-template-areas: 'topbar' 'ticker' 'main'` single-column on mobile), `.dash` (12-column content grid), `.col-3/4/5/6/7/8/12`, `.card`, `.card-h`, `.card-b`, `.page-head`, `.page-title`.
 
--   Component classes: `.wmn` (What Matters Now block), `.ai-block`, `.ai-sec`, `.heat` (sector heatmap grid), `.fundcard`, `.fin-row`, `.iq-toggle`, `.iq-toggle-row`, `.pill`, `.pill.up/dn/amc/opt/bmo/beat/miss/raise/lower/hold`, `.tr-badge`, `.iconbtn`, `.topbar-avatar`, `.trseg`, `.trseg2`, `.tf-pills`, `.ind-tbl`, `.sd-grid`, `.sd-head`.
+-   Component classes: `.wmn` (What Matters Now block), `.ai-block`, `.ai-sec`, `.heat` (sector heatmap grid), `.fundcard`, `.fin-row`, `.iq-toggle`, `.iq-toggle-row`, `.pill`, `.pill.up/dn/amc/opt/bmo/beat/miss/raise/lower/hold`, `.tr-badge`, `.iconbtn`, `.topbar-avatar`, `.pd-avatar` (52px circle for profile dropdown — shows photo or initials monogram), `.trseg`, `.trseg2`, `.tf-pills`, `.ind-tbl`, `.sd-grid`, `.sd-head`. Mobile-specific classes: `.mob-ham`, `.mob-brand`, `.mob-rail-head`, `.mob-nav-close`, `.mob-nav-scrim`, `.mob-open` (applied to rail to slide it in). `iq-dropdownIn` keyframe (`from { opacity:0; transform:scale(.95) } to { opacity:1; transform:scale(1) }`, `animation-fill-mode: both`) replaces `iq-scaleIn` for the profile dropdown to avoid the visual shift caused by the old `translateX(-50%)` that `iq-scaleIn` included.
 
--   Sliding drawer pattern: `.stock-side-drawer` — `position:fixed; right:0; top:0; height:100vh; width:min(680px,100vw); z-index:51; overflow:hidden auto`. Used by movers.tsx, watchlist.tsx, and portfolio.tsx to embed a full `StockScreen` without navigation. Header row uses `.drawer-h`; body uses `.drawer-b` (overflow auto, flex-grow). Paired with `.scrim` for click-away dismiss.
+-   Sliding drawer pattern: `.stock-side-drawer` — `position:fixed; right:0; top:0; height:100vh; width:min(680px,100vw); z-index:51; overflow:hidden auto`. Used by movers.tsx, watchlist.tsx, and portfolio.tsx to embed a full `StockScreen` without navigation. Header row uses `.drawer-h`; body uses `.drawer-b` (overflow auto, flex-grow). Paired with `.scrim` for click-away dismiss. On mobile (`≤767px`) drawers become bottom-sheets (`inset: auto 0 0 0; border-radius: top-xl`). Copilot FAB becomes an icon-only 48px circle on mobile. Options page expiry tabs scroll horizontally (`flex-wrap: nowrap; overflow-x: auto`) and header meta wraps below price. Nav items use `var(--text-hi)` in mobile drawer.
 
 -   Stock screener classes: `.filt`, `.filt .fh`, `.filt .fb`, `.fgroup .fl`, `.preset`, `.dd`, `.dd-menu`.
 
@@ -283,7 +284,9 @@ Cmd+K Command Bar
 
 -   **Firebase Hosting**: serves the Next.js static export (`out/` directory). Project ID: `fin-app26`. Deployed via `firebase deploy --only hosting`. Clean URLs enabled; all routes rewrite to `index.html` for SPA navigation.
 
--   **Firebase Authentication**: email/password + Google OAuth. Firebase ID tokens issued client-side; `FirebaseListener` monitors `onAuthStateChanged` and syncs to Redux store.
+-   **Firebase Authentication**: email/password + Google OAuth. Firebase ID tokens issued client-side; `FirebaseListener` monitors `onAuthStateChanged` and syncs to Redux store. **iOS Safari fix** (`app/firebase.ts`): `firebaseAuth` is now initialised via `initializeAuth` (not `getAuth`) with `persistence: [indexedDBLocalPersistence, browserLocalPersistence]` and `popupRedirectResolver: browserPopupRedirectResolver`, wrapped in a try/catch fallback to `getAuth` for hot-reload re-initialisation safety. All Google sign-in handlers (LoginForm, SignupForm, landing page) use popup-first with redirect fallback: `signInWithPopup` → on `auth/popup-blocked` → `signInWithRedirect`. `LoginForm` and `SignupForm` both call `getRedirectResult(firebaseAuth)` in a `useEffect` on mount to pick up pending redirect credentials. Fixes iOS Safari ITP which blocks cross-origin cookies used by the `firebaseapp.com` redirect domain.
+
+-   **Landing page fixes** (`app/landing.css`, `app/page.tsx`): `.lp-root.mq-root` background is now `transparent` (was `#000`), unblocking the WebGL wave canvas rendered behind the root element. `ScaledScreen` now uses a `ResizeObserver` to compute `scale = containerWidth / 1200` dynamically instead of the previous hardcoded constant, fixing glance-modal card previews at any container width.
 
 -   **Cloud Firestore**: primary data store. Collections live: `users/{uid}` (profile), `settings/{uid}` (user preferences including dark mode), `stock_comments` (user chart notes — saved from Stock Detail page right-click context menu; schema: `{uid, sym, name, comment, createdAt: Timestamp}`). Security rules enforced via `firestore.rules` (deployed via `firebase deploy --only firestore:rules`). Firebase project: `fin-app26`.
 

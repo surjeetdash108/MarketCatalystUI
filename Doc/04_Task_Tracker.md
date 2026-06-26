@@ -638,6 +638,12 @@ v1.5 | June 2026
 | T-082 | Wire dark mode to Firestore settings/{uid}; localStorage fast cache; ThemeConfirmModal | Frontend | 1d | P0 | FE Eng 1 | S-03 | **Done** | settings.tsx + shell.tsx + firestore.rules. |
 | T-114 | Extend Cmd+K: SEARCHABLE_STOCKS constant + starred stocks (Set state + toggleStar) | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | shell.tsx. |
 | T-123 | Code cleanup: remove dead code, centralise hashStr/EarnQ/earnHistory in utils.tsx | Cleanup | 1d | P1 | FE Eng 1 | S-10 | **Done** | Zero TS errors. No UI changes. |
+| T-125 | Mobile responsive shell: hamburger (`.mob-ham`), slide-in rail (`.rail.mob-open`), scrim inside `.app` (stacking context fix — scrim z-100, rail z-200), `navOpen` state + Escape/pathname close, mobile-brand in topbar | Frontend | 1.5d | P0 | FE Eng 1 | S-11 | **Done** | `app/iq/shell.tsx` + `app/iq.css`. `@media (max-width: 767px)` breakpoint. |
+| T-126 | Auth pages mobile responsive: added `lp-auth-cols` / `lp-auth-left` / `lp-auth-form` classes to wire `@media` rules (class was missing — two-column layout never collapsed). `≤900px` stacks vertically; `≤600px` hides marketing panel, form full-width | Frontend | 0.5d | P0 | FE Eng 1 | S-11 | **Done** | `app/auth/auth-layout.tsx`. |
+| T-127 | Firebase Auth iOS Safari fix: `initializeAuth` with `[indexedDBLocalPersistence, browserLocalPersistence]` (ITP-safe). All Google handlers: `signInWithPopup` first → `signInWithRedirect` fallback. `getRedirectResult` on mount in LoginForm + SignupForm | Frontend | 1d | P0 | FE Eng 1 | S-11 | **Done** | `app/firebase.ts` + `app/auth/login/login-form.tsx` + `app/auth/signup/signup-form.tsx` + `app/page.tsx`. |
+| T-128 | Profile dropdown: `iq-dropdownIn` animation (no `translateX` — fixes post-animation position jump). `pd-avatar` 52px image centered at top of dropdown. `animation-fill-mode: both` | Frontend | 0.5d | P1 | FE Eng 1 | S-11 | **Done** | `app/iq.css` + `app/iq/shell.tsx`. |
+| T-129 | Landing page fixes: WebGL canvas visible (`background: transparent` on `.lp-root.mq-root`). `ScaledScreen` uses `ResizeObserver` for dynamic scale (`containerWidth/1200`) — fixes glance modal at any width | Frontend | 0.5d | P1 | FE Eng 1 | S-11 | **Done** | `app/landing.css` + `app/page.tsx`. |
+| T-130 | Mobile options page: expiry tabs horizontal scroll (`flex-wrap:nowrap; overflow-x:auto`), stock header meta wraps below price. Nav items `var(--text-hi)` in mobile rail. AI badge removed from Earnings nav item (`badge: null`) | Frontend | 0.5d | P1 | FE Eng 1 | S-11 | **Done** | `app/iq.css` + `app/dashboard/menu-items.ts`. |
 
 ### Subscription & Billing
 
@@ -720,7 +726,7 @@ v1.5 | June 2026
 | Recaps | 3 | 10 | 13 |
 | Macro & VIX | 2 | 4 | 6 |
 | Stock Detail | 5 | 10 | 15 |
-| Shell & Design | 5 | 0 | 5 |
+| Shell & Design | 11 | 0 | 11 |
 | Subscription | 0 | 3 | 3 |
 | AI Copilot | 0 | 5 | 5 |
 | Cmd+K | 0 | 2 | 2 |
@@ -728,4 +734,4 @@ v1.5 | June 2026
 | Learn 60s | 0 | 2 | 2 |
 | Industry Alerts | 0 | 2 | 2 |
 | Mobile | 0 | 4 | 4 |
-| **TOTAL** | **50** | **169** | **219** |
+| **TOTAL** | **56** | **169** | **225** |

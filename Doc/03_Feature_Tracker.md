@@ -12,13 +12,13 @@ v1.3 | June 2026
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-47 | StockWise Landing Page + Modal Login | MVP | All | **Complete** | 100% | Full Stack | Standalone marketing page at `app/page.tsx`. Dark radial gradient + animated perspective grid (spPan). Sections: hw-nav (sticky glassmorphism navbar), hw-hero (headline + "What Matters Now" live mock frame), hw-commit (commitment block, hwSheen animation, 2 cards), hw-steps (5 alternating step+mock-frame sections), hw-tabs-sec (14 workspace cards, gradShift+hwShine hover), hw-final (CTA). Scroll-reveal via IntersectionObserver (`.reveal` → `.reveal.in`). "Log in" opens inline modal overlay — no navigation. "Sign up" → /auth/signup. Modal: LoginForm in glassmorphism card, ✕ + Escape to close, logo button closes modal. CSS: `app/landing.css`. |
+| F-47 | StockWise Landing Page + Modal Login | MVP | All | **Complete** | 100% | Full Stack | Standalone marketing page at `app/page.tsx`. Dark radial gradient + animated perspective grid (spPan). Sections: hw-nav (sticky glassmorphism navbar), hw-hero (headline + "What Matters Now" live mock frame), hw-commit (commitment block, hwSheen animation, 2 cards), hw-steps (5 alternating step+mock-frame sections), hw-tabs-sec (14 workspace cards, gradShift+hwShine hover), hw-final (CTA). Scroll-reveal via IntersectionObserver (`.reveal` → `.reveal.in`). "Log in" opens inline modal overlay — no navigation. "Sign up" → /auth/signup. Modal: LoginForm in glassmorphism card, ✕ + Escape to close, logo button closes modal. CSS: `app/landing.css`. WebGL wave animation now visible: `.lp-root.mq-root { background: transparent }` (was `#000`). `ScaledScreen` uses `ResizeObserver` for dynamic scale (`containerWidth/1200`) instead of hardcoded 0.2834 — fixes glance-modal card at any width. |
 
 ### Auth Pages — `/auth/*`
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-43 | Auth Pages — StockWise Theme | MVP | All | **Complete** | 100% | Full Stack | Login, Signup, Forgot Password with StockWise dark theme. Two-panel AuthLayout: LEFT = marketing panel (StockWise wordmark, gradient shimmer tagline, 8 animated feature pills with staggered spUp animation), RIGHT = glassmorphism form card (backdrop-filter blur, spRightIn animation). Google OAuth + email/password. Shared `app/auth/auth-layout.tsx`. Routes: /auth/login, /auth/signup, /auth/forgot-password. All logos → /. Signup "Sign in" → /. Forgot "Back to sign in" → /. |
+| F-43 | Auth Pages — StockWise Theme | MVP | All | **Complete** | 100% | Full Stack | Login, Signup, Forgot Password with StockWise dark theme. Two-panel AuthLayout: LEFT = marketing panel (StockWise wordmark, gradient shimmer tagline, 8 animated feature pills with staggered spUp animation), RIGHT = glassmorphism form card (backdrop-filter blur, spRightIn animation). Google OAuth + email/password. Shared `app/auth/auth-layout.tsx`. Routes: /auth/login, /auth/signup, /auth/forgot-password. All logos → /. Signup "Sign in" → /. Forgot "Back to sign in" → /. Mobile responsive fix: added classes `lp-auth-cols` / `lp-auth-left` / `lp-auth-form` to wire inline media queries. `≤900px` stacks columns; `≤600px` hides marketing panel, form goes full-width. Firebase Auth iOS Safari fix: `signInWithPopup` first, `signInWithRedirect` fallback on popup-blocked. `getRedirectResult` on mount in both LoginForm and SignupForm. `initializeAuth` with `indexedDBLocalPersistence` + `browserLocalPersistence` (ITP-safe). |
 
 ---
 
@@ -156,7 +156,7 @@ v1.3 | June 2026
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-42 | StockWise Shell & Design System | MVP | All | **Complete** | 100% | Full Stack | IQShell wrapping each page; sidebar nav (3 groups: Intelligence / My Money / Context; 14 screens inc. IPOs + Insider), topbar (StockWise logo gradient + wordmark b=ai color), drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, profile dropdown. IQActionsContext: openStock/openStockFull/openEarnings/openSector/openFund/openIndex/openFearGreed/setCopilot/theme/setTheme. **Modal pattern (iq.css)**: all overlay UIs use `position:fixed; inset:0; margin:auto` centered modal with `iq-popIn` scale+translateY animation, replacing the prior right-side sliding drawer. |
+| F-42 | StockWise Shell & Design System | MVP | All | **Complete** | 100% | Full Stack | IQShell wrapping each page; sidebar nav (3 groups: Intelligence / My Money / Context; 14 screens inc. IPOs + Insider), topbar (StockWise logo gradient + wordmark b=ai color), drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, profile dropdown. IQActionsContext: openStock/openStockFull/openEarnings/openSector/openFund/openIndex/openFearGreed/setCopilot/theme/setTheme. **Modal pattern (iq.css)**: all overlay UIs use `position:fixed; inset:0; margin:auto` centered modal with `iq-popIn` scale+translateY animation, replacing the prior right-side sliding drawer. Mobile responsive: `@media (max-width: 767px)` breakpoint. Hamburger (`.mob-ham`), slide-in rail (`.rail.mob-open`), scrim inside `.app` (critical stacking context fix — scrim z-100, rail z-200). Bottom-sheet drawers on mobile. Options page: horizontal tab scroll, header meta wraps. Nav items `var(--text-hi)` in rail. Tablet `@media (max-width: 860px)` stacks options sidebar. Profile dropdown: `iq-dropdownIn` animation (no translateX), `pd-avatar` 52px image in popup header. |
 | F-44 | User Preferences & Dark Mode | MVP | All | **Complete** | 100% | Full Stack | Dark mode toggle in Settings wired to Firestore `settings/{uid}` (darkMode: boolean). Custom in-app confirmation modal. Theme applied via `data-theme` on `.iq-root`. localStorage fast cache (no flicker on nav). Firestore read on shell mount syncs across devices. |
 | F-40 | Cmd+K Command Bar | Phase 2 | Pro+ | **In Progress** | 65% | Full Stack | Cmd+K / Ctrl+K global overlay. `SEARCHABLE_STOCKS` constant (20 tickers with name/sector). Stock ticker results surface above page-nav results. Per-stock ☆/★ star toggle with `starred: Set<string>` state and `toggleStar(sym)`. Starred stocks listed in palette footer section. Keyboard navigation (↑↓ arrows, Enter, Escape). Phase 2: fuzzy search via API, contextual suggestions by current page. File: `shell.tsx`. |
 | F-32 | AI Market Copilot (Chat) | Phase 2 | Premium | **Not Started** | 0% | AI + Full Stack | Chat panel in shell. Access to: live market data, earnings, analyst actions, 13F, macro, portfolio, watchlist. Streaming SSE. Labeled informational, not investment advice. |
@@ -173,6 +173,7 @@ v1.3 | June 2026
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
 | F-36 | Mobile App (React Native) | Phase 2 | Pro+ | **Not Started** | 0% | Mobile | React Native. Bottom tab nav: Dashboard / Earnings / Movers / Portfolio / Alerts. Push notifications for all alert types. Condensed mobile-optimized views. Shared API layer with web. |
+| F-56 | Web App Mobile Responsive | MVP | All | **Complete** | 100% | Full Stack | Responsive shell at ≤767px: hamburger menu (`.mob-ham`), slide-in nav rail (`.rail.mob-open`), scrim inside `.app` for correct stacking context, bottom-sheet drawers, icon-only Copilot FAB. Tablet breakpoint at ≤860px for options sidebar. Auth pages responsive: `lp-auth-cols` / `lp-auth-left` / `lp-auth-form` classes, ≤600px hides marketing panel. Options page: tabs scroll horizontally, stock header wraps on mobile. Profile dropdown: fixed shift bug (`iq-dropdownIn`), 52px avatar image. Firebase Auth iOS Safari: popup-first + redirect fallback + `indexedDBLocalPersistence`. |
 
 ---
 
@@ -180,9 +181,9 @@ v1.3 | June 2026
 
 | Phase | Total Features | Complete | In Progress | Target |
 |---|---|---|---|---|
-| MVP (Phase 1) | 33 | 11 (F-42, F-43, F-44, F-46, F-47, F-48, F-49, F-50, F-51, F-52, F-53, F-55) | 10 (F-01, F-02, F-07, F-10, F-12, F-13, F-15, F-21, F-22, F-25, F-40, F-45) | Week 18 |
+| MVP (Phase 1) | 34 | 12 (F-42, F-43, F-44, F-46, F-47, F-48, F-49, F-50, F-51, F-52, F-53, F-55, F-56) | 10 (F-01, F-02, F-07, F-10, F-12, F-13, F-15, F-21, F-22, F-25, F-40, F-45) | Week 18 |
 | Phase 2 | 17 (+F-26 UI) | 0 | 1 (F-40) | Week 38 |
-| **Total** | **50** | **11** | **11** | — |
+| **Total** | **51** | **12** | **11** | — |
 
 ## Status Legend
 
