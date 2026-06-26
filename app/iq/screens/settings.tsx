@@ -112,11 +112,20 @@ export function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const [pendingFont, setPendingFont] = useState<FontKey | null>(null);
-  const [fontSaving, setFontSaving] = useState(false);
-  const [fontError, setFontError] = useState("");
-
   const isPremium = profile?.tier !== "free";
+
+  async function applyFont(key: FontKey) {
+    if (key === font) return;
+    try {
+      if (user?.uid) {
+        await setDoc(doc(firebaseDb, "settings", user.uid), { font: key }, { merge: true });
+      }
+      localStorage.setItem("iq-font", key);
+      setFont(key);
+    } catch (err) {
+      console.error("Failed to save font", err);
+    }
+  }
 
   async function applyTheme() {
     if (pending === null) return;
@@ -142,29 +151,6 @@ export function SettingsScreen() {
     setSaveError("");
   }
 
-  async function confirmFont() {
-    if (!pendingFont) return;
-    setFontError("");
-    setFontSaving(true);
-    try {
-      if (user?.uid) {
-        await setDoc(doc(firebaseDb, "settings", user.uid), { font: pendingFont }, { merge: true });
-      }
-      localStorage.setItem("iq-font", pendingFont);
-      setFont(pendingFont);
-      setPendingFont(null);
-    } catch (err) {
-      setFontError("Failed to save font: " + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setFontSaving(false);
-    }
-  }
-
-  function cancelFont() {
-    setPendingFont(null);
-    setFontError("");
-  }
-
   async function handleSignOut() {
     await signOut(firebaseAuth);
     window.location.href = "/";
@@ -184,17 +170,7 @@ export function SettingsScreen() {
         />
       )}
 
-      {pendingFont !== null && (
-        <ConfirmModal
-          icon="Aa"
-          title={`Switch to ${FONTS.find(f => f.key === pendingFont)?.label}?`}
-          body={`This will apply ${FONTS.find(f => f.key === pendingFont)?.label} across all screens and save your font preference.`}
-          saving={fontSaving}
-          error={fontError}
-          onConfirm={() => void confirmFont()}
-          onCancel={cancelFont}
-        />
-      )}
+
 
       <div className="page-head">
         <div>
@@ -260,7 +236,7 @@ export function SettingsScreen() {
             {FONTS.map(f => (
               <label
                 key={f.key}
-                onClick={() => { if (f.key !== font) setPendingFont(f.key); }}
+                onClick={() => void applyFont(f.key)}
                 style={{
                   display: "flex", alignItems: "center", gap: 14,
                   padding: "14px 16px", borderRadius: "var(--r)",

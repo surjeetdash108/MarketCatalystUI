@@ -379,7 +379,7 @@ export function CommentaryScreen() {
                 <h3>{feedLabel.title}</h3>
                 {feedLabel.badge}
               </div>
-              <div className="card-b" style={{ paddingTop: 2 }}>
+              <div className="card-b" style={{ paddingTop: 2, maxHeight: 620, overflowY: "auto" }}>
                 {tabFeed.length === 0 ? (
                   <div style={{ padding: "18px 0", color: "var(--text-dim-solid)", fontSize: ".84rem" }}>
                     {activeTab === 3

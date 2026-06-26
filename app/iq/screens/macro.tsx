@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { StockLogo } from "../utils";
 
 // ── Economic calendar ────────────────────────────────────────────────────────
@@ -349,6 +349,19 @@ export function MacroScreen() {
   const [selStock,  setSelStock]  = useState<DivStock | null>(null);
   const [calDay,    setCalDay]    = useState<number | null>(null);
   const [vixSel,    setVixSel]    = useState<DivStock | null>(null);
+  const vixTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [vixPop, setVixPop] = useState<{ s: VixStock; x: number; y: number } | null>(null);
+
+  const showVixPop = (e: React.MouseEvent, s: VixStock) => {
+    if (vixTimerRef.current) clearTimeout(vixTimerRef.current);
+    const r = e.currentTarget.getBoundingClientRect();
+    const popH = 220;
+    const y = r.top > popH + 20 ? r.top - popH : r.bottom + 6;
+    const x = Math.max(8, Math.min(r.left, window.innerWidth - 306));
+    setVixPop({ s, x, y });
+  };
+  const hideVixPop   = () => { vixTimerRef.current = setTimeout(() => setVixPop(null), 200); };
+  const cancelVixPop = () => { if (vixTimerRef.current) clearTimeout(vixTimerRef.current); };
 
   // ── Dividend calendar rendering ──────────────────────────────────────────
   const isDivDay   = divTab === "today" || divTab === "yest" || divTab === "tom";
@@ -677,31 +690,16 @@ export function MacroScreen() {
                     amount: s.divAmt, yld: s.yld, freq: "Quarterly", streak: 0, weekDay: 0,
                   };
                   return (
-                    <tr key={s.sym} className="mv-dash-row" style={{ cursor: "pointer" }}
-                      onClick={() => setVixSel(divStk)}>
-                      <td style={{ position: "relative" }}>
+                    <tr key={s.sym} style={{ cursor: "pointer" }}
+                      onClick={() => setVixSel(divStk)}
+                      onMouseEnter={e => showVixPop(e, s)}
+                      onMouseLeave={hideVixPop}>
+                      <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                           <StockLogo sym={s.sym} size={20} />
                           <div>
                             <div style={{ fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-mono)", fontSize: ".85rem" }}>{s.sym}</div>
                             <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{s.name}</div>
-                          </div>
-                        </div>
-                        <div className="mv-dp" onClick={e => e.stopPropagation()}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, paddingBottom: 9, borderBottom: "1px solid var(--border)" }}>
-                            <StockLogo sym={s.sym} size={26} />
-                            <div>
-                              <div style={{ fontWeight: 800, color: "var(--text-hi)", fontSize: ".9rem" }}>{s.sym}</div>
-                              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{s.name} · {s.sector}</div>
-                            </div>
-                          </div>
-                          <div className="dp-row"><span>Beta (5yr monthly)</span><b style={{ color: s.beta >= 2 ? "var(--down)" : "var(--warn)" }}>{s.beta.toFixed(2)}</b></div>
-                          <div className="dp-row"><span>Implied vol (30d)</span><b>{s.iv30}%</b></div>
-                          <div className="dp-row"><span>VIX sensitivity</span><b>{s.beta >= 2.5 ? "Extreme" : s.beta >= 1.8 ? "High" : "Moderate"}</b></div>
-                          {s.yld > 0 && <div className="dp-row"><span>Dividend yield</span><b style={{ color: "var(--up)" }}>{s.yld.toFixed(2)}%</b></div>}
-                          {s.divAmt > 0 && <div className="dp-row"><span>Quarterly div</span><b>${s.divAmt.toFixed(2)}</b></div>}
-                          <div className="dp-note" style={{ marginTop: 8 }}>
-                            {s.divAmt > 0 ? "Click to see 10-year dividend history →" : "No dividend — pure growth / volatility play."}
                           </div>
                         </div>
                       </td>
@@ -726,6 +724,32 @@ export function MacroScreen() {
       {/* ── Dividend drawer from VIX row click ── */}
       {vixSel && (
         <DividendDrawer stock={vixSel} onClose={() => setVixSel(null)} />
+      )}
+
+      {/* ── VIX hover popup (fixed, smart above/below) ── */}
+      {vixPop && (
+        <div className="mv-dp"
+          style={{ display: "block", position: "fixed", left: vixPop.x, top: vixPop.y, zIndex: 200 }}
+          onMouseEnter={cancelVixPop}
+          onMouseLeave={hideVixPop}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, paddingBottom: 9, borderBottom: "1px solid var(--border)" }}>
+            <StockLogo sym={vixPop.s.sym} size={26} />
+            <div>
+              <div style={{ fontWeight: 800, color: "var(--text-hi)", fontSize: ".9rem" }}>{vixPop.s.sym}</div>
+              <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{vixPop.s.name} · {vixPop.s.sector}</div>
+            </div>
+          </div>
+          <div className="dp-row"><span>Beta (5yr monthly)</span><b style={{ color: vixPop.s.beta >= 2 ? "var(--down)" : "var(--warn)" }}>{vixPop.s.beta.toFixed(2)}</b></div>
+          <div className="dp-row"><span>Implied vol (30d)</span><b>{vixPop.s.iv30}%</b></div>
+          <div className="dp-row"><span>VIX sensitivity</span><b>{vixPop.s.beta >= 2.5 ? "Extreme" : vixPop.s.beta >= 1.8 ? "High" : "Moderate"}</b></div>
+          {vixPop.s.yld > 0 && <div className="dp-row"><span>Dividend yield</span><b style={{ color: "var(--up)" }}>{vixPop.s.yld.toFixed(2)}%</b></div>}
+          {vixPop.s.divAmt > 0 && <div className="dp-row"><span>Quarterly div</span><b>${vixPop.s.divAmt.toFixed(2)}</b></div>}
+          <div className="dp-note" style={{ marginTop: 8 }}>
+            {vixPop.s.divAmt > 0 ? "Click row to see 10-year dividend history →" : "No dividend — pure growth / volatility play."}
+          </div>
+        </div>
       )}
     </>
   );
