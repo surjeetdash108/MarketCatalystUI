@@ -22,14 +22,14 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
     <div className="sp-grid" />
     <div className="lp-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
 
-      <div style={{
+      <div className="lp-auth-cols" style={{
         display: "flex", gap: "46px", alignItems: "center",
         justifyContent: "center", maxWidth: "1060px", width: "100%",
         position: "relative", zIndex: 1,
       }}>
 
         {/* ── LEFT: marketing panel ── */}
-        <div style={{ flex: "1 1 0", maxWidth: "560px", textAlign: "center" }}>
+        <div className="lp-auth-left" style={{ flex: "1 1 0", maxWidth: "560px", textAlign: "center" }}>
 
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "24px" }}>
@@ -95,7 +95,7 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         </div>
 
         {/* ── RIGHT: form card ── */}
-        <div style={{ flex: "0 0 380px", maxWidth: "94vw" }}>
+        <div className="lp-auth-form" style={{ flex: "0 0 380px", maxWidth: "94vw" }}>
           <div style={{
             background: "rgba(12,18,32,.82)",
             backdropFilter: "blur(12px)",
@@ -129,8 +129,19 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         @keyframes spUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
         @keyframes spRightIn { from{opacity:0;transform:translateX(34px)} to{opacity:1;transform:none} }
         @keyframes tagShimmer { to{background-position:220% center} }
+
+        /* Tablet: stack columns vertically */
         @media(max-width:900px){
-          .lp-auth-cols{flex-direction:column!important;gap:28px!important}
+          .lp-auth-cols { flex-direction:column !important; gap:28px !important; align-items:center !important; }
+          .lp-auth-left { max-width:520px !important; }
+        }
+
+        /* Mobile: hide marketing panel, center form, reduce padding */
+        @media(max-width:600px){
+          .lp-auth-left { display:none !important; }
+          .lp-auth-cols { padding:0 !important; }
+          .lp-auth-form { flex:none !important; width:100% !important; max-width:100% !important; }
+          .lp-root { padding:20px 16px !important; align-items:flex-start !important; padding-top:40px !important; }
         }
       `}</style>
     </div>

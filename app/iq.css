@@ -1875,6 +1875,18 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
   .opt-side { display: none; }
   .opt-wrap  { gap: 0; }
 
+  /* ---- Nav items: brighter in mobile drawer ---- */
+  .navitem { color: var(--text-hi); }
+
+  /* ---- Options: horizontal-scroll expiry tabs (no awkward wrapping) ---- */
+  .opt-exps { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 4px; }
+  .opt-exps::-webkit-scrollbar { display: none; }
+  .opt-exp { flex-shrink: 0; }
+
+  /* ---- Options: stack header meta below price on small screens ---- */
+  .opt-h { flex-wrap: wrap; }
+  .opt-h-meta { margin-left: 0; width: 100%; text-align: left; margin-top: 2px; }
+
   /* ---- Ticker: tighter items ---- */
   .tk { padding: 0 10px; }
 }
