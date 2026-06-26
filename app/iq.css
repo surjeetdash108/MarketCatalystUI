@@ -381,6 +381,11 @@
 
 /* dash grid */
 .dash { padding: 14px 18px; display: grid; grid-template-columns: repeat(12,1fr); gap: 10px; }
+.dgrid { display: grid; grid-template-columns: repeat(12,1fr); gap: 14px; padding: 14px 18px; }
+.dgrid .col-12 { grid-column: span 12; }
+.dgrid .col-4 { grid-column: span 4; }
+.dgrid .col-6 { grid-column: span 6; }
+.dgrid > div > .card, .dgrid > div > .wmn { height: 100%; }
 .col-12 { grid-column: span 12; }
 .col-8 { grid-column: span 8; }
 .col-4 { grid-column: span 4; }
@@ -388,6 +393,7 @@
 .col-3 { grid-column: span 3; }
 @media(max-width: 900px) {
   .col-8, .col-4, .col-6, .col-3 { grid-column: span 12; }
+  .dgrid .col-4, .dgrid .col-6 { grid-column: span 12; }
 }
 
 /* cards */
