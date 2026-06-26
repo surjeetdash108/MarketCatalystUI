@@ -340,203 +340,182 @@ function MoversThumb() {
   );
 }
 
-function StockThumb() {
+// Shared stock detail content — used by StockThumb and PortfolioThumb's pf-detail
+function StockDetailContent() {
   const pts = [38,42,40,45,43,49,47,52,50,55,52,58,55,60,58,63,61,65,63,67,65,70];
   const SH = 240, SW = 740, vmin = 38, vmax = 70;
   const path = pts.map((v, i) =>
     `${i === 0 ? "M" : "L"}${(i / (pts.length - 1)) * SW},${SH - ((v - vmin) / (vmax - vmin)) * SH}`
   ).join(" ");
   return (
+    <>
+      <div className="sd-head">
+        <div className="sd-logo" style={{ width: 46, height: 46, borderRadius: 12, background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 18 }}>N</div>
+        <div className="sd-name">
+          <h1 style={{ fontFamily: "var(--f-mono)", fontSize: "1.5rem", fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.01em", margin: 0 }}>NVDA</h1>
+          <div className="sub" style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>NVIDIA Corporation &middot; NASDAQ &middot; Semiconductors</div>
+        </div>
+        <div className="sd-px" style={{ marginLeft: 8 }}>
+          <div className="p" style={{ fontFamily: "var(--f-mono)", fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>$1,025.60</div>
+          <div className="c up" style={{ fontFamily: "var(--f-mono)", fontSize: ".86rem", fontWeight: 600 }}>&#9650; +$78.04 (+8.23%)</div>
+        </div>
+        <div className="sd-actions">
+          <button className="btn">Watch</button>
+          <button className="btn ai">Ask Copilot</button>
+        </div>
+      </div>
+      <div className="sd-grid">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="card">
+            <div className="chart-toolbar">
+              {["1D","1W","1M","3M","6M","1Y","5Y"].map((t, i) => (
+                <button key={t} className={`rng${i === 0 ? " on" : ""}`}>{t}</button>
+              ))}
+              <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+              {["Candles","Hollow","Bars","Line","Area"].map((t, i) => (
+                <button key={t} className={`rng${i === 0 ? " on" : ""}`}>{t}</button>
+              ))}
+              <button className="rng">MA</button>
+              <button className="rng">EMA</button>
+              <button className="rng">Volume</button>
+              <button className="rng">RSI</button>
+              <div style={{ flex: 1 }} />
+              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>drag-free · hover for OHLC</span>
+            </div>
+            <svg viewBox={`0 0 ${SW} ${SH}`} width="100%" height={SH} preserveAspectRatio="none" style={{ display: "block" }}>
+              <defs>
+                <linearGradient id="sdg2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity=".28" />
+                  <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d={`${path} L${SW},${SH} L0,${SH} Z`} fill="url(#sdg2)" />
+              <path d={path} fill="none" stroke="#22c55e" strokeWidth="2.2" />
+            </svg>
+            <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Pattern: <b style={{ color: "var(--up)" }}>cup-with-handle breakout</b> on above-average volume.</div>
+          </div>
+          <div className="card">
+            <div className="keystats">
+              {[["Mkt Cap","$2.91T"],["P/E","78.0"],["Revenue (TTM)","$60.9B"],["EPS (TTM)","$13.14"],["Short Int.","0.8%"],["Next ER","Aug 28"],["52W Range","$350 – $1,255"],["Avg Vol","42.8M"]].map(([k, v]) => (
+                <div key={k} className="kstat"><div className="k">{k}</div><div className="v">{v}</div></div>
+              ))}
+            </div>
+          </div>
+          <div className="ai-block">
+            <div className="card-h"><h3 className="ai-c">&#9670; AI Technical Analysis</h3>
+              <div className="toneseg" style={{ width: 280 }}>
+                {["Summary","Swing","Position","Long-term"].map((t, i) => <button key={t} className={i === 1 ? "on" : ""}>{t}</button>)}
+              </div>
+            </div>
+            <div className="card-b">
+              {[
+                ["Trend","<b>Bull trend intact.</b> Higher highs and higher lows; price above all major SMAs."],
+                ["Support / Resist.","Support near <b>$920</b> and <b>$820</b>; resistance at <b>$1,100</b> then the 52-week high."],
+                ["MA posture","Above the 20, 50 and 200-day — bullish alignment."],
+                ["Rel. strength","Relative-strength rank <b>96/99</b> vs the market — group leader."],
+                ["Volume","Relative volume <b>5.8×</b> — well above average (event-driven)."],
+                ["Event risk","Next earnings Aug 28 (~65 days). Hawkish Fed surprise pressures high-multiple names first."],
+              ].map(([k, v]) => (
+                <div key={k} className="ai-line"><span className="k">{k}</span><span className="v" dangerouslySetInnerHTML={{ __html: v as string }} /></div>
+              ))}
+              <div style={{ marginTop: 10, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Source: 250-day OHLCV, 20/50/200 SMA, RS vs SPX · AI-generated · not investment advice.</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="card">
+            <div className="card-h"><h3>Technical Rating</h3><div style={{ display: "flex", alignItems: "center", gap: 10 }}><div className="tf-pills">{["1D","1W","1M"].map((t, i) => <button key={t} className={`rng${i === 2 ? " on" : ""}`}>{t}</button>)}</div><span className="link">View all →</span></div></div>
+            <div className="card-b">
+              <div className="trgroup" style={{ borderColor: "var(--ai-dim,rgba(52,226,240,.2))", marginBottom: 10 }}>
+                <div className="gl ai-c">Summary</div>
+                <div className="rate" style={{ color: "#22c55e" }}>Strong Buy</div>
+                <div className="counts"><span style={{ color: "var(--down)" }}>Sell<b>2</b></span><span style={{ color: "var(--text-dim-solid)" }}>Neut<b>3</b></span><span style={{ color: "var(--up)" }}>Buy<b>12</b></span></div>
+              </div>
+              <div className="trseg2">
+                <div className="trgroup"><div className="gl">Oscillators</div><div className="rate" style={{ color: "#22c55e" }}>Buy</div><div className="counts"><span style={{ color: "var(--down)" }}>Sell<b>1</b></span><span style={{ color: "var(--text-dim-solid)" }}>Neut<b>2</b></span><span style={{ color: "var(--up)" }}>Buy<b>6</b></span></div></div>
+                <div className="trgroup"><div className="gl">Moving Avgs</div><div className="rate" style={{ color: "#22c55e" }}>Strong Buy</div><div className="counts"><span style={{ color: "var(--down)" }}>Sell<b>1</b></span><span style={{ color: "var(--text-dim-solid)" }}>Neut<b>1</b></span><span style={{ color: "var(--up)" }}>Buy<b>7</b></span></div></div>
+              </div>
+              <table className="ind-tbl" style={{ marginTop: 12 }}><tbody>
+                {[["RSI (14)","72.40","Buy"],["MACD (12,26)","5.2","Buy"],["Stoch %K","88.1","Sell"],["ADX (14)","34.2","Buy"],["EMA 50","$912","Buy"],["SMA 200","$748","Buy"]].map(([ind, val, act]) => (
+                  <tr key={String(ind)}><td>{ind}</td><td className="v">{val}</td><td className="a" style={{ color: act === "Buy" ? "var(--up)" : act === "Sell" ? "var(--down)" : "var(--text-dim-solid)" }}>{act}</td></tr>
+                ))}
+              </tbody></table>
+              <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>Computed from 11 oscillators + 15 moving averages.</div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-h"><h3>Peers &middot; who&apos;s leading</h3><span className="link">View all →</span></div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              {([["NVDA",8.23,"Leader"],["AMD",2.10,""],["AVGO",2.97,""],["INTC",-1.80,"Laggard"],["QCOM",1.30,""]] as [string,number,string][]).map(([t, c, tag]) => (
+                <div key={t} className={`minirow${t === "NVDA" ? " owned" : ""}`}>
+                  <span className="tkr">{t}</span>
+                  <span className="mid">{tag ? <span className={`pill ${tag === "Leader" ? "up" : "dn"}`}>{tag}</span> : ""}</span>
+                  <span className={`r ${c >= 0 ? "up" : "down"}`}>{c >= 0 ? "+" : ""}{c.toFixed(2)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-h"><h3>Industry Group rank</h3><div style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="pill up">Improving</span><span className="link">View all →</span></div></div>
+            <div className="card-b">
+              {sectorList.slice(0, 5).map(g => (
+                <div key={g.name} className="grouprow">
+                  <span className="rk">{g.rank}</span><span className="gn">{g.name}</span>
+                  <span className="bar"><i style={{ width: `${Math.max(8, 100 - g.rank * 1.6)}%` }} /></span>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.chg)}</span>
+                </div>
+              ))}
+              <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 8 }}>Semiconductors ranks <b style={{ color: "var(--up)" }}>#1 of 21</b> groups.</div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-h"><h3>Earnings history</h3><div style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="pill up">8-qtr beat streak</span><span className="link">View all →</span></div></div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                <div className="cd"><span className="num">65</span><span className="u">days to<br/>next ER</span></div>
+                <div>
+                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>Beat / miss streak</div>
+                  <div className="streak">{[1,1,1,1,1,1,1,1].map((b, i) => <b key={i} style={{ background: b ? "var(--up)" : "var(--down)" }}>{b ? "B" : "M"}</b>)}</div>
+                </div>
+              </div>
+              {[["Q1 25","$13.96 EPS","18%"],["Q4 24","$13.14 EPS","12%"],["Q3 24","$12.50 EPS","8%"],["Q2 24","$11.88 EPS","6%"]].map(([q, eps, beat]) => (
+                <div key={q} className="minirow"><span className="tkr" style={{ width: 60 }}>{q}</span><span className="mid mono">{eps}</span><span className="r up">beat {beat}</span></div>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-h"><h3>Insider &amp; Institutional</h3><span className="link">View all →</span></div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--text-dim-solid)", margin: "2px 0 5px" }}>Recent insider transactions</div>
+              {[{ dir: "buy", role: "CEO", val: "$42M", date: "May 18" }, { dir: "sell", role: "CFO", val: "$8.2M", date: "May 15" }].map((x, i) => (
+                <div key={i} className="minirow"><span className="tkr" style={{ width: 60 }}>{x.date}</span><span className="mid">{x.dir === "buy" ? "Buy" : "Sell"} · {x.role}</span><span className={`r ${x.dir === "buy" ? "up" : "down"}`}>{x.dir === "buy" ? "+" : "−"}{x.val}</span></div>
+              ))}
+              <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
+              <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--text-dim-solid)", marginBottom: 4 }}>Institutional</div>
+              {[["Inst. ownership","60%","up"],["Short interest","0.8%","dim"],["13F funds holding","4 tracked","dim"]].map(([k, v, c]) => (
+                <div key={k} className="minirow"><span className="mid">{k}</span><span className="r" style={{ color: c === "dim" ? "var(--text-hi)" : c === "up" ? "var(--up)" : "var(--down)" }}>{v}</span></div>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-h"><h3>Key levels (pivots)</h3><span className="link">View all →</span></div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              {[["R2","$1,124"],["R1","$1,087"],["Pivot","$1,026"],["S1","$988"],["S2","$951"]].map(([lv, pr]) => (
+                <div key={lv} className="minirow"><span className="tkr" style={{ width: 50 }}>{lv}</span><span className="mid" /><span className="r mono" style={{ color: lv.startsWith("R") ? "var(--down)" : lv === "Pivot" ? "var(--text-hi)" : "var(--up)" }}>{pr}</span></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function StockThumb() {
+  return (
     <ScaledScreen>
       <div style={{ padding: "20px 28px 0" }}>
-        <div className="sd-head">
-          <div className="sd-logo" style={{ width: 46, height: 46, borderRadius: 12, background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 18 }}>N</div>
-          <div className="sd-name">
-            <h1 style={{ fontFamily: "var(--f-mono)", fontSize: "1.5rem", fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.01em", margin: 0 }}>NVDA</h1>
-            <div className="sub" style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>NVIDIA Corporation &middot; NASDAQ &middot; Semiconductors</div>
-          </div>
-          <div className="sd-px" style={{ marginLeft: 8 }}>
-            <div className="p" style={{ fontFamily: "var(--f-mono)", fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>$1,025.60</div>
-            <div className="c up" style={{ fontFamily: "var(--f-mono)", fontSize: ".86rem", fontWeight: 600 }}>&#9650; +$78.04 (+8.23%)</div>
-          </div>
-          <div className="sd-actions">
-            <button className="btn">Watch</button>
-            <button className="btn ai">Ask Copilot</button>
-          </div>
-        </div>
-        <div className="sd-grid">
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div className="card">
-              <div className="chart-toolbar">
-                {["1D","1W","1M","3M","6M","1Y","5Y"].map((t, i) => (
-                  <button key={t} className={`rng${i === 0 ? " on" : ""}`}>{t}</button>
-                ))}
-                <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
-                {["Candles","Line","Area"].map((t, i) => (
-                  <button key={t} className={`rng${i === 0 ? " on" : ""}`}>{t}</button>
-                ))}
-                <button className="rng">MA</button>
-                <button className="rng">Volume</button>
-                <div style={{ flex: 1 }} />
-                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>hover for OHLC</span>
-              </div>
-              <svg viewBox={`0 0 ${SW} ${SH}`} width="100%" height={SH} preserveAspectRatio="none" style={{ display: "block" }}>
-                <defs>
-                  <linearGradient id="sdg2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity=".28" />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path d={`${path} L${SW},${SH} L0,${SH} Z`} fill="url(#sdg2)" />
-                <path d={path} fill="none" stroke="#22c55e" strokeWidth="2.2" />
-              </svg>
-              <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Pattern: <b style={{ color: "var(--up)" }}>cup-with-handle breakout</b> on above-average volume.</div>
-            </div>
-            <div className="card">
-              <div className="keystats">
-                {[["Mkt Cap","$2.91T"],["P/E","78.0"],["Revenue (TTM)","$60.9B"],["EPS (TTM)","$13.14"],["Short Int.","0.8%"],["Next ER","Aug 28"],["52W Range","$350 – $1,255"],["Avg Vol","42.8M"]].map(([k, v]) => (
-                  <div key={k} className="kstat">
-                    <div className="k">{k}</div>
-                    <div className="v">{v}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="ai-block">
-              <div className="card-h"><h3 className="ai-c">&#9670; AI Technical Analysis</h3></div>
-              <div className="card-b">
-                {[
-                  ["Trend","Bull trend intact — price above all major SMAs with higher highs and higher lows since Q4."],
-                  ["Support / Resist.","Support near $920 and $820; resistance at $1,100 then the 52-week high $1,255."],
-                  ["MA posture","Price above 50 and 200 SMA. Both moving averages rising — textbook momentum posture."],
-                  ["Rel. strength","Relative-strength rank 96/99 vs the market — group leader."],
-                  ["Volume","Relative volume 5.8× — well above average (event-driven)."],
-                  ["Event risk","Next earnings Aug 28 (~65 days). Hawkish Fed surprise pressures high-multiple names first."],
-                ].map(([k, v]) => (
-                  <div key={k} className="ai-line">
-                    <span className="k">{k}</span>
-                    <span className="v">{v}</span>
-                  </div>
-                ))}
-                <div style={{ marginTop: 10, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Source: 250-day OHLCV · AI-generated for informational purposes, not investment advice.</div>
-              </div>
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div className="card">
-              <div className="card-h">
-                <h3>Technical Rating</h3>
-                <div className="tf-pills">
-                  {["1D","1W","1M"].map((t, i) => <button key={t} className={`rng${i === 2 ? " on" : ""}`}>{t}</button>)}
-                </div>
-              </div>
-              <div className="card-b">
-                <div className="trgroup" style={{ borderColor: "var(--ai-dim,rgba(52,226,240,.2))", marginBottom: 10 }}>
-                  <div className="gl">Summary</div>
-                  <div className="rate" style={{ color: "#22c55e" }}>Strong Buy</div>
-                  <div className="counts">
-                    <span style={{ color: "var(--down)" }}>Sell<b>2</b></span>
-                    <span style={{ color: "var(--text-dim-solid)" }}>Neut<b>3</b></span>
-                    <span style={{ color: "var(--up)" }}>Buy<b>12</b></span>
-                  </div>
-                </div>
-                <div className="trseg2">
-                  <div className="trgroup">
-                    <div className="gl">Oscillators</div>
-                    <div className="rate" style={{ color: "#22c55e" }}>Buy</div>
-                    <div className="counts">
-                      <span style={{ color: "var(--down)" }}>Sell<b>1</b></span>
-                      <span style={{ color: "var(--text-dim-solid)" }}>Neut<b>2</b></span>
-                      <span style={{ color: "var(--up)" }}>Buy<b>6</b></span>
-                    </div>
-                  </div>
-                  <div className="trgroup">
-                    <div className="gl">Moving Avgs</div>
-                    <div className="rate" style={{ color: "#22c55e" }}>Strong Buy</div>
-                    <div className="counts">
-                      <span style={{ color: "var(--down)" }}>Sell<b>1</b></span>
-                      <span style={{ color: "var(--text-dim-solid)" }}>Neut<b>1</b></span>
-                      <span style={{ color: "var(--up)" }}>Buy<b>7</b></span>
-                    </div>
-                  </div>
-                </div>
-                <table className="ind-tbl" style={{ marginTop: 12 }}><tbody>
-                  {[["RSI (14)","72.4","Buy"],["MACD","Bullish cross","Buy"],["Stoch %K","88.1","Buy"],["CCI (20)","164","Buy"],["ADX","34.2","Buy"],["50 SMA","$912","Buy"],["200 SMA","$748","Buy"]].map(([ind, val, act]) => (
-                    <tr key={String(ind)}>
-                      <td>{ind}</td>
-                      <td className="v">{val}</td>
-                      <td className="a" style={{ color: act === "Buy" ? "var(--up)" : act === "Sell" ? "var(--down)" : "var(--text-dim-solid)" }}>{act}</td>
-                    </tr>
-                  ))}
-                </tbody></table>
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-h"><h3>Peers &middot; who&apos;s leading</h3></div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {([["NVDA",8.23,"Leader"],["AMD",2.10,""],["AVGO",2.97,""],["INTC",-1.80,"Laggard"],["QCOM",1.30,""]] as [string,number,string][]).map(([t, c, tag]) => (
-                  <div key={t} className={`minirow${t === "NVDA" ? " owned" : ""}`}>
-                    <span className="tkr">{t}</span>
-                    <span className="mid">{tag ? <span className={`pill ${tag === "Leader" ? "up" : "dn"}`}>{tag}</span> : ""}</span>
-                    <span className={`r ${c >= 0 ? "up" : "down"}`}>{c >= 0 ? "+" : ""}{c.toFixed(2)}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-h"><h3>Industry Group rank</h3><div style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="pill up">Improving</span><span className="link">View all →</span></div></div>
-              <div className="card-b">
-                {sectorList.slice(0, 5).map(g => (
-                  <div key={g.name} className="grouprow">
-                    <span className="rk">{g.rank}</span>
-                    <span className="gn">{g.name}</span>
-                    <span className="bar"><i style={{ width: `${Math.max(8, 100 - g.rank * 1.6)}%` }} /></span>
-                    <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.chg)}</span>
-                  </div>
-                ))}
-                <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 8 }}>Semiconductors ranks <b style={{ color: "var(--up)" }}>#1 of 21</b> groups by relative strength.</div>
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-h"><h3>Earnings history</h3><div style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="pill up">8-qtr beat streak</span><span className="link">View all →</span></div></div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                  <div className="cd"><span className="num">65</span><span className="u">days to<br/>next ER</span></div>
-                  <div>
-                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>Beat / miss streak</div>
-                    <div className="streak">{[1,1,1,1,1,1,1,1].map((b, i) => <b key={i} style={{ background: b ? "var(--up)" : "var(--down)" }}>{b ? "B" : "M"}</b>)}</div>
-                  </div>
-                </div>
-                {[["Q1 25","$13.96","18%"],["Q4 24","$13.14","12%"],["Q3 24","$12.50","8%"],["Q2 24","$11.88","6%"]].map(([q, eps, beat]) => (
-                  <div key={q} className="minirow"><span className="tkr" style={{ width: 60 }}>{q}</span><span className="mid mono">{eps} EPS</span><span className="r up">beat {beat}</span></div>
-                ))}
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-h"><h3>Insider &amp; Institutional</h3><span className="link">View all →</span></div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--text-dim-solid)", margin: "2px 0 5px" }}>Recent insider transactions</div>
-                {[{ s: "NVDA", dir: "buy", role: "CEO", det: "Open-market purchase", val: "$42M", date: "May 18" },
-                  { s: "NVDA", dir: "sell", role: "CFO", det: "Planned 10b5-1 sale", val: "$8.2M", date: "May 15" }].map((x, i) => (
-                  <div key={i} className="minirow"><span className="tkr" style={{ width: 60 }}>{x.date}</span><span className="mid">{x.dir === "buy" ? "Buy" : "Sell"} · {x.role}</span><span className={`r ${x.dir === "buy" ? "up" : "down"}`}>{x.dir === "buy" ? "+" : "−"}{x.val}</span></div>
-                ))}
-                <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
-                <div style={{ fontSize: ".72rem", fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--text-dim-solid)", marginBottom: 4 }}>Institutional</div>
-                {[["Inst. ownership","60%","up"],["Short interest","0.8%","dim"],["13F funds holding","4 tracked","dim"]].map(([k, v, c]) => (
-                  <div key={k} className="minirow"><span className="mid">{k}</span><span className="r" style={{ color: c === "dim" ? "var(--text-hi)" : c === "up" ? "var(--up)" : "var(--down)" }}>{v}</span></div>
-                ))}
-              </div>
-            </div>
-            <div className="card">
-              <div className="card-h"><h3>Key levels (pivots)</h3><span className="link">View all →</span></div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {[["R2","$1,124"],["R1","$1,087"],["Pivot","$1,026"],["S1","$988"],["S2","$951"]].map(([lv, pr]) => (
-                  <div key={lv} className="minirow"><span className="tkr" style={{ width: 50 }}>{lv}</span><span className="mid" /><span className="r mono" style={{ color: lv.startsWith("R") ? "var(--down)" : lv === "Pivot" ? "var(--text-hi)" : "var(--up)" }}>{pr}</span></div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+        <StockDetailContent />
       </div>
     </ScaledScreen>
   );
@@ -796,6 +775,7 @@ function PortfolioThumb() {
               <button className="btn">Trim &frac12;</button>
               <button className="btn">Sell all</button>
             </div>
+            <StockDetailContent />
           </div>
         </div>
       </div>
