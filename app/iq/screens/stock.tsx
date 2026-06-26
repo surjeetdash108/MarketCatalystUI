@@ -136,9 +136,9 @@ function earnIncome(mc: number, mg: number, px: number, period: "Q" | "A"): IncR
   const sh   = Math.max(0.3, mc / Math.max(1, px));
   const cols = period === "Q"
     ? ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"]
-    : ["FY 25e","FY 2024","FY 2023","FY 2022","FY 2021"];
+    : ["FY 25e","FY 2024","FY 2023","FY 2022","FY 2021","FY 2020","FY 2019","FY 2018","FY 2017","FY 2016"];
   const scale = period === "A" ? 4 : 1;
-  const step  = period === "A" ? 0.08 : 0.025;
+  const step  = period === "A" ? 0.07 : 0.025;
   return cols.map((c, i) => {
     const rev  = rev0 * scale * (1 - i * step);
     const cogs = rev * (1 - Math.min(0.95, mg / 100));
@@ -756,7 +756,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
           {/* Financials — grouped bar chart */}
           {(() => {
             const inc     = earnIncome(mc, mg, p, finPeriod);
-            const histEps = finPeriod === "Q" ? hist10 : earnHistAnnual(hist10);
+            const histEps = finPeriod === "Q" ? hist10.slice(0, 10) : earnHistAnnual(hist10);
             const beatsOf = histEps.filter(h => h.surp >= 0).length;
             const latestA = histEps[0]?.a ?? 0;
             const prevA   = histEps[finPeriod === "Q" ? 4 : 1]?.a;
@@ -789,7 +789,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                   <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
                     {finPeriod === "Q"
                       ? "Last 10 quarters · revenue, gross profit & net income"
-                      : "Last 5 fiscal years · revenue, gross profit & net income"}
+                      : "Last 10 fiscal years · revenue, gross profit & net income"}
                     {" · tap "}&#8220;View all&#8221; for the full statement.
                   </div>
 

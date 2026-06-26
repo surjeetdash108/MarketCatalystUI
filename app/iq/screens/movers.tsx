@@ -226,9 +226,119 @@ const CALLS_DATA: CallEntry[] = [
     epsEst: 9.18, epsAct: null, revEst: "13.8B", revAct: null, guide: null, react: null,
     summary: "", points: [],
   },
+  {
+    sym: "WDAY", name: "Workday Inc.", price: 268.30, change: 1.12,
+    callDate: "Jun 30, 2026", callTime: "4:30 PM ET", session: "AMC", title: "Q1 FY2027 Earnings Call",
+    epsEst: 1.82, epsAct: null, revEst: "2.21B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "GIS", name: "General Mills Inc.", price: 72.40, change: -0.88,
+    callDate: "Jul 2, 2026", callTime: "8:00 AM ET", session: "BMO", title: "Q4 FY2026 Earnings Call",
+    epsEst: 1.02, epsAct: null, revEst: "5.11B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
+  {
+    sym: "LULU", name: "Lululemon Athletica", price: 312.80, change: 0.54,
+    callDate: "Jul 2, 2026", callTime: "4:15 PM ET", session: "AMC", title: "Q1 FY2027 Earnings Call",
+    epsEst: 2.61, epsAct: null, revEst: "2.45B", revAct: null, guide: null, react: null,
+    summary: "", points: [],
+  },
 ];
 
-const CALLS_PER_PAGE = 9;
+// ── Earnings call calendar helpers ───────────────────────────────────────────
+
+const CALL_DATES: Record<string, { month: number; day: number; weekDay: number }> = {
+  NVDA:  { month: 6, day: 4,  weekDay: 3 },
+  AAPL:  { month: 5, day: 1,  weekDay: 4 },
+  MSFT:  { month: 4, day: 30, weekDay: 3 },
+  AMZN:  { month: 5, day: 1,  weekDay: 4 },
+  GOOGL: { month: 4, day: 29, weekDay: 2 },
+  META:  { month: 4, day: 30, weekDay: 3 },
+  TSLA:  { month: 4, day: 22, weekDay: 2 },
+  JPM:   { month: 4, day: 11, weekDay: 4 },
+  BAC:   { month: 4, day: 15, weekDay: 2 },
+  AMD:   { month: 4, day: 29, weekDay: 2 },
+  INTC:  { month: 4, day: 24, weekDay: 4 },
+  CRM:   { month: 5, day: 28, weekDay: 3 },
+  NFLX:  { month: 4, day: 15, weekDay: 2 },
+  V:     { month: 4, day: 23, weekDay: 3 },
+  JNJ:   { month: 4, day: 15, weekDay: 2 },
+  WMT:   { month: 5, day: 15, weekDay: 4 },
+  DIS:   { month: 5, day: 7,  weekDay: 3 },
+  ORCL:  { month: 6, day: 9,  weekDay: 1 },
+  ADBE:  { month: 6, day: 11, weekDay: 3 },
+  FDX:   { month: 6, day: 24, weekDay: 2 },
+  COST:  { month: 6, day: 26, weekDay: 4 },
+  TGT:   { month: 6, day: 18, weekDay: 3 },
+  NKE:   { month: 6, day: 26, weekDay: 4 },
+  SBUX:  { month: 7, day: 29, weekDay: 2 },
+  GS:    { month: 7, day: 14, weekDay: 1 },
+  WDAY:  { month: 6, day: 30, weekDay: 1 },
+  GIS:   { month: 7, day: 2,  weekDay: 3 },
+  LULU:  { month: 7, day: 2,  weekDay: 3 },
+};
+
+type EcTabKey = "lmonth" | "prev" | "yest" | "today" | "tom" | "week" | "next" | "month";
+const EC_RANGES: [EcTabKey, string][] = [
+  ["lmonth", "Last Month"],
+  ["prev",   "Last Week"],
+  ["yest",   "Yesterday"],
+  ["today",  "Today"],
+  ["tom",    "Tomorrow"],
+  ["week",   "This Week"],
+  ["next",   "Next Week"],
+  ["month",  "Month"],
+];
+const EC_DOWS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+function ecCalFor(t: EcTabKey): CallEntry[] {
+  return CALLS_DATA.filter(c => {
+    const d = CALL_DATES[c.sym];
+    if (!d) return false;
+    switch (t) {
+      case "today":  return d.month === 6 && d.day === 25;
+      case "yest":   return d.month === 6 && d.day === 24;
+      case "tom":    return d.month === 6 && d.day === 26;
+      case "week":   return d.month === 6 && d.day >= 22 && d.day <= 26;
+      case "prev":   return d.month === 6 && d.day >= 15 && d.day <= 19;
+      case "next":   return (d.month === 6 && d.day >= 29) || (d.month === 7 && d.day <= 3);
+      case "lmonth": return d.month === 5;
+      case "month":  return d.month === 6;
+    }
+  });
+}
+
+function ecMonthMap(month1: number): Record<number, CallEntry[]> {
+  const Y = 2026;
+  const days = new Date(Y, month1, 0).getDate();
+  const map: Record<number, CallEntry[]> = {};
+  for (let d = 1; d <= days; d++) {
+    map[d] = CALLS_DATA.filter(c => {
+      const cd = CALL_DATES[c.sym];
+      return cd && cd.month === month1 && cd.day === d;
+    });
+  }
+  return map;
+}
+
+function CallChip({ entry, selected, onSelect }: {
+  entry: CallEntry; selected: boolean; onSelect: (c: CallEntry) => void;
+}) {
+  return (
+    <button className={`ec-chip${selected ? " on" : ""}`} onClick={() => onSelect(entry)}>
+      <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6" }}>
+        {entry.sym[0]}
+        <img
+          src={`https://assets.parqet.com/logos/symbol/${entry.sym}?format=png`}
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+          alt=""
+        />
+      </span>
+      {entry.sym}
+    </button>
+  );
+}
 
 /* ── CallDrawer ── */
 function CallDrawer({ call, onClose }: { call: CallEntry; onClose: () => void }) {
@@ -413,7 +523,8 @@ export function MoversScreen() {
   const [cap,          setCap]          = useState("All");
   const [selectedSym,  setSelectedSym]  = useState<string | null>(null);
   const [selectedCall, setSelectedCall] = useState<CallEntry | null>(null);
-  const [callsPage,    setCallsPage]    = useState(0);
+  const [ecTab,        setEcTab]        = useState<EcTabKey>("week");
+  const [ecMonthDay,   setEcMonthDay]   = useState<number | null>(null);
 
   const sectors = ["All", ...Array.from(new Set(movers.map(m => m.sector))).sort()];
 
@@ -441,9 +552,6 @@ export function MoversScreen() {
   const val = (m: typeof movers[0]) => tab === "week" ? m.wk : m.c;
 
   const upcomingCalls = CALLS_DATA.filter(c => c.epsAct === null);
-  const recentCalls   = CALLS_DATA.filter(c => c.epsAct !== null);
-  const callsPages    = Math.ceil(recentCalls.length / CALLS_PER_PAGE);
-  const callsSlice    = recentCalls.slice(callsPage * CALLS_PER_PAGE, (callsPage + 1) * CALLS_PER_PAGE);
 
   return (
     <>
@@ -581,7 +689,7 @@ export function MoversScreen() {
         </table>
       </div>
 
-      {/* ── Earnings Calls ── */}
+      {/* ── Earnings Calls Calendar ── */}
       <div className="card" style={{ marginTop: 14 }}>
         <div className="card-h">
           <h3>Earnings Calls</h3>
@@ -590,119 +698,209 @@ export function MoversScreen() {
           </span>
         </div>
 
-        {/* Upcoming Calls logo strip */}
-        {upcomingCalls.length > 0 && (
-          <div style={{ padding: "4px 16px 0" }}>
-            <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
-              Upcoming Calls
-            </div>
-            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 14 }}>
-              {upcomingCalls.map(c => (
-                <button
-                  key={c.sym}
-                  onClick={() => setSelectedCall(c)}
-                  style={{
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-                    padding: "10px 14px", borderRadius: 12,
-                    background: "var(--surface-1)", border: "1px solid var(--border-soft)",
-                    cursor: "pointer", flexShrink: 0, transition: ".15s",
-                    minWidth: 80,
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--brand-2)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-soft)"; }}
-                >
-                  <StockLogo sym={c.sym} size={34} />
-                  <span style={{ fontSize: ".7rem", fontWeight: 700, color: "var(--text-hi)" }}>{c.sym}</span>
-                  <span style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>{c.callDate}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Divider */}
-        <div style={{ borderTop: "1px solid var(--border-soft)", margin: "0 16px 14px" }} />
-
-        {/* Recent Calls header */}
-        <div style={{ padding: "0 16px", marginBottom: 12 }}>
-          <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".06em" }}>
-            Recent Calls
-          </div>
-        </div>
-
-        {/* 3-col card grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, padding: "0 16px 16px" }}>
-          {callsSlice.map(c => {
-            const beat = c.epsAct !== null && c.epsEst !== null && c.epsAct > c.epsEst;
-            const miss = c.epsAct !== null && c.epsEst !== null && c.epsAct < c.epsEst;
-            return (
+        {/* Time-period tabs */}
+        <div style={{ padding: "0 16px 2px", borderBottom: "1px solid var(--border-soft)" }}>
+          <div className="tabs" style={{ paddingBottom: 6 }}>
+            {EC_RANGES.map(([k, l]) => (
               <button
-                key={c.sym}
-                onClick={() => setSelectedCall(c)}
-                style={{
-                  display: "flex", flexDirection: "column", gap: 10, padding: 12,
-                  background: "var(--surface-1)", border: "1px solid var(--border-soft)",
-                  borderRadius: 12, cursor: "pointer", textAlign: "left",
-                  transition: ".15s",
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--brand-2)"; (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-2)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border-soft)"; (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-1)"; }}
+                key={k}
+                className={`tab${ecTab === k ? " on" : ""}`}
+                onClick={() => { setEcTab(k); setEcMonthDay(null); }}
               >
-                {/* Top row: logo + play */}
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                  <StockLogo sym={c.sym} size={36} />
-                  <div style={{
-                    width: 30, height: 30, borderRadius: "50%",
-                    background: "var(--surface-3)", border: "1px solid var(--border)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: ".7rem", color: "var(--text-dim-solid)", flexShrink: 0,
-                  }}>
-                    ▶
-                  </div>
-                </div>
-                {/* Company + title */}
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: ".82rem", color: "var(--text-hi)" }}>{c.sym}</div>
-                  <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", marginTop: 1, lineHeight: 1.3 }}>{c.title}</div>
-                </div>
-                {/* Date + beat/miss */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto" }}>
-                  <span style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{c.callDate}</span>
-                  {beat && <span className="pill up" style={{ fontSize: ".62rem" }}>Beat</span>}
-                  {miss && <span className="pill dn" style={{ fontSize: ".62rem" }}>Miss</span>}
-                  {!beat && !miss && c.epsAct !== null && <span className="pill" style={{ fontSize: ".62rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>In-line</span>}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Pagination */}
-        {callsPages > 1 && (
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", padding: "0 16px 16px", alignItems: "center" }}>
-            <button
-              className="ecm-nav"
-              onClick={() => setCallsPage(p => Math.max(0, p - 1))}
-              disabled={callsPage === 0}
-              style={{ opacity: callsPage === 0 ? 0.4 : 1 }}
-            >←</button>
-            {Array.from({ length: callsPages }, (_, i) => (
-              <button
-                key={i}
-                className={`ecm-nav${callsPage === i ? " on" : ""}`}
-                onClick={() => setCallsPage(i)}
-              >
-                {i + 1}
+                {l}
               </button>
             ))}
-            <button
-              className="ecm-nav"
-              onClick={() => setCallsPage(p => Math.min(callsPages - 1, p + 1))}
-              disabled={callsPage === callsPages - 1}
-              style={{ opacity: callsPage === callsPages - 1 ? 0.4 : 1 }}
-            >→</button>
           </div>
-        )}
+        </div>
+
+        <div className="card-b" style={{ paddingTop: 12 }}>
+          {(() => {
+            const isDay  = ecTab === "today" || ecTab === "yest" || ecTab === "tom";
+            const isWeek = ecTab === "week"  || ecTab === "prev" || ecTab === "next";
+            const isLMon = ecTab === "lmonth";
+            const isMon  = ecTab === "month";
+
+            if (isDay) {
+              const items = ecCalFor(ecTab);
+              const bmo = items.filter(c => c.session === "BMO");
+              const amc = items.filter(c => c.session === "AMC");
+              const dayLabel: Record<EcTabKey, string> = {
+                today: "Today · Thu Jun 25", yest: "Yesterday · Wed Jun 24", tom: "Tomorrow · Fri Jun 26",
+                week: "", next: "", prev: "", month: "", lmonth: "",
+              };
+              return (
+                <>
+                  <div style={{ fontSize: ".8rem", fontWeight: 700, color: "var(--text-hi)", marginBottom: 10 }}>
+                    {dayLabel[ecTab]}
+                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 8 }}>
+                      {items.length} calls
+                    </span>
+                  </div>
+                  {items.length === 0 ? (
+                    <span className="ec-none">No earnings calls scheduled this day.</span>
+                  ) : (
+                    <>
+                      <div className="ec-lbl">Before open</div>
+                      <div style={{ marginBottom: 10 }}>
+                        {bmo.length
+                          ? bmo.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)
+                          : <span className="ec-none">None</span>}
+                      </div>
+                      <div className="ec-lbl">After close</div>
+                      <div>
+                        {amc.length
+                          ? amc.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)
+                          : <span className="ec-none">None</span>}
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            }
+
+            if (isWeek) {
+              const items = ecCalFor(ecTab);
+              const days  = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+              const weekLabel: Record<EcTabKey, string> = {
+                week: "This Week · Jun 22–26", next: "Next Week · Jun 29–Jul 3",
+                prev: "Last Week · Jun 15–19", today: "", tom: "", yest: "", month: "", lmonth: "",
+              };
+              const selDayIdx = selectedCall ? (CALL_DATES[selectedCall.sym]?.weekDay ?? -1) : -1;
+              return (
+                <>
+                  <div style={{ fontSize: ".8rem", fontWeight: 700, color: "var(--text-hi)", marginBottom: 10 }}>
+                    {weekLabel[ecTab]}
+                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 8 }}>
+                      {items.length} calls
+                    </span>
+                  </div>
+                  <div className="ec-grid">
+                    {days.map((dn, di) => {
+                      const bmo = items.filter(c => c.session === "BMO" && CALL_DATES[c.sym]?.weekDay === di);
+                      const amc = items.filter(c => c.session === "AMC" && CALL_DATES[c.sym]?.weekDay === di);
+                      const isToday = ecTab === "week" && di === 3; // Thursday Jun 25
+                      const isSel   = di === selDayIdx;
+                      return (
+                        <div key={dn} className={`ec-day${isToday ? " is-today" : ""}${isSel && !isToday ? " is-sel" : ""}`}>
+                          <div className="ec-dh">{dn}{isToday ? " · Today" : ""}</div>
+                          <div className="ec-sess">
+                            <div className="ec-lbl">Before open</div>
+                            {bmo.length
+                              ? bmo.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)
+                              : <span className="ec-none">—</span>}
+                          </div>
+                          <div className="ec-sess">
+                            <div className="ec-lbl">After close</div>
+                            {amc.length
+                              ? amc.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)
+                              : <span className="ec-none">—</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            }
+
+            if (isLMon) {
+              const items = ecCalFor("lmonth");
+              return (
+                <>
+                  <div style={{ fontSize: ".8rem", fontWeight: 700, color: "var(--text-hi)", marginBottom: 10 }}>
+                    May 2026 · earnings calls recap
+                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 8 }}>
+                      {items.length} calls
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {items.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)}
+                  </div>
+                </>
+              );
+            }
+
+            if (isMon) {
+              const M1 = 6; // June (1-based)
+              const Y  = 2026, M0 = M1 - 1; // 0-based for Date
+              const first = new Date(Y, M0, 1).getDay();
+              const days  = new Date(Y, M0 + 1, 0).getDate();
+              const map   = ecMonthMap(M1);
+              const todayMark = 25; // Jun 25
+              return (
+                <div className="ecm-wrap" style={{ marginTop: 0 }}>
+                  <div className="ecm-monthbar">
+                    <div />
+                    <div className="ecm-month">June 2026 · earnings calls</div>
+                    <div />
+                  </div>
+                  <div className="ecm-head">
+                    {EC_DOWS.map(d => <div key={d}>{d}</div>)}
+                  </div>
+                  <div className="ecm-grid">
+                    {Array.from({ length: first }, (_, i) => (
+                      <div key={`e${i}`} className="ecm-cell ecm-empty" />
+                    ))}
+                    {Array.from({ length: days }, (_, i) => {
+                      const d   = i + 1;
+                      const lst = map[d] ?? [];
+                      const isT = d === todayMark;
+                      const isSel = d === ecMonthDay;
+                      const has   = lst.length > 0;
+                      return (
+                        <div
+                          key={d}
+                          className={`ecm-cell${has ? " has" : ""}${isT ? " is-today" : ""}${isSel ? " sel" : ""}`}
+                          onClick={has ? () => { setEcMonthDay(d); setSelectedCall(lst[0]); } : undefined}
+                        >
+                          <div className="ecm-d">
+                            {d}
+                            {isT && <span className="ecm-t">Today</span>}
+                          </div>
+                          {lst.length > 0 && (
+                            <>
+                              <div className="ecm-logos">
+                                {lst.slice(0, 3).map(c => (
+                                  <span key={c.sym} className="ecm-logo" style={{ background: "#27314a", color: "#cdd6e6" }}>
+                                    {c.sym[0]}
+                                    <img
+                                      src={`https://assets.parqet.com/logos/symbol/${c.sym}?format=png`}
+                                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                      alt=""
+                                    />
+                                  </span>
+                                ))}
+                                {lst.length > 3 && <span className="ecm-more">+{lst.length - 3}</span>}
+                              </div>
+                              <div className="ecm-n">{lst.length} call{lst.length > 1 ? "s" : ""}</div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {ecMonthDay && (
+                    <div style={{ marginTop: 12 }}>
+                      <div className="ec-lbl" style={{ marginBottom: 6 }}>Jun {ecMonthDay} · {(map[ecMonthDay] ?? []).length} call{(map[ecMonthDay] ?? []).length !== 1 ? "s" : ""}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {(map[ecMonthDay] ?? []).map(c => (
+                          <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!ecMonthDay && (
+                    <div style={{ marginTop: 10, color: "var(--text-dim-solid)", fontSize: ".82rem" }}>
+                      Click a date with calls to see the companies.
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return null;
+          })()}
+        </div>
       </div>
 
       {/* Earnings call detail drawer */}

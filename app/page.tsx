@@ -913,7 +913,6 @@ export default function LandingPage() {
   return (
     <>
     <canvas ref={glbgRef} className="sp-glbg" />
-    <div className="sp-grid" />
     <div className="lp-root mq-root">
       <div className="sp-aurora">
         <i className="a1" /><i className="a2" /><i className="a3" />

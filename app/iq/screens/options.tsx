@@ -4,6 +4,31 @@ import { useState, useMemo } from "react";
 import { movers } from "../data";
 import { fmt, sign, cls, arr, StockLogo } from "../utils";
 
+const EXTRA_STOCKS = [
+  { s: "AAPL",  n: "Apple",          p:  189.98, c:  1.02 },
+  { s: "TSLA",  n: "Tesla",          p:  171.40, c:  3.45 },
+  { s: "META",  n: "Meta",           p:  415.32, c:  0.86 },
+  { s: "MSFT",  n: "Microsoft",      p:  415.50, c:  0.41 },
+  { s: "AMZN",  n: "Amazon",         p:  182.20, c:  2.11 },
+  { s: "GOOGL", n: "Alphabet",       p:  173.20, c:  1.34 },
+  { s: "AMD",   n: "Adv Micro Dev",  p:  165.20, c: -2.10 },
+  { s: "MU",    n: "Micron",         p:  131.50, c:  1.75 },
+  { s: "SMCI",  n: "Super Micro",    p:  812.40, c:  5.60 },
+  { s: "NFLX",  n: "Netflix",        p:  645.80, c:  1.22 },
+  { s: "DIS",   n: "Disney",         p:  115.40, c: -0.88 },
+  { s: "BA",    n: "Boeing",         p:  185.30, c: -1.40 },
+  { s: "GS",    n: "Goldman Sachs",  p:  451.20, c:  0.72 },
+  { s: "JPM",   n: "JPMorgan",       p:  196.40, c:  0.55 },
+  { s: "XOM",   n: "ExxonMobil",     p:  117.80, c: -0.31 },
+  { s: "SOFI",  n: "SoFi Tech",      p:    8.42, c:  3.20 },
+  { s: "COIN",  n: "Coinbase",       p:  232.40, c:  4.85 },
+  { s: "MSTR",  n: "MicroStrategy",  p: 1580.00, c:  6.44 },
+  { s: "SPY",   n: "S&P 500 ETF",    p:  525.50, c:  0.73 },
+  { s: "QQQ",   n: "Nasdaq 100 ETF", p:  445.60, c:  1.02 },
+  { s: "RIOT",  n: "Riot Platforms", p:   12.65, c:  2.90 },
+  { s: "HOOD",  n: "Robinhood",      p:   21.85, c:  1.55 },
+];
+
 // ---- Expiry dates ----
 const EXPS = [
   { label: "Jun 27", days: 2 },
@@ -43,7 +68,7 @@ function buildChain(sym: string, p: number, ei: number): OptionRow[] {
   const sig  = p * ivb * Math.sqrt(T) + 1e-6;
   const rows: OptionRow[] = [];
 
-  for (let i = -7; i <= 7; i++) {
+  for (let i = -15; i <= 14; i++) {
     const k = +(atmK + i * step).toFixed(2);
     if (k <= 0) continue;
     const dist = Math.abs(k - p) / p;
@@ -70,10 +95,12 @@ function fK(k: number) { return k % 1 === 0 ? k.toFixed(0) : k.toFixed(1); }
 function fOI(x: number) { return fmt(x, 0); }
 
 export function OptionsScreen() {
-  const stockList = useMemo(
-    () => [...movers].map(m => ({ s: m.s, n: m.n, p: m.p, c: m.c })).sort((a, b) => a.s < b.s ? -1 : 1),
-    []
-  );
+  const stockList = useMemo(() => {
+    const moverSyms = new Set(movers.map(m => m.s));
+    const base = movers.map(m => ({ s: m.s, n: m.n, p: m.p, c: m.c }));
+    const extra = EXTRA_STOCKS.filter(e => !moverSyms.has(e.s));
+    return [...base, ...extra].sort((a, b) => a.s < b.s ? -1 : 1);
+  }, []);
 
   const [selSym, setSelSym] = useState(stockList[0]?.s ?? "NVDA");
   const [expIdx, setExpIdx] = useState(0);

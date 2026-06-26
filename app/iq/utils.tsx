@@ -171,7 +171,12 @@ export function hashStr(s: string): number {
 export interface EarnQ { q: string; e: number; a: number; surp: number; mv: number; }
 
 export function earnHistory(sym: string, base: number): EarnQ[] {
-  const qs = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
+  const qs = [
+    "Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23",
+    "Q4 22","Q3 22","Q2 22","Q1 22","Q4 21","Q3 21","Q2 21","Q1 21","Q4 20","Q3 20",
+    "Q2 20","Q1 20","Q4 19","Q3 19","Q2 19","Q1 19","Q4 18","Q3 18","Q2 18","Q1 18",
+    "Q4 17","Q3 17","Q2 17","Q1 17","Q4 16","Q3 16","Q2 16","Q1 16","Q4 15","Q3 15",
+  ];
   return qs.map((q, i) => {
     const r    = (Math.abs(sym.charCodeAt(0) * 31 + (sym.charCodeAt(1) || 7) * 17 + i * 13) % 97) / 97;
     const e    = parseFloat((base * (1 - i * 0.03)).toFixed(2));
@@ -183,7 +188,7 @@ export function earnHistory(sym: string, base: number): EarnQ[] {
 }
 
 export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
-  const d = [...hist].slice(0, 8).reverse();
+  const d = [...hist].slice(0, 12).reverse();
   const W = 560, H = 190, PADL = 36, PADR = 12, PADT = 28, PADB = 26;
   const iw = W - PADL - PADR, ih = H - PADT - PADB;
   const vals = d.map(x => x.a);
