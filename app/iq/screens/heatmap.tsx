@@ -41,7 +41,11 @@ function capFmt(mcap: number) {
   return mcap >= 1000 ? `$${(mcap / 1000).toFixed(1)}T` : `$${Math.round(mcap)}B`;
 }
 
-interface HoverStock { sym: string; chg: number; mcap: number; x: number; y: number; }
+interface HoverStock {
+  sym: string; chg: number; mcap: number; x: number; y: number;
+  sector: string;
+  peers: [string, number, number][];
+}
 
 export function HeatmapScreen() {
   const { openSector, openStockFull } = useIQActions();
@@ -51,9 +55,13 @@ export function HeatmapScreen() {
 
   const showHover = (e: React.MouseEvent, sym: string, chg: number, mcap: number) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    const x = e.clientX + 14 + 310 > window.innerWidth ? e.clientX - 322 : e.clientX + 14;
-    const y = Math.max(8, Math.min(e.clientY - 10, window.innerHeight - 300));
-    setHover({ sym, chg, mcap, x, y });
+    const sector = sectorList.find(g => g.items.some(([s]) => s === sym));
+    const peers  = sector ? [...sector.items].sort((a, b) => b[1] - a[1]) : [];
+    const estH   = 160 + 34 + peers.length * 27; // header rows + label + peer rows
+    const maxH   = Math.min(estH, window.innerHeight - 16);
+    const x = e.clientX + 14 + 318 > window.innerWidth ? e.clientX - 326 : e.clientX + 14;
+    const y = Math.max(8, Math.min(e.clientY - 10, window.innerHeight - maxH - 8));
+    setHover({ sym, chg, mcap, x, y, sector: sector?.name ?? "", peers });
   };
   const hideHover   = () => { hoverTimer.current = setTimeout(() => setHover(null), 200); };
   const cancelHover = () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); };
@@ -204,12 +212,12 @@ export function HeatmapScreen() {
         const scr = screenerStocks.find(s => s.s === hover.sym);
         return (
           <div className="dash-pop"
-            style={{ left: hover.x, top: hover.y }}
+            style={{ left: hover.x, top: hover.y, cursor: "default", width: 310, maxHeight: `${window.innerHeight - hover.y - 8}px`, overflowY: "auto" }}
             onMouseEnter={cancelHover}
             onMouseLeave={hideHover}
-            onClick={() => { setHover(null); openStockFull(hover.sym); }}
           >
-            <div className="dp-head">
+            {/* Hovered stock header */}
+            <div className="dp-head" style={{ cursor: "pointer" }} onClick={() => { setHover(null); openStockFull(hover.sym); }}>
               <StockLogo sym={hover.sym} size={28} />
               <span className="dp-sym">{hover.sym}</span>
               <span className={`pill ${hover.chg >= 0 ? "up" : "dn"}`}>{sign(hover.chg)}</span>
@@ -219,11 +227,28 @@ export function HeatmapScreen() {
             {mv  && <div className="dp-row"><span>RVOL</span><b className={mv.rvol >= 2 ? "up" : ""}>{mv.rvol}×</b></div>}
             {scr && <div className="dp-row"><span>RS Rating</span><b>{scr.rs}/99</b></div>}
             {mv?.ma && <div className="dp-row"><span>MA Status</span><b className={cls(mv.c)}>{mv.ma}</b></div>}
-            {mv?.tech && <div className="dp-note">{mv.tech}</div>}
-            <button className="dp-foot" style={{ cursor: "pointer", background: "none", border: "none", padding: 0, width: "100%", textAlign: "left" }}
-              onClick={() => { setHover(null); openStockFull(hover.sym); }}>
-              Open full stock details →
-            </button>
+
+            {/* Same-sector stock list */}
+            {hover.peers.length > 0 && (
+              <>
+                <div className="hpop-label" onClick={() => { setHover(null); openSector(hover.sector); }}>
+                  <span>{hover.sector}</span>
+                  <span className="link" style={{ fontSize: ".62rem" }}>View sector →</span>
+                </div>
+                {hover.peers.map(([psym, pmcap, pchg]) => (
+                  <div key={psym}
+                    className={`hpop-row${psym === hover.sym ? " hpop-row-hi" : ""}`}
+                    onClick={() => { setHover(null); openStockFull(psym); }}
+                  >
+                    <StockLogo sym={psym} size={16} />
+                    <span className="hpop-sym">{psym}</span>
+                    <span className="hpop-mcap">{capFmt(pmcap)}</span>
+                    <span className={`hpop-chg ${pchg >= 0 ? "up" : "down"}`}>{sign(pchg)}</span>
+                    <i className="hpop-bar" style={{ background: heatCol(pchg).bg, width: `${Math.min(56, Math.abs(pchg) * 14)}px` }} />
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         );
       })()}

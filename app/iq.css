@@ -917,6 +917,27 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .dp-foot { margin-top: 9px; font-size: .66rem; color: var(--brand-2); font-weight: 600; }
 .minirow:hover { background: rgba(124,108,245,.06); border-radius: 6px; }
 
+/* heatmap stock-hover peer list */
+.hpop-label {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 10px 0 4px;
+  padding: 5px 0 5px;
+  border-top: 1px solid var(--border-soft);
+  font-size: .65rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-dim-solid); cursor: pointer;
+}
+.hpop-label:hover { color: var(--text-hi); }
+.hpop-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 5px; border-radius: 6px; cursor: pointer;
+  transition: background .1s;
+}
+.hpop-row:hover, .hpop-row-hi { background: var(--surface-2); }
+.hpop-sym { font-family: var(--f-mono); font-size: .74rem; font-weight: 700; color: var(--text-hi); width: 42px; flex-shrink: 0; }
+.hpop-mcap { font-family: var(--f-mono); font-size: .66rem; color: var(--text-dim-solid); flex: 1; }
+.hpop-chg { font-family: var(--f-mono); font-size: .74rem; font-weight: 600; width: 52px; text-align: right; flex-shrink: 0; }
+.hpop-bar { display: block; height: 3px; border-radius: 2px; flex-shrink: 0; min-width: 2px; }
+
 /* heatmap hover popup */
 .heat-pop {
   position: fixed; z-index: 1000; pointer-events: auto;
