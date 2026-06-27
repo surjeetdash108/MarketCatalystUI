@@ -80,9 +80,8 @@ type PopBlock = "earnings" | "movers" | "analyst" | "watchlist" | "portfolio" | 
 interface PopState {
   sym: string;
   block: PopBlock;
-  right: number;
-  top: number;
-  left: number;
+  x: number;
+  y: number;
 }
 
 const BLOCK_LABEL: Record<PopBlock, string> = {
@@ -274,16 +273,18 @@ export function DashboardScreen() {
   const [heatSym, setHeatSym] = useState<string | null>(null);
   const showHeatPop = (e: React.MouseEvent, sd: SectorRow) => {
     if (heatTimerRef.current) clearTimeout(heatTimerRef.current);
-    const r = e.currentTarget.getBoundingClientRect();
-    setHeatPop({ sd, x: r.left, y: r.bottom });
+    const x = Math.max(8, Math.min(e.clientX + 14, window.innerWidth - 268));
+    const y = Math.max(8, Math.min(e.clientY - 10, window.innerHeight - 280));
+    setHeatPop({ sd, x, y });
   };
   const hideHeatPop = () => { heatTimerRef.current = setTimeout(() => setHeatPop(null), 300); };
   const cancelHideHeat = () => { if (heatTimerRef.current) clearTimeout(heatTimerRef.current); };
 
   const showPop = (e: React.MouseEvent<HTMLElement>, sym: string, block: PopBlock) => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    const r = e.currentTarget.getBoundingClientRect();
-    setPop({ sym, block, right: r.right, top: r.top, left: r.left });
+    const x = Math.max(8, Math.min(e.clientX + 14, window.innerWidth - 320));
+    const y = Math.max(8, Math.min(e.clientY - 10, window.innerHeight - 280));
+    setPop({ sym, block, x, y });
   };
   const hidePop = () => {
     hideTimerRef.current = setTimeout(() => setPop(null), 150);
@@ -1055,10 +1056,7 @@ export function DashboardScreen() {
       {pop && (
         <div
           className="dash-pop"
-          style={{
-            left: Math.min(pop.right + 12, (typeof window !== "undefined" ? window.innerWidth : 1400) - 320),
-            top:  Math.max(8, Math.min(pop.top, (typeof window !== "undefined" ? window.innerHeight : 900) - 280)),
-          }}
+          style={{ left: pop.x, top: pop.y }}
           onMouseEnter={cancelHide}
           onMouseLeave={hidePop}
           onClick={() => {

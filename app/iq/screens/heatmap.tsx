@@ -51,9 +51,9 @@ export function HeatmapScreen() {
 
   const showHover = (e: React.MouseEvent, sym: string, chg: number, mcap: number) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    const r = e.currentTarget.getBoundingClientRect();
-    const x = r.right + 8 + 310 > window.innerWidth ? r.left - 318 : r.right + 8;
-    setHover({ sym, chg, mcap, x: Math.max(8, x), y: Math.min(r.top, window.innerHeight - 300) });
+    const x = e.clientX + 14 + 310 > window.innerWidth ? e.clientX - 322 : e.clientX + 14;
+    const y = Math.max(8, Math.min(e.clientY - 10, window.innerHeight - 300));
+    setHover({ sym, chg, mcap, x, y });
   };
   const hideHover   = () => { hoverTimer.current = setTimeout(() => setHover(null), 200); };
   const cancelHover = () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); };

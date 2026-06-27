@@ -354,10 +354,8 @@ export function MacroScreen() {
 
   const showVixPop = (e: React.MouseEvent, s: VixStock) => {
     if (vixTimerRef.current) clearTimeout(vixTimerRef.current);
-    const r = e.currentTarget.getBoundingClientRect();
-    const popH = 220;
-    const y = r.top > popH + 20 ? r.top - popH : r.bottom + 6;
-    const x = Math.max(8, Math.min(r.left, window.innerWidth - 306));
+    const x = Math.max(8, Math.min(e.clientX + 14, window.innerWidth - 306));
+    const y = Math.max(8, Math.min(e.clientY - 10, window.innerHeight - 230));
     setVixPop({ s, x, y });
   };
   const hideVixPop   = () => { vixTimerRef.current = setTimeout(() => setVixPop(null), 200); };
