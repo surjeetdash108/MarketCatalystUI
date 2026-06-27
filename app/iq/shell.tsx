@@ -81,7 +81,7 @@ function NavIcon({ slug }: { slug: string }) {
     options:     "M12 3l8 4.5-8 4.5-8-4.5L12 3zM4 12l8 4.5 8-4.5M4 16.5L12 21l8-4.5",
   };
   return (
-    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
       strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d={paths[slug] ?? "M5 12h14"} />
     </svg>
@@ -1086,6 +1086,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             {/* Main content */}
             <main className="main">
               {children}
+              <footer className="disclaimer-bar">
+                StockWise LLC is not a registered investment advisor and does not manage client assets. Information and tools on this platform are for informational and educational purposes only and do not constitute investment advice. StockWise is a data provider, not a stock-picks or alert service. Trading stocks and options carries risk — consult your own financial advisor.
+              </footer>
             </main>
           </div>
 
