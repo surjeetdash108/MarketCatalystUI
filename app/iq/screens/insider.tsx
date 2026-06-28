@@ -390,7 +390,6 @@ export function InsiderScreen() {
       <div className="page-head">
         <div>
           <div className="eyebrow">My Money · Smart money</div>
-          <div className="page-title">Insider &amp; Institutional</div>
           <div className="page-sub">{sub}</div>
         </div>
       </div>

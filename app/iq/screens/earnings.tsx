@@ -738,6 +738,53 @@ function CallDrawer({ call, onClose }: { call: CallEntry; onClose: () => void })
   );
 }
 
+// ── Company bios ─────────────────────────────────────────────────────────────
+
+const COMPANY_BIO: Record<string, string> = {
+  AAPL:  "Apple designs and sells iPhones, Macs, iPads, and wearables while growing its high-margin Services business including the App Store, iCloud, and Apple Pay. Services is now the most profitable segment and the key driver of multiple expansion.",
+  MSFT:  "Microsoft is a global technology leader with enterprise software (Office 365, Windows), Azure cloud computing, and AI services powered by its OpenAI partnership. Azure is the company's fastest-growing segment and the main earnings driver.",
+  NVDA:  "NVIDIA designs the world's leading data center GPUs for AI training and inference. Blackwell architecture demand is driving unprecedented revenue growth, with hyperscaler backlogs extending several quarters and data center revenue up 90%+ year-over-year.",
+  AMZN:  "Amazon is the world's largest e-commerce marketplace and cloud computing provider through AWS. The company also operates a fast-growing advertising business now crossing $60B in annualized revenue, with AWS margins expanding as AI workloads ramp.",
+  GOOG:  "Alphabet operates Google Search, YouTube, Google Cloud, and Waymo. Revenue is primarily advertising-driven with Cloud growing at 30%+ and AI Overviews monetizing better than feared, supporting the long-term ad revenue base.",
+  GOOGL: "Alphabet operates Google Search, YouTube, Google Cloud, and Waymo. Revenue is primarily advertising-driven with Cloud growing at 30%+ and AI Overviews monetizing better than feared, supporting the long-term ad revenue base.",
+  META:  "Meta Platforms owns Facebook, Instagram, and WhatsApp, reaching over 3 billion daily active users. AI-driven Advantage+ ad campaigns and Llama 4 integration are accelerating revenue growth and reducing infrastructure costs simultaneously.",
+  TSLA:  "Tesla designs and manufactures electric vehicles, battery storage, and solar products globally. Near-term earnings are pressured by automotive margin compression from price cuts, while energy storage and autonomous (FSD/Optimus) represent long-term optionality.",
+  AMD:   "Advanced Micro Devices designs high-performance CPUs and GPUs for data centers, gaming, and embedded applications. MI300X AI accelerators are gaining significant share against NVIDIA with data center GPU revenue tripling year-over-year.",
+  INTC:  "Intel is a legacy semiconductor manufacturer undergoing a multi-year turnaround, competing in CPUs, AI accelerators, and foundry services. The company is managing significant losses in its Intel Foundry segment while facing ongoing share losses to AMD.",
+  JPM:   "JPMorgan Chase is the largest US bank by assets, with leading positions in consumer banking, investment banking, and asset management. Net interest income remains a key earnings driver and the firm benefits from its scale in volatile markets.",
+  BAC:   "Bank of America is the second-largest US bank, heavily exposed to retail deposits and consumer credit. The company benefits disproportionately from higher-for-longer rates through its large fixed-rate bond portfolio repricing over time.",
+  CRM:   "Salesforce is the world's leading CRM platform, serving sales, service, marketing, and commerce teams. Its Agentforce AI product is accelerating upsell across the installed base and driving higher total contract values per customer.",
+  NFLX:  "Netflix is the world's largest streaming service with 270M+ subscribers globally. The advertising-supported tier is scaling rapidly with 94M monthly active users, and live events strategy — sports and WWE — is driving total viewing hour growth.",
+  V:     "Visa operates the world's largest payment network, processing trillions in volume annually across 200+ countries. Growth is driven by cross-border travel recovery, B2B payment digitization, and value-added services now at 22% of net revenue.",
+  JNJ:   "Johnson & Johnson is a global healthcare company with leading MedTech and pharmaceutical divisions. Key drugs Darzalex and TREMFYA are growing strongly while the MedTech segment benefits from robotic surgery procedure volume recovery.",
+  WMT:   "Walmart is the world's largest retailer by revenue operating 10,500+ stores globally with a fast-growing e-commerce platform. Higher-income shoppers trading down from premium grocers and advertising revenue growth are the two key earnings catalysts.",
+  DIS:   "The Walt Disney Company operates theme parks, studios, cruise lines, and streaming through Disney+, Hulu, and ESPN+. Streaming has reached profitability while Parks & Experiences faces near-term pressure from macroeconomic softness in domestic attendance.",
+  QCOM:  "Qualcomm is the world's leading mobile chipmaker, supplying Snapdragon processors for Android smartphones. The company is diversifying into automotive, IoT, and AI-on-device markets to reduce its handset concentration risk.",
+  UBER:  "Uber operates a global mobility and food delivery platform across 70+ countries with 150M+ active users. The business generates strong network effects and is generating consistent EBITDA profitability as Delivery and Freight segments mature.",
+  ARM:   "Arm Holdings licenses CPU and GPU architectures to semiconductor manufacturers worldwide. Virtually every smartphone chip uses Arm designs, and the company is expanding into AI inference, data center, and edge computing markets.",
+  CSCO:  "Cisco Systems is the dominant provider of enterprise networking equipment including routers, switches, and security appliances. The company is pivoting to software and subscription revenue through its networking, collaboration, and observability platforms.",
+  HD:    "Home Depot is the largest home improvement retailer in the US with 2,300+ stores serving DIY and professional customers. Pro contractor revenue is an increasingly large portion of sales and tends to be higher-ticket and more recurring.",
+  TGT:   "Target is a national mass-merchandise retailer offering groceries, apparel, home goods, and electronics. The company is working to recover discretionary spending share after aggressive inventory corrections and pricing pressure from competition.",
+  SNOW:  "Snowflake provides a cloud-native data platform enabling organizations to store, query, and share data across multiple cloud providers. Its consumption-based model makes revenue growth closely tied to enterprise AI data workload expansion.",
+  MDB:   "MongoDB provides a flexible document-oriented database platform used by developers worldwide. Its Atlas cloud database product is the fastest-growing segment, with AI vector search capabilities expanding the addressable market significantly.",
+  COST:  "Costco operates a membership-only warehouse club with over 130 million members globally. Its low-price model, strong Kirkland private label, and membership fee income create a deeply loyal customer base and predictable recurring earnings.",
+  ORCL:  "Oracle is a cloud applications and database company with a fast-growing Infrastructure Cloud (OCI) division. AI workload demand has filled its data centers and driven a multi-year backlog, with revenue guidance being raised materially.",
+  ADBE:  "Adobe provides creative software (Photoshop, Illustrator, Premiere), document management (Acrobat), and marketing analytics tools. AI-powered Firefly features are expanding its content creation addressable market and driving meaningful upsell activity.",
+  DAL:   "Delta Air Lines is one of the world's largest carriers, differentiated by its premium cabin mix and American Express co-brand credit card partnership generating $7B+ in annual revenue. Domestic and international travel demand remains resilient.",
+  KR:    "Kroger is the largest traditional US grocery chain with 2,700+ stores and a strong loyalty data platform. The company faces ongoing margin pressure from labor cost inflation and competitive pricing, with digital grocery a key investment area.",
+  FDX:   "FedEx is a global logistics and express delivery company operating in 220+ countries. The company is executing its multi-year DRIVE cost reduction program targeting $4B+ in savings, improving operating margin structurally as volumes normalize.",
+  NKE:   "Nike is the world's largest athletic footwear and apparel brand selling through wholesale, direct-to-consumer, and its own digital platform. The company is working to stabilize volumes in North America and China after an inventory reset.",
+  SMCI:  "Super Micro Computer manufactures high-performance server and storage solutions for AI and data center applications. The company is a key AI infrastructure supplier but has faced accounting restatement and Nasdaq compliance challenges.",
+  MU:    "Micron Technology manufactures DRAM and NAND memory chips for AI servers, PCs, smartphones, and automotive. Its HBM3E high-bandwidth memory for AI accelerators is a fast-growing, highly profitable product driving significant margin improvement.",
+  LEVI:  "Levi Strauss is a global denim apparel brand with the iconic Levi's, Dockers, and Beyond Yoga labels. The company is growing its direct-to-consumer channel to improve margins and reduce dependence on wholesale department store accounts.",
+  STZ:   "Constellation Brands is a leading beverage alcohol company with premium Mexican beer brands including Corona, Modelo, and Pacifico. Beer segment operating margins consistently exceed 37%, driven by strong premiumization trends in the US Hispanic market.",
+  LEN:   "Lennar is one of the largest US homebuilders operating across 20+ states. The company benefits from a significant structural housing supply shortage and has used mortgage rate buydowns effectively to maintain order pace despite elevated rates.",
+  ACN:   "Accenture is a global professional services firm providing strategy, consulting, digital transformation, and managed services to enterprises in 120+ countries. AI-related consulting engagements are growing rapidly and expanding total engagement size.",
+  WBA:   "Walgreens Boots Alliance operates one of the largest pharmacy retail chains in the US and Europe with 8,700+ locations. The company is undergoing a strategic transformation to expand healthcare services amid declining retail pharmacy foot traffic.",
+  PAYX:  "Paychex is a leading provider of payroll, HR, and benefits administration services to small and medium-sized businesses. The company generates highly recurring SaaS-like revenue from its 745,000+ client base with strong retention rates.",
+  CAG:   "Conagra Brands is a packaged food company with brands including Slim Jim, Birds Eye, Duncan Hines, and Hunt's. The company is navigating volume pressure from consumer trade-down while managing input cost inflation across its grocery portfolio.",
+};
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export function EarningsScreen() {
@@ -1033,11 +1080,7 @@ export function EarningsScreen() {
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6", width: 36, height: 36, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: ".9rem", flexShrink: 0 }}>
-                {sel[0]}
-                <img src={`https://assets.parqet.com/logos/symbol/${sel}?format=png`}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} alt="" />
-              </span>
+              <StockLogo sym={sel} size={36} />
               <div>
                 <span style={{ fontWeight: 700, color: "var(--text-hi)", fontSize: ".95rem" }}>{sel}</span>
                 <span style={{ color: "var(--text-dim-solid)", fontSize: ".78rem", marginLeft: 8 }}>{selEarning.n} · {selEarning.sec}</span>
@@ -1048,6 +1091,11 @@ export function EarningsScreen() {
             </div>
           </div>
           <div className="card-b" style={{ paddingTop: 10 }}>
+            {(COMPANY_BIO[sel] ?? stockInfo[sel]?.ai_thesis) && (
+              <p style={{ fontSize: ".82rem", color: "var(--text)", lineHeight: 1.6, marginBottom: 14, marginTop: 0 }}>
+                {COMPANY_BIO[sel] ?? stockInfo[sel]?.ai_thesis}
+              </p>
+            )}
             <div className="metric-grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 12 }}>
               <div className="m">
                 <div className="k">EPS estimate</div>

@@ -346,7 +346,6 @@ export function RecapScreen() {
       {/* ── Page head ── */}
       <div className="page-head">
         <div>
-          <div className="eyebrow">Recaps</div>
           <h1 className="page-title">{activeTab === 1 ? "Weekly Recap" : "End-of-Day Recap"}</h1>
           <div className="page-sub">
             {activeTab === 1
@@ -365,17 +364,6 @@ export function RecapScreen() {
       {/* ── Today (EOD) ── */}
       {activeTab === 0 && (
         <div style={{ padding: "14px 18px 18px" }}>
-          <div className="rcp-idx">
-            {pulse.map((x, i) => (
-              <div key={x.l} className="rcp-box">
-                <div className="rcp-bl">{x.l}</div>
-                <div className="rcp-bv">{fmt(x.v, x.v > 1000 ? 0 : 2)}</div>
-                <div className={`rcp-bc ${cls(x.c)}`}>{arr(x.c)} {sign(x.c)}</div>
-                <div className="rcp-bs"><Spark seed={i + 1} up={x.c >= 0} w={96} h={26} /></div>
-              </div>
-            ))}
-          </div>
-
           <RcpCarousel picks={rcPicks} label="Today" dateLabel={recap.date} />
 
           <div className="recap-hero">
@@ -451,17 +439,6 @@ export function RecapScreen() {
       {/* ── This Week ── */}
       {activeTab === 1 && (
         <div style={{ padding: "14px 18px 18px" }}>
-          <div className="rcp-idx">
-            {pulse.map((x, i) => (
-              <div key={x.l} className="rcp-box">
-                <div className="rcp-bl">{x.l}</div>
-                <div className="rcp-bv">{fmt(x.v, x.v > 1000 ? 0 : 2)}</div>
-                <div className={`rcp-bc ${cls(x.c)}`}>{arr(x.c)} {sign(x.c)}</div>
-                <div className="rcp-bs"><Spark seed={i + 1} up={x.c >= 0} w={96} h={26} /></div>
-              </div>
-            ))}
-          </div>
-
           <RcpCarousel picks={rcPicks} label="This week" dateLabel={`Week of ${WEEKLY.range}`} />
 
           <div className="recap-hero">

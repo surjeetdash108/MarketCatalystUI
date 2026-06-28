@@ -312,12 +312,6 @@ export function DashboardScreen() {
   return (
     <>
       {/* ── Header ── */}
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-        </div>
-      </div>
-
       <div className="dash" style={{ alignItems: "stretch" }}>
 
         {/* ── 1. Pulse strip ── */}

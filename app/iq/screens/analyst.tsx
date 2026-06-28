@@ -54,17 +54,16 @@ export function AnalystScreen() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Analyst Actions</div>
           <h1 className="page-title">Upgrades &amp; Downgrades</h1>
           <div className="page-sub">
             Back-end flags stocks with 5+ actions in 30 days, and names drawing 2–3 upgrades
           </div>
         </div>
-        <div className="tabs">
-          {TABS.map((t, i) => (
-            <button key={t} className={`tab${i === tab ? " on" : ""}`} onClick={() => setTab(i)}>{t}</button>
-          ))}
-        </div>
+      </div>
+      <div className="tabs" style={{ alignSelf: "flex-start" }}>
+        {TABS.map((t, i) => (
+          <button key={t} className={`tab${i === tab ? " on" : ""}`} onClick={() => setTab(i)}>{t}</button>
+        ))}
       </div>
 
       {/* ── Signal cards ── */}

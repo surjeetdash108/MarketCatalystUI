@@ -118,7 +118,6 @@ export function OptionsScreen() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Options</div>
           <h1 className="page-title">Options Chain</h1>
           <div className="page-sub">
             Live calls &amp; puts · search any stock on the left and tap it to load its chain

@@ -77,7 +77,6 @@ export function HeatmapScreen() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Market Heatmap</div>
           <h1 className="page-title">Where the day is leaning</h1>
           <div className="page-sub">
             {sectorList.length} sectors · size = market cap · color = % change · hover for data · click to open stock

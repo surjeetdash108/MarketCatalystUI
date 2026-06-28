@@ -82,8 +82,6 @@ export function PortfolioScreen() {
       {/* Page header */}
       <div className="page-head">
         <div>
-          <div className="eyebrow">Portfolio Pulse</div>
-          <div className="page-title">Portfolio Pulse</div>
           <div className="page-sub">
             {holdings.length} holdings · {usd(totalVal)} ·{" "}
             <span className={cls(dayPL)}>

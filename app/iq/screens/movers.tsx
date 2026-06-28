@@ -71,7 +71,6 @@ export function MoversScreen() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Market Movers</div>
           <h1 className="page-title">Winners &amp; Losers</h1>
           <div className="page-sub">
             {{ win: "Top 15 gainers today", lose: "Top 15 losers today", vol: "Top 15 by relative volume", week: "Biggest 5-day movers" }[tab]}
