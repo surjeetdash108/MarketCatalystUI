@@ -250,7 +250,6 @@ export function RecapScreen() {
   const { openStock, openSector } = useIQActions();
   const [activeTab, setActiveTab] = useState(0);
   const [recapPage, setRecapPage] = useState(0);
-  const [schMsg, setSchMsg] = useState("");
   const [drawer, setDrawer] = useState<"earn-movers" | "internals" | null>(null);
 
   const rcPicks = movers.filter(m => m.c).slice(0, 6);
@@ -267,52 +266,7 @@ export function RecapScreen() {
     URL.revokeObjectURL(url);
   }
 
-  function scheduleRecap(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSchMsg("✓ Recap scheduled — you’ll receive it at the selected time.");
-    setTimeout(() => setSchMsg(""), 4000);
-  }
-
   // ---- Reusable cards ----
-  const ScheduleCard = (
-    <div className="card" style={{ marginTop: 14 }}>
-      <div className="card-h">
-        <h3>Schedule &amp; share this recap</h3>
-        <span className="pill ai">AI</span>
-      </div>
-      <div className="card-b">
-        <p style={{ fontSize: ".82rem", color: "var(--text)", lineHeight: 1.5, marginBottom: 12 }}>
-          Get this executive summary delivered automatically, or download it now. The summary headline above is clickable — it opens the full PDF.
-        </p>
-        <form onSubmit={scheduleRecap} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <label style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-            Frequency<br />
-            <select className="mv-sel" style={{ marginTop: 4 }}>
-              <option>Daily (EOD)</option>
-              <option>Weekdays</option>
-              <option>Weekly (Fri)</option>
-            </select>
-          </label>
-          <label style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-            Send time<br />
-            <select className="mv-sel" style={{ marginTop: 4 }}>
-              <option>4:45 PM ET</option>
-              <option>6:00 PM ET</option>
-              <option>7:00 AM ET</option>
-            </select>
-          </label>
-          <label style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-            Email<br />
-            <input className="mv-sel" type="email" style={{ marginTop: 4, minWidth: 220 }}
-              placeholder="you@example.com" defaultValue="dash.surjeet@gmail.com" />
-          </label>
-          <button className="btn primary" type="submit">Schedule email</button>
-          <button className="btn" type="button" onClick={() => downloadRecap("today")}>Download now</button>
-        </form>
-        {schMsg && <div style={{ fontSize: ".78rem", marginTop: 10, color: "var(--up)" }}>{schMsg}</div>}
-      </div>
-    </div>
-  );
 
   const SectorHeatCard = (paginated: boolean, weeklyScale: boolean) => (
     <div className="card" style={{ marginTop: 14 }}>
@@ -488,7 +442,7 @@ export function RecapScreen() {
             </div>
           </div>
 
-          {ScheduleCard}
+
           {SectorHeatCard(true, false)}
           {BottomDash}
         </div>
@@ -619,7 +573,7 @@ export function RecapScreen() {
             </div>
           </div>
 
-          {ScheduleCard}
+
           {SectorHeatCard(true, true)}
           {BottomDash}
         </div>

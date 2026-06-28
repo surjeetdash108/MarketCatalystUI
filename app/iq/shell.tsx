@@ -836,9 +836,12 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   const [copilotOpen, setCopilotOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchStarred, setSearchStarred] = useState<Set<string>>(() => new Set());
+  const cmdRef = useRef<HTMLDivElement>(null);
   const [drawer, setDrawer] = useState<
     | { type: "stock"; sym: string }
     | { type: "mover-modal"; sym: string }
@@ -886,14 +889,26 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [profileDropdownOpen]);
 
+  // Close search dropdown when clicking outside
+  useEffect(() => {
+    function handleCmdOutside(e: MouseEvent) {
+      if (cmdRef.current && !cmdRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+        setSearchQ("");
+      }
+    }
+    if (searchOpen) document.addEventListener("mousedown", handleCmdOutside);
+    return () => document.removeEventListener("mousedown", handleCmdOutside);
+  }, [searchOpen]);
+
   // Close mobile nav on route change
   useEffect(() => { setNavOpen(false); }, [pathname]);
 
   // Keyboard shortcuts
   useEffect(() => {
     function handler(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setPaletteOpen(true); }
-      if (e.key === "Escape") { setPaletteOpen(false); setDrawer(null); setCopilotOpen(false); setProfileDropdownOpen(false); setNavOpen(false); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(true); (document.querySelector(".cmd-input") as HTMLInputElement)?.focus(); }
+      if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); setDrawer(null); setCopilotOpen(false); setProfileDropdownOpen(false); setNavOpen(false); }
     }
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -969,9 +984,52 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="wordmark">StockWise<span>Market Intelligence</span></div>
               </div>
-              <button className="cmd" onClick={() => setPaletteOpen(true)}>
-                ⌕ Search tickers and stocks…
-              </button>
+              <div className="cmd-wrap" ref={cmdRef}>
+                <div className={`cmd${searchOpen ? " cmd-active" : ""}`}>
+                  <span className="palette-icon">⌕</span>
+                  <input
+                    className="cmd-input"
+                    placeholder="Search tickers and stocks…"
+                    value={searchQ}
+                    onFocus={() => setSearchOpen(true)}
+                    onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
+                    onKeyDown={e => {
+                      if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); }
+                      if (e.key === "Enter") {
+                        const matches = SEARCHABLE_STOCKS.filter(s => s.toLowerCase().startsWith(searchQ.toLowerCase()));
+                        if (matches[0]) { localStorage.setItem("iq-stock", matches[0]); router.push("/menu/stock"); setSearchOpen(false); setSearchQ(""); }
+                      }
+                    }}
+                  />
+                  {searchQ && <button className="cmd-clear" onClick={() => { setSearchQ(""); setSearchOpen(false); }}>✕</button>}
+                </div>
+                {searchOpen && (
+                  <div className="cmd-dropdown">
+                    {SEARCHABLE_STOCKS.filter(s => !searchQ || s.toLowerCase().startsWith(searchQ.toLowerCase())).map(sym => (
+                      <div key={sym} className="palette-item"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => { localStorage.setItem("iq-stock", sym); router.push("/menu/stock"); setSearchOpen(false); setSearchQ(""); }}
+                      >
+                        <div className="palette-item-icon" style={{ color: "var(--brand-2)", fontWeight: 700, fontFamily: "var(--f-mono)" }}>{sym[0]}</div>
+                        <div style={{ flex: 1 }}>
+                          <div className="palette-item-label">{sym}</div>
+                          <div className="palette-item-sub">Stock · click to open</div>
+                        </div>
+                        <button
+                          title={searchStarred.has(sym) ? "Remove from watchlist" : "Add to watchlist"}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={e => { e.stopPropagation(); setSearchStarred(prev => { const n = new Set(prev); n.has(sym) ? n.delete(sym) : n.add(sym); return n; }); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", color: searchStarred.has(sym) ? "var(--warn)" : "var(--text-dim-solid)", padding: "0 4px" }}>
+                          {searchStarred.has(sym) ? "★" : "☆"}
+                        </button>
+                      </div>
+                    ))}
+                    {searchQ && SEARCHABLE_STOCKS.filter(s => s.toLowerCase().startsWith(searchQ.toLowerCase())).length === 0 && (
+                      <div style={{ padding: "12px 15px", color: "var(--text-dim-solid)", fontSize: 13 }}>No results for &ldquo;{searchQ}&rdquo;</div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="statuspill">
                 <div className="dot" />
                 Markets Open
@@ -1009,6 +1067,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     </button>
                     <button className="pd-item" onClick={() => { router.push("/settings"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">⚙</span> Settings
+                    </button>
+                    <button className="pd-item" onClick={() => { router.push("/manage-plan"); setProfileDropdownOpen(false); }}>
+                      <span className="pd-icon">◈</span> Manage Account
                     </button>
                     <div className="pd-divider" />
                     <button className="pd-item danger" onClick={() => { handleSignOut(); setProfileDropdownOpen(false); }}>
@@ -1064,23 +1125,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 </div>
               ))}
 
-              {/* Profile box */}
-              <div className="planbox">
-                <div className="row">
-                  <div className="avatar">
-                    {initials}
-                    {profileImage && <img src={profileImage} alt={displayName} />}
-                  </div>
-                  <div>
-                    <div className="who">{displayName}</div>
-                    <div className="tier">✦ {tier}</div>
-                  </div>
-                </div>
-                <button className="planbtn" onClick={() => router.push("/manage-plan")}>
-                  <span style={{ fontSize: 13 }}>◈</span>
-                  Manage plan
-                </button>
-              </div>
             </nav>
 
             {/* Main content */}
@@ -1115,27 +1159,10 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <FearGreedDrawer onClose={() => setDrawer(null)} />
           )}
 
-          {/* Copilot FAB — visible when panel is closed */}
-          {!copilotOpen && (
-            <button className="copilot-fab" onClick={() => setCopilotOpen(true)}>
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
-                <circle cx="18.5" cy="17.5" r="2" fill="currentColor" />
-              </svg>
-              <span className="fab-label">Market Copilot</span>
-            </button>
-          )}
 
           {/* Copilot panel */}
           {copilotOpen && <CopilotPanel onClose={() => setCopilotOpen(false)} />}
 
-          {/* Command palette */}
-          {paletteOpen && (
-            <CommandPalette
-              onClose={() => setPaletteOpen(false)}
-              onNavigate={href => { router.push(href); }}
-            />
-          )}
         </div>
       </IQActionsContext.Provider>
     </AuthGuard>

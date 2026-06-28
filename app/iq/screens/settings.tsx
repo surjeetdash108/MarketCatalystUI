@@ -111,6 +111,13 @@ export function SettingsScreen() {
   const [pending, setPending] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [schMsg, setSchMsg] = useState("");
+
+  function scheduleRecap(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSchMsg("✓ Recap scheduled — you'll receive it at the selected time.");
+    setTimeout(() => setSchMsg(""), 4000);
+  }
 
   const isPremium = profile?.tier !== "free";
 
@@ -307,6 +314,44 @@ export function SettingsScreen() {
               <span style={{ fontSize: 13 }}>◈</span>
               Manage Plan
             </button>
+          </div>
+        </div>
+
+        {/* Schedule & share recap */}
+        <div className="card col-12">
+          <div className="card-h">
+            <h3>Schedule &amp; share recap</h3>
+            <span className="pill ai">AI</span>
+          </div>
+          <div className="card-b">
+            <p style={{ fontSize: ".82rem", color: "var(--text)", lineHeight: 1.5, marginBottom: 14 }}>
+              Get the end-of-day executive summary delivered automatically to your inbox, or download it on demand.
+            </p>
+            <form onSubmit={scheduleRecap} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <label style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                Frequency<br />
+                <select className="mv-sel" style={{ marginTop: 4 }}>
+                  <option>Daily (EOD)</option>
+                  <option>Weekdays</option>
+                  <option>Weekly (Fri)</option>
+                </select>
+              </label>
+              <label style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                Send time<br />
+                <select className="mv-sel" style={{ marginTop: 4 }}>
+                  <option>4:45 PM ET</option>
+                  <option>6:00 PM ET</option>
+                  <option>7:00 AM ET</option>
+                </select>
+              </label>
+              <label style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                Email<br />
+                <input className="mv-sel" type="email" style={{ marginTop: 4, minWidth: 220 }}
+                  placeholder="you@example.com" defaultValue={user?.email ?? ""} />
+              </label>
+              <button className="btn primary" type="submit">Schedule email</button>
+            </form>
+            {schMsg && <div style={{ fontSize: ".78rem", marginTop: 10, color: "var(--up)" }}>{schMsg}</div>}
           </div>
         </div>
 

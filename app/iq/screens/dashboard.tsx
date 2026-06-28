@@ -261,6 +261,7 @@ export function DashboardScreen() {
 
 
   const [drawer, setDrawer] = useState<DrawerKey>(null);
+  const [moversTab, setMoversTab] = useState<0 | 1 | 2>(0);
 
   // ---- Dash pop hover ----
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -418,27 +419,26 @@ export function DashboardScreen() {
               <h3>Market Movers</h3>
               <button className="link" onClick={() => setDrawer("movers")}>View all →</button>
             </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
-              <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
-                ▲ Top gainers
-              </div>
-              {movers.filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 3).map(m => (
-                <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
-                  <StockLogo sym={m.s} size={26} />
-                  <span className="tkr">{m.s}</span>
-                  <span className="mid">{m.cat}</span>
-                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
-                  <MoverPopup m={m} />
-                </div>
+            <div style={{ display: "flex", gap: 4, padding: "6px 13px 0" }}>
+              {(["Gainers", "Losers", "Most Active"] as const).map((label, i) => (
+                <button key={label}
+                  className={`chip${moversTab === i ? " on" : ""}`}
+                  style={{ fontSize: ".65rem", padding: "3px 9px" }}
+                  onClick={() => setMoversTab(i as 0 | 1 | 2)}
+                >{label}</button>
               ))}
-              <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px" }}>
-                ▼ Top losers
-              </div>
-              {movers.filter(m => m.c < 0).sort((a, b) => a.c - b.c).slice(0, 3).map(m => (
+            </div>
+            <div className="card-b" style={{ paddingTop: 8 }}>
+              {(moversTab === 0
+                ? [...movers].filter(m => m.c > 0).sort((a, b) => b.c - a.c)
+                : moversTab === 1
+                ? [...movers].filter(m => m.c < 0).sort((a, b) => a.c - b.c)
+                : [...movers].sort((a, b) => b.rvol - a.rvol)
+              ).slice(0, 6).map(m => (
                 <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
                   <StockLogo sym={m.s} size={26} />
                   <span className="tkr">{m.s}</span>
-                  <span className="mid">{m.cat}</span>
+                  <span className="mid">{moversTab === 2 ? `${m.rvol}× vol` : m.cat}</span>
                   <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
                   <MoverPopup m={m} />
                 </div>
@@ -452,34 +452,74 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Market Heatmap</h3>
-              <Link className="link" href="/menu/heatmap">View all →</Link>
+              <Link className="link" href="/menu/heatmap">Full map →</Link>
             </div>
-            <div className="card-b" style={{ paddingTop: 10, display: "flex", flexDirection: "column" }}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {sectorList.slice(0, 8).map(sd => {
-                  const hc  = heatCol(sd.chg);
-                  const tot = sd.items.reduce((s, i) => s + i[1], 0);
-                  return (
-                    <div key={sd.name}
-                      onClick={() => openSector(sd.name)}
-                      onMouseEnter={e => showHeatPop(e, sd)}
-                      onMouseLeave={hideHeatPop}
-                      style={{
-                        cursor: "pointer", background: hc.bg, borderRadius: 7,
-                        padding: "8px 9px", flex: `${Math.max(1, tot / 1400)} 1 70px`,
-                        transition: "filter .13s",
-                      }}
-                    >
-                      <div style={{ fontSize: ".6rem", fontWeight: 700, color: hc.fg, lineHeight: 1.1 }}>{sd.name}</div>
-                      <div className="mono" style={{ fontSize: ".64rem", color: hc.fg, opacity: .88 }}>{sign(sd.chg)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 9 }}>
-                Tap to open the full heatmap.
-              </div>
-            </div>
+            {(() => {
+              // Top 16 stocks by market cap across all sectors (deduplicated)
+              const seen = new Set<string>();
+              const top16 = sectorList
+                .flatMap(sd => sd.items.map(([sym, mcap, chg]) => ({ sym, mcap, chg, sd })))
+                .sort((a, b) => b.mcap - a.mcap)
+                .filter(s => { if (seen.has(s.sym)) return false; seen.add(s.sym); return true; })
+                .slice(0, 16);
+
+              // Group back by sector, preserving sector order
+              const groups = sectorList
+                .map(sd => ({ sd, stocks: top16.filter(s => s.sd === sd) }))
+                .filter(g => g.stocks.length > 0);
+
+              return (
+                <div className="card-b" style={{ paddingTop: 6 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {groups.map(({ sd, stocks }) => {
+                      const hcSect = heatCol(sd.chg);
+                      return (
+                        <div key={sd.name} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <div
+                            onClick={() => openSector(sd.name)}
+                            onMouseEnter={e => showHeatPop(e, sd)}
+                            onMouseLeave={hideHeatPop}
+                            style={{
+                              width: 90, flexShrink: 0, cursor: "pointer",
+                              background: hcSect.bg, borderRadius: 6,
+                              padding: "4px 7px", height: 40,
+                              display: "flex", flexDirection: "column", justifyContent: "center", gap: 2,
+                            }}
+                          >
+                            <span style={{ fontSize: ".65rem", fontWeight: 700, color: hcSect.fg, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sd.name}</span>
+                            <span style={{ fontFamily: "var(--f-mono)", fontSize: ".6rem", color: hcSect.fg, opacity: .9 }}>{sign(sd.chg)}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: 3 }}>
+                            {stocks.map(({ sym, chg }) => {
+                              const hc = heatCol(chg);
+                              return (
+                                <div key={sym}
+                                  onClick={() => openStock(sym)}
+                                  title={`${sym}  ${sign(chg)}`}
+                                  style={{
+                                    background: hc.bg, borderRadius: 6,
+                                    width: 56, height: 40, flexShrink: 0,
+                                    display: "flex", flexDirection: "column",
+                                    alignItems: "center", justifyContent: "center",
+                                    cursor: "pointer", transition: "filter .12s",
+                                    gap: 2,
+                                  }}
+                                  onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.3)")}
+                                  onMouseOut={e => (e.currentTarget.style.filter = "")}
+                                >
+                                  <span style={{ fontSize: ".65rem", fontWeight: 800, color: hc.fg, lineHeight: 1 }}>{sym.slice(0, 4)}</span>
+                                  <span style={{ fontSize: ".58rem", fontFamily: "var(--f-mono)", color: hc.fg, opacity: .88, lineHeight: 1 }}>{sign(chg)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
