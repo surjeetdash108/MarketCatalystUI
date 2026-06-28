@@ -982,16 +982,27 @@ export default function LandingPage() {
         const N = cards.length;
         if (N > 0) {
           const f = p * (N - 1);
-          const cardW = cards[0].offsetWidth || 340;
-          const step = cardW + 40;
+          const cardW = cards[0].offsetWidth || 370;
+          const step = cardW + 36;
           const stageW = window.innerWidth;
           row.style.transform = `translateX(${(stageW / 2 - (f * step + cardW / 2)).toFixed(1)}px)`;
 
           const fi = Math.round(f);
           cards.forEach((c, i) => {
             const dist = Math.abs(i - f);
-            c.style.transform = `scale(${Math.max(0.62, 1.13 - dist * 0.26).toFixed(3)})`;
-            c.style.opacity = Math.max(0.24, 1 - dist * 0.3).toFixed(2);
+            const visible = dist <= 1.4;
+            if (!visible) {
+              c.style.opacity = "0";
+              c.style.transform = "scale(0.6)";
+              (c.style as CSSStyleDeclaration & { zIndex: string }).zIndex = "0";
+              c.style.pointerEvents = "none";
+              c.classList.remove("front");
+              return;
+            }
+            const scale = (dist < 0.5 ? 1.2 : Math.max(0.58, 1.2 - dist * 0.7)).toFixed(3);
+            c.style.transform = `scale(${scale})`;
+            c.style.opacity = Math.max(0.45, 1 - dist * 0.52).toFixed(2);
+            c.style.pointerEvents = "auto";
             (c.style as CSSStyleDeclaration & { zIndex: string }).zIndex = i === fi ? "5" : "1";
             if (i === fi) c.classList.add("front");
             else c.classList.remove("front");
@@ -1128,6 +1139,15 @@ export default function LandingPage() {
     setAuthOpen(true);
   }
 
+  function scrollToCard(idx: number) {
+    const track = trackRef.current;
+    const row = rowRef.current;
+    if (!track || !row) return;
+    const N = row.children.length;
+    const range = track.offsetHeight - window.innerHeight;
+    window.scrollTo({ top: track.offsetTop + (idx / (N - 1)) * range, behavior: "smooth" });
+  }
+
   async function handleLandingGoogle() {
     try {
       const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
@@ -1187,7 +1207,10 @@ export default function LandingPage() {
               {WS_LIST.map((ws, i) => {
                 const Thumb = ws.Thumb;
                 return (
-                  <div key={ws.n} className="mq-card" onClick={() => setGlanceIdx(i)}>
+                  <div key={ws.n} className="mq-card" onClick={(e) => {
+                    if (e.currentTarget.classList.contains("front")) setGlanceIdx(i);
+                    else scrollToCard(i);
+                  }}>
                     <div className="mq-shot"><Thumb /></div>
                     <div className="mq-label">
                       <h3>{ws.n}</h3>
@@ -1201,7 +1224,13 @@ export default function LandingPage() {
                 );
               })}
               {/* "And many more" card */}
-              <div className="mq-card mq-more" onClick={() => openAuth("signup")}>
+              <div className="mq-card mq-more" onClick={(e) => {
+                const row = rowRef.current;
+                if (!row) return;
+                const lastIdx = row.children.length - 1;
+                if (e.currentTarget.classList.contains("front")) openAuth("signup");
+                else scrollToCard(lastIdx);
+              }}>
                 <div className="mq-more-inner">
                   <h3>And many more</h3>
                   <p>Screener, IPOs, Watchlist, Insider & 13F, Commentary, Macro & VIX — fourteen connected workspaces in all.</p>
