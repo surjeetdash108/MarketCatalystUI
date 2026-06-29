@@ -41,16 +41,6 @@ export function IPOsScreen() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <div className="eyebrow">New Issues</div>
-          <div className="page-title">IPOs &amp; Recent Performance</div>
-          <div className="page-sub">
-            {RECENT_IPOS.length} recent IPOs tracked · {winners}/{filtered.length} above offer · returns from offer price
-          </div>
-        </div>
-      </div>
-
       {/* Stats strip */}
       <div className="dash" style={{ marginBottom: 14 }}>
         <div className="col-4">

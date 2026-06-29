@@ -380,19 +380,8 @@ export function InsiderScreen() {
   );
   const activeInst = [...INST_DATA].sort((a, b) => b.owners - a.owners).slice(0, 6);
 
-  const sub = view === "13f"
-    ? "Quarterly 13F fund positioning · sourced from SEC EDGAR"
-    : "Form 4 insider transactions & 10%-owner moves · last 5 sessions";
-
   return (
     <>
-      {/* ---- page head ---- */}
-      <div className="page-head">
-        <div>
-          <div className="eyebrow">My Money · Smart money</div>
-          <div className="page-sub">{sub}</div>
-        </div>
-      </div>
 
       {/* ---- tabs (left-aligned, below header) ---- */}
       <div className="tabs" style={{ marginBottom: 14, alignSelf: "flex-start" }}>

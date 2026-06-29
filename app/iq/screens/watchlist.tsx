@@ -93,13 +93,7 @@ export function WatchlistScreen() {
   return (
     <>
       <div className="page-head">
-        <div>
-          <div className="eyebrow">My Watchlist</div>
-          <div className="page-title">Names I&apos;m tracking</div>
-          <div className="page-sub">
-            {list.length} names · AI parsing on for {aiCount} · alerts fire on price moves &amp; analyst upgrades
-          </div>
-        </div>
+  
         <div className="tabs">
           <button className={`tab${wlRange === "eod" ? " on" : ""}`} onClick={() => setWlRange("eod")}>EOD summary</button>
           <button className={`tab${wlRange === "eow" ? " on" : ""}`} onClick={() => setWlRange("eow")}>EOW summary</button>

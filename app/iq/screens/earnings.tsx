@@ -1013,12 +1013,7 @@ export function EarningsScreen() {
       {/* ── Page head ──────────────────────────────────────────────────── */}
       <div className="page-head">
         <div>
-          <div className="eyebrow">Earnings Workspace</div>
           <h1 className="page-title">Earnings Calendar</h1>
-          <div className="page-sub">
-            Company logos by day · before-open vs after-close · or switch to{" "}
-            <b style={{ color: "var(--text-hi)" }}>Month</b> for the full calendar
-          </div>
         </div>
         <div className="tabs">
           {RANGES.map(([k, l]) => (

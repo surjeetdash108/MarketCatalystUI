@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { commentary, watch, folio, movers, analyst, screenerStocks, stockInfo, sectorByName } from "../data";
-import { sign, cls, fmt, hashStr, earnHistory, StockLogo } from "../utils";
+import { sign, fmt, hashStr, earnHistory, StockLogo } from "../utils";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
@@ -299,11 +299,6 @@ export function CommentaryScreen() {
   return (
     <>
       <div className="page-head">
-        <div>
-          <div className="eyebrow">Context</div>
-          <div className="page-title">All-Market Commentary</div>
-          <div className="page-sub">Live, plain-English coverage of stocks in play, news, ratings and the macro tape</div>
-        </div>
         <div className="tabs">
           {TABS.map((t, i) => (
             <button key={t} className={`tab${i === activeTab ? " on" : ""}`}

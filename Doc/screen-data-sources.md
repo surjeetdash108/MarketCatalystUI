@@ -174,10 +174,20 @@
 
 | Element | Data | Status |
 |---|---|---|
-| Hero recap (date, market summary) | `data.recap` — hardcoded | 🔴 Static |
-| Daily recap items | `data.recap.items` — hardcoded | 🔴 Static |
-| Previous weeks list | Hardcoded inline in component | 🔴 Static |
-| PDF download | Generated client-side from `data.recap` text | 🔴 Static |
+| Index pulse cards (9 indices, sparklines) | `data.pulse` — hardcoded | 🔴 Static |
+| News briefing lead paragraph | Hardcoded `DAILY_LEAD` / `WEEKLY_LEAD` constants in `screens/recap.tsx` | 🔴 Static |
+| News briefing items (7 daily, 6 weekly) | Hardcoded `NEWS_DAILY` / `NEWS_WEEKLY` arrays in `screens/recap.tsx` | 🔴 Static |
+| Newspaper spread — two-page layout | Rendered from above arrays via `NewsBriefing` component | 🔴 Static |
+| Social share buttons (X, LinkedIn, WhatsApp, Facebook, Telegram) | `window.open()` with social share URLs constructed client-side | 🔴 Static (client-side) |
+| Download PDF | `downloadRecap()` — client-side Blob generation | 🔴 Static |
+| Schedule & share form (frequency, time, email) | `ScheduleShare` component — demo state only, no email is sent | 🔴 Static (demo) |
+| AI executive summary hero (headline, indices) | `data.recap.headline` / `data.recap.indices` — hardcoded | 🔴 Static |
+| Key stories column | `data.recap.stories` — hardcoded | 🔴 Static |
+| Up next column (tomorrow's events) | `data.recap.tomorrow` — hardcoded | 🔴 Static |
+| Weekly headline & indices | `WEEKLY` constant in `screens/recap.tsx` | 🔴 Static |
+| Sector heatmap | `data.sectorList` with pagination — hardcoded | 🔴 Static |
+| Biggest earnings movers | `data.recap.movers` — hardcoded | 🔴 Static |
+| Market internals | `data.recap.internals` — hardcoded | 🔴 Static |
 
 ---
 

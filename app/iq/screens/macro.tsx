@@ -545,10 +545,7 @@ export function MacroScreen() {
   return (
     <>
       <div className="page-head">
-        <div>
-          <div className="eyebrow">Macro &amp; Rates</div>
-          <h1 className="page-title">Macro Dashboard</h1>
-        </div>
+      
         <div className="tabs">
           {ECO_TABS.map((t, i) => (
             <button key={t} className={`tab${i === ecoTab ? " on" : ""}`} onClick={() => setEcoTab(i)}>{t}</button>

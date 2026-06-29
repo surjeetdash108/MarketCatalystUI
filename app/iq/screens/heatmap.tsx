@@ -76,12 +76,6 @@ export function HeatmapScreen() {
   return (
     <>
       <div className="page-head">
-        <div>
-          <h1 className="page-title">Where the day is leaning</h1>
-          <div className="page-sub">
-            {sectorList.length} sectors · size = market cap · color = % change · hover for data · click to open stock
-          </div>
-        </div>
         <div className="tabs">
           {TABS.map((t, i) => (
             <button key={t} className={`tab${i === tab ? " on" : ""}`} onClick={() => setTab(i)}>{t}</button>

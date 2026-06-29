@@ -116,14 +116,6 @@ export function OptionsScreen() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Options Chain</h1>
-          <div className="page-sub">
-            Live calls &amp; puts · search any stock on the left and tap it to load its chain
-          </div>
-        </div>
-      </div>
 
       <div className="opt-wrap">
         {/* ─── Left sidebar ─── */}

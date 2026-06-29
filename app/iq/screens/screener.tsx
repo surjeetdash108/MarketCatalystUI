@@ -102,13 +102,6 @@ export function ScreenerScreen() {
   return (
     <>
       <div className="page-head">
-        <div>
-          <div className="eyebrow">Stock Screener</div>
-          <div className="page-title">Find your next idea</div>
-          <div className="page-sub">
-            Fundamental + technical filters · {filtered.length} of {screenerStocks.length} stocks match
-          </div>
-        </div>
         <button className="btn primary">
           <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
             <path d="M5 5h14v14l-7-4-7 4z" stroke="#fff" strokeWidth="2" strokeLinejoin="round" />
