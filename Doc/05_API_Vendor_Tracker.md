@@ -37,6 +37,7 @@ v1.0 | June 2026
 | Analyst ratings + targets | Benzinga (Paid) | FMP (Paid) | ❌ No meaningful free tier | Benzinga has real-time ratings stream |
 | 13F filings | SEC EDGAR (Free) | — | ✅ Completely free | Rate limit: 10 req/sec; parse XML directly |
 | Macro/economic calendar | Finnhub (Free tier sufficient) | FMP | ✅ Finnhub free tier | Finnhub economic calendar free on all plans |
+| Options chain (calls + puts, IV, OI) | Tradier (Free) | Polygon.io Options REST | ✅ Tradier free with brokerage account | Powers Options Chain screen `/menu/options` |
 | Options flow + unusual activity | Unusual Whales (Paid) | Tradier (options chains, free) | ⚠️ Tradier free for chains only | Unusual Whales needed for "unusual" flow detection |
 | Block trade data | Polygon.io (Paid — same subscription) | Intrinio | ❌ Needs paid | Polygon Trades API covers block detection |
 | Company reference + fundamentals | FMP (Paid) | Finnhub | ✅ Finnhub basic | FMP has sector/group/MarketSurge-style data |
@@ -52,9 +53,9 @@ v1.0 | June 2026
 | News + analyst actions + transcripts | Benzinga API | ~$149–299 (contact sales) | News feed WS, analyst ratings stream, earnings transcripts |
 | Earnings calendar + sector + fundamentals | FMP Premium | ~$99 | Earnings calendar, actuals, transcripts (fallback), sector/group, PE/fundamentals |
 | Macro/economic calendar | Finnhub | Free | Economic calendar, basic news, earnings surprises |
-| Options flow | Unusual Whales | ~$48 | Unusual options, dark pool, congressional trades |
+| Options chains (Options Chain screen `/menu/options`) | Tradier | Free (brokerage account) | Expiry dates + full call/put chain (strike, bid, ask, IV, volume, OI) |
+| Options flow + unusual activity | Unusual Whales | ~$48 | Unusual options, dark pool, congressional trades |
 | 13F filings | SEC EDGAR | Free | All 13F-HR filings, EDGAR full-text search |
-| Options chains (for implied move calc) | Tradier | Free (brokerage account) | Options chain data, Greeks, implied move |
 | **Total MVP estimate** | | **~$325–475/mo** | |
 
 > **Phase 2 additions**: Intrinio for deeper transcript/options coverage if Benzinga proves insufficient (~$250/mo add).  
@@ -89,6 +90,26 @@ Everything else (news, earnings, analyst actions, macro, options flow, 13F, move
 ---
 
 ## 5. Firestore Collection Schemas
+
+> **Note on field naming:** All Firestore schemas use full, descriptive field names (e.g. `ticker`, `pctChange`, `priceTarget`). The current UI mock data in `app/iq/data.ts` uses abbreviated keys (e.g. `s`, `c`, `ptT`) for conciseness while the app runs on static data. When live API data replaces the static mock, the API responses will use the full field names defined in these schemas, and the UI interfaces will be updated to match.
+>
+> **UI interface → Firestore field quick reference:**
+>
+> | UI interface (`data.ts`) | Firestore collection | Key abbreviation pattern |
+> |---|---|---|
+> | `PulseItem { l, v, c, o, pc }` | `indexCards[]` in `recaps` | `l`=label, `v`=value, `c`=change, `o`=open, `pc`=prevClose |
+> | `Earning { s, n, t, mc, sec, epsE, epsA, revE, revA, guide, react, tags, owned, implied }` | `earnings_events` | `s`=ticker, `n`=name, `t`=session(BMO/AMC), `mc`=marketCap, `epsE/A`=estimate/actual, `react`=priceReaction |
+> | `Mover { s, n, p, c, rvol, rs, cat, ma, owned, sector, cap, wk, tech, news }` | `market_movers[].movers[]` | `p`=price, `c`=pctChange, `rs`=relativeStrength, `cat`=catalystLabel, `ma`=maPosture |
+> | `AnalystAction { s, n, firm, dir, from, to, ptF, ptT, react, n30, owned }` | `analyst_actions` | `dir`=actionType(up/down/init/hold), `ptF/ptT`=prevPriceTarget/newPriceTarget, `n30`=actionsLast30Days |
+> | `FolioItem { s, n, p, c, gl, size, conv, evt }` | `users/{uid}/portfolios/{id}/holdings/{ticker}` | `gl`=gainLossPct, `conv`=conviction, `evt`=eventNote |
+> | `Fund { nm, av, mgr, aum, pos, top, newPos, exits, q }` | `fund_holdings` | `nm`=fundName, `av`=avatar/initials, `mgr`=managerName, `pos`=totalPositions, `q`=quarter |
+> | `WatchItem { s, n, px, c, er, analyst, opt, headline }` | `users/{uid}/watchlists/{id}` (symbols[]) + live prices | `px`=price, `er`=nextEarningsDate, `opt`=hasOptions |
+> | `StockInfo { name, px, c, mkt, pe, eps, wkh52, wkl52, div, beta, sec, ai_call, ai_thesis, ai_risk, ai_metrics, fin, news, ins }` | `companies` + `earnings_events` + `news` + Polygon OHLCV | `mkt`=marketCap, `wkh52/wkl52`=52weekHigh/Low, `ins`=insiderActivity |
+> | `SectorRow { name, rank, trend, chg, items }` | `market_movers` (sector aggregates) | `chg`=pctChange, `items=[ticker, marketCap, pctChange][]` |
+> | `ScreenerStock { s, n, sec, mc, pe, rs, salesG, epsG, mgn, rvol, rating }` | `companies` + live metrics | `mc`=marketCap(B), `rs`=relativeStrength0-100, `salesG/epsG`=growthPct, `mgn`=grossMarginPct |
+> | `CommentaryItem { cat, accent, time, text, why }` | `news` | `cat`=category, `accent`=CSS color var (UI-only), `why`=whyItMatters |
+> | `RecapData { date, subtitle, headline, indices, stories, tomorrow, movers, internals }` | `recaps` | See field mapping in §5.12 |
+> | `OptionRow { k, atm, call:{last,bid,ask,iv,vol,oi,itm}, put:{...} }` | Not Firestore — Redis cache | `k`=strike; see §5.14 |
 
 ### 5.1 companies
 
@@ -487,28 +508,83 @@ Indexes needed:
 
 ### 5.12 recaps
 
-EOD and weekly recaps. Written by recap BullMQ workers.
+EOD and weekly recaps. Written by recap BullMQ workers. Schema matches the `RecapData` interface in `app/iq/data.ts`.
 
 ```
 Collection: recaps
 Document ID: "daily_{YYYY-MM-DD}" | "weekly_{YYYY}-W{ww}"
 
 {
-  type:          "daily" | "weekly",
-  date:          string,           // "2025-06-10" or "2025-W23"
-  title:         string,
-  articleContent: string,          // full article markdown
-  bulletPoints:  string[],         // bullet summary version
-  audioUrl:      string | null,    // S3 presigned URL
-  audioDuration: number | null,    // seconds
-  audioScript:   string | null,    // 60-sec TTS script
-  emailSentAt:   timestamp | null,
-  generatedAt:   timestamp
+  type:         "daily" | "weekly",
+  date:         string,           // "2025-06-10" or "2025-W23"
+
+  // ── Recap hero (top section) ──
+  title:        string,           // headline e.g. "Markets closed broadly higher..."
+  subtitle:     string,           // "auto-generated 4:31 ET"
+  indices: [
+    { label: string; value: number }  // e.g. { label: "S&P 500", value: 0.73 }
+  ],
+
+  // ── Index pulse cards (RcpIndexCards component) ──
+  // Same shape as PulseItem in data.ts; 9 market indices
+  indexCards: [
+    { label: string; value: number; change: number; open: number; prevClose: number }
+  ],
+
+  // ── News briefing (NewsBriefing newspaper spread) ──
+  newsLead:   string,             // lead paragraph shown on Page 1 of spread
+  newsItems: [
+    { headline: string; body: string; sym?: string }
+    // up to 7 items (daily) / 6 items (weekly); sym used for inline $TICKER parsing
+  ],
+
+  // ── 2-column key stories + tomorrow's events ──
+  stories:    string[],           // bullet story lines
+  tomorrow: [
+    { time: string; event: string }
+    // e.g. { time: "8:30a", event: "Initial jobless claims" }
+  ],
+
+  // ── Bottom grid ──
+  movers: [
+    { ticker: string; reason: string; pctChange: number }
+  ],
+  internals: [
+    { label: string; value: string; direction: 1 | -1 | 0 }
+    // direction: 1 = positive, -1 = negative, 0 = neutral
+  ],
+  sectorPerformance: [
+    { name: string; change: number }
+  ],
+
+  // ── Audio (Phase 2) ──
+  audioUrl:     string | null,    // S3 presigned URL for mp3
+  audioDuration: number | null,   // seconds
+  audioScript:  string | null,    // 60-sec TTS script
+
+  emailSentAt:  timestamp | null,
+  generatedAt:  timestamp
 }
 
 Indexes needed:
   - type ASC + date DESC
 ```
+
+**UI → Firestore field mapping (data.ts `RecapData` uses short keys in mock data):**
+
+| UI mock field | Firestore field | Notes |
+|---|---|---|
+| `date` | `date` | Same |
+| `subtitle` | `subtitle` | Same |
+| `headline` | `title` | Renamed for clarity |
+| `indices[].l` / `.v` | `indices[].label` / `.value` | Expanded |
+| `stories[]` | `stories[]` | Same |
+| `tomorrow[].time` / `.ev` | `tomorrow[].time` / `.event` | `.ev` → `.event` |
+| `movers[].s` / `.reason` / `.c` | `movers[].ticker` / `.reason` / `.pctChange` | `.s` → `.ticker`, `.c` → `.pctChange` |
+| `internals[].l` / `.v` / `.c` | `internals[].label` / `.value` / `.direction` | `.c` → `.direction` |
+| `NEWS_DAILY` / `NEWS_WEEKLY` (local arrays in recap.tsx) | `newsItems[]` | Moved to Firestore for live data |
+| `DAILY_LEAD` / `WEEKLY_LEAD` (local constants in recap.tsx) | `newsLead` | Moved to Firestore |
+| `pulse[]` (global from data.ts) | `indexCards[]` | Recap-specific snapshot |
 
 ---
 
@@ -541,7 +617,63 @@ Security rules: owner read/write/delete only; no update (immutable); create vali
 
 ---
 
-### 5.14 User Collections
+### 5.14 Options Chain (not Firestore — on-demand API call)
+
+Options chain data is **not written to Firestore** — it's fetched on-demand from Tradier and cached in Redis. Chains change tick-by-tick so storing them in Firestore would be prohibitively expensive.
+
+**Tradier API endpoints:**
+```
+GET /v1/markets/options/expirations?symbol={SYM}&includeAllRoots=true
+→ Returns: { expirations: { date: string[] } }
+   Used for the expiry tab row in OptionsScreen.
+
+GET /v1/markets/options/chains?symbol={SYM}&expiration={YYYY-MM-DD}&greeks=false
+→ Returns: { options: { option: OptionContract[] } }
+```
+
+**Normalized OptionRow schema** (matches `OptionRow` interface in `screens/options.tsx`):
+```
+{
+  strike:     number,
+  atm:        boolean,          // true if strike == ATM strike
+  call: {
+    last:     number,
+    bid:      number,
+    ask:      number,
+    iv:       number,           // implied volatility as decimal e.g. 0.45
+    volume:   number,
+    oi:       number,           // open interest
+    itm:      boolean           // in-the-money: strike < currentPrice
+  },
+  put: {
+    last:     number,
+    bid:      number,
+    ask:      number,
+    iv:       number,
+    volume:   number,
+    oi:       number,
+    itm:      boolean           // in-the-money: strike > currentPrice
+  }
+}
+```
+
+**API endpoint (backend):**
+```
+GET /api/v1/options/expirations?sym={SYM}
+  → proxies Tradier; returns string[] of expiry dates
+
+GET /api/v1/options/chain?sym={SYM}&expiry={YYYY-MM-DD}
+  → proxies Tradier; normalizes to OptionRow[]; cached Redis `options:{sym}:{expiry}` TTL 60s
+  → 401 if unauthenticated, 403 if Free tier (options require Pro+)
+```
+
+**Redis cache key:** `options:{sym}:{expiry}` — TTL 60 seconds during market hours, 10 minutes after close.
+
+**Current UI state:** `buildChain()` in `screens/options.tsx` generates fully deterministic seeded data using `optRand()`. The seeded chain mirrors the Tradier contract structure exactly, so replacing it with live data is a drop-in swap.
+
+---
+
+### 5.16 User Collections
 
 ```
 Collection: users
@@ -633,6 +765,7 @@ Sub-collection: users/{uid}/notifications/{notificationId}
 | Earnings Calendar Sync | FMP REST | Every 15 min | Firestore `earnings_events` | Upsert by ticker+quarter key |
 | Analyst Actions Ingest | Benzinga REST | Every 5 min | Firestore `analyst_actions` | Real-time feed |
 | Macro Calendar Sync | Finnhub REST | Daily 6am ET | Firestore `macro_events` | Upsert by date+event slug |
+| Options Chain (on-demand) | Tradier REST | On-demand + 60s cache | Redis `options:{sym}:{expiry}` (NOT Firestore) | Powers `/menu/options` screen; never written to Firestore |
 | Options Flow Ingest | Unusual Whales WS | Real-time | Firestore `options_flow` | Filter for isUnusual=true |
 | EDGAR 13F Parser | SEC EDGAR | Nightly + on filing | Firestore `fund_holdings` | Phase 2 |
 | Block Trade Ingest | Polygon.io Trades | Real-time | Firestore `block_trades` | Filter: value > $500k or shares > 10k |

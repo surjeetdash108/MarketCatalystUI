@@ -177,7 +177,7 @@ Auth Navigation Map
 
 StockWise Shell & Component Architecture
 
--   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav (3 groups: Intelligence / My Money / Context), topbar with "Stock**Wise**" branding, drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`. **Mobile nav**: on `≤767px` the sidebar rail becomes `position:fixed; left:0; width:min(260px,80vw); transform:translateX(-100%)` and slides in when the `.mob-open` class is applied. New shell elements: `.mob-ham` (hamburger button in topbar), `.mob-brand` (logo in topbar), `.mob-rail-head` (rail header with close button), `.mob-nav-close`, `.mob-nav-scrim`. The scrim (`.mob-nav-scrim`, z-index 100) is placed **inside** the `.app` div so it shares `.app`'s stacking context with the rail (z-index 200) — prevents z-index bleed to unrelated layers.
+-   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav (3 groups: Intelligence / Context / My Money), topbar with "Stock**Wise**" branding, drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`. **Mobile nav**: on `≤767px` the sidebar rail becomes `position:fixed; left:0; width:min(260px,80vw); transform:translateX(-100%)` and slides in when the `.mob-open` class is applied. New shell elements: `.mob-ham` (hamburger button in topbar), `.mob-brand` (logo in topbar), `.mob-rail-head` (rail header with close button), `.mob-nav-close`, `.mob-nav-scrim`. The scrim (`.mob-nav-scrim`, z-index 100) is placed **inside** the `.app` div so it shares `.app`'s stacking context with the rail (z-index 200) — prevents z-index bleed to unrelated layers.
 
 -   **`IQActionsContext`**: React context providing `openStock(sym)`, `openStockFull(sym)`, `openEarnings(sym)`, `openSector(name)`, `openFund(idx)`, `openIndex(i)`, `openFearGreed()`, `setCopilot(open)`, `theme`, `setTheme` to all child screens. Consumed via `useIQActions()` hook.
 
@@ -227,7 +227,7 @@ Design System — StockWise (`iq.css`)
 
 -   Auth pages use the same CSS variables (imported globally) but are not wrapped in `.iq-root`; they use inline styles referencing `var(--*)`.
 
-Screens (Current) — Navigation groups: Intelligence / My Money / Context
+Screens (Current) — Navigation groups: Intelligence / Context / My Money
 
 | Slug | Screen File | Nav Group | Status |
 |---|---|---|---|
@@ -238,12 +238,13 @@ Screens (Current) — Navigation groups: Intelligence / My Money / Context
 | analyst | screens/analyst.tsx | Intelligence | UI complete — computeFlags() (5+ action alert); topUpgrades sidebar; static data |
 | screener | screens/screener.tsx | Intelligence | UI complete — 20 presets, checkbox filters, native `<details>` dropdown |
 | ipos | screens/ipos.tsx | Intelligence | UI complete — recent IPO table + upcoming pipeline tab; static data |
+| stock | screens/stock.tsx | Intelligence | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout; Firebase stock notes (stock_comments collection); Insider & Key Levels side-by-side; Ask Copilot button removed from sd-actions |
+| options | screens/options.tsx | Intelligence | UI complete — options chain table (calls + puts), expiry tab selector (horizontal scroll on mobile), left stock search sidebar; static data |
+| insider | screens/insider.tsx | Intelligence | UI complete — tabbed: Insider activity (Form 4 feed) + 13F institutional view |
 | portfolio | screens/portfolio.tsx | My Money | UI complete — left pf-list panel (holdings add/remove/sell); right panel embeds full StockScreen via dynamic import for `pfSel` ticker; AI drivers/laggards/leaders |
 | watchlist | screens/watchlist.tsx | My Money | UI complete — Google Finance two-panel layout; company name click opens `stock-side-drawer` with embedded StockScreen; delete confirmation modal; `localStorage("iq-watchlist")` persists list |
-| stock | screens/stock.tsx | My Money | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout; Firebase stock notes (stock_comments collection); Insider & Key Levels side-by-side; Ask Copilot button removed from sd-actions |
-| insider | screens/insider.tsx | My Money | UI complete — tabbed: Insider activity (Form 4 feed) + 13F institutional view |
 | commentary | screens/commentary.tsx | Context | UI complete — Live/Premarket/AH/My names/Macro tabs; ticker search bar (SEARCH_SYMS autocomplete); `NewsDrawer` slides in with `buildNewsHistory()` categorized items (Catalyst/Technical/Sector/Analyst/Earnings/Calendar/Coverage/Product/Guidance); Quick news lookup chip sidebar |
-| recap | screens/recap.tsx | Context | UI complete — static data |
+| recap | screens/recap.tsx | Context | UI complete — `RcpIndexCards` (9-index pulse grid using `data.pulse` + `Spark` sparklines); `NewsBriefing` newspaper two-page spread (NEWS_DAILY / NEWS_WEEKLY arrays, `stockifyText()` inline ticker parsing); social share buttons (X/LinkedIn/WhatsApp/Facebook/Telegram via `window.open()`); `ScheduleShare` form (frequency/time/email — demo state); EOD/Weekly tabs; AI recap hero, sector heatmap, earnings movers, market internals |
 | macro | screens/macro.tsx | Context | UI complete — MacroEvent interface; 3-week calendar (CAL_LAST/THIS/NEXT); 8-column table |
 | settings | screens/settings.tsx | — | Settings + dark mode wired to Firestore |
 | manage-plan | screens/manage-plan.tsx | — | UI scaffold |

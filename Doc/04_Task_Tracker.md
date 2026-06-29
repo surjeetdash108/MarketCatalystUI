@@ -395,6 +395,105 @@ v1.5 | June 2026
 
 ---
 
+### Stock Detail — `/menu/stock`
+
+#### Done
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-094 | Build CandleChart + RsiPane SVG components (seeded RNG, MA overlays, hover tooltip) | Frontend | 2d | P0 | FE Eng 1 | S-08 | **Done** | utils.tsx. |
+| T-095 | Build TrGauge + SemiGauge SVG components; RATING_VAL map | Frontend | 1d | P0 | FE Eng 1 | S-08 | **Done** | utils.tsx. |
+| T-096 | Build Stock Detail screen (static, full HTML-parity) | Frontend | 3d | P0 | FE Eng 1 | S-08 | **Done** | screens/stock.tsx. StockInfo interface: `{name,px,c,mkt,pe,eps,wkh52,wkl52,div,beta,sec,ai_call,ai_thesis,ai_risk,ai_metrics,fin,news,ins}` |
+| T-112 | Firebase stock notes: right-click chart → save/load/delete Firestore `stock_comments` | Frontend | 1.5d | P0 | FE Eng 1 | S-08 | **Done** | screens/stock.tsx. |
+| T-124 | Remove Ask Copilot button from sd-actions row | Frontend | 0.5d | P1 | FE Eng 1 | S-10 | **Done** | screens/stock.tsx. |
+
+#### Live Stock — Chart
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-042a | Replace seeded CandleChart with real OHLCV: `GET /api/v1/ohlcv?sym=&tf={1d|1w|1m|3m|6m|1y|3y}`; keep seeded as fallback | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | Not Started | |
+| T-042b | Overlay earnings events on chart: vertical dashed line at each ER date; show surprise% tooltip on hover | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | Not Started | ER dates from `GET /api/v1/earnings?sym=&limit=8` |
+| T-042c | Overlay analyst actions: tiny badge at action date; show firm + direction on hover | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | Not Started | Data from Firestore `analyst_actions where sym=ticker` |
+| T-042d | 1D intraday view: use real-time tick aggregation from Redis; 1W–3Y use daily OHLCV from ClickHouse | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | Not Started | |
+
+#### Live Stock — Peer View
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-043a | Peer table: 5 closest peers (same industry group), columns: ticker, 1D/1W/1M perf, mkt cap, next ER date, analyst consensus | Frontend | 0.5d | P1 | FE Eng 2 | S-09 | Not Started | `GET /api/v1/stocks/{sym}/peers` |
+| T-043b | Leader badge: peer with highest 1-month RS gets "Leader"; current sym gets "You" badge | Frontend | 0.5d | P1 | FE Eng 2 | S-09 | Not Started | RS = 1-month return vs S&P 500 |
+
+#### Live Stock — Group View
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-044a | Group header: industry group name, rank among all groups (1–197), trend arrow (rising/falling/flat) | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | Not Started | `GET /api/v1/groups/{groupId}` |
+| T-044b | Top 3 + bottom 3 names in group by 1-month RS; click to open Stock Detail for that sym | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | Not Started | |
+
+#### Live Stock — AI Technical Analysis (Phase 2)
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-057a | API endpoint: accept sym + OHLCV 90d + indicator values (RSI, MACD, Bollinger); call Claude async via BullMQ; client polls | Backend | 0.5d | P0 | Backend | S-13 | Not Started | Phase 2 |
+| T-057b | Build 4-tone Claude prompts: Summary / Swing Trader / Position Trader / LT Investor; store all 4 in `ta_analysis/{sym}` | Backend | 0.5d | P0 | Backend | S-13 | Not Started | Phase 2 |
+
+---
+
+### Options Chain — `/menu/options`
+
+#### Done
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-131 | Build Options Chain screen: left stock search sidebar (movers + EXTRA_STOCKS merged, alphabetical), expiry tabs (5 expirations), calls+puts chain table (OI/Vol/IV/Last/Bid/Ask × Strike), ATM row highlight, seeded deterministic `buildChain()` | Frontend | 1.5d | P0 | FE Eng 1 | S-11 | **Done** | screens/options.tsx. OptionRow interface: `{k, atm, call:{last,bid,ask,iv,vol,oi,itm}, put:{...}}` |
+
+#### Live Options Chain
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-132a | Fetch expiry dates from `GET /api/v1/options/expirations?sym=`; replace hardcoded `EXPS` array; update on sym change | Frontend | 0.5d | P0 | FE Eng 1 | S-11 | Not Started | Backend source: Tradier `GET /v1/markets/options/expirations` |
+| T-132b | Fetch live chain from `GET /api/v1/options/chain?sym=&expiry=`; normalize to OptionRow interface; refresh every 30s during market hours | Frontend | 0.5d | P0 | FE Eng 1 | S-11 | Not Started | Backend: Tradier chain API → normalize `{strike, call:{last,bid,ask,iv,volume,open_interest}, put:{...}}` → cache Redis `options:{sym}:{expiry}` TTL 60s |
+| T-132c | Highlight top-5 OI strikes per side (calls / puts); show implied move calculation (ATM straddle ÷ stock price) in header meta | Frontend | 0.5d | P1 | FE Eng 1 | S-12 | Not Started | |
+| T-132d | API endpoint: `GET /api/v1/options/chain?sym=&expiry=`; proxy to Tradier; normalize schema; cache in Redis TTL 60s; 401 if tier < pro | Backend | 0.5d | P0 | Backend | S-11 | Not Started | Tradier free with brokerage account |
+
+---
+
+### Insider & Institutional — `/menu/insider`
+
+#### Done
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-087 | Build 13F Intelligence screen: fund cards, AI summary blocks, cross-ownership tables (static) | Frontend | 2d | P0 | FE Eng 1 | S-12 | **Done** | screens/insider.tsx (13F tab). Fund interface: `{nm,av,mgr,aum,pos,top,newPos,exits,q}` |
+| T-101 | Build Insider & Institutional screen: tabbed Insider activity + 13F institutional | Frontend | 2d | P0 | FE Eng 1 | S-07 | **Done** | screens/insider.tsx. |
+
+#### Live 13F Data (Phase 2)
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-052a | EDGAR full-text index poller: detect new 13F-HR filings nightly; compare to cached last-seen filing date per CIK | Backend | 0.5d | P0 | Backend | S-12 | Not Started | Phase 2 |
+| T-052b | 13F XML parser: extract fund name, report date, all holdings (CUSIP, value, shares); handle both 13F-HR and 13F-HR/A amended schemas | Backend | 1d | P0 | Backend | S-12 | Not Started | Phase 2; most complex parsing step |
+| T-052c | Load to Firestore `fund_holdings/{CIK}/{quarter}/{CUSIP}`; compute delta vs prior quarter (new/added/trimmed/exited/unchanged) | Backend | 0.5d | P0 | Backend | S-12 | Not Started | Phase 2 |
+| T-053a | 13F AI summary BullMQ job: call Claude with fund name + top 25 holdings + delta; output 3 key themes | Backend | 0.5d | P0 | Backend | S-12 | Not Started | Phase 2 |
+| T-053b | Store summary in Firestore `fund_summaries/{CIK}/{quarter}`; publish to in-app feed | Backend | 0.5d | P0 | Backend | S-12 | Not Started | Phase 2 |
+
+#### Cross-Fund Views (Phase 2)
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-066a | "Most Owned" view: aggregate fund_holdings to find top 20 CUSIPs by fund count; ranked list | Frontend | 0.5d | P0 | FE Eng 1 | S-12 | Not Started | Phase 2 |
+| T-066b | Co-Attribution Screener: user selects 2–5 funds; show positions held by ALL selected funds (intersection query) | Frontend | 1d | P0 | FE Eng 1 | S-12 | Not Started | Phase 2 |
+
+#### Options Flow & Block Trades (Phase 2)
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-067a | Options Flow board UI: table rows (ticker, call/put, strike, expiry, premium, total value, vol/OI ratio) | Frontend | 0.5d | P0 | FE Eng 2 | S-11 | Not Started | Phase 2 |
+| T-067b | Options filters: All/Calls/Puts/Sweeps; min premium dropdown ($50k/$100k/$250k/$500k) | Frontend | 0.5d | P0 | FE Eng 2 | S-11 | Not Started | Phase 2 |
+| T-068a | Block Trades board UI: rows (ticker, value, shares, price, vs-VWAP badge, time, direction arrow); sector + size filters | Frontend | 0.5d | P1 | FE Eng 1 | S-11 | Not Started | Phase 2 |
+
+---
+
 ### Commentary — `/menu/commentary`
 
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
@@ -477,40 +576,6 @@ v1.5 | June 2026
 
 ---
 
-### Insider & Institutional — `/menu/insider`
-
-#### Done
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-087 | Build 13F Intelligence screen: fund cards, AI summary blocks, cross-ownership tables (static) | Frontend | 2d | P0 | FE Eng 1 | S-12 | **Done** | screens/insider.tsx (13F tab). |
-| T-101 | Build Insider & Institutional screen: tabbed Insider activity + 13F institutional | Frontend | 2d | P0 | FE Eng 1 | S-07 | **Done** | screens/insider.tsx. |
-
-#### Live 13F Data (Phase 2)
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-052a | EDGAR full-text index poller: detect new 13F-HR filings nightly; compare to cached last-seen filing date per CIK | Backend | 0.5d | P0 | Backend | S-12 | Not Started | Phase 2 |
-| T-052b | 13F XML parser: extract fund name, report date, all holdings (CUSIP, value, shares); handle both 13F-HR and 13F-HR/A amended schemas | Backend | 1d | P0 | Backend | S-12 | Not Started | Phase 2; most complex parsing step |
-| T-052c | Load to Firestore `fund_holdings/{CIK}/{quarter}/{CUSIP}`; compute delta vs prior quarter (new/added/trimmed/exited/unchanged) | Backend | 0.5d | P0 | Backend | S-12 | Not Started | Phase 2 |
-| T-053a | 13F AI summary BullMQ job: call Claude with fund name + top 25 holdings + delta; output 3 key themes | Backend | 0.5d | P0 | Backend | S-12 | Not Started | Phase 2 |
-| T-053b | Store summary in Firestore `fund_summaries/{CIK}/{quarter}`; publish to in-app feed | Backend | 0.5d | P0 | Backend | S-12 | Not Started | Phase 2 |
-
-#### Cross-Fund Views (Phase 2)
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-066a | "Most Owned" view: aggregate fund_holdings to find top 20 CUSIPs by fund count; ranked list | Frontend | 0.5d | P0 | FE Eng 1 | S-12 | Not Started | Phase 2 |
-| T-066b | Co-Attribution Screener: user selects 2–5 funds; show positions held by ALL selected funds (intersection query) | Frontend | 1d | P0 | FE Eng 1 | S-12 | Not Started | Phase 2 |
-
-#### Options & Block Trades (Phase 2)
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-067a | Options Flow board UI: table rows (ticker, call/put, strike, expiry, premium, total value, vol/OI ratio) | Frontend | 0.5d | P0 | FE Eng 2 | S-11 | Not Started | Phase 2 |
-| T-067b | Options filters: All/Calls/Puts/Sweeps; min premium dropdown ($50k/$100k/$250k/$500k) | Frontend | 0.5d | P0 | FE Eng 2 | S-11 | Not Started | Phase 2 |
-| T-068a | Block Trades board UI: rows (ticker, value, shares, price, vs-VWAP badge, time, direction arrow); sector + size filters | Frontend | 0.5d | P1 | FE Eng 1 | S-11 | Not Started | Phase 2 |
-
 ---
 
 ## Context
@@ -582,48 +647,6 @@ v1.5 | June 2026
 | T-046b | Highlight actuals: if event.actual is set, color surprise cell green (actual > est) or red; bold actual value; compute surprise% | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | Not Started | surprise% = (actual − est) / |est| × 100 |
 
 ---
-
-### Stock Detail — `/menu/stock`
-
-#### Done
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-094 | Build CandleChart + RsiPane SVG components (seeded RNG, MA overlays, hover tooltip) | Frontend | 2d | P0 | FE Eng 1 | S-08 | **Done** | utils.tsx. |
-| T-095 | Build TrGauge + SemiGauge SVG components; RATING_VAL map | Frontend | 1d | P0 | FE Eng 1 | S-08 | **Done** | utils.tsx. |
-| T-096 | Build Stock Detail screen (static, full HTML-parity) | Frontend | 3d | P0 | FE Eng 1 | S-08 | **Done** | screens/stock.tsx. |
-| T-112 | Firebase stock notes: right-click chart → save/load/delete Firestore `stock_comments` | Frontend | 1.5d | P0 | FE Eng 1 | S-08 | **Done** | screens/stock.tsx. |
-| T-124 | Remove Ask Copilot button from sd-actions row | Frontend | 0.5d | P1 | FE Eng 1 | S-10 | **Done** | screens/stock.tsx. |
-
-#### Live Stock — Chart
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-042a | Replace seeded CandleChart with real OHLCV: `GET /api/v1/ohlcv?sym=&tf={1d|1w|1m|3m|6m|1y|3y}`; keep seeded as fallback | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | Not Started | |
-| T-042b | Overlay earnings events on chart: vertical dashed line at each ER date; show surprise% tooltip on hover | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | Not Started | ER dates from `GET /api/v1/earnings?sym=&limit=8` |
-| T-042c | Overlay analyst actions: tiny badge at action date; show firm + direction on hover | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | Not Started | Data from Firestore `analyst_actions where sym=ticker` |
-| T-042d | 1D intraday view: use real-time tick aggregation from Redis; 1W–3Y use daily OHLCV from ClickHouse | Frontend | 0.5d | P0 | FE Eng 1 | S-08 | Not Started | |
-
-#### Live Stock — Peer View
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-043a | Peer table: 5 closest peers (same industry group), columns: ticker, 1D/1W/1M perf, mkt cap, next ER date, analyst consensus | Frontend | 0.5d | P1 | FE Eng 2 | S-09 | Not Started | `GET /api/v1/stocks/{sym}/peers` |
-| T-043b | Leader badge: peer with highest 1-month RS gets "Leader"; current sym gets "You" badge | Frontend | 0.5d | P1 | FE Eng 2 | S-09 | Not Started | RS = 1-month return vs S&P 500 |
-
-#### Live Stock — Group View
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-044a | Group header: industry group name, rank among all groups (1–197), trend arrow (rising/falling/flat) | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | Not Started | `GET /api/v1/groups/{groupId}` |
-| T-044b | Top 3 + bottom 3 names in group by 1-month RS; click to open Stock Detail for that sym | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | Not Started | |
-
-#### Live Stock — AI Technical Analysis (Phase 2)
-
-| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
-|---|---|---|---|---|---|---|---|---|
-| T-057a | API endpoint: accept sym + OHLCV 90d + indicator values (RSI, MACD, Bollinger); call Claude async via BullMQ; client polls | Backend | 0.5d | P0 | Backend | S-13 | Not Started | Phase 2 |
-| T-057b | Build 4-tone Claude prompts: Summary / Swing Trader / Position Trader / LT Investor; store all 4 in `ta_analysis/{sym}` | Backend | 0.5d | P0 | Backend | S-13 | Not Started | Phase 2 |
 
 ---
 
@@ -706,32 +729,35 @@ v1.5 | June 2026
 
 ## Task Count Summary
 
-| Area | Done | Not Started | Total |
-|---|---|---|---|
-| Core Infrastructure | 3 | 21 | 24 |
-| Data Ingestion | 0 | 21 | 21 |
-| Landing Page | 1 | 0 | 1 |
-| Auth Pages | 2 | 4 | 6 |
-| Dashboard | 8 | 18 | 26 |
-| Earnings | 1 | 22 | 23 |
-| Market Movers | 2 | 8 | 10 |
-| Market Heatmap | 1 | 0 | 1 |
-| Analyst Actions | 2 | 5 | 7 |
-| Screener | 1 | 0 | 1 |
-| IPOs | 1 | 0 | 1 |
-| Commentary | 3 | 0 | 3 |
-| Portfolio Pulse | 4 | 8 | 12 |
-| Watchlist | 4 | 6 | 10 |
-| Insider & Inst. | 2 | 10 | 12 |
-| Recaps | 3 | 10 | 13 |
-| Macro & VIX | 2 | 4 | 6 |
-| Stock Detail | 5 | 10 | 15 |
-| Shell & Design | 11 | 0 | 11 |
-| Subscription | 0 | 3 | 3 |
-| AI Copilot | 0 | 5 | 5 |
-| Cmd+K | 0 | 2 | 2 |
-| Story Stocks | 0 | 4 | 4 |
-| Learn 60s | 0 | 2 | 2 |
-| Industry Alerts | 0 | 2 | 2 |
-| Mobile | 0 | 4 | 4 |
-| **TOTAL** | **56** | **169** | **225** |
+**Nav groups: Intelligence / Context / My Money**
+
+| Area | Nav Group | Done | Not Started | Total |
+|---|---|---|---|---|
+| Core Infrastructure | — | 3 | 21 | 24 |
+| Data Ingestion | — | 0 | 21 | 21 |
+| Landing Page | Pre-App | 1 | 0 | 1 |
+| Auth Pages | Pre-App | 2 | 4 | 6 |
+| Dashboard | Intelligence | 8 | 18 | 26 |
+| Earnings | Intelligence | 1 | 22 | 23 |
+| Market Movers | Intelligence | 2 | 8 | 10 |
+| Market Heatmap | Intelligence | 1 | 0 | 1 |
+| Analyst Actions | Intelligence | 2 | 5 | 7 |
+| Screener | Intelligence | 1 | 0 | 1 |
+| IPOs | Intelligence | 1 | 0 | 1 |
+| Stock Detail | Intelligence | 5 | 10 | 15 |
+| Options Chain | Intelligence | 1 | 4 | 5 |
+| Insider & Inst. | Intelligence | 2 | 10 | 12 |
+| Commentary | Intelligence | 3 | 0 | 3 |
+| Recaps | Context | 3 | 10 | 13 |
+| Macro & VIX | Context | 2 | 4 | 6 |
+| Portfolio Pulse | My Money | 4 | 8 | 12 |
+| Watchlist | My Money | 4 | 6 | 10 |
+| Shell & Design | Platform | 11 | 0 | 11 |
+| Subscription | Platform | 0 | 3 | 3 |
+| AI Copilot | Platform | 0 | 5 | 5 |
+| Cmd+K | Platform | 0 | 2 | 2 |
+| Story Stocks | Platform | 0 | 4 | 4 |
+| Learn 60s | Platform | 0 | 2 | 2 |
+| Industry Alerts | Platform | 0 | 2 | 2 |
+| Mobile | Platform | 0 | 4 | 4 |
+| **TOTAL** | | **57** | **173** | **230** |

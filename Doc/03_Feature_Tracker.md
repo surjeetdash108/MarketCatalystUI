@@ -78,6 +78,33 @@ v1.3 | June 2026
 |---|---|---|---|---|---|---|---|
 | F-46 | IPOs & Recent Performance | MVP | Free+ | **Complete** | 100% | Full Stack | Stats strip (above-offer count, best performer, median return). Tabs: (1) Recent performance — 8 recent IPOs with ticker/company/sector/IPO date/offer/current/Day-1/since-IPO return, click-to-open Stock Detail; (2) Upcoming pipeline — 4 expected new issues. File: `screens/ipos.tsx`. Slug: `ipos`. Static data; prod source: SEC EDGAR + Polygon.io. |
 
+### Stock Detail — `/menu/stock`
+
+| ID | Feature | Phase | Tier | Status | % | Owner | Notes |
+|---|---|---|---|---|---|---|---|
+| F-17 | Stock Detail Page | MVP | Free+ | **In Progress** | 75% | Full Stack | UI complete: sym selector bar (fbar), sd-head (logo/name/price/actions), sd-grid (chart col + ratings col). CandleChart SVG + RsiPane. Key stats grid. AI Technical Analysis. Financials bar chart. TrGauge (5-segment Technical Rating) + indicator table, Peers minirows, Industry Group rank, Earnings history, Insider/Institutional section. Remaining: real API data, interactive zoom, options/block trades sections. |
+| F-50 | Stock Chart Right-Click Notes (Firebase) | MVP | Pro+ | **Complete** | 100% | Full Stack | Right-click context menu on chart div. Opens centered modal with textarea. Saves to Firestore `stock_comments` collection: `{uid, sym, name, comment, createdAt: Timestamp}`. Notes card below chart shows history with datetime + ✕ delete per note. `loadNotes()` / `saveNote()` / `deleteNote()` async helpers using `collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc`. `useCallback` + `useEffect` refreshes notes on symbol change. File: `screens/stock.tsx`. |
+| F-18 | Peer View | MVP | Pro+ | **Not Started** | 0% | Full Stack | 5–10 closest peers by sector/industry group/business model. Table: ticker, 1D/1W/1M perf, market cap, next earnings date, analyst rating consensus, valuation snapshot. |
+| F-19 | Group View (MarketSurge-style) | MVP | Pro+ | **Not Started** | 0% | Full Stack | Industry group rank vs all groups, trend, strongest/weakest names in group, group-level news + analyst activity. |
+| F-31 | AI Technical Analysis | Phase 2 | Pro+ | **Not Started** | 0% | AI + Full Stack | 4 tone modes: Short Summary / Swing Trader View / Position Trader View / Long-Term Investor View. Labeled AI-generated, not investment advice. |
+| F-41 | Peer RS vs EPS Growth Scatter Matrix | Phase 2 | Pro+ | **Not Started** | 0% | Full Stack | 2D bubble chart: RS (X-axis) vs EPS Growth Rate (Y-axis) for all peers/group members. |
+
+### Options Chain — `/menu/options`
+
+| ID | Feature | Phase | Tier | Status | % | Owner | Notes |
+|---|---|---|---|---|---|---|---|
+| F-57 | Options Chain Screen | MVP | Pro+ | **In Progress** | 40% | Full Stack | Left stock search sidebar + main chain table (calls left / puts right) with strike, bid, ask, IV%, OI, volume columns. Expiry date tab selector (horizontal scroll on mobile). Filter: calls/puts/both. Click row → opens stock detail. File: `screens/options.tsx`. Static data; prod source: Polygon.io Options API. |
+
+### Insider & Institutional — `/menu/insider`
+
+| ID | Feature | Phase | Tier | Status | % | Owner | Notes |
+|---|---|---|---|---|---|---|---|
+| F-26 | Insider & Institutional — Fund Tracker + Insider Feed | Phase 2 | Premium | **In Progress** | 50% | Backend | Two tabs: (1) Insider activity — Form 4 feed table, filter by Buys/Sells/10% owners, sort by value or date, most-active chips; (2) 13F institutional — fund cards + AI summary + cross-fund signals. Top 5 most-followed funds. Sources: SEC EDGAR 13F-HR + Form 4. Slug: `insider`. File: `screens/insider.tsx`. UI complete, static data. |
+| F-27 | 13F Quarterly Digest & AI Summary | Phase 2 | Premium | **Not Started** | 0% | AI + Backend | Per fund per quarter: new positions, added, trimmed, exited, unchanged. AI summary. |
+| F-28 | Cross-Fund Views | Phase 2 | Premium | **Not Started** | 0% | Full Stack | "Most owned across tracked funds", "Most sold", "Only one fund owns this". Co-Attribution Screener. |
+| F-29 | Unusual Options Activity Board | Phase 2 | Premium | **Not Started** | 0% | Full Stack | Rows: ticker, call/put, strike, expiry, premium paid, contract size, total value, vol/OI ratio, direction flag. Powered by Unusual Whales API. |
+| F-30 | Block Trades Board | Phase 2 | Premium | **Not Started** | 0% | Full Stack | Rows: ticker, trade value, shares, price, price vs VWAP, time, direction context. Powered by Polygon.io Trades. |
+
 ### Commentary — `/menu/commentary`
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
@@ -107,16 +134,6 @@ v1.3 | June 2026
 | F-16 | Alert Engine — Core Rules | MVP | Pro+ | **Not Started** | 0% | Backend | In-app + email (Phase 1); SMS + push Phase 2. 12 alert types: earnings posted, post-ER move >5%, analyst up/down, unusual options, block trade, price move, volume spike >3×, 52-wk breakout, macro event, peer sympathy move, 13F filing, group RS rank. |
 | F-38 | Industry Rotation Alerts | Phase 2 | Premium | **Not Started** | 0% | Backend | Detection: industry subgroup enters or exits top 20 RS rankings. Push + email delivery. |
 
-### Insider & Institutional — `/menu/insider`
-
-| ID | Feature | Phase | Tier | Status | % | Owner | Notes |
-|---|---|---|---|---|---|---|---|
-| F-26 | Insider & Institutional — Fund Tracker + Insider Feed | Phase 2 | Premium | **In Progress** | 50% | Backend | Two tabs: (1) Insider activity — Form 4 feed table, filter by Buys/Sells/10% owners, sort by value or date, most-active chips; (2) 13F institutional — fund cards + AI summary + cross-fund signals. Top 5 most-followed funds. Sources: SEC EDGAR 13F-HR + Form 4. Slug: `insider`. File: `screens/insider.tsx`. UI complete, static data. |
-| F-27 | 13F Quarterly Digest & AI Summary | Phase 2 | Premium | **Not Started** | 0% | AI + Backend | Per fund per quarter: new positions, added, trimmed, exited, unchanged. AI summary. |
-| F-28 | Cross-Fund Views | Phase 2 | Premium | **Not Started** | 0% | Full Stack | "Most owned across tracked funds", "Most sold", "Only one fund owns this". Co-Attribution Screener. |
-| F-29 | Unusual Options Activity Board | Phase 2 | Premium | **Not Started** | 0% | Full Stack | Rows: ticker, call/put, strike, expiry, premium paid, contract size, total value, vol/OI ratio, direction flag. Powered by Unusual Whales API. |
-| F-30 | Block Trades Board | Phase 2 | Premium | **Not Started** | 0% | Full Stack | Rows: ticker, trade value, shares, price, price vs VWAP, time, direction context. Powered by Polygon.io Trades. |
-
 ---
 
 ## Context
@@ -125,10 +142,10 @@ v1.3 | June 2026
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-22 | End-of-Day Recap | MVP | Free (read) | **In Progress** | 75% | AI + Backend | EOD tab complete: recap-hero (WMN orb + headline + index returns + audio CTA), PDF downloads, 2-column key stories + up-next, schedule-and-share form, sector heatmap (.heat grid), biggest earnings movers + market internals columns. All data from `recap` object in `data.ts`. File: `screens/recap.tsx`. Remaining: real backend generation, actual PDF writer, audio TTS. |
-| F-23 | Weekly Recap | MVP | Free (read) | **In Progress** | 50% | AI + Backend | "This Week" tab implemented with static `WEEKLY` data: headline, 5-day index returns, audio CTA, PDF download buttons, top-stories + next-week calendar (2-col), sector leaders/laggards/biggest-moves (3-col), weekly sector heatmap. Same page-head with dynamic title/sub based on `activeTab`. File: `screens/recap.tsx`. Remaining: real backend weekly generation, email delivery, portfolio-specific weekly tab. |
+| F-22 | End-of-Day Recap | MVP | Free (read) | **In Progress** | 80% | AI + Backend | EOD tab complete: `RcpIndexCards` (9-index pulse grid, `data.pulse`, `Spark` sparklines); `NewsBriefing` newspaper two-page spread (`NEWS_DAILY` array, `DAILY_LEAD`, `stockifyText()` inline ticker parsing, social share buttons X/LinkedIn/WhatsApp/Facebook/Telegram); `ScheduleShare` form (freq/time/email — demo state); recap-hero (headline + index returns + audio CTA), PDF download, 2-col key stories + up-next, sector heatmap, earnings movers, market internals. File: `screens/recap.tsx`. Remaining: real backend generation, actual PDF writer, audio TTS, email delivery. |
+| F-23 | Weekly Recap | MVP | Free (read) | **In Progress** | 60% | AI + Backend | "This Week" tab shares the same `RcpIndexCards`, `NewsBriefing` (using `NEWS_WEEKLY` / `WEEKLY_LEAD`), and `ScheduleShare` components as EOD. Static `WEEKLY` data: headline, 5-day index returns, top-stories + next-week calendar (2-col), sector leaders/laggards/biggest-moves (3-col), weekly sector heatmap. File: `screens/recap.tsx`. Remaining: real backend weekly generation, portfolio-specific weekly tab. |
 | F-34 | Audio Recaps (TTS) | Phase 2 | Premium | **Not Started** | 0% | Backend | TTS pipeline: Claude generates 60s audio script from EOD/weekly recap → TTS → MP3 stored in S3 → in-app player. |
-| F-39 | Social Sharing — Recap Cards | Phase 2 | Pro+ | **Not Started** | 0% | Full Stack | Recap card image generation (Canvas/Puppeteer). Share to Twitter/LinkedIn. |
+| F-39 | Social Sharing — Recap Cards | Phase 2 | Pro+ | **In Progress** | 40% | Full Stack | Share buttons (X, LinkedIn, WhatsApp, Facebook, Telegram) implemented in `NewsBriefing` component via `window.open()` with platform-specific URL encoding. Remaining: recap card image generation (Canvas/Puppeteer), actual image attachment to share payloads. |
 
 ### Macro & VIX — `/menu/macro`
 
@@ -136,17 +153,6 @@ v1.3 | June 2026
 |---|---|---|---|---|---|---|---|
 | F-20 | VIX Widget | MVP | Free+ | **Not Started** | 0% | Full Stack | VIX level + day change, 12-month percentile rank, trend direction (rising/falling/flat), plain-English explanation, 30-day sparkline trend. |
 | F-21 | Macro Dashboard & Calendar | MVP | Pro+ | **In Progress** | 60% | Full Stack | Typed `MacroEvent` interface. 3-week calendar via `CAL_LAST`, `CAL_THIS`, `CAL_NEXT` arrays. 15+ events: CPI, PPI, Retail Sales, FOMC Decision, FOMC Press Conference, Jobless Claims, Philadelphia Fed, Existing Home Sales, GDP, PCE Deflator, Consumer Confidence, Durable Goods, Chicago PMI. 8-column table: Event, Date, Impact (H/M/L pill), Prior, Est., Actual, Surprise, Note. Market regime label widget: 7 states. Recent macro releases section. File: `screens/macro.tsx`. |
-
-### Stock Detail — `/menu/stock`
-
-| ID | Feature | Phase | Tier | Status | % | Owner | Notes |
-|---|---|---|---|---|---|---|---|
-| F-17 | Stock Detail Page | MVP | Free+ | **In Progress** | 75% | Full Stack | UI complete: sym selector bar (fbar), sd-head (logo/name/price/actions), sd-grid (chart col + ratings col). CandleChart SVG + RsiPane. Key stats grid. AI Technical Analysis. Financials bar chart. TrGauge (5-segment Technical Rating) + indicator table, Peers minirows, Industry Group rank, Earnings history, Insider/Institutional section. Remaining: real API data, interactive zoom, options/block trades sections. |
-| F-50 | Stock Chart Right-Click Notes (Firebase) | MVP | Pro+ | **Complete** | 100% | Full Stack | Right-click context menu on chart div. Opens centered modal with textarea. Saves to Firestore `stock_comments` collection: `{uid, sym, name, comment, createdAt: Timestamp}`. Notes card below chart shows history with datetime + ✕ delete per note. `loadNotes()` / `saveNote()` / `deleteNote()` async helpers using `collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc`. `useCallback` + `useEffect` refreshes notes on symbol change. File: `screens/stock.tsx`. |
-| F-18 | Peer View | MVP | Pro+ | **Not Started** | 0% | Full Stack | 5–10 closest peers by sector/industry group/business model. Table: ticker, 1D/1W/1M perf, market cap, next earnings date, analyst rating consensus, valuation snapshot. |
-| F-19 | Group View (MarketSurge-style) | MVP | Pro+ | **Not Started** | 0% | Full Stack | Industry group rank vs all groups, trend, strongest/weakest names in group, group-level news + analyst activity. |
-| F-31 | AI Technical Analysis | Phase 2 | Pro+ | **Not Started** | 0% | AI + Full Stack | 4 tone modes: Short Summary / Swing Trader View / Position Trader View / Long-Term Investor View. Labeled AI-generated, not investment advice. |
-| F-41 | Peer RS vs EPS Growth Scatter Matrix | Phase 2 | Pro+ | **Not Started** | 0% | Full Stack | 2D bubble chart: RS (X-axis) vs EPS Growth Rate (Y-axis) for all peers/group members. |
 
 ---
 
@@ -156,7 +162,7 @@ v1.3 | June 2026
 
 | ID | Feature | Phase | Tier | Status | % | Owner | Notes |
 |---|---|---|---|---|---|---|---|
-| F-42 | StockWise Shell & Design System | MVP | All | **Complete** | 100% | Full Stack | IQShell wrapping each page; sidebar nav (3 groups: Intelligence / My Money / Context; 14 screens inc. IPOs + Insider), topbar (StockWise logo gradient + wordmark b=ai color), drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, profile dropdown. IQActionsContext: openStock/openStockFull/openEarnings/openSector/openFund/openIndex/openFearGreed/setCopilot/theme/setTheme. **Modal pattern (iq.css)**: all overlay UIs use `position:fixed; inset:0; margin:auto` centered modal with `iq-popIn` scale+translateY animation, replacing the prior right-side sliding drawer. Mobile responsive: `@media (max-width: 767px)` breakpoint. Hamburger (`.mob-ham`), slide-in rail (`.rail.mob-open`), scrim inside `.app` (critical stacking context fix — scrim z-100, rail z-200). Bottom-sheet drawers on mobile. Options page: horizontal tab scroll, header meta wraps. Nav items `var(--text-hi)` in rail. Tablet `@media (max-width: 860px)` stacks options sidebar. Profile dropdown: `iq-dropdownIn` animation (no translateX), `pd-avatar` 52px image in popup header. |
+| F-42 | StockWise Shell & Design System | MVP | All | **Complete** | 100% | Full Stack | IQShell wrapping each page; sidebar nav (3 groups: Intelligence / Context / My Money; 15 screens — Intelligence: Dashboard, Earnings, Market Movers, Heatmap, Analyst, Screener, IPOs, Stock Detail, Options, Insider & Institutional; Context: Commentary, Recap, Macro; My Money: Portfolio Pulse, Watchlist). Topbar (StockWise logo gradient + wordmark b=ai color), drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, profile dropdown. IQActionsContext: openStock/openStockFull/openEarnings/openSector/openFund/openIndex/openFearGreed/setCopilot/theme/setTheme. **Modal pattern (iq.css)**: all overlay UIs use `position:fixed; inset:0; margin:auto` centered modal with `iq-popIn` scale+translateY animation, replacing the prior right-side sliding drawer. Mobile responsive: `@media (max-width: 767px)` breakpoint. Hamburger (`.mob-ham`), slide-in rail (`.rail.mob-open`), scrim inside `.app` (critical stacking context fix — scrim z-100, rail z-200). Bottom-sheet drawers on mobile. Options page: horizontal tab scroll, header meta wraps. Nav items `var(--text-hi)` in rail. Tablet `@media (max-width: 860px)` stacks options sidebar. Profile dropdown: `iq-dropdownIn` animation (no translateX), `pd-avatar` 52px image in popup header. |
 | F-44 | User Preferences & Dark Mode | MVP | All | **Complete** | 100% | Full Stack | Dark mode toggle in Settings wired to Firestore `settings/{uid}` (darkMode: boolean). Custom in-app confirmation modal. Theme applied via `data-theme` on `.iq-root`. localStorage fast cache (no flicker on nav). Firestore read on shell mount syncs across devices. |
 | F-40 | Cmd+K Command Bar | Phase 2 | Pro+ | **In Progress** | 65% | Full Stack | Cmd+K / Ctrl+K global overlay. `SEARCHABLE_STOCKS` constant (20 tickers with name/sector). Stock ticker results surface above page-nav results. Per-stock ☆/★ star toggle with `starred: Set<string>` state and `toggleStar(sym)`. Starred stocks listed in palette footer section. Keyboard navigation (↑↓ arrows, Enter, Escape). Phase 2: fuzzy search via API, contextual suggestions by current page. File: `shell.tsx`. |
 | F-32 | AI Market Copilot (Chat) | Phase 2 | Premium | **Not Started** | 0% | AI + Full Stack | Chat panel in shell. Access to: live market data, earnings, analyst actions, 13F, macro, portfolio, watchlist. Streaming SSE. Labeled informational, not investment advice. |
