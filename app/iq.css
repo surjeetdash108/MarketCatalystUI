@@ -1424,6 +1424,15 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .ec-chip .ec-logo { width: 19px; height: 19px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: .62rem; font-weight: 800; flex-shrink: 0; position: relative; overflow: hidden; }
 .ec-chip .ec-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; border-radius: inherit; }
 .ec-none { font-size: .72rem; color: var(--text-dim-solid); }
+.call-row { display: flex; align-items: center; gap: 12px; background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; text-align: left; font-family: inherit; width: 100%; transition: border-color .13s; }
+.call-row:hover { border-color: var(--brand-2); }
+.call-row.on { border-color: var(--brand); background: rgba(124,108,245,.1); }
+.call-row .cr-logo { width: 44px; height: 44px; border-radius: 10px; background: #fff; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: .9rem; font-weight: 800; color: #27314a; position: relative; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+.call-row .cr-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 4px; background: #fff; border-radius: inherit; }
+.call-row .cr-body { flex: 1; min-width: 0; }
+.call-row .cr-title { font-size: .84rem; font-weight: 700; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-row .cr-sub { font-size: .72rem; color: var(--text-dim-solid); margin-top: 2px; }
+.call-row .cr-play { width: 34px; height: 34px; border-radius: 50%; background: var(--surface-3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-dim-solid); }
 
 .ecm-wrap { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
 .ecm-monthbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }

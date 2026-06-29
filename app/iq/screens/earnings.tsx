@@ -544,26 +544,43 @@ function ecMonthMap(month1: number): Record<number, CallEntry[]> {
   return map;
 }
 
-function CallChip({ entry, selected, onSelect }: {
-  entry: CallEntry; selected: boolean; onSelect: (c: CallEntry) => void;
+function CallChip({ entry, selected, playing, onSelect, onPlay }: {
+  entry: CallEntry; selected: boolean; playing: boolean;
+  onSelect: (c: CallEntry) => void; onPlay: (c: CallEntry) => void;
 }) {
+  const title = `${entry.sym} ${entry.title.replace(" Call", "")}`;
+  const dateStr = `${entry.callDate}, ${entry.callTime}`;
   return (
-    <button className={`ec-chip${selected ? " on" : ""}`} onClick={() => onSelect(entry)}>
-      <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6" }}>
+    <button className={`call-row${selected ? " on" : ""}`} onClick={() => onSelect(entry)}>
+      <div className="cr-logo">
         {entry.sym[0]}
         <img
           src={`https://assets.parqet.com/logos/symbol/${entry.sym}?format=png`}
           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
           alt=""
         />
-      </span>
-      {entry.sym}
+      </div>
+      <div className="cr-body">
+        <div className="cr-title">{title}</div>
+        <div className="cr-sub">{dateStr}</div>
+      </div>
+      <div
+        className="cr-play"
+        role="button"
+        onClick={(e) => { e.stopPropagation(); onPlay(entry); }}
+        style={playing ? { background: "var(--brand-2)", color: "#000" } : undefined}
+      >
+        {playing
+          ? <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          : <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor"><path d="M8 5v14l11-7z"/></svg>}
+      </div>
     </button>
   );
 }
 
-function CallDrawer({ call, onClose }: { call: CallEntry; onClose: () => void }) {
-  const [playing,   setPlaying]   = useState(false);
+function CallDrawer({ call, onClose, playing, onTogglePlay }: {
+  call: CallEntry; onClose: () => void; playing: boolean; onTogglePlay: () => void;
+}) {
   const [activeTab, setActiveTab] = useState<"summary" | "transcript">("summary");
 
   const beat = call.epsAct !== null && call.epsEst !== null && call.epsAct > call.epsEst;
@@ -608,7 +625,7 @@ function CallDrawer({ call, onClose }: { call: CallEntry; onClose: () => void })
               </div>
             </div>
             <button
-              onClick={() => setPlaying(p => !p)}
+              onClick={onTogglePlay}
               style={{
                 width: 42, height: 42, borderRadius: "50%",
                 background: playing ? "var(--brand-2)" : "var(--surface-2)",
@@ -793,8 +810,9 @@ export function EarningsScreen() {
   const [sel, setSel]           = useState<string>(() => earnsForTab("week")[0]?.s ?? "GOOG");
   const [monthOff, setMonthOff] = useState(0);
   const [earnDay, setEarnDay]   = useState<number | null>(null);
-  const [selectedCall, setSelectedCall] = useState<CallEntry | null>(null);
-  const [ecTab,        setEcTab]        = useState<EcTabKey>("week");
+  const [selectedCall,   setSelectedCall]   = useState<CallEntry | null>(null);
+  const [playingCallSym, setPlayingCallSym] = useState<string | null>(null);
+  const [ecTab,          setEcTab]          = useState<EcTabKey>("week");
   const [ecMonthDay,   setEcMonthDay]   = useState<number | null>(null);
 
   const isDay   = tab === "today" || tab === "tom" || tab === "yest";
@@ -1302,13 +1320,13 @@ export function EarningsScreen() {
                       <div className="ec-lbl">Before open</div>
                       <div style={{ marginBottom: 10 }}>
                         {bmo.length
-                          ? bmo.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)
+                          ? bmo.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} playing={playingCallSym === c.sym} onSelect={setSelectedCall} onPlay={c => setPlayingCallSym(p => p === c.sym ? null : c.sym)} />)
                           : <span className="ec-none">None</span>}
                       </div>
                       <div className="ec-lbl">After close</div>
                       <div>
                         {amc.length
-                          ? amc.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)
+                          ? amc.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} playing={playingCallSym === c.sym} onSelect={setSelectedCall} onPlay={c => setPlayingCallSym(p => p === c.sym ? null : c.sym)} />)
                           : <span className="ec-none">None</span>}
                       </div>
                     </>
@@ -1345,13 +1363,13 @@ export function EarningsScreen() {
                           <div className="ec-sess">
                             <div className="ec-lbl">Before open</div>
                             {bmo.length
-                              ? bmo.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)
+                              ? bmo.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} playing={playingCallSym === c.sym} onSelect={setSelectedCall} onPlay={c => setPlayingCallSym(p => p === c.sym ? null : c.sym)} />)
                               : <span className="ec-none">—</span>}
                           </div>
                           <div className="ec-sess">
                             <div className="ec-lbl">After close</div>
                             {amc.length
-                              ? amc.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)
+                              ? amc.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} playing={playingCallSym === c.sym} onSelect={setSelectedCall} onPlay={c => setPlayingCallSym(p => p === c.sym ? null : c.sym)} />)
                               : <span className="ec-none">—</span>}
                           </div>
                         </div>
@@ -1372,8 +1390,8 @@ export function EarningsScreen() {
                       {items.length} calls
                     </span>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {items.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />)}
+                  <div>
+                    {items.map(c => <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} playing={playingCallSym === c.sym} onSelect={setSelectedCall} onPlay={c => setPlayingCallSym(p => p === c.sym ? null : c.sym)} />)}
                   </div>
                 </>
               );
@@ -1441,9 +1459,9 @@ export function EarningsScreen() {
                   {ecMonthDay && (
                     <div style={{ marginTop: 12 }}>
                       <div className="ec-lbl" style={{ marginBottom: 6 }}>Jun {ecMonthDay} · {(map[ecMonthDay] ?? []).length} call{(map[ecMonthDay] ?? []).length !== 1 ? "s" : ""}</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      <div>
                         {(map[ecMonthDay] ?? []).map(c => (
-                          <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} onSelect={setSelectedCall} />
+                          <CallChip key={c.sym} entry={c} selected={selectedCall?.sym === c.sym} playing={playingCallSym === c.sym} onSelect={setSelectedCall} onPlay={c => setPlayingCallSym(p => p === c.sym ? null : c.sym)} />
                         ))}
                       </div>
                     </div>
@@ -1463,7 +1481,14 @@ export function EarningsScreen() {
       </div>
 
       {/* Earnings call detail drawer */}
-      {selectedCall && <CallDrawer call={selectedCall} onClose={() => setSelectedCall(null)} />}
+      {selectedCall && (
+        <CallDrawer
+          call={selectedCall}
+          onClose={() => setSelectedCall(null)}
+          playing={playingCallSym === selectedCall.sym}
+          onTogglePlay={() => setPlayingCallSym(p => p === selectedCall.sym ? null : selectedCall.sym)}
+        />
+      )}
     </>
   );
 }
