@@ -1383,7 +1383,7 @@ export default function LandingPage() {
                 const Thumb = ws.Thumb;
                 return (
                   <div key={ws.n} className="mq-card" onClick={(e) => {
-                    if (e.currentTarget.classList.contains("front")) setGlanceIdx(i);
+                    if (e.currentTarget.classList.contains("front")) openAuth("signup");
                     else scrollToCard(i);
                   }}>
                     <div className="mq-head">
