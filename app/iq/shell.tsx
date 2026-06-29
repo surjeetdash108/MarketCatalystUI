@@ -1108,7 +1108,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 <div className="wordmark">StockWise<span>Market Intelligence</span></div>
                 <button className="mob-nav-close" onClick={() => setNavOpen(false)} aria-label="Close navigation">✕</button>
               </div>
-              {(["Intelligence", "My Money", "Context"] as const).map(group => (
+              {(["Intelligence", "Context", "My Money"] as const).map(group => (
                 <div key={group}>
                   <div className="sec-lbl">{group}</div>
                   {menuItems.filter(m => m.group === group).map(item => {
