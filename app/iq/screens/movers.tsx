@@ -70,9 +70,6 @@ export function MoversScreen() {
   return (
     <>
       <div className="page-head">
-        <div>
-          <h1 className="page-title">Winners &amp; Losers</h1>
-        </div>
         <div className="tabs">
           {TABS.map(([k, l]) => (
             <button key={k} className={`tab${k === tab ? " on" : ""}`} onClick={() => setTab(k as TabKey)}>{l}</button>

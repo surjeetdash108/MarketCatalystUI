@@ -1012,9 +1012,6 @@ export function EarningsScreen() {
     <>
       {/* ── Page head ──────────────────────────────────────────────────── */}
       <div className="page-head">
-        <div>
-          <h1 className="page-title">Earnings Calendar</h1>
-        </div>
         <div className="tabs">
           {RANGES.map(([k, l]) => (
             <button
