@@ -1174,7 +1174,7 @@ export default function LandingPage() {
               c.classList.remove("front");
               return;
             }
-            const scale = (dist < 0.5 ? 1.2 : Math.max(0.58, 1.2 - dist * 0.7)).toFixed(3);
+            const scale = (dist < 0.5 ? 1.05 : Math.max(0.58, 1.05 - dist * 0.62)).toFixed(3);
             c.style.transform = `scale(${scale})`;
             c.style.opacity = Math.max(0.45, 1 - dist * 0.52).toFixed(2);
             c.style.pointerEvents = "auto";

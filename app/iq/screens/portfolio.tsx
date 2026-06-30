@@ -154,7 +154,10 @@ export function PortfolioScreen() {
             <div className="card">
               <div className="card-h">
                 <h3>Holdings</h3>
-                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{holdings.length} names</span>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".8rem", fontWeight: 700, color: "var(--text-hi)" }}>{usd(totalVal)}</span>
+                  <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{holdings.length} names</span>
+                </div>
               </div>
               <div className="pf-list">
                 {holdings.length === 0 ? (
@@ -191,9 +194,9 @@ export function PortfolioScreen() {
                 {/* Portfolio-specific context metrics */}
                 <div className="pf-ctx" style={{ marginBottom: 14 }}>
                   <div className="m" style={{ borderRight: "1px solid var(--border-soft)", paddingRight: 16, marginRight: 4 }}>
-                    <span className="k" style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 800, letterSpacing: ".04em", color: "var(--brand-2)" }}>{sel.s}</span>
+                    <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 800, letterSpacing: ".04em", color: "var(--brand-2)", lineHeight: 1 }}>{sel.s}</span>
+                    <span className="k">Current price</span>
                     <span className="v" style={{ fontFamily: "var(--f-mono)", fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)" }}>${sel.p >= 1000 ? (sel.p / 1000).toFixed(2) + "K" : sel.p.toFixed(2)}</span>
-                    <span className={`${cls(sel.c)}`} style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 600 }}>{sign(sel.c)}</span>
                   </div>
                   <div className="m">
                     <span className="k">Shares</span>
