@@ -145,33 +145,6 @@ export function WatchlistScreen() {
           <div className="pf-detail">
             {sel ? (
               <>
-                {selData && (
-                  <div className="pf-ctx" style={{ marginBottom: 14 }}>
-                    <div className="m" style={{ borderRight: "1px solid var(--border-soft)", paddingRight: 16, marginRight: 4 }}>
-                      <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 800, letterSpacing: ".04em", color: "var(--brand-2)", lineHeight: 1 }}>{sel}</span>
-                      <span className="k">Current price</span>
-                      <span className="v" style={{ fontFamily: "var(--f-mono)", fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)" }}>
-                        ${selData.px >= 1000 ? (selData.px / 1000).toFixed(2) + "K" : selData.px.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="m">
-                      <span className="k">Day</span>
-                      <span className={`v ${cls(selData.c)}`}>{sign(selData.c)}</span>
-                    </div>
-                    {selData.er && (
-                      <div className="m">
-                        <span className="k">Next ER</span>
-                        <span className="v" style={{ fontSize: ".8rem" }}>{selData.er}</span>
-                      </div>
-                    )}
-                    {selData.analyst && (
-                      <div className="m" style={{ flex: 1 }}>
-                        <span className="k">Analyst</span>
-                        <span className="v" style={{ fontSize: ".72rem" }}>{selData.analyst}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
                 <StockScreenEmbed initialSym={sel} hideHeader />
               </>
             ) : (

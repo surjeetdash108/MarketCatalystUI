@@ -621,33 +621,25 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
         </div>
       )}
 
-      <div style={{ padding: "14px 18px 0" }}>
-        {!hideHeader && (
-        <div className="sd-head">
-          <div className="sd-logo" style={{ background: `linear-gradient(135deg,${logoBg(sym)},${logoBg(sym)}88)`, color: logoFg(sym) }}>
-            {sym[0]}
-          </div>
-          <div className="sd-name">
-            <h1>{sym}</h1>
-            <div className="sub">{data.name} · {ex} · {group}</div>
-          </div>
-          <div className="sd-px">
-            <div className="p">${fmt(p, 2)}</div>
-            <div className={`c ${cls(data.c)}`}>{arr(data.c)} {data.c >= 0 ? "+" : ""}${fmt(dollar, 2)} ({sign(data.c)})</div>
+      {!hideHeader && (
+        <div style={{ padding: "14px 18px 0" }}>
+          <div className="sd-head">
+            <div className="sd-logo" style={{ background: `linear-gradient(135deg,${logoBg(sym)},${logoBg(sym)}88)`, color: logoFg(sym) }}>
+              {sym[0]}
+            </div>
+            <div className="sd-name">
+              <h1>{sym}</h1>
+              <div className="sub">{data.name} · {ex} · {group}</div>
+            </div>
+            <div className="sd-px">
+              <div className="p">${fmt(p, 2)}</div>
+              <div className={`c ${cls(data.c)}`}>{arr(data.c)} {data.c >= 0 ? "+" : ""}${fmt(dollar, 2)} ({sign(data.c)})</div>
+            </div>
           </div>
         </div>
-        )}
+      )}
 
-        {!info && (
-          <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "10px 14px", marginBottom: 14, fontSize: ".8rem", color: "var(--text-dim-solid)", display: "flex", alignItems: "center", gap: 8 }}>
-            <span>ℹ</span>
-            <span><b style={{ color: "var(--text-hi)" }}>{sym}</b> is outside our curated coverage set — AI analysis, earnings and insider data may be limited.</span>
-          </div>
-        )}
-      </div>
-
-
-      <div className="sd-grid">
+      <div className="sd-grid" style={hideHeader ? { paddingTop: 0 } : undefined}>
         {/* LEFT COLUMN */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 

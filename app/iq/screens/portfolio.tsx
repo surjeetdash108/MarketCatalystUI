@@ -149,7 +149,7 @@ export function PortfolioScreen() {
         {/* Two-panel master-detail */}
         <div className="pf-master">
 
-          {/* LEFT: holdings list */}
+          {/* LEFT: holdings list + context metrics */}
           <div className="pf-side">
             <div className="card">
               <div className="card-h">
@@ -159,7 +159,7 @@ export function PortfolioScreen() {
                   <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{holdings.length} names</span>
                 </div>
               </div>
-              <div className="pf-list">
+              <div className="pf-list" style={{ maxHeight: "min(420px, calc(100vh - 380px))" }}>
                 {holdings.length === 0 ? (
                   <div style={{ padding: 16, fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
                     No holdings — click &ldquo;Add holding&rdquo;.
@@ -185,19 +185,16 @@ export function PortfolioScreen() {
                 ))}
               </div>
             </div>
-          </div>
 
-          {/* RIGHT: portfolio context bar + full stock detail */}
-          <div className="pf-detail">
-            {sel ? (
-              <>
-                {/* Portfolio-specific context metrics */}
-                <div className="pf-ctx" style={{ marginBottom: 14 }}>
-                  <div className="m" style={{ borderRight: "1px solid var(--border-soft)", paddingRight: 16, marginRight: 4 }}>
-                    <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 800, letterSpacing: ".04em", color: "var(--brand-2)", lineHeight: 1 }}>{sel.s}</span>
-                    <span className="k">Current price</span>
-                    <span className="v" style={{ fontFamily: "var(--f-mono)", fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)" }}>${sel.p >= 1000 ? (sel.p / 1000).toFixed(2) + "K" : sel.p.toFixed(2)}</span>
-                  </div>
+            {/* Portfolio context metrics — below holdings list */}
+            {sel && (
+              <div className="pf-ctx" style={{ marginTop: 12, flexDirection: "column", alignItems: "stretch", gap: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--border-soft)" }}>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".8rem", fontWeight: 800, letterSpacing: ".04em", color: "var(--brand-2)" }}>{sel.s}</span>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)" }}>${sel.p >= 1000 ? (sel.p / 1000).toFixed(2) + "K" : sel.p.toFixed(2)}</span>
+                  <span className={cls(sel.c)} style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 600, marginLeft: 2 }}>{sign(sel.c)}</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" }}>
                   <div className="m">
                     <span className="k">Shares</span>
                     <span className="v">
@@ -219,9 +216,7 @@ export function PortfolioScreen() {
                   </div>
                   <div className="m">
                     <span className="k">Weight</span>
-                    <span className="v">
-                      {totalVal > 0 ? ((shares[sel.s] ?? 10) * sel.p / totalVal * 100).toFixed(1) : "0"}%
-                    </span>
+                    <span className="v">{totalVal > 0 ? ((shares[sel.s] ?? 10) * sel.p / totalVal * 100).toFixed(1) : "0"}%</span>
                   </div>
                   <div className="m">
                     <span className="k">Day</span>
@@ -235,11 +230,19 @@ export function PortfolioScreen() {
                     <span className="k">Conviction</span>
                     <span className="v">{convPill(sel.conv)}</span>
                   </div>
-                  <div className="sp" />
-                  <button className="btn" onClick={() => trimHolding(sel.s)}>Trim ½</button>
-                  <button className="btn" style={{ color: "var(--down)" }} onClick={() => removeHolding(sel.s)}>Sell all</button>
                 </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border-soft)" }}>
+                  <button className="btn" style={{ flex: 1 }} onClick={() => trimHolding(sel.s)}>Trim ½</button>
+                  <button className="btn" style={{ flex: 1, color: "var(--down)" }} onClick={() => removeHolding(sel.s)}>Sell all</button>
+                </div>
+              </div>
+            )}
+          </div>
 
+          {/* RIGHT: full stock detail */}
+          <div className="pf-detail">
+            {sel ? (
+              <>
                 {/* Full stock detail — same as stock details page */}
                 <StockScreenEmbed initialSym={pfSel} hideHeader />
               </>
