@@ -99,13 +99,7 @@ function stockifyText(text: string): React.ReactNode {
       {parts.map((part, i) => {
         const m = part.match(/^\$([A-Z]{1,6})$/);
         if (m) {
-          const sym = m[1]!;
-          return (
-            <span key={i} className="nb-stk">
-              <StockLogo sym={sym} size={14} />
-              <b>{sym}</b>
-            </span>
-          );
+          return <span key={i} className="nb-stk"><b>{m[1]}</b></span>;
         }
         return part;
       })}
@@ -132,7 +126,7 @@ function RcpIndexCards() {
 }
 
 // ---- News briefing newspaper ----
-function NewsBriefing({ mode, dateLabel, onDownload }: { mode: 'today' | 'week'; dateLabel: string; onDownload: () => void }) {
+function NewsBriefing({ mode, dateLabel, onDownload, headline }: { mode: 'today' | 'week'; dateLabel: string; onDownload: () => void; headline?: string }) {
   const data = mode === 'week' ? NEWS_WEEKLY : NEWS_DAILY;
   const lead = mode === 'week' ? WEEKLY_LEAD : DAILY_LEAD;
   const half = Math.ceil(data.length / 2);
@@ -159,6 +153,15 @@ function NewsBriefing({ mode, dateLabel, onDownload }: { mode: 'today' | 'week';
 
   return (
     <div className="rcp-carousel-wrap">
+      {headline && (
+        <div style={{
+          fontSize: "1.35rem", fontWeight: 700, color: "var(--text-hi)",
+          fontFamily: "var(--f-display)", letterSpacing: "-.3px", lineHeight: 1.25,
+          marginBottom: 16,
+        }}>
+          {headline}
+        </div>
+      )}
       <div className="nb-head">
         <div>
           <div className="eyebrow">{mode === 'week' ? 'This week' : 'Today'} · news briefing</div>
@@ -410,15 +413,7 @@ export function RecapScreen() {
       {/* ── Today (EOD) ── */}
       {activeTab === 0 && (
         <div style={{ padding: "14px 18px 18px" }}>
-          <RcpIndexCards />
-
-          <NewsBriefing
-            mode="today"
-            dateLabel={recap.date}
-            onDownload={() => downloadRecap("today")}
-          />
-
-          <div className="recap-hero">
+         <div className="recap-hero">
             <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 14 }}>
               <div className="wmn-orb">{STAR_SVG}</div>
               <div onClick={() => downloadRecap("today")}
@@ -481,8 +476,11 @@ export function RecapScreen() {
               </div>
             </div>
           </div>
-
-          <ScheduleShare onDownload={() => downloadRecap("today")} />
+ <NewsBriefing
+            mode="today"
+            dateLabel={recap.date}
+            onDownload={() => downloadRecap("today")}
+            />
           {SectorHeatCard(true, false)}
           {BottomDash}
         </div>
@@ -491,14 +489,6 @@ export function RecapScreen() {
       {/* ── This Week ── */}
       {activeTab === 1 && (
         <div style={{ padding: "14px 18px 18px" }}>
-          <RcpIndexCards />
-
-          <NewsBriefing
-            mode="week"
-            dateLabel={`Week of ${WEEKLY.range}`}
-            onDownload={() => downloadRecap("this-week")}
-          />
-
           <div className="recap-hero">
             <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 14 }}>
               <div className="wmn-orb">{STAR_SVG}</div>
@@ -562,7 +552,6 @@ export function RecapScreen() {
             </div>
           </div>
 
-          <ScheduleShare onDownload={() => downloadRecap("this-week")} />
 
           <div className="dash" style={{ marginTop: 14, padding: 0 }}>
             <div className="col-6">
@@ -609,7 +598,11 @@ export function RecapScreen() {
               ))}
             </div>
           </div>
-
+   <NewsBriefing
+            mode="week"
+            dateLabel={`Week of ${WEEKLY.range}`}
+            onDownload={() => downloadRecap("this-week")}
+          />
           {SectorHeatCard(true, true)}
           {BottomDash}
         </div>

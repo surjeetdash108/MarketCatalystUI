@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useIQActions } from "../shell";
+import { useIQActions, ExpandBtn } from "../shell";
 import { earnings, stockInfo, type Earning } from "../data";
 import { fmt, cls, sign, earnHistory, EarnQ, StockLogo } from "../utils";
 
@@ -1142,13 +1142,16 @@ export function EarningsScreen() {
           <div className="card">
             <div className="card-h">
               <h3>{sel} · 10-quarter earnings history</h3>
-              {selEarning?.react != null
-                ? <span className={`pill ${selEarning.react >= 0 ? "up" : "dn"}`}>{sign(selEarning.react)} last reaction</span>
-                : beats >= 7
-                  ? <span className="pill up">{beats}/10 beats</span>
-                  : beats < 5
-                  ? <span className="pill dn">{beats}/10 beats</span>
-                  : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats}/10 beats</span>}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {selEarning?.react != null
+                  ? <span className={`pill ${selEarning.react >= 0 ? "up" : "dn"}`}>{sign(selEarning.react)} last reaction</span>
+                  : beats >= 7
+                    ? <span className="pill up">{beats}/10 beats</span>
+                    : beats < 5
+                    ? <span className="pill dn">{beats}/10 beats</span>
+                    : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats}/10 beats</span>}
+                <ExpandBtn title={`${sel} · 10-quarter earnings history`} node={<EpsChart hist={hist} />} />
+              </div>
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               <div className="ec-legend">
@@ -1194,9 +1197,10 @@ export function EarningsScreen() {
           <div className="card">
             <div className="card-h">
               <h3>{sel} · Income statement</h3>
-              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-                Quarterly
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Quarterly</span>
+                <ExpandBtn title={`${sel} · Income statement`} node={<IncChart inc={inc} />} />
+              </div>
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               <div className="ec-legend">

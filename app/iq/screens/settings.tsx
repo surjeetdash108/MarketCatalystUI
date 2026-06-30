@@ -111,6 +111,23 @@ export function SettingsScreen() {
   const [pending, setPending] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [alertEnabled, setAlertEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const v = localStorage.getItem("iq-alert");
+    return v === null ? true : v === "1";
+  });
+
+  async function toggleAlert(enabled: boolean) {
+    setAlertEnabled(enabled);
+    localStorage.setItem("iq-alert", enabled ? "1" : "0");
+    try {
+      if (user?.uid) {
+        await setDoc(doc(firebaseDb, "settings", user.uid), { alert: enabled }, { merge: true });
+      }
+    } catch (err) {
+      console.error("Failed to save alert setting", err);
+    }
+  }
   const [schMsg, setSchMsg] = useState("");
 
   function scheduleRecap(e: React.FormEvent<HTMLFormElement>) {
@@ -227,6 +244,22 @@ export function SettingsScreen() {
                   type="checkbox"
                   checked={theme === "dark"}
                   onChange={e => setPending(e.target.checked)}
+                />
+                <span className="iq-toggle-slider" />
+              </label>
+            </div>
+            <div className="iq-toggle-row" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-soft)" }}>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-hi)" }}>Alerts</div>
+                <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginTop: 2 }}>
+                  Receive price alerts and market notifications
+                </div>
+              </div>
+              <label className="iq-toggle">
+                <input
+                  type="checkbox"
+                  checked={alertEnabled}
+                  onChange={e => void toggleAlert(e.target.checked)}
                 />
                 <span className="iq-toggle-slider" />
               </label>

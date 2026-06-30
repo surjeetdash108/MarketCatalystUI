@@ -1,7 +1,7 @@
 "use client";
 
 // iq.css is imported globally via app/layout.tsx
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -12,7 +12,7 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
 import { signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { firebaseAuth, firebaseDb } from "../firebase";
 import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
@@ -39,6 +39,7 @@ interface IQActions {
   openIndex: (i: number) => void;
   openFearGreed: () => void;
   setCopilot: (open: boolean) => void;
+  openChart: (title: string, node: ReactNode) => void;
   theme: "dark" | "light";
   setTheme: (t: "dark" | "light") => void;
   font: FontKey;
@@ -54,12 +55,28 @@ export const IQActionsContext = createContext<IQActions>({
   openIndex: () => {},
   openFearGreed: () => {},
   setCopilot: () => {},
+  openChart: () => {},
   theme: "dark",
   setTheme: () => {},
   font: "dm-sans",
   setFont: () => {},
 });
 export function useIQActions() { return useContext(IQActionsContext); }
+
+export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
+  const { openChart } = useIQActions();
+  return (
+    <button
+      className="chart-expand-btn"
+      title="Expand chart"
+      onClick={(e) => { e.stopPropagation(); openChart(title, node); }}
+    >
+      <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+      </svg>
+    </button>
+  );
+}
 
 // ---- Nav icon SVG ----
 function NavIcon({ slug }: { slug: string }) {
@@ -838,6 +855,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [expandedChart, setExpandedChart] = useState<{ title: string; node: ReactNode } | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("iq-nav-collapsed") === "1";
@@ -931,6 +949,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     openFund: useCallback((idx) => setDrawer({ type: "fund", idx }), []),
     openIndex: useCallback((idx) => setDrawer({ type: "index", idx }), []),
     openFearGreed: useCallback(() => setDrawer({ type: "feargreed" }), []),
+    openChart: useCallback((title: string, node: ReactNode) => setExpandedChart({ title, node }), []),
     setCopilot: setCopilotOpen,
     theme,
     setTheme,
@@ -1049,6 +1068,22 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 <div className="dot" />
                 Markets Open
               </div>
+              <button
+                className="iconbtn"
+                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                onClick={() => {
+                  const next = theme === "dark" ? "light" : "dark";
+                  localStorage.setItem("iq-theme", next);
+                  setTheme(next);
+                  if (user?.uid) {
+                    void setDoc(doc(firebaseDb, "settings", user.uid), { darkMode: next === "dark" }, { merge: true });
+                  }
+                }}
+              >
+                {theme === "dark"
+                  ? <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                  : <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>}
+              </button>
               <button className={`iconbtn${copilotOpen ? " ai-active" : ""}`} title="AI Copilot"
                 onClick={() => setCopilotOpen(o => !o)}>
                 ✦
@@ -1177,6 +1212,25 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
           {/* Copilot panel */}
           {copilotOpen && <CopilotPanel onClose={() => setCopilotOpen(false)} />}
+
+          {/* Chart expand modal */}
+          {expandedChart && (
+            <div className="chart-modal-overlay" onClick={() => setExpandedChart(null)}>
+              <div className="chart-modal" onClick={e => e.stopPropagation()}>
+                <div className="chart-modal-head">
+                  <h3>{expandedChart.title}</h3>
+                  <button className="chart-modal-close" onClick={() => setExpandedChart(null)}>
+                    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="chart-modal-body">
+                  {expandedChart.node}
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       </IQActionsContext.Provider>

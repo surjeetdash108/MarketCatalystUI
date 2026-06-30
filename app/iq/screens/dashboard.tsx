@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { useIQActions } from "../shell";
+import { useIQActions, ExpandBtn } from "../shell";
 import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks, Mover, SectorRow } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol } from "../utils";
 
@@ -762,7 +762,10 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Fear &amp; Greed</h3>
-              <button className="link" onClick={() => setDrawer("fg-history")}>History →</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button className="link" onClick={() => setDrawer("fg-history")}>History →</button>
+                <ExpandBtn title="Fear & Greed Index" node={<SemiGauge val={62} label="Greed" id="fg-modal" />} />
+              </div>
             </div>
             <div className="card-b gauge-wrap">
               <SemiGauge val={62} label="Greed" id="fg" />

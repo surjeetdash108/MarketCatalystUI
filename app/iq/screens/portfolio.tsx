@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { folio as folioData, FolioItem } from "../data";
 import { cls, arr, sign, fmt, Spark } from "../utils";
 
-const StockScreenEmbed = dynamic<{ initialSym?: string }>(
+const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean }>(
   () => import("./stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
@@ -190,6 +190,11 @@ export function PortfolioScreen() {
               <>
                 {/* Portfolio-specific context metrics */}
                 <div className="pf-ctx" style={{ marginBottom: 14 }}>
+                  <div className="m" style={{ borderRight: "1px solid var(--border-soft)", paddingRight: 16, marginRight: 4 }}>
+                    <span className="k" style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 800, letterSpacing: ".04em", color: "var(--brand-2)" }}>{sel.s}</span>
+                    <span className="v" style={{ fontFamily: "var(--f-mono)", fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)" }}>${sel.p >= 1000 ? (sel.p / 1000).toFixed(2) + "K" : sel.p.toFixed(2)}</span>
+                    <span className={`${cls(sel.c)}`} style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 600 }}>{sign(sel.c)}</span>
+                  </div>
                   <div className="m">
                     <span className="k">Shares</span>
                     <span className="v">
@@ -233,7 +238,7 @@ export function PortfolioScreen() {
                 </div>
 
                 {/* Full stock detail — same as stock details page */}
-                <StockScreenEmbed initialSym={pfSel} />
+                <StockScreenEmbed initialSym={pfSel} hideHeader />
               </>
             ) : (
               <div className="card">

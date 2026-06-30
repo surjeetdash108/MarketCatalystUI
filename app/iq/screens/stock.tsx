@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useIQActions } from "../shell";
+import { useIQActions, ExpandBtn } from "../shell";
 import { stockInfo, watch, movers as moversData, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail } from "../data";
 import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, earnHistory, EarnQ, EarningsGrowthChart } from "../utils";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
@@ -299,7 +299,76 @@ function EarnPane({ sym, base }: { sym: string; base: number }) {
   );
 }
 
-export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
+function StockChartExpanded({
+  sym, px, initialTf, initialChartType, initialMaStep, initialEmaStep,
+  initialShowVol, initialShowRsi, initialShowEarnings, eps, rs, rsi, erDate,
+}: {
+  sym: string; px: number; initialTf: string;
+  initialChartType: "Candles" | "Hollow" | "Bars" | "Line" | "Area";
+  initialMaStep: number; initialEmaStep: number;
+  initialShowVol: boolean; initialShowRsi: boolean; initialShowEarnings: boolean;
+  eps: number; rs: number; rsi: number; erDate: string;
+}) {
+  const [tf, setTf] = useState(initialTf);
+  const [chartType, setChartType] = useState(initialChartType);
+  const [maStep, setMaStep] = useState(initialMaStep);
+  const [emaStep, setEmaStep] = useState(initialEmaStep);
+  const [showVol, setShowVol] = useState(initialShowVol);
+  const [showRsi, setShowRsi] = useState(initialShowRsi);
+  const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
+  const isUp = px > 0;
+  return (
+    <div>
+      <div className="chart-toolbar" style={{ flexWrap: "wrap", gap: "4px 0", paddingBottom: 8 }}>
+        {(["1D","1W","1M","3M","6M","1Y","5Y"] as const).map(r => (
+          <button key={r} className={`rng tfbtn${tf === r ? " on" : ""}`} onClick={() => setTf(r)}>{r}</button>
+        ))}
+        <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+        {(["Candles","Hollow","Bars","Line","Area"] as const).map(ct => (
+          <button key={ct} className={`rng ctype-btn${chartType === ct ? " on" : ""}`} onClick={() => setChartType(ct)}>{ct}</button>
+        ))}
+        <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+        <button className={`rng indbtn${maStep > 0 ? " on" : ""}`} onClick={() => setMaStep(s => (s + 1) % 5)}>
+          MA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
+        </button>
+        <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`} onClick={() => setEmaStep(s => (s + 1) % 5)}>
+          EMA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
+        </button>
+        <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
+        <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
+        <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
+      </div>
+      <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} />
+      {showRsi && (
+        <div style={{ marginTop: 4 }}>
+          <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
+            <span>RSI (14)</span>
+            <span className="mono" style={{ color: "var(--warn)" }}>
+              {Math.round(38 + rs * 0.36)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
+            </span>
+          </div>
+          <RsiPane sym={sym} tf={tf} />
+        </div>
+      )}
+      {showEarnings && (
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 4 }}>
+          <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Earnings · EPS Surprise</span>
+            <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>Next: {erDate}</span>
+          </div>
+          <EarnPane sym={sym} base={eps} />
+        </div>
+      )}
+      <div style={{ marginTop: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+        Pattern: <b style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
+          {isUp ? "cup-with-handle breakout" : "breakdown below support"}
+        </b> {isUp ? "on above-average volume." : "on rising volume."}
+      </div>
+    </div>
+  );
+}
+
+export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; hideHeader?: boolean } = {}) {
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
@@ -506,52 +575,54 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
   return (
     <>
       {/* Symbol bar — search left, chips right */}
-      <div className="fbar" style={{ position: "relative" }}>
-        <div style={{ position: "relative", flexShrink: 0 }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && search) selectSym(search.toUpperCase()); }}
-            placeholder="Search symbol…"
-            style={{
-              background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)",
-              padding: "5px 10px", fontSize: 12.5, color: "var(--text-hi)", outline: "none", width: 140,
-              fontFamily: "var(--f-mono)",
-            }}
-          />
-          {suggestions.length > 0 && (
-            <div style={{
-              position: "absolute", top: "100%", left: 0, background: "var(--surface-1)",
-              border: "1px solid var(--border)", borderRadius: "var(--r-sm)", zIndex: 20,
-              minWidth: 180, marginTop: 2,
-            }}>
-              {suggestions.slice(0, 6).map(s => (
-                <div key={s} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 6px 12px" }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                  <div onMouseDown={() => selectSym(s)}
-                    style={{ flex: 1, cursor: "pointer", fontSize: 12.5, color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>
-                    {s}
+      {!hideHeader && (
+        <div className="fbar" style={{ position: "relative" }}>
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && search) selectSym(search.toUpperCase()); }}
+              placeholder="Search symbol…"
+              style={{
+                background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)",
+                padding: "5px 10px", fontSize: 12.5, color: "var(--text-hi)", outline: "none", width: 140,
+                fontFamily: "var(--f-mono)",
+              }}
+            />
+            {suggestions.length > 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, background: "var(--surface-1)",
+                border: "1px solid var(--border)", borderRadius: "var(--r-sm)", zIndex: 20,
+                minWidth: 180, marginTop: 2,
+              }}>
+                {suggestions.slice(0, 6).map(s => (
+                  <div key={s} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 6px 12px" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "")}>
+                    <div onMouseDown={() => selectSym(s)}
+                      style={{ flex: 1, cursor: "pointer", fontSize: 12.5, color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>
+                      {s}
+                    </div>
+                    <button
+                      onMouseDown={e => { e.preventDefault(); toggleWatchlist(s); }}
+                      title={watchedSet.has(s) ? "Remove from watchlist" : "Add to watchlist"}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 4px",
+                        color: watchedSet.has(s) ? "var(--warn)" : "var(--text-dim-solid)", lineHeight: 1 }}>
+                      {watchedSet.has(s) ? "★" : "☆"}
+                    </button>
                   </div>
-                  <button
-                    onMouseDown={e => { e.preventDefault(); toggleWatchlist(s); }}
-                    title={watchedSet.has(s) ? "Remove from watchlist" : "Add to watchlist"}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 4px",
-                      color: watchedSet.has(s) ? "var(--warn)" : "var(--text-dim-solid)", lineHeight: 1 }}>
-                    {watchedSet.has(s) ? "★" : "☆"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
+          {Object.keys(stockInfo).map(s => (
+            <button key={s} className={`chip${sym === s ? " active" : ""}`} onClick={() => selectSym(s)}>{s}</button>
+          ))}
         </div>
-        {Object.keys(stockInfo).map(s => (
-          <button key={s} className={`chip${sym === s ? " active" : ""}`} onClick={() => selectSym(s)}>{s}</button>
-        ))}
-      </div>
+      )}
 
       <div style={{ padding: "14px 18px 0" }}>
-        {/* sd-head */}
+        {!hideHeader && (
         <div className="sd-head">
           <div className="sd-logo" style={{ background: `linear-gradient(135deg,${logoBg(sym)},${logoBg(sym)}88)`, color: logoFg(sym) }}>
             {sym[0]}
@@ -564,17 +635,8 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
             <div className="p">${fmt(p, 2)}</div>
             <div className={`c ${cls(data.c)}`}>{arr(data.c)} {data.c >= 0 ? "+" : ""}${fmt(dollar, 2)} ({sign(data.c)})</div>
           </div>
-          <div className="sd-actions">
-            <button className="btn" onClick={() => toggleWatchlist(sym)}
-              style={watchedSet.has(sym) ? { borderColor: "var(--warn)", color: "var(--warn)" } : {}}>
-              <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
-                <path d="M5 5h14v14l-7-4-7 4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
-                  fill={watchedSet.has(sym) ? "currentColor" : "none"} />
-              </svg>
-              {watchedSet.has(sym) ? "★ Watching" : "Watch"}
-            </button>
-          </div>
         </div>
+        )}
 
         {!info && (
           <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-sm)", padding: "10px 14px", marginBottom: 14, fontSize: ".8rem", color: "var(--text-dim-solid)", display: "flex", alignItems: "center", gap: 8 }}>
@@ -584,20 +646,6 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
         )}
       </div>
 
-      {/* Stock description — full width, above the chart grid */}
-      <div style={{ padding: "0 18px 16px" }}>
-        <div style={{
-          background: "var(--surface-1)", border: "1px solid var(--border-soft)",
-          borderRadius: "var(--r-sm)", padding: "13px 16px",
-        }}>
-          <div style={{ fontSize: ".65rem", fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--text-dim-solid)", marginBottom: 6 }}>
-            About {data.name}
-          </div>
-          <p style={{ fontSize: ".85rem", lineHeight: 1.7, color: "var(--text)", margin: 0 }}>
-            {STOCK_DESC[sym] ?? `${data.name} is a ${group} company listed on ${ex}.`}
-          </p>
-        </div>
-      </div>
 
       <div className="sd-grid">
         {/* LEFT COLUMN */}
@@ -636,6 +684,19 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
               <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
               <div style={{ flex: 1 }} />
               <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>drag-free · hover for OHLC</span>
+              <ExpandBtn
+                title={`${sym} · Price Chart`}
+                node={
+                  <StockChartExpanded
+                    sym={sym} px={p}
+                    initialTf={tfActive} initialChartType={chartType}
+                    initialMaStep={maStep} initialEmaStep={emaStep}
+                    initialShowVol={showVol} initialShowRsi={showRsi}
+                    initialShowEarnings={showEarnings}
+                    eps={eps} rs={rs} rsi={rsi} erDate={erDate}
+                  />
+                }
+              />
             </div>
             <div id="chartHost" style={{ padding: "0 14px 0" }} ref={chartRef}
               onContextMenu={handleChartRightClick}>
@@ -777,6 +838,7 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                       >Annual</button>
                     </div>
                     <span className="link" onClick={() => setInnerDrawer("financials")}>View all →</span>
+                    <ExpandBtn title={`${sym} · Financials (${finPeriod === "Q" ? "Quarterly" : "Annual"})`} node={<EarnIncChart inc={inc} />} />
                   </div>
                 </div>
                 <div className="card-b" style={{ paddingTop: 8 }}>
@@ -796,11 +858,14 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                   <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border-soft)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                       <div style={{ fontSize: ".78rem", fontWeight: 700, color: "var(--text-hi)" }}>Earnings Growth (EPS)</div>
-                      <span className="ec-legend" style={{ margin: 0 }}>
-                        <span><i style={{ background: "var(--up)" }} />Beat</span>
-                        <span><i style={{ background: "var(--down)" }} />Miss</span>
-                        <span><i className="ln" style={{ background: "var(--brand-2)" }} />Trend</span>
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="ec-legend" style={{ margin: 0 }}>
+                          <span><i style={{ background: "var(--up)" }} />Beat</span>
+                          <span><i style={{ background: "var(--down)" }} />Miss</span>
+                          <span><i className="ln" style={{ background: "var(--brand-2)" }} />Trend</span>
+                        </span>
+                        <ExpandBtn title={`${sym} · Earnings Growth (EPS)`} node={<EarningsGrowthChart hist={histEps} />} />
+                      </div>
                     </div>
                     <EarningsGrowthChart hist={histEps} />
                     <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
@@ -841,9 +906,31 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
               <div className="card">
                 <div className="card-h">
                   <h3>Dividend history</h3>
-                  {data.div > 0
-                    ? <span className="pill up">{data.div.toFixed(2)}% yield</span>
-                    : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {data.div > 0
+                      ? <span className="pill up">{data.div.toFixed(2)}% yield</span>
+                      : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>}
+                    {data.div > 0 && <ExpandBtn title={`${sym} · Dividend history`} node={
+                      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+                        {divAmts.map((v, i) => {
+                          const bh = (v / maxAmt) * (H - PADT - PADB);
+                          const bx = gap * i + (gap - bw) / 2;
+                          const by = PADT + (H - PADT - PADB) - bh;
+                          const isLast = i === divAmts.length - 1;
+                          return (
+                            <g key={i}>
+                              <rect x={bx} y={by} width={bw} height={bh} rx={2}
+                                style={{ fill: isLast ? "var(--brand-2)" : "var(--surface-3)" }} />
+                              <text x={bx + bw / 2} y={H - 4} textAnchor="middle"
+                                style={{ fill: "var(--text-dim-solid)", fontSize: "7px" }}>
+                                {QLABELS[i]}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    } />}
+                  </div>
                 </div>
                 <div className="card-b" style={{ paddingTop: 8 }}>
                   {data.div === 0 ? (
@@ -1454,10 +1541,13 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                   <div className="card" style={{ marginBottom: 14 }}>
                     <div className="card-h">
                       <h3>{sym} · 10-quarter earnings history</h3>
-                      {erEnt?.react != null
-                        ? <span className={`pill ${erEnt.react >= 0 ? "up" : "dn"}`}>{erEnt.react >= 0 ? "+" : ""}{erEnt.react}% last reaction</span>
-                        : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats10}/10 beats</span>
-                      }
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {erEnt?.react != null
+                          ? <span className={`pill ${erEnt.react >= 0 ? "up" : "dn"}`}>{erEnt.react >= 0 ? "+" : ""}{erEnt.react}% last reaction</span>
+                          : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats10}/10 beats</span>
+                        }
+                        <ExpandBtn title={`${sym} · 10-quarter earnings history`} node={<EarnEpsChart hist={hist10} />} />
+                      </div>
                     </div>
                     <div className="card-b" style={{ paddingTop: 8 }}>
                       <div className="ec-legend">
@@ -1473,7 +1563,10 @@ export function StockScreen({ initialSym }: { initialSym?: string } = {}) {
                   <div className="card" style={{ marginBottom: 14 }}>
                     <div className="card-h">
                       <h3>Income statement</h3>
-                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Quarterly</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Quarterly</span>
+                        <ExpandBtn title={`${sym} · Income statement`} node={<EarnIncChart inc={inc} />} />
+                      </div>
                     </div>
                     <div className="card-b" style={{ paddingTop: 8 }}>
                       <div className="ec-legend">
