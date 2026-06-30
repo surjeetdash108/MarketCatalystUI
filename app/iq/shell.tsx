@@ -838,6 +838,10 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("iq-nav-collapsed") === "1";
+  });
   const [searchQ, setSearchQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchStarred, setSearchStarred] = useState<Set<string>>(() => new Set());
@@ -951,7 +955,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     <AuthGuard>
       <IQActionsContext.Provider value={actions}>
         <div className="iq-root" data-theme={theme} data-font={font}>
-          <div className="app">
+          <div className={`app${navCollapsed ? " nav-collapsed" : ""}`}>
             {/* Brand cell */}
             <div className="brandcell">
               <div className="brand-top">
@@ -965,6 +969,17 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               <div className="nav-clock">
                 {navTime.day} · <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{navTime.time} ET</span>
               </div>
+              <button
+                className="nav-collapse-btn"
+                onClick={() => setNavCollapsed(c => { const next = !c; localStorage.setItem("iq-nav-collapsed", next ? "1" : "0"); return next; })}
+                aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+              >
+                <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  {navCollapsed
+                    ? <path d="M9 18l6-6-6-6" />
+                    : <path d="M15 18l-6-6 6-6" />}
+                </svg>
+              </button>
             </div>
 
             {/* Topbar */}
@@ -1115,9 +1130,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     const href = slugToHref(item.slug);
                     const isActive = pathname === href;
                     return (
-                      <Link key={item.slug} href={href} className={`navitem${isActive ? " active" : ""}`}>
+                      <Link key={item.slug} href={href} className={`navitem${isActive ? " active" : ""}`} title={item.label}>
                         <div className="nicon"><NavIcon slug={item.slug} /></div>
-                        {item.label}
+                        <span className="nav-label">{item.label}</span>
                         {item.badge && <span className="nav-tag">{item.badge}</span>}
                       </Link>
                     );
