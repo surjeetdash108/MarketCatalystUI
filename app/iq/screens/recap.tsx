@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
-import { recap, sectorList, pulse, earnings } from "../data";
-import { cls, arr, sign, fmt, Spark, StockLogo } from "../utils";
+import { recap, sectorList, earnings } from "../data";
+import { cls, arr, sign, StockLogo, heatCol } from "../utils";
 
 const SEC_PAGE = 10;
 const SEC_PAGES = Math.ceil(sectorList.length / SEC_PAGE);
@@ -107,23 +107,6 @@ function stockifyText(text: string): React.ReactNode {
   );
 }
 
-// ---- Index pulse cards ----
-function RcpIndexCards() {
-  return (
-    <div className="rcp-idx">
-      {pulse.map((x, i) => (
-        <div key={x.l} className="rcp-box">
-          <div className="rcp-bl">{x.l}</div>
-          <div className="rcp-bv">{fmt(x.v, x.v > 1000 ? 0 : 2)}</div>
-          <div className={`rcp-bc ${cls(x.c)}`}>{arr(x.c)} {sign(x.c)}</div>
-          <div className="rcp-bs">
-            <Spark seed={i + 1} up={x.c >= 0} w={96} h={28} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ---- News briefing newspaper ----
 function NewsBriefing({ mode, dateLabel, onDownload, headline }: { mode: 'today' | 'week'; dateLabel: string; onDownload: () => void; headline?: string }) {
@@ -216,69 +199,6 @@ function NewsBriefing({ mode, dateLabel, onDownload, headline }: { mode: 'today'
 }
 
 // ---- Schedule & share card ----
-function ScheduleShare({ onDownload }: { onDownload: () => void }) {
-  const [freq, setFreq] = useState('Daily (EOD)');
-  const [time, setTime] = useState('4:45 PM ET');
-  const [email, setEmail] = useState('');
-  const [msg, setMsg] = useState('');
-
-  function schedule() {
-    if (!email || !/.+@.+\..+/.test(email)) {
-      setMsg('Enter a valid email to schedule.');
-      return;
-    }
-    setMsg(`✓ Scheduled — ${freq} executive recap at ${time} to ${email}. (Demo: no email is actually sent.)`);
-  }
-
-  return (
-    <div className="card" style={{ marginTop: 14 }}>
-      <div className="card-h">
-        <h3>Schedule &amp; share this recap</h3>
-        <span className="pill ai">AI</span>
-      </div>
-      <div className="card-b">
-        <p style={{ fontSize: '.82rem', color: 'var(--text)', lineHeight: 1.5, marginBottom: 12 }}>
-          Get this executive summary delivered automatically, or download it now.
-        </p>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <label style={{ fontSize: '.7rem', color: 'var(--text-dim-solid)' }}>
-            Frequency<br />
-            <select className="mv-sel" style={{ marginTop: 4 }} value={freq} onChange={e => setFreq(e.target.value)}>
-              <option>Daily (EOD)</option>
-              <option>Weekdays</option>
-              <option>Weekly (Fri)</option>
-            </select>
-          </label>
-          <label style={{ fontSize: '.7rem', color: 'var(--text-dim-solid)' }}>
-            Send time<br />
-            <select className="mv-sel" style={{ marginTop: 4 }} value={time} onChange={e => setTime(e.target.value)}>
-              <option>4:45 PM ET</option>
-              <option>6:00 PM ET</option>
-              <option>7:00 AM ET</option>
-            </select>
-          </label>
-          <label style={{ fontSize: '.7rem', color: 'var(--text-dim-solid)' }}>
-            Email<br />
-            <input
-              className="mv-sel"
-              style={{ marginTop: 4, minWidth: 220 }}
-              placeholder="you@example.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </label>
-          <button className="btn primary" onClick={schedule}>Schedule email</button>
-          <button className="btn" onClick={onDownload}>Download now</button>
-        </div>
-        {msg && (
-          <div style={{ fontSize: '.78rem', marginTop: 10, color: msg.startsWith('✓') ? 'var(--up)' : 'var(--warn)' }}>
-            {msg}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ---- Utilities ----
 function heatColor(v: number): string {
@@ -423,15 +343,20 @@ export function RecapScreen() {
                 <span style={{ fontSize: ".7rem", color: "var(--brand-2)", fontWeight: 600 }}>→ open PDF</span>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
-              {recap.indices.map(idx => (
-                <div key={idx.l}>
-                  <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{idx.l}</div>
-                  <div className={`mono ${cls(idx.v)}`} style={{ fontSize: "1.25rem", fontWeight: 700 }}>
-                    {arr(idx.v)}{sign(idx.v)}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
+              {recap.indices.map(idx => {
+                const { bg, fg } = heatCol(idx.v);
+                return (
+                  <div key={idx.l} style={{
+                    background: bg, borderRadius: 10, padding: "8px 14px", minWidth: 90,
+                  }}>
+                    <div style={{ fontSize: ".68rem", color: fg, opacity: 0.8, marginBottom: 3 }}>{idx.l}</div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--f-mono)", color: fg }}>
+                      {arr(idx.v)}{sign(idx.v)}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div style={{ marginLeft: "auto" }}>
                 <button className="btn ai">
                   <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
@@ -499,15 +424,20 @@ export function RecapScreen() {
                 <span style={{ fontSize: ".7rem", color: "var(--brand-2)", fontWeight: 600 }}>→ open PDF</span>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
-              {WEEKLY.indices.map(idx => (
-                <div key={idx.l}>
-                  <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{idx.l}</div>
-                  <div className={`mono ${cls(idx.v)}`} style={{ fontSize: "1.25rem", fontWeight: 700 }}>
-                    {arr(idx.v)}{sign(idx.v)}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
+              {WEEKLY.indices.map(idx => {
+                const { bg, fg } = heatCol(idx.v);
+                return (
+                  <div key={idx.l} style={{
+                    background: bg, borderRadius: 10, padding: "8px 14px", minWidth: 90,
+                  }}>
+                    <div style={{ fontSize: ".68rem", color: fg, opacity: 0.8, marginBottom: 3 }}>{idx.l}</div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--f-mono)", color: fg }}>
+                      {arr(idx.v)}{sign(idx.v)}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div style={{ marginLeft: "auto" }}>
                 <button className="btn ai">
                   <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
