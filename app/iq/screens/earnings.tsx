@@ -1048,39 +1048,6 @@ export function EarningsScreen() {
         </div>
       </div>
 
-      {/* ── Earnings Today ─────────────────────────────────────────────── */}
-      {(() => {
-        const todayItems = earnsForTab("today");
-        if (todayItems.length === 0) return null;
-        return (
-          <div className="card" style={{ marginTop: 14 }}>
-            <div className="card-h">
-              <h3>Earnings Today</h3>
-              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-                {todayItems.length} reporting
-              </span>
-            </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
-              {todayItems.map(e => (
-                <div key={e.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => { setSel(e.s); setTab("today"); }}
-                >
-                  <StockLogo sym={e.s} size={26} />
-                  <span className="tkr">{e.s}<small>{e.n}</small></span>
-                  <span className="mid">
-                    <span className={`pill ${e.sess === "BMO" ? "bmo" : "amc"}`}>{e.sess}</span>
-                  </span>
-                  <span className={`r ${e.react != null ? cls(e.react) : ""}`}>
-                    {e.react != null
-                      ? sign(e.react)
-                      : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Calendar ───────────────────────────────────────────────────── */}
       {calNode}
