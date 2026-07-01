@@ -15,6 +15,7 @@ import { CommentaryScreen } from "../../iq/screens/commentary";
 import { RecapScreen } from "../../iq/screens/recap";
 import { MacroScreen } from "../../iq/screens/macro";
 import { OptionsScreen } from "../../iq/screens/options";
+import { ThemesScreen } from "../../iq/screens/themes";
 
 export function generateStaticParams() {
   return menuItems
@@ -28,6 +29,7 @@ const SCREENS: Record<string, React.ReactNode> = {
   heatmap:     <HeatmapScreen />,
   analyst:     <AnalystScreen />,
   screener:    <ScreenerScreen />,
+  themes:      <ThemesScreen />,
   ipos:        <IPOsScreen />,
   portfolio:   <PortfolioScreen />,
   watchlist:   <WatchlistScreen />,

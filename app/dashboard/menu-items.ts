@@ -6,6 +6,7 @@ export const menuItems = [
   { label: 'Market Heatmap', slug: 'heatmap', group: 'Intelligence', icon: '🟩', badge: null },
   { label: 'Analyst Actions', slug: 'analyst', group: 'Intelligence', icon: '🔔', badge: null },
   { label: 'Screener', slug: 'screener', group: 'Intelligence', icon: '🔍', badge: null },
+  { label: 'Themes', slug: 'themes', group: 'Intelligence', icon: '◈', badge: null },
   { label: 'IPO Corner', slug: 'ipos', group: 'Intelligence', icon: '🚀', badge: null },
   { label: 'Stock Detail', slug: 'stock', group: 'Intelligence', icon: '📊', badge: null },
   { label: 'Options', slug: 'options', group: 'Intelligence', icon: '◈', badge: null },
