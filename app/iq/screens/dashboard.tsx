@@ -262,6 +262,7 @@ export function DashboardScreen() {
 
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [moversTab, setMoversTab] = useState<0 | 1 | 2>(0);
+  const [scrTab, setScrTab] = useState<"leaders" | "laggards">("leaders");
 
   // ---- Dash pop hover ----
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -547,28 +548,35 @@ export function DashboardScreen() {
               <h3>Screener · Leaders &amp; Laggards</h3>
               <Link className="link" href="/menu/screener">View all →</Link>
             </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
-              <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px" }}>
+            {/* Tabs */}
+            <div style={{ display: "flex", borderBottom: "1px solid var(--border-soft)" }}>
+              <button
+                onClick={() => setScrTab("leaders")}
+                style={{
+                  flex: 1, padding: "7px 0", fontSize: ".72rem", fontWeight: 700,
+                  background: "none", border: "none", cursor: "pointer",
+                  borderBottom: scrTab === "leaders" ? "2px solid var(--up)" : "2px solid transparent",
+                  color: scrTab === "leaders" ? "var(--up)" : "var(--text-dim-solid)",
+                  transition: "color .15s",
+                }}
+              >
                 ▲ Leaders
-              </div>
-              {leaders.map(s => {
-                const dayC = movers.find(m => m.s === s.s)?.c ?? 0;
-                return (
-                  <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
-                    onClick={() => openStock(s.s)}
-                    {...mr(s.s, "screener")}
-                  >
-                    <StockLogo sym={s.s} size={26} />
-                    <span className="tkr">{s.s}</span>
-                    <span className="mid">RS {s.rs} · {s.sec}</span>
-                    <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
-                  </div>
-                );
-              })}
-              <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px" }}>
+              </button>
+              <button
+                onClick={() => setScrTab("laggards")}
+                style={{
+                  flex: 1, padding: "7px 0", fontSize: ".72rem", fontWeight: 700,
+                  background: "none", border: "none", cursor: "pointer",
+                  borderBottom: scrTab === "laggards" ? "2px solid var(--down)" : "2px solid transparent",
+                  color: scrTab === "laggards" ? "var(--down)" : "var(--text-dim-solid)",
+                  transition: "color .15s",
+                }}
+              >
                 ▼ Laggards
-              </div>
-              {laggards.map(s => {
+              </button>
+            </div>
+            <div className="card-b" style={{ paddingTop: 4 }}>
+              {(scrTab === "leaders" ? leaders : laggards).map(s => {
                 const dayC = movers.find(m => m.s === s.s)?.c ?? 0;
                 return (
                   <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
