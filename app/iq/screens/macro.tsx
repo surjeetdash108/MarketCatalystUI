@@ -632,31 +632,6 @@ export function MacroScreen() {
         </div>
       </div>
 
-      {/* ── Dividend Calendar (full width, earnings-style) ── */}
-      <div style={{ marginTop: 14 }}>
-        <div className="page-head" style={{ paddingTop: 0, paddingBottom: 10 }}>
-          <div>
-            <div className="eyebrow">Dividend Calendar</div>
-            <h2 style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)", margin: 0 }}>
-              Ex-dividend &amp; pay dates
-            </h2>
-            <div className="page-sub" style={{ marginTop: 2 }}>
-              Company logos by day · click a logo for 10-year dividend history
-            </div>
-          </div>
-          <div className="tabs">
-            {DIV_RANGES.map(([k, l]) => (
-              <button key={k}
-                className={`tab${divTab === k ? " active" : ""}`}
-                onClick={() => { setDivTab(k); setCalDay(null); setSelStock(null); }}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {divCalNode}
-      </div>
 
       {/* ── VIX Sensitive Stocks ── */}
       <div style={{ marginTop: 14 }}>
