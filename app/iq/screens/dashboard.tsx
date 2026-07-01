@@ -311,7 +311,7 @@ export function DashboardScreen() {
   }
 
   return (
-    <>
+    <div className="dash-pg">
       {/* ── Header ── */}
       <div className="dash" style={{ alignItems: "stretch" }}>
 
@@ -1114,6 +1114,6 @@ export function DashboardScreen() {
           <DashPopContent sym={pop.sym} block={pop.block} />
         </div>
       )}
-    </>
+    </div>
   );
 }

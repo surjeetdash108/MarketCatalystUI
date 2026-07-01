@@ -462,9 +462,9 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 11px 13px; border-bottom: 1px solid var(--border-soft);
 }
-.card-h h3 {
-  font-family: var(--f-display); font-size: 12.5px; font-weight: 700;
-  color: var(--text-hi); letter-spacing: -.2px;
+.card-h h2, .card-h h3 {
+  font-family: var(--f-display); font-size: 15px; font-weight: 700;
+  color: var(--text-hi); letter-spacing: -.3px;
 }
 .card-h .more { font-size: 11px; color: var(--brand-2); font-weight: 500; cursor: pointer; }
 .card-h .more:hover { text-decoration: underline; }
