@@ -2,41 +2,41 @@
 // STOCKWISE — MOCK DATA (TypeScript)
 // ============================================================
 
-export interface PulseItem { l: string; v: number; c: number; o: number; pc: number; }
-export interface WMNItem { h: string; t: string; tag: 'macro' | 'earn' | 'sector'; }
+export interface PulseItem { label: string; value: number; change: number; open: number; prevClose: number; }
+export interface WMNItem { headline: string; body: string; tag: 'macro' | 'earn' | 'sector'; }
 export interface Earning {
-  s: string; n: string; t: string; mc: string; sec: string;
-  epsE: number; epsA: number | null;
-  revE: number; revA: number | null;
-  guide: string | null; react: number | null;
-  tags: string[]; owned: boolean; implied: number;
+  ticker: string; name: string; session: string; marketCap: string; sector: string;
+  epsEstimate: number; epsActual: number | null;
+  revenueEstimate: number; revenueActual: number | null;
+  guidanceStatus: string | null; priceReaction: number | null;
+  tags: string[]; owned: boolean; impliedMove: number;
 }
 export interface Mover {
-  s: string; n: string; p: number; c: number; rvol: number; rs: number;
-  cat: string; ma: string; owned: boolean;
+  ticker: string; name: string; price: number; pctChange: number; rvolRatio: number; relativeStrength: number;
+  catalystLabel: string; maPosture: string; owned: boolean;
   sector: string; cap: 'Mega' | 'Large' | 'Mid' | 'Small';
-  wk: number; tech: string; news: string;
+  weekPct: number; techContext: string; newsContext: string;
 }
 export interface AnalystAction {
-  s: string; n: string; firm: string;
-  dir: 'up' | 'down' | 'init' | 'hold';
-  from: string; to: string;
-  ptF: number; ptT: number;
-  react: number; n30: number; owned: boolean;
+  ticker: string; name: string; firm: string;
+  actionType: 'up' | 'down' | 'init' | 'hold';
+  previousRating: string; newRating: string;
+  prevPriceTarget: number; newPriceTarget: number;
+  priceChangeSince: number; actionsLast30Days: number; owned: boolean;
 }
 export interface FolioItem {
-  s: string; n: string;
-  p: number;    // current price
-  c: number;    // day % change
-  gl: number;   // total gain/loss %
-  size: "Small" | "Medium" | "Large";
-  conv: "High" | "Medium" | "Low";
-  evt: string;
+  ticker: string; name: string;
+  price: number;
+  pctChange: number;
+  gainLossPct: number;
+  positionSize: "Small" | "Medium" | "Large";
+  conviction: "High" | "Medium" | "Low";
+  eventNote: string;
 }
 export interface Fund {
-  nm: string; av: string; mgr: string;
-  aum: string; pos: number; top: string;
-  newPos: number; exits: number; q: string;
+  fundName: string; avatar: string; managerName: string;
+  aum: string; totalPositions: number; topHolding: string;
+  newPositions: number; exitCount: number; quarter: string;
 }
 export interface FundDetail {
   holdings: [string, number, string][];
@@ -46,212 +46,212 @@ export interface FundDetail {
   conc: string;
 }
 export interface WatchItem {
-  s: string; n: string; px: number; c: number;
-  er: string; analyst: string | null; opt: boolean; headline: string;
+  ticker: string; name: string; price: number; pctChange: number;
+  nextEarningsDate: string; lastAnalystAction: string | null; hasOptions: boolean; latestHeadline: string;
 }
 export interface StockInfo {
-  name: string; px: number; c: number; mkt: string;
-  pe: number; eps: number; wkh52: number; wkl52: number;
-  div: number; beta: number; sec: string;
-  ai_call: string; ai_thesis: string; ai_risk: string;
-  ai_metrics: { l: string; v: string; }[];
-  fin: { l: string; v: string; }[];
-  news: { h: string; dt: string; }[];
-  ins: { n: string; a: string; dt: string; }[];
+  name: string; price: number; pctChange: number; marketCap: string;
+  peRatio: number; eps: number; week52High: number; week52Low: number;
+  dividendYield: number; beta: number; sector: string;
+  aiRating: string; aiThesis: string; aiRisk: string;
+  aiMetrics: { label: string; value: string; }[];
+  financials: { label: string; value: string; }[];
+  news: { headline: string; date: string; }[];
+  insiderActivity: { name: string; action: string; date: string; }[];
 }
-export interface SectorRow { name: string; rank: number; trend: string; chg: number; items: [string, number, number][]; }
+export interface SectorRow { name: string; rank: number; trend: string; pctChange: number; items: [string, number, number][]; }
 export interface ScreenerStock {
-  s: string; n: string; sec: string;
-  mc: number; pe: number;
-  rs: number;     // relative strength 0–100
-  salesG: number; // sales growth %
-  epsG: number;   // EPS growth %
-  mgn: number;    // gross margin %
-  rvol: number;   // relative volume
-  rating: string; // Strong Buy | Buy | Neutral | Sell | Strong Sell
+  ticker: string; name: string; sector: string;
+  marketCap: number; peRatio: number;
+  relativeStrength: number;
+  salesGrowth: number;
+  epsGrowth: number;
+  grossMargin: number;
+  rvolRatio: number;
+  techRating: string;
 }
 export interface CommentaryItem {
   cat: string; accent: string; time: string; text: string; why: string;
 }
 export interface RecapData {
   date: string; subtitle: string; headline: string;
-  indices: { l: string; v: number }[];
+  indices: { label: string; value: number }[];
   stories: string[];
-  tomorrow: { time: string; ev: string }[];
-  movers: { s: string; reason: string; c: number }[];
-  internals: { l: string; v: string; c: number }[];
+  tomorrow: { time: string; event: string }[];
+  movers: { ticker: string; reason: string; pctChange: number }[];
+  internals: { label: string; value: string; direction: number }[];
 }
 
 // ---- Market Pulse (10 items) ----
 export const pulse: PulseItem[] = [
-  { l: 'S&P 500',     v: 5312.08,  c: 0.73,  o: 5281.4,  pc: 5273.66 },
-  { l: 'Nasdaq',      v: 16973.17, c: 1.02,  o: 16800.0, pc: 16801.7 },
-  { l: 'Dow',         v: 39872.4,  c: 0.41,  o: 39714.0, pc: 39709.6 },
-  { l: 'Russell 2K',  v: 2061.3,   c: -0.32, o: 2071.4,  pc: 2067.9  },
-  { l: 'VIX',         v: 14.18,    c: -2.51, o: 14.52,   pc: 14.54   },
-  { l: '10Y Yield',   v: 4.32,     c: -0.04, o: 4.36,    pc: 4.36    },
-  { l: 'WTI Crude',   v: 78.64,    c: -1.21, o: 79.42,   pc: 79.60   },
-  { l: 'Gold',        v: 2344.10,  c: 0.31,  o: 2337.0,  pc: 2336.8  },
-  { l: 'Dollar (DXY)',v: 104.21,   c: 0.12,  o: 104.08,  pc: 104.09  },
+  { label: 'S&P 500',      value: 5312.08,  change: 0.73,  open: 5281.4,  prevClose: 5273.66 },
+  { label: 'Nasdaq',       value: 16973.17, change: 1.02,  open: 16800.0, prevClose: 16801.7 },
+  { label: 'Dow',          value: 39872.4,  change: 0.41,  open: 39714.0, prevClose: 39709.6 },
+  { label: 'Russell 2K',   value: 2061.3,   change: -0.32, open: 2071.4,  prevClose: 2067.9  },
+  { label: 'VIX',          value: 14.18,    change: -2.51, open: 14.52,   prevClose: 14.54   },
+  { label: '10Y Yield',    value: 4.32,     change: -0.04, open: 4.36,    prevClose: 4.36    },
+  { label: 'WTI Crude',    value: 78.64,    change: -1.21, open: 79.42,   prevClose: 79.60   },
+  { label: 'Gold',         value: 2344.10,  change: 0.31,  open: 2337.0,  prevClose: 2336.8  },
+  { label: 'Dollar (DXY)', value: 104.21,   change: 0.12,  open: 104.08,  prevClose: 104.09  },
 ];
 
 // ---- What Matters Now ----
 export const wmn: WMNItem[] = [
-  { h: 'Cooler CPI print', t: 'May core inflation came in at <b>0.2% m/m</b>, below the 0.3% estimate — yields fell and rate-cut odds for September rose.', tag: 'macro' },
-  { h: 'NVDA earnings beat', t: '<span class="sym up">NVDA</span> beat EPS by 18% and raised FY25 guidance on Data Center demand. Stock <b class="up">+8.2%</b>.', tag: 'earn' },
-  { h: 'Fed minutes: higher-for-longer tone', t: 'FOMC minutes reiterated patience; committee needs <b>more evidence</b> before cutting. September cut probability fell to 38%.', tag: 'macro' },
-  { h: 'Target misses and guides down', t: '<span class="sym down">TGT</span> Q1 EPS missed by 11%; full-year guidance cut. Consumer discretionary facing <b class="warn">margin pressure</b>.', tag: 'earn' },
-  { h: 'Oil slides on demand concerns', t: 'Brent crude fell below $80 as OPEC+ compliance data disappointed. Energy sector <b class="down">−1.8%</b>.', tag: 'sector' },
-  { h: 'Semis rally on AI capex data', t: 'AMD, AVGO, MRVL all up 3–5% on strong hyperscaler spending signals from MSFT and GOOG earnings guidance.', tag: 'sector' },
-  { h: 'Dollar weakens on soft data', t: 'DXY slipped to 104.1 after softer jobs and CPI prints. Emerging-market equities and commodities caught a bid.', tag: 'macro' },
-  { h: 'JPM raises S&P 500 target', t: '<span class="sym">JPM</span> strategists lifted their year-end S&P 500 target to <b>5,800</b>, citing stronger-than-expected earnings resilience.', tag: 'macro' },
+  { headline: 'Cooler CPI print', body: 'May core inflation came in at <b>0.2% m/m</b>, below the 0.3% estimate — yields fell and rate-cut odds for September rose.', tag: 'macro' },
+  { headline: 'NVDA earnings beat', body: '<span class="sym up">NVDA</span> beat EPS by 18% and raised FY25 guidance on Data Center demand. Stock <b class="up">+8.2%</b>.', tag: 'earn' },
+  { headline: 'Fed minutes: higher-for-longer tone', body: 'FOMC minutes reiterated patience; committee needs <b>more evidence</b> before cutting. September cut probability fell to 38%.', tag: 'macro' },
+  { headline: 'Target misses and guides down', body: '<span class="sym down">TGT</span> Q1 EPS missed by 11%; full-year guidance cut. Consumer discretionary facing <b class="warn">margin pressure</b>.', tag: 'earn' },
+  { headline: 'Oil slides on demand concerns', body: 'Brent crude fell below $80 as OPEC+ compliance data disappointed. Energy sector <b class="down">−1.8%</b>.', tag: 'sector' },
+  { headline: 'Semis rally on AI capex data', body: 'AMD, AVGO, MRVL all up 3–5% on strong hyperscaler spending signals from MSFT and GOOG earnings guidance.', tag: 'sector' },
+  { headline: 'Dollar weakens on soft data', body: 'DXY slipped to 104.1 after softer jobs and CPI prints. Emerging-market equities and commodities caught a bid.', tag: 'macro' },
+  { headline: 'JPM raises S&P 500 target', body: '<span class="sym">JPM</span> strategists lifted their year-end S&P 500 target to <b>5,800</b>, citing stronger-than-expected earnings resilience.', tag: 'macro' },
 ];
 
 // ---- Earnings ----
 export const earnings: Earning[] = [
-  { s: 'NVDA', n: 'Nvidia', t: 'Wed post', mc: '$2.91T', sec: 'Semiconductors', epsE: 5.56, epsA: 6.57, revE: 24.6, revA: 26.0, guide: 'Raised', react: 8.2, tags: ['Beat', 'Raised'], owned: true, implied: 7.2 },
-  { s: 'MSFT', n: 'Microsoft', t: 'Tue post', mc: '$3.1T', sec: 'Software', epsE: 2.82, epsA: 2.94, revE: 60.8, revA: 61.9, guide: 'In-line', react: 2.1, tags: ['Beat'], owned: true, implied: 4.1 },
-  { s: 'AMZN', n: 'Amazon', t: 'Thu post', mc: '$1.9T', sec: 'E-Commerce', epsE: 0.98, epsA: null, revE: 142.6, revA: null, guide: null, react: null, tags: [], owned: false, implied: 5.8 },
-  { s: 'GOOG', n: 'Alphabet', t: 'Mon post', mc: '$2.1T', sec: 'Internet', epsE: 1.84, epsA: 1.89, revE: 79.9, revA: 80.5, guide: 'In-line', react: 1.3, tags: ['Beat'], owned: false, implied: 3.9 },
-  { s: 'META', n: 'Meta', t: 'Wed post', mc: '$1.2T', sec: 'Social Media', epsE: 4.71, epsA: 4.86, revE: 36.2, revA: 36.5, guide: 'Raised', react: 3.2, tags: ['Beat', 'Raised'], owned: true, implied: 5.5 },
-  { s: 'AAPL', n: 'Apple', t: 'Thu post', mc: '$3.0T', sec: 'Hardware', epsE: 1.50, epsA: null, revE: 89.3, revA: null, guide: null, react: null, tags: [], owned: true, implied: 3.2 },
-  { s: 'TGT', n: 'Target', t: 'Wed pre', mc: '$58B', sec: 'Retail', epsE: 2.05, epsA: 1.82, revE: 24.5, revA: 24.1, guide: 'Lowered', react: -7.8, tags: ['Miss', 'Lowered'], owned: false, implied: 4.6 },
-  { s: 'WMT', n: 'Walmart', t: 'Thu pre', mc: '$480B', sec: 'Retail', epsE: 0.52, epsA: 0.60, revE: 159.5, revA: 161.5, guide: 'Raised', react: 5.2, tags: ['Beat', 'Raised'], owned: false, implied: 2.9 },
+  { ticker: 'NVDA', name: 'Nvidia',   session: 'Wed post', marketCap: '$2.91T', sector: 'Semiconductors', epsEstimate: 5.56, epsActual: 6.57,  revenueEstimate: 24.6,  revenueActual: 26.0,  guidanceStatus: 'Raised',   priceReaction: 8.2,  tags: ['Beat', 'Raised'], owned: true,  impliedMove: 7.2 },
+  { ticker: 'MSFT', name: 'Microsoft',session: 'Tue post', marketCap: '$3.1T',  sector: 'Software',       epsEstimate: 2.82, epsActual: 2.94,  revenueEstimate: 60.8,  revenueActual: 61.9,  guidanceStatus: 'In-line', priceReaction: 2.1,  tags: ['Beat'],          owned: true,  impliedMove: 4.1 },
+  { ticker: 'AMZN', name: 'Amazon',   session: 'Thu post', marketCap: '$1.9T',  sector: 'E-Commerce',     epsEstimate: 0.98, epsActual: null,  revenueEstimate: 142.6, revenueActual: null,  guidanceStatus: null,      priceReaction: null, tags: [],                owned: false, impliedMove: 5.8 },
+  { ticker: 'GOOG', name: 'Alphabet', session: 'Mon post', marketCap: '$2.1T',  sector: 'Internet',       epsEstimate: 1.84, epsActual: 1.89,  revenueEstimate: 79.9,  revenueActual: 80.5,  guidanceStatus: 'In-line', priceReaction: 1.3,  tags: ['Beat'],          owned: false, impliedMove: 3.9 },
+  { ticker: 'META', name: 'Meta',     session: 'Wed post', marketCap: '$1.2T',  sector: 'Social Media',   epsEstimate: 4.71, epsActual: 4.86,  revenueEstimate: 36.2,  revenueActual: 36.5,  guidanceStatus: 'Raised',  priceReaction: 3.2,  tags: ['Beat', 'Raised'], owned: true, impliedMove: 5.5 },
+  { ticker: 'AAPL', name: 'Apple',    session: 'Thu post', marketCap: '$3.0T',  sector: 'Hardware',       epsEstimate: 1.50, epsActual: null,  revenueEstimate: 89.3,  revenueActual: null,  guidanceStatus: null,      priceReaction: null, tags: [],                owned: true,  impliedMove: 3.2 },
+  { ticker: 'TGT',  name: 'Target',   session: 'Wed pre',  marketCap: '$58B',   sector: 'Retail',         epsEstimate: 2.05, epsActual: 1.82,  revenueEstimate: 24.5,  revenueActual: 24.1,  guidanceStatus: 'Lowered', priceReaction: -7.8, tags: ['Miss', 'Lowered'], owned: false, impliedMove: 4.6 },
+  { ticker: 'WMT',  name: 'Walmart',  session: 'Thu pre',  marketCap: '$480B',  sector: 'Retail',         epsEstimate: 0.52, epsActual: 0.60,  revenueEstimate: 159.5, revenueActual: 161.5, guidanceStatus: 'Raised',  priceReaction: 5.2,  tags: ['Beat', 'Raised'], owned: false, impliedMove: 2.9 },
 ];
 
 // ---- Market Movers ----
 export const movers: Mover[] = [
-  { s: 'NVDA', n: 'Nvidia',     p: 1181.75, c:  8.23, rvol: 5.8, rs: 96, cat: 'Earnings beat',      ma: 'Above 50/200', owned: true,  sector: 'Semis',    cap: 'Mega',  wk: 18.9, tech: 'Above 50/200 · RVOL 5.8× · RS 96/99. Buyers in control — momentum positive.', news: 'Earnings beat is driving today\'s move.' },
-  { s: 'ZIM',  n: 'ZIM Int\'l', p:   18.42, c:  9.97, rvol: 4.2, rs: 81, cat: 'Earnings beat',      ma: 'Above 50/200', owned: false, sector: 'Shipping', cap: 'Small', wk: 22.1, tech: 'Above 50/200 · RVOL 4.2× · RS 81/99. Buyers in control — momentum positive.', news: 'Earnings beat is driving today\'s move.' },
-  { s: 'PLTR', n: 'Palantir',   p:   24.88, c:  6.18, rvol: 3.4, rs: 88, cat: 'Guidance raise',     ma: 'Above 50/200', owned: false, sector: 'Software', cap: 'Large', wk: 14.2, tech: 'Above 50/200 · RVOL 3.4× · RS 88/99. Buyers in control — momentum positive.', news: 'Guidance raise is driving today\'s move.' },
-  { s: 'AVGO', n: 'Broadcom',   p: 1402.50, c:  2.97, rvol: 1.9, rs: 77, cat: 'Sympathy (semis)',   ma: 'Above 50/200', owned: false, sector: 'Semis',    cap: 'Mega',  wk:  7.4, tech: 'Above 50/200 · RVOL 1.9× · RS 77/99. Buyers in control — momentum positive.', news: 'Sympathy (semis) is driving today\'s move.' },
-  { s: 'CRM',  n: 'Salesforce', p:  316.50, c:  4.21, rvol: 2.6, rs: 73, cat: 'Analyst upgrade',    ma: 'Above 50/200', owned: false, sector: 'Software', cap: 'Large', wk:  9.6, tech: 'Above 50/200 · RVOL 2.6× · RS 73/99. Buyers in control — momentum positive.', news: 'Analyst upgrade is driving today\'s move.' },
-  { s: 'DELL', n: 'Dell',       p:  161.80, c: -3.45, rvol: 3.1, rs: 42, cat: 'Margin miss',        ma: 'Below 50/200', owned: false, sector: 'Hardware', cap: 'Large', wk: -6.1, tech: 'Below 50/200 · RVOL 3.1× · RS 42/99. Under distribution — momentum negative.', news: 'Margin miss is driving today\'s move.' },
-  { s: 'WBA',  n: 'Walgreens',  p:   15.30, c: -5.80, rvol: 2.7, rs: 18, cat: 'Guidance cut',       ma: 'Below 50/200', owned: false, sector: 'Retail',   cap: 'Mid',   wk:-11.3, tech: 'Below 50/200 · RVOL 2.7× · RS 18/99. Under distribution — momentum negative.', news: 'Guidance cut is driving today\'s move.' },
-  { s: 'INTC', n: 'Intel',      p:   30.12, c: -1.80, rvol: 1.4, rs: 24, cat: 'No known catalyst',  ma: 'Below 50/200', owned: false, sector: 'Semis',    cap: 'Large', wk: -4.2, tech: 'Below 50/200 · RVOL 1.4× · RS 24/99. Under distribution — momentum negative.', news: 'No company-specific headline — trading with its sector and the broad tape.' },
+  { ticker: 'NVDA', name: 'Nvidia',     price: 1181.75, pctChange:  8.23, rvolRatio: 5.8, relativeStrength: 96, catalystLabel: 'Earnings beat',     maPosture: 'Above 50/200', owned: true,  sector: 'Semis',    cap: 'Mega',  weekPct: 18.9, techContext: 'Above 50/200 · RVOL 5.8× · RS 96/99. Buyers in control — momentum positive.', newsContext: 'Earnings beat is driving today\'s move.' },
+  { ticker: 'ZIM',  name: 'ZIM Int\'l', price:   18.42, pctChange:  9.97, rvolRatio: 4.2, relativeStrength: 81, catalystLabel: 'Earnings beat',     maPosture: 'Above 50/200', owned: false, sector: 'Shipping', cap: 'Small', weekPct: 22.1, techContext: 'Above 50/200 · RVOL 4.2× · RS 81/99. Buyers in control — momentum positive.', newsContext: 'Earnings beat is driving today\'s move.' },
+  { ticker: 'PLTR', name: 'Palantir',   price:   24.88, pctChange:  6.18, rvolRatio: 3.4, relativeStrength: 88, catalystLabel: 'Guidance raise',    maPosture: 'Above 50/200', owned: false, sector: 'Software', cap: 'Large', weekPct: 14.2, techContext: 'Above 50/200 · RVOL 3.4× · RS 88/99. Buyers in control — momentum positive.', newsContext: 'Guidance raise is driving today\'s move.' },
+  { ticker: 'AVGO', name: 'Broadcom',   price: 1402.50, pctChange:  2.97, rvolRatio: 1.9, relativeStrength: 77, catalystLabel: 'Sympathy (semis)', maPosture: 'Above 50/200', owned: false, sector: 'Semis',    cap: 'Mega',  weekPct:  7.4, techContext: 'Above 50/200 · RVOL 1.9× · RS 77/99. Buyers in control — momentum positive.', newsContext: 'Sympathy (semis) is driving today\'s move.' },
+  { ticker: 'CRM',  name: 'Salesforce', price:  316.50, pctChange:  4.21, rvolRatio: 2.6, relativeStrength: 73, catalystLabel: 'Analyst upgrade',   maPosture: 'Above 50/200', owned: false, sector: 'Software', cap: 'Large', weekPct:  9.6, techContext: 'Above 50/200 · RVOL 2.6× · RS 73/99. Buyers in control — momentum positive.', newsContext: 'Analyst upgrade is driving today\'s move.' },
+  { ticker: 'DELL', name: 'Dell',       price:  161.80, pctChange: -3.45, rvolRatio: 3.1, relativeStrength: 42, catalystLabel: 'Margin miss',       maPosture: 'Below 50/200', owned: false, sector: 'Hardware', cap: 'Large', weekPct: -6.1, techContext: 'Below 50/200 · RVOL 3.1× · RS 42/99. Under distribution — momentum negative.', newsContext: 'Margin miss is driving today\'s move.' },
+  { ticker: 'WBA',  name: 'Walgreens',  price:   15.30, pctChange: -5.80, rvolRatio: 2.7, relativeStrength: 18, catalystLabel: 'Guidance cut',      maPosture: 'Below 50/200', owned: false, sector: 'Retail',   cap: 'Mid',   weekPct:-11.3, techContext: 'Below 50/200 · RVOL 2.7× · RS 18/99. Under distribution — momentum negative.', newsContext: 'Guidance cut is driving today\'s move.' },
+  { ticker: 'INTC', name: 'Intel',      price:   30.12, pctChange: -1.80, rvolRatio: 1.4, relativeStrength: 24, catalystLabel: 'No known catalyst', maPosture: 'Below 50/200', owned: false, sector: 'Semis',    cap: 'Large', weekPct: -4.2, techContext: 'Below 50/200 · RVOL 1.4× · RS 24/99. Under distribution — momentum negative.', newsContext: 'No company-specific headline — trading with its sector and the broad tape.' },
 ];
 
 // ---- Analyst Actions ----
 export const analyst: AnalystAction[] = [
   // CRM — 6 actions (consensus shift flagged)
-  { s: 'CRM',  n: 'Salesforce',  firm: 'Morgan Stanley', dir: 'up',   from: 'Equal Weight', to: 'Overweight', ptF: 280,  ptT: 340,  react:  3.80, n30: 6, owned: false },
-  { s: 'CRM',  n: 'Salesforce',  firm: 'Bernstein',      dir: 'up',   from: 'Market Perform',to: 'Outperform', ptF: 260,  ptT: 320,  react:  2.90, n30: 6, owned: false },
-  { s: 'CRM',  n: 'Salesforce',  firm: 'RBC Capital',    dir: 'up',   from: 'Sector Perform',to: 'Outperform', ptF: 270,  ptT: 330,  react:  3.10, n30: 6, owned: false },
-  { s: 'CRM',  n: 'Salesforce',  firm: 'Piper Sandler',  dir: 'up',   from: 'Neutral',      to: 'Overweight', ptF: 265,  ptT: 315,  react:  1.80, n30: 6, owned: false },
-  { s: 'CRM',  n: 'Salesforce',  firm: 'Wolfe Research', dir: 'up',   from: 'Peer Perform',  to: 'Outperform', ptF: 275,  ptT: 335,  react:  2.50, n30: 6, owned: false },
-  { s: 'CRM',  n: 'Salesforce',  firm: 'Barclays',       dir: 'init', from: '—',            to: 'Overweight', ptF: 0,    ptT: 350,  react:  4.20, n30: 6, owned: false },
+  { ticker: 'CRM',  name: 'Salesforce', firm: 'Morgan Stanley', actionType: 'up',   previousRating: 'Equal Weight',   newRating: 'Overweight',  prevPriceTarget: 280,  newPriceTarget: 340,  priceChangeSince:  3.80, actionsLast30Days: 6, owned: false },
+  { ticker: 'CRM',  name: 'Salesforce', firm: 'Bernstein',      actionType: 'up',   previousRating: 'Market Perform', newRating: 'Outperform',  prevPriceTarget: 260,  newPriceTarget: 320,  priceChangeSince:  2.90, actionsLast30Days: 6, owned: false },
+  { ticker: 'CRM',  name: 'Salesforce', firm: 'RBC Capital',    actionType: 'up',   previousRating: 'Sector Perform', newRating: 'Outperform',  prevPriceTarget: 270,  newPriceTarget: 330,  priceChangeSince:  3.10, actionsLast30Days: 6, owned: false },
+  { ticker: 'CRM',  name: 'Salesforce', firm: 'Piper Sandler',  actionType: 'up',   previousRating: 'Neutral',        newRating: 'Overweight',  prevPriceTarget: 265,  newPriceTarget: 315,  priceChangeSince:  1.80, actionsLast30Days: 6, owned: false },
+  { ticker: 'CRM',  name: 'Salesforce', firm: 'Wolfe Research', actionType: 'up',   previousRating: 'Peer Perform',   newRating: 'Outperform',  prevPriceTarget: 275,  newPriceTarget: 335,  priceChangeSince:  2.50, actionsLast30Days: 6, owned: false },
+  { ticker: 'CRM',  name: 'Salesforce', firm: 'Barclays',       actionType: 'init', previousRating: '—',              newRating: 'Overweight',  prevPriceTarget: 0,    newPriceTarget: 350,  priceChangeSince:  4.20, actionsLast30Days: 6, owned: false },
   // NVDA — 5 actions
-  { s: 'NVDA', n: 'Nvidia',      firm: 'Goldman Sachs',  dir: 'up',   from: 'Buy',          to: 'Strong Buy', ptF: 1000, ptT: 1250, react:  8.23, n30: 5, owned: true  },
-  { s: 'NVDA', n: 'Nvidia',      firm: 'JPMorgan',       dir: 'up',   from: 'Overweight',   to: 'Overweight', ptF: 950,  ptT: 1200, react:  5.10, n30: 5, owned: true  },
-  { s: 'NVDA', n: 'Nvidia',      firm: 'Wedbush',        dir: 'up',   from: 'Outperform',   to: 'Outperform', ptF: 900,  ptT: 1180, react:  6.40, n30: 5, owned: true  },
-  { s: 'NVDA', n: 'Nvidia',      firm: 'Bank of America',dir: 'up',   from: 'Buy',          to: 'Buy',        ptF: 1050, ptT: 1300, react:  7.80, n30: 5, owned: true  },
-  { s: 'NVDA', n: 'Nvidia',      firm: 'Mizuho',         dir: 'up',   from: 'Outperform',   to: 'Outperform', ptF: 980,  ptT: 1220, react:  4.60, n30: 5, owned: true  },
+  { ticker: 'NVDA', name: 'Nvidia',     firm: 'Goldman Sachs',  actionType: 'up',   previousRating: 'Buy',            newRating: 'Strong Buy',  prevPriceTarget: 1000, newPriceTarget: 1250, priceChangeSince:  8.23, actionsLast30Days: 5, owned: true  },
+  { ticker: 'NVDA', name: 'Nvidia',     firm: 'JPMorgan',       actionType: 'up',   previousRating: 'Overweight',     newRating: 'Overweight',  prevPriceTarget: 950,  newPriceTarget: 1200, priceChangeSince:  5.10, actionsLast30Days: 5, owned: true  },
+  { ticker: 'NVDA', name: 'Nvidia',     firm: 'Wedbush',        actionType: 'up',   previousRating: 'Outperform',     newRating: 'Outperform',  prevPriceTarget: 900,  newPriceTarget: 1180, priceChangeSince:  6.40, actionsLast30Days: 5, owned: true  },
+  { ticker: 'NVDA', name: 'Nvidia',     firm: 'Bank of America',actionType: 'up',   previousRating: 'Buy',            newRating: 'Buy',         prevPriceTarget: 1050, newPriceTarget: 1300, priceChangeSince:  7.80, actionsLast30Days: 5, owned: true  },
+  { ticker: 'NVDA', name: 'Nvidia',     firm: 'Mizuho',         actionType: 'up',   previousRating: 'Outperform',     newRating: 'Outperform',  prevPriceTarget: 980,  newPriceTarget: 1220, priceChangeSince:  4.60, actionsLast30Days: 5, owned: true  },
   // Others
-  { s: 'TSLA', n: 'Tesla',       firm: 'UBS',            dir: 'up',   from: 'Sell',         to: 'Neutral',    ptF: 120,  ptT: 135,  react:  3.45, n30: 2, owned: true  },
-  { s: 'AAPL', n: 'Apple',       firm: 'Morgan Stanley', dir: 'up',   from: 'Neutral',      to: 'Buy',        ptF: 195,  ptT: 215,  react:  1.02, n30: 1, owned: true  },
-  { s: 'AMZN', n: 'Amazon',      firm: 'Citi',           dir: 'hold', from: 'Buy',          to: 'Buy',        ptF: 205,  ptT: 225,  react:  2.11, n30: 2, owned: false },
-  { s: 'INTC', n: 'Intel',       firm: 'Deutsche Bank',  dir: 'down', from: 'Buy',          to: 'Neutral',    ptF: 50,   ptT: 32,   react: -2.14, n30: 1, owned: false },
-  { s: 'GOOG', n: 'Alphabet',    firm: 'BofA',           dir: 'hold', from: 'Buy',          to: 'Buy',        ptF: 195,  ptT: 210,  react:  1.30, n30: 2, owned: false },
-  { s: 'META', n: 'Meta',        firm: 'Wells Fargo',    dir: 'init', from: '—',            to: 'Overweight', ptF: 0,    ptT: 550,  react:  2.40, n30: 1, owned: true  },
-  { s: 'MSFT', n: 'Microsoft',   firm: 'Oppenheimer',    dir: 'up',   from: 'Perform',      to: 'Outperform', ptF: 380,  ptT: 450,  react:  1.90, n30: 1, owned: true  },
+  { ticker: 'TSLA', name: 'Tesla',      firm: 'UBS',            actionType: 'up',   previousRating: 'Sell',           newRating: 'Neutral',     prevPriceTarget: 120,  newPriceTarget: 135,  priceChangeSince:  3.45, actionsLast30Days: 2, owned: true  },
+  { ticker: 'AAPL', name: 'Apple',      firm: 'Morgan Stanley', actionType: 'up',   previousRating: 'Neutral',        newRating: 'Buy',         prevPriceTarget: 195,  newPriceTarget: 215,  priceChangeSince:  1.02, actionsLast30Days: 1, owned: true  },
+  { ticker: 'AMZN', name: 'Amazon',     firm: 'Citi',           actionType: 'hold', previousRating: 'Buy',            newRating: 'Buy',         prevPriceTarget: 205,  newPriceTarget: 225,  priceChangeSince:  2.11, actionsLast30Days: 2, owned: false },
+  { ticker: 'INTC', name: 'Intel',      firm: 'Deutsche Bank',  actionType: 'down', previousRating: 'Buy',            newRating: 'Neutral',     prevPriceTarget: 50,   newPriceTarget: 32,   priceChangeSince: -2.14, actionsLast30Days: 1, owned: false },
+  { ticker: 'GOOG', name: 'Alphabet',   firm: 'BofA',           actionType: 'hold', previousRating: 'Buy',            newRating: 'Buy',         prevPriceTarget: 195,  newPriceTarget: 210,  priceChangeSince:  1.30, actionsLast30Days: 2, owned: false },
+  { ticker: 'META', name: 'Meta',       firm: 'Wells Fargo',    actionType: 'init', previousRating: '—',              newRating: 'Overweight',  prevPriceTarget: 0,    newPriceTarget: 550,  priceChangeSince:  2.40, actionsLast30Days: 1, owned: true  },
+  { ticker: 'MSFT', name: 'Microsoft',  firm: 'Oppenheimer',    actionType: 'up',   previousRating: 'Perform',        newRating: 'Outperform',  prevPriceTarget: 380,  newPriceTarget: 450,  priceChangeSince:  1.90, actionsLast30Days: 1, owned: true  },
 ];
 
 // ---- Portfolio ----
 export const folio: FolioItem[] = [
-  { s: 'NVDA', n: 'NVIDIA',       p: 1181.75, c:  8.23, gl:  42.60, size: 'Large',  conv: 'High',   evt: 'Earnings beat · raised guide' },
-  { s: 'AAPL', n: 'Apple',        p:  189.98, c:  1.02, gl:  12.40, size: 'Large',  conv: 'High',   evt: 'Reports after close today' },
-  { s: 'TSLA', n: 'Tesla',        p:  171.40, c:  3.45, gl:  -8.10, size: 'Medium', conv: 'Medium', evt: 'UBS upgrade to Neutral' },
-  { s: 'META', n: 'Meta',         p:  415.32, c:  0.86, gl:  28.90, size: 'Medium', conv: 'High',   evt: 'WF initiates Overweight' },
-  { s: 'HD',   n: 'Home Depot',   p:  342.10, c: -1.10, gl:   4.20, size: 'Small',  conv: 'Low',    evt: 'Lowered guidance' },
-  { s: 'MSFT', n: 'Microsoft',    p:  415.50, c:  0.41, gl:  19.70, size: 'Large',  conv: 'High',   evt: '—' },
-  { s: 'AMZN', n: 'Amazon',       p:  182.20, c:  2.11, gl:  30.14, size: 'Medium', conv: 'High',   evt: '—' },
-  { s: 'PLTR', n: 'Palantir',     p:   24.88, c:  6.18, gl:  55.50, size: 'Small',  conv: 'High',   evt: 'Guidance raise' },
+  { ticker: 'NVDA', name: 'NVIDIA',     price: 1181.75, pctChange:  8.23, gainLossPct:  42.60, positionSize: 'Large',  conviction: 'High',   eventNote: 'Earnings beat · raised guide' },
+  { ticker: 'AAPL', name: 'Apple',      price:  189.98, pctChange:  1.02, gainLossPct:  12.40, positionSize: 'Large',  conviction: 'High',   eventNote: 'Reports after close today' },
+  { ticker: 'TSLA', name: 'Tesla',      price:  171.40, pctChange:  3.45, gainLossPct:  -8.10, positionSize: 'Medium', conviction: 'Medium', eventNote: 'UBS upgrade to Neutral' },
+  { ticker: 'META', name: 'Meta',       price:  415.32, pctChange:  0.86, gainLossPct:  28.90, positionSize: 'Medium', conviction: 'High',   eventNote: 'WF initiates Overweight' },
+  { ticker: 'HD',   name: 'Home Depot', price:  342.10, pctChange: -1.10, gainLossPct:   4.20, positionSize: 'Small',  conviction: 'Low',    eventNote: 'Lowered guidance' },
+  { ticker: 'MSFT', name: 'Microsoft',  price:  415.50, pctChange:  0.41, gainLossPct:  19.70, positionSize: 'Large',  conviction: 'High',   eventNote: '—' },
+  { ticker: 'AMZN', name: 'Amazon',     price:  182.20, pctChange:  2.11, gainLossPct:  30.14, positionSize: 'Medium', conviction: 'High',   eventNote: '—' },
+  { ticker: 'PLTR', name: 'Palantir',   price:   24.88, pctChange:  6.18, gainLossPct:  55.50, positionSize: 'Small',  conviction: 'High',   eventNote: 'Guidance raise' },
 ];
 
 // ---- 13F Funds ----
 export const funds: Fund[] = [
-  { nm: 'Berkshire Hathaway', av: 'BH', mgr: 'Warren Buffett',    aum: '$331B',  pos: 42,  top: 'AAPL', newPos: 1,   exits: 2,  q: 'Q1 2024' },
-  { nm: 'Pershing Square',    av: 'PS', mgr: 'Bill Ackman',       aum: '$10.4B', pos: 8,   top: 'CMG',  newPos: 1,   exits: 1,  q: 'Q1 2024' },
-  { nm: 'Tiger Global',       av: 'TG', mgr: 'Chase Coleman',     aum: '$24.9B', pos: 34,  top: 'MSFT', newPos: 5,   exits: 6,  q: 'Q1 2024' },
-  { nm: 'Scion Asset Mgmt',   av: 'SC', mgr: 'Michael Burry',     aum: '$1.6B',  pos: 11,  top: 'BABA', newPos: 4,   exits: 3,  q: 'Q1 2024' },
-  { nm: 'Bridgewater',        av: 'BW', mgr: 'Ray Dalio (fmr)',   aum: '$19.8B', pos: 680, top: 'IVV',  newPos: 120, exits: 90, q: 'Q1 2024' },
+  { fundName: 'Berkshire Hathaway', avatar: 'BH', managerName: 'Warren Buffett',  aum: '$331B',  totalPositions: 42,  topHolding: 'AAPL', newPositions: 1,   exitCount: 2,  quarter: 'Q1 2024' },
+  { fundName: 'Pershing Square',    avatar: 'PS', managerName: 'Bill Ackman',      aum: '$10.4B', totalPositions: 8,   topHolding: 'CMG',  newPositions: 1,   exitCount: 1,  quarter: 'Q1 2024' },
+  { fundName: 'Tiger Global',       avatar: 'TG', managerName: 'Chase Coleman',    aum: '$24.9B', totalPositions: 34,  topHolding: 'MSFT', newPositions: 5,   exitCount: 6,  quarter: 'Q1 2024' },
+  { fundName: 'Scion Asset Mgmt',   avatar: 'SC', managerName: 'Michael Burry',    aum: '$1.6B',  totalPositions: 11,  topHolding: 'BABA', newPositions: 4,   exitCount: 3,  quarter: 'Q1 2024' },
+  { fundName: 'Bridgewater',        avatar: 'BW', managerName: 'Ray Dalio (fmr)',  aum: '$19.8B', totalPositions: 680, topHolding: 'IVV',  newPositions: 120, exitCount: 90, quarter: 'Q1 2024' },
 ];
 
 // ---- Watchlist ----
 export const watch: WatchItem[] = [
-  { s: 'AMD',  n: 'Adv Micro Dev',  px: 165.20,   c: -2.10, er: 'Jul 30', analyst: 'JPM → Neutral',      opt: true,  headline: 'Downgraded on AI-share concerns' },
-  { s: 'AVGO', n: 'Broadcom',       px: 1402.50,  c:  2.97, er: 'Jun 12', analyst: null,                  opt: true,  headline: 'Semis rally on NVDA read-through' },
-  { s: 'SMCI', n: 'Super Micro',    px:  812.40,  c:  5.60, er: 'Aug 06', analyst: 'Barclays PT $1,000',  opt: true,  headline: 'Server demand commentary lifts shares' },
-  { s: 'UBER', n: 'Uber',           px:   64.50,  c:  0.80, er: 'Aug 06', analyst: 'GS reiterates Buy',   opt: false, headline: '—' },
-  { s: 'PLTR', n: 'Palantir',       px:   24.88,  c:  6.18, er: 'Aug 05', analyst: null,                  opt: true,  headline: 'Guidance raise drives momentum' },
+  { ticker: 'AMD',  name: 'Adv Micro Dev', price: 165.20,  pctChange: -2.10, nextEarningsDate: 'Jul 30', lastAnalystAction: 'JPM → Neutral',     hasOptions: true,  latestHeadline: 'Downgraded on AI-share concerns' },
+  { ticker: 'AVGO', name: 'Broadcom',      price: 1402.50, pctChange:  2.97, nextEarningsDate: 'Jun 12', lastAnalystAction: null,                  hasOptions: true,  latestHeadline: 'Semis rally on NVDA read-through' },
+  { ticker: 'SMCI', name: 'Super Micro',   price:  812.40, pctChange:  5.60, nextEarningsDate: 'Aug 06', lastAnalystAction: 'Barclays PT $1,000',  hasOptions: true,  latestHeadline: 'Server demand commentary lifts shares' },
+  { ticker: 'UBER', name: 'Uber',          price:   64.50, pctChange:  0.80, nextEarningsDate: 'Aug 06', lastAnalystAction: 'GS reiterates Buy',   hasOptions: false, latestHeadline: '—' },
+  { ticker: 'PLTR', name: 'Palantir',      price:   24.88, pctChange:  6.18, nextEarningsDate: 'Aug 05', lastAnalystAction: null,                  hasOptions: true,  latestHeadline: 'Guidance raise drives momentum' },
 ];
 
 // ---- Stock Detail ----
 export const stockInfo: Record<string, StockInfo> = {
   NVDA: {
-    name: 'Nvidia', px: 1025, c: 8.2, mkt: '$2.91T', pe: 78, eps: 13.14,
-    wkh52: 1250, wkl52: 350, div: 0.04, beta: 1.72, sec: 'Semiconductors',
-    ai_call: 'Strong Buy',
-    ai_thesis: "NVDA's data center dominance, Hopper architecture moat, and accelerating AI inference demand make this the best-positioned semiconductor for the AI buildout cycle. H200 supply constraints are easing into H2 2025, with Blackwell ramping.",
-    ai_risk: 'Valuation pricing in perfection; any miss on data center revenue could compress the multiple sharply. AMD/Intel competition timeline uncertain.',
-    ai_metrics: [
-      { l: 'AI Confidence', v: '94 / 100' }, { l: 'Moat', v: 'Wide' },
-      { l: 'Insider Activity', v: 'Neutral' }, { l: 'Short Interest', v: '0.8%' },
+    name: 'Nvidia', price: 1025, pctChange: 8.2, marketCap: '$2.91T', peRatio: 78, eps: 13.14,
+    week52High: 1250, week52Low: 350, dividendYield: 0.04, beta: 1.72, sector: 'Semiconductors',
+    aiRating: 'Strong Buy',
+    aiThesis: "NVDA's data center dominance, Hopper architecture moat, and accelerating AI inference demand make this the best-positioned semiconductor for the AI buildout cycle. H200 supply constraints are easing into H2 2025, with Blackwell ramping.",
+    aiRisk: 'Valuation pricing in perfection; any miss on data center revenue could compress the multiple sharply. AMD/Intel competition timeline uncertain.',
+    aiMetrics: [
+      { label: 'AI Confidence', value: '94 / 100' }, { label: 'Moat', value: 'Wide' },
+      { label: 'Insider Activity', value: 'Neutral' }, { label: 'Short Interest', value: '0.8%' },
     ],
-    fin: [
-      { l: 'Revenue', v: '$26.0B' }, { l: 'EPS', v: '$6.57' }, { l: 'Gross Margin', v: '78.4%' },
-      { l: 'P/E', v: '78×' }, { l: 'P/S', v: '30×' }, { l: 'Debt/Equity', v: '0.43' },
+    financials: [
+      { label: 'Revenue', value: '$26.0B' }, { label: 'EPS', value: '$6.57' }, { label: 'Gross Margin', value: '78.4%' },
+      { label: 'P/E', value: '78×' }, { label: 'P/S', value: '30×' }, { label: 'Debt/Equity', value: '0.43' },
     ],
     news: [
-      { h: 'NVDA raises FY25 Data Center forecast above $100B', dt: 'May 22' },
-      { h: 'Blackwell GPU shipments on track for Q2 ramp — CEO Jensen Huang', dt: 'May 21' },
-      { h: 'Microsoft Azure expands NVDA H200 cluster to 50K GPUs', dt: 'May 19' },
+      { headline: 'NVDA raises FY25 Data Center forecast above $100B', date: 'May 22' },
+      { headline: 'Blackwell GPU shipments on track for Q2 ramp — CEO Jensen Huang', date: 'May 21' },
+      { headline: 'Microsoft Azure expands NVDA H200 cluster to 50K GPUs', date: 'May 19' },
     ],
-    ins: [
-      { n: 'Jensen Huang (CEO)', a: 'Plan 10b5-1 sale 50K sh', dt: 'May 10' },
-      { n: 'Colette Kress (CFO)', a: 'Plan 10b5-1 sale 8K sh', dt: 'May 10' },
+    insiderActivity: [
+      { name: 'Jensen Huang (CEO)', action: 'Plan 10b5-1 sale 50K sh', date: 'May 10' },
+      { name: 'Colette Kress (CFO)', action: 'Plan 10b5-1 sale 8K sh', date: 'May 10' },
     ],
   },
   TSLA: {
-    name: 'Tesla', px: 168, c: -3.1, mkt: '$536B', pe: 42, eps: 4.00,
-    wkh52: 295, wkl52: 138, div: 0, beta: 2.34, sec: 'Auto / EV',
-    ai_call: 'Neutral',
-    ai_thesis: "Tesla's energy storage segment is growing rapidly, and FSD progress could unlock robotaxi optionality. However, near-term margin pressure from price cuts and China competition weigh on the thesis.",
-    ai_risk: 'Margin deterioration from EV price war; execution risk on Cybertruck ramp; Elon distraction risk.',
-    ai_metrics: [
-      { l: 'AI Confidence', v: '51 / 100' }, { l: 'Moat', v: 'Narrow' },
-      { l: 'Insider Activity', v: 'Selling' }, { l: 'Short Interest', v: '3.1%' },
+    name: 'Tesla', price: 168, pctChange: -3.1, marketCap: '$536B', peRatio: 42, eps: 4.00,
+    week52High: 295, week52Low: 138, dividendYield: 0, beta: 2.34, sector: 'Auto / EV',
+    aiRating: 'Neutral',
+    aiThesis: "Tesla's energy storage segment is growing rapidly, and FSD progress could unlock robotaxi optionality. However, near-term margin pressure from price cuts and China competition weigh on the thesis.",
+    aiRisk: 'Margin deterioration from EV price war; execution risk on Cybertruck ramp; Elon distraction risk.',
+    aiMetrics: [
+      { label: 'AI Confidence', value: '51 / 100' }, { label: 'Moat', value: 'Narrow' },
+      { label: 'Insider Activity', value: 'Selling' }, { label: 'Short Interest', value: '3.1%' },
     ],
-    fin: [
-      { l: 'Revenue', v: '$21.3B' }, { l: 'EPS', v: '$0.45' }, { l: 'Gross Margin', v: '17.4%' },
-      { l: 'P/E', v: '42×' }, { l: 'P/S', v: '5.6×' }, { l: 'Debt/Equity', v: '0.15' },
+    financials: [
+      { label: 'Revenue', value: '$21.3B' }, { label: 'EPS', value: '$0.45' }, { label: 'Gross Margin', value: '17.4%' },
+      { label: 'P/E', value: '42×' }, { label: 'P/S', value: '5.6×' }, { label: 'Debt/Equity', value: '0.15' },
     ],
     news: [
-      { h: 'Tesla cuts Model Y price in Europe for second time in 2025', dt: 'May 23' },
-      { h: 'China EV sales fall 8% MoM in April — CAAM data', dt: 'May 20' },
-      { h: 'FSD v12.4 rollout begins in North America', dt: 'May 18' },
+      { headline: 'Tesla cuts Model Y price in Europe for second time in 2025', date: 'May 23' },
+      { headline: 'China EV sales fall 8% MoM in April — CAAM data', date: 'May 20' },
+      { headline: 'FSD v12.4 rollout begins in North America', date: 'May 18' },
     ],
-    ins: [{ n: 'Elon Musk (CEO)', a: 'No recent activity', dt: '—' }],
+    insiderActivity: [{ name: 'Elon Musk (CEO)', action: 'No recent activity', date: '—' }],
   },
   MSFT: {
-    name: 'Microsoft', px: 415, c: 2.1, mkt: '$3.1T', pe: 36, eps: 11.53,
-    wkh52: 430, wkl52: 310, div: 0.8, beta: 0.89, sec: 'Software',
-    ai_call: 'Buy',
-    ai_thesis: 'Azure AI services growing 29% YoY, Copilot integration driving ARPU expansion across M365. Nuance and Activision integrations maturing. Dominant enterprise position provides durable moat.',
-    ai_risk: 'AI monetization slower than expected; regulatory scrutiny on Activision; cloud competition from AWS and GCP intensifying.',
-    ai_metrics: [
-      { l: 'AI Confidence', v: '87 / 100' }, { l: 'Moat', v: 'Wide' },
-      { l: 'Insider Activity', v: 'Neutral' }, { l: 'Short Interest', v: '0.5%' },
+    name: 'Microsoft', price: 415, pctChange: 2.1, marketCap: '$3.1T', peRatio: 36, eps: 11.53,
+    week52High: 430, week52Low: 310, dividendYield: 0.8, beta: 0.89, sector: 'Software',
+    aiRating: 'Buy',
+    aiThesis: 'Azure AI services growing 29% YoY, Copilot integration driving ARPU expansion across M365. Nuance and Activision integrations maturing. Dominant enterprise position provides durable moat.',
+    aiRisk: 'AI monetization slower than expected; regulatory scrutiny on Activision; cloud competition from AWS and GCP intensifying.',
+    aiMetrics: [
+      { label: 'AI Confidence', value: '87 / 100' }, { label: 'Moat', value: 'Wide' },
+      { label: 'Insider Activity', value: 'Neutral' }, { label: 'Short Interest', value: '0.5%' },
     ],
-    fin: [
-      { l: 'Revenue', v: '$61.9B' }, { l: 'EPS', v: '$2.94' }, { l: 'Gross Margin', v: '69.4%' },
-      { l: 'P/E', v: '36×' }, { l: 'P/S', v: '14×' }, { l: 'Debt/Equity', v: '0.31' },
+    financials: [
+      { label: 'Revenue', value: '$61.9B' }, { label: 'EPS', value: '$2.94' }, { label: 'Gross Margin', value: '69.4%' },
+      { label: 'P/E', value: '36×' }, { label: 'P/S', value: '14×' }, { label: 'Debt/Equity', value: '0.31' },
     ],
     news: [
-      { h: 'Azure OpenAI services available in 12 new regions', dt: 'May 20' },
-      { h: 'Copilot for M365 reaches 1M paid seats — MSFT CEO', dt: 'May 17' },
+      { headline: 'Azure OpenAI services available in 12 new regions', date: 'May 20' },
+      { headline: 'Copilot for M365 reaches 1M paid seats — MSFT CEO', date: 'May 17' },
     ],
-    ins: [{ n: 'Satya Nadella (CEO)', a: 'No recent activity', dt: '—' }],
+    insiderActivity: [{ name: 'Satya Nadella (CEO)', action: 'No recent activity', date: '—' }],
   },
 };
 
@@ -268,36 +268,36 @@ const _bigCap: Record<string, number> = {
 function _mcap(t: string): number { return _bigCap[t] || (12 + _hash(t) % 270); }
 
 const SEC: [string, number, string[]][] = [
-  ['Semiconductors',  3.1, ['NVDA','AVGO','TSM','QCOM','AMD','TXN','MU','AMAT','KLAC','LRCX','INTC','ON','MRVL','MPWR']],
-  ['Mega-Cap Tech',   2.4, ['AAPL','MSFT','GOOG','AMZN','META','NFLX','ORCL','ADBE','CSCO','IBM','SAP','INTU']],
-  ['Cloud Software',  1.8, ['CRM','NOW','SNOW','DDOG','MDB','WDAY','ADSK','VEEV','HUBS','OKTA','ZI','APP','TEAM']],
-  ['Social Media',    2.1, ['META','SNAP','PINS','RDDT','YELP','MTCH','ZG','IAC','ANGI','BMBL','SOFI','HOOD']],
-  ['E-Commerce',      1.5, ['AMZN','SHOP','BABA','MELI','JD','PDD','EBAY','ETSY','W','CHWY','WISH','CART']],
-  ['Cybersecurity',   0.9, ['CRWD','PANW','ZS','FTNT','S','OKTA','CYBR','NET','GEN','TENB','QLYS','RPM']],
-  ['EV / Clean Energy',-1.3,['TSLA','BYD','RIVN','NIO','LCID','GM','F','PLUG','FCEL','BLNK','BE','CHPT','NKLA']],
-  ['Consumer Disc.',  0.6, ['AMZN','HD','MCD','NKE','SBUX','TGT','LULU','CMG','LOW','BKNG','MAR','HLT','DG']],
-  ['Financials',      0.8, ['JPM','BAC','GS','MS','V','MA','AXP','BRK.B','WFC','C','SCHW','BX','KKR']],
-  ['Healthcare',      0.2, ['UNH','JNJ','LLY','ABBV','MRK','TMO','DHR','PFE','BMY','GILD','CVS','CI','HUM']],
-  ['Energy',         -0.7, ['XOM','CVX','COP','SLB','EOG','OXY','PSX','VLO','MPC','HAL','DVN','PXD','BKR']],
-  ['Industrials',     0.4, ['CAT','GE','HON','RTX','UPS','LMT','NOC','GD','MMM','EMR','ETN','ITW','PH']],
-  ['Real Estate',    -0.5, ['AMT','PLD','EQIX','SPG','O','WELL','DLR','PSA','VTR','AVB','EQR','ARE','WY']],
-  ['Utilities',      -0.3, ['NEE','DUK','SO','AEP','EXC','D','PCG','SRE','ES','XEL','PEG','ED','WEC']],
-  ['Materials',       0.1, ['LIN','APD','SHW','FCX','NEM','DOW','DD','NUE','ALB','MOS','IP','PKG','CE']],
-  ['Consumer Staples',0.3, ['PG','KO','PEP','WMT','COST','PM','MO','CL','GIS','KMB','KHC','SYY','MKC']],
-  ['Biotech',         1.2, ['AMGN','BIIB','REGN','VRTX','MRNA','GILD','ILMN','ALNY','EXAS','SGEN','SAGE','SRPT']],
-  ['Med Devices',     0.5, ['MDT','ABT','ISRG','BSX','SYK','EW','ZBH','BDX','IQV','TMO','RMD','HOLX']],
-  ['Insurance',       0.6, ['CB','MET','AIG','PRU','AFL','TRV','ALL','MKL','HIG','LNC','GL','EQH']],
-  ['Banks',           0.9, ['JPM','BAC','WFC','C','USB','PNC','TFC','FITB','KEY','RF','HBAN','CFG','MTB']],
-  ['Autos',          -0.8, ['TSLA','TM','GM','F','STLA','HMC','RIVN','NIO','LCID','RACE','BWM','VWAGY']],
+  ['Semiconductors',   3.1,  ['NVDA','AVGO','TSM','QCOM','AMD','TXN','MU','AMAT','KLAC','LRCX','INTC','ON','MRVL','MPWR']],
+  ['Mega-Cap Tech',    2.4,  ['AAPL','MSFT','GOOG','AMZN','META','NFLX','ORCL','ADBE','CSCO','IBM','SAP','INTU']],
+  ['Cloud Software',   1.8,  ['CRM','NOW','SNOW','DDOG','MDB','WDAY','ADSK','VEEV','HUBS','OKTA','ZI','APP','TEAM']],
+  ['Social Media',     2.1,  ['META','SNAP','PINS','RDDT','YELP','MTCH','ZG','IAC','ANGI','BMBL','SOFI','HOOD']],
+  ['E-Commerce',       1.5,  ['AMZN','SHOP','BABA','MELI','JD','PDD','EBAY','ETSY','W','CHWY','WISH','CART']],
+  ['Cybersecurity',    0.9,  ['CRWD','PANW','ZS','FTNT','S','OKTA','CYBR','NET','GEN','TENB','QLYS','RPM']],
+  ['EV / Clean Energy',-1.3, ['TSLA','BYD','RIVN','NIO','LCID','GM','F','PLUG','FCEL','BLNK','BE','CHPT','NKLA']],
+  ['Consumer Disc.',   0.6,  ['AMZN','HD','MCD','NKE','SBUX','TGT','LULU','CMG','LOW','BKNG','MAR','HLT','DG']],
+  ['Financials',       0.8,  ['JPM','BAC','GS','MS','V','MA','AXP','BRK.B','WFC','C','SCHW','BX','KKR']],
+  ['Healthcare',       0.2,  ['UNH','JNJ','LLY','ABBV','MRK','TMO','DHR','PFE','BMY','GILD','CVS','CI','HUM']],
+  ['Energy',          -0.7,  ['XOM','CVX','COP','SLB','EOG','OXY','PSX','VLO','MPC','HAL','DVN','PXD','BKR']],
+  ['Industrials',      0.4,  ['CAT','GE','HON','RTX','UPS','LMT','NOC','GD','MMM','EMR','ETN','ITW','PH']],
+  ['Real Estate',     -0.5,  ['AMT','PLD','EQIX','SPG','O','WELL','DLR','PSA','VTR','AVB','EQR','ARE','WY']],
+  ['Utilities',       -0.3,  ['NEE','DUK','SO','AEP','EXC','D','PCG','SRE','ES','XEL','PEG','ED','WEC']],
+  ['Materials',        0.1,  ['LIN','APD','SHW','FCX','NEM','DOW','DD','NUE','ALB','MOS','IP','PKG','CE']],
+  ['Consumer Staples', 0.3,  ['PG','KO','PEP','WMT','COST','PM','MO','CL','GIS','KMB','KHC','SYY','MKC']],
+  ['Biotech',          1.2,  ['AMGN','BIIB','REGN','VRTX','MRNA','GILD','ILMN','ALNY','EXAS','SGEN','SAGE','SRPT']],
+  ['Med Devices',      0.5,  ['MDT','ABT','ISRG','BSX','SYK','EW','ZBH','BDX','IQV','TMO','RMD','HOLX']],
+  ['Insurance',        0.6,  ['CB','MET','AIG','PRU','AFL','TRV','ALL','MKL','HIG','LNC','GL','EQH']],
+  ['Banks',            0.9,  ['JPM','BAC','WFC','C','USB','PNC','TFC','FITB','KEY','RF','HBAN','CFG','MTB']],
+  ['Autos',           -0.8,  ['TSLA','TM','GM','F','STLA','HMC','RIVN','NIO','LCID','RACE','BWM','VWAGY']],
 ];
 
 export const sectorList: SectorRow[] = SEC.map((row, i) => {
-  const [name, chg, tk] = row;
+  const [name, pctChange, tk] = row;
   return {
     name, rank: i + 1,
-    trend: chg > 0.5 ? 'Improving' : chg < -0.5 ? 'Deteriorating' : 'Flat',
-    chg,
-    items: tk.map(t => [t, _mcap(t), +(chg + ((_hash(t + name) % 9) - 4) * 0.35).toFixed(2)] as [string, number, number]),
+    trend: pctChange > 0.5 ? 'Improving' : pctChange < -0.5 ? 'Deteriorating' : 'Flat',
+    pctChange,
+    items: tk.map(t => [t, _mcap(t), +(pctChange + ((_hash(t + name) % 9) - 4) * 0.35).toFixed(2)] as [string, number, number]),
   };
 });
 
@@ -305,47 +305,47 @@ export const sectorByName: Record<string, SectorRow> = Object.fromEntries(sector
 
 // ---- Screener ----
 export const screenerStocks: ScreenerStock[] = [
-  { s: 'NVDA', n: 'NVIDIA',       sec: 'Semis',    mc: 2910, pe: 71.4, rs: 98, salesG: 262, epsG: 486, mgn: 53, rvol: 4.2, rating: 'Strong Buy' },
-  { s: 'AVGO', n: 'Broadcom',     sec: 'Semis',    mc: 648,  pe: 48.2, rs: 91, salesG: 34,  epsG: 12,  mgn: 46, rvol: 1.8, rating: 'Buy' },
-  { s: 'CRM',  n: 'Salesforce',   sec: 'Software', mc: 281,  pe: 44.1, rs: 78, salesG: 11,  epsG: 44,  mgn: 30, rvol: 2.2, rating: 'Buy' },
-  { s: 'PLTR', n: 'Palantir',     sec: 'Software', mc: 52,   pe: 66.0, rs: 88, salesG: 21,  epsG: 60,  mgn: 25, rvol: 3.4, rating: 'Strong Buy' },
-  { s: 'META', n: 'Meta',         sec: 'Internet', mc: 1060, pe: 27.8, rs: 84, salesG: 27,  epsG: 117, mgn: 38, rvol: 1.3, rating: 'Buy' },
-  { s: 'AMD',  n: 'Adv Micro Dev',sec: 'Semis',    mc: 266,  pe: 51.5, rs: 62, salesG: 2,   epsG: -7,  mgn: 11, rvol: 1.9, rating: 'Neutral' },
-  { s: 'MU',   n: 'Micron',       sec: 'Semis',    mc: 152,  pe: 39.0, rs: 81, salesG: 58,  epsG: 120, mgn: 18, rvol: 1.6, rating: 'Buy' },
-  { s: 'INTC', n: 'Intel',        sec: 'Semis',    mc: 128,  pe: 32.1, rs: 34, salesG: -9,  epsG: -40, mgn: 5,  rvol: 1.9, rating: 'Sell' },
-  { s: 'SMCI', n: 'Super Micro',  sec: 'Hardware', mc: 48,   pe: 38.4, rs: 95, salesG: 200, epsG: 308, mgn: 14, rvol: 4.8, rating: 'Strong Buy' },
-  { s: 'WBA',  n: 'Walgreens',    sec: 'Retail',   mc: 14,   pe: 6.2,  rs: 9,  salesG: 6,   epsG: -60, mgn: 2,  rvol: 2.7, rating: 'Strong Sell' },
-  { s: 'ZIM',  n: 'ZIM Shipping', sec: 'Shipping', mc: 3,    pe: 5.0,  rs: 81, salesG: 30,  epsG: 120, mgn: 12, rvol: 4.2, rating: 'Buy' },
-  { s: 'DELL', n: 'Dell Tech',    sec: 'Hardware', mc: 90,   pe: 18.0, rs: 42, salesG: 6,   epsG: 10,  mgn: 6,  rvol: 3.1, rating: 'Neutral' },
+  { ticker: 'NVDA', name: 'NVIDIA',       sector: 'Semis',    marketCap: 2910, peRatio: 71.4, relativeStrength: 98, salesGrowth: 262, epsGrowth: 486, grossMargin: 53, rvolRatio: 4.2, techRating: 'Strong Buy' },
+  { ticker: 'AVGO', name: 'Broadcom',     sector: 'Semis',    marketCap: 648,  peRatio: 48.2, relativeStrength: 91, salesGrowth: 34,  epsGrowth: 12,  grossMargin: 46, rvolRatio: 1.8, techRating: 'Buy' },
+  { ticker: 'CRM',  name: 'Salesforce',   sector: 'Software', marketCap: 281,  peRatio: 44.1, relativeStrength: 78, salesGrowth: 11,  epsGrowth: 44,  grossMargin: 30, rvolRatio: 2.2, techRating: 'Buy' },
+  { ticker: 'PLTR', name: 'Palantir',     sector: 'Software', marketCap: 52,   peRatio: 66.0, relativeStrength: 88, salesGrowth: 21,  epsGrowth: 60,  grossMargin: 25, rvolRatio: 3.4, techRating: 'Strong Buy' },
+  { ticker: 'META', name: 'Meta',         sector: 'Internet', marketCap: 1060, peRatio: 27.8, relativeStrength: 84, salesGrowth: 27,  epsGrowth: 117, grossMargin: 38, rvolRatio: 1.3, techRating: 'Buy' },
+  { ticker: 'AMD',  name: 'Adv Micro Dev',sector: 'Semis',    marketCap: 266,  peRatio: 51.5, relativeStrength: 62, salesGrowth: 2,   epsGrowth: -7,  grossMargin: 11, rvolRatio: 1.9, techRating: 'Neutral' },
+  { ticker: 'MU',   name: 'Micron',       sector: 'Semis',    marketCap: 152,  peRatio: 39.0, relativeStrength: 81, salesGrowth: 58,  epsGrowth: 120, grossMargin: 18, rvolRatio: 1.6, techRating: 'Buy' },
+  { ticker: 'INTC', name: 'Intel',        sector: 'Semis',    marketCap: 128,  peRatio: 32.1, relativeStrength: 34, salesGrowth: -9,  epsGrowth: -40, grossMargin: 5,  rvolRatio: 1.9, techRating: 'Sell' },
+  { ticker: 'SMCI', name: 'Super Micro',  sector: 'Hardware', marketCap: 48,   peRatio: 38.4, relativeStrength: 95, salesGrowth: 200, epsGrowth: 308, grossMargin: 14, rvolRatio: 4.8, techRating: 'Strong Buy' },
+  { ticker: 'WBA',  name: 'Walgreens',    sector: 'Retail',   marketCap: 14,   peRatio: 6.2,  relativeStrength: 9,  salesGrowth: 6,   epsGrowth: -60, grossMargin: 2,  rvolRatio: 2.7, techRating: 'Strong Sell' },
+  { ticker: 'ZIM',  name: 'ZIM Shipping', sector: 'Shipping', marketCap: 3,    peRatio: 5.0,  relativeStrength: 81, salesGrowth: 30,  epsGrowth: 120, grossMargin: 12, rvolRatio: 4.2, techRating: 'Buy' },
+  { ticker: 'DELL', name: 'Dell Tech',    sector: 'Hardware', marketCap: 90,   peRatio: 18.0, relativeStrength: 42, salesGrowth: 6,   epsGrowth: 10,  grossMargin: 6,  rvolRatio: 3.1, techRating: 'Neutral' },
 ];
 
 export interface ScreenerPreset {
   name: string;
   desc: string;
-  f: { rs_min?: number; salesG_min?: number; epsG_min?: number; rvol_min?: number; rating?: string[]; mc_min?: number; };
+  f: { relativeStrength_min?: number; salesGrowth_min?: number; epsGrowth_min?: number; rvolRatio_min?: number; techRating?: string[]; marketCap_min?: number; };
 }
 
 export const screenerPresets: ScreenerPreset[] = [
-  { name: 'Briefing growth screen',     desc: '6-mo RS ≥ 80 · sales & EPS growth · expanding margins', f: { rs_min: 80, salesG_min: 20, epsG_min: 25 } },
-  { name: 'Post-earnings momentum',     desc: 'beat + raise · gap up · RVOL > 2×',                      f: { rvol_min: 2 } },
-  { name: 'Oversold quality',           desc: 'RSI < 35 · positive FCF · above 200-DMA',                f: {} },
-  { name: 'Unusual volume',             desc: 'RVOL > 3× · price > $5',                                 f: { rvol_min: 3 } },
-  { name: 'CAN SLIM leaders',           desc: "O'Neil: EPS+sales accel · RS ≥ 90 · near highs",         f: { rs_min: 90, salesG_min: 15, epsG_min: 20 } },
-  { name: 'Minervini trend template',   desc: 'price > 50 > 150 > 200-DMA, all rising',                 f: { rs_min: 75 } },
-  { name: '52-week-high breakouts',     desc: 'new 52w high · volume surge',                             f: { rvol_min: 1.5, rs_min: 80 } },
-  { name: 'Gap-and-go (premarket)',     desc: 'gap > 4% · premarket RVOL > 5×',                          f: { rvol_min: 3 } },
-  { name: 'Relative-strength leaders', desc: 'RS ≥ 90 vs S&P over 6 months',                            f: { rs_min: 90 } },
-  { name: 'Dividend growth aristocrats',desc: '25-yr dividend growth · payout < 60%',                   f: {} },
-  { name: 'Magic Formula (Greenblatt)', desc: 'high ROIC · high earnings yield',                        f: {} },
-  { name: 'GARP',                       desc: 'growth ≥ 15% · PEG < 1.5',                               f: { salesG_min: 15, epsG_min: 15 } },
-  { name: 'Deep value (low P/E + FCF)', desc: 'P/E < 12 · FCF yield > 8%',                              f: {} },
-  { name: 'Net-net / asset value',      desc: 'price < net current assets',                              f: {} },
-  { name: 'Short-squeeze candidates',   desc: 'short interest > 20% · rising price',                    f: { rs_min: 60 } },
-  { name: 'Insider-buying cluster',     desc: '3+ insider buys in 90 days',                              f: {} },
-  { name: 'Analyst-upgrade momentum',   desc: '2+ upgrades in 30 days · PT raised',                     f: { rs_min: 70 } },
-  { name: 'Golden cross (50>200)',       desc: '50-DMA crossing above 200-DMA',                          f: { rs_min: 65 } },
-  { name: 'Bollinger squeeze breakout', desc: 'low volatility → expansion',                              f: { rvol_min: 2 } },
-  { name: 'Cup-with-handle setups',     desc: 'classic base · breakout pivot',                           f: { rs_min: 80 } },
+  { name: 'Briefing growth screen',      desc: '6-mo RS ≥ 80 · sales & EPS growth · expanding margins', f: { relativeStrength_min: 80, salesGrowth_min: 20, epsGrowth_min: 25 } },
+  { name: 'Post-earnings momentum',      desc: 'beat + raise · gap up · RVOL > 2×',                      f: { rvolRatio_min: 2 } },
+  { name: 'Oversold quality',            desc: 'RSI < 35 · positive FCF · above 200-DMA',                f: {} },
+  { name: 'Unusual volume',              desc: 'RVOL > 3× · price > $5',                                 f: { rvolRatio_min: 3 } },
+  { name: 'CAN SLIM leaders',            desc: "O'Neil: EPS+sales accel · RS ≥ 90 · near highs",         f: { relativeStrength_min: 90, salesGrowth_min: 15, epsGrowth_min: 20 } },
+  { name: 'Minervini trend template',    desc: 'price > 50 > 150 > 200-DMA, all rising',                 f: { relativeStrength_min: 75 } },
+  { name: '52-week-high breakouts',      desc: 'new 52w high · volume surge',                             f: { rvolRatio_min: 1.5, relativeStrength_min: 80 } },
+  { name: 'Gap-and-go (premarket)',      desc: 'gap > 4% · premarket RVOL > 5×',                          f: { rvolRatio_min: 3 } },
+  { name: 'Relative-strength leaders',  desc: 'RS ≥ 90 vs S&P over 6 months',                            f: { relativeStrength_min: 90 } },
+  { name: 'Dividend growth aristocrats', desc: '25-yr dividend growth · payout < 60%',                   f: {} },
+  { name: 'Magic Formula (Greenblatt)', desc: 'high ROIC · high earnings yield',                          f: {} },
+  { name: 'GARP',                        desc: 'growth ≥ 15% · PEG < 1.5',                               f: { salesGrowth_min: 15, epsGrowth_min: 15 } },
+  { name: 'Deep value (low P/E + FCF)', desc: 'P/E < 12 · FCF yield > 8%',                               f: {} },
+  { name: 'Net-net / asset value',       desc: 'price < net current assets',                              f: {} },
+  { name: 'Short-squeeze candidates',   desc: 'short interest > 20% · rising price',                     f: { relativeStrength_min: 60 } },
+  { name: 'Insider-buying cluster',      desc: '3+ insider buys in 90 days',                              f: {} },
+  { name: 'Analyst-upgrade momentum',   desc: '2+ upgrades in 30 days · PT raised',                      f: { relativeStrength_min: 70 } },
+  { name: 'Golden cross (50>200)',       desc: '50-DMA crossing above 200-DMA',                           f: { relativeStrength_min: 65 } },
+  { name: 'Bollinger squeeze breakout', desc: 'low volatility → expansion',                               f: { rvolRatio_min: 2 } },
+  { name: 'Cup-with-handle setups',     desc: 'classic base · breakout pivot',                            f: { relativeStrength_min: 80 } },
 ];
 
 // ---- Commentary (live intraday feed) ----
@@ -365,10 +365,10 @@ export const recap: RecapData = {
   subtitle: 'auto-generated 4:31 ET',
   headline: 'Markets closed broadly higher on cooler inflation',
   indices: [
-    { l: 'S&P 500',    v:  0.73 },
-    { l: 'Nasdaq',     v:  1.02 },
-    { l: 'Dow',        v:  0.41 },
-    { l: 'Russell 2K', v: -0.32 },
+    { label: 'S&P 500',    value:  0.73 },
+    { label: 'Nasdaq',     value:  1.02 },
+    { label: 'Dow',        value:  0.41 },
+    { label: 'Russell 2K', value: -0.32 },
   ],
   stories: [
     'Cooler-than-expected CPI lifted rate-cut hopes and sent yields lower.',
@@ -376,23 +376,23 @@ export const recap: RecapData = {
     'Defensive sectors lagged as risk appetite returned across the tape.',
   ],
   tomorrow: [
-    { time: '8:30a', ev: 'Initial jobless claims' },
-    { time: 'BMO',   ev: 'Earnings: DELL, HD' },
-    { time: '2:00p', ev: 'FOMC minutes' },
-    { time: 'AMC',   ev: 'Earnings: SNOW, WDAY' },
+    { time: '8:30a', event: 'Initial jobless claims' },
+    { time: 'BMO',   event: 'Earnings: DELL, HD' },
+    { time: '2:00p', event: 'FOMC minutes' },
+    { time: 'AMC',   event: 'Earnings: SNOW, WDAY' },
   ],
   movers: [
-    { s: 'NVDA', reason: 'Earnings beat',  c:  8.23 },
-    { s: 'ZIM',  reason: 'Earnings beat',  c:  9.97 },
-    { s: 'PLTR', reason: 'Guidance raise', c:  6.18 },
-    { s: 'DELL', reason: 'Margin miss',    c: -3.45 },
-    { s: 'WBA',  reason: 'Guidance cut',   c: -5.80 },
+    { ticker: 'NVDA', reason: 'Earnings beat',  pctChange:  8.23 },
+    { ticker: 'ZIM',  reason: 'Earnings beat',  pctChange:  9.97 },
+    { ticker: 'PLTR', reason: 'Guidance raise', pctChange:  6.18 },
+    { ticker: 'DELL', reason: 'Margin miss',    pctChange: -3.45 },
+    { ticker: 'WBA',  reason: 'Guidance cut',   pctChange: -5.80 },
   ],
   internals: [
-    { l: 'Advancers / Decliners', v: '2,810 / 1,140', c:  1 },
-    { l: 'New 52-wk highs',       v: '184',            c:  1 },
-    { l: 'New 52-wk lows',        v: '39',             c: -1 },
-    { l: 'Up volume',             v: '71%',            c:  1 },
+    { label: 'Advancers / Decliners', value: '2,810 / 1,140', direction:  1 },
+    { label: 'New 52-wk highs',       value: '184',            direction:  1 },
+    { label: 'New 52-wk lows',        value: '39',             direction: -1 },
+    { label: 'Up volume',             value: '71%',            direction:  1 },
   ],
 };
 
