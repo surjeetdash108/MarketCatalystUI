@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { CandleChart, RsiPane, earnHistory, Spark } from "./utils";
 import { stockInfo, watch as watchData, screenerStocks } from "./data";
+import { ExpandBtn } from "./shell";
 
 /* ── Shared dynamic embed — one definition for all screens ── */
 export const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
@@ -138,6 +139,69 @@ export function StockListCard({
   );
 }
 
+/* ── Expanded chart rendered inside the modal opened by ExpandBtn ── */
+function ChartCardExpanded({
+  sym, px, initialTf, initialChartType, initialMaStep, initialEmaStep,
+  initialShowVol, initialShowRsi, initialShowEarnings, eps, rs, erDate,
+}: {
+  sym: string; px: number; initialTf: string;
+  initialChartType: "Candles" | "Hollow" | "Bars" | "Line" | "Area";
+  initialMaStep: number; initialEmaStep: number;
+  initialShowVol: boolean; initialShowRsi: boolean; initialShowEarnings: boolean;
+  eps: number; rs: number; erDate: string;
+}) {
+  const [tf, setTf] = useState(initialTf);
+  const [chartType, setChartType] = useState(initialChartType);
+  const [maStep, setMaStep] = useState(initialMaStep);
+  const [emaStep, setEmaStep] = useState(initialEmaStep);
+  const [showVol, setShowVol] = useState(initialShowVol);
+  const [showRsi, setShowRsi] = useState(initialShowRsi);
+  const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
+  const rsiVal = Math.round(38 + rs * 0.36);
+  return (
+    <div>
+      <div className="chart-toolbar" style={{ flexWrap: "wrap", gap: "4px 0", paddingBottom: 8 }}>
+        {(["1D","1W","1M","3M","6M","1Y","5Y"] as const).map(r => (
+          <button key={r} className={`rng tfbtn${tf === r ? " on" : ""}`} onClick={() => setTf(r)}>{r}</button>
+        ))}
+        <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+        {(["Candles","Hollow","Bars","Line","Area"] as const).map(ct => (
+          <button key={ct} className={`rng ctype-btn${chartType === ct ? " on" : ""}`} onClick={() => setChartType(ct)}>{ct}</button>
+        ))}
+        <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+        <button className={`rng indbtn${maStep > 0 ? " on" : ""}`} onClick={() => setMaStep(s => (s + 1) % 5)}>
+          MA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
+        </button>
+        <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`} onClick={() => setEmaStep(s => (s + 1) % 5)}>
+          EMA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
+        </button>
+        <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
+        <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
+        <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
+      </div>
+      <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} />
+      {showRsi && (
+        <div style={{ marginTop: 4 }}>
+          <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
+            <span>RSI (14)</span>
+            <span className="mono" style={{ color: "var(--warn)" }}>{rsiVal} · {rsiVal > 70 ? "overbought" : rsiVal < 40 ? "weak" : "neutral-to-strong"}</span>
+          </div>
+          <RsiPane sym={sym} tf={tf} />
+        </div>
+      )}
+      {showEarnings && (
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 4 }}>
+          <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Earnings · EPS Surprise</span>
+            <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>Next: {erDate}</span>
+          </div>
+          <EarnPane sym={sym} base={eps} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── ChartCard: full-featured self-contained chart (mirrors stock details) ── */
 export function ChartCard({
   sym, px,
@@ -190,6 +254,20 @@ export function ChartCard({
             <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
             <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
             <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
+            <div style={{ flex: 1 }} />
+            <ExpandBtn
+              title={`${sym} · Price Chart`}
+              node={
+                <ChartCardExpanded
+                  sym={sym} px={px}
+                  initialTf={tf} initialChartType={chartType}
+                  initialMaStep={maStep} initialEmaStep={emaStep}
+                  initialShowVol={showVol} initialShowRsi={showRsi}
+                  initialShowEarnings={showEarnings}
+                  eps={eps} rs={rs} erDate={erDate}
+                />
+              }
+            />
           </div>
           <div style={{ padding: "0 14px 0" }}>
             <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} />
