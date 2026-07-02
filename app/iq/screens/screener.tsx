@@ -190,6 +190,7 @@ export function ScreenerScreen() {
               headerRight={<span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{filtered.length} matches</span>}
               isEmpty={filtered.length === 0}
               emptyMessage="No matches — try relaxing filters."
+              maxListHeight={414}
             >
               {filtered.map((s, i) => (
                 <StockRow

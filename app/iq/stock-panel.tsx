@@ -68,12 +68,13 @@ export function StockRow({
 
 /* ── StockListCard: 340px card with scrollable list ── */
 export function StockListCard({
-  title, headerRight, isEmpty, emptyMessage = "No items.", children,
+  title, headerRight, isEmpty, emptyMessage = "No items.", maxListHeight, children,
 }: {
   title: string;
   headerRight?: ReactNode;
   isEmpty?: boolean;
   emptyMessage?: string;
+  maxListHeight?: number;
   children?: ReactNode;
 }) {
   return (
@@ -83,7 +84,7 @@ export function StockListCard({
           <h3>{title}</h3>
           {headerRight}
         </div>
-        <div className="pf-list" style={{ flex: 1, maxHeight: "none", overflowY: "auto" }}>
+        <div className="pf-list" style={{ flex: 1, maxHeight: maxListHeight ?? "none", overflowY: "auto" }}>
           {isEmpty ? (
             <div style={{ padding: 16, fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
               {emptyMessage}
