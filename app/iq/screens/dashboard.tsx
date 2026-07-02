@@ -548,34 +548,16 @@ export function DashboardScreen() {
               <h3>Screener · Leaders &amp; Laggards</h3>
               <Link className="link" href="/menu/screener">View all →</Link>
             </div>
-            {/* Tabs */}
-            <div style={{ display: "flex", borderBottom: "1px solid var(--border-soft)" }}>
-              <button
-                onClick={() => setScrTab("leaders")}
-                style={{
-                  flex: 1, padding: "7px 0", fontSize: ".72rem", fontWeight: 700,
-                  background: "none", border: "none", cursor: "pointer",
-                  borderBottom: scrTab === "leaders" ? "2px solid var(--up)" : "2px solid transparent",
-                  color: scrTab === "leaders" ? "var(--up)" : "var(--text-dim-solid)",
-                  transition: "color .15s",
-                }}
-              >
-                ▲ Leaders
-              </button>
-              <button
-                onClick={() => setScrTab("laggards")}
-                style={{
-                  flex: 1, padding: "7px 0", fontSize: ".72rem", fontWeight: 700,
-                  background: "none", border: "none", cursor: "pointer",
-                  borderBottom: scrTab === "laggards" ? "2px solid var(--down)" : "2px solid transparent",
-                  color: scrTab === "laggards" ? "var(--down)" : "var(--text-dim-solid)",
-                  transition: "color .15s",
-                }}
-              >
-                ▼ Laggards
-              </button>
+            <div style={{ display: "flex", gap: 4, padding: "6px 13px 0" }}>
+              {(["▲ Leaders", "▼ Laggards"] as const).map((label, i) => (
+                <button key={label}
+                  className={`chip${scrTab === (i === 0 ? "leaders" : "laggards") ? " on" : ""}`}
+                  style={{ fontSize: ".65rem", padding: "3px 9px" }}
+                  onClick={() => setScrTab(i === 0 ? "leaders" : "laggards")}
+                >{label}</button>
+              ))}
             </div>
-            <div className="card-b" style={{ paddingTop: 4 }}>
+            <div className="card-b" style={{ paddingTop: 8 }}>
               {(scrTab === "leaders" ? leaders : laggards).map(s => {
                 const dayC = movers.find(m => m.ticker === s.ticker)?.pctChange ?? 0;
                 return (
