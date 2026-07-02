@@ -974,7 +974,7 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
         </div>
 
         {/* RIGHT COLUMN */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "stretch" }}>
 
           {/* Technical Rating */}
           <div className="card">
@@ -1032,12 +1032,12 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
           </div>
 
           {/* Peers */}
-          <div className="card">
+          <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             <div className="card-h">
               <h3>Peers · who's leading</h3>
               <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>
             </div>
-            <div className="card-b" style={{ paddingTop: 6 }}>
+            <div className="card-b" style={{ paddingTop: 6, flex: 1, overflowY: "auto", minHeight: 0 }}>
               {peers.length ? peers.map(peer => {
                 const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
                 return (
