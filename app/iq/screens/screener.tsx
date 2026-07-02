@@ -1,21 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useIQActions } from "../shell";
 import { screenerStocks, screenerPresets } from "../data";
-import { cls, sign } from "../utils";
-
-const RATING_COLOR: Record<string, string> = {
-  "Strong Buy":  "var(--up)",
-  "Buy":         "#7bdcae",
-  "Neutral":     "var(--text-dim-solid)",
-  "Sell":        "#ff9aab",
-  "Strong Sell": "var(--down)",
-};
-
-function mcLabel(mc: number) {
-  return mc >= 1000 ? `$${(mc / 1000).toFixed(2)}T` : `$${mc}B`;
-}
 
 function CheckOpt({
   label, on, onToggle,
@@ -36,12 +22,7 @@ function CheckOpt({
 }
 
 export function ScreenerScreen() {
-  const { openStock } = useIQActions();
-
-  // ---- preset state ----
   const [activePreset, setActivePreset] = useState(0);
-
-  // ---- checkbox filter state ----
   const [rs90,      setRs90]      = useState(false);
   const [rs7090,    setRs7090]    = useState(false);
   const [rsLt40,    setRsLt40]    = useState(false);
@@ -55,15 +36,14 @@ export function ScreenerScreen() {
   function applyPreset(idx: number) {
     const f = screenerPresets[idx].f;
     setActivePreset(idx);
-    // reset all checkboxes then apply preset's intended checkboxes
     setRs90(false); setRs7090(false); setRsLt40(false);
     setSalesGt20(false); setEpsGt25(false); setMarginPos(false);
     setRatingBuy(false); setMcGt10(true); setRvolGt15(false);
     if (f.rs_min !== undefined && f.rs_min >= 90) setRs90(true);
     else if (f.rs_min !== undefined && f.rs_min >= 70) setRs7090(true);
     if (f.salesG_min !== undefined && f.salesG_min >= 20) setSalesGt20(true);
-    if (f.epsG_min !== undefined && f.epsG_min >= 25) setEpsGt25(true);
-    if (f.rvol_min !== undefined && f.rvol_min >= 1.5) setRvolGt15(true);
+    if (f.epsG_min   !== undefined && f.epsG_min   >= 25) setEpsGt25(true);
+    if (f.rvol_min   !== undefined && f.rvol_min   >= 1.5) setRvolGt15(true);
   }
 
   function resetAll() {
@@ -73,35 +53,33 @@ export function ScreenerScreen() {
     setRatingBuy(false); setMcGt10(false); setRvolGt15(false);
   }
 
-  // ---- apply preset filter + checkbox filters ----
   const pf = activePreset >= 0 ? screenerPresets[activePreset].f : {};
 
   const filtered = screenerStocks.filter(s => {
-    // preset rules
-    if (pf.rs_min    !== undefined && s.rs     < pf.rs_min)    return false;
-    if (pf.salesG_min!== undefined && s.salesG < pf.salesG_min)return false;
-    if (pf.epsG_min  !== undefined && s.epsG   < pf.epsG_min)  return false;
-    if (pf.rvol_min  !== undefined && s.rvol   < pf.rvol_min)  return false;
-    if (pf.mc_min    !== undefined && s.mc     < pf.mc_min)    return false;
-    if (pf.rating    !== undefined && !pf.rating.includes(s.rating)) return false;
-    // checkbox rules
-    if (rs90      && s.rs < 90)                          return false;
-    if (rs7090    && (s.rs < 70 || s.rs >= 90))          return false;
-    if (rsLt40    && s.rs >= 40)                          return false;
-    if (salesGt20 && s.salesG < 20)                      return false;
-    if (epsGt25   && s.epsG   < 25)                      return false;
-    if (marginPos && s.mgn    <= 10)                      return false;
-    if (ratingBuy && !["Strong Buy","Buy"].includes(s.rating)) return false;
-    if (mcGt10    && s.mc < 10)                           return false;
-    if (rvolGt15  && s.rvol < 1.5)                        return false;
+    if (pf.rs_min     !== undefined && s.rs     < pf.rs_min)     return false;
+    if (pf.salesG_min !== undefined && s.salesG < pf.salesG_min) return false;
+    if (pf.epsG_min   !== undefined && s.epsG   < pf.epsG_min)   return false;
+    if (pf.rvol_min   !== undefined && s.rvol   < pf.rvol_min)   return false;
+    if (pf.mc_min     !== undefined && s.mc     < pf.mc_min)     return false;
+    if (pf.rating     !== undefined && !pf.rating.includes(s.rating)) return false;
+    if (rs90      && s.rs < 90)                                   return false;
+    if (rs7090    && (s.rs < 70 || s.rs >= 90))                   return false;
+    if (rsLt40    && s.rs >= 40)                                   return false;
+    if (salesGt20 && s.salesG < 20)                               return false;
+    if (epsGt25   && s.epsG   < 25)                               return false;
+    if (marginPos && s.mgn    <= 10)                               return false;
+    if (ratingBuy && !["Strong Buy", "Buy"].includes(s.rating))   return false;
+    if (mcGt10    && s.mc < 10)                                    return false;
+    if (rvolGt15  && s.rvol < 1.5)                                return false;
     return true;
   });
-
-  const firstFour = screenerPresets.slice(0, 4);
 
   return (
     <>
       <div className="page-head">
+        <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
+          {filtered.length} match{filtered.length !== 1 ? "es" : ""}
+        </span>
         <button className="btn primary">
           <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
             <path d="M5 5h14v14l-7-4-7 4z" stroke="#fff" strokeWidth="2" strokeLinejoin="round" />
@@ -110,48 +88,62 @@ export function ScreenerScreen() {
         </button>
       </div>
 
-      <div className="scr-grid" style={{ padding: "14px 18px" }}>
+      <div style={{ padding: "0 18px 18px" }}>
+        <div className="card">
 
-        {/* ---- Left filter panel ---- */}
-        <div className="filt">
-          <div className="fh">
+          {/* ── Header ── */}
+          <div className="filt-hdr">
             Filters
             <span className="link" onClick={resetAll}>Reset</span>
           </div>
-          <div className="fb">
 
-            {/* Preset buttons */}
-            <div className="fgroup">
-              <div className="fl">Saved &amp; preset screens</div>
-              <div className="preset">
-                {firstFour.map((p, i) => (
-                  <button key={p.name}
-                    className={activePreset === i ? "on" : ""}
-                    onClick={() => applyPreset(i)}>
+          {/* ── Presets row ── */}
+          <div style={{
+            display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center",
+            padding: "10px 14px", borderBottom: "1px solid var(--border-soft)",
+          }}>
+            <span style={{
+              fontSize: ".66rem", letterSpacing: ".05em", textTransform: "uppercase",
+              color: "var(--text-dim-solid)", fontWeight: 600, marginRight: 4,
+            }}>
+              Presets
+            </span>
+            {screenerPresets.slice(0, 4).map((p, i) => (
+              <button key={p.name} onClick={() => applyPreset(i)} style={{
+                fontSize: ".72rem", padding: "4px 11px", borderRadius: 6, cursor: "pointer",
+                fontFamily: "var(--f-body)",
+                border: `1px solid ${activePreset === i ? "var(--ai)" : "var(--border)"}`,
+                background: activePreset === i ? "var(--ai-dim)" : "var(--surface-2)",
+                color: activePreset === i ? "var(--text-hi)" : "var(--text-dim-solid)",
+              }}>
+                {p.name}
+              </button>
+            ))}
+            <details className="dd">
+              <summary style={{
+                cursor: "pointer", fontSize: ".72rem", padding: "4px 11px",
+                background: "var(--surface-2)", border: "1px solid var(--border)",
+                borderRadius: 6, color: "var(--text-dim-solid)", listStyle: "none",
+              }}>
+                More ▾
+              </summary>
+              <div className="dd-menu">
+                <div className="ddlbl">{screenerPresets.length} preset screens</div>
+                {screenerPresets.map((p, i) => (
+                  <button key={p.name} onClick={() => applyPreset(i)}>
                     {p.name}
                     <small>{p.desc}</small>
                   </button>
                 ))}
-                <details className="dd">
-                  <summary style={{ cursor: "pointer", fontSize: ".78rem", padding: "8px 10px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)", listStyle: "none" }}>
-                    Browse all {screenerPresets.length} presets ▾
-                    <small style={{ display: "block", color: "var(--text-dim-solid)", fontSize: ".66rem", marginTop: 2 }}>top screens analysts &amp; traders use</small>
-                  </summary>
-                  <div className="dd-menu">
-                    <div className="ddlbl">{screenerPresets.length} preset screens</div>
-                    {screenerPresets.map((p, i) => (
-                      <button key={p.name} onClick={() => applyPreset(i)}>
-                        {p.name}
-                        <small>{p.desc}</small>
-                      </button>
-                    ))}
-                  </div>
-                </details>
               </div>
-            </div>
+            </details>
+          </div>
+
+          {/* ── Filter groups — horizontal ── */}
+          <div style={{ display: "flex" }}>
 
             {/* Relative Strength */}
-            <div className="fgroup">
+            <div className="fgroup" style={{ flex: 1, borderBottom: "none", borderRight: "1px solid var(--border-soft)" }}>
               <div className="fl">Relative strength (6-mo)</div>
               <CheckOpt label="RS ≥ 90 (leaders)"  on={rs90}   onToggle={() => { setRs90(o => !o); setRs7090(false); setRsLt40(false); }} />
               <CheckOpt label="RS 70–90"            on={rs7090} onToggle={() => { setRs7090(o => !o); setRs90(false); setRsLt40(false); }} />
@@ -159,7 +151,7 @@ export function ScreenerScreen() {
             </div>
 
             {/* Growth */}
-            <div className="fgroup">
+            <div className="fgroup" style={{ flex: 1, borderBottom: "none", borderRight: "1px solid var(--border-soft)" }}>
               <div className="fl">Growth</div>
               <CheckOpt label="Sales growth > 20%"  on={salesGt20} onToggle={() => setSalesGt20(o => !o)} />
               <CheckOpt label="EPS growth > 25%"    on={epsGt25}   onToggle={() => setEpsGt25(o => !o)} />
@@ -167,87 +159,23 @@ export function ScreenerScreen() {
             </div>
 
             {/* Technical rating */}
-            <div className="fgroup">
+            <div className="fgroup" style={{ flex: 1, borderBottom: "none", borderRight: "1px solid var(--border-soft)" }}>
               <div className="fl">Technical rating</div>
-              <CheckOpt label="Strong Buy / Buy"      on={ratingBuy} onToggle={() => setRatingBuy(o => !o)} />
-              <CheckOpt label="Above 50 & 200-DMA"    on={false}     onToggle={() => {}} />
-              <CheckOpt label="RSI 40–70"             on={false}     onToggle={() => {}} />
+              <CheckOpt label="Strong Buy / Buy"   on={ratingBuy} onToggle={() => setRatingBuy(o => !o)} />
+              <CheckOpt label="Above 50 & 200-DMA" on={false}     onToggle={() => {}} />
+              <CheckOpt label="RSI 40–70"          on={false}     onToggle={() => {}} />
             </div>
 
             {/* Liquidity & cap */}
-            <div className="fgroup">
+            <div className="fgroup" style={{ flex: 1, borderBottom: "none" }}>
               <div className="fl">Liquidity &amp; cap</div>
-              <CheckOpt label="Market cap > $10B"   on={mcGt10}   onToggle={() => setMcGt10(o => !o)} />
-              <CheckOpt label="RVOL > 1.5×"         on={rvolGt15} onToggle={() => setRvolGt15(o => !o)} />
-              <CheckOpt label="Price > $5"           on={false}    onToggle={() => {}} />
+              <CheckOpt label="Market cap > $10B"  on={mcGt10}   onToggle={() => setMcGt10(o => !o)} />
+              <CheckOpt label="RVOL > 1.5×"        on={rvolGt15} onToggle={() => setRvolGt15(o => !o)} />
+              <CheckOpt label="Price > $5"          on={false}    onToggle={() => {}} />
             </div>
-          </div>
-        </div>
 
-        {/* ---- Right results table ---- */}
-        <div className="card">
-          <div className="card-h">
-            <h3>Results · {filtered.length} matches</h3>
-            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-              Sorted by 6-mo RS ▾ · click a row to open the chart
-            </span>
           </div>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Company</th>
-                  <th>Sector</th>
-                  <th className="num">Mkt Cap</th>
-                  <th className="num">P/E</th>
-                  <th className="num">RS</th>
-                  <th className="num">Sales Gr</th>
-                  <th className="num">EPS Gr</th>
-                  <th className="num">Margin</th>
-                  <th className="num">RVOL</th>
-                  <th className="num">Tech Rating</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered
-                  .slice()
-                  .sort((a, b) => b.rs - a.rs)
-                  .map(s => (
-                    <tr key={s.s} style={{ cursor: "pointer" }} onClick={() => openStock(s.s)}>
-                      <td>
-                        <div className="co">
-                          <span className="s">{s.s}</span>
-                          <span className="n">{s.n}</span>
-                        </div>
-                      </td>
-                      <td>{s.sec}</td>
-                      <td className="num">{mcLabel(s.mc)}</td>
-                      <td className="num">{s.pe.toFixed(1)}</td>
-                      <td className="num">
-                        <b style={{ color: s.rs >= 80 ? "var(--up)" : s.rs < 40 ? "var(--down)" : "var(--text)" }}>
-                          {s.rs}
-                        </b>
-                      </td>
-                      <td className={`num ${cls(s.salesG)}`}>{sign(s.salesG)}</td>
-                      <td className={`num ${cls(s.epsG)}`}>{sign(s.epsG)}</td>
-                      <td className="num">{s.mgn}%</td>
-                      <td className="num">{s.rvol.toFixed(1)}×</td>
-                      <td className="num">
-                        <span className="tr-badge"
-                          style={{ background: RATING_COLOR[s.rating] + "22", color: RATING_COLOR[s.rating] }}>
-                          {s.rating}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-          <p style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", padding: "10px 14px 14px" }}>
-            The &ldquo;Briefing growth screen&rdquo; preset mirrors a relative-strength + sales/EPS-growth + margin-expansion
-            filter. Technical Rating is computed from 11 oscillators and 15 moving averages — informational,
-            not investment advice.
-          </p>
+
         </div>
       </div>
     </>
