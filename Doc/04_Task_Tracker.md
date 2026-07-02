@@ -366,6 +366,8 @@ v1.5 | June 2026
 |---|---|---|---|---|---|---|---|---|
 | T-090 | Build Analyst Actions screen (static): direction arrows, firm, rating/PT change, action pills | Frontend | 1d | P0 | FE Eng 2 | S-07 | **Done** | screens/analyst.tsx. |
 | T-109 | Add computeFlags() (5+ action alert) + topUpgrades sidebar | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | screens/analyst.tsx + data.ts. |
+| T-142a | Move ◆ AI take · CRM cluster section to full-width position between signal cards (🔥 Cluster alert / My names PT) and the filter bar | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | screens/analyst.tsx. Added `<div className="ai-block">` wrapper at col-12 level. |
+| T-142b | Remove col-8/col-4 dashboard split from rating table; make it full-width single card (remove `<div className="dash">` wrapper) | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | screens/analyst.tsx. Table and tbl-wrap now direct children of page content area. |
 
 #### Live Analyst
 
@@ -384,6 +386,9 @@ v1.5 | June 2026
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
 | T-083 | Build Stock Screener: 9 checkbox filters, 20 presets, RS-colored results table | Frontend | 3d | P0 | FE Eng 2 | S-05 | **Done** | screener.tsx. |
+| T-137a | Rewrite screener layout to StockPanelLayout: 340px filter+results list card (left) + ChartCard (right) + StockScreenEmbed below | Frontend | 0.5d | P0 | FE Eng 1 | S-12 | **Done** | screens/screener.tsx. Matches portfolio/watchlist layout pattern. |
+| T-137b | Wire all 9 checkbox filters live to screenerStocks array with no submit button; `applyPreset(idx)` maps preset.f fields to individual checkbox state | Frontend | 0.5d | P0 | FE Eng 1 | S-12 | **Done** | screens/screener.tsx. `selPx` resolved from watchData or moversData. |
+| T-137c | Auto-fallback stock selection: `selStock = filtered.find(s => s.s === scrSel) ?? filtered[0] ?? null` so chart always shows a stock from current filter set | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | screens/screener.tsx. |
 
 ---
 
@@ -494,6 +499,14 @@ v1.5 | June 2026
 
 ---
 
+### Themes — `/menu/themes`
+
+| ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| T-136 | See Shell & Design section | — | — | — | — | — | — | Themes screen refactored to use StockPanelLayout (documented under T-136 in Shell & Design). |
+
+---
+
 ### Commentary — `/menu/commentary`
 
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
@@ -501,6 +514,9 @@ v1.5 | June 2026
 | T-088 | Build Commentary screen: 5 tabs, feed cards, sidebar cards | Frontend | 1.5d | P0 | FE Eng 2 | S-03 | **Done** | screens/commentary.tsx. |
 | T-116 | Tab filtering: Premarket, AH, My names, Macro; FeedItem component | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | **Done** | screens/commentary.tsx. |
 | T-119 | Add ticker search bar (SEARCH_SYMS autocomplete) + NewsDrawer with buildNewsHistory() (9 categories) | Frontend | 1d | P1 | FE Eng 1 | S-10 | **Done** | screens/commentary.tsx. |
+| T-140a | Remove standalone Quick news lookup card from col-4 sidebar | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | screens/commentary.tsx. Card was duplicating content now handled at bottom of feed column. |
+| T-140b | Add permanent Quick news lookup card at bottom of col-8 feed column (below feed card); use `activeTab === 3 ? "Tracked names" : "Quick news lookup"` for context-aware title and chip list | Frontend | 0.5d | P1 | FE Eng 1 | S-12 | **Done** | screens/commentary.tsx. My names tab shows `[...mySymbols]` chips; all others show 8 hardcoded ticker chips. |
+| T-141 | General perspective card in col-4: add `style={{ flex: 1 }}` so its bottom border aligns with the Quick news lookup card bottom | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | screens/commentary.tsx. |
 
 ---
 
@@ -516,6 +532,8 @@ v1.5 | June 2026
 | T-110 | Extend Portfolio with useState CRUD + dynamic drivers/laggards/leaders | Frontend | 1d | P0 | FE Eng 1 | S-08 | **Done** | screens/portfolio.tsx. |
 | T-118 | Add AI Pulse card (PULSE string array as bullets) | Frontend | 0.5d | P1 | FE Eng 1 | S-09 | **Done** | screens/portfolio.tsx. |
 | T-120 | Replace inline StockDetail with embedded StockScreen in right panel | Frontend | 0.5d | P0 | FE Eng 1 | S-10 | **Done** | screens/portfolio.tsx. Dynamic import; pfSel state. |
+| T-135a | Refactor portfolio.tsx to import StockPanelLayout, StockListCard, StockRow from stock-panel.tsx; remove local dynamic import and local StockScreenEmbed definition | Frontend | 0.5d | P1 | FE Eng 1 | S-12 | **Done** | screens/portfolio.tsx. |
+| T-135b | Remove dead `convPill` function from portfolio.tsx (leftover from old layout, was never called) | Frontend | 0.25d | P2 | FE Eng 1 | S-12 | **Done** | screens/portfolio.tsx. Cleanup only; zero UI change. |
 
 #### Persistent Portfolio
 
@@ -552,6 +570,7 @@ v1.5 | June 2026
 | T-111 | Add AI alerts column + per-stock AI toggle | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | screens/watchlist.tsx. |
 | T-115 | Rewrite as Google Finance 2-panel layout with bigChartSVG() | Frontend | 1.5d | P1 | FE Eng 1 | S-09 | **Done** | screens/watchlist.tsx + app/iq.css. |
 | T-121 | Add stock-side-drawer + delete confirmation modal + localStorage("iq-watchlist") persistence | Frontend | 1d | P0 | FE Eng 1 | S-10 | **Done** | screens/watchlist.tsx. |
+| T-134 | Refactor watchlist.tsx to import StockPanelLayout, StockListCard, StockRow from stock-panel.tsx; remove local StockScreenEmbed, CandleChart, Spark imports | Frontend | 0.5d | P1 | FE Eng 1 | S-12 | **Done** | screens/watchlist.tsx. StockRow valueBottom shows `${arr(c)} ${sign(c)}`. |
 
 #### Persistent Watchlist
 
@@ -667,6 +686,16 @@ v1.5 | June 2026
 | T-128 | Profile dropdown: `iq-dropdownIn` animation (no `translateX` — fixes post-animation position jump). `pd-avatar` 52px image centered at top of dropdown. `animation-fill-mode: both` | Frontend | 0.5d | P1 | FE Eng 1 | S-11 | **Done** | `app/iq.css` + `app/iq/shell.tsx`. |
 | T-129 | Landing page fixes: WebGL canvas visible (`background: transparent` on `.lp-root.mq-root`). `ScaledScreen` uses `ResizeObserver` for dynamic scale (`containerWidth/1200`) — fixes glance modal at any width | Frontend | 0.5d | P1 | FE Eng 1 | S-11 | **Done** | `app/landing.css` + `app/page.tsx`. |
 | T-130 | Mobile options page: expiry tabs horizontal scroll (`flex-wrap:nowrap; overflow-x:auto`), stock header meta wraps below price. Nav items `var(--text-hi)` in mobile rail. AI badge removed from Earnings nav item (`badge: null`) | Frontend | 0.5d | P1 | FE Eng 1 | S-11 | **Done** | `app/iq.css` + `app/dashboard/menu-items.ts`. |
+| T-133a | Create `app/iq/stock-panel.tsx`: define `StockScreenEmbed` via `dynamic()` (single shared definition eliminates circular import duplication across 4 screens) | Frontend | 0.5d | P1 | FE Eng 1 | S-12 | **Done** | `app/iq/stock-panel.tsx`. Note: shell.tsx keeps its own local copy to avoid its own circular chain. |
+| T-133b | Add `StockRow` component to stock-panel.tsx: `pf-li` grid row with sym/name/Spark/valueTop/valueBottom/optional trash button; `gridTemplateColumns` switches between "1fr 60px auto auto" (with delete) and "1fr 60px auto" (without) | Frontend | 0.5d | P1 | FE Eng 1 | S-12 | **Done** | `app/iq/stock-panel.tsx`. TrashIcon SVG private to module. |
+| T-133c | Add `StockListCard` component to stock-panel.tsx: 340px fixed-width flex column card with scrollable `pf-list`, optional `headerRight` slot, empty state support | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | `app/iq/stock-panel.tsx`. |
+| T-133d | Add `ChartCard` component to stock-panel.tsx: right-side flex-1 card with TF toolbar (["1D","1W","1M","3M","6M","1Y","5Y"]) and CandleChart; empty state placeholder | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | `app/iq/stock-panel.tsx`. |
+| T-133e | Add `StockPanelLayout` component to stock-panel.tsx: top flex row (listCard + ChartCard with alignItems:stretch) + StockScreenEmbed below; empty state for both chart and detail pane | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | `app/iq/stock-panel.tsx`. |
+| T-136 | Refactor themes.tsx to use StockPanelLayout, StockListCard, StockRow from stock-panel.tsx; themes rows have no delete button (read-only list; `onDelete` omitted → 3-column grid) | Frontend | 0.5d | P1 | FE Eng 1 | S-12 | **Done** | screens/themes.tsx. THEMES array kept as module-level constant. `valueBottomClass={cls(stock.c)}`. |
+| T-138a | Optimize utils.tsx: remove `_hash` wrapper function (was just `return hashStr(s)`); inline `hashStr(sym + tf)` calls directly in genOHLC and RsiPane | Frontend | 0.25d | P2 | FE Eng 1 | S-12 | **Done** | `app/iq/utils.tsx`. Dead wrapper function removed. |
+| T-138b | Add `useMemo` to CandleChart: `const data = useMemo(() => genOHLC(sym, tf, px), [sym, tf, px])` — prevents full chart recomputation on every tooltip mouse-move hover rerender | Frontend | 0.25d | P1 | FE Eng 1 | S-12 | **Done** | `app/iq/utils.tsx`. Fixes performance regression on hover. |
+| T-139a | Remove dead `CommandPalette` component from shell.tsx (~70 lines, was never rendered — superseded by inline topbar search) | Frontend | 0.25d | P2 | FE Eng 1 | S-12 | **Done** | `app/iq/shell.tsx`. |
+| T-139b | Move `tickerItems` constant to module level (outside `IQShell` component body) to avoid recreating the array on every render | Frontend | 0.25d | P2 | FE Eng 1 | S-12 | **Done** | `app/iq/shell.tsx`. |
 
 ### Subscription & Billing
 
@@ -741,18 +770,19 @@ v1.5 | June 2026
 | Earnings | Intelligence | 1 | 22 | 23 |
 | Market Movers | Intelligence | 2 | 8 | 10 |
 | Market Heatmap | Intelligence | 1 | 0 | 1 |
-| Analyst Actions | Intelligence | 2 | 5 | 7 |
-| Screener | Intelligence | 1 | 0 | 1 |
+| Analyst Actions | Intelligence | 4 | 5 | 9 |
+| Screener | Intelligence | 4 | 0 | 4 |
+| Themes | Intelligence | 1 | 0 | 1 |
 | IPOs | Intelligence | 1 | 0 | 1 |
 | Stock Detail | Intelligence | 5 | 10 | 15 |
 | Options Chain | Intelligence | 1 | 4 | 5 |
 | Insider & Inst. | Intelligence | 2 | 10 | 12 |
-| Commentary | Intelligence | 3 | 0 | 3 |
+| Commentary | Context | 6 | 0 | 6 |
 | Recaps | Context | 3 | 10 | 13 |
 | Macro & VIX | Context | 2 | 4 | 6 |
-| Portfolio Pulse | My Money | 4 | 8 | 12 |
-| Watchlist | My Money | 4 | 6 | 10 |
-| Shell & Design | Platform | 11 | 0 | 11 |
+| Portfolio Pulse | My Money | 6 | 8 | 14 |
+| Watchlist | My Money | 5 | 6 | 11 |
+| Shell & Design | Platform | 21 | 0 | 21 |
 | Subscription | Platform | 0 | 3 | 3 |
 | AI Copilot | Platform | 0 | 5 | 5 |
 | Cmd+K | Platform | 0 | 2 | 2 |
@@ -760,4 +790,4 @@ v1.5 | June 2026
 | Learn 60s | Platform | 0 | 2 | 2 |
 | Industry Alerts | Platform | 0 | 2 | 2 |
 | Mobile | Platform | 0 | 4 | 4 |
-| **TOTAL** | | **57** | **173** | **230** |
+| **TOTAL** | | **80** | **173** | **253** |

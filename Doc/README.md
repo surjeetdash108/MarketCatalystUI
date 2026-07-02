@@ -18,7 +18,13 @@ app/
 │   ├── signup/           # /auth/signup — signup page (AuthLayout + SignupForm)
 │   └── forgot-password/  # /auth/forgot-password — password reset page
 ├── dashboard/            # /dashboard — main app shell (IQShell)
-├── menu/[slug]/          # /menu/:slug — 14 workspace screens
+├── iq/
+│   ├── shell.tsx         # IQShell — sidebar nav, topbar, drawer system, Cmd+K, Copilot panel
+│   ├── stock-panel.tsx   # Shared components: StockScreenEmbed, StockRow, StockListCard, ChartCard, StockPanelLayout
+│   ├── utils.tsx         # Shared chart + utility components: CandleChart, RsiPane, TrGauge, SemiGauge, Spark, hashStr, earnHistory
+│   ├── data.ts           # Static mock data: pulse, earnings, movers, analyst, folio, watch, screener, funds, etc.
+│   └── screens/          # One file per workspace screen (watchlist, portfolio, themes, screener, analyst, commentary, etc.)
+├── menu/[slug]/          # /menu/:slug — 15 workspace screens
 ├── profile/edit/         # /profile/edit — investor profile setup
 └── settings/             # /settings — preferences (dark mode, etc.)
 ```
@@ -58,9 +64,9 @@ The shell (`IQShell`) wraps every authenticated page with a left sidebar of 14 w
 
 | Group | Workspace |
 |---|---|
-| Intelligence | Dashboard, Earnings, Market Movers, Market Heatmap, Analyst Actions, Screener, IPOs, Commentary |
-| My Money | Portfolio Pulse, Watchlist, Insider & Institutional |
-| Context | Recaps, Macro & VIX, Stock Detail |
+| Intelligence | Dashboard, Earnings, Market Movers, Market Heatmap, Analyst Actions, Screener, IPOs, Stock Detail, Options, Insider & Institutional |
+| My Money | Portfolio Pulse, Watchlist, Themes |
+| Context | Commentary, Recaps, Macro & VIX |
 
 ---
 

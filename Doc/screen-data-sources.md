@@ -89,8 +89,11 @@
 |---|---|---|
 | Stock universe | `data.screenerStocks` — hardcoded | 🔴 Static |
 | Filter presets | `data.screenerPresets` — hardcoded | 🔴 Static |
-| Filter state (moat, EPS growth, P/E, yield) | Component `useState` | 🔴 Static |
-| Sort order | Component `useState` | 🔴 Static |
+| Filter state (9 checkboxes: moat, EPS growth, P/E, yield, etc.) | Component `useState`; `applyPreset(idx)` maps preset.f back to checkbox state | 🔴 Static |
+| Filtered results list (StockListCard) | `useMemo` computed from checkbox state applied to `screenerStocks` | 🔴 Static |
+| Selected stock chart (ChartCard) | Deterministic CandleChart; `selPx` resolved from `watchData` or `moversData` | 🔴 Static |
+| Stock detail panel (StockScreenEmbed) | Same sources as Stock Detail page | 🔴 Static |
+| Auto-fallback stock selection | `filtered.find(s => s.s === scrSel) ?? filtered[0] ?? null` | 🔴 Static |
 
 ---
 
@@ -101,6 +104,18 @@
 | Recent IPO performance table (8 rows) | Hardcoded inline in `screens/ipos.tsx` | 🔴 Static |
 | Upcoming pipeline table (4 rows) | Hardcoded inline in `screens/ipos.tsx` | 🔴 Static |
 | Stats strip (above-offer count, best performer, median) | Hardcoded inline in `screens/ipos.tsx` | 🔴 Static |
+
+---
+
+## Themes (`/menu/themes`)
+
+| Element | Data | Status |
+|---|---|---|
+| Theme list (8 sector themes) | `THEMES` module-level constant in `screens/themes.tsx` — hardcoded | 🔴 Static |
+| Stock rows per theme | Each theme object's `stocks[]` array — hardcoded | 🔴 Static |
+| Selected theme stock list | Derived from `THEMES[selTheme].stocks` | 🔴 Static |
+| Chart (ChartCard) | Deterministic CandleChart via seeded RNG (`useMemo(genOHLC)`) | 🔴 Static |
+| Stock detail panel (StockScreenEmbed) | Same sources as Stock Detail page (`data.stockInfo`, deterministic charts) | 🔴 Static |
 
 ---
 
@@ -166,7 +181,8 @@
 | Tag filter | Derived from `data.commentary` | 🔴 Static |
 | Ticker search bar suggestions | `SEARCH_SYMS` constant (20 tickers) — hardcoded in screen | 🔴 Static |
 | NewsDrawer history items | `buildNewsHistory(sym)` — derived from `data.movers`, `data.analyst`, `sectorByName`, `data.watch`, `earnHistory()` from utils | 🔴 Static |
-| Quick news lookup chips | 8 hardcoded ticker chips in sidebar | 🔴 Static |
+| Quick news lookup card (bottom of feed column) | Context-aware: My names tab → `[...mySymbols]` chips (user's watchlist symbols); all other tabs → 8 hardcoded ticker chips. `activeTab === 3` switch. | 🔴 Static (chips) / 🟡 Hybrid (My names uses watchlist state) |
+| General perspective card height | `flex: 1` on card style — grows to match Quick news lookup bottom border | UI layout only |
 
 ---
 

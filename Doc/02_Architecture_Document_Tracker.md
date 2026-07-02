@@ -185,11 +185,25 @@ StockWise Shell & Component Architecture
 
 -   **Theme system**: `theme: "dark" | "light"` state in `IQShell`. Applied as `data-theme={theme}` on `.iq-root` div. Initialized from `localStorage` synchronously (no flicker on navigation). Persisted to Firestore `settings/{uid}` collection (`darkMode: boolean` field) when user changes preference via Settings. `localStorage` acts as a fast cache so the correct theme is available on the first render of every page mount.
 
+Shared Stock Panel Components (`app/iq/stock-panel.tsx`)
+
+Created to eliminate duplication of stock list + chart + detail layout across watchlist, portfolio, themes, and screener screens. All four screens import from this file.
+
+-   **`StockScreenEmbed`**: `dynamic(() => import("./screens/stock").then(m => ({ default: m.StockScreen })), { ssr: false })`. Single definition used by all 4 stock-list screens. **Exception**: `shell.tsx` retains its own local copy to avoid `stock.tsx → shell.tsx → stock.tsx` circular dependency.
+
+-   **`StockRow`**: Renders a `pf-li` grid row. `gridTemplateColumns` is `"1fr 60px auto auto"` when `onDelete` is provided (4 cols including trash button), `"1fr 60px auto"` otherwise. Renders `<Spark>` sparkline and accepts `valueTop`/`valueBottom`/`valueBottomClass` for the price/change column.
+
+-   **`StockListCard`**: Fixed 340px width flex-column card. Wraps a scrollable `pf-list` div. Accepts `headerRight` ReactNode slot and `isEmpty`/`emptyMessage` for empty state.
+
+-   **`ChartCard`**: Flex-1 right panel. TF toolbar with buttons `["1D","1W","1M","3M","6M","1Y","5Y"]`. Renders `<CandleChart>` when `sym` is non-empty; empty-state centered text otherwise.
+
+-   **`StockPanelLayout`**: Composes `listCard` prop + `<ChartCard>` in a flex row with `alignItems: stretch` (equal height). Below the row: `<StockScreenEmbed initialSym={selectedSym} hideHeader hideChart />` when a symbol is selected, or empty-state card. Props: `listCard`, `selectedSym`, `chartPx`, `tf`, `onTfChange`, `chartEmptyText?`, `detailEmptyText?`.
+
 Shared Utility Components (`app/iq/utils.tsx`)
 
 -   **`heatCol(p)`**: RGB color ramp matching HTML reference. Returns `{ bg, fg }`. Pale mint→deep green (positive), pale pink→deep red (negative). `fg` is `#ffffff` for dark tiles, `#0c1a13` for light tiles (threshold: saturation > 42%). Used by dashboard heatmap mini, heatmap treemap, and stock page key-stat cells.
 
--   **`CandleChart({ sym, tf, px, showMA?, showVol? })`**: SVG candlestick chart. Deterministic OHLC generation via seeded RNG matching HTML's `genOHLC()` algorithm. Features: candles + wicks, MA20/MA50 overlays, volume bars, ER marker, hover crosshair tooltip. Rendered on stock detail page.
+-   **`CandleChart({ sym, tf, px, showMA?, showVol? })`**: SVG candlestick chart. Deterministic OHLC generation via seeded RNG matching HTML's `genOHLC()` algorithm. Features: candles + wicks, MA20/MA50 overlays, volume bars, ER marker, hover crosshair tooltip. `genOHLC` result is memoized via `useMemo([sym, tf, px])` — prevents recomputation on tooltip hover rerenders. Rendered on stock detail page and inside ChartCard.
 
 -   **`RsiPane({ sym, tf })`**: SVG RSI oscillator sub-pane. 70/30 dashed reference lines. Shares seed with CandleChart so RSI is consistent with price data.
 
@@ -201,7 +215,7 @@ Shared Utility Components (`app/iq/utils.tsx`)
 
 -   **`RATING_VAL`**: Map from rating string to gauge position — `{ "Strong Buy": 0.9, "Buy": 0.55, "Neutral": 0, "Sell": -0.55, "Strong Sell": -0.9 }`.
 
--   **`hashStr(s)`**: Exported deterministic string hash using `Math.imul(31, h)`. Shared by commentary.tsx and data.ts (internal `_hash` delegates to this). Centralises the seeding algorithm so all deterministic data generation stays consistent.
+-   **`hashStr(s)`**: Exported deterministic string hash using `Math.imul(31, h)`. Used directly by `genOHLC` and `RsiPane`. The former `_hash` wrapper function has been removed — it was just `return hashStr(s)`.
 
 -   **`EarnQ`**: Exported interface — `{ q: string; e: number; a: number; surp: number; mv: number }`. Used by stock.tsx, earnings.tsx, and commentary.tsx's `buildNewsHistory`.
 
@@ -235,15 +249,16 @@ Screens (Current) — Navigation groups: Intelligence / Context / My Money
 | earnings | screens/earnings.tsx | Intelligence | UI complete — side-by-side col-6 layout; inline accordion detail panel (no drawer) |
 | movers | screens/movers.tsx | Intelligence | UI complete — row/pill click opens `stock-side-drawer` with embedded StockScreen (dynamic import); removed mvpop hover tooltip |
 | heatmap | screens/heatmap.tsx | Intelligence | UI complete — heatCol() dynamic text color on treemap tiles |
-| analyst | screens/analyst.tsx | Intelligence | UI complete — computeFlags() (5+ action alert); topUpgrades sidebar; static data |
-| screener | screens/screener.tsx | Intelligence | UI complete — 20 presets, checkbox filters, native `<details>` dropdown |
+| analyst | screens/analyst.tsx | Intelligence | UI complete — computeFlags() (5+ action alert); topUpgrades sidebar; ◆ AI take section full-width between signal cards and filter bar; rating table full-width (no col-8/col-4 split); static data |
+| screener | screens/screener.tsx | Intelligence | UI complete — 20 presets, 9 checkbox filters live-wired (no submit), StockPanelLayout (340px results + ChartCard + StockScreenEmbed), auto-fallback stock selection |
 | ipos | screens/ipos.tsx | Intelligence | UI complete — recent IPO table + upcoming pipeline tab; static data |
-| stock | screens/stock.tsx | Intelligence | UI complete — CandleChart, RsiPane, TrGauge, full HTML-parity layout; Firebase stock notes (stock_comments collection); Insider & Key Levels side-by-side; Ask Copilot button removed from sd-actions |
+| stock | screens/stock.tsx | Intelligence | UI complete — CandleChart (useMemo genOHLC), RsiPane, TrGauge, full HTML-parity layout; Firebase stock notes (stock_comments collection); Insider & Key Levels side-by-side; Ask Copilot button removed from sd-actions |
 | options | screens/options.tsx | Intelligence | UI complete — options chain table (calls + puts), expiry tab selector (horizontal scroll on mobile), left stock search sidebar; static data |
 | insider | screens/insider.tsx | Intelligence | UI complete — tabbed: Insider activity (Form 4 feed) + 13F institutional view |
-| portfolio | screens/portfolio.tsx | My Money | UI complete — left pf-list panel (holdings add/remove/sell); right panel embeds full StockScreen via dynamic import for `pfSel` ticker; AI drivers/laggards/leaders |
-| watchlist | screens/watchlist.tsx | My Money | UI complete — Google Finance two-panel layout; company name click opens `stock-side-drawer` with embedded StockScreen; delete confirmation modal; `localStorage("iq-watchlist")` persists list |
-| commentary | screens/commentary.tsx | Context | UI complete — Live/Premarket/AH/My names/Macro tabs; ticker search bar (SEARCH_SYMS autocomplete); `NewsDrawer` slides in with `buildNewsHistory()` categorized items (Catalyst/Technical/Sector/Analyst/Earnings/Calendar/Coverage/Product/Guidance); Quick news lookup chip sidebar |
+| themes | screens/themes.tsx | My Money | UI complete — 8 curated sector themes; StockPanelLayout (read-only StockRow list, no delete, 3-col grid); ChartCard + StockScreenEmbed below |
+| portfolio | screens/portfolio.tsx | My Money | UI complete — StockPanelLayout (340px StockListCard + ChartCard + StockScreenEmbed); holdings add/remove/sell; AI drivers/laggards/leaders; imports from stock-panel.tsx |
+| watchlist | screens/watchlist.tsx | My Money | UI complete — StockPanelLayout (340px StockListCard + ChartCard + StockScreenEmbed); delete confirmation modal; `localStorage("iq-watchlist")` persists list; imports from stock-panel.tsx |
+| commentary | screens/commentary.tsx | Context | UI complete — Live/Premarket/AH/My names/Macro tabs; ticker search bar (SEARCH_SYMS autocomplete); `NewsDrawer` slides in with `buildNewsHistory()` categorized items (Catalyst/Technical/Sector/Analyst/Earnings/Calendar/Coverage/Product/Guidance); Quick news lookup card at bottom of col-8 (context-aware: "Tracked names" on My names tab); General perspective card has flex:1 |
 | recap | screens/recap.tsx | Context | UI complete — `RcpIndexCards` (9-index pulse grid using `data.pulse` + `Spark` sparklines); `NewsBriefing` newspaper two-page spread (NEWS_DAILY / NEWS_WEEKLY arrays, `stockifyText()` inline ticker parsing); social share buttons (X/LinkedIn/WhatsApp/Facebook/Telegram via `window.open()`); `ScheduleShare` form (frequency/time/email — demo state); EOD/Weekly tabs; AI recap hero, sector heatmap, earnings movers, market internals |
 | macro | screens/macro.tsx | Context | UI complete — MacroEvent interface; 3-week calendar (CAL_LAST/THIS/NEXT); 8-column table |
 | settings | screens/settings.tsx | — | Settings + dark mode wired to Firestore |
