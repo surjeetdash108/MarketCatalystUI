@@ -6,23 +6,23 @@ import { arr, sign } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
 export function WatchlistScreen() {
-  const [items, setItems]               = useState<string[]>(() => watchData.map(w => w.s));
-  const [sel, setSel]                   = useState<string | null>(() => watchData[0]?.s ?? null);
+  const [items, setItems]               = useState<string[]>(() => watchData.map(w => w.ticker));
+  const [sel, setSel]                   = useState<string | null>(() => watchData[0]?.ticker ?? null);
   const [addOpen, setAddOpen]           = useState(false);
   const [newSym, setNewSym]             = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [wlTf, setWlTf] = useState("3M");
 
-  const list = watchData.filter(w => items.includes(w.s));
-  const up   = list.filter(w => w.c > 0).length;
-  const dn   = list.filter(w => w.c < 0).length;
-  const best  = [...list].sort((a, b) => b.c - a.c)[0];
-  const worst = [...list].sort((a, b) => a.c - b.c)[0];
+  const list = watchData.filter(w => items.includes(w.ticker));
+  const up   = list.filter(w => w.pctChange > 0).length;
+  const dn   = list.filter(w => w.pctChange < 0).length;
+  const best  = [...list].sort((a, b) => b.pctChange - a.pctChange)[0];
+  const worst = [...list].sort((a, b) => a.pctChange - b.pctChange)[0];
 
   const sumTxt =
     `Your ${list.length} watched names finished <b class="up">${up} up</b> / <b class="down">${dn} down</b> today.` +
-    (best  ? ` <b>${best.s}</b> led (${sign(best.c)})` : "") +
-    (worst && worst.s !== best?.s ? `, <b>${worst.s}</b> lagged (${sign(worst.c)})` : "") +
+    (best  ? ` <b>${best.ticker}</b> led (${sign(best.pctChange)})` : "") +
+    (worst && worst.ticker !== best?.ticker ? `, <b>${worst.ticker}</b> lagged (${sign(worst.pctChange)})` : "") +
     `. Broad market: Nasdaq <b class="up">+1.02%</b>, S&P 500 <b class="up">+0.73%</b>.`;
 
   function addStock() {
@@ -43,7 +43,7 @@ export function WatchlistScreen() {
     setConfirmDelete(null);
   }
 
-  const selData = list.find(w => w.s === sel);
+  const selData = list.find(w => w.ticker === sel);
 
   return (
     <>
@@ -81,7 +81,7 @@ export function WatchlistScreen() {
 
         <StockPanelLayout
           selectedSym={sel ?? ""}
-          chartPx={selData?.px ?? 0}
+          chartPx={selData?.price ?? 0}
           tf={wlTf}
           onTfChange={setWlTf}
           chartEmptyText="Select a stock to see chart"
@@ -94,14 +94,14 @@ export function WatchlistScreen() {
               emptyMessage='No stocks — click "Add stock".'
             >
               {items.map((sym, i) => {
-                const w  = watchData.find(x => x.s === sym);
-                const px = w?.px ?? 0;
-                const c  = w?.c  ?? 0;
+                const w  = watchData.find(x => x.ticker === sym);
+                const px = w?.price ?? 0;
+                const c  = w?.pctChange  ?? 0;
                 return (
                   <StockRow
                     key={sym}
                     sym={sym}
-                    name={w?.n ?? sym}
+                    name={w?.name ?? sym}
                     seed={i + 3}
                     sparkUp={c >= 0}
                     isSelected={sel === sym}

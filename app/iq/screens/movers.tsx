@@ -25,11 +25,11 @@ function computeTrending() {
     if (!srcs[s]) srcs[s] = new Set();
     srcs[s].add(src);
   };
-  movers.forEach(m  => add(m.s, "Movers"));
-  analyst.forEach(a => add(a.s, "Analyst"));
-  earnings.forEach(e => add(e.s, "Earnings"));
-  watch.forEach(w   => add(w.s, "Watchlist"));
-  folio.forEach(f   => add(f.s, "Portfolio"));
+  movers.forEach(m  => add(m.ticker, "Movers"));
+  analyst.forEach(a => add(a.ticker, "Analyst"));
+  earnings.forEach(e => add(e.ticker, "Earnings"));
+  watch.forEach(w   => add(w.ticker, "Watchlist"));
+  folio.forEach(f   => add(f.ticker, "Portfolio"));
   return Object.entries(srcs)
     .map(([s, set]) => ({ s, n: set.size, srcs: [...set], days: 2 + (s.charCodeAt(0) % 4) }))
     .filter(o => o.n >= 2)
@@ -48,15 +48,15 @@ export function MoversScreen() {
     .filter(m => {
       if (sector !== "All" && m.sector !== sector) return false;
       if (cap    !== "All" && m.cap    !== cap)    return false;
-      if (tab === "win")  return m.c > 0;
-      if (tab === "lose") return m.c < 0;
+      if (tab === "win")  return m.pctChange > 0;
+      if (tab === "lose") return m.pctChange < 0;
       return true;
     })
     .sort((a, b) => {
-      if (tab === "win")  return b.c    - a.c;
-      if (tab === "lose") return a.c    - b.c;
-      if (tab === "vol")  return b.rvol - a.rvol;
-      return Math.abs(b.wk) - Math.abs(a.wk);
+      if (tab === "win")  return b.pctChange    - a.pctChange;
+      if (tab === "lose") return a.pctChange    - b.pctChange;
+      if (tab === "vol")  return b.rvolRatio - a.rvolRatio;
+      return Math.abs(b.weekPct) - Math.abs(a.weekPct);
     })
     .slice(0, 15);
 
@@ -65,7 +65,7 @@ export function MoversScreen() {
   const sectorTally = Object.entries(tally).sort((a, b) => b[1] - a[1]);
 
   const trending = computeTrending();
-  const val = (m: typeof movers[0]) => tab === "week" ? m.wk : m.c;
+  const val = (m: typeof movers[0]) => tab === "week" ? m.weekPct : m.pctChange;
 
   return (
     <>
@@ -88,8 +88,8 @@ export function MoversScreen() {
           </div>
           <div className="card-b" style={{ paddingTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
             {trending.map(o => {
-              const mv = movers.find(m => m.s === o.s);
-              const isUp = (mv?.c ?? 0) >= 0;
+              const mv = movers.find(m => m.ticker === o.s);
+              const isUp = (mv?.pctChange ?? 0) >= 0;
               return (
                 <button key={o.s} className="tr-pill" onClick={() => setSelectedSym(o.s)}>
                   <StockLogo sym={o.s} size={18} />
@@ -150,27 +150,27 @@ export function MoversScreen() {
               const v = val(m);
               return (
                 <tr
-                  key={m.s}
+                  key={m.ticker}
                   className={m.owned ? "owned" : ""}
-                  onClick={() => setSelectedSym(m.s)}
+                  onClick={() => setSelectedSym(m.ticker)}
                   style={{ cursor: "pointer" }}
                 >
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <StockLogo sym={m.s} size={26} />
+                      <StockLogo sym={m.ticker} size={26} />
                       <div className="co">
                         <span className="s">
                           {m.owned && <span className="own-dot" />}
-                          {m.s}
+                          {m.ticker}
                         </span>
-                        <span className="n">{m.n}</span>
+                        <span className="n">{m.name}</span>
                       </div>
                     </div>
                   </td>
-                  <td className="num">${fmt(m.p)}</td>
+                  <td className="num">${fmt(m.price)}</td>
                   <td className={`num ${cls(v)}`}>{arr(v)} {sign(v)}</td>
                   <td className="num">
-                    <b style={{ color: m.rvol > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvol.toFixed(1)}×</b>
+                    <b style={{ color: m.rvolRatio > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvolRatio.toFixed(1)}×</b>
                   </td>
                   <td>
                     <span style={{ fontSize: ".74rem" }}>
@@ -180,13 +180,13 @@ export function MoversScreen() {
                     </span>
                   </td>
                   <td className="mv-reason">
-                    {m.cat === "No known catalyst"
-                      ? <span style={{ color: "var(--text-dim-solid)" }}>{m.cat}</span>
-                      : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{m.cat}</span>
+                    {m.catalystLabel === "No known catalyst"
+                      ? <span style={{ color: "var(--text-dim-solid)" }}>{m.catalystLabel}</span>
+                      : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{m.catalystLabel}</span>
                     }
                   </td>
                   <td className="num">
-                    <Spark seed={m.s.charCodeAt(0)} up={v >= 0} />
+                    <Spark seed={m.ticker.charCodeAt(0)} up={v >= 0} />
                   </td>
                 </tr>
               );

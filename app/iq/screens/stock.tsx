@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
-import { stockInfo, watch, movers as moversData, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail } from "../data";
+import { stockInfo, watch, movers as moversData, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail, StockInfo } from "../data";
 import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, earnHistory, EarnQ, EarningsGrowthChart } from "../utils";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
@@ -126,7 +126,7 @@ function ratingCounts(rt: string) {
 
 const ac = (a: string) => a === "Buy" ? "var(--up)" : a === "Sell" ? "var(--down)" : "var(--text-dim-solid)";
 
-const SYMBOLS = [...Object.keys(stockInfo), ...watch.map(w => w.s), ...folio.map(f => f.s)]
+const SYMBOLS = [...Object.keys(stockInfo), ...watch.map(w => w.ticker), ...folio.map(f => f.ticker)]
   .filter((v, i, a) => a.indexOf(v) === i);
 
 type IncRow = { c: string; rev: number; cogs: number; gp: number; opex: number; oi: number; ni: number; eps: number };
@@ -402,10 +402,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
 
   const [watchedSet, setWatchedSet] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set(watch.map(w => w.s));
+    if (typeof window === "undefined") return new Set(watch.map(w => w.ticker));
     const saved = localStorage.getItem("iq-watchlist");
     if (saved) { try { return new Set(JSON.parse(saved) as string[]); } catch { /* ignore */ } }
-    return new Set(watch.map(w => w.s));
+    return new Set(watch.map(w => w.ticker));
   });
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -442,59 +442,59 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   );
 
   const info = stockInfo[sym];
-  const ss = screenerStocks.find(x => x.s === sym);
-  const erEntry = earningsData.find(e => e.s === sym);
-  const moverEntry = moversData.find(m => m.s === sym);
-  const watchEntry = watch.find(w => w.s === sym);
+  const ss = screenerStocks.find(x => x.ticker ===sym);
+  const erEntry = earningsData.find(e => e.ticker ===sym);
+  const moverEntry = moversData.find(m => m.ticker ===sym);
+  const watchEntry = watch.find(w => w.ticker ===sym);
 
-  const _baseP   = moverEntry?.p   ?? watchEntry?.px ?? 162;
-  const _baseC   = moverEntry?.c   ?? watchEntry?.c  ?? 2.4;
-  const _baseName = moverEntry?.n  ?? watchEntry?.n  ?? sym;
-  const _baseSec  = ss?.sec ?? moverEntry?.sector ?? "Technology";
-  const _basePe   = ss?.pe ?? 46;
-  const _baseMc   = ss?.mc ?? 100;
+  const _baseP   = moverEntry?.price   ?? watchEntry?.price ?? 162;
+  const _baseC   = moverEntry?.pctChange   ?? watchEntry?.pctChange  ?? 2.4;
+  const _baseName = moverEntry?.name  ?? watchEntry?.name  ?? sym;
+  const _baseSec  = ss?.sector ?? moverEntry?.sector ?? "Technology";
+  const _basePe   = ss?.peRatio ?? 46;
+  const _baseMc   = ss?.marketCap ?? 100;
   const _baseMkt  = _baseMc >= 1000 ? `$${(_baseMc/1000).toFixed(2)}T` : _baseMc >= 10 ? `$${Math.round(_baseMc)}B` : `$${_baseMc.toFixed(1)}B`;
 
-  const fallbackData = {
-    name: _baseName, px: _baseP, c: _baseC, mkt: _baseMkt,
-    pe: _basePe, eps: _baseP / _basePe,
-    wkh52: _baseP * 1.35, wkl52: _baseP * 0.65,
-    div: 0, beta: 1.45, sec: _baseSec,
-    ai_call: ss?.rating ?? "Neutral", ai_thesis: "", ai_risk: "",
-    ai_metrics: [] as { l: string; v: string }[],
-    fin: [] as { l: string; v: string }[],
-    news: [] as { h: string; dt: string }[],
-    ins: [] as { n: string; a: string; dt: string }[],
+  const fallbackData: StockInfo = {
+    name: _baseName, price: _baseP, pctChange: _baseC, marketCap: _baseMkt,
+    peRatio: _basePe, eps: _baseP / _basePe,
+    week52High: _baseP * 1.35, week52Low: _baseP * 0.65,
+    dividendYield: 0, beta: 1.45, sector: _baseSec,
+    aiRating: ss?.techRating ?? "Neutral", aiThesis: "", aiRisk: "",
+    aiMetrics: [],
+    financials: [],
+    news: [],
+    insiderActivity: [],
   };
   const data = info ?? fallbackData;
-  const isUp = data.c >= 0;
-  const p = data.px;
+  const isUp = data.pctChange >= 0;
+  const p = data.price;
 
-  const rating = ss?.rating ?? data.ai_call ?? "Neutral";
-  const rs = ss?.rs ?? 55;
-  const mg = ss?.mgn ?? 20;
-  const rv = ss?.rvol ?? 1.2;
-  const mc = ss?.mc ?? 100;
+  const rating = ss?.techRating ?? data.aiRating ?? "Neutral";
+  const rs = ss?.relativeStrength ?? 55;
+  const mg = ss?.grossMargin ?? 20;
+  const rv = ss?.rvolRatio ?? 1.2;
+  const mc = ss?.marketCap ?? 100;
   const gv = RATING_VAL[rating] ?? 0;
   const tone = gv > 0.6 ? "var(--up)" : gv > 0 ? "#7bdcae" : gv < -0.6 ? "var(--down)" : gv < 0 ? "#ff9aab" : "var(--text-dim-solid)";
   const rc = ratingCounts(rating);
 
   const ex = EXCHANGE[sym] ?? "NASDAQ";
-  const group = data.sec ?? ss?.sec ?? "Technology";
+  const group = data.sector ?? ss?.sector ?? "Technology";
   const st = BEAT_STREAK[sym] ?? 2;
   const si = SHORT_INT[sym] ?? 2.0;
   const io = INST_OWN[sym] ?? 60;
-  const erDate = erEntry?.t ?? data.ai_metrics?.find(m => m.l === "Next ER")?.v ?? "—";
+  const erDate = erEntry?.session ?? data.aiMetrics?.find(m => m.label === "Next ER")?.value ?? "—";
   const fundsHolding = Object.values(fundDetail).filter(fd => fd.holdings.some(h => h[0] === sym)).length;
 
   // Derived financials
-  const eps = p / (data.pe || 25);
-  const ni = mc / (data.pe || 25);
+  const eps = p / (data.peRatio || 25);
+  const ni = mc / (data.peRatio || 25);
   const rev = ni / ((mg / 100) || 0.2);
   const fcf = ni * 0.9;
   const debt = mc * 0.04;
   const rsi = Math.round(38 + rs * 0.36);
-  const dollar = Math.abs(data.c / 100 * p);
+  const dollar = Math.abs(data.pctChange / 100 * p);
   const avgVol = Math.max(1, Math.round(mc * 1000 / p * 0.012));
 
   const cap = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : v >= 10 ? `$${Math.round(v)}B` : `$${v.toFixed(1)}B`;
@@ -513,9 +513,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
 
   const indRows: [string, string, string][] = [
     ["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
-    ["MACD (12,26)", (data.c * 2.6).toFixed(1), isUp ? "Buy" : "Sell"],
-    ["Stoch %K", (50 + data.c * 4).toFixed(1), (50 + data.c * 4) > 80 ? "Sell" : "Buy"],
-    ["ADX (14)", (20 + Math.abs(data.c) * 2).toFixed(1), isUp ? "Buy" : "Sell"],
+    ["MACD (12,26)", (data.pctChange * 2.6).toFixed(1), isUp ? "Buy" : "Sell"],
+    ["Stoch %K", (50 + data.pctChange * 4).toFixed(1), (50 + data.pctChange * 4) > 80 ? "Sell" : "Buy"],
+    ["ADX (14)", (20 + Math.abs(data.pctChange) * 2).toFixed(1), isUp ? "Buy" : "Sell"],
     ["EMA 50", nf(p * 0.94), isUp ? "Buy" : "Sell"],
     ["SMA 200", nf(p * 0.74), rs > 50 ? "Buy" : "Sell"],
   ];
@@ -549,9 +549,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const topSectors = sectorList.slice(0, 5);
 
   const peers = screenerStocks
-    .filter(x => x.sec === group && x.s !== sym)
+    .filter(x => x.sector === group && x.ticker !== sym)
     .slice(0, 5)
-    .map(x => ({ t: x.s, c: (x.rs - 50) / 10 }));
+    .map(x => ({ t: x.ticker, c: (x.relativeStrength - 50) / 10 }));
   const pcs = peers.map(x => x.c);
   const pmx = pcs.length ? Math.max(...pcs) : 0;
   const pmn = pcs.length ? Math.min(...pcs) : 0;
@@ -634,7 +634,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             </div>
             <div className="sd-px">
               <div className="p">${fmt(p, 2)}</div>
-              <div className={`c ${cls(data.c)}`}>{arr(data.c)} {data.c >= 0 ? "+" : ""}${fmt(dollar, 2)} ({sign(data.c)})</div>
+              <div className={`c ${cls(data.pctChange)}`}>{arr(data.pctChange)} {data.pctChange >= 0 ? "+" : ""}${fmt(dollar, 2)} ({sign(data.pctChange)})</div>
             </div>
           </div>
         </div>
@@ -765,7 +765,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             <div className="keystats">
               {([
                 ["Mkt Cap",        cap(mc)],
-                ["P/E",            data.pe.toFixed(1)],
+                ["P/E",            data.peRatio.toFixed(1)],
                 ["Revenue (TTM)",  cap(rev)],
                 ["EPS (TTM)",      "$" + eps.toFixed(2)],
                 ["Short Int.",     si + "%"],
@@ -954,7 +954,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               {peers.length ? peers.map(peer => {
                 const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
                 return (
-                  <div key={peer.t} className={`minirow${folio.some(f => f.s === peer.t) ? " owned" : ""}`}
+                  <div key={peer.t} className={`minirow${folio.some(f => f.ticker ===peer.t) ? " owned" : ""}`}
                     style={{ cursor: "pointer" }} onClick={() => openStock(peer.t)}>
                     <span className="tkr">{peer.t}</span>
                     <span className="mid">{tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`}>{tag}</span>}</span>
@@ -980,7 +980,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   <span className="rk">{g.rank}</span>
                   <span className="gn">{g.name}</span>
                   <div className="bar"><i style={{ width: Math.max(8, 100 - g.rank * 1.6) + "%" }} /></div>
-                  <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.chg)}</span>
+                  <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.pctChange)}</span>
                 </div>
               ))}
               <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
@@ -994,10 +994,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
         {/* Dividend history — row 3, col 1 */}
         {/* alignSelf stretch is default on grid children; explicit here for clarity */}
         {(() => {
-          const annualDiv = p * (data.div / 100);
+          const annualDiv = p * (data.dividendYield / 100);
           const qDiv = annualDiv / 4;
           const exDay = 6 + (sym.charCodeAt(0) % 22);
-          const payoutRatio = data.div > 0 && data.eps > 0
+          const payoutRatio = data.dividendYield > 0 && data.eps > 0
             ? Math.min(99, Math.round((annualDiv / data.eps) * 100)) : 0;
           const DROWS = [
             { label: "Q2'25", mo: "Apr", dy: exDay },
@@ -1012,8 +1012,8 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <div className="card-h">
                 <h3>Dividend history</h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {data.div > 0
-                    ? <span className="pill up">{data.div.toFixed(2)}% yield</span>
+                  {data.dividendYield > 0
+                    ? <span className="pill up">{data.dividendYield.toFixed(2)}% yield</span>
                     : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>}
                   <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                 </div>
@@ -1021,17 +1021,17 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <div className="card-b" style={{ paddingTop: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                   <div className="cd">
-                    <span className="num">{data.div > 0 ? exDay - 1 : "—"}</span>
+                    <span className="num">{data.dividendYield > 0 ? exDay - 1 : "—"}</span>
                     <span className="u">days to<br />ex-div</span>
                   </div>
                   <div>
                     <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>5-yr dividend growth</div>
                     <div style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>
-                      {data.div > 0 ? `+6.5% / yr · payout ${payoutRatio}%` : "No dividend declared"}
+                      {data.dividendYield > 0 ? `+6.5% / yr · payout ${payoutRatio}%` : "No dividend declared"}
                     </div>
                   </div>
                 </div>
-                {data.div > 0 ? divRows.map(q => (
+                {data.dividendYield > 0 ? divRows.map(q => (
                   <div key={q.label} className="minirow">
                     <span className="tkr" style={{ width: 60 }}>{q.label}</span>
                     <span className="mid mono">${q.perShare.toFixed(4)}/sh</span>
@@ -1046,8 +1046,8 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   ))
                 )}
                 <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
-                  <span className="mid">Annual ({data.div > 0 ? "4 payments" : "no payments"})</span>
-                  <span className="r" style={{ color: "var(--text-hi)" }}>{data.div > 0 ? `$${annualDiv.toFixed(2)}/sh` : "—"}</span>
+                  <span className="mid">Annual ({data.dividendYield > 0 ? "4 payments" : "no payments"})</span>
+                  <span className="r" style={{ color: "var(--text-hi)" }}>{data.dividendYield > 0 ? `$${annualDiv.toFixed(2)}/sh` : "—"}</span>
                 </div>
               </div>
             </div>
@@ -1102,15 +1102,15 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
                 Recent insider transactions
               </div>
-              {data.ins.length > 0 ? (
-                data.ins.map((n, idx) => {
-                  const isSell = /sale|sold|exercis/i.test(n.a);
-                  const valEst = (Math.abs(data.c) * 0.0015 * mc + 0.5).toFixed(1);
+              {data.insiderActivity.length > 0 ? (
+                data.insiderActivity.map((n, idx) => {
+                  const isSell = /sale|sold|exercis/i.test(n.action);
+                  const valEst = (Math.abs(data.pctChange) * 0.0015 * mc + 0.5).toFixed(1);
                   return (
                     <div key={idx} className="minirow" style={{ cursor: "pointer", alignItems: "flex-start", gap: 10 }}>
                       <span className="tkr" style={{ flex: "none" }}>{sym}</span>
                       <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
-                        {n.n} {n.a} <span style={{ color: "var(--text-dim-solid)" }}>({n.dt})</span>
+                        {n.name} {n.action} <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
                       </span>
                       <span className={`r ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
                         {isSell ? "−" : "+"}${valEst}M
@@ -1230,15 +1230,15 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   <tbody>
                     {([
                       ["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
-                      ["Stoch %K", (50 + data.c * 4).toFixed(1), (50 + data.c * 4) > 80 ? "Sell" : "Buy"],
-                      ["CCI (14)", (data.c * 15).toFixed(1), isUp ? "Buy" : "Sell"],
-                      ["MACD (12,26)", (data.c * 2.6).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["Stoch %K", (50 + data.pctChange * 4).toFixed(1), (50 + data.pctChange * 4) > 80 ? "Sell" : "Buy"],
+                      ["CCI (14)", (data.pctChange * 15).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["MACD (12,26)", (data.pctChange * 2.6).toFixed(1), isUp ? "Buy" : "Sell"],
                       ["Williams %R", String(-(100 - rsi).toFixed(0)), rsi > 70 ? "Overbought" : "Neutral"],
-                      ["Bull/Bear Power", (data.c * 3.2).toFixed(1), isUp ? "Buy" : "Sell"],
-                      ["ADX (14)", (20 + Math.abs(data.c) * 2).toFixed(1), Math.abs(data.c) > 2 ? "Strong" : "Weak"],
-                      ["Ultimate Osc.", (45 + data.c * 3).toFixed(1), isUp ? "Buy" : "Sell"],
-                      ["ROC", (data.c * 1.8).toFixed(2), isUp ? "Buy" : "Sell"],
-                      ["Stoch RSI", (0.5 + data.c * 0.05).toFixed(2), isUp ? "Overbought" : "Oversold"],
+                      ["Bull/Bear Power", (data.pctChange * 3.2).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["ADX (14)", (20 + Math.abs(data.pctChange) * 2).toFixed(1), Math.abs(data.pctChange) > 2 ? "Strong" : "Weak"],
+                      ["Ultimate Osc.", (45 + data.pctChange * 3).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["ROC", (data.pctChange * 1.8).toFixed(2), isUp ? "Buy" : "Sell"],
+                      ["Stoch RSI", (0.5 + data.pctChange * 0.05).toFixed(2), isUp ? "Overbought" : "Oversold"],
                       ["ATR (14)", (p * 0.018).toFixed(2), "Neutral"],
                     ] as [string, string, string][]).map(r => (
                       <tr key={r[0]}>
@@ -1294,19 +1294,19 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               </div>
               <div className="drawer-b">
                 {screenerStocks
-                  .filter(x => x.sec === group)
-                  .sort((a, b) => b.rs - a.rs)
+                  .filter(x => x.sector === group)
+                  .sort((a, b) => b.relativeStrength - a.relativeStrength)
                   .map(x => {
-                    const chg = (x.rs - 50) / 10;
+                    const chg = (x.relativeStrength - 50) / 10;
                     return (
-                      <div key={x.s} className="minirow" style={{ cursor: "pointer" }}
-                        onClick={() => { setInnerDrawer(null); openStock(x.s); }}>
+                      <div key={x.ticker} className="minirow" style={{ cursor: "pointer" }}
+                        onClick={() => { setInnerDrawer(null); openStock(x.ticker); }}>
                         <span className="mono" style={{
                           fontWeight: 700, minWidth: 52,
-                          color: x.s === sym ? "var(--brand-2)" : "var(--text-hi)",
-                        }}>{x.s}</span>
-                        <span className="mid" style={{ fontSize: ".76rem" }}>{x.n}</span>
-                        <span className="pill" style={{ fontSize: ".66rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>RS {x.rs}</span>
+                          color: x.ticker === sym ? "var(--brand-2)" : "var(--text-hi)",
+                        }}>{x.ticker}</span>
+                        <span className="mid" style={{ fontSize: ".76rem" }}>{x.name}</span>
+                        <span className="pill" style={{ fontSize: ".66rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>RS {x.relativeStrength}</span>
                         <span className={`mono ${cls(chg)}`} style={{ fontSize: ".82rem" }}>{sign(chg)}</span>
                       </div>
                     );
@@ -1335,7 +1335,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                       fontWeight: g.name === group ? 700 : undefined,
                     }}>{g.name}</span>
                     <div className="bar"><i style={{ width: Math.max(8, 100 - g.rank * 1.6) + "%" }} /></div>
-                    <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.chg)}</span>
+                    <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.pctChange)}</span>
                   </div>
                 ))}
               </div>
@@ -1359,15 +1359,15 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   <div className="m"><div className="k">13F funds</div><div className="v">{fundsHolding} tracked</div></div>
                 </div>
                 <div className="ai-sec"><div className="h">Recent insider transactions (Form 4)</div></div>
-                {data.ins.length > 0 ? data.ins.map((n, i) => {
-                  const isSell = /sale|sold|exercis/i.test(n.a);
-                  const valEst = (Math.abs(data.c) * 0.0015 * mc + 0.5).toFixed(1);
+                {data.insiderActivity.length > 0 ? data.insiderActivity.map((n, i) => {
+                  const isSell = /sale|sold|exercis/i.test(n.action);
+                  const valEst = (Math.abs(data.pctChange) * 0.0015 * mc + 0.5).toFixed(1);
                   return (
                     <div key={i} className="minirow" style={{ alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-soft)" }}>
                       <span className={`pill ${isSell ? "dn" : "up"}`} style={{ flex: "none", fontSize: ".66rem" }}>{isSell ? "SELL" : "BUY"}</span>
                       <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
-                        <b style={{ color: "var(--text-hi)" }}>{n.n}</b> {n.a}{" "}
-                        <span style={{ color: "var(--text-dim-solid)" }}>({n.dt})</span>
+                        <b style={{ color: "var(--text-hi)" }}>{n.name}</b> {n.action}{" "}
+                        <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
                       </span>
                       <span className={`r mono ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
                         {isSell ? "−" : "+"}${valEst}M
@@ -1514,9 +1514,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             const fb = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
             const beats10 = hist10.filter(h => h.surp >= 0).length;
             const avgMv = (hist10.reduce((a, h) => a + Math.abs(h.mv), 0) / hist10.length).toFixed(1);
-            const erEnt = earningsData.find(e => e.s === sym);
+            const erEnt = earningsData.find(e => e.ticker === sym);
             const aiRead = erEnt
-              ? `${sym} ${erEnt.epsA != null ? (erEnt.epsA >= erEnt.epsE ? "beat" : "missed") + " EPS estimates" : "reports " + erEnt.t}. Guidance ${erEnt.guide === "Raised" ? "was raised — bullish" : erEnt.guide === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${erEnt.react != null ? "Shares reacted " + (erEnt.react >= 0 ? "+" : "") + erEnt.react + "% on the print." : `Options imply a ±${erEnt.implied}% move.`}`
+              ? `${sym} ${erEnt.epsActual != null ? (erEnt.epsActual >= erEnt.epsEstimate ? "beat" : "missed") + " EPS estimates" : "reports " + erEnt.session}. Guidance ${erEnt.guidanceStatus === "Raised" ? "was raised — bullish" : erEnt.guidanceStatus === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${erEnt.priceReaction != null ? "Shares reacted " + (erEnt.priceReaction >= 0 ? "+" : "") + erEnt.priceReaction + "% on the print." : `Options imply a ±${erEnt.impliedMove}% move.`}`
               : `${data.name} reports around ${erDate !== "—" ? erDate : "next quarter"}.`;
             return (
               <div className="side-drawer" style={{ zIndex: 52 }}>
@@ -1536,8 +1536,8 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                     <div className="card-h">
                       <h3>{sym} · 10-quarter earnings history</h3>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {erEnt?.react != null
-                          ? <span className={`pill ${erEnt.react >= 0 ? "up" : "dn"}`}>{erEnt.react >= 0 ? "+" : ""}{erEnt.react}% last reaction</span>
+                        {erEnt?.priceReaction != null
+                          ? <span className={`pill ${erEnt.priceReaction >= 0 ? "up" : "dn"}`}>{erEnt.priceReaction >= 0 ? "+" : ""}{erEnt.priceReaction}% last reaction</span>
                           : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats10}/10 beats</span>
                         }
                         <ExpandBtn title={`${sym} · 10-quarter earnings history`} node={<EarnEpsChart hist={hist10} />} />
@@ -1616,7 +1616,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
           })()}
 
           {innerDrawer === "dividend" && (() => {
-            const annualDiv = p * (data.div / 100);
+            const annualDiv = p * (data.dividendYield / 100);
             const qDiv = annualDiv / 4;
             const QLABELS = ["Q3'24","Q4'24","Q1'25","Q2'25","Q3'25","Q4'25","Q1'26","Q2'26"];
             const divAmts = QLABELS.map((_, i) => qDiv * Math.pow(1 / 1.065, (7 - i) / 4));
@@ -1632,13 +1632,13 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Dividend History · {sym}</div>
                     <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-                      {data.div > 0 ? `${data.div.toFixed(2)}% yield · $${annualDiv.toFixed(2)}/yr` : "No dividend paid"}
+                      {data.dividendYield > 0 ? `${data.dividendYield.toFixed(2)}% yield · $${annualDiv.toFixed(2)}/yr` : "No dividend paid"}
                     </div>
                   </div>
                   <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
                 </div>
                 <div className="drawer-b">
-                  {data.div === 0 ? (
+                  {data.dividendYield === 0 ? (
                     <div style={{ padding: "24px 0", textAlign: "center", fontSize: ".9rem", color: "var(--text-dim-solid)" }}>
                       {sym} does not currently pay a dividend.
                     </div>
@@ -1647,7 +1647,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                       <div className="metric-grid" style={{ marginBottom: 14 }}>
                         <div className="m"><div className="k">Annual</div><div className="v">${annualDiv.toFixed(2)}</div></div>
                         <div className="m"><div className="k">Quarterly</div><div className="v">${qDiv.toFixed(2)}</div></div>
-                        <div className="m"><div className="k">Yield</div><div className="v up">{data.div.toFixed(2)}%</div></div>
+                        <div className="m"><div className="k">Yield</div><div className="v up">{data.dividendYield.toFixed(2)}%</div></div>
                         <div className="m"><div className="k">5-yr growth</div><div className="v up">+6.5%/yr</div></div>
                         <div className="m"><div className="k">Payout ratio</div><div className="v">{Math.round((annualDiv / data.eps) * 100)}%</div></div>
                         <div className="m"><div className="k">Frequency</div><div className="v">Quarterly</div></div>
@@ -1692,7 +1692,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                         <div className="card-h"><h3 className="ai-c">◆ AI dividend read · {sym}</h3></div>
                         <div className="card-b">
                           <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>
-                            {sym} yields <b style={{ color: "var(--up)" }}>{data.div.toFixed(2)}%</b>, paying ${annualDiv.toFixed(2)}/share annually (${qDiv.toFixed(2)} quarterly).
+                            {sym} yields <b style={{ color: "var(--up)" }}>{data.dividendYield.toFixed(2)}%</b>, paying ${annualDiv.toFixed(2)}/share annually (${qDiv.toFixed(2)} quarterly).
                             The 5-year dividend CAGR is +6.5% with a payout ratio of {Math.round((annualDiv / data.eps) * 100)}%.
                             {Math.round((annualDiv / data.eps) * 100) < 60
                               ? " Payout is conservative — suggests room for future increases."

@@ -4,104 +4,104 @@ import { useState } from "react";
 import { cls, arr, sign } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
-interface ThemeStock { s: string; n: string; px: number; c: number; }
+interface ThemeStock { s: string; n: string; price: number; c: number; }
 interface Theme { id: string; name: string; desc: string; stocks: ThemeStock[]; }
 
 const THEMES: Theme[] = [
   {
     id: "mag7", name: "Magnificent Seven", desc: "The 7 mega-caps driving market returns",
     stocks: [
-      { s: "AAPL",  n: "Apple",       px: 189.30,   c:  0.82 },
-      { s: "MSFT",  n: "Microsoft",   px: 415.50,   c:  1.14 },
-      { s: "GOOGL", n: "Alphabet",    px: 178.20,   c:  0.93 },
-      { s: "AMZN",  n: "Amazon",      px: 185.60,   c:  1.52 },
-      { s: "NVDA",  n: "Nvidia",      px: 1181.75,  c:  8.23 },
-      { s: "META",  n: "Meta",        px: 512.40,   c:  2.10 },
-      { s: "TSLA",  n: "Tesla",       px: 168.00,   c: -3.10 },
+      { s: "AAPL",  n: "Apple",       price: 189.30,   c:  0.82 },
+      { s: "MSFT",  n: "Microsoft",   price: 415.50,   c:  1.14 },
+      { s: "GOOGL", n: "Alphabet",    price: 178.20,   c:  0.93 },
+      { s: "AMZN",  n: "Amazon",      price: 185.60,   c:  1.52 },
+      { s: "NVDA",  n: "Nvidia",      price: 1181.75,  c:  8.23 },
+      { s: "META",  n: "Meta",        price: 512.40,   c:  2.10 },
+      { s: "TSLA",  n: "Tesla",       price: 168.00,   c: -3.10 },
     ],
   },
   {
     id: "ai", name: "AI & Semiconductors", desc: "Chips, models and infrastructure powering AI",
     stocks: [
-      { s: "NVDA",  n: "Nvidia",        px: 1181.75,  c:  8.23 },
-      { s: "AMD",   n: "Adv Micro Dev", px: 165.20,   c: -2.10 },
-      { s: "AVGO",  n: "Broadcom",      px: 1402.50,  c:  2.97 },
-      { s: "INTC",  n: "Intel",         px:   30.12,  c: -1.80 },
-      { s: "MU",    n: "Micron",        px:  127.40,  c:  3.21 },
-      { s: "ARM",   n: "Arm Holdings",  px:  118.60,  c:  1.85 },
-      { s: "QCOM",  n: "Qualcomm",      px:  158.90,  c:  0.72 },
-      { s: "MRVL",  n: "Marvell Tech",  px:   67.50,  c:  2.40 },
+      { s: "NVDA",  n: "Nvidia",        price: 1181.75,  c:  8.23 },
+      { s: "AMD",   n: "Adv Micro Dev", price: 165.20,   c: -2.10 },
+      { s: "AVGO",  n: "Broadcom",      price: 1402.50,  c:  2.97 },
+      { s: "INTC",  n: "Intel",         price:   30.12,  c: -1.80 },
+      { s: "MU",    n: "Micron",        price:  127.40,  c:  3.21 },
+      { s: "ARM",   n: "Arm Holdings",  price:  118.60,  c:  1.85 },
+      { s: "QCOM",  n: "Qualcomm",      price:  158.90,  c:  0.72 },
+      { s: "MRVL",  n: "Marvell Tech",  price:   67.50,  c:  2.40 },
     ],
   },
   {
     id: "software", name: "Software & Cloud", desc: "Enterprise SaaS and cloud platforms",
     stocks: [
-      { s: "PLTR",  n: "Palantir",    px:   24.88,  c:  6.18 },
-      { s: "CRM",   n: "Salesforce",  px:  316.50,  c:  4.21 },
-      { s: "NOW",   n: "ServiceNow",  px:  780.20,  c:  1.62 },
-      { s: "MSFT",  n: "Microsoft",   px:  415.50,  c:  1.14 },
-      { s: "ADSK",  n: "Autodesk",    px:  218.40,  c: -0.55 },
-      { s: "SNOW",  n: "Snowflake",   px:  162.30,  c:  2.80 },
-      { s: "DDOG",  n: "Datadog",     px:  133.80,  c:  3.10 },
+      { s: "PLTR",  n: "Palantir",    price:   24.88,  c:  6.18 },
+      { s: "CRM",   n: "Salesforce",  price:  316.50,  c:  4.21 },
+      { s: "NOW",   n: "ServiceNow",  price:  780.20,  c:  1.62 },
+      { s: "MSFT",  n: "Microsoft",   price:  415.50,  c:  1.14 },
+      { s: "ADSK",  n: "Autodesk",    price:  218.40,  c: -0.55 },
+      { s: "SNOW",  n: "Snowflake",   price:  162.30,  c:  2.80 },
+      { s: "DDOG",  n: "Datadog",     price:  133.80,  c:  3.10 },
     ],
   },
   {
     id: "internet", name: "Internet & Media", desc: "Digital advertising, streaming and social",
     stocks: [
-      { s: "META",  n: "Meta",       px: 512.40,  c:  2.10 },
-      { s: "GOOGL", n: "Alphabet",   px: 178.20,  c:  0.93 },
-      { s: "AMZN",  n: "Amazon",     px: 185.60,  c:  1.52 },
-      { s: "NFLX",  n: "Netflix",    px: 682.30,  c:  0.44 },
-      { s: "PINS",  n: "Pinterest",  px:  38.50,  c: -1.20 },
-      { s: "SNAP",  n: "Snap",       px:  15.80,  c: -2.40 },
+      { s: "META",  n: "Meta",       price: 512.40,  c:  2.10 },
+      { s: "GOOGL", n: "Alphabet",   price: 178.20,  c:  0.93 },
+      { s: "AMZN",  n: "Amazon",     price: 185.60,  c:  1.52 },
+      { s: "NFLX",  n: "Netflix",    price: 682.30,  c:  0.44 },
+      { s: "PINS",  n: "Pinterest",  price:  38.50,  c: -1.20 },
+      { s: "SNAP",  n: "Snap",       price:  15.80,  c: -2.40 },
     ],
   },
   {
     id: "consumer", name: "Consumer & Retail", desc: "Brands, retail and consumer discretionary",
     stocks: [
-      { s: "AMZN",  n: "Amazon",       px: 185.60,  c:  1.52 },
-      { s: "TSLA",  n: "Tesla",        px: 168.00,  c: -3.10 },
-      { s: "SBUX",  n: "Starbucks",    px:  78.20,  c: -0.60 },
-      { s: "NKE",   n: "Nike",         px:  93.40,  c:  0.30 },
-      { s: "MCD",   n: "McDonald's",   px: 268.50,  c:  0.18 },
-      { s: "HD",    n: "Home Depot",   px: 342.80,  c:  0.94 },
-      { s: "TGT",   n: "Target",       px: 148.60,  c: -1.80 },
-      { s: "WBA",   n: "Walgreens",    px:  15.30,  c: -5.80 },
+      { s: "AMZN",  n: "Amazon",       price: 185.60,  c:  1.52 },
+      { s: "TSLA",  n: "Tesla",        price: 168.00,  c: -3.10 },
+      { s: "SBUX",  n: "Starbucks",    price:  78.20,  c: -0.60 },
+      { s: "NKE",   n: "Nike",         price:  93.40,  c:  0.30 },
+      { s: "MCD",   n: "McDonald's",   price: 268.50,  c:  0.18 },
+      { s: "HD",    n: "Home Depot",   price: 342.80,  c:  0.94 },
+      { s: "TGT",   n: "Target",       price: 148.60,  c: -1.80 },
+      { s: "WBA",   n: "Walgreens",    price:  15.30,  c: -5.80 },
     ],
   },
   {
     id: "fintech", name: "Fintech", desc: "Payments, crypto and financial innovation",
     stocks: [
-      { s: "PYPL",  n: "PayPal",      px:  65.80,  c:  1.40 },
-      { s: "SQ",    n: "Block",       px:  72.40,  c:  2.80 },
-      { s: "V",     n: "Visa",        px: 278.60,  c:  0.62 },
-      { s: "MA",    n: "Mastercard",  px: 458.90,  c:  0.75 },
-      { s: "SOFI",  n: "SoFi Tech",   px:   7.90,  c:  3.25 },
-      { s: "COIN",  n: "Coinbase",    px: 226.40,  c:  5.10 },
-      { s: "AFRM",  n: "Affirm",      px:  38.20,  c:  4.60 },
+      { s: "PYPL",  n: "PayPal",      price:  65.80,  c:  1.40 },
+      { s: "SQ",    n: "Block",       price:  72.40,  c:  2.80 },
+      { s: "V",     n: "Visa",        price: 278.60,  c:  0.62 },
+      { s: "MA",    n: "Mastercard",  price: 458.90,  c:  0.75 },
+      { s: "SOFI",  n: "SoFi Tech",   price:   7.90,  c:  3.25 },
+      { s: "COIN",  n: "Coinbase",    price: 226.40,  c:  5.10 },
+      { s: "AFRM",  n: "Affirm",      price:  38.20,  c:  4.60 },
     ],
   },
   {
     id: "hardware", name: "Devices & Hardware", desc: "Physical compute, servers and peripherals",
     stocks: [
-      { s: "AAPL",  n: "Apple",         px: 189.30,  c:  0.82 },
-      { s: "DELL",  n: "Dell Tech",     px: 161.80,  c: -3.45 },
-      { s: "SMCI",  n: "Super Micro",   px: 812.40,  c:  5.60 },
-      { s: "HPQ",   n: "HP Inc",        px:  31.40,  c: -0.90 },
-      { s: "NTAP",  n: "NetApp",        px: 114.60,  c:  1.10 },
-      { s: "WDC",   n: "Western Digital", px: 60.20, c:  2.30 },
+      { s: "AAPL",  n: "Apple",         price: 189.30,  c:  0.82 },
+      { s: "DELL",  n: "Dell Tech",     price: 161.80,  c: -3.45 },
+      { s: "SMCI",  n: "Super Micro",   price: 812.40,  c:  5.60 },
+      { s: "HPQ",   n: "HP Inc",        price:  31.40,  c: -0.90 },
+      { s: "NTAP",  n: "NetApp",        price: 114.60,  c:  1.10 },
+      { s: "WDC",   n: "Western Digital", price: 60.20, c:  2.30 },
     ],
   },
   {
     id: "value", name: "Deep Value", desc: "Low-multiple, out-of-favor names with recovery potential",
     stocks: [
-      { s: "INTC",  n: "Intel",          px:  30.12,  c: -1.80 },
-      { s: "WBA",   n: "Walgreens",      px:  15.30,  c: -5.80 },
-      { s: "DELL",  n: "Dell Tech",      px: 161.80,  c: -3.45 },
-      { s: "F",     n: "Ford",           px:  12.40,  c: -0.80 },
-      { s: "BAC",   n: "Bank of America", px: 38.20,  c:  0.52 },
-      { s: "C",     n: "Citigroup",      px:  64.10,  c:  0.88 },
-      { s: "T",     n: "AT&T",           px:  17.80,  c:  0.11 },
+      { s: "INTC",  n: "Intel",          price:  30.12,  c: -1.80 },
+      { s: "WBA",   n: "Walgreens",      price:  15.30,  c: -5.80 },
+      { s: "DELL",  n: "Dell Tech",      price: 161.80,  c: -3.45 },
+      { s: "F",     n: "Ford",           price:  12.40,  c: -0.80 },
+      { s: "BAC",   n: "Bank of America", price: 38.20,  c:  0.52 },
+      { s: "C",     n: "Citigroup",      price:  64.10,  c:  0.88 },
+      { s: "T",     n: "AT&T",           price:  17.80,  c:  0.11 },
     ],
   },
 ];
@@ -188,7 +188,7 @@ export function ThemesScreen() {
 
         <StockPanelLayout
           selectedSym={sel ?? ""}
-          chartPx={stocks.find(s => s.s === sel)?.px ?? 0}
+          chartPx={stocks.find(s => s.s === sel)?.price ?? 0}
           tf={thTf}
           onTfChange={setThTf}
           chartEmptyText="Select a stock to see chart"
@@ -207,7 +207,7 @@ export function ThemesScreen() {
                   sparkUp={stock.c >= 0}
                   isSelected={sel === stock.s}
                   onClick={() => setSel(stock.s)}
-                  valueTop={stock.px >= 1000 ? `$${(stock.px / 1000).toFixed(2)}K` : `$${stock.px.toFixed(2)}`}
+                  valueTop={stock.price >= 1000 ? `$${(stock.price / 1000).toFixed(2)}K` : `$${stock.price.toFixed(2)}`}
                   valueBottom={`${arr(stock.c)} ${sign(stock.c)}`}
                   valueBottomClass={cls(stock.c)}
                 />

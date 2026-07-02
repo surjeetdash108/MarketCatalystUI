@@ -74,11 +74,11 @@ function GaugeSVG({ val }: { val: number }) {
 function DashThumb() {
   const hmMini = sectorList.slice(0, 8).map(sd => {
     const tot = sd.items.reduce((s, i) => s + i[1], 0);
-    const { bg, fg } = heatCol(sd.chg);
+    const { bg, fg } = heatCol(sd.pctChange);
     return (
       <div key={sd.name} style={{ background: bg, borderRadius: 7, padding: "8px 9px", flex: `${Math.max(1, tot / 1400)} 1 70px` }}>
         <div style={{ fontSize: ".6rem", fontWeight: 700, color: fg, lineHeight: 1.1 }}>{sd.name.replace("Mega-Cap ", "").replace("Cloud ", "")}</div>
-        <div style={{ fontFamily: "var(--f-mono)", fontSize: ".64rem", color: fg, opacity: 0.88, marginTop: 2 }}>{sign(sd.chg)}</div>
+        <div style={{ fontFamily: "var(--f-mono)", fontSize: ".64rem", color: fg, opacity: 0.88, marginTop: 2 }}>{sign(sd.pctChange)}</div>
       </div>
     );
   });
@@ -101,14 +101,14 @@ function DashThumb() {
         <div className="col-12">
           <div className="pulse">
             {pulse.slice(0, 6).map((p, i) => {
-              const dec = p.v > 1000 ? 0 : 2;
+              const dec = p.value > 1000 ? 0 : 2;
               return (
-                <div key={p.l} className="p" style={{ cursor: "pointer" }}>
-                  <div className="lbl">{p.l}</div>
-                  <div className="val">{fmt(p.v, dec)}</div>
-                  <div className={`chg ${cls(p.c)}`}>{sign(p.c)}</div>
-                  <div className="pmeta" style={{ fontSize: ".6rem", color: "var(--text-dim-solid)" }}>O {fmt(p.o ?? p.v * 0.99, dec)} &middot; PC {fmt(p.pc ?? p.v * 1.01, dec)}</div>
-                  <Spark idx={i} up={p.c >= 0} />
+                <div key={p.label} className="p" style={{ cursor: "pointer" }}>
+                  <div className="lbl">{p.label}</div>
+                  <div className="val">{fmt(p.value, dec)}</div>
+                  <div className={`chg ${cls(p.change)}`}>{sign(p.change)}</div>
+                  <div className="pmeta" style={{ fontSize: ".6rem", color: "var(--text-dim-solid)" }}>O {fmt(p.open ?? p.value * 0.99, dec)} &middot; PC {fmt(p.prevClose ?? p.value * 1.01, dec)}</div>
+                  <Spark idx={i} up={p.change >= 0} />
                 </div>
               );
             })}
@@ -125,7 +125,7 @@ function DashThumb() {
             </div>
             <ul className="wmn-body">
               {wmn.slice(0, 4).map((b, i) => (
-                <li key={i}><span className="bullet" /><span><b>{b.h}.</b> <span dangerouslySetInnerHTML={{ __html: b.t }} /></span></li>
+                <li key={i}><span className="bullet" /><span><b>{b.headline}.</b> <span dangerouslySetInnerHTML={{ __html: b.body }} /></span></li>
               ))}
             </ul>
             <div className="wmn-foot" style={{ display: "flex", gap: 6, padding: "8px 18px", borderTop: "1px solid var(--border)", fontSize: ".66rem", flexWrap: "wrap" }}>
@@ -138,10 +138,10 @@ function DashThumb() {
             <div className="card-h"><h3>Earnings Today</h3><span className="link">View all →</span></div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {earnings.slice(0, 5).map(e => (
-                <div key={e.s} className="minirow">
-                  <span className="tkr">{e.s}<small>{e.n}</small></span>
-                  <span className="mid"><span className={`pill ${e.t === "BMO" ? "bmo" : "amc"}`}>{e.t}</span></span>
-                  <span className={`r ${e.epsA !== null ? cls(e.epsA - e.epsE) : ""}`}>{e.epsA !== null ? sign(e.epsA - e.epsE) : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}</span>
+                <div key={e.ticker} className="minirow">
+                  <span className="tkr">{e.ticker}<small>{e.name}</small></span>
+                  <span className="mid"><span className={`pill ${e.session.includes("pre") ? "bmo" : "amc"}`}>{e.session}</span></span>
+                  <span className={`r ${e.epsActual !== null ? cls(e.epsActual - e.epsEstimate) : ""}`}>{e.epsActual !== null ? sign(e.epsActual - e.epsEstimate) : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}</span>
                 </div>
               ))}
             </div>
@@ -152,10 +152,10 @@ function DashThumb() {
             <div className="card-h"><h3>Market Movers</h3><span className="link">View all →</span></div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {movers.slice(0, 5).map(m => (
-                <div key={m.s} className="minirow">
-                  <span className="tkr">{m.s}</span>
-                  <span className="mid">{m.cat}</span>
-                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                <div key={m.ticker} className="minirow">
+                  <span className="tkr">{m.ticker}</span>
+                  <span className="mid">{m.catalystLabel}</span>
+                  <span className={`r ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span>
                 </div>
               ))}
             </div>
@@ -176,9 +176,9 @@ function DashThumb() {
             <div className="card-b" style={{ paddingTop: 4 }}>
               {analyst.slice(0, 5).map((a, i) => (
                 <div key={i} className="minirow">
-                  <span className="tkr">{a.s}</span>
-                  <span className="mid">{a.firm} &rarr; <b style={{ color: "var(--text-hi)" }}>{a.to}</b></span>
-                  <span className="r">{a.dir === "up" ? <span className="up">&#9650; Upg</span> : a.dir === "down" ? <span className="down">&#9660; Dng</span> : a.dir === "init" ? <span className="ai-c">&#9670; Init</span> : <span style={{ color: "var(--text-dim-solid)" }}>Reit</span>}</span>
+                  <span className="tkr">{a.ticker}</span>
+                  <span className="mid">{a.firm} &rarr; <b style={{ color: "var(--text-hi)" }}>{a.newRating}</b></span>
+                  <span className="r">{a.actionType === "up" ? <span className="up">&#9650; Upg</span> : a.actionType === "down" ? <span className="down">&#9660; Dng</span> : a.actionType === "init" ? <span className="ai-c">&#9670; Init</span> : <span style={{ color: "var(--text-dim-solid)" }}>Reit</span>}</span>
                 </div>
               ))}
             </div>
@@ -190,11 +190,11 @@ function DashThumb() {
             <div className="card-b" style={{ paddingTop: 4 }}>
               <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 4px", color: "var(--up)" }}>&#9650; Leaders</div>
               {sectorList.slice(0, 3).map(g => (
-                <div key={g.name} className="minirow"><span className="tkr">{g.name.split(" ")[0]}</span><span className="mid">RS {g.rank} &middot; {g.name.split(" ").slice(1).join(" ")}</span><span className={`r ${cls(g.chg)}`}>{sign(g.chg)}</span></div>
+                <div key={g.name} className="minirow"><span className="tkr">{g.name.split(" ")[0]}</span><span className="mid">RS {g.rank} &middot; {g.name.split(" ").slice(1).join(" ")}</span><span className={`r ${cls(g.pctChange)}`}>{sign(g.pctChange)}</span></div>
               ))}
               <div style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "8px 0 4px", color: "var(--down)" }}>&#9660; Laggards</div>
               {sectorList.slice(-3).map(g => (
-                <div key={g.name} className="minirow"><span className="tkr">{g.name.split(" ")[0]}</span><span className="mid">RS {g.rank} &middot; {g.name.split(" ").slice(1).join(" ")}</span><span className={`r ${cls(g.chg)}`}>{sign(g.chg)}</span></div>
+                <div key={g.name} className="minirow"><span className="tkr">{g.name.split(" ")[0]}</span><span className="mid">RS {g.rank} &middot; {g.name.split(" ").slice(1).join(" ")}</span><span className={`r ${cls(g.pctChange)}`}>{sign(g.pctChange)}</span></div>
               ))}
             </div>
           </div>
@@ -208,7 +208,7 @@ function DashThumb() {
                 <span className="mono up" style={{ fontWeight: 600 }}>&#9650; +1.42%</span>
               </div>
               {folio.slice(0, 4).map(f => (
-                <div key={f.s} className="minirow"><span className="tkr">{f.s}</span><span className="mid">{f.size} &middot; {f.conv} conv.</span><span className={`r ${cls(f.c)}`}>{sign(f.c)}</span></div>
+                <div key={f.ticker} className="minirow"><span className="tkr">{f.ticker}</span><span className="mid">{f.positionSize} &middot; {f.conviction} conv.</span><span className={`r ${cls(f.pctChange)}`}>{sign(f.pctChange)}</span></div>
               ))}
             </div>
           </div>
@@ -218,7 +218,7 @@ function DashThumb() {
             <div className="card-h"><h3>Watchlist</h3><span className="link">View all →</span></div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               {watch.slice(0, 5).map(w => (
-                <div key={w.s} className="minirow"><span className="tkr">{w.s}</span><span className="mid">{w.opt && <span className="pill opt">&#9889;</span>} ER {w.er}</span><span className={`r ${cls(w.c)}`}>{sign(w.c)}</span></div>
+                <div key={w.ticker} className="minirow"><span className="tkr">{w.ticker}</span><span className="mid">{w.hasOptions && <span className="pill opt">&#9889;</span>} ER {w.nextEarningsDate}</span><span className={`r ${cls(w.pctChange)}`}>{sign(w.pctChange)}</span></div>
               ))}
             </div>
           </div>
@@ -288,7 +288,7 @@ function DashThumb() {
 
 function MoversThumb() {
   const tabs = [["win","Top Gainers"],["lose","Top Losers"],["vol","Unusual Volume"],["week","Weekly Movers"]];
-  const list = [...movers].filter(m => m.c > 0).sort((a, b) => b.c - a.c).slice(0, 15);
+  const list = [...movers].filter(m => m.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange).slice(0, 15);
   const tally: Record<string, number> = {};
   list.forEach(m => { tally[m.sector] = (tally[m.sector] || 0) + 1; });
   const tallyEntries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
@@ -332,14 +332,14 @@ function MoversThumb() {
             </thead>
             <tbody>
               {movers.map(m => (
-                <tr key={m.s} style={{ cursor: "pointer" }}>
-                  <td><div className="co"><span className="s">{m.s}</span><span className="n">{m.n}</span></div></td>
-                  <td className="num">${fmt(m.p, 2)}</td>
-                  <td className={`num ${cls(m.c)}`}>{sign(m.c)}</td>
-                  <td className="num"><b style={{ color: m.rvol > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvol.toFixed(1)}&times;</b></td>
+                <tr key={m.ticker} style={{ cursor: "pointer" }}>
+                  <td><div className="co"><span className="s">{m.ticker}</span><span className="n">{m.name}</span></div></td>
+                  <td className="num">${fmt(m.price, 2)}</td>
+                  <td className={`num ${cls(m.pctChange)}`}>{sign(m.pctChange)}</td>
+                  <td className="num"><b style={{ color: m.rvolRatio > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvolRatio.toFixed(1)}&times;</b></td>
                   <td><span style={{ fontSize: ".74rem" }}><b style={{ color: "var(--text-hi)" }}>{m.cap}</b> &middot; <span style={{ color: "var(--text-dim-solid)" }}>{m.sector}</span></span></td>
-                  <td><span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{m.cat}</span></td>
-                  <td className="num"><Spark idx={m.s.charCodeAt(0) % 8} up={m.c >= 0} /></td>
+                  <td><span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{m.catalystLabel}</span></td>
+                  <td className="num"><Spark idx={m.ticker.charCodeAt(0) % 8} up={m.pctChange >= 0} /></td>
                 </tr>
               ))}
             </tbody>
@@ -581,7 +581,7 @@ function StockDetailContent() {
                 <div key={g.name} className="grouprow">
                   <span className="rk">{g.rank}</span><span className="gn">{g.name}</span>
                   <span className="bar"><i style={{ width: `${Math.max(8, 100 - g.rank * 1.6)}%` }} /></span>
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.chg)}</span>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.pctChange)}</span>
                 </div>
               ))}
               <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 8 }}>Semiconductors ranks <b style={{ color: "var(--up)" }}>#1 of {sectorList.length}</b> groups.</div>
@@ -670,7 +670,7 @@ function HeatmapThumb() {
                 return (
                   <div key={g.name} className="tm-sector" style={{ flex: `${Math.max(1, tot / 800)} 1 240px` }}>
                     <div className="sl" style={{ cursor: "pointer" }}>
-                      <span>{g.name} <span className={cls(g.chg)} style={{ fontFamily: "var(--f-mono)", fontWeight: 600 }}>{sign(g.chg)}</span></span>
+                      <span>{g.name} <span className={cls(g.pctChange)} style={{ fontFamily: "var(--f-mono)", fontWeight: 600 }}>{sign(g.pctChange)}</span></span>
                       <span style={{ color: "var(--brand-2)", fontWeight: 600 }}>View all →</span>
                     </div>
                     <div className="tm-cells">
@@ -752,13 +752,13 @@ function EarnEpsChart({ hist }: { hist: EarnQ[] }) {
   );
 }
 
-function EcChip({ e, selected }: { e: { s: string; n: string }; selected: boolean }) {
+function EcChip({ e, selected }: { e: { ticker: string; name: string }; selected: boolean }) {
   return (
     <button className={`ec-chip${selected ? " on" : ""}`}>
       <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6", position: "relative" }}>
-        {e.s[0]}
+        {e.ticker[0]}
       </span>
-      {e.s}
+      {e.ticker}
     </button>
   );
 }
@@ -766,8 +766,8 @@ function EcChip({ e, selected }: { e: { s: string; n: string }; selected: boolea
 function EarningsThumb() {
   const ranges = [["yest","Yesterday"],["today","Today"],["tom","Tomorrow"],["week","This Week"],["next","Next Week"],["prev","Last Week"],["month","Month"]];
   const days = ["Mon","Tue","Wed","Thu","Fri"];
-  const bmo = earnings.filter(e => e.t === "BMO");
-  const amc = earnings.filter(e => e.t === "AMC");
+  const bmo = earnings.filter(e => e.session.includes("pre"));
+  const amc = earnings.filter(e => e.session.includes("post"));
   const sel = earnings[0];
   const hist = earnHistory("NVDA", 1181.75, 71.4);
   const beats = hist.filter(h => h.surp > 0).length;
@@ -781,18 +781,18 @@ function EarningsThumb() {
       <div style={{ padding: "0 32px" }}>
         <div className="ec-grid">
           {days.map((day, di) => {
-            const bmoDay = earnings.slice(di * 2, di * 2 + 2).filter(e => e.t === "BMO");
-            const amcDay = earnings.slice(di * 2, di * 2 + 2).filter(e => e.t === "AMC");
+            const bmoDay = earnings.slice(di * 2, di * 2 + 2).filter(e => e.session.includes("pre"));
+            const amcDay = earnings.slice(di * 2, di * 2 + 2).filter(e => e.session.includes("post"));
             return (
               <div key={day} className={`ec-day${di === 1 ? " is-today" : ""}`}>
                 <div className="ec-dh">{day}{di === 1 && " · Today"}</div>
                 <div className="ec-sess">
                   <div className="ec-lbl">Before open</div>
-                  {bmo.slice(di, di + 2).length ? bmo.slice(di, di + 2).map(e => <EcChip key={e.s} e={e} selected={e.s === sel.s} />) : <span className="ec-none">—</span>}
+                  {bmo.slice(di, di + 2).length ? bmo.slice(di, di + 2).map(e => <EcChip key={e.ticker} e={e} selected={e.ticker === sel.ticker} />) : <span className="ec-none">—</span>}
                 </div>
                 <div className="ec-sess">
                   <div className="ec-lbl">After close</div>
-                  {amc.slice(di, di + 2).length ? amc.slice(di, di + 2).map(e => <EcChip key={e.s} e={e} selected={false} />) : <span className="ec-none">—</span>}
+                  {amc.slice(di, di + 2).length ? amc.slice(di, di + 2).map(e => <EcChip key={e.ticker} e={e} selected={false} />) : <span className="ec-none">—</span>}
                 </div>
               </div>
             );
@@ -801,7 +801,7 @@ function EarningsThumb() {
         <div className="dash" style={{ marginTop: 16 }}>
           <div className="col-7">
             <div className="card">
-              <div className="card-h"><h3>{sel.s} &middot; 10-quarter earnings history</h3><span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats}/10 beats</span></div>
+              <div className="card-h"><h3>{sel.ticker} &middot; 10-quarter earnings history</h3><span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats}/10 beats</span></div>
               <div className="card-b" style={{ paddingTop: 8 }}>
                 <div className="ec-legend"><span><i style={{ background: "var(--surface-3)" }} />EPS estimate</span><span><i style={{ background: "var(--up)" }} />Beat</span><span><i style={{ background: "var(--down)" }} />Miss</span><span><i className="ln" style={{ background: "var(--brand-2)" }} />Stock move %</span></div>
                 <EarnEpsChart hist={hist} />
@@ -819,7 +819,7 @@ function EarningsThumb() {
           </div>
         </div>
         <div className="ai-block" style={{ marginTop: 2 }}>
-          <div className="card-h"><h3 className="ai-c">&#9670; AI earnings read &middot; {sel.s}</h3></div>
+          <div className="card-h"><h3 className="ai-c">&#9670; AI earnings read &middot; {sel.ticker}</h3></div>
           <div className="card-b"><p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>NVDA beat EPS estimates. Guidance was raised — bullish. History shows <b style={{ color: "var(--text-hi)" }}>{beats}/10 beats</b> and an average post-print move of <b style={{ color: "var(--text-hi)" }}>{avgMv}%</b>. Watch revenue growth and forward guidance most.</p></div>
         </div>
       </div>
@@ -871,13 +871,13 @@ function AnalystThumb() {
                   <tbody>
                     {analyst.map((a, i) => (
                       <tr key={i} style={{ cursor: "pointer" }}>
-                        <td><div className="co"><span className="s">{a.s}</span><span className="n">{a.n}</span></div></td>
+                        <td><div className="co"><span className="s">{a.ticker}</span><span className="n">{a.name}</span></div></td>
                         <td>{a.firm}</td>
-                        <td>{a.dir === "up" ? <span className="pill up">&#9650; Upgrade</span> : a.dir === "down" ? <span className="pill dn">&#9660; Downgrade</span> : a.dir === "init" ? <span className="pill ai">&#9670; Initiate</span> : <span className="pill hold">Reiterate</span>}</td>
-                        <td><span style={{ color: "var(--text-dim-solid)" }}>{a.from}</span> &rarr; <b style={{ color: "var(--text-hi)" }}>{a.to}</b></td>
-                        <td className="num">{a.ptF ? `$${a.ptF}` : "—"} &rarr; <b style={{ color: "var(--text-hi)" }}>${a.ptT}</b></td>
-                        <td className={`num ${cls(a.react)}`}>{sign(a.react)}</td>
-                        <td className="num">{a.n30}&times; /30d</td>
+                        <td>{a.actionType === "up" ? <span className="pill up">&#9650; Upgrade</span> : a.actionType === "down" ? <span className="pill dn">&#9660; Downgrade</span> : a.actionType === "init" ? <span className="pill ai">&#9670; Initiate</span> : <span className="pill hold">Reiterate</span>}</td>
+                        <td><span style={{ color: "var(--text-dim-solid)" }}>{a.previousRating}</span> &rarr; <b style={{ color: "var(--text-hi)" }}>{a.newRating}</b></td>
+                        <td className="num">{a.prevPriceTarget ? `$${a.prevPriceTarget}` : "—"} &rarr; <b style={{ color: "var(--text-hi)" }}>${a.newPriceTarget}</b></td>
+                        <td className={`num ${cls(a.priceChangeSince)}`}>{sign(a.priceChangeSince)}</td>
+                        <td className="num">{a.actionsLast30Days}&times; /30d</td>
                       </tr>
                     ))}
                   </tbody>
@@ -903,7 +903,7 @@ function AnalystThumb() {
 }
 
 function PortfolioThumb() {
-  const dayPL = folio.reduce((s, f) => s + f.c * f.p * 0.005, 0);
+  const dayPL = folio.reduce((s, f) => s + f.pctChange * f.price * 0.005, 0);
   const tot = 128430;
   return (
     <ScaledScreen>
@@ -921,7 +921,7 @@ function PortfolioThumb() {
             <ul className="wmn-body" style={{ columns: 2 }}>
               <li><span className="bullet" /><span><b>Biggest driver:</b> <b style={{ color: "var(--text-hi)" }}>NVDA</b> — +8.23% at 28% weight.</span></li>
               <li><span className="bullet" /><span><b>Leader:</b> <b className="up">NVDA +8.23%</b>; <b>laggard:</b> <b className="down">HD -1.10%</b>.</span></li>
-              <li><span className="bullet" /><span><b>Net:</b> {folio.filter(h => h.c > 0).length} of {folio.length} green today.</span></li>
+              <li><span className="bullet" /><span><b>Net:</b> {folio.filter(h => h.pctChange > 0).length} of {folio.length} green today.</span></li>
               <li><span className="bullet" /><span>Click any holding on the left to open its full detail →</span></li>
             </ul>
           </div>
@@ -932,10 +932,10 @@ function PortfolioThumb() {
               <div className="card-h"><h3>Holdings</h3><span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{folio.length} names</span></div>
               <div className="pf-list">
                 {folio.map((f, i) => (
-                  <div key={f.s} className={`pf-li${i === 0 ? " active" : ""}`}>
-                    <div><span className="s">{f.s}</span><span className="n">{f.n}</span></div>
-                    <div className="pf-spark"><Spark idx={i + 3} up={f.c >= 0} /></div>
-                    <div><span className="px">${fmt(f.p, 2)}</span><span className={`ch ${cls(f.c)}`}>{sign(f.c)}</span></div>
+                  <div key={f.ticker} className={`pf-li${i === 0 ? " active" : ""}`}>
+                    <div><span className="s">{f.ticker}</span><span className="n">{f.name}</span></div>
+                    <div className="pf-spark"><Spark idx={i + 3} up={f.pctChange >= 0} /></div>
+                    <div><span className="px">${fmt(f.price, 2)}</span><span className={`ch ${cls(f.pctChange)}`}>{sign(f.pctChange)}</span></div>
                   </div>
                 ))}
               </div>
@@ -971,11 +971,11 @@ function RecapsThumb() {
       <div style={{ padding: "0 32px" }}>
         <div className="rcp-idx">
           {pulse.slice(0, 6).map((p, i) => (
-            <div key={p.l} className="rcp-box">
-              <div className="rcp-bl">{p.l}</div>
-              <div className="rcp-bv">{fmt(p.v, p.v > 1000 ? 0 : 2)}</div>
-              <div className={`rcp-bc ${cls(p.c)}`}>{sign(p.c)}</div>
-              <div className="rcp-bs"><Spark idx={i + 1} up={p.c >= 0} /></div>
+            <div key={p.label} className="rcp-box">
+              <div className="rcp-bl">{p.label}</div>
+              <div className="rcp-bv">{fmt(p.value, p.value > 1000 ? 0 : 2)}</div>
+              <div className={`rcp-bc ${cls(p.change)}`}>{sign(p.change)}</div>
+              <div className="rcp-bs"><Spark idx={i + 1} up={p.change >= 0} /></div>
             </div>
           ))}
         </div>
@@ -986,7 +986,7 @@ function RecapsThumb() {
           </div>
           <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
             {recap.indices.map(x => (
-              <div key={x.l}><div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{x.l}</div><div className={`mono ${cls(x.v)}`} style={{ fontSize: "1.25rem", fontWeight: 700 }}>{sign(x.v)}</div></div>
+              <div key={x.label}><div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{x.label}</div><div className={`mono ${cls(x.value)}`} style={{ fontSize: "1.25rem", fontWeight: 700 }}>{sign(x.value)}</div></div>
             ))}
             <div style={{ marginLeft: "auto" }}><button className="btn ai">&#9654; 60-sec audio recap</button></div>
           </div>
@@ -1006,7 +1006,7 @@ function RecapsThumb() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><div className="eyebrow">Up next · tomorrow</div><span className="link">View all →</span></div>
               {recap.tomorrow.map((t, i) => (
-                <div key={i} className="minirow"><span className="mono" style={{ width: 54, color: "var(--warn)" }}>{t.time}</span><span className="mid">{t.ev}</span></div>
+                <div key={i} className="minirow"><span className="mono" style={{ width: 54, color: "var(--warn)" }}>{t.time}</span><span className="mid">{t.event}</span></div>
               ))}
             </div>
           </div>
@@ -1016,8 +1016,8 @@ function RecapsThumb() {
           <div className="card-b">
             <div className="heat">
               {sectorList.slice(0, 10).map(s => {
-                const hc = heatCol(s.chg);
-                return <div key={s.name} className="s" style={{ cursor: "pointer", background: hc.bg }}><div className="nm" style={{ color: hc.fg }}>{s.name}</div><div className="v" style={{ color: hc.fg }}>{sign(s.chg)}</div></div>;
+                const hc = heatCol(s.pctChange);
+                return <div key={s.name} className="s" style={{ cursor: "pointer", background: hc.bg }}><div className="nm" style={{ color: hc.fg }}>{s.name}</div><div className="v" style={{ color: hc.fg }}>{sign(s.pctChange)}</div></div>;
               })}
             </div>
           </div>
@@ -1028,7 +1028,7 @@ function RecapsThumb() {
               <div className="card-h"><h3>Biggest earnings movers</h3><span className="link">View all →</span></div>
               <div className="card-b" style={{ paddingTop: 6 }}>
                 {recap.movers.map(m => (
-                  <div key={m.s} className="minirow"><span className="tkr">{m.s}</span><span className="mid">{m.reason}</span><span className={`r ${cls(m.c)}`}>{sign(m.c)}</span></div>
+                  <div key={m.ticker} className="minirow"><span className="tkr">{m.ticker}</span><span className="mid">{m.reason}</span><span className={`r ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span></div>
                 ))}
               </div>
             </div>
@@ -1038,7 +1038,7 @@ function RecapsThumb() {
               <div className="card-h"><h3>Market internals</h3><span className="link">View all →</span></div>
               <div className="card-b" style={{ paddingTop: 6 }}>
                 {recap.internals.map(r => (
-                  <div key={r.l} className="minirow"><span className="mid">{r.l}</span><span className={`r ${r.c > 0 ? "up" : "down"}`}>{r.v}</span></div>
+                  <div key={r.label} className="minirow"><span className="mid">{r.label}</span><span className={`r ${r.direction > 0 ? "up" : "down"}`}>{r.value}</span></div>
                 ))}
               </div>
             </div>

@@ -91,13 +91,13 @@ function earnsForTab(t: TabKey): EarnCalItem[] {
 
 function calToEarning(cal: EarnCalItem): Earning {
   return {
-    s: cal.s, n: cal.n,
-    t: cal.sess === "BMO" ? "Before open" : "After close",
-    mc: "$60B", sec: cal.sec,
-    epsE: cal.epsE, epsA: cal.epsA,
-    revE: 0, revA: null,
-    guide: cal.guide, react: cal.react,
-    tags: [], owned: false, implied: cal.implied,
+    ticker: cal.s, name: cal.n,
+    session: cal.sess === "BMO" ? "Before open" : "After close",
+    marketCap: "$60B", sector: cal.sec,
+    epsEstimate: cal.epsE, epsActual: cal.epsA,
+    revenueEstimate: 0, revenueActual: null,
+    guidanceStatus: cal.guide, priceReaction: cal.react,
+    tags: [], owned: false, impliedMove: cal.implied,
   };
 }
 
@@ -114,7 +114,7 @@ function parseMcNum(mc: string): number {
 function earnIncome(s: string, mcStr: string): IncRow[] {
   const si    = stockInfo[s];
   const mc    = parseMcNum(mcStr);
-  const price = si?.px ?? 100;
+  const price = si?.price ?? 100;
   const rev0  = Math.max(2, mc * 0.02);
   const sh    = Math.max(0.3, mc / price);
   const cols  = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
@@ -902,23 +902,23 @@ export function EarningsScreen() {
 
   // ── Detail section ────────────────────────────────────────────────────────
 
-  const selEarning: Earning = earnings.find(e => e.s === sel)
+  const selEarning: Earning = earnings.find(e => e.ticker === sel)
     ?? (() => { const cal = EARN_CAL.find(e => e.s === sel); return cal ? calToEarning(cal) : calToEarning(EARN_CAL[0]); })();
 
   const _si   = stockInfo[sel];
-  const _base = Math.max(0.05, ((_si?.px ?? 100) / (_si?.pe ?? 25)) / 4);
+  const _base = Math.max(0.05, ((_si?.price ?? 100) / (_si?.peRatio ?? 25)) / 4);
   const hist  = earnHistory(sel, _base);
-  const inc   = earnIncome(sel, selEarning?.mc ?? "$60B");
+  const inc   = earnIncome(sel, selEarning?.marketCap ?? "$60B");
   const beats = hist.filter(h => h.surp > 0).length;
   const avgMv = (hist.reduce((a, h) => a + Math.abs(h.mv), 0) / hist.length).toFixed(1);
 
   const fmtB = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
 
   const aiRead = selEarning
-    ? `${sel} ${selEarning.epsA != null
-        ? (selEarning.epsA >= selEarning.epsE ? "beat" : "missed") + " EPS estimates"
-        : "reports " + selEarning.t
-      }. Guidance ${selEarning.guide === "Raised" ? "was raised — bullish" : selEarning.guide === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${selEarning.react != null ? `Shares reacted ${sign(selEarning.react)} on the print.` : `Options imply a ±${selEarning.implied}% move.`}`
+    ? `${sel} ${selEarning.epsActual != null
+        ? (selEarning.epsActual >= selEarning.epsEstimate ? "beat" : "missed") + " EPS estimates"
+        : "reports " + selEarning.session
+      }. Guidance ${selEarning.guidanceStatus === "Raised" ? "was raised — bullish" : selEarning.guidanceStatus === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${selEarning.priceReaction != null ? `Shares reacted ${sign(selEarning.priceReaction)} on the print.` : `Options imply a ±${selEarning.impliedMove}% move.`}`
     : `${sel} reports next quarter.`;
 
   return (
@@ -955,10 +955,10 @@ export function EarningsScreen() {
               <StockLogo sym={sel} size={36} />
               <div>
                 <span style={{ fontWeight: 700, color: "var(--text-hi)", fontSize: ".95rem" }}>{sel}</span>
-                <span style={{ color: "var(--text-dim-solid)", fontSize: ".78rem", marginLeft: 8 }}>{selEarning.n} · {selEarning.sec}</span>
+                <span style={{ color: "var(--text-dim-solid)", fontSize: ".78rem", marginLeft: 8 }}>{selEarning.name} · {selEarning.sector}</span>
               </div>
-              <span className={`pill ${selEarning.t.includes("pre") || selEarning.t.includes("Before") ? "bmo" : "amc"}`} style={{ marginLeft: 4 }}>
-                {selEarning.t}
+              <span className={`pill ${selEarning.session.includes("pre") || selEarning.session.includes("Before") ? "bmo" : "amc"}`} style={{ marginLeft: 4 }}>
+                {selEarning.session}
               </span>
               {/* Action buttons — inline, same row */}
               <div style={{ display: "flex", gap: 6, marginLeft: 4 }}>
@@ -996,33 +996,33 @@ export function EarningsScreen() {
             </div>{/* end outer flex */}
           </div>{/* end card-h */}
           <div className="card-b" style={{ paddingTop: 10 }}>
-            {(COMPANY_BIO[sel] ?? stockInfo[sel]?.ai_thesis) && (
+            {(COMPANY_BIO[sel] ?? stockInfo[sel]?.aiThesis) && (
               <p style={{ fontSize: ".82rem", color: "var(--text)", lineHeight: 1.6, marginBottom: 14, marginTop: 0 }}>
-                {COMPANY_BIO[sel] ?? stockInfo[sel]?.ai_thesis}
+                {COMPANY_BIO[sel] ?? stockInfo[sel]?.aiThesis}
               </p>
             )}
             <div className="metric-grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 12 }}>
               <div className="m">
                 <div className="k">EPS estimate</div>
-                <div className="v">${selEarning.epsE.toFixed(2)}</div>
+                <div className="v">${selEarning.epsEstimate.toFixed(2)}</div>
               </div>
               <div className="m">
                 <div className="k">EPS actual</div>
-                {selEarning.epsA != null
-                  ? <div className={`v ${selEarning.epsA >= selEarning.epsE ? "up" : "down"}`}>${selEarning.epsA.toFixed(2)}</div>
+                {selEarning.epsActual != null
+                  ? <div className={`v ${selEarning.epsActual >= selEarning.epsEstimate ? "up" : "down"}`}>${selEarning.epsActual.toFixed(2)}</div>
                   : <div className="v" style={{ color: "var(--text-dim-solid)" }}>Pending</div>}
               </div>
               <div className="m">
                 <div className="k">Guidance</div>
-                <div className={`v ${selEarning.guide === "Raised" ? "up" : selEarning.guide === "Lowered" ? "down" : ""}`} style={{ fontSize: ".95rem" }}>
-                  {selEarning.guide ?? "—"}
+                <div className={`v ${selEarning.guidanceStatus === "Raised" ? "up" : selEarning.guidanceStatus === "Lowered" ? "down" : ""}`} style={{ fontSize: ".95rem" }}>
+                  {selEarning.guidanceStatus ?? "—"}
                 </div>
               </div>
               <div className="m">
-                <div className="k">{selEarning.react != null ? "Reaction" : "Implied move"}</div>
-                {selEarning.react != null
-                  ? <div className={`v ${cls(selEarning.react)}`}>{sign(selEarning.react)}</div>
-                  : <div className="v" style={{ color: "var(--warn)" }}>±{selEarning.implied}%</div>}
+                <div className="k">{selEarning.priceReaction != null ? "Reaction" : "Implied move"}</div>
+                {selEarning.priceReaction != null
+                  ? <div className={`v ${cls(selEarning.priceReaction)}`}>{sign(selEarning.priceReaction)}</div>
+                  : <div className="v" style={{ color: "var(--warn)" }}>±{selEarning.impliedMove}%</div>}
               </div>
             </div>
             <p style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", margin: 0 }}>{aiRead}</p>
@@ -1038,8 +1038,8 @@ export function EarningsScreen() {
             <div className="card-h">
               <h3>{sel} · 10-quarter earnings history</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {selEarning?.react != null
-                  ? <span className={`pill ${selEarning.react >= 0 ? "up" : "dn"}`}>{sign(selEarning.react)} last reaction</span>
+                {selEarning?.priceReaction != null
+                  ? <span className={`pill ${selEarning.priceReaction >= 0 ? "up" : "dn"}`}>{sign(selEarning.priceReaction)} last reaction</span>
                   : beats >= 7
                     ? <span className="pill up">{beats}/10 beats</span>
                     : beats < 5

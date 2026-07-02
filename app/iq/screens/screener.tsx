@@ -43,11 +43,11 @@ export function ScreenerScreen() {
     setRs90(false); setRs7090(false); setRsLt40(false);
     setSalesGt20(false); setEpsGt25(false); setMarginPos(false);
     setRatingBuy(false); setMcGt10(true); setRvolGt15(false);
-    if (f.rs_min !== undefined && f.rs_min >= 90)  setRs90(true);
-    else if (f.rs_min !== undefined && f.rs_min >= 70) setRs7090(true);
-    if (f.salesG_min !== undefined && f.salesG_min >= 20) setSalesGt20(true);
-    if (f.epsG_min   !== undefined && f.epsG_min   >= 25) setEpsGt25(true);
-    if (f.rvol_min   !== undefined && f.rvol_min   >= 1.5) setRvolGt15(true);
+    if (f.relativeStrength_min !== undefined && f.relativeStrength_min >= 90)  setRs90(true);
+    else if (f.relativeStrength_min !== undefined && f.relativeStrength_min >= 70) setRs7090(true);
+    if (f.salesGrowth_min !== undefined && f.salesGrowth_min >= 20) setSalesGt20(true);
+    if (f.epsGrowth_min   !== undefined && f.epsGrowth_min   >= 25) setEpsGt25(true);
+    if (f.rvolRatio_min   !== undefined && f.rvolRatio_min   >= 1.5) setRvolGt15(true);
   }
 
   function resetAll() {
@@ -61,32 +61,32 @@ export function ScreenerScreen() {
 
   /* ── Filtered results ── */
   const filtered = screenerStocks.filter(s => {
-    if (pf.rs_min     !== undefined && s.rs     < pf.rs_min)     return false;
-    if (pf.salesG_min !== undefined && s.salesG < pf.salesG_min) return false;
-    if (pf.epsG_min   !== undefined && s.epsG   < pf.epsG_min)   return false;
-    if (pf.rvol_min   !== undefined && s.rvol   < pf.rvol_min)   return false;
-    if (pf.mc_min     !== undefined && s.mc     < pf.mc_min)     return false;
-    if (pf.rating     !== undefined && !pf.rating.includes(s.rating)) return false;
-    if (rs90      && s.rs < 90)                                   return false;
-    if (rs7090    && (s.rs < 70 || s.rs >= 90))                   return false;
-    if (rsLt40    && s.rs >= 40)                                   return false;
-    if (salesGt20 && s.salesG < 20)                               return false;
-    if (epsGt25   && s.epsG   < 25)                               return false;
-    if (marginPos && s.mgn    <= 10)                               return false;
-    if (ratingBuy && !["Strong Buy", "Buy"].includes(s.rating))   return false;
-    if (mcGt10    && s.mc < 10)                                    return false;
-    if (rvolGt15  && s.rvol < 1.5)                                return false;
+    if (pf.relativeStrength_min     !== undefined && s.relativeStrength     < pf.relativeStrength_min)     return false;
+    if (pf.salesGrowth_min !== undefined && s.salesGrowth < pf.salesGrowth_min) return false;
+    if (pf.epsGrowth_min   !== undefined && s.epsGrowth   < pf.epsGrowth_min)   return false;
+    if (pf.rvolRatio_min   !== undefined && s.rvolRatio   < pf.rvolRatio_min)   return false;
+    if (pf.marketCap_min     !== undefined && s.marketCap     < pf.marketCap_min)     return false;
+    if (pf.techRating     !== undefined && !pf.techRating.includes(s.techRating)) return false;
+    if (rs90      && s.relativeStrength < 90)                                   return false;
+    if (rs7090    && (s.relativeStrength < 70 || s.relativeStrength >= 90))                   return false;
+    if (rsLt40    && s.relativeStrength >= 40)                                   return false;
+    if (salesGt20 && s.salesGrowth < 20)                               return false;
+    if (epsGt25   && s.epsGrowth   < 25)                               return false;
+    if (marginPos && s.grossMargin    <= 10)                               return false;
+    if (ratingBuy && !["Strong Buy", "Buy"].includes(s.techRating))   return false;
+    if (mcGt10    && s.marketCap < 10)                                    return false;
+    if (rvolGt15  && s.rvolRatio < 1.5)                                return false;
     return true;
   });
 
   /* selected stock — fall back to first result if current sel drops out */
-  const selStock = filtered.find(s => s.s === scrSel) ?? filtered[0] ?? null;
-  const selSym   = selStock?.s ?? "";
+  const selStock = filtered.find(s => s.ticker === scrSel) ?? filtered[0] ?? null;
+  const selSym   = selStock?.ticker ?? "";
 
   /* price for CandleChart */
-  const selWatch = watchData.find(w => w.s === selSym);
-  const selMover = moversData.find(m => m.s === selSym);
-  const selPx    = selWatch?.px ?? selMover?.p ?? 0;
+  const selWatch = watchData.find(w => w.ticker === selSym);
+  const selMover = moversData.find(m => m.ticker === selSym);
+  const selPx    = selWatch?.price ?? selMover?.price ?? 0;
 
   return (
     <>
@@ -193,16 +193,16 @@ export function ScreenerScreen() {
             >
               {filtered.map((s, i) => (
                 <StockRow
-                  key={s.s}
-                  sym={s.s}
-                  name={s.n}
+                  key={s.ticker}
+                  sym={s.ticker}
+                  name={s.name}
                   seed={i + 11}
-                  sparkUp={s.rs >= 60}
-                  isSelected={selSym === s.s}
-                  onClick={() => setScrSel(s.s)}
-                  valueTop={`RS ${s.rs}`}
-                  valueBottom={s.rating}
-                  valueBottomClass={s.rating.includes("Buy") ? "up" : s.rating.includes("Sell") ? "down" : ""}
+                  sparkUp={s.relativeStrength >= 60}
+                  isSelected={selSym === s.ticker}
+                  onClick={() => setScrSel(s.ticker)}
+                  valueTop={`RS ${s.relativeStrength}`}
+                  valueBottom={s.techRating}
+                  valueBottomClass={s.techRating.includes("Buy") ? "up" : s.techRating.includes("Sell") ? "down" : ""}
                 />
               ))}
             </StockListCard>

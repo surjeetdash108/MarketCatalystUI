@@ -46,8 +46,8 @@ const MARKET_INTERNALS = [
 ] as { k: string; v: string; note: string; up: boolean | null }[];
 
 const EARN_MOVERS = [...earnings]
-  .filter(e => e.react !== null)
-  .sort((a, b) => Math.abs(b.react!) - Math.abs(a.react!));
+  .filter(e => e.priceReaction !== null)
+  .sort((a, b) => Math.abs(b.priceReaction!) - Math.abs(a.priceReaction!));
 
 const FG_HISTORY = [
   { date: "Jun 25", val: 62, label: "Greed"       },
@@ -114,73 +114,73 @@ function DpRow({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function DashPopContent({ sym, block }: { sym: string; block: PopBlock }) {
-  const mv  = movers.find(x => x.s === sym);
-  const er  = earnings.find(x => x.s === sym);
-  const an  = analyst.find(x => x.s === sym);
-  const w   = watch.find(x => x.s === sym);
-  const pf  = folio.find(x => x.s === sym);
-  const scr = screenerStocks.find(x => x.s === sym);
+  const mv  = movers.find(x => x.ticker ===sym);
+  const er  = earnings.find(x => x.ticker ===sym);
+  const an  = analyst.find(x => x.ticker ===sym);
+  const w   = watch.find(x => x.ticker ===sym);
+  const pf  = folio.find(x => x.ticker ===sym);
+  const scr = screenerStocks.find(x => x.ticker ===sym);
   const ins = INSIDER_MINI.find(x => x.s === sym);
-  const name = mv?.n ?? er?.n ?? an?.n ?? w?.n ?? scr?.n ?? sym;
+  const name = mv?.name ?? er?.name ?? an?.name ?? w?.name ?? scr?.name ?? sym;
 
   let body: React.ReactNode;
 
   if (block === "earnings") {
     if (er) {
       body = <>
-        <DpRow label="When">{er.t === "BMO" ? "Before open" : er.t === "AMC" ? "After close" : er.t}</DpRow>
+        <DpRow label="When">{er.session === "BMO" ? "Before open" : er.session === "AMC" ? "After close" : er.session}</DpRow>
         <DpRow label="EPS est → act">
-          ${er.epsE}{er.epsA != null && <> → ${er.epsA} <span className={er.epsA >= er.epsE ? "up" : "down"}>({er.epsA >= er.epsE ? "beat" : "miss"})</span></>}
+          ${er.epsEstimate}{er.epsActual != null && <> → ${er.epsActual} <span className={er.epsActual >= er.epsEstimate ? "up" : "down"}>({er.epsActual >= er.epsEstimate ? "beat" : "miss"})</span></>}
         </DpRow>
         <DpRow label="Guidance">
-          <span className={er.guide === "Raised" ? "up" : er.guide === "Lowered" ? "down" : ""}>{er.guide ?? "—"}</span>
+          <span className={er.guidanceStatus === "Raised" ? "up" : er.guidanceStatus === "Lowered" ? "down" : ""}>{er.guidanceStatus ?? "—"}</span>
         </DpRow>
-        {er.react != null
-          ? <DpRow label="Reaction"><span className={cls(er.react)}>{sign(er.react)}</span></DpRow>
-          : <DpRow label="Implied move">±{er.implied}%</DpRow>
+        {er.priceReaction != null
+          ? <DpRow label="Reaction"><span className={cls(er.priceReaction)}>{sign(er.priceReaction)}</span></DpRow>
+          : <DpRow label="Implied move">±{er.impliedMove}%</DpRow>
         }
-        <div className="dp-note">Why it&apos;s here: reporting {er.t === "BMO" ? "before the open" : "after the close"}{er.guide === "Raised" ? " — and raised guidance." : "."}</div>
+        <div className="dp-note">Why it&apos;s here: reporting {er.session === "BMO" ? "before the open" : "after the close"}{er.guidanceStatus === "Raised" ? " — and raised guidance." : "."}</div>
       </>;
     } else {
       body = <div className="dp-note">On this week&apos;s earnings calendar.</div>;
     }
   } else if (block === "movers" && mv) {
     body = <>
-      <DpRow label="Today"><span className={cls(mv.c)}>{sign(mv.c)}</span></DpRow>
-      <DpRow label="Rel. volume">{mv.rvol.toFixed(1)}×</DpRow>
-      <DpRow label="Catalyst">{mv.cat}</DpRow>
-      <DpRow label="Technicals">{mv.ma} · RS {mv.rs}</DpRow>
-      <div className="dp-note">Why it&apos;s moving: {mv.cat === "No known catalyst" ? "trading with its sector and the broad tape" : mv.cat.toLowerCase()}, on {mv.rvol.toFixed(1)}× normal volume.</div>
+      <DpRow label="Today"><span className={cls(mv.pctChange)}>{sign(mv.pctChange)}</span></DpRow>
+      <DpRow label="Rel. volume">{mv.rvolRatio.toFixed(1)}×</DpRow>
+      <DpRow label="Catalyst">{mv.catalystLabel}</DpRow>
+      <DpRow label="Technicals">{mv.maPosture} · RS {mv.relativeStrength}</DpRow>
+      <div className="dp-note">Why it&apos;s moving: {mv.catalystLabel === "No known catalyst" ? "trading with its sector and the broad tape" : mv.catalystLabel.toLowerCase()}, on {mv.rvolRatio.toFixed(1)}× normal volume.</div>
     </>;
   } else if (block === "analyst" && an) {
     body = <>
       <DpRow label="Action">
-        <span className={an.dir === "up" ? "up" : an.dir === "down" ? "down" : ""}>{an.dir === "up" ? "Upgrade" : an.dir === "down" ? "Downgrade" : "Reiterate"} · {an.firm}</span>
+        <span className={an.actionType === "up" ? "up" : an.actionType === "down" ? "down" : ""}>{an.actionType === "up" ? "Upgrade" : an.actionType === "down" ? "Downgrade" : "Reiterate"} · {an.firm}</span>
       </DpRow>
-      <DpRow label="Rating">{an.from} → {an.to}</DpRow>
-      <DpRow label="Price target">{an.ptF ? `$${an.ptF} → ` : ""}${an.ptT}</DpRow>
-      <DpRow label="Reaction"><span className={cls(an.react)}>{sign(an.react)}</span></DpRow>
-      <div className="dp-note">Why it&apos;s here: {an.firm} changed its call — {an.n30} firm(s) active in 30d.</div>
+      <DpRow label="Rating">{an.previousRating} → {an.newRating}</DpRow>
+      <DpRow label="Price target">{an.prevPriceTarget ? `$${an.prevPriceTarget} → ` : ""}${an.newPriceTarget}</DpRow>
+      <DpRow label="Reaction"><span className={cls(an.priceChangeSince)}>{sign(an.priceChangeSince)}</span></DpRow>
+      <div className="dp-note">Why it&apos;s here: {an.firm} changed its call — {an.actionsLast30Days} firm(s) active in 30d.</div>
     </>;
   } else if (block === "watchlist") {
-    const px = w?.px ?? mv?.p;
+    const px = w?.price ?? mv?.price;
     body = <>
       {px != null && <DpRow label="Price"><span className="mono">${fmt(px, 2)}</span></DpRow>}
-      <DpRow label="Day"><span className={cls(w?.c ?? mv?.c ?? 0)}>{sign(w?.c ?? mv?.c ?? 0)}</span></DpRow>
-      {scr && <DpRow label="Mkt Cap">{scr.mc >= 1000 ? `${(scr.mc / 1000).toFixed(1)}T` : `${Math.round(scr.mc)}B`}</DpRow>}
-      {scr && <DpRow label="P/E">{scr.pe > 0 ? scr.pe.toFixed(1) : "—"}</DpRow>}
-      {scr && <DpRow label="RS rank">{scr.rs}/99</DpRow>}
-      {scr && <DpRow label="Sector">{scr.sec}</DpRow>}
-      <DpRow label="Next ER">{w?.er ?? "—"}</DpRow>
-      {an && <DpRow label="Latest action"><span className={an.dir === "up" ? "up" : an.dir === "down" ? "down" : ""}>{an.dir === "up" ? "▲" : an.dir === "down" ? "▼" : "·"} {an.firm} → {an.to}</span></DpRow>}
-      {w?.headline && w.headline !== "—" && <div className="dp-note">{w.headline}</div>}
+      <DpRow label="Day"><span className={cls(w?.pctChange ?? mv?.pctChange ?? 0)}>{sign(w?.pctChange ?? mv?.pctChange ?? 0)}</span></DpRow>
+      {scr && <DpRow label="Mkt Cap">{scr.marketCap >= 1000 ? `${(scr.marketCap / 1000).toFixed(1)}T` : `${Math.round(scr.marketCap)}B`}</DpRow>}
+      {scr && <DpRow label="P/E">{scr.peRatio > 0 ? scr.peRatio.toFixed(1) : "—"}</DpRow>}
+      {scr && <DpRow label="RS rank">{scr.relativeStrength}/99</DpRow>}
+      {scr && <DpRow label="Sector">{scr.sector}</DpRow>}
+      <DpRow label="Next ER">{w?.nextEarningsDate ?? "—"}</DpRow>
+      {an && <DpRow label="Latest action"><span className={an.actionType === "up" ? "up" : an.actionType === "down" ? "down" : ""}>{an.actionType === "up" ? "▲" : an.actionType === "down" ? "▼" : "·"} {an.firm} → {an.newRating}</span></DpRow>}
+      {w?.latestHeadline && w.latestHeadline !== "—" && <div className="dp-note">{w.latestHeadline}</div>}
     </>;
   } else if (block === "portfolio" && pf) {
     body = <>
-      <DpRow label="Day"><span className={cls(pf.c)}>{sign(pf.c)}</span></DpRow>
-      <DpRow label="Unrealized"><span className={cls(pf.gl)}>{pf.gl > 0 ? "+" : ""}{pf.gl.toFixed(1)}%</span></DpRow>
-      <DpRow label="Conviction">{pf.conv}</DpRow>
-      <div className="dp-note">Why it&apos;s here: {pf.evt !== "—" ? pf.evt : "a position in your book"}.</div>
+      <DpRow label="Day"><span className={cls(pf.pctChange)}>{sign(pf.pctChange)}</span></DpRow>
+      <DpRow label="Unrealized"><span className={cls(pf.gainLossPct)}>{pf.gainLossPct > 0 ? "+" : ""}{pf.gainLossPct.toFixed(1)}%</span></DpRow>
+      <DpRow label="Conviction">{pf.conviction}</DpRow>
+      <div className="dp-note">Why it&apos;s here: {pf.eventNote !== "—" ? pf.eventNote : "a position in your book"}.</div>
     </>;
   } else if (block === "insider" && ins) {
     const buy = ins.dir === "buy";
@@ -192,19 +192,19 @@ function DashPopContent({ sym, block }: { sym: string; block: PopBlock }) {
     </>;
   } else if (block === "screener" && scr) {
     body = <>
-      <DpRow label="RS rank">{scr.rs}/99</DpRow>
-      <DpRow label="Sector">{scr.sec}</DpRow>
-      <DpRow label="Rating">{scr.rating}</DpRow>
-      <DpRow label="Rev growth"><span className={cls(scr.salesG)}>{sign(scr.salesG)}</span></DpRow>
+      <DpRow label="RS rank">{scr.relativeStrength}/99</DpRow>
+      <DpRow label="Sector">{scr.sector}</DpRow>
+      <DpRow label="Rating">{scr.techRating}</DpRow>
+      <DpRow label="Rev growth"><span className={cls(scr.salesGrowth)}>{sign(scr.salesGrowth)}</span></DpRow>
       <div className="dp-note">Why it&apos;s here: clears the leaders screen — high relative strength + growth.</div>
     </>;
   } else {
-    const c = mv?.c ?? (w ? w.c : 0);
+    const c = mv?.pctChange ?? (w ? w.pctChange : 0);
     body = <>
-      <DpRow label="Price">{mv ? `$${fmt(mv.p)}` : "—"}</DpRow>
+      <DpRow label="Price">{mv ? `$${fmt(mv.price)}` : "—"}</DpRow>
       <DpRow label="Today"><span className={cls(c)}>{sign(c)}</span></DpRow>
-      <DpRow label="Sector">{mv?.sector ?? scr?.sec ?? "—"}</DpRow>
-      <DpRow label="Rating">{scr?.rating ?? "—"}</DpRow>
+      <DpRow label="Sector">{mv?.sector ?? scr?.sector ?? "—"}</DpRow>
+      <DpRow label="Rating">{scr?.techRating ?? "—"}</DpRow>
     </>;
   }
 
@@ -223,24 +223,24 @@ function MoverPopup({ m }: { m: Mover }) {
   return (
     <div className="mv-dp" onClick={e => e.stopPropagation()}>
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
-        <span style={{ fontWeight: 800, color: "var(--text-hi)", fontSize: ".9rem" }}>{m.s}</span>
-        <span style={{ flex: 1, fontSize: ".72rem", color: "var(--text-dim-solid)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.n}</span>
-        <span className={`r ${cls(m.c)}`} style={{ fontSize: ".78rem" }}>{sign(m.c)}</span>
+        <span style={{ fontWeight: 800, color: "var(--text-hi)", fontSize: ".9rem" }}>{m.ticker}</span>
+        <span style={{ flex: 1, fontSize: ".72rem", color: "var(--text-dim-solid)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
+        <span className={`r ${cls(m.pctChange)}`} style={{ fontSize: ".78rem" }}>{sign(m.pctChange)}</span>
       </div>
       <div className="mvtabs">
         <span className="mvt mvt-t">Technical</span>
         <span className="mvt mvt-n">News</span>
       </div>
       <div className="mvp mvp-t">
-        <div className="dp-row"><span>Price</span><b>${fmt(m.p)}</b></div>
-        <div className="dp-row"><span>RVOL</span><b>{m.rvol}×</b></div>
-        <div className="dp-row"><span>RS Rating</span><b>{m.rs}/99</b></div>
-        <div className="dp-row"><span>4-Week</span><b className={cls(m.wk)}>{m.wk > 0 ? "+" : ""}{m.wk}%</b></div>
-        <div className="dp-note" style={{ marginTop: 6 }}>{m.tech}</div>
+        <div className="dp-row"><span>Price</span><b>${fmt(m.price)}</b></div>
+        <div className="dp-row"><span>RVOL</span><b>{m.rvolRatio}×</b></div>
+        <div className="dp-row"><span>RS Rating</span><b>{m.relativeStrength}/99</b></div>
+        <div className="dp-row"><span>4-Week</span><b className={cls(m.weekPct)}>{m.weekPct > 0 ? "+" : ""}{m.weekPct}%</b></div>
+        <div className="dp-note" style={{ marginTop: 6 }}>{m.techContext}</div>
       </div>
       <div className="mvp mvp-n">
-        <span className="dp-tag" style={{ display: "inline-block", marginBottom: 6 }}>{m.cat}</span>
-        <div className="dp-note">{m.news}</div>
+        <span className="dp-tag" style={{ display: "inline-block", marginBottom: 6 }}>{m.catalystLabel}</span>
+        <div className="dp-note">{m.newsContext}</div>
       </div>
     </div>
   );
@@ -256,8 +256,8 @@ function analystDir(type: string) {
 export function DashboardScreen() {
   const { openStock, openMoverModal, openEarnings, openSector, openIndex } = useIQActions();
 
-  const leaders  = [...screenerStocks].sort((a, b) => b.rs - a.rs).slice(0, 3);
-  const laggards = [...screenerStocks].sort((a, b) => a.rs - b.rs).slice(0, 3);
+  const leaders  = [...screenerStocks].sort((a, b) => b.relativeStrength - a.relativeStrength).slice(0, 3);
+  const laggards = [...screenerStocks].sort((a, b) => a.relativeStrength - b.relativeStrength).slice(0, 3);
 
 
   const [drawer, setDrawer] = useState<DrawerKey>(null);
@@ -319,11 +319,11 @@ export function DashboardScreen() {
         <div className="col-12">
           <div className="pulse">
             {pulse.slice(0, 6).map((x, i) => (
-              <div key={x.l} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(i)}>
-                <div className="lbl">{x.l}</div>
-                <div className="val">{fmt(x.v, x.v > 1000 ? 0 : 2)}</div>
-                <div className={`chg ${cls(x.c)}`}>{arr(x.c)} {sign(x.c)}</div>
-                <Spark seed={i + 1} up={x.c >= 0} />
+              <div key={x.label} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(i)}>
+                <div className="lbl">{x.label}</div>
+                <div className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</div>
+                <div className={`chg ${cls(x.change)}`}>{arr(x.change)} {sign(x.change)}</div>
+                <Spark seed={i + 1} up={x.change >= 0} />
               </div>
             ))}
           </div>
@@ -359,8 +359,8 @@ export function DashboardScreen() {
                 <li key={i}>
                   <span className="bullet" />
                   <span>
-                    <b>{b.h}.</b>{" "}
-                    <span dangerouslySetInnerHTML={{ __html: b.t }} />
+                    <b>{b.headline}.</b>{" "}
+                    <span dangerouslySetInnerHTML={{ __html: b.body }} />
                   </span>
                 </li>
               ))}
@@ -387,18 +387,18 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {earnings.slice(0, 5).map(e => (
-                <div key={e.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openEarnings(e.s)}
-                  {...mr(e.s, "earnings")}
+                <div key={e.ticker} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openEarnings(e.ticker)}
+                  {...mr(e.ticker, "earnings")}
                 >
-                  <StockLogo sym={e.s} size={26} />
-                  <span className="tkr">{e.s}<small>{e.n}</small></span>
+                  <StockLogo sym={e.ticker} size={26} />
+                  <span className="tkr">{e.ticker}<small>{e.name}</small></span>
                   <span className="mid">
-                    <span className={`pill ${e.t === "BMO" ? "bmo" : "amc"}`}>{e.t}</span>
+                    <span className={`pill ${e.session === "BMO" ? "bmo" : "amc"}`}>{e.session}</span>
                   </span>
-                  <span className={`r ${e.react != null ? cls(e.react) : ""}`}>
-                    {e.react != null
-                      ? sign(e.react)
+                  <span className={`r ${e.priceReaction != null ? cls(e.priceReaction) : ""}`}>
+                    {e.priceReaction != null
+                      ? sign(e.priceReaction)
                       : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}
                   </span>
                 </div>
@@ -425,16 +425,16 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               {(moversTab === 0
-                ? [...movers].filter(m => m.c > 0).sort((a, b) => b.c - a.c)
+                ? [...movers].filter(m => m.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange)
                 : moversTab === 1
-                ? [...movers].filter(m => m.c < 0).sort((a, b) => a.c - b.c)
-                : [...movers].sort((a, b) => b.rvol - a.rvol)
+                ? [...movers].filter(m => m.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange)
+                : [...movers].sort((a, b) => b.rvolRatio - a.rvolRatio)
               ).slice(0, 6).map(m => (
-                <div key={m.s} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.s)}>
-                  <StockLogo sym={m.s} size={26} />
-                  <span className="tkr">{m.s}</span>
-                  <span className="mid">{moversTab === 2 ? `${m.rvol}× vol` : m.cat}</span>
-                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                <div key={m.ticker} className="minirow mv-dash-row" style={{ cursor: "pointer" }} onClick={() => openMoverModal(m.ticker)}>
+                  <StockLogo sym={m.ticker} size={26} />
+                  <span className="tkr">{m.ticker}</span>
+                  <span className="mid">{moversTab === 2 ? `${m.rvolRatio}× vol` : m.catalystLabel}</span>
+                  <span className={`r ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span>
                   <MoverPopup m={m} />
                 </div>
               ))}
@@ -467,7 +467,7 @@ export function DashboardScreen() {
                 <div className="card-b" style={{ paddingTop: 6 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {groups.map(({ sd, stocks }) => {
-                      const hcSect = heatCol(sd.chg);
+                      const hcSect = heatCol(sd.pctChange);
                       return (
                         <div key={sd.name} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <div
@@ -482,7 +482,7 @@ export function DashboardScreen() {
                             }}
                           >
                             <span style={{ fontSize: ".65rem", fontWeight: 700, color: hcSect.fg, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sd.name}</span>
-                            <span style={{ fontFamily: "var(--f-mono)", fontSize: ".6rem", color: hcSect.fg, opacity: .9 }}>{sign(sd.chg)}</span>
+                            <span style={{ fontFamily: "var(--f-mono)", fontSize: ".6rem", color: hcSect.fg, opacity: .9 }}>{sign(sd.pctChange)}</span>
                           </div>
                           <div style={{ display: "flex", gap: 3 }}>
                             {stocks.map(({ sym, chg }) => {
@@ -528,13 +528,13 @@ export function DashboardScreen() {
             <div className="card-b" style={{ paddingTop: 4 }}>
               {analyst.slice(0, 5).map((a, i) => (
                 <div key={i} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(a.s)}
-                  {...mr(a.s, "analyst")}
+                  onClick={() => openStock(a.ticker)}
+                  {...mr(a.ticker, "analyst")}
                 >
-                  <StockLogo sym={a.s} size={26} />
-                  <span className="tkr">{a.s}</span>
-                  <span className="mid">{a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.to}</b></span>
-                  <span className="r">{analystDir(a.dir)}</span>
+                  <StockLogo sym={a.ticker} size={26} />
+                  <span className="tkr">{a.ticker}</span>
+                  <span className="mid">{a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.newRating}</b></span>
+                  <span className="r">{analystDir(a.actionType)}</span>
                 </div>
               ))}
             </div>
@@ -577,15 +577,15 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {(scrTab === "leaders" ? leaders : laggards).map(s => {
-                const dayC = movers.find(m => m.s === s.s)?.c ?? 0;
+                const dayC = movers.find(m => m.ticker === s.ticker)?.pctChange ?? 0;
                 return (
-                  <div key={s.s} className="minirow" style={{ cursor: "pointer" }}
-                    onClick={() => openStock(s.s)}
-                    {...mr(s.s, "screener")}
+                  <div key={s.ticker} className="minirow" style={{ cursor: "pointer" }}
+                    onClick={() => openStock(s.ticker)}
+                    {...mr(s.ticker, "screener")}
                   >
-                    <StockLogo sym={s.s} size={26} />
-                    <span className="tkr">{s.s}</span>
-                    <span className="mid">RS {s.rs} · {s.sec}</span>
+                    <StockLogo sym={s.ticker} size={26} />
+                    <span className="tkr">{s.ticker}</span>
+                    <span className="mid">RS {s.relativeStrength} · {s.sector}</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
                   </div>
                 );
@@ -607,15 +607,15 @@ export function DashboardScreen() {
                 <span className="mono up" style={{ fontWeight: 600 }}>▲ +1.42%</span>
               </div>
               {folio.slice(0, 4).map(f => {
-                const dayC = movers.find(m => m.s === f.s)?.c ?? f.c;
+                const dayC = movers.find(m => m.ticker === f.ticker)?.pctChange ?? f.pctChange;
                 return (
-                  <div key={f.s} className="minirow" style={{ cursor: "pointer" }}
-                    onClick={() => openStock(f.s)}
-                    {...mr(f.s, "portfolio")}
+                  <div key={f.ticker} className="minirow" style={{ cursor: "pointer" }}
+                    onClick={() => openStock(f.ticker)}
+                    {...mr(f.ticker, "portfolio")}
                   >
-                    <StockLogo sym={f.s} size={26} />
-                    <span className="tkr">{f.s}</span>
-                    <span className="mid">{f.size} · {f.conv} conv.</span>
+                    <StockLogo sym={f.ticker} size={26} />
+                    <span className="tkr">{f.ticker}</span>
+                    <span className="mid">{f.positionSize} · {f.conviction} conv.</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
                   </div>
                 );
@@ -633,16 +633,16 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
               {watch.slice(0, 5).map(w => (
-                <div key={w.s} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(w.s)}
-                  {...mr(w.s, "watchlist")}
+                <div key={w.ticker} className="minirow" style={{ cursor: "pointer" }}
+                  onClick={() => openStock(w.ticker)}
+                  {...mr(w.ticker, "watchlist")}
                 >
-                  <StockLogo sym={w.s} size={26} />
-                  <span className="tkr">{w.s}</span>
+                  <StockLogo sym={w.ticker} size={26} />
+                  <span className="tkr">{w.ticker}</span>
                   <span className="mid">
-                    {w.opt ? <span className="pill opt">⚡</span> : null}{w.opt ? " " : ""}ER {w.er}
+                    {w.hasOptions ? <span className="pill opt">⚡</span> : null}{w.hasOptions ? " " : ""}ER {w.nextEarningsDate}
                   </span>
-                  <span className={`r ${cls(w.c)}`}>{sign(w.c)}</span>
+                  <span className={`r ${cls(w.pctChange)}`}>{sign(w.pctChange)}</span>
                 </div>
               ))}
             </div>
@@ -812,19 +812,19 @@ export function DashboardScreen() {
 
               {/* Earnings */}
               {drawer === "earnings" && earnings.map(e => (
-                <div key={e.s} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
-                  onClick={() => { openEarnings(e.s); setDrawer(null); }}>
-                  <StockLogo sym={e.s} size={22} />
-                  <span className="tkr">{e.s}<small>{e.n}</small></span>
+                <div key={e.ticker} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
+                  onClick={() => { openEarnings(e.ticker); setDrawer(null); }}>
+                  <StockLogo sym={e.ticker} size={22} />
+                  <span className="tkr">{e.ticker}<small>{e.name}</small></span>
                   <span className="mid">
-                    <span className={`pill ${e.t.includes("pre") ? "bmo" : "amc"}`}>{e.t}</span>
+                    <span className={`pill ${e.session.includes("pre") ? "bmo" : "amc"}`}>{e.session}</span>
                   </span>
                   <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                    EPS est <span className="mono">${e.epsE}</span>
-                    {e.epsA != null && <> &rarr; <span className={`mono ${e.epsA >= e.epsE ? "up" : "down"}`}>${e.epsA}</span></>}
+                    EPS est <span className="mono">${e.epsEstimate}</span>
+                    {e.epsActual != null && <> &rarr; <span className={`mono ${e.epsActual >= e.epsEstimate ? "up" : "down"}`}>${e.epsActual}</span></>}
                   </span>
-                  <span className={`r ${e.react != null ? cls(e.react) : ""}`}>
-                    {e.react != null ? sign(e.react) : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}
+                  <span className={`r ${e.priceReaction != null ? cls(e.priceReaction) : ""}`}>
+                    {e.priceReaction != null ? sign(e.priceReaction) : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}
                   </span>
                 </div>
               ))}
@@ -833,23 +833,23 @@ export function DashboardScreen() {
               {drawer === "movers" && (
                 <>
                   <div className="up" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "0 0 6px" }}>&#x25B2; Top gainers</div>
-                  {movers.filter(m => m.c > 0).sort((a,b) => b.c - a.c).map(m => (
-                    <div key={m.s} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
-                      onClick={() => { openMoverModal(m.s); setDrawer(null); }}>
-                      <StockLogo sym={m.s} size={22} />
-                      <span className="tkr">{m.s}<small>{m.n}</small></span>
-                      <span className="mid">{m.cat}</span>
-                      <span className={`r mono ${cls(m.c)}`}>{sign(m.c)}</span>
+                  {movers.filter(m => m.pctChange > 0).sort((a,b) => b.pctChange - a.pctChange).map(m => (
+                    <div key={m.ticker} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                      onClick={() => { openMoverModal(m.ticker); setDrawer(null); }}>
+                      <StockLogo sym={m.ticker} size={22} />
+                      <span className="tkr">{m.ticker}<small>{m.name}</small></span>
+                      <span className="mid">{m.catalystLabel}</span>
+                      <span className={`r mono ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span>
                     </div>
                   ))}
                   <div className="down" style={{ fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", margin: "14px 0 6px" }}>&#x25BC; Top losers</div>
-                  {movers.filter(m => m.c < 0).sort((a,b) => a.c - b.c).map(m => (
-                    <div key={m.s} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
-                      onClick={() => { openMoverModal(m.s); setDrawer(null); }}>
-                      <StockLogo sym={m.s} size={22} />
-                      <span className="tkr">{m.s}<small>{m.n}</small></span>
-                      <span className="mid">{m.cat}</span>
-                      <span className={`r mono ${cls(m.c)}`}>{sign(m.c)}</span>
+                  {movers.filter(m => m.pctChange < 0).sort((a,b) => a.pctChange - b.pctChange).map(m => (
+                    <div key={m.ticker} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                      onClick={() => { openMoverModal(m.ticker); setDrawer(null); }}>
+                      <StockLogo sym={m.ticker} size={22} />
+                      <span className="tkr">{m.ticker}<small>{m.name}</small></span>
+                      <span className="mid">{m.catalystLabel}</span>
+                      <span className={`r mono ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span>
                     </div>
                   ))}
                 </>
@@ -858,29 +858,29 @@ export function DashboardScreen() {
               {/* Analyst */}
               {drawer === "analyst" && analyst.map((a, i) => (
                 <div key={i} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
-                  onClick={() => { openStock(a.s); setDrawer(null); }}>
-                  <StockLogo sym={a.s} size={22} />
-                  <span className="tkr">{a.s}<small>{a.n}</small></span>
-                  <span className="mid" style={{ fontSize: ".74rem" }}>{a.firm} <b style={{ color: "var(--text-hi)" }}>{a.from} &rarr; {a.to}</b></span>
-                  <span className="r">{analystDir(a.dir)}</span>
+                  onClick={() => { openStock(a.ticker); setDrawer(null); }}>
+                  <StockLogo sym={a.ticker} size={22} />
+                  <span className="tkr">{a.ticker}<small>{a.name}</small></span>
+                  <span className="mid" style={{ fontSize: ".74rem" }}>{a.firm} <b style={{ color: "var(--text-hi)" }}>{a.previousRating} &rarr; {a.newRating}</b></span>
+                  <span className="r">{analystDir(a.actionType)}</span>
                 </div>
               ))}
 
               {/* Earn movers */}
               {drawer === "earn-movers" && EARN_MOVERS.map(e => (
-                <div key={e.s} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
-                  onClick={() => { openEarnings(e.s); setDrawer(null); }}>
-                  <StockLogo sym={e.s} size={22} />
-                  <span className="tkr">{e.s}<small>{e.n}</small></span>
+                <div key={e.ticker} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
+                  onClick={() => { openEarnings(e.ticker); setDrawer(null); }}>
+                  <StockLogo sym={e.ticker} size={22} />
+                  <span className="tkr">{e.ticker}<small>{e.name}</small></span>
                   <span className="mid">
-                    <span className={`pill ${e.react! >= 0 ? "beat" : "miss"}`}>{e.react! >= 0 ? "Beat" : "Miss"}</span>
-                    {e.guide && e.guide !== "In-line" && (
-                      <span className={`pill ${e.guide === "Raised" ? "beat" : "miss"}`} style={{ marginLeft: 4 }}>{e.guide}</span>
+                    <span className={`pill ${e.priceReaction! >= 0 ? "beat" : "miss"}`}>{e.priceReaction! >= 0 ? "Beat" : "Miss"}</span>
+                    {e.guidanceStatus && e.guidanceStatus !== "In-line" && (
+                      <span className={`pill ${e.guidanceStatus === "Raised" ? "beat" : "miss"}`} style={{ marginLeft: 4 }}>{e.guidanceStatus}</span>
                     )}
-                    <span style={{ marginLeft: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>EPS: ${e.epsE} &rarr; ${e.epsA}</span>
+                    <span style={{ marginLeft: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>EPS: ${e.epsEstimate} &rarr; ${e.epsActual}</span>
                   </span>
-                  <span className={`r mono ${e.react! >= 0 ? "up" : "down"}`} style={{ fontWeight: 700 }}>
-                    {e.react! >= 0 ? "+" : ""}{e.react}%
+                  <span className={`r mono ${e.priceReaction! >= 0 ? "up" : "down"}`} style={{ fontWeight: 700 }}>
+                    {e.priceReaction! >= 0 ? "+" : ""}{e.priceReaction}%
                   </span>
                 </div>
               ))}
@@ -918,27 +918,27 @@ export function DashboardScreen() {
 
               {/* Watchlist */}
               {drawer === "watchlist" && watch.map(w => (
-                <div key={w.s} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
-                  onClick={() => { openStock(w.s); setDrawer(null); }}>
-                  <StockLogo sym={w.s} size={22} />
-                  <span className="tkr">{w.s}<small>{w.n}</small></span>
-                  <span className="mid">ER {w.er}{w.opt ? <span className="pill opt" style={{ marginLeft: 4 }}>&#x26A1;</span> : null}</span>
-                  <span className={`r ${cls(w.c)}`}>{sign(w.c)}</span>
+                <div key={w.ticker} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                  onClick={() => { openStock(w.ticker); setDrawer(null); }}>
+                  <StockLogo sym={w.ticker} size={22} />
+                  <span className="tkr">{w.ticker}<small>{w.name}</small></span>
+                  <span className="mid">ER {w.nextEarningsDate}{w.hasOptions ? <span className="pill opt" style={{ marginLeft: 4 }}>&#x26A1;</span> : null}</span>
+                  <span className={`r ${cls(w.pctChange)}`}>{sign(w.pctChange)}</span>
                 </div>
               ))}
 
               {/* Portfolio */}
               {drawer === "portfolio" && folio.map(f => {
-                const dayC = movers.find(m => m.s === f.s)?.c ?? f.c;
+                const dayC = movers.find(m => m.ticker === f.ticker)?.pctChange ?? f.pctChange;
                 return (
-                  <div key={f.s} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
-                    onClick={() => { openStock(f.s); setDrawer(null); }}>
-                    <StockLogo sym={f.s} size={22} />
-                    <span className="tkr">{f.s}</span>
-                    <span className="mid">{f.size} &middot; {f.conv} conv.</span>
+                  <div key={f.ticker} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                    onClick={() => { openStock(f.ticker); setDrawer(null); }}>
+                    <StockLogo sym={f.ticker} size={22} />
+                    <span className="tkr">{f.ticker}</span>
+                    <span className="mid">{f.positionSize} &middot; {f.conviction} conv.</span>
                     <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
-                    <span className={`mono ${cls(f.gl)}`} style={{ fontSize: ".74rem", marginLeft: 6 }}>
-                      {f.gl > 0 ? "+" : ""}{f.gl.toFixed(1)}% total
+                    <span className={`mono ${cls(f.gainLossPct)}`} style={{ fontSize: ".74rem", marginLeft: 6 }}>
+                      {f.gainLossPct > 0 ? "+" : ""}{f.gainLossPct.toFixed(1)}% total
                     </span>
                   </div>
                 );
@@ -1055,12 +1055,12 @@ export function DashboardScreen() {
         >
           <div className="heat-pop-h">
             <span>{heatPop.sd.name}</span>
-            <span className={`pill ${heatPop.sd.chg >= 0 ? "up" : "dn"}`}>{sign(heatPop.sd.chg)}</span>
+            <span className={`pill ${heatPop.sd.pctChange >= 0 ? "up" : "dn"}`}>{sign(heatPop.sd.pctChange)}</span>
           </div>
           <div className="heat-pop-trend">{heatPop.sd.trend}</div>
           {heatPop.sd.items.slice(0, 4).map(([sym, mcap, chg]) => {
-            const mv  = movers.find(m => m.s === sym);
-            const scr = screenerStocks.find(s => s.s === sym);
+            const mv  = movers.find(m => m.ticker === sym);
+            const scr = screenerStocks.find(s => s.ticker === sym);
             const cap = mcap >= 1000 ? `$${(mcap / 1000).toFixed(1)}T` : `$${Math.round(mcap)}B`;
             const isActive = heatSym === sym;
             return (
@@ -1077,10 +1077,10 @@ export function DashboardScreen() {
                 {isActive && (
                   <div className="heat-pop-detail">
                     <span>Mkt Cap <b>{cap}</b></span>
-                    {mv  ? <span>Price <b>${fmt(mv.p)}</b></span> : null}
-                    {mv  ? <span>RVOL <b>{mv.rvol}×</b></span>   : null}
-                    {scr ? <span>RS <b>{scr.rs}/99</b></span>     : null}
-                    {mv  ? <span className={mv.ma.startsWith("Above") ? "up" : "down"} style={{ fontSize: ".6rem" }}>{mv.ma}</span> : null}
+                    {mv  ? <span>Price <b>${fmt(mv.price)}</b></span> : null}
+                    {mv  ? <span>RVOL <b>{mv.rvolRatio}×</b></span>   : null}
+                    {scr ? <span>RS <b>{scr.relativeStrength}/99</b></span>     : null}
+                    {mv  ? <span className={mv.maPosture.startsWith("Above") ? "up" : "down"} style={{ fontSize: ".6rem" }}>{mv.maPosture}</span> : null}
                   </div>
                 )}
               </div>

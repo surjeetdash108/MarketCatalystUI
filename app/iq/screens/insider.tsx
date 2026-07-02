@@ -113,10 +113,10 @@ function insiderHistory(sym: string) {
 function instHolders(sym: string) {
   const out: { fund: string; mgr: string; pct: number; act: string }[] = [];
   funds.forEach(fd => {
-    const dt = fundDetail[fd.nm];
+    const dt = fundDetail[fd.fundName];
     if (!dt) return;
     const hit = dt.holdings.find(x => x[0] === sym);
-    if (hit) out.push({ fund: fd.nm, mgr: fd.mgr, pct: hit[1], act: hit[2] });
+    if (hit) out.push({ fund: fd.fundName, mgr: fd.managerName, pct: hit[1], act: hit[2] });
   });
   return out;
 }
@@ -533,13 +533,13 @@ export function InsiderScreen() {
 
           <div className="dash" style={{ marginBottom: 14 }}>
             {funds.map((f, i) => (
-              <div key={f.nm} className="col-4">
-                <div className="fundcard" onClick={() => setDrawer({ kind: "inst", sym: f.top, sn: INST_SN[f.top] || f.top })}>
+              <div key={f.fundName} className="col-4">
+                <div className="fundcard" onClick={() => setDrawer({ kind: "inst", sym: f.topHolding, sn: INST_SN[f.topHolding] || f.topHolding })}>
                   <div style={{ display: "flex", gap: 11, alignItems: "center", marginBottom: 12 }}>
-                    <div className="av">{f.av}</div>
+                    <div className="av">{f.avatar}</div>
                     <div>
-                      <div className="nm">{f.nm}</div>
-                      <div className="mgr">{f.mgr}</div>
+                      <div className="nm">{f.fundName}</div>
+                      <div className="mgr">{f.managerName}</div>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 14, fontFamily: "var(--f-mono)", fontSize: ".78rem" }}>
@@ -549,19 +549,19 @@ export function InsiderScreen() {
                     </div>
                     <div>
                       <div style={{ color: "var(--text-dim-solid)", fontSize: ".62rem", fontFamily: "var(--f-body)" }}>Positions</div>
-                      <b style={{ color: "var(--text-hi)" }}>{f.pos}</b>
+                      <b style={{ color: "var(--text-hi)" }}>{f.totalPositions}</b>
                     </div>
                     <div>
                       <div style={{ color: "var(--text-dim-solid)", fontSize: ".62rem", fontFamily: "var(--f-body)" }}>Top</div>
-                      <b style={{ color: "var(--text-hi)" }}>{f.top}</b>
+                      <b style={{ color: "var(--text-hi)" }}>{f.topHolding}</b>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, marginTop: 11, alignItems: "center" }}>
-                    <span className="pill up">{f.newPos} new</span>
-                    <span className="pill dn">{f.exits} exits</span>
-                    <span className="pill amc">{f.q}</span>
+                    <span className="pill up">{f.newPositions} new</span>
+                    <span className="pill dn">{f.exitCount} exits</span>
+                    <span className="pill amc">{f.quarter}</span>
                     <span className="link" style={{ marginLeft: "auto" }}
-                      onClick={e => { e.stopPropagation(); openStockFull(f.top); }}>
+                      onClick={e => { e.stopPropagation(); openStockFull(f.topHolding); }}>
                       Deep analysis →
                     </span>
                   </div>

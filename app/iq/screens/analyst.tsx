@@ -15,19 +15,19 @@ function dirPill(dir: string) {
 }
 
 function computeClusters() {
-  const byS: Record<string, { name: string; up: number; down: number; init: number; n: number; n30: number }> = {};
+  const byS: Record<string, { name: string; up: number; down: number; init: number; n: number; actionsLast30Days: number }> = {};
   analyst.forEach(a => {
-    const o = byS[a.s] = byS[a.s] || { name: a.n, up: 0, down: 0, init: 0, n: 0, n30: 0 };
+    const o = byS[a.ticker] = byS[a.ticker] || { name: a.name, up: 0, down: 0, init: 0, n: 0, actionsLast30Days: 0 };
     o.n++;
-    o.n30 = Math.max(o.n30, a.n30);
-    if (a.dir === "up")        o.up++;
-    else if (a.dir === "down") o.down++;
-    else if (a.dir === "init") o.init++;
+    o.actionsLast30Days = Math.max(o.actionsLast30Days, a.actionsLast30Days);
+    if (a.actionType === "up")        o.up++;
+    else if (a.actionType === "down") o.down++;
+    else if (a.actionType === "init") o.init++;
   });
   const clusters = Object.entries(byS)
-    .filter(([, o]) => o.n30 >= 5)
+    .filter(([, o]) => o.actionsLast30Days >= 5)
     .map(([s, o]) => ({ s, ...o }))
-    .sort((a, b) => b.n30 - a.n30);
+    .sort((a, b) => b.actionsLast30Days - a.actionsLast30Days);
   const upgrades = Object.entries(byS)
     .filter(([, o]) => o.up >= 2)
     .map(([s, o]) => ({ s, ...o }));
@@ -42,11 +42,11 @@ export function AnalystScreen() {
   const { byS, clusters, upgrades } = computeClusters();
 
   const filtered = analyst.filter(a => {
-    if (clustersOnly && (byS[a.s]?.n30 ?? 0) < 5) return false;
-    if (tab === 1) return a.dir === "up";
-    if (tab === 2) return a.dir === "down";
-    if (tab === 3) return a.dir === "init";
-    if (tab === 4) return a.ptT !== a.ptF;
+    if (clustersOnly && (byS[a.ticker]?.actionsLast30Days ?? 0) < 5) return false;
+    if (tab === 1) return a.actionType === "up";
+    if (tab === 2) return a.actionType === "down";
+    if (tab === 3) return a.actionType === "init";
+    if (tab === 4) return a.newPriceTarget !== a.prevPriceTarget;
     return true;
   });
 
@@ -76,7 +76,7 @@ export function AnalystScreen() {
                     <StockLogo sym={c.s} size={20} />
                     <span className="tkr">{c.s}</span>
                     <span className="mid">{c.name} · {c.up} up / {c.down} down</span>
-                    <span className="r" style={{ color: "var(--warn)", fontWeight: 700 }}>{c.n30} /30d</span>
+                    <span className="r" style={{ color: "var(--warn)", fontWeight: 700 }}>{c.actionsLast30Days} /30d</span>
                   </div>
                 ))
               }
@@ -153,39 +153,39 @@ export function AnalystScreen() {
             </thead>
             <tbody>
               {filtered.map(a => {
-                const clusterBadge = (byS[a.s]?.n30 ?? 0) >= 5;
+                const clusterBadge = (byS[a.ticker]?.actionsLast30Days ?? 0) >= 5;
                 return (
-                  <tr key={a.s + a.firm} className={a.owned ? "owned" : ""}
-                    onClick={() => openStock(a.s)} style={{ cursor: "pointer" }}>
+                  <tr key={a.ticker + a.firm} className={a.owned ? "owned" : ""}
+                    onClick={() => openStock(a.ticker)} style={{ cursor: "pointer" }}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <StockLogo sym={a.s} size={26} />
+                        <StockLogo sym={a.ticker} size={26} />
                         <div className="co">
                           <span className="s">
                             {a.owned && <span className="own-dot" />}
-                            {a.s}
+                            {a.ticker}
                             {clusterBadge && (
                               <span className="pill" style={{ background: "rgba(245,170,60,.18)", color: "var(--warn)", marginLeft: 4, fontSize: ".62rem" }}>
-                                {byS[a.s].n30}+ /30d
+                                {byS[a.ticker].actionsLast30Days}+ /30d
                               </span>
                             )}
                           </span>
-                          <span className="n">{a.n}</span>
+                          <span className="n">{a.name}</span>
                         </div>
                       </div>
                     </td>
                     <td style={{ fontSize: ".8rem" }}>{a.firm}</td>
-                    <td>{dirPill(a.dir)}</td>
+                    <td>{dirPill(a.actionType)}</td>
                     <td>
-                      <span style={{ color: "var(--text-dim-solid)" }}>{a.from}</span>
+                      <span style={{ color: "var(--text-dim-solid)" }}>{a.previousRating}</span>
                       {" → "}
-                      <b style={{ color: "var(--text-hi)" }}>{a.to}</b>
+                      <b style={{ color: "var(--text-hi)" }}>{a.newRating}</b>
                     </td>
                     <td className="num">
-                      {a.ptF ? `$${a.ptF}` : "—"} → <b style={{ color: "var(--text-hi)" }}>${a.ptT}</b>
+                      {a.prevPriceTarget ? `$${a.prevPriceTarget}` : "—"} → <b style={{ color: "var(--text-hi)" }}>${a.newPriceTarget}</b>
                     </td>
-                    <td className={`num ${cls(a.react)}`}>{sign(a.react)}</td>
-                    <td className="num">{a.n30}× /30d</td>
+                    <td className={`num ${cls(a.priceChangeSince)}`}>{sign(a.priceChangeSince)}</td>
+                    <td className="num">{a.actionsLast30Days}× /30d</td>
                   </tr>
                 );
               })}

@@ -87,6 +87,7 @@ function NavIcon({ slug }: { slug: string }) {
     heatmap:     "M3 3h8v8H3V3Zm13 0h8v5h-8V3ZM13 10h8v11h-8V10ZM3 13h8v8H3v-8Z",
     analyst:     "M12 2l2.5 6.5L21 9l-5 4.5L17.5 21 12 17l-5.5 4L8 13.5 3 9l6.5-.5z",
     screener:    "M3 4h18l-7 8v6l-4 2V12z",
+    themes:      "M12 2L2 7l10 5 10-5L12 2zM2 12l10 5 10-5M2 17l10 5 10-5",
     ipos:        "M3 17l6-6 4 4 8-8M14 7h7v7",
     portfolio:   "M3 13a9 9 0 1 0 18 0 9 9 0 0 0-18 0ZM12 7v6l4 2",
     watchlist:   "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7ZM12 12m-3 0a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
@@ -108,21 +109,21 @@ function NavIcon({ slug }: { slug: string }) {
 // ---- Drawers ----
 function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
   const { openStockFull, openSector } = useIQActions();
-  const mv  = movers.find(x => x.s === sym);
-  const scr = screenerStocks.find(x => x.s === sym);
+  const mv  = movers.find(x => x.ticker === sym);
+  const scr = screenerStocks.find(x => x.ticker === sym);
 
-  const name   = mv?.n      ?? scr?.n   ?? sym;
-  const sector = mv?.sector ?? scr?.sec ?? "—";
-  const p      = mv?.p   ?? 0;
-  const c      = mv?.c   ?? 0;
-  const rvol   = mv?.rvol ?? scr?.rvol ?? 1;
-  const rs     = mv?.rs  ?? scr?.rs  ?? 50;
-  const wk     = mv?.wk  ?? 0;
-  const cat    = mv?.cat ?? "";
-  const ma     = mv?.ma  ?? "";
-  const tech   = mv?.tech ?? "";
-  const news   = mv?.news ?? "";
-  const mc     = scr?.mc ?? 0;
+  const name   = mv?.name      ?? scr?.name   ?? sym;
+  const sector = mv?.sector ?? scr?.sector ?? "—";
+  const p      = mv?.price   ?? 0;
+  const c      = mv?.pctChange   ?? 0;
+  const rvol   = mv?.rvolRatio ?? scr?.rvolRatio ?? 1;
+  const rs     = mv?.relativeStrength  ?? scr?.relativeStrength  ?? 50;
+  const wk     = mv?.weekPct  ?? 0;
+  const cat    = mv?.catalystLabel ?? "";
+  const ma     = mv?.maPosture  ?? "";
+  const tech   = mv?.techContext ?? "";
+  const news   = mv?.newsContext ?? "";
+  const mc     = scr?.marketCap ?? 0;
   const mcTxt  = mc >= 1000 ? `$${(mc / 1000).toFixed(2)}T` : mc > 0 ? `$${mc}B` : mv?.cap ?? "—";
 
   // Build "why it moved" narrative (HTML string — data is internal, never user input)
@@ -135,8 +136,8 @@ function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
   if (ma) why += ` Price is <b>${ma}</b> with a relative-strength rank of <b>${rs}/99</b>, so the underlying trend is ${c >= 0 ? "constructive" : "weak"}.`;
   const sec = sectorByName[sector] ?? null;
   if (sec) {
-    why += ` Its group, <b>${sector}</b>, is ${sec.chg >= 0 ? "up" : "down"} <b class="${cls(sec.chg)}">${sign(sec.chg)}</b> today (${(sec.trend || "Flat").toLowerCase()}) — `;
-    why += (sec.chg >= 0) === (c >= 0) ? "in line with sector strength." : "bucking its sector today.";
+    why += ` Its group, <b>${sector}</b>, is ${sec.pctChange >= 0 ? "up" : "down"} <b class="${cls(sec.pctChange)}">${sign(sec.pctChange)}</b> today (${(sec.trend || "Flat").toLowerCase()}) — `;
+    why += (sec.pctChange >= 0) === (c >= 0) ? "in line with sector strength." : "bucking its sector today.";
   }
 
   return (
@@ -233,10 +234,10 @@ function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
 
 function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
   const { openStockFull } = useIQActions();
-  const e = earningsData.find(x => x.s === sym);
-  const posted = e && e.epsA != null;
-  const epsBeat = e && e.epsA != null ? ((e.epsA - e.epsE) / Math.abs(e.epsE) * 100) : null;
-  const revBeat = e && e.revA != null ? ((e.revA - e.revE) / Math.abs(e.revE) * 100) : null;
+  const e = earningsData.find(x => x.ticker ===sym);
+  const posted = e && e.epsActual != null;
+  const epsBeat = e && e.epsActual != null ? ((e.epsActual - e.epsEstimate) / Math.abs(e.epsEstimate) * 100) : null;
+  const revBeat = e && e.revenueActual != null ? ((e.revenueActual - e.revenueEstimate) / Math.abs(e.revenueEstimate) * 100) : null;
 
   return (
     <>
@@ -249,8 +250,8 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
           <div style={{ flex: 1 }}>
             <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>{sym}</div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-              {e?.n ?? sym} · {e?.sec ?? "—"} ·{" "}
-              <span className={`pill ${e?.t === "Before open" ? "bmo" : "amc"}`}>{e?.t ?? "—"}</span>
+              {e?.name ?? sym} · {e?.sector ?? "—"} ·{" "}
+              <span className={`pill ${e?.session === "Before open" ? "bmo" : "amc"}`}>{e?.session ?? "—"}</span>
             </div>
           </div>
           <button className="closebtn" onClick={onClose}>✕</button>
@@ -262,27 +263,27 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
               <div className="metric-grid">
                 <div className="m">
                   <div className="k">EPS · actual vs est</div>
-                  <div className="v">${e.epsA}</div>
+                  <div className="v">${e.epsActual}</div>
                   <div className={`s ${(epsBeat ?? 0) >= 0 ? "up" : "dn"}`}>
-                    est ${e.epsE} · {epsBeat != null ? `${epsBeat > 0 ? "+" : ""}${epsBeat.toFixed(1)}%` : ""}
+                    est ${e.epsEstimate} · {epsBeat != null ? `${epsBeat > 0 ? "+" : ""}${epsBeat.toFixed(1)}%` : ""}
                   </div>
                 </div>
                 <div className="m">
                   <div className="k">Revenue</div>
-                  <div className="v">${e.revA}B</div>
+                  <div className="v">${e.revenueActual}B</div>
                   <div className={`s ${(revBeat ?? 0) >= 0 ? "up" : "dn"}`}>
-                    est ${e.revE}B{revBeat != null ? ` · ${revBeat > 0 ? "+" : ""}${revBeat.toFixed(1)}%` : ""}
+                    est ${e.revenueEstimate}B{revBeat != null ? ` · ${revBeat > 0 ? "+" : ""}${revBeat.toFixed(1)}%` : ""}
                   </div>
                 </div>
                 <div className="m">
                   <div className="k">Guidance</div>
-                  <div className="v" style={{ color: e.guide === "Raised" ? "var(--up)" : e.guide === "Cut" ? "var(--down)" : "var(--text-hi)", fontSize: "1rem" }}>
-                    {e.guide ?? "—"}
+                  <div className="v" style={{ color: e.guidanceStatus === "Raised" ? "var(--up)" : e.guidanceStatus === "Cut" ? "var(--down)" : "var(--text-hi)", fontSize: "1rem" }}>
+                    {e.guidanceStatus ?? "—"}
                   </div>
                 </div>
                 <div className="m">
                   <div className="k">Reaction</div>
-                  <div className={`v ${cls(e.react ?? 0)}`}>{sign(e.react ?? 0)}</div>
+                  <div className={`v ${cls(e.priceReaction ?? 0)}`}>{sign(e.priceReaction ?? 0)}</div>
                   <div className="s">after hours</div>
                 </div>
               </div>
@@ -292,8 +293,8 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
                 <span style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
                   {e.tags.includes("Beat") ? "Beat on top and bottom line — guidance the catalyst" : "Results mixed; reaction tells the story"}
                 </span>
-                <span className={`verdict ${(e.react ?? 0) >= 0 ? "up" : "dn"}`}>
-                  {(e.react ?? 0) >= 2 ? "Bullish" : (e.react ?? 0) >= 0 ? "Mild beat" : "Bearish"}
+                <span className={`verdict ${(e.priceReaction ?? 0) >= 0 ? "up" : "dn"}`}>
+                  {(e.priceReaction ?? 0) >= 2 ? "Bullish" : (e.priceReaction ?? 0) >= 0 ? "Mild beat" : "Bearish"}
                 </span>
               </div>
 
@@ -305,19 +306,19 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
                 <div className="card-b">
                   <div className="ai-sec">
                     <div className="h">What happened</div>
-                    <p>{e.n} reported {(epsBeat ?? 0) >= 0 ? "above" : "below"}-consensus EPS of ${e.epsA} vs. est ${e.epsE}, with revenue of ${e.revA}B. Stock reacted {sign(e.react ?? 0)} after hours.</p>
+                    <p>{e.name} reported {(epsBeat ?? 0) >= 0 ? "above" : "below"}-consensus EPS of ${e.epsActual} vs. est ${e.epsEstimate}, with revenue of ${e.revenueActual}B. Stock reacted {sign(e.priceReaction ?? 0)} after hours.</p>
                   </div>
                   <div className="ai-sec">
                     <div className="h">Bull case</div>
-                    <p>Beat on both lines with guidance {e.guide === "Raised" ? "raised — management confidence is a strong signal" : "maintained — execution visible"}. {e.owned ? "Your position benefits directly." : ""}</p>
+                    <p>Beat on both lines with guidance {e.guidanceStatus === "Raised" ? "raised — management confidence is a strong signal" : "maintained — execution visible"}. {e.owned ? "Your position benefits directly." : ""}</p>
                   </div>
                   <div className="ai-sec">
                     <div className="h">Bear case</div>
-                    <p>Much of the upside may be priced in. Implied move was ±{e.implied}% — actual {Math.abs(e.react ?? 0).toFixed(1)}% {Math.abs(e.react ?? 0) > e.implied ? "exceeded" : "was within"} expectations.</p>
+                    <p>Much of the upside may be priced in. Implied move was ±{e.impliedMove}% — actual {Math.abs(e.priceReaction ?? 0).toFixed(1)}% {Math.abs(e.priceReaction ?? 0) > e.impliedMove ? "exceeded" : "was within"} expectations.</p>
                   </div>
                   <div className="ai-sec">
                     <div className="h">Guidance detail</div>
-                    <p>Company {e.guide === "Raised" ? "raised" : e.guide === "In-line" ? "maintained" : "cut"} forward guidance. Watch next quarter&apos;s setup relative to current Street estimates.</p>
+                    <p>Company {e.guidanceStatus === "Raised" ? "raised" : e.guidanceStatus === "In-line" ? "maintained" : "cut"} forward guidance. Watch next quarter&apos;s setup relative to current Street estimates.</p>
                   </div>
                   <div className="ai-sec">
                     <div className="h">What to watch next</div>
@@ -329,7 +330,7 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
               <div className="card" style={{ marginBottom: 14 }}>
                 <div className="card-h"><h3>Peer reactions</h3></div>
                 <div className="card-b">
-                  {[{ s: "Sector index", c: parseFloat(((e.react ?? 0) * 0.3).toFixed(2)) }, { s: "Direct peers", c: parseFloat(((e.react ?? 0) * 0.5).toFixed(2)) }].map(p => (
+                  {[{ s: "Sector index", c: parseFloat(((e.priceReaction ?? 0) * 0.3).toFixed(2)) }, { s: "Direct peers", c: parseFloat(((e.priceReaction ?? 0) * 0.5).toFixed(2)) }].map(p => (
                     <div key={p.s} className="minirow">
                       <span className="mono" style={{ fontWeight: 700, color: "var(--text-hi)" }}>{p.s}</span>
                       <span className={`mono ${cls(p.c)}`} style={{ marginLeft: "auto" }}>{sign(p.c)}</span>
@@ -341,7 +342,7 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
           ) : (
             <div style={{ padding: "20px 0", color: "var(--text-dim-solid)", fontSize: ".85rem" }}>
               {e
-                ? `${e.n} reports ${e.t.toLowerCase()}. Implied move: ±${e.implied}%. Check back after results are posted.`
+                ? `${e.name} reports ${e.session.toLowerCase()}. Implied move: ±${e.impliedMove}%. Check back after results are posted.`
                 : `No earnings data available for ${sym}.`}
             </div>
           )}
@@ -374,7 +375,7 @@ function SectorDrawer({ name, onClose }: { name: string; onClose: () => void }) 
             <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{name}</div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
               {sector ? `Group rank #${sector.rank} · ` : ""}
-              <span className={cls(sector?.chg ?? 0)}>{sign(sector?.chg ?? 0)} today</span>
+              <span className={cls(sector?.pctChange ?? 0)}>{sign(sector?.pctChange ?? 0)} today</span>
               {sector && <> · <span className="pill" style={{ marginLeft: 2 }}>{sector.trend}</span></>}
             </div>
           </div>
@@ -413,7 +414,7 @@ function SectorDrawer({ name, onClose }: { name: string; onClose: () => void }) 
 function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
   const { openStock } = useIQActions();
   const fund: Fund | undefined = funds[idx];
-  const dt: FundDetail | undefined = fund ? fundDetail[fund.nm] : undefined;
+  const dt: FundDetail | undefined = fund ? fundDetail[fund.fundName] : undefined;
 
   return (
     <>
@@ -421,12 +422,12 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
       <div className="drawer open">
         <div className="drawer-h">
           <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)", fontSize: ".78rem" }}>
-            {fund?.av ?? "—"}
+            {fund?.avatar ?? "—"}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{fund?.nm ?? "Fund"}</div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{fund?.fundName ?? "Fund"}</div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-              {fund?.mgr} · 13F AUM {fund?.aum} · {fund?.pos} positions · {fund?.q}
+              {fund?.managerName} · 13F AUM {fund?.aum} · {fund?.totalPositions} positions · {fund?.quarter}
             </div>
           </div>
           <button className="closebtn" onClick={onClose}>✕</button>
@@ -436,9 +437,9 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
           {fund && (
             <>
               <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-                <span className="pill up">{fund.newPos} new</span>
-                <span className="pill dn">{fund.exits} exits</span>
-                <span className="src-chip">{fund.q} 13F-HR</span>
+                <span className="pill up">{fund.newPositions} new</span>
+                <span className="pill dn">{fund.exitCount} exits</span>
+                <span className="src-chip">{fund.quarter} 13F-HR</span>
               </div>
 
               {dt && (
@@ -500,7 +501,7 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
                       <div className="ai-sec">
                         <div className="h">Overlap with your portfolio</div>
                         <p style={{ fontSize: ".82rem", lineHeight: 1.6 }}>
-                          {dt.holdings.filter(([sym]) => folio.some(f => f.s === sym)).length} of {dt.holdings.length} top holdings overlap with your portfolio. Review position sizing for shared names.
+                          {dt.holdings.filter(([sym]) => folio.some(f => f.ticker ===sym)).length} of {dt.holdings.length} top holdings overlap with your portfolio. Review position sizing for shared names.
                         </p>
                       </div>
                     </div>
@@ -521,39 +522,39 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
 function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
   const x = pulse[idx];
   if (!x) return null;
-  const dec = x.v > 1000 ? 0 : 2;
-  const dollar = x.v - x.pc;
-  const c = x.c >= 0 ? "up" : "down";
-  const dayLow = Math.min(x.o, x.pc, x.v) * 0.997;
-  const dayHigh = Math.max(x.o, x.pc, x.v) * 1.003;
-  const y52lo = x.v * 0.82, y52hi = x.v * 1.06;
-  const eq = ["S&P 500", "Nasdaq", "Dow", "Russell 2K"].includes(x.l);
-  const lead = [...sectorList].sort((a, b) => b.chg - a.chg).slice(0, 3);
-  const lag = [...sectorList].sort((a, b) => b.chg - a.chg).slice(-3).reverse();
-  const note = x.l === "VIX" ? "Volatility is low and falling — a calm, risk-on tape with cheap hedging."
-    : x.l.includes("Yield") ? "Yields easing — supportive for long-duration growth and rate-sensitive sectors."
-    : x.l === "WTI Crude" ? "Crude softer — pressures energy names, eases input-cost worries elsewhere."
-    : x.l === "Gold" ? "Gold firmer — mild safe-haven bid alongside a softer dollar."
-    : x.l === "Dollar (DXY)" ? "Dollar steady — limited FX headwind for multinationals today."
-    : x.c >= 0 ? "Broad-based gains; breadth is positive and the tape reads risk-on." : "Mild risk-off; defensives are outpacing cyclicals.";
-  const sub = eq ? "Equity index" : x.l === "VIX" ? "Volatility index" : x.l.includes("Yield") ? "Treasury yield" : "Market benchmark";
+  const dec = x.value > 1000 ? 0 : 2;
+  const dollar = x.value - x.prevClose;
+  const c = x.change >= 0 ? "up" : "down";
+  const dayLow = Math.min(x.open, x.prevClose, x.value) * 0.997;
+  const dayHigh = Math.max(x.open, x.prevClose, x.value) * 1.003;
+  const y52lo = x.value * 0.82, y52hi = x.value * 1.06;
+  const eq = ["S&P 500", "Nasdaq", "Dow", "Russell 2K"].includes(x.label);
+  const lead = [...sectorList].sort((a, b) => b.pctChange - a.pctChange).slice(0, 3);
+  const lag = [...sectorList].sort((a, b) => b.pctChange - a.pctChange).slice(-3).reverse();
+  const note = x.label === "VIX" ? "Volatility is low and falling — a calm, risk-on tape with cheap hedging."
+    : x.label.includes("Yield") ? "Yields easing — supportive for long-duration growth and rate-sensitive sectors."
+    : x.label === "WTI Crude" ? "Crude softer — pressures energy names, eases input-cost worries elsewhere."
+    : x.label === "Gold" ? "Gold firmer — mild safe-haven bid alongside a softer dollar."
+    : x.label === "Dollar (DXY)" ? "Dollar steady — limited FX headwind for multinationals today."
+    : x.change >= 0 ? "Broad-based gains; breadth is positive and the tape reads risk-on." : "Mild risk-off; defensives are outpacing cyclicals.";
+  const sub = eq ? "Equity index" : x.label === "VIX" ? "Volatility index" : x.label.includes("Yield") ? "Treasury yield" : "Market benchmark";
   return (
     <>
       <div className="scrim open" onClick={onClose} />
       <div className="side-drawer">
         <div className="drawer-h">
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f4d6b,#0e2233)", color: "#7fd0ff" }}>{x.l[0]}</div>
-          <div><div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{x.l}</div><div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{sub} · delayed ≤15s</div></div>
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f4d6b,#0e2233)", color: "#7fd0ff" }}>{x.label[0]}</div>
+          <div><div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{x.label}</div><div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{sub} · delayed ≤15s</div></div>
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-b">
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
-            <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>{fmt(x.v, dec)}</div>
-            <div className={c} style={{ fontWeight: 600 }}>{arr(x.c)} {x.c >= 0 ? "+" : ""}{fmt(Math.abs(dollar), dec)} ({sign(x.c)})</div>
+            <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>{fmt(x.value, dec)}</div>
+            <div className={c} style={{ fontWeight: 600 }}>{arr(x.change)} {x.change >= 0 ? "+" : ""}{fmt(Math.abs(dollar), dec)} ({sign(x.change)})</div>
           </div>
           <div className="metric-grid">
-            <div className="m"><div className="k">Open</div><div className="v">{fmt(x.o, dec)}</div></div>
-            <div className="m"><div className="k">Prev close</div><div className="v">{fmt(x.pc, dec)}</div></div>
+            <div className="m"><div className="k">Open</div><div className="v">{fmt(x.open, dec)}</div></div>
+            <div className="m"><div className="k">Prev close</div><div className="v">{fmt(x.prevClose, dec)}</div></div>
             <div className="m"><div className="k">Day range</div><div className="v" style={{ fontSize: ".92rem" }}>{fmt(dayLow, dec)} – {fmt(dayHigh, dec)}</div></div>
             <div className="m"><div className="k">52-wk range</div><div className="v" style={{ fontSize: ".92rem" }}>{fmt(y52lo, dec)} – {fmt(y52hi, dec)}</div></div>
           </div>
@@ -565,7 +566,7 @@ function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
                 <div key={g.name} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
                   <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{g.name}</span>
                   <span className="mid" />
-                  <span className="r up">{sign(g.chg)}</span>
+                  <span className="r up">{sign(g.pctChange)}</span>
                 </div>
               ))}
               <div className="ai-sec" style={{ marginTop: 12 }}><div className="h">Lagging sectors today</div></div>
@@ -573,7 +574,7 @@ function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
                 <div key={g.name} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
                   <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{g.name}</span>
                   <span className="mid" />
-                  <span className="r down">{sign(g.chg)}</span>
+                  <span className="r down">{sign(g.pctChange)}</span>
                 </div>
               ))}
             </>
@@ -1062,9 +1063,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               <div className="ticker-track">
                 {tickerItems.map((x, i) => (
                   <div key={i} className="tk">
-                    <span className="lbl">{x.l}</span>
-                    <span className="val">{fmt(x.v, x.v > 1000 ? 0 : 2)}</span>
-                    <span className={`chg ${cls(x.c)}`}>{arr(x.c)} {Math.abs(x.c).toFixed(2)}%</span>
+                    <span className="lbl">{x.label}</span>
+                    <span className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</span>
+                    <span className={`chg ${cls(x.change)}`}>{arr(x.change)} {Math.abs(x.change).toFixed(2)}%</span>
                   </div>
                 ))}
               </div>

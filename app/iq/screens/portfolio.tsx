@@ -16,11 +16,11 @@ function usd(v: number) {
 
 export function PortfolioScreen() {
   const [holdings, setHoldings] = useState(() => [...folioData]);
-  const [pfSel, setPfSel]       = useState(folioData[0]?.s ?? "");
+  const [pfSel, setPfSel]       = useState(folioData[0]?.ticker ?? "");
   const [pfTf, setPfTf]         = useState("3M");
   const [shares, setShares]     = useState<Record<string, number>>(() => {
     const base = { ...DEFAULT_SHARES };
-    folioData.forEach(f => { if (!(f.s in base)) base[f.s] = 10; });
+    folioData.forEach(f => { if (!(f.ticker in base)) base[f.ticker] = 10; });
     return base;
   });
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
@@ -32,29 +32,29 @@ export function PortfolioScreen() {
   const [newSize, setNewSize]       = useState<"Small"|"Medium"|"Large">("Small");
   const [newConv, setNewConv]       = useState<"High"|"Medium"|"Low">("Medium");
 
-  const sel      = holdings.find(h => h.s === pfSel);
-  const totalVal = holdings.reduce((s, h) => s + (shares[h.s] ?? 10) * h.p, 0);
-  const dayPL    = holdings.reduce((s, h) => s + (shares[h.s] ?? 10) * h.p * h.c / 100, 0);
-  const green    = holdings.filter(h => h.c > 0).length;
-  const driver   = [...holdings].sort((a, b) => (shares[b.s] ?? 10) * b.p - (shares[a.s] ?? 10) * a.p)[0];
-  const leader   = [...holdings].sort((a, b) => b.c - a.c)[0];
-  const laggard  = [...holdings].sort((a, b) => a.c - b.c)[0];
+  const sel      = holdings.find(h => h.ticker === pfSel);
+  const totalVal = holdings.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price, 0);
+  const dayPL    = holdings.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price * h.pctChange / 100, 0);
+  const green    = holdings.filter(h => h.pctChange > 0).length;
+  const driver   = [...holdings].sort((a, b) => (shares[b.ticker] ?? 10) * b.price - (shares[a.ticker] ?? 10) * a.price)[0];
+  const leader   = [...holdings].sort((a, b) => b.pctChange - a.pctChange)[0];
+  const laggard  = [...holdings].sort((a, b) => a.pctChange - b.pctChange)[0];
   const driverWt = driver && totalVal > 0
-    ? ((shares[driver.s] ?? 10) * driver.p / totalVal * 100).toFixed(0) : "0";
+    ? ((shares[driver.ticker] ?? 10) * driver.price / totalVal * 100).toFixed(0) : "0";
 
   function addHolding() {
     if (!newSym.trim()) return;
     const s = newSym.trim().toUpperCase();
-    if (holdings.find(h => h.s === s)) { setAddOpen(false); return; }
-    setHoldings(prev => [...prev, { s, n: s, p: 100, c: 0, gl: 0, size: newSize, conv: newConv, evt: "—" }]);
+    if (holdings.find(h => h.ticker === s)) { setAddOpen(false); return; }
+    setHoldings(prev => [...prev, { ticker: s, name: s, price: 100, pctChange: 0, gainLossPct: 0, positionSize: newSize, conviction: newConv, eventNote: "—" }]);
     setShares(prev => ({ ...prev, [s]: 10 }));
     setNewSym(""); setAddOpen(false);
   }
 
   function removeHolding(sym: string) {
-    const next = holdings.find(h => h.s !== sym);
-    setHoldings(prev => prev.filter(h => h.s !== sym));
-    if (pfSel === sym) setPfSel(next?.s ?? "");
+    const next = holdings.find(h => h.ticker !== sym);
+    setHoldings(prev => prev.filter(h => h.ticker !== sym));
+    if (pfSel === sym) setPfSel(next?.ticker ?? "");
     setConfirmDel(null);
   }
 
@@ -108,14 +108,14 @@ export function PortfolioScreen() {
                 <span className="bullet" />
                 <span>
                   <b>Biggest driver:</b>{" "}
-                  <b style={{ color: "var(--text-hi)" }}>{driver?.s ?? "—"}</b> — {sign(driver?.c ?? 0)} at {driverWt}% weight.
+                  <b style={{ color: "var(--text-hi)" }}>{driver?.ticker ?? "—"}</b> — {sign(driver?.pctChange ?? 0)} at {driverWt}% weight.
                 </span>
               </li>
               <li>
                 <span className="bullet" />
                 <span>
-                  <b>Leader:</b> <b className="up">{leader?.s} {sign(leader?.c ?? 0)}</b>;{" "}
-                  <b>laggard:</b> <b className="down">{laggard?.s} {sign(laggard?.c ?? 0)}</b>.
+                  <b>Leader:</b> <b className="up">{leader?.ticker} {sign(leader?.pctChange ?? 0)}</b>;{" "}
+                  <b>laggard:</b> <b className="down">{laggard?.ticker} {sign(laggard?.pctChange ?? 0)}</b>.
                 </span>
               </li>
               <li>
@@ -135,7 +135,7 @@ export function PortfolioScreen() {
 
         <StockPanelLayout
           selectedSym={pfSel}
-          chartPx={sel?.p ?? 0}
+          chartPx={sel?.price ?? 0}
           tf={pfTf}
           onTfChange={setPfTf}
           chartEmptyText="Select a holding to see chart"
@@ -154,17 +154,17 @@ export function PortfolioScreen() {
             >
               {holdings.map((f, i) => (
                 <StockRow
-                  key={f.s}
-                  sym={f.s}
-                  name={f.n}
+                  key={f.ticker}
+                  sym={f.ticker}
+                  name={f.name}
                   seed={i + 3}
-                  sparkUp={f.c >= 0}
-                  isSelected={pfSel === f.s}
-                  onClick={() => setPfSel(f.s)}
-                  onDelete={() => setConfirmDel(f.s)}
-                  valueTop={f.p >= 1000 ? `$${(f.p / 1000).toFixed(2)}K` : `$${f.p.toFixed(2)}`}
-                  valueBottom={`${arr(f.c)} ${sign(f.c)}`}
-                  valueBottomClass={f.c >= 0 ? "up" : "down"}
+                  sparkUp={f.pctChange >= 0}
+                  isSelected={pfSel === f.ticker}
+                  onClick={() => setPfSel(f.ticker)}
+                  onDelete={() => setConfirmDel(f.ticker)}
+                  valueTop={f.price >= 1000 ? `$${(f.price / 1000).toFixed(2)}K` : `$${f.price.toFixed(2)}`}
+                  valueBottom={`${arr(f.pctChange)} ${sign(f.pctChange)}`}
+                  valueBottomClass={f.pctChange >= 0 ? "up" : "down"}
                 />
               ))}
             </StockListCard>

@@ -96,8 +96,8 @@ function fOI(x: number) { return fmt(x, 0); }
 
 export function OptionsScreen() {
   const stockList = useMemo(() => {
-    const moverSyms = new Set(movers.map(m => m.s));
-    const base = movers.map(m => ({ s: m.s, n: m.n, p: m.p, c: m.c }));
+    const moverSyms = new Set(movers.map(m => m.ticker));
+    const base = movers.map(m => ({ s: m.ticker, n: m.name, p: m.price, c: m.pctChange }));
     const extra = EXTRA_STOCKS.filter(e => !moverSyms.has(e.s));
     return [...base, ...extra].sort((a, b) => a.s < b.s ? -1 : 1);
   }, []);

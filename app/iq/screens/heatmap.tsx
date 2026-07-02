@@ -138,8 +138,8 @@ export function HeatmapScreen() {
                   }}>{g.name}</span>
                   <span style={{
                     fontSize: ".62rem", fontFamily: "var(--f-mono)", fontWeight: 700,
-                    color: g.chg >= 0 ? "var(--up)" : "var(--down)", flexShrink: 0,
-                  }}>{sign(g.chg)}</span>
+                    color: g.pctChange >= 0 ? "var(--up)" : "var(--down)", flexShrink: 0,
+                  }}>{sign(g.pctChange)}</span>
                 </div>
 
                 {/* Stock cells */}
@@ -201,8 +201,8 @@ export function HeatmapScreen() {
 
       {/* ── Hover tooltip ── */}
       {hover && (() => {
-        const mv  = movers.find(m => m.s === hover.sym);
-        const scr = screenerStocks.find(s => s.s === hover.sym);
+        const mv  = movers.find(m => m.ticker === hover.sym);
+        const scr = screenerStocks.find(s => s.ticker === hover.sym);
         return (
           <div className="dash-pop"
             style={{ left: hover.x, top: hover.y, cursor: "default", width: 310, maxHeight: `${window.innerHeight - hover.y - 8}px`, overflowY: "auto" }}
@@ -216,10 +216,10 @@ export function HeatmapScreen() {
               <span className={`pill ${hover.chg >= 0 ? "up" : "dn"}`}>{sign(hover.chg)}</span>
             </div>
             <div className="dp-row"><span>Mkt Cap</span><b>{capFmt(hover.mcap)}</b></div>
-            {mv  && <div className="dp-row"><span>Price</span><b>${fmt(mv.p)}</b></div>}
-            {mv  && <div className="dp-row"><span>RVOL</span><b className={mv.rvol >= 2 ? "up" : ""}>{mv.rvol}×</b></div>}
-            {scr && <div className="dp-row"><span>RS Rating</span><b>{scr.rs}/99</b></div>}
-            {mv?.ma && <div className="dp-row"><span>MA Status</span><b className={cls(mv.c)}>{mv.ma}</b></div>}
+            {mv  && <div className="dp-row"><span>Price</span><b>${fmt(mv.price)}</b></div>}
+            {mv  && <div className="dp-row"><span>RVOL</span><b className={mv.rvolRatio >= 2 ? "up" : ""}>{mv.rvolRatio}×</b></div>}
+            {scr && <div className="dp-row"><span>RS Rating</span><b>{scr.relativeStrength}/99</b></div>}
+            {mv?.maPosture && <div className="dp-row"><span>MA Status</span><b className={cls(mv.pctChange)}>{mv.maPosture}</b></div>}
 
             {/* Same-sector stock list */}
             {hover.peers.length > 0 && (

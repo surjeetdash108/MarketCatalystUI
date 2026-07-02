@@ -16,10 +16,10 @@ const WEEKLY = {
   subtitle: "auto-generated · Fri 5:02 ET",
   headline: "Tech leads a strong week; Fed hold priced in, rate-cut odds firming",
   indices: [
-    { l: "S&P 500",    v:  2.14 },
-    { l: "Nasdaq",     v:  3.42 },
-    { l: "Dow",        v:  1.08 },
-    { l: "Russell 2K", v: -0.71 },
+    { label: "S&P 500",    value:  2.14 },
+    { label: "Nasdaq",     value:  3.42 },
+    { label: "Dow",        value:  1.08 },
+    { label: "Russell 2K", value: -0.71 },
   ],
   stories: [
     "NVDA earnings beat powered semiconductors +6.1% for the week — the biggest sector move.",
@@ -28,28 +28,28 @@ const WEEKLY = {
     "Defensives (Utilities, Staples) underperformed as risk appetite dominated all week.",
   ],
   nextWeek: [
-    { time: "Mon", ev: "No major macro" },
-    { time: "Tue", ev: "Consumer Confidence (10:00a)" },
-    { time: "Wed", ev: "Durable Goods (8:30a)" },
-    { time: "Thu", ev: "GDP Q1 final (8:30a) · Jobless Claims" },
-    { time: "Fri", ev: "PCE Deflator (8:30a) — key Fed inflation gauge" },
+    { time: "Mon", event: "No major macro" },
+    { time: "Tue", event: "Consumer Confidence (10:00a)" },
+    { time: "Wed", event: "Durable Goods (8:30a)" },
+    { time: "Thu", event: "GDP Q1 final (8:30a) · Jobless Claims" },
+    { time: "Fri", event: "PCE Deflator (8:30a) — key Fed inflation gauge" },
   ],
   sectorLeaders: [
-    { name: "Semiconductors", chg:  6.1 },
-    { name: "Technology",     chg:  4.8 },
-    { name: "Consumer Disc.", chg:  2.3 },
+    { name: "Semiconductors", pctChange:  6.1 },
+    { name: "Technology",     pctChange:  4.8 },
+    { name: "Consumer Disc.", pctChange:  2.3 },
   ],
   sectorLaggards: [
-    { name: "Utilities",      chg: -1.4 },
-    { name: "Staples",        chg: -0.9 },
-    { name: "Healthcare",     chg:  0.2 },
+    { name: "Utilities",      pctChange: -1.4 },
+    { name: "Staples",        pctChange: -0.9 },
+    { name: "Healthcare",     pctChange:  0.2 },
   ],
   biggestMoves: [
-    { s: "NVDA", reason: "Earnings beat-and-raise", c:  14.2 },
-    { s: "PLTR", reason: "Guidance raise",          c:   9.1 },
-    { s: "ZIM",  reason: "Earnings + dividend",     c:   9.0 },
-    { s: "WBA",  reason: "Guidance cut",            c:  -9.4 },
-    { s: "DELL", reason: "Margin miss",             c:  -5.2 },
+    { ticker: "NVDA", reason: "Earnings beat-and-raise", pctChange:  14.2 },
+    { ticker: "PLTR", reason: "Guidance raise",          pctChange:   9.1 },
+    { ticker: "ZIM",  reason: "Earnings + dividend",     pctChange:   9.0 },
+    { ticker: "WBA",  reason: "Guidance cut",            pctChange:  -9.4 },
+    { ticker: "DELL", reason: "Margin miss",             pctChange:  -5.2 },
   ],
 };
 
@@ -252,10 +252,10 @@ export function RecapScreen() {
         <div className="heat">
           {pageSectors.map(s => (
             <div key={s.name} className="s"
-              style={{ background: heatColor(weeklyScale ? s.chg * 5 : s.chg), cursor: "pointer" }}
+              style={{ background: heatColor(weeklyScale ? s.pctChange * 5 : s.pctChange), cursor: "pointer" }}
               onClick={() => openSector(s.name)}>
               <div className="nm">{s.name}</div>
-              <div className="v">{weeklyScale ? `${arr(s.chg)}${sign(s.chg)}` : sign(s.chg)}</div>
+              <div className="v">{weeklyScale ? `${arr(s.pctChange)}${sign(s.pctChange)}` : sign(s.pctChange)}</div>
             </div>
           ))}
         </div>
@@ -286,11 +286,11 @@ export function RecapScreen() {
           </div>
           <div className="card-b" style={{ paddingTop: 6 }}>
             {recap.movers.map(m => (
-              <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
-                <StockLogo sym={m.s} size={20} />
-                <span className="tkr">{m.s}</span>
+              <div key={m.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.ticker)}>
+                <StockLogo sym={m.ticker} size={20} />
+                <span className="tkr">{m.ticker}</span>
                 <span className="mid">{m.reason}</span>
-                <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                <span className={`r ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span>
               </div>
             ))}
           </div>
@@ -304,9 +304,9 @@ export function RecapScreen() {
           </div>
           <div className="card-b" style={{ paddingTop: 6 }}>
             {recap.internals.map(r => (
-              <div key={r.l} className="minirow">
-                <span className="mid">{r.l}</span>
-                <span className={`r ${r.c > 0 ? "up" : r.c < 0 ? "down" : ""}`}>{r.v}</span>
+              <div key={r.label} className="minirow">
+                <span className="mid">{r.label}</span>
+                <span className={`r ${r.direction > 0 ? "up" : r.direction < 0 ? "down" : ""}`}>{r.value}</span>
               </div>
             ))}
           </div>
@@ -345,14 +345,14 @@ export function RecapScreen() {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
               {recap.indices.map(idx => {
-                const { bg, fg } = heatCol(idx.v);
+                const { bg, fg } = heatCol(idx.value);
                 return (
-                  <div key={idx.l} style={{
+                  <div key={idx.label} style={{
                     background: bg, borderRadius: 10, padding: "8px 14px", minWidth: 90,
                   }}>
-                    <div style={{ fontSize: ".68rem", color: fg, opacity: 0.8, marginBottom: 3 }}>{idx.l}</div>
+                    <div style={{ fontSize: ".68rem", color: fg, opacity: 0.8, marginBottom: 3 }}>{idx.label}</div>
                     <div style={{ fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--f-mono)", color: fg }}>
-                      {arr(idx.v)}{sign(idx.v)}
+                      {arr(idx.value)}{sign(idx.value)}
                     </div>
                   </div>
                 );
@@ -395,7 +395,7 @@ export function RecapScreen() {
                 {recap.tomorrow.map((t, i) => (
                   <div key={i} className="minirow">
                     <span className="mono" style={{ width: 54, color: "var(--warn)" }}>{t.time}</span>
-                    <span className="mid">{t.ev}</span>
+                    <span className="mid">{t.event}</span>
                   </div>
                 ))}
               </div>
@@ -426,14 +426,14 @@ export function RecapScreen() {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
               {WEEKLY.indices.map(idx => {
-                const { bg, fg } = heatCol(idx.v);
+                const { bg, fg } = heatCol(idx.value);
                 return (
-                  <div key={idx.l} style={{
+                  <div key={idx.label} style={{
                     background: bg, borderRadius: 10, padding: "8px 14px", minWidth: 90,
                   }}>
-                    <div style={{ fontSize: ".68rem", color: fg, opacity: 0.8, marginBottom: 3 }}>{idx.l}</div>
+                    <div style={{ fontSize: ".68rem", color: fg, opacity: 0.8, marginBottom: 3 }}>{idx.label}</div>
                     <div style={{ fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--f-mono)", color: fg }}>
-                      {arr(idx.v)}{sign(idx.v)}
+                      {arr(idx.value)}{sign(idx.value)}
                     </div>
                   </div>
                 );
@@ -475,7 +475,7 @@ export function RecapScreen() {
                 {WEEKLY.nextWeek.map((t, i) => (
                   <div key={i} className="minirow">
                     <span className="mono" style={{ width: 36, color: "var(--warn)" }}>{t.time}</span>
-                    <span className="mid">{t.ev}</span>
+                    <span className="mid">{t.event}</span>
                   </div>
                 ))}
               </div>
@@ -491,7 +491,7 @@ export function RecapScreen() {
                   {WEEKLY.sectorLeaders.map(s => (
                     <div key={s.name} className="minirow" style={{ cursor: "pointer" }} onClick={() => openSector(s.name)}>
                       <span className="mid">{s.name}</span>
-                      <span className={`r ${cls(s.chg)}`}>{sign(s.chg)}</span>
+                      <span className={`r ${cls(s.pctChange)}`}>{sign(s.pctChange)}</span>
                     </div>
                   ))}
                 </div>
@@ -504,7 +504,7 @@ export function RecapScreen() {
                   {WEEKLY.sectorLaggards.map(s => (
                     <div key={s.name} className="minirow" style={{ cursor: "pointer" }} onClick={() => openSector(s.name)}>
                       <span className="mid">{s.name}</span>
-                      <span className={`r ${cls(s.chg)}`}>{sign(s.chg)}</span>
+                      <span className={`r ${cls(s.pctChange)}`}>{sign(s.pctChange)}</span>
                     </div>
                   ))}
                 </div>
@@ -519,11 +519,11 @@ export function RecapScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 6 }}>
               {WEEKLY.biggestMoves.map(m => (
-                <div key={m.s} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.s)}>
-                  <StockLogo sym={m.s} size={20} />
-                  <span className="tkr">{m.s}</span>
+                <div key={m.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.ticker)}>
+                  <StockLogo sym={m.ticker} size={20} />
+                  <span className="tkr">{m.ticker}</span>
                   <span className="mid" style={{ fontSize: ".75rem" }}>{m.reason}</span>
-                  <span className={`r ${cls(m.c)}`}>{sign(m.c)}</span>
+                  <span className={`r ${cls(m.pctChange)}`}>{sign(m.pctChange)}</span>
                 </div>
               ))}
             </div>
@@ -560,12 +560,12 @@ export function RecapScreen() {
               {drawer === "earn-movers" && (
                 <>
                   {recap.movers.map(m => (
-                    <div key={m.s} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
-                      onClick={() => { openStock(m.s); setDrawer(null); }}>
-                      <StockLogo sym={m.s} size={22} />
-                      <span className="tkr">{m.s}</span>
+                    <div key={m.ticker} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
+                      onClick={() => { openStock(m.ticker); setDrawer(null); }}>
+                      <StockLogo sym={m.ticker} size={22} />
+                      <span className="tkr">{m.ticker}</span>
                       <span className="mid">{m.reason}</span>
-                      <span className={`r mono ${cls(m.c)}`} style={{ fontWeight: 700 }}>{sign(m.c)}</span>
+                      <span className={`r mono ${cls(m.pctChange)}`} style={{ fontWeight: 700 }}>{sign(m.pctChange)}</span>
                     </div>
                   ))}
                   <div style={{ height: 1, background: "var(--border)", margin: "12px 0 10px" }} />
@@ -573,28 +573,28 @@ export function RecapScreen() {
                     Full earnings calendar · reported reactions
                   </div>
                   {[...earnings]
-                    .filter(e => e.react !== null)
-                    .sort((a, b) => Math.abs(b.react!) - Math.abs(a.react!))
+                    .filter(e => e.priceReaction !== null)
+                    .sort((a, b) => Math.abs(b.priceReaction!) - Math.abs(a.priceReaction!))
                     .map(e => (
-                      <div key={e.s} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
-                        onClick={() => { openStock(e.s); setDrawer(null); }}>
-                        <StockLogo sym={e.s} size={22} />
-                        <span className="tkr">{e.s}<small>{e.n}</small></span>
+                      <div key={e.ticker} className="minirow" style={{ cursor: "pointer", padding: "8px 0" }}
+                        onClick={() => { openStock(e.ticker); setDrawer(null); }}>
+                        <StockLogo sym={e.ticker} size={22} />
+                        <span className="tkr">{e.ticker}<small>{e.name}</small></span>
                         <span className="mid">
-                          <span className={`pill ${e.react! >= 0 ? "beat" : "miss"}`}>
-                            {e.react! >= 0 ? "Beat" : "Miss"}
+                          <span className={`pill ${e.priceReaction! >= 0 ? "beat" : "miss"}`}>
+                            {e.priceReaction! >= 0 ? "Beat" : "Miss"}
                           </span>
-                          {e.guide && e.guide !== "In-line" && (
-                            <span className={`pill ${e.guide === "Raised" ? "beat" : "miss"}`} style={{ marginLeft: 4 }}>
-                              {e.guide}
+                          {e.guidanceStatus && e.guidanceStatus !== "In-line" && (
+                            <span className={`pill ${e.guidanceStatus === "Raised" ? "beat" : "miss"}`} style={{ marginLeft: 4 }}>
+                              {e.guidanceStatus}
                             </span>
                           )}
                           <span style={{ marginLeft: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                            EPS ${e.epsE} → ${e.epsA}
+                            EPS ${e.epsEstimate} → ${e.epsActual}
                           </span>
                         </span>
-                        <span className={`r mono ${e.react! >= 0 ? "up" : "down"}`} style={{ fontWeight: 700 }}>
-                          {e.react! >= 0 ? "+" : ""}{e.react}%
+                        <span className={`r mono ${e.priceReaction! >= 0 ? "up" : "down"}`} style={{ fontWeight: 700 }}>
+                          {e.priceReaction! >= 0 ? "+" : ""}{e.priceReaction}%
                         </span>
                       </div>
                     ))}
@@ -615,14 +615,14 @@ export function RecapScreen() {
                     </div>
                   </div>
                   {recap.internals.map(r => (
-                    <div key={r.l} style={{
+                    <div key={r.label} style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
                       padding: "10px 14px", marginBottom: 6,
                       background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10,
                     }}>
-                      <span style={{ fontSize: ".82rem", color: "var(--text)" }}>{r.l}</span>
-                      <span className={`mono ${r.c > 0 ? "up" : r.c < 0 ? "down" : ""}`}
-                        style={{ fontWeight: 700, fontSize: ".9rem" }}>{r.v}</span>
+                      <span style={{ fontSize: ".82rem", color: "var(--text)" }}>{r.label}</span>
+                      <span className={`mono ${r.direction > 0 ? "up" : r.direction < 0 ? "down" : ""}`}
+                        style={{ fontWeight: 700, fontSize: ".9rem" }}>{r.value}</span>
                     </div>
                   ))}
                   <div style={{ height: 1, background: "var(--border)", margin: "12px 0 10px" }} />
@@ -630,21 +630,21 @@ export function RecapScreen() {
                     Extended breadth data
                   </div>
                   {[
-                    { l: "NYSE TICK",      v: "+420",  c:  1 },
-                    { l: "TRIN (Arms)",    v: "0.74",  c:  1 },
-                    { l: "McClellan Osc",  v: "+38.5", c:  1 },
-                    { l: "Put/Call Ratio", v: "0.82",  c:  0 },
-                    { l: "New 52W Highs",  v: "184",   c:  1 },
-                    { l: "New 52W Lows",   v: "39",    c: -1 },
+                    { label: "NYSE TICK",      value: "+420",  direction:  1 },
+                    { label: "TRIN (Arms)",    value: "0.74",  direction:  1 },
+                    { label: "McClellan Osc",  value: "+38.5", direction:  1 },
+                    { label: "Put/Call Ratio", value: "0.82",  direction:  0 },
+                    { label: "New 52W Highs",  value: "184",   direction:  1 },
+                    { label: "New 52W Lows",   value: "39",    direction: -1 },
                   ].map(r => (
-                    <div key={r.l} style={{
+                    <div key={r.label} style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
                       padding: "10px 14px", marginBottom: 6,
                       background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10,
                     }}>
-                      <span style={{ fontSize: ".82rem", color: "var(--text)" }}>{r.l}</span>
-                      <span className={`mono ${r.c > 0 ? "up" : r.c < 0 ? "down" : ""}`}
-                        style={{ fontWeight: 700, fontSize: ".9rem" }}>{r.v}</span>
+                      <span style={{ fontSize: ".82rem", color: "var(--text)" }}>{r.label}</span>
+                      <span className={`mono ${r.direction > 0 ? "up" : r.direction < 0 ? "down" : ""}`}
+                        style={{ fontWeight: 700, fontSize: ".9rem" }}>{r.value}</span>
                     </div>
                   ))}
                 </>

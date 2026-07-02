@@ -37,8 +37,8 @@ function nd(days: number): string {
 /* ── Ticker search suggestion list ── */
 const SEARCH_SYMS = [
   ...Object.keys(stockInfo),
-  ...screenerStocks.map(s => s.s),
-  ...movers.map(m => m.s),
+  ...screenerStocks.map(s => s.ticker),
+  ...movers.map(m => m.ticker),
 ].filter((v, i, a) => a.indexOf(v) === i).sort();
 
 function catCol(c: string): string {
@@ -54,42 +54,42 @@ type NewsItem = { daysAgo: number; cat: string; source: string; html: string };
 
 function buildNewsHistory(sym: string): NewsItem[] {
   const H: NewsItem[] = [];
-  const ss = screenerStocks.find(x => x.s === sym);
+  const ss = screenerStocks.find(x => x.ticker === sym);
   const info = stockInfo[sym];
-  const nm = info?.name ?? ss?.n ?? sym;
-  const mv = movers.find(m => m.s === sym);
-  const sec = ss ? sectorByName[ss.sec] : null;
+  const nm = info?.name ?? ss?.name ?? sym;
+  const mv = movers.find(m => m.ticker === sym);
+  const sec = ss ? sectorByName[ss.sector] : null;
   const sd = hashStr(sym + "news");
-  const rs = ss?.rs ?? 55;
-  const p = mv?.p ?? info?.px ?? 100;
-  const c = mv?.c ?? info?.c ?? 0;
+  const rs = ss?.relativeStrength ?? 55;
+  const p = mv?.price ?? info?.price ?? 100;
+  const c = mv?.pctChange ?? info?.pctChange ?? 0;
 
   // Catalyst
-  if (mv?.news) H.push({ daysAgo: 0, cat: "Catalyst", source: mv.cat ?? "Market", html: mv.news });
+  if (mv?.newsContext) H.push({ daysAgo: 0, cat: "Catalyst", source: mv.catalystLabel ?? "Market", html: mv.newsContext });
   // Technical
   if (mv) {
     H.push({
-      daysAgo: 0, cat: "Technical", source: mv.ma ?? "Trend",
-      html: `${nm} is ${c >= 0 ? `<b class="up">up ${sign(c)}</b>` : `<b class="down">down ${sign(c)}</b>`} today on <b>${(mv.rvol ?? 1).toFixed(1)}×</b> volume. ${mv.tech ?? ""}`,
+      daysAgo: 0, cat: "Technical", source: mv.maPosture ?? "Trend",
+      html: `${nm} is ${c >= 0 ? `<b class="up">up ${sign(c)}</b>` : `<b class="down">down ${sign(c)}</b>`} today on <b>${(mv.rvolRatio ?? 1).toFixed(1)}×</b> volume. ${mv.techContext ?? ""}`,
     });
   }
   // Sector
   if (sec) {
     H.push({
-      daysAgo: 1, cat: "Sector", source: ss?.sec ?? "Group",
-      html: `The ${ss?.sec ?? "group"} is ${sec.chg >= 0 ? `<b class="up">${sign(sec.chg)}</b>` : `<b class="down">${sign(sec.chg)}</b>`} (${(sec.trend ?? "flat").toLowerCase()}).`,
+      daysAgo: 1, cat: "Sector", source: ss?.sector ?? "Group",
+      html: `The ${ss?.sector ?? "group"} is ${sec.pctChange >= 0 ? `<b class="up">${sign(sec.pctChange)}</b>` : `<b class="down">${sign(sec.pctChange)}</b>`} (${(sec.trend ?? "flat").toLowerCase()}).`,
     });
   }
   // Analyst actions
-  analyst.filter(a => a.s === sym).slice(0, 3).forEach((a, i) => {
-    const verb = a.dir === "up" ? "raised to" : a.dir === "down" ? "cut to" : a.dir === "init" ? "initiated at" : "reiterated";
+  analyst.filter(a => a.ticker === sym).slice(0, 3).forEach((a, i) => {
+    const verb = a.actionType === "up" ? "raised to" : a.actionType === "down" ? "cut to" : a.actionType === "init" ? "initiated at" : "reiterated";
     H.push({
       daysAgo: 3 + i * 4, cat: "Analyst", source: a.firm,
-      html: `<b>${a.firm}</b> ${verb} <b style="color:var(--text-hi)">${a.to}</b>${a.ptT ? `, PT $${a.ptT}` : ""}.`,
+      html: `<b>${a.firm}</b> ${verb} <b style="color:var(--text-hi)">${a.newRating}</b>${a.newPriceTarget ? `, PT $${a.newPriceTarget}` : ""}.`,
     });
   });
   // Last earnings
-  const qeps = p / ((info?.pe ?? ss?.pe ?? 25) || 25) / 4;
+  const qeps = p / ((info?.peRatio ?? ss?.peRatio ?? 25) || 25) / 4;
   const hist = earnHistory(sym, qeps);
   if (hist.length) {
     const q = hist[0];
@@ -99,13 +99,13 @@ function buildNewsHistory(sym: string): NewsItem[] {
     });
   }
   // Next ER (from watch data)
-  const wEntry = watch.find(w => w.s === sym);
-  if (wEntry?.er && wEntry.er !== "—") {
+  const wEntry = watch.find(w => w.ticker === sym);
+  if (wEntry?.nextEarningsDate && wEntry.nextEarningsDate !== "—") {
     const streak = Math.abs(sd % 7) + 2;
     const beatStreak = (sd % 3) !== 0;
     H.push({
       daysAgo: 0, cat: "Earnings", source: "Calendar",
-      html: `${nm} next reports <b style="color:var(--text-hi)">${wEntry.er}</b>. Riding a ${streak}-qtr ${beatStreak ? "beat" : "miss"} streak.`,
+      html: `${nm} next reports <b style="color:var(--text-hi)">${wEntry.nextEarningsDate}</b>. Riding a ${streak}-qtr ${beatStreak ? "beat" : "miss"} streak.`,
     });
   }
   // Coverage (deterministic)
@@ -116,7 +116,7 @@ function buildNewsHistory(sym: string): NewsItem[] {
   // Product
   H.push({
     daysAgo: (sd % 7) + 16, cat: "Product", source: "Company",
-    html: `${nm} unveiled a new ${(ss?.sec ?? "").toLowerCase().includes("semi") ? "product line" : "initiative"}; the Street called it ${(sd % 2) ? "incremental" : "a needle-mover"}.`,
+    html: `${nm} unveiled a new ${(ss?.sector ?? "").toLowerCase().includes("semi") ? "product line" : "initiative"}; the Street called it ${(sd % 2) ? "incremental" : "a needle-mover"}.`,
   });
   // Guidance
   H.push({
@@ -182,8 +182,8 @@ function FeedItem({ item, i, total, onItemClick }: {
 function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
   const { openStockFull } = useIQActions();
   const info = stockInfo[sym];
-  const ss   = screenerStocks.find(x => x.s === sym);
-  const nm   = info?.name ?? ss?.n ?? sym;
+  const ss   = screenerStocks.find(x => x.ticker === sym);
+  const nm   = info?.name ?? ss?.name ?? sym;
   const items = buildNewsHistory(sym);
 
   return (
@@ -247,8 +247,8 @@ export function CommentaryScreen() {
   const [suggOpen, setSuggOpen] = useState(false);
 
   const mySymbols = new Set([
-    ...watch.map(w => w.s),
-    ...folio.map(f => f.s),
+    ...watch.map(w => w.ticker),
+    ...folio.map(f => f.ticker),
   ]);
 
   const myFeed = commentary.filter(item =>
@@ -331,9 +331,9 @@ export function CommentaryScreen() {
                 minWidth: 220, width: "100%",
               }}>
                 {suggestions.map(sym => {
-                  const ss  = screenerStocks.find(x => x.s === sym);
+                  const ss  = screenerStocks.find(x => x.ticker === sym);
                   const inf = stockInfo[sym];
-                  const nm  = inf?.name ?? ss?.n ?? "";
+                  const nm  = inf?.name ?? ss?.name ?? "";
                   return (
                     <div
                       key={sym}
