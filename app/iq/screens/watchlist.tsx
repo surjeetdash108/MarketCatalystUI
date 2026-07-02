@@ -3,9 +3,9 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { watch as watchData } from "../data";
-import { cls, arr, sign, Spark } from "../utils";
+import { arr, sign, Spark, CandleChart } from "../utils";
 
-const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean }>(
+const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
   () => import("./stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
@@ -16,6 +16,7 @@ export function WatchlistScreen() {
   const [addOpen, setAddOpen]           = useState(false);
   const [newSym, setNewSym]             = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [wlTf, setWlTf] = useState("3M");
 
   const list = watchData.filter(w => items.includes(w.s));
   const up   = list.filter(w => w.c > 0).length;
@@ -85,17 +86,17 @@ export function WatchlistScreen() {
           </div>
         </div>
 
-        {/* Two-panel master-detail */}
-        <div className="pf-master">
+        {/* TOP ROW: Watchlist list (left) + Chart (right) — same height */}
+        <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
 
-          {/* LEFT: watchlist */}
-          <div className="pf-side">
-            <div className="card">
+          {/* LEFT: vertical watchlist list */}
+          <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
               <div className="card-h">
                 <h3>Watchlist</h3>
                 <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{items.length} stocks</span>
               </div>
-              <div className="pf-list">
+              <div className="pf-list" style={{ flex: 1, maxHeight: "none", overflowY: "auto" }}>
                 {items.length === 0 ? (
                   <div style={{ padding: 16, fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
                     No stocks — click &ldquo;Add stock&rdquo;.
@@ -105,33 +106,22 @@ export function WatchlistScreen() {
                   const px = w?.px ?? 0;
                   const c  = w?.c  ?? 0;
                   return (
-                    <div
-                      key={sym}
-                      className={`pf-li${sel === sym ? " active" : ""}`}
+                    <div key={sym} className={`pf-li${sel === sym ? " active" : ""}`}
                       style={{ gridTemplateColumns: "1fr 60px auto auto" }}
-                      onClick={() => setSel(sym)}
-                    >
+                      onClick={() => setSel(sym)}>
                       <div>
                         <span className="s">{sym}</span>
                         <span className="n">{w?.n ?? sym}</span>
                       </div>
-                      <div className="pf-spark">
-                        <Spark seed={i + 3} up={c >= 0} />
-                      </div>
+                      <div className="pf-spark"><Spark seed={i + 3} up={c >= 0} /></div>
                       <div>
                         <span className="px">{px >= 1000 ? `$${(px / 1000).toFixed(2)}K` : `$${px.toFixed(2)}`}</span>
-                        <span className={`ch ${cls(c)}`}>{arr(c)} {sign(c)}</span>
+                        <span className={`ch ${c >= 0 ? "up" : "down"}`}>{arr(c)} {sign(c)}</span>
                       </div>
-                      <button
-                        className="wl-del-btn"
-                        title="Remove from watchlist"
-                        onClick={e => { e.stopPropagation(); setConfirmDelete(sym); }}
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }}>
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14H6L5 6" />
-                          <path d="M10 11v6M14 11v6" />
-                          <path d="M9 6V4h6v2" />
+                      <button className="wl-del-btn" title="Remove"
+                        onClick={e => { e.stopPropagation(); setConfirmDelete(sym); }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ width: 10, height: 10 }}>
+                          <path d="M18 6L6 18M6 6l12 12" />
                         </svg>
                       </button>
                     </div>
@@ -141,21 +131,39 @@ export function WatchlistScreen() {
             </div>
           </div>
 
-          {/* RIGHT: stock detail */}
-          <div className="pf-detail">
+          {/* RIGHT: Chart card */}
+          <div style={{ flex: 1, minWidth: 0 }}>
             {sel ? (
-              <>
-                <StockScreenEmbed initialSym={sel} hideHeader />
-              </>
-            ) : (
-              <div className="card">
-                <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
-                  Add a stock to see its detail here.
+              <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                <div className="chart-toolbar">
+                  {["1D","1W","1M","3M","6M","1Y","5Y"].map(r => (
+                    <button key={r} className={`rng tfbtn${wlTf === r ? " on" : ""}`} onClick={() => setWlTf(r)}>{r}</button>
+                  ))}
                 </div>
+                <div style={{ padding: "0 14px 14px", flex: 1 }}>
+                  <CandleChart sym={sel} tf={wlTf} px={selData?.px ?? 0}
+                    maStep={0} emaStep={0} showVol chartType="candles" />
+                </div>
+              </div>
+            ) : (
+              <div className="card" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "var(--text-dim-solid)", fontSize: ".85rem" }}>Select a stock to see chart</span>
               </div>
             )}
           </div>
+
         </div>
+
+        {/* BOTTOM: Stock detail without chart */}
+        {sel ? (
+          <StockScreenEmbed initialSym={sel} hideHeader hideChart />
+        ) : (
+          <div className="card">
+            <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
+              Add a stock to see its detail here.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add stock modal */}

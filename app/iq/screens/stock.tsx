@@ -368,7 +368,7 @@ function StockChartExpanded({
   );
 }
 
-export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; hideHeader?: boolean } = {}) {
+export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean } = {}) {
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
@@ -397,7 +397,7 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
   const [noteOpen, setNoteOpen]  = useState(false);
   const [ctxMenu, setCtxMenu]    = useState<{ x: number; y: number } | null>(null);
 
-  type InnerDrawer = "techrating" | "peers" | "industry" | "insider" | "keylevels" | "earnings" | "financials" | null;
+  type InnerDrawer = "techrating" | "peers" | "industry" | "insider" | "keylevels" | "earnings" | "financials" | "dividend" | null;
   const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
 
@@ -640,9 +640,9 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
       )}
 
       <div className="sd-grid" style={hideHeader ? { paddingTop: 0 } : undefined}>
-        {/* LEFT COLUMN */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
+        {/* Full-width chart */}
+        {!hideChart && <div style={{ gridColumn: "1 / -1" }}>
           {/* Chart card */}
           <div className="card">
             <div className="chart-toolbar">
@@ -754,6 +754,10 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
               )}
             </div>
           </div>
+        </div>}
+
+        {/* LEFT COLUMN */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "stretch" }}>
 
           {/* Keystats */}
           <div className="card">
@@ -902,6 +906,7 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
                     {data.div > 0
                       ? <span className="pill up">{data.div.toFixed(2)}% yield</span>
                       : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>}
+                    <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                     {data.div > 0 && <ExpandBtn title={`${sym} · Dividend history`} node={
                       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
                         {divAmts.map((v, i) => {
@@ -1110,8 +1115,10 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
             </div>
           </div>
 
-          {/* Insider & institutional */}
-          <div className="card">
+        </div>
+
+        {/* Insider & institutional — col 1 */}
+        <div className="card">
             <div className="card-h">
               <h3>Insider &amp; institutional</h3>
               <span className="link" onClick={() => setInnerDrawer("insider")}>View all →</span>
@@ -1159,8 +1166,8 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
             </div>
           </div>
 
-          {/* Key levels */}
-          <div className="card">
+        {/* Key levels — col 2 */}
+        <div className="card">
             <div className="card-h">
               <h3>Key levels (pivots)</h3>
               <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
@@ -1178,7 +1185,6 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
             </div>
           </div>
 
-        </div>
       </div>
 
       {/* ── Right-click context menu ── */}
@@ -1608,6 +1614,102 @@ export function StockScreen({ initialSym, hideHeader }: { initialSym?: string; h
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {innerDrawer === "dividend" && (() => {
+            const annualDiv = p * (data.div / 100);
+            const qDiv = annualDiv / 4;
+            const QLABELS = ["Q3'24","Q4'24","Q1'25","Q2'25","Q3'25","Q4'25","Q1'26","Q2'26"];
+            const divAmts = QLABELS.map((_, i) => qDiv * Math.pow(1 / 1.065, (7 - i) / 4));
+            const maxAmt = Math.max(...divAmts) * 1.15 || 1;
+            const W = 420, H = 110, PADB = 22, PADT = 14;
+            const bw = W / QLABELS.length * 0.55;
+            const gap = W / QLABELS.length;
+            const exDay = 6 + (sym.charCodeAt(0) % 22);
+            const payDay = exDay + 30;
+            return (
+              <div className="side-drawer" style={{ zIndex: 52 }}>
+                <div className="drawer-h">
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Dividend History · {sym}</div>
+                    <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
+                      {data.div > 0 ? `${data.div.toFixed(2)}% yield · $${annualDiv.toFixed(2)}/yr` : "No dividend paid"}
+                    </div>
+                  </div>
+                  <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
+                </div>
+                <div className="drawer-b">
+                  {data.div === 0 ? (
+                    <div style={{ padding: "24px 0", textAlign: "center", fontSize: ".9rem", color: "var(--text-dim-solid)" }}>
+                      {sym} does not currently pay a dividend.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="metric-grid" style={{ marginBottom: 14 }}>
+                        <div className="m"><div className="k">Annual</div><div className="v">${annualDiv.toFixed(2)}</div></div>
+                        <div className="m"><div className="k">Quarterly</div><div className="v">${qDiv.toFixed(2)}</div></div>
+                        <div className="m"><div className="k">Yield</div><div className="v up">{data.div.toFixed(2)}%</div></div>
+                        <div className="m"><div className="k">5-yr growth</div><div className="v up">+6.5%/yr</div></div>
+                        <div className="m"><div className="k">Payout ratio</div><div className="v">{Math.round((annualDiv / data.eps) * 100)}%</div></div>
+                        <div className="m"><div className="k">Frequency</div><div className="v">Quarterly</div></div>
+                      </div>
+                      <div className="ai-sec"><div className="h">Quarterly dividend per share</div></div>
+                      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", margin: "10px 0 14px" }}>
+                        {divAmts.map((v, i) => {
+                          const bh = (v / maxAmt) * (H - PADT - PADB);
+                          const bx = gap * i + (gap - bw) / 2;
+                          const by = PADT + (H - PADT - PADB) - bh;
+                          const isLast = i === divAmts.length - 1;
+                          return (
+                            <g key={i}>
+                              <rect x={bx} y={by} width={bw} height={bh} rx={2}
+                                style={{ fill: isLast ? "var(--brand-2)" : "var(--surface-3)" }} />
+                              <text x={bx + bw / 2} y={by - 3} textAnchor="middle"
+                                style={{ fill: isLast ? "var(--brand-2)" : "var(--text-dim-solid)", fontSize: "7px" }}>
+                                ${v.toFixed(2)}
+                              </text>
+                              <text x={bx + bw / 2} y={H - 5} textAnchor="middle"
+                                style={{ fill: "var(--text-dim-solid)", fontSize: "8px" }}>
+                                {QLABELS[i]}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </svg>
+                      <div className="ai-sec"><div className="h">Upcoming dates</div></div>
+                      <div className="minirow" style={{ marginTop: 8 }}>
+                        <span className="mid">Ex-dividend date</span>
+                        <span className="r mono" style={{ color: "var(--warn)" }}>Jul {exDay}, 2025</span>
+                      </div>
+                      <div className="minirow">
+                        <span className="mid">Payment date</span>
+                        <span className="r mono">Aug {payDay - 31}, 2025</span>
+                      </div>
+                      <div className="minirow">
+                        <span className="mid">Declaration date</span>
+                        <span className="r mono">Jun {Math.max(1, exDay - 10)}, 2025</span>
+                      </div>
+                      <div className="card" style={{ marginTop: 14 }}>
+                        <div className="card-h"><h3 className="ai-c">◆ AI dividend read · {sym}</h3></div>
+                        <div className="card-b">
+                          <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>
+                            {sym} yields <b style={{ color: "var(--up)" }}>{data.div.toFixed(2)}%</b>, paying ${annualDiv.toFixed(2)}/share annually (${qDiv.toFixed(2)} quarterly).
+                            The 5-year dividend CAGR is +6.5% with a payout ratio of {Math.round((annualDiv / data.eps) * 100)}%.
+                            {Math.round((annualDiv / data.eps) * 100) < 60
+                              ? " Payout is conservative — suggests room for future increases."
+                              : " Payout is elevated — monitor earnings coverage carefully."}
+                            {" "}Next ex-date is <b style={{ color: "var(--warn)" }}>Jul {exDay}, 2025</b>.
+                          </p>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 10 }}>
+                        Dividend data is illustrative. Verify with company IR and SEC filings. Not investment advice.
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             );

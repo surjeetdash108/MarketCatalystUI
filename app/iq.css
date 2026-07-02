@@ -1855,7 +1855,7 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 
 /* ── Portfolio two-panel ── */
 .pf-master{display:flex;gap:16px;align-items:flex-start}
-.pf-side{width:300px;flex:none}
+.pf-side{width:340px;flex:none}
 .pf-detail{flex:1;min-width:0}
 .pf-list{display:flex;flex-direction:column;gap:2px;max-height:calc(100vh - 270px);overflow:auto;padding:4px}
 .pf-li{display:grid;grid-template-columns:1fr 60px auto;gap:10px;align-items:center;padding:9px 10px;border-radius:9px;cursor:pointer;border:1px solid transparent}
