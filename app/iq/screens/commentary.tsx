@@ -387,22 +387,18 @@ export function CommentaryScreen() {
               </div>
             </div>
 
-            {/* My names: tracked stocks chips */}
-            {activeTab === 3 && (
-              <div className="card" style={{ marginTop: 14 }}>
-                <div className="card-h">
-                  <h3>Tracked names</h3>
-                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-                    {mySymbols.size} stocks
-                  </span>
-                </div>
-                <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {[...mySymbols].map(sym => (
-                    <button key={sym} className="chip" onClick={() => openNews(sym)}>{sym}</button>
-                  ))}
-                </div>
+            {/* Quick news lookup — always visible at the bottom of the feed column */}
+            <div className="card" style={{ marginTop: 14 }}>
+              <div className="card-h">
+                <h3>{activeTab === 3 ? "Tracked names" : "Quick news lookup"}</h3>
+                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>tap to open</span>
               </div>
-            )}
+              <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {(activeTab === 3 ? [...mySymbols] : ["NVDA","AAPL","TSLA","META","MSFT","AMZN","AMD","AVGO"]).map(sym => (
+                  <button key={sym} className="chip" onClick={() => openNews(sym)}>{sym}</button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* col-4: side cards */}
@@ -444,7 +440,7 @@ export function CommentaryScreen() {
               </div>
             </div>
 
-            <div className="card">
+            <div className="card" style={{ flex: 1 }}>
               <div className="card-h"><h3>General perspective</h3></div>
               <div className="card-b">
                 <div className="note">
@@ -453,18 +449,6 @@ export function CommentaryScreen() {
               </div>
             </div>
 
-            {/* Quick ticker search shortcuts */}
-            <div className="card">
-              <div className="card-h">
-                <h3>Quick news lookup</h3>
-                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>tap to open</span>
-              </div>
-              <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {["NVDA","AAPL","TSLA","META","MSFT","AMZN","AMD","AVGO"].map(sym => (
-                  <button key={sym} className="chip" onClick={() => openNews(sym)}>{sym}</button>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>

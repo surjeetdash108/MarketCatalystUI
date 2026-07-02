@@ -108,6 +108,24 @@ export function AnalystScreen() {
         </div>
       </div>
 
+      {/* ── AI take · CRM cluster — full width, between signal cards and filter bar ── */}
+      <div className="ai-block" style={{ marginBottom: 14 }}>
+        <div className="card-h">
+          <h3 className="ai-c">◆ AI take · CRM cluster</h3>
+        </div>
+        <div className="card-b">
+          <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>
+            CRM has drawn <b style={{ color: "var(--text-hi)" }}>two upgrades</b> this week (Morgan Stanley, Citigroup) with PTs to $330–340. NVDA shows a{" "}
+            <b style={{ color: "var(--text-hi)" }}>6-action cluster</b> in 30 days — dense coverage that often precedes continued momentum. Clusters matter more than any single call.
+          </p>
+          <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <span className="src-chip">CRM: 2 upgrades</span>
+            <span className="src-chip">NVDA: 6 / 30d</span>
+            <span className="src-chip">Crowding: low</span>
+          </div>
+        </div>
+      </div>
+
       {/* ── Filter bar ── */}
       <div className="fbar">
         <button className="chip on">My names</button>
@@ -118,89 +136,62 @@ export function AnalystScreen() {
         <div className="spacer" />
       </div>
 
-      {/* ── Main layout ── */}
-      <div className="dash">
-
-        {/* col-8: actions table */}
-        <div className="col-8">
-          <div className="card">
-            <div className="tbl-wrap">
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Company</th>
-                    <th>Firm</th>
-                    <th>Action</th>
-                    <th>Rating</th>
-                    <th className="num">Price Target</th>
-                    <th className="num">Reaction</th>
-                    <th className="num">Activity</th>
+      {/* ── Full-width actions table ── */}
+      <div className="card">
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Firm</th>
+                <th>Action</th>
+                <th>Rating</th>
+                <th className="num">Price Target</th>
+                <th className="num">Reaction</th>
+                <th className="num">Activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(a => {
+                const clusterBadge = (byS[a.s]?.n30 ?? 0) >= 5;
+                return (
+                  <tr key={a.s + a.firm} className={a.owned ? "owned" : ""}
+                    onClick={() => openStock(a.s)} style={{ cursor: "pointer" }}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <StockLogo sym={a.s} size={26} />
+                        <div className="co">
+                          <span className="s">
+                            {a.owned && <span className="own-dot" />}
+                            {a.s}
+                            {clusterBadge && (
+                              <span className="pill" style={{ background: "rgba(245,170,60,.18)", color: "var(--warn)", marginLeft: 4, fontSize: ".62rem" }}>
+                                {byS[a.s].n30}+ /30d
+                              </span>
+                            )}
+                          </span>
+                          <span className="n">{a.n}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: ".8rem" }}>{a.firm}</td>
+                    <td>{dirPill(a.dir)}</td>
+                    <td>
+                      <span style={{ color: "var(--text-dim-solid)" }}>{a.from}</span>
+                      {" → "}
+                      <b style={{ color: "var(--text-hi)" }}>{a.to}</b>
+                    </td>
+                    <td className="num">
+                      {a.ptF ? `$${a.ptF}` : "—"} → <b style={{ color: "var(--text-hi)" }}>${a.ptT}</b>
+                    </td>
+                    <td className={`num ${cls(a.react)}`}>{sign(a.react)}</td>
+                    <td className="num">{a.n30}× /30d</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(a => {
-                    const clusterBadge = (byS[a.s]?.n30 ?? 0) >= 5;
-                    return (
-                      <tr key={a.s + a.firm} className={a.owned ? "owned" : ""}
-                        onClick={() => openStock(a.s)} style={{ cursor: "pointer" }}>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <StockLogo sym={a.s} size={26} />
-                            <div className="co">
-                            <span className="s">
-                              {a.owned && <span className="own-dot" />}
-                              {a.s}
-                              {clusterBadge && (
-                                <span className="pill" style={{ background: "rgba(245,170,60,.18)", color: "var(--warn)", marginLeft: 4, fontSize: ".62rem" }}>
-                                  {byS[a.s].n30}+ /30d
-                                </span>
-                              )}
-                            </span>
-                            <span className="n">{a.n}</span>
-                          </div>
-                          </div>
-                        </td>
-                        <td style={{ fontSize: ".8rem" }}>{a.firm}</td>
-                        <td>{dirPill(a.dir)}</td>
-                        <td>
-                          <span style={{ color: "var(--text-dim-solid)" }}>{a.from}</span>
-                          {" → "}
-                          <b style={{ color: "var(--text-hi)" }}>{a.to}</b>
-                        </td>
-                        <td className="num">
-                          {a.ptF ? `$${a.ptF}` : "—"} → <b style={{ color: "var(--text-hi)" }}>${a.ptT}</b>
-                        </td>
-                        <td className={`num ${cls(a.react)}`}>{sign(a.react)}</td>
-                        <td className="num">{a.n30}× /30d</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-
-        {/* col-4: AI take */}
-        <div className="col-4">
-          <div className="ai-block">
-            <div className="card-h">
-              <h3 className="ai-c">◆ AI take · CRM cluster</h3>
-            </div>
-            <div className="card-b">
-              <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>
-                CRM has drawn <b style={{ color: "var(--text-hi)" }}>two upgrades</b> this week (Morgan Stanley, Citigroup) with PTs to $330–340. NVDA shows a{" "}
-                <b style={{ color: "var(--text-hi)" }}>6-action cluster</b> in 30 days — dense coverage that often precedes continued momentum. Clusters matter more than any single call.
-              </p>
-              <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <span className="src-chip">CRM: 2 upgrades</span>
-                <span className="src-chip">NVDA: 6 / 30d</span>
-                <span className="src-chip">Crowding: low</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </>
   );
