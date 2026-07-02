@@ -538,6 +538,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     ["Q4 24", qeps * 0.99, 8  * beatSign],
     ["Q3 24", qeps * 0.95, 6  * beatSign],
     ["Q2 24", qeps * 0.9,  5  * beatSign],
+    ["Q1 24", qeps * 0.85, 4  * beatSign],
   ];
   const hist10 = earnHistory(sym, qeps);
 
@@ -883,99 +884,6 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             );
           })()}
 
-          {/* Dividend history */}
-          {(() => {
-            const annualDiv = p * (data.div / 100);
-            const qDiv = annualDiv / 4;
-            const QLABELS = ["Q3'24","Q4'24","Q1'25","Q2'25","Q3'25","Q4'25","Q1'26","Q2'26"];
-            const divAmts = QLABELS.map((_, i) => {
-              const factor = Math.pow(1 / 1.065, (7 - i) / 4);
-              return qDiv * factor;
-            });
-            const maxAmt = Math.max(...divAmts) * 1.15 || 1;
-            const W = 340, H = 80, PADB = 18, PADT = 6;
-            const bw = W / QLABELS.length * 0.55;
-            const gap = W / QLABELS.length;
-            const exDay = 6 + (sym.charCodeAt(0) % 22);
-            const payDay = exDay + 30;
-            return (
-              <div className="card">
-                <div className="card-h">
-                  <h3>Dividend history</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {data.div > 0
-                      ? <span className="pill up">{data.div.toFixed(2)}% yield</span>
-                      : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>}
-                    <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
-                    {data.div > 0 && <ExpandBtn title={`${sym} · Dividend history`} node={
-                      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
-                        {divAmts.map((v, i) => {
-                          const bh = (v / maxAmt) * (H - PADT - PADB);
-                          const bx = gap * i + (gap - bw) / 2;
-                          const by = PADT + (H - PADT - PADB) - bh;
-                          const isLast = i === divAmts.length - 1;
-                          return (
-                            <g key={i}>
-                              <rect x={bx} y={by} width={bw} height={bh} rx={2}
-                                style={{ fill: isLast ? "var(--brand-2)" : "var(--surface-3)" }} />
-                              <text x={bx + bw / 2} y={H - 4} textAnchor="middle"
-                                style={{ fill: "var(--text-dim-solid)", fontSize: "7px" }}>
-                                {QLABELS[i]}
-                              </text>
-                            </g>
-                          );
-                        })}
-                      </svg>
-                    } />}
-                  </div>
-                </div>
-                <div className="card-b" style={{ paddingTop: 8 }}>
-                  {data.div === 0 ? (
-                    <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", padding: "4px 0 8px" }}>
-                      {sym} does not currently pay a dividend.
-                    </div>
-                  ) : (
-                    <>
-                      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", marginBottom: 6 }}>
-                        {divAmts.map((v, i) => {
-                          const bh = (v / maxAmt) * (H - PADT - PADB);
-                          const bx = gap * i + (gap - bw) / 2;
-                          const by = PADT + (H - PADT - PADB) - bh;
-                          const isLast = i === divAmts.length - 1;
-                          return (
-                            <g key={i}>
-                              <rect x={bx} y={by} width={bw} height={bh} rx={2}
-                                style={{ fill: isLast ? "var(--brand-2)" : "var(--surface-3)" }} />
-                              <text x={bx + bw / 2} y={H - 4} textAnchor="middle"
-                                style={{ fill: "var(--text-dim-solid)", fontSize: "7px" }}>
-                                {QLABELS[i]}
-                              </text>
-                            </g>
-                          );
-                        })}
-                      </svg>
-                      <div className="metric-grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 10 }}>
-                        <div className="m"><div className="k">Annual</div><div className="v" style={{ fontSize: ".95rem" }}>${annualDiv.toFixed(2)}</div></div>
-                        <div className="m"><div className="k">Quarterly</div><div className="v" style={{ fontSize: ".95rem" }}>${qDiv.toFixed(2)}</div></div>
-                        <div className="m"><div className="k">Ex-div date</div><div className="v" style={{ fontSize: ".78rem", color: "var(--warn)" }}>Jul {exDay}</div></div>
-                        <div className="m"><div className="k">Pay date</div><div className="v" style={{ fontSize: ".78rem" }}>Aug {payDay - 31}</div></div>
-                      </div>
-                      <div className="minirow">
-                        <span className="mid" style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>5-yr dividend growth rate</span>
-                        <span className="r up" style={{ fontSize: ".78rem" }}>+6.5% / yr</span>
-                      </div>
-                      <div className="minirow">
-                        <span className="mid" style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Payout ratio</span>
-                        <span className="r" style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>
-                          {Math.round((annualDiv / data.eps) * 100)}%
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
         </div>
 
         {/* RIGHT COLUMN */}
@@ -1081,40 +989,107 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             </div>
           </div>
 
-          {/* Earnings history */}
-          <div className="card">
-            <div className="card-h">
-              <h3>Earnings history</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className={`pill ${st >= 0 ? "up" : "dn"}`}>{Math.abs(st)}-qtr {st >= 0 ? "beat" : "miss"} streak</span>
-                <span className="link" onClick={() => setInnerDrawer("earnings")}>View all →</span>
-              </div>
-            </div>
-            <div className="card-b" style={{ paddingTop: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                <div className="cd">
-                  <span className="num">—</span>
-                  <span className="u">days to<br />next ER</span>
+        </div>
+
+        {/* Dividend history — row 3, col 1 */}
+        {/* alignSelf stretch is default on grid children; explicit here for clarity */}
+        {(() => {
+          const annualDiv = p * (data.div / 100);
+          const qDiv = annualDiv / 4;
+          const exDay = 6 + (sym.charCodeAt(0) % 22);
+          const payoutRatio = data.div > 0 && data.eps > 0
+            ? Math.min(99, Math.round((annualDiv / data.eps) * 100)) : 0;
+          const DROWS = [
+            { label: "Q2'25", mo: "Apr", dy: exDay },
+            { label: "Q1'25", mo: "Jan", dy: exDay },
+            { label: "Q4'24", mo: "Oct", dy: exDay },
+            { label: "Q3'24", mo: "Jul", dy: exDay },
+            { label: "Q2'24", mo: "Apr", dy: exDay },
+          ];
+          const divRows = DROWS.map((r, i) => ({ ...r, perShare: qDiv / Math.pow(1.065, i / 4) }));
+          return (
+            <div className="card">
+              <div className="card-h">
+                <h3>Dividend history</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {data.div > 0
+                    ? <span className="pill up">{data.div.toFixed(2)}% yield</span>
+                    : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>}
+                  <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                 </div>
-                <div>
-                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>Beat / miss streak</div>
-                  <div className="streak">
-                    {chips.map((b, i) => (
-                      <b key={i} style={{ background: b ? "var(--up)" : "var(--down)" }}>{b ? "B" : "M"}</b>
-                    ))}
+              </div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                  <div className="cd">
+                    <span className="num">{data.div > 0 ? exDay - 1 : "—"}</span>
+                    <span className="u">days to<br />ex-div</span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>5-yr dividend growth</div>
+                    <div style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>
+                      {data.div > 0 ? `+6.5% / yr · payout ${payoutRatio}%` : "No dividend declared"}
+                    </div>
                   </div>
                 </div>
-              </div>
-              {erRows.map(q => (
-                <div key={q[0]} className="minirow">
-                  <span className="tkr" style={{ width: 60 }}>{q[0]}</span>
-                  <span className="mid mono">${fmt(Math.abs(q[1]), 2)} EPS</span>
-                  <span className={`r ${q[2] >= 0 ? "up" : "down"}`}>{q[2] >= 0 ? "beat" : "miss"} {Math.abs(q[2])}%</span>
+                {data.div > 0 ? divRows.map(q => (
+                  <div key={q.label} className="minirow">
+                    <span className="tkr" style={{ width: 60 }}>{q.label}</span>
+                    <span className="mid mono">${q.perShare.toFixed(4)}/sh</span>
+                    <span className="r" style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>ex {q.mo} {q.dy}</span>
+                  </div>
+                )) : (
+                  [["Annual dividend","—"],["Quarterly","—"],["Payout ratio","—"],["5-yr growth","—"],["Ex-div date","—"]].map(r => (
+                    <div key={r[0]} className="minirow">
+                      <span className="mid">{r[0]}</span>
+                      <span className="r" style={{ color: "var(--text-dim-solid)" }}>{r[1]}</span>
+                    </div>
+                  ))
+                )}
+                <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
+                  <span className="mid">Annual ({data.div > 0 ? "4 payments" : "no payments"})</span>
+                  <span className="r" style={{ color: "var(--text-hi)" }}>{data.div > 0 ? `$${annualDiv.toFixed(2)}/sh` : "—"}</span>
                 </div>
-              ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Earnings history — row 3, col 2 */}
+        <div className="card">
+          <div className="card-h">
+            <h3>Earnings history</h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className={`pill ${st >= 0 ? "up" : "dn"}`}>{Math.abs(st)}-qtr {st >= 0 ? "beat" : "miss"} streak</span>
+              <span className="link" onClick={() => setInnerDrawer("earnings")}>View all →</span>
             </div>
           </div>
-
+          <div className="card-b" style={{ paddingTop: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <div className="cd">
+                <span className="num">—</span>
+                <span className="u">days to<br />next ER</span>
+              </div>
+              <div>
+                <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>Beat / miss streak</div>
+                <div className="streak">
+                  {chips.map((b, i) => (
+                    <b key={i} style={{ background: b ? "var(--up)" : "var(--down)" }}>{b ? "B" : "M"}</b>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {erRows.map(q => (
+              <div key={q[0]} className="minirow">
+                <span className="tkr" style={{ width: 60 }}>{q[0]}</span>
+                <span className="mid mono">${fmt(Math.abs(q[1]), 2)} EPS</span>
+                <span className={`r ${q[2] >= 0 ? "up" : "down"}`}>{q[2] >= 0 ? "beat" : "miss"} {Math.abs(q[2])}%</span>
+              </div>
+            ))}
+            <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
+              <span className="mid">FY 25 EPS est.</span>
+              <span className="r" style={{ color: "var(--text-hi)" }}>${(qeps * 4 * 1.08).toFixed(2)}</span>
+            </div>
+          </div>
         </div>
 
         {/* Insider & institutional — col 1 */}
@@ -1173,9 +1148,30 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
             </div>
             <div className="card-b" style={{ paddingTop: 6 }}>
+              <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                Weekly pivots
+              </div>
               {([["R2", R2, "down"], ["R1", R1, "down"], ["Pivot", p, "dim"], ["S1", S1, "up"], ["S2", S2, "up"]] as [string, number, string][]).map(x => (
                 <div key={x[0]} className="minirow">
                   <span className="tkr" style={{ width: 50 }}>{x[0]}</span>
+                  <span className="mid" />
+                  <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
+                    ${nf(x[1])}
+                  </span>
+                </div>
+              ))}
+              <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
+              <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                Moving averages &amp; range
+              </div>
+              {([
+                ["52W High",  hi,         isUp ? "up"   : "dim"],
+                ["EMA 50",    p * 0.94,   isUp ? "up"   : "down"],
+                ["SMA 200",   p * 0.74,   rs > 50 ? "up" : "down"],
+                ["52W Low",   lo,         isUp ? "dim"  : "down"],
+              ] as [string, number, string][]).map(x => (
+                <div key={x[0]} className="minirow">
+                  <span className="tkr" style={{ width: 70 }}>{x[0]}</span>
                   <span className="mid" />
                   <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
                     ${nf(x[1])}
