@@ -795,6 +795,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchStarred, setSearchStarred] = useState<Set<string>>(() => new Set());
   const cmdRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLElement>(null);
   const [drawer, setDrawer] = useState<
     | { type: "stock"; sym: string }
     | { type: "mover-modal"; sym: string }
@@ -856,6 +857,17 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   // Close mobile nav on route change
   useEffect(() => { setNavOpen(false); }, [pathname]);
+
+  // Persist rail scroll position across page navigations
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const saved = sessionStorage.getItem("iq-rail-scroll");
+    if (saved) rail.scrollTop = parseInt(saved, 10);
+    function onScroll() { sessionStorage.setItem("iq-rail-scroll", String(rail!.scrollTop)); }
+    rail.addEventListener("scroll", onScroll, { passive: true });
+    return () => rail.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1075,7 +1087,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             {navOpen && <div className="mob-nav-scrim" onClick={() => setNavOpen(false)} />}
 
             {/* Rail / Sidebar */}
-            <nav className={`rail${navOpen ? " mob-open" : ""}`}>
+            <nav ref={railRef} className={`rail${navOpen ? " mob-open" : ""}`}>
               {/* Mobile rail header — hidden on desktop via CSS */}
               <div className="mob-rail-head">
                 <div className="logo" style={{ width: 26, height: 26 }}>
