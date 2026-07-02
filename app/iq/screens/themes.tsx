@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { cls, arr, sign, Spark } from "../utils";
+import { cls, arr, sign, Spark, CandleChart } from "../utils";
 
-const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean }>(
+const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
   () => import("./stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
@@ -114,6 +114,7 @@ const THEMES: Theme[] = [
 export function ThemesScreen() {
   const [themeId, setThemeId] = useState<string>(THEMES[0].id);
   const [sel, setSel]         = useState<string | null>(THEMES[0].stocks[0]?.s ?? null);
+  const [thTf, setThTf]       = useState("3M");
 
   const theme  = THEMES.find(t => t.id === themeId) ?? THEMES[0];
   const stocks = theme.stocks;
@@ -196,24 +197,22 @@ export function ThemesScreen() {
           </div>
         </div>
 
-        {/* Two-panel master-detail */}
-        <div className="pf-master">
+        {/* TOP ROW: Stock list (left) + Chart (right) — same height */}
+        <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
 
-          {/* LEFT: stock list */}
-          <div className="pf-side">
-            <div className="card">
+          {/* LEFT: theme stock list */}
+          <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
               <div className="card-h">
                 <h3>{theme.name}</h3>
                 <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{stocks.length} stocks</span>
               </div>
-              <div className="pf-list">
+              <div className="pf-list" style={{ flex: 1, maxHeight: "none", overflowY: "auto" }}>
                 {stocks.map((stock, i) => (
-                  <div
-                    key={stock.s}
+                  <div key={stock.s}
                     className={`pf-li${sel === stock.s ? " active" : ""}`}
                     style={{ gridTemplateColumns: "1fr 60px auto" }}
-                    onClick={() => setSel(stock.s)}
-                  >
+                    onClick={() => setSel(stock.s)}>
                     <div>
                       <span className="s">{stock.s}</span>
                       <span className="n">{stock.n}</span>
@@ -233,20 +232,40 @@ export function ThemesScreen() {
             </div>
           </div>
 
-          {/* RIGHT: stock detail */}
-          <div className="pf-detail">
+          {/* RIGHT: Chart card */}
+          <div style={{ flex: 1, minWidth: 0 }}>
             {sel ? (
-              <StockScreenEmbed initialSym={sel} hideHeader />
-            ) : (
-              <div className="card">
-                <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
-                  Select a stock to see its detail here.
+              <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                <div className="chart-toolbar">
+                  {["1D","1W","1M","3M","6M","1Y","5Y"].map(r => (
+                    <button key={r} className={`rng tfbtn${thTf === r ? " on" : ""}`} onClick={() => setThTf(r)}>{r}</button>
+                  ))}
                 </div>
+                <div style={{ padding: "0 14px 14px", flex: 1 }}>
+                  <CandleChart sym={sel} tf={thTf}
+                    px={stocks.find(s => s.s === sel)?.px ?? 0}
+                    maStep={0} emaStep={0} showVol chartType="candles" />
+                </div>
+              </div>
+            ) : (
+              <div className="card" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "var(--text-dim-solid)", fontSize: ".85rem" }}>Select a stock to see chart</span>
               </div>
             )}
           </div>
 
         </div>
+
+        {/* BOTTOM: Full stock detail without chart */}
+        {sel ? (
+          <StockScreenEmbed initialSym={sel} hideHeader hideChart />
+        ) : (
+          <div className="card">
+            <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
+              Select a stock to see its detail here.
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

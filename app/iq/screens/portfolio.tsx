@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { folio as folioData, FolioItem } from "../data";
-import { cls, arr, sign, fmt, Spark } from "../utils";
+import { folio as folioData } from "../data";
+import { cls, arr, sign, Spark, CandleChart } from "../utils";
 
-const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean }>(
+const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
   () => import("./stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
@@ -24,22 +24,22 @@ function convPill(conv: string) {
   return <span className={`pill ${c}`}>{conv}</span>;
 }
 
-/* ── Main portfolio screen ── */
 export function PortfolioScreen() {
-  const [holdings, setHoldings] = useState<FolioItem[]>(folioData);
-  const [pfSel, setPfSel] = useState(folioData[0]?.s ?? "");
-  const [shares, setShares] = useState<Record<string, number>>(() => {
+  const [holdings, setHoldings] = useState(() => [...folioData]);
+  const [pfSel, setPfSel]       = useState(folioData[0]?.s ?? "");
+  const [pfTf, setPfTf]         = useState("3M");
+  const [shares, setShares]     = useState<Record<string, number>>(() => {
     const base = { ...DEFAULT_SHARES };
     folioData.forEach(f => { if (!(f.s in base)) base[f.s] = 10; });
     return base;
   });
-  const [addOpen, setAddOpen] = useState(false);
+  const [addOpen, setAddOpen]       = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [importing, setImporting]   = useState(false);
   const [importDone, setImportDone] = useState(false);
-  const [newSym, setNewSym] = useState("");
-  const [newSize, setNewSize] = useState<"Small"|"Medium"|"Large">("Small");
-  const [newConv, setNewConv] = useState<"High"|"Medium"|"Low">("Medium");
+  const [newSym, setNewSym]         = useState("");
+  const [newSize, setNewSize]       = useState<"Small"|"Medium"|"Large">("Small");
+  const [newConv, setNewConv]       = useState<"High"|"Medium"|"Low">("Medium");
 
   const sel      = holdings.find(h => h.s === pfSel);
   const totalVal = holdings.reduce((s, h) => s + (shares[h.s] ?? 10) * h.p, 0);
@@ -64,10 +64,6 @@ export function PortfolioScreen() {
     const next = holdings.find(h => h.s !== sym);
     setHoldings(prev => prev.filter(h => h.s !== sym));
     if (pfSel === sym) setPfSel(next?.s ?? "");
-  }
-
-  function trimHolding(sym: string) {
-    setShares(prev => ({ ...prev, [sym]: Math.max(1, Math.floor((prev[sym] ?? 10) / 2)) }));
   }
 
   function startImport() {
@@ -146,12 +142,12 @@ export function PortfolioScreen() {
           </div>
         </div>
 
-        {/* Two-panel master-detail */}
-        <div className="pf-master">
+        {/* TOP ROW: Holdings list (left) + Chart (right) — same height */}
+        <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
 
-          {/* LEFT: holdings list + context metrics */}
-          <div className="pf-side">
-            <div className="card">
+          {/* LEFT: Holdings list — styled like Watchlist box */}
+          <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
               <div className="card-h">
                 <h3>Holdings</h3>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
@@ -159,102 +155,64 @@ export function PortfolioScreen() {
                   <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{holdings.length} names</span>
                 </div>
               </div>
-              <div className="pf-list" style={{ maxHeight: "min(420px, calc(100vh - 380px))" }}>
+              <div className="pf-list" style={{ flex: 1, maxHeight: "none", overflowY: "auto" }}>
                 {holdings.length === 0 ? (
                   <div style={{ padding: 16, fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
                     No holdings — click &ldquo;Add holding&rdquo;.
                   </div>
                 ) : holdings.map((f, i) => (
-                  <div
-                    key={f.s}
-                    className={`pf-li${pfSel === f.s ? " active" : ""}`}
-                    onClick={() => setPfSel(f.s)}
-                  >
+                  <div key={f.s} className={`pf-li${pfSel === f.s ? " active" : ""}`}
+                    style={{ gridTemplateColumns: "1fr 60px auto" }}
+                    onClick={() => setPfSel(f.s)}>
                     <div>
                       <span className="s">{f.s}</span>
                       <span className="n">{f.n}</span>
                     </div>
-                    <div className="pf-spark">
-                      <Spark seed={i + 3} up={f.c >= 0} />
-                    </div>
+                    <div className="pf-spark"><Spark seed={i + 3} up={f.c >= 0} /></div>
                     <div>
                       <span className="px">{f.p >= 1000 ? `$${(f.p / 1000).toFixed(2)}K` : `$${f.p.toFixed(2)}`}</span>
-                      <span className={`ch ${cls(f.c)}`}>{arr(f.c)} {sign(f.c)}</span>
+                      <span className={`ch ${f.c >= 0 ? "up" : "down"}`}>{arr(f.c)} {sign(f.c)}</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Portfolio context metrics — below holdings list */}
-            {sel && (
-              <div className="pf-ctx" style={{ marginTop: 12, flexDirection: "column", alignItems: "stretch", gap: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--border-soft)" }}>
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".8rem", fontWeight: 800, letterSpacing: ".04em", color: "var(--brand-2)" }}>{sel.s}</span>
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)" }}>${sel.p >= 1000 ? (sel.p / 1000).toFixed(2) + "K" : sel.p.toFixed(2)}</span>
-                  <span className={cls(sel.c)} style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 600, marginLeft: 2 }}>{sign(sel.c)}</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" }}>
-                  <div className="m">
-                    <span className="k">Shares</span>
-                    <span className="v">
-                      <input
-                        className="sh-edit"
-                        type="number"
-                        value={shares[sel.s] ?? 10}
-                        onChange={e => setShares(prev => ({
-                          ...prev,
-                          [sel.s]: Math.max(1, parseInt(e.target.value) || 1),
-                        }))}
-                        style={{ width: 64 }}
-                      />
-                    </span>
-                  </div>
-                  <div className="m">
-                    <span className="k">Market value</span>
-                    <span className="v">{usd((shares[sel.s] ?? 10) * sel.p)}</span>
-                  </div>
-                  <div className="m">
-                    <span className="k">Weight</span>
-                    <span className="v">{totalVal > 0 ? ((shares[sel.s] ?? 10) * sel.p / totalVal * 100).toFixed(1) : "0"}%</span>
-                  </div>
-                  <div className="m">
-                    <span className="k">Day</span>
-                    <span className={`v ${cls(sel.c)}`}>{sign(sel.c)}</span>
-                  </div>
-                  <div className="m">
-                    <span className="k">Unrealized G/L</span>
-                    <span className={`v ${cls(sel.gl)}`}>{sign(sel.gl)}</span>
-                  </div>
-                  <div className="m">
-                    <span className="k">Conviction</span>
-                    <span className="v">{convPill(sel.conv)}</span>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border-soft)" }}>
-                  <button className="btn" style={{ flex: 1 }} onClick={() => trimHolding(sel.s)}>Trim ½</button>
-                  <button className="btn" style={{ flex: 1, color: "var(--down)" }} onClick={() => removeHolding(sel.s)}>Sell all</button>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* RIGHT: full stock detail */}
-          <div className="pf-detail">
-            {sel ? (
-              <>
-                {/* Full stock detail — same as stock details page */}
-                <StockScreenEmbed initialSym={pfSel} hideHeader />
-              </>
+          {/* RIGHT: Chart card */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {pfSel ? (
+              <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                <div className="chart-toolbar">
+                  {["1D","1W","1M","3M","6M","1Y","5Y"].map(r => (
+                    <button key={r} className={`rng tfbtn${pfTf === r ? " on" : ""}`} onClick={() => setPfTf(r)}>{r}</button>
+                  ))}
+                </div>
+                <div style={{ padding: "0 14px 14px", flex: 1 }}>
+                  <CandleChart sym={pfSel} tf={pfTf} px={sel?.p ?? 0}
+                    maStep={0} emaStep={0} showVol chartType="candles" />
+                </div>
+              </div>
             ) : (
-              <div className="card">
-                <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
-                  Add a holding to see its detail here.
-                </div>
+              <div className="card" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "var(--text-dim-solid)", fontSize: ".85rem" }}>Select a holding to see chart</span>
               </div>
             )}
           </div>
+
         </div>
+
+        {/* BOTTOM: Full stock detail without chart */}
+        {pfSel ? (
+          <StockScreenEmbed initialSym={pfSel} hideHeader hideChart />
+        ) : (
+          <div className="card">
+            <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
+              Add a holding to see its detail here.
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ── Add Holding modal ── */}
@@ -272,7 +230,8 @@ export function PortfolioScreen() {
                 <input className="inp"
                   style={{ width: "100%", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)", fontSize: ".9rem" }}
                   placeholder="e.g. NVDA"
-                  value={newSym} onChange={e => setNewSym(e.target.value.toUpperCase())} />
+                  value={newSym} onChange={e => setNewSym(e.target.value.toUpperCase())}
+                  onKeyDown={e => { if (e.key === "Enter") addHolding(); }} />
               </div>
               <div>
                 <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Position size</label>
@@ -345,6 +304,7 @@ export function PortfolioScreen() {
           </div>
         </>
       )}
+
     </>
   );
 }
