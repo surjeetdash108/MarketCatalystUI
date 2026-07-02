@@ -1,14 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
 import { folio as folioData } from "../data";
-import { cls, arr, sign, Spark, CandleChart } from "../utils";
-
-const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
-  () => import("./stock").then(m => ({ default: m.StockScreen })),
-  { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
-);
+import { cls, arr, sign } from "../utils";
+import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
 const DEFAULT_SHARES: Record<string, number> = {
   NVDA: 15, AAPL: 120, TSLA: 40, META: 30,
@@ -33,6 +28,7 @@ export function PortfolioScreen() {
     folioData.forEach(f => { if (!(f.s in base)) base[f.s] = 10; });
     return base;
   });
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [addOpen, setAddOpen]       = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting]   = useState(false);
@@ -64,6 +60,7 @@ export function PortfolioScreen() {
     const next = holdings.find(h => h.s !== sym);
     setHoldings(prev => prev.filter(h => h.s !== sym));
     if (pfSel === sym) setPfSel(next?.s ?? "");
+    setConfirmDel(null);
   }
 
   function startImport() {
@@ -75,7 +72,6 @@ export function PortfolioScreen() {
 
   return (
     <>
-      {/* Page header */}
       <div className="page-head">
         <div>
           <div className="page-sub">
@@ -142,76 +138,43 @@ export function PortfolioScreen() {
           </div>
         </div>
 
-        {/* TOP ROW: Holdings list (left) + Chart (right) — same height */}
-        <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
-
-          {/* LEFT: Holdings list — styled like Watchlist box */}
-          <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column" }}>
-            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <h3>Holdings</h3>
+        <StockPanelLayout
+          selectedSym={pfSel}
+          chartPx={sel?.p ?? 0}
+          tf={pfTf}
+          onTfChange={setPfTf}
+          chartEmptyText="Select a holding to see chart"
+          detailEmptyText="Add a holding to see its detail here."
+          listCard={
+            <StockListCard
+              title="Holdings"
+              headerRight={
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
                   <span style={{ fontFamily: "var(--f-mono)", fontSize: ".8rem", fontWeight: 700, color: "var(--text-hi)" }}>{usd(totalVal)}</span>
                   <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{holdings.length} names</span>
                 </div>
-              </div>
-              <div className="pf-list" style={{ flex: 1, maxHeight: "none", overflowY: "auto" }}>
-                {holdings.length === 0 ? (
-                  <div style={{ padding: 16, fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
-                    No holdings — click &ldquo;Add holding&rdquo;.
-                  </div>
-                ) : holdings.map((f, i) => (
-                  <div key={f.s} className={`pf-li${pfSel === f.s ? " active" : ""}`}
-                    style={{ gridTemplateColumns: "1fr 60px auto" }}
-                    onClick={() => setPfSel(f.s)}>
-                    <div>
-                      <span className="s">{f.s}</span>
-                      <span className="n">{f.n}</span>
-                    </div>
-                    <div className="pf-spark"><Spark seed={i + 3} up={f.c >= 0} /></div>
-                    <div>
-                      <span className="px">{f.p >= 1000 ? `$${(f.p / 1000).toFixed(2)}K` : `$${f.p.toFixed(2)}`}</span>
-                      <span className={`ch ${f.c >= 0 ? "up" : "down"}`}>{arr(f.c)} {sign(f.c)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT: Chart card */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {pfSel ? (
-              <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-                <div className="chart-toolbar">
-                  {["1D","1W","1M","3M","6M","1Y","5Y"].map(r => (
-                    <button key={r} className={`rng tfbtn${pfTf === r ? " on" : ""}`} onClick={() => setPfTf(r)}>{r}</button>
-                  ))}
-                </div>
-                <div style={{ padding: "0 14px 14px", flex: 1 }}>
-                  <CandleChart sym={pfSel} tf={pfTf} px={sel?.p ?? 0}
-                    maStep={0} emaStep={0} showVol chartType="candles" />
-                </div>
-              </div>
-            ) : (
-              <div className="card" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ color: "var(--text-dim-solid)", fontSize: ".85rem" }}>Select a holding to see chart</span>
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* BOTTOM: Full stock detail without chart */}
-        {pfSel ? (
-          <StockScreenEmbed initialSym={pfSel} hideHeader hideChart />
-        ) : (
-          <div className="card">
-            <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
-              Add a holding to see its detail here.
-            </div>
-          </div>
-        )}
+              }
+              isEmpty={holdings.length === 0}
+              emptyMessage='No holdings — click "Add holding".'
+            >
+              {holdings.map((f, i) => (
+                <StockRow
+                  key={f.s}
+                  sym={f.s}
+                  name={f.n}
+                  seed={i + 3}
+                  sparkUp={f.c >= 0}
+                  isSelected={pfSel === f.s}
+                  onClick={() => setPfSel(f.s)}
+                  onDelete={() => setConfirmDel(f.s)}
+                  valueTop={f.p >= 1000 ? `$${(f.p / 1000).toFixed(2)}K` : `$${f.p.toFixed(2)}`}
+                  valueBottom={`${arr(f.c)} ${sign(f.c)}`}
+                  valueBottomClass={f.c >= 0 ? "up" : "down"}
+                />
+              ))}
+            </StockListCard>
+          }
+        />
 
       </div>
 
@@ -300,6 +263,29 @@ export function PortfolioScreen() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Confirm remove holding ── */}
+      {confirmDel && (
+        <>
+          <div className="scrim" style={{ zIndex: 60 }} onClick={() => setConfirmDel(null)} />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            background: "var(--surface-1)", border: "1px solid var(--border)",
+            borderRadius: "var(--r-lg)", padding: 24, zIndex: 61,
+            minWidth: 320, boxShadow: "0 16px 48px rgba(0,0,0,.5)",
+          }}>
+            <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)", marginBottom: 8 }}>Remove holding</div>
+            <div style={{ fontSize: ".88rem", color: "var(--text)", marginBottom: 20 }}>
+              Remove <b style={{ color: "var(--text-hi)" }}>{confirmDel}</b> from your portfolio?
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn" onClick={() => setConfirmDel(null)}>Cancel</button>
+              <button className="btn primary" style={{ background: "var(--down)", borderColor: "var(--down)" }}
+                onClick={() => removeHolding(confirmDel)}>Remove</button>
             </div>
           </div>
         </>

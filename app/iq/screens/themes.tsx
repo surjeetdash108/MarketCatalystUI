@@ -1,13 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
-import { cls, arr, sign, Spark, CandleChart } from "../utils";
-
-const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
-  () => import("./stock").then(m => ({ default: m.StockScreen })),
-  { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
-);
+import { cls, arr, sign } from "../utils";
+import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
 interface ThemeStock { s: string; n: string; px: number; c: number; }
 interface Theme { id: string; name: string; desc: string; stocks: ThemeStock[]; }
@@ -135,7 +130,6 @@ export function ThemesScreen() {
 
   return (
     <>
-      {/* Page header */}
       <div className="page-head">
         <div>
           <div style={{ fontWeight: 700, fontSize: ".92rem", color: "var(--text-hi)", marginBottom: 2 }}>
@@ -158,16 +152,11 @@ export function ThemesScreen() {
               key={t.id}
               onClick={() => handleThemeChange(t.id)}
               style={{
-                padding: "5px 13px",
-                borderRadius: 20,
-                border: "1px solid",
-                fontSize: ".72rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                transition: "all .15s",
+                padding: "5px 13px", borderRadius: 20, border: "1px solid",
+                fontSize: ".72rem", fontWeight: 700, cursor: "pointer", transition: "all .15s",
                 borderColor: themeId === t.id ? "var(--brand)" : "var(--border)",
-                background: themeId === t.id ? "var(--brand)" : "var(--surface-2)",
-                color: themeId === t.id ? "#fff" : "var(--text-dim-solid)",
+                background:  themeId === t.id ? "var(--brand)" : "var(--surface-2)",
+                color:       themeId === t.id ? "#fff" : "var(--text-dim-solid)",
               }}
             >
               {t.name}
@@ -197,75 +186,36 @@ export function ThemesScreen() {
           </div>
         </div>
 
-        {/* TOP ROW: Stock list (left) + Chart (right) — same height */}
-        <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
+        <StockPanelLayout
+          selectedSym={sel ?? ""}
+          chartPx={stocks.find(s => s.s === sel)?.px ?? 0}
+          tf={thTf}
+          onTfChange={setThTf}
+          chartEmptyText="Select a stock to see chart"
+          detailEmptyText="Select a stock to see its detail here."
+          listCard={
+            <StockListCard
+              title={theme.name}
+              headerRight={<span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{stocks.length} stocks</span>}
+            >
+              {stocks.map((stock, i) => (
+                <StockRow
+                  key={stock.s}
+                  sym={stock.s}
+                  name={stock.n}
+                  seed={i + 7}
+                  sparkUp={stock.c >= 0}
+                  isSelected={sel === stock.s}
+                  onClick={() => setSel(stock.s)}
+                  valueTop={stock.px >= 1000 ? `$${(stock.px / 1000).toFixed(2)}K` : `$${stock.px.toFixed(2)}`}
+                  valueBottom={`${arr(stock.c)} ${sign(stock.c)}`}
+                  valueBottomClass={cls(stock.c)}
+                />
+              ))}
+            </StockListCard>
+          }
+        />
 
-          {/* LEFT: theme stock list */}
-          <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column" }}>
-            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <h3>{theme.name}</h3>
-                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{stocks.length} stocks</span>
-              </div>
-              <div className="pf-list" style={{ flex: 1, maxHeight: "none", overflowY: "auto" }}>
-                {stocks.map((stock, i) => (
-                  <div key={stock.s}
-                    className={`pf-li${sel === stock.s ? " active" : ""}`}
-                    style={{ gridTemplateColumns: "1fr 60px auto" }}
-                    onClick={() => setSel(stock.s)}>
-                    <div>
-                      <span className="s">{stock.s}</span>
-                      <span className="n">{stock.n}</span>
-                    </div>
-                    <div className="pf-spark">
-                      <Spark seed={i + 7} up={stock.c >= 0} />
-                    </div>
-                    <div>
-                      <span className="px">
-                        {stock.px >= 1000 ? `$${(stock.px / 1000).toFixed(2)}K` : `$${stock.px.toFixed(2)}`}
-                      </span>
-                      <span className={`ch ${cls(stock.c)}`}>{arr(stock.c)} {sign(stock.c)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT: Chart card */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {sel ? (
-              <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-                <div className="chart-toolbar">
-                  {["1D","1W","1M","3M","6M","1Y","5Y"].map(r => (
-                    <button key={r} className={`rng tfbtn${thTf === r ? " on" : ""}`} onClick={() => setThTf(r)}>{r}</button>
-                  ))}
-                </div>
-                <div style={{ padding: "0 14px 14px", flex: 1 }}>
-                  <CandleChart sym={sel} tf={thTf}
-                    px={stocks.find(s => s.s === sel)?.px ?? 0}
-                    maStep={0} emaStep={0} showVol chartType="candles" />
-                </div>
-              </div>
-            ) : (
-              <div className="card" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ color: "var(--text-dim-solid)", fontSize: ".85rem" }}>Select a stock to see chart</span>
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* BOTTOM: Full stock detail without chart */}
-        {sel ? (
-          <StockScreenEmbed initialSym={sel} hideHeader hideChart />
-        ) : (
-          <div className="card">
-            <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
-              Select a stock to see its detail here.
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

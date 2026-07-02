@@ -1,14 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
 import { watch as watchData } from "../data";
-import { arr, sign, Spark, CandleChart } from "../utils";
-
-const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
-  () => import("./stock").then(m => ({ default: m.StockScreen })),
-  { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
-);
+import { arr, sign } from "../utils";
+import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
 export function WatchlistScreen() {
   const [items, setItems]               = useState<string[]>(() => watchData.map(w => w.s));
@@ -52,7 +47,6 @@ export function WatchlistScreen() {
 
   return (
     <>
-      {/* Page header */}
       <div className="page-head">
         <div>
           <div className="page-sub">{items.length} stocks watching · {up} up / {dn} down today</div>
@@ -69,7 +63,6 @@ export function WatchlistScreen() {
 
       <div style={{ padding: "0 18px 18px" }}>
 
-        {/* AI watchlist summary */}
         <div className="ai-block" style={{ marginBottom: 14 }}>
           <div className="card-h">
             <h3 className="ai-c">◆ AI watchlist summary</h3>
@@ -86,84 +79,44 @@ export function WatchlistScreen() {
           </div>
         </div>
 
-        {/* TOP ROW: Watchlist list (left) + Chart (right) — same height */}
-        <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
+        <StockPanelLayout
+          selectedSym={sel ?? ""}
+          chartPx={selData?.px ?? 0}
+          tf={wlTf}
+          onTfChange={setWlTf}
+          chartEmptyText="Select a stock to see chart"
+          detailEmptyText="Add a stock to see its detail here."
+          listCard={
+            <StockListCard
+              title="Watchlist"
+              headerRight={<span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{items.length} stocks</span>}
+              isEmpty={items.length === 0}
+              emptyMessage='No stocks — click "Add stock".'
+            >
+              {items.map((sym, i) => {
+                const w  = watchData.find(x => x.s === sym);
+                const px = w?.px ?? 0;
+                const c  = w?.c  ?? 0;
+                return (
+                  <StockRow
+                    key={sym}
+                    sym={sym}
+                    name={w?.n ?? sym}
+                    seed={i + 3}
+                    sparkUp={c >= 0}
+                    isSelected={sel === sym}
+                    onClick={() => setSel(sym)}
+                    onDelete={() => setConfirmDelete(sym)}
+                    valueTop={px >= 1000 ? `$${(px / 1000).toFixed(2)}K` : `$${px.toFixed(2)}`}
+                    valueBottom={`${arr(c)} ${sign(c)}`}
+                    valueBottomClass={c >= 0 ? "up" : "down"}
+                  />
+                );
+              })}
+            </StockListCard>
+          }
+        />
 
-          {/* LEFT: vertical watchlist list */}
-          <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column" }}>
-            <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <h3>Watchlist</h3>
-                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{items.length} stocks</span>
-              </div>
-              <div className="pf-list" style={{ flex: 1, maxHeight: "none", overflowY: "auto" }}>
-                {items.length === 0 ? (
-                  <div style={{ padding: 16, fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
-                    No stocks — click &ldquo;Add stock&rdquo;.
-                  </div>
-                ) : items.map((sym, i) => {
-                  const w  = watchData.find(x => x.s === sym);
-                  const px = w?.px ?? 0;
-                  const c  = w?.c  ?? 0;
-                  return (
-                    <div key={sym} className={`pf-li${sel === sym ? " active" : ""}`}
-                      style={{ gridTemplateColumns: "1fr 60px auto auto" }}
-                      onClick={() => setSel(sym)}>
-                      <div>
-                        <span className="s">{sym}</span>
-                        <span className="n">{w?.n ?? sym}</span>
-                      </div>
-                      <div className="pf-spark"><Spark seed={i + 3} up={c >= 0} /></div>
-                      <div>
-                        <span className="px">{px >= 1000 ? `$${(px / 1000).toFixed(2)}K` : `$${px.toFixed(2)}`}</span>
-                        <span className={`ch ${c >= 0 ? "up" : "down"}`}>{arr(c)} {sign(c)}</span>
-                      </div>
-                      <button className="wl-del-btn" title="Remove"
-                        onClick={e => { e.stopPropagation(); setConfirmDelete(sym); }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ width: 10, height: 10 }}>
-                          <path d="M18 6L6 18M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT: Chart card */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {sel ? (
-              <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-                <div className="chart-toolbar">
-                  {["1D","1W","1M","3M","6M","1Y","5Y"].map(r => (
-                    <button key={r} className={`rng tfbtn${wlTf === r ? " on" : ""}`} onClick={() => setWlTf(r)}>{r}</button>
-                  ))}
-                </div>
-                <div style={{ padding: "0 14px 14px", flex: 1 }}>
-                  <CandleChart sym={sel} tf={wlTf} px={selData?.px ?? 0}
-                    maStep={0} emaStep={0} showVol chartType="candles" />
-                </div>
-              </div>
-            ) : (
-              <div className="card" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ color: "var(--text-dim-solid)", fontSize: ".85rem" }}>Select a stock to see chart</span>
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* BOTTOM: Stock detail without chart */}
-        {sel ? (
-          <StockScreenEmbed initialSym={sel} hideHeader hideChart />
-        ) : (
-          <div className="card">
-            <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>
-              Add a stock to see its detail here.
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Add stock modal */}
