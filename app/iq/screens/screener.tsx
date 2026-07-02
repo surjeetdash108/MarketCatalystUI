@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { screenerStocks, screenerPresets, watch as watchData, movers as moversData } from "../data";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
@@ -21,8 +21,10 @@ function CheckOpt({ label, on, onToggle }: { label: string; on: boolean; onToggl
 }
 
 export function ScreenerScreen() {
-  /* ── Filter state ── */
-  const [activePreset, setActivePreset] = useState(-1);
+  /* ── Preset multi-select ── */
+  const [activePresets, setActivePresets] = useState<Set<number>>(new Set());
+
+  /* ── Manual filter state ── */
   const [rs90,       setRs90]       = useState(false);
   const [rs7090,     setRs7090]     = useState(false);
   const [rsLt40,     setRsLt40]     = useState(false);
@@ -33,48 +35,65 @@ export function ScreenerScreen() {
   const [mcGt10,     setMcGt10]     = useState(true);
   const [rvolGt15,   setRvolGt15]   = useState(false);
 
+  /* ── More dropdown ── */
+  const [ddOpen, setDdOpen] = useState(false);
+  const ddRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ddOpen) return;
+    function onOutside(e: MouseEvent) {
+      if (ddRef.current && !ddRef.current.contains(e.target as Node)) {
+        setDdOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [ddOpen]);
+
   /* ── Selection / chart state ── */
   const [scrSel, setScrSel] = useState("");
 
-  function applyPreset(idx: number) {
-    const f = screenerPresets[idx].f;
-    setActivePreset(idx);
-    setRs90(false); setRs7090(false); setRsLt40(false);
-    setSalesGt20(false); setEpsGt25(false); setMarginPos(false);
-    setRatingBuy(false); setMcGt10(true); setRvolGt15(false);
-    if (f.relativeStrength_min !== undefined && f.relativeStrength_min >= 90)  setRs90(true);
-    else if (f.relativeStrength_min !== undefined && f.relativeStrength_min >= 70) setRs7090(true);
-    if (f.salesGrowth_min !== undefined && f.salesGrowth_min >= 20) setSalesGt20(true);
-    if (f.epsGrowth_min   !== undefined && f.epsGrowth_min   >= 25) setEpsGt25(true);
-    if (f.rvolRatio_min   !== undefined && f.rvolRatio_min   >= 1.5) setRvolGt15(true);
+  function togglePreset(idx: number) {
+    setActivePresets(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
   }
 
   function resetAll() {
-    setActivePreset(-1);
+    setActivePresets(new Set());
     setRs90(false); setRs7090(false); setRsLt40(false);
     setSalesGt20(false); setEpsGt25(false); setMarginPos(false);
     setRatingBuy(false); setMcGt10(false); setRvolGt15(false);
   }
 
-  const pf = activePreset >= 0 ? screenerPresets[activePreset].f : {};
-
   /* ── Filtered results ── */
   const filtered = screenerStocks.filter(s => {
-    if (pf.relativeStrength_min     !== undefined && s.relativeStrength     < pf.relativeStrength_min)     return false;
-    if (pf.salesGrowth_min !== undefined && s.salesGrowth < pf.salesGrowth_min) return false;
-    if (pf.epsGrowth_min   !== undefined && s.epsGrowth   < pf.epsGrowth_min)   return false;
-    if (pf.rvolRatio_min   !== undefined && s.rvolRatio   < pf.rvolRatio_min)   return false;
-    if (pf.marketCap_min     !== undefined && s.marketCap     < pf.marketCap_min)     return false;
-    if (pf.techRating     !== undefined && !pf.techRating.includes(s.techRating)) return false;
-    if (rs90      && s.relativeStrength < 90)                                   return false;
-    if (rs7090    && (s.relativeStrength < 70 || s.relativeStrength >= 90))                   return false;
-    if (rsLt40    && s.relativeStrength >= 40)                                   return false;
-    if (salesGt20 && s.salesGrowth < 20)                               return false;
-    if (epsGt25   && s.epsGrowth   < 25)                               return false;
-    if (marginPos && s.grossMargin    <= 10)                               return false;
-    if (ratingBuy && !["Strong Buy", "Buy"].includes(s.techRating))   return false;
-    if (mcGt10    && s.marketCap < 10)                                    return false;
-    if (rvolGt15  && s.rvolRatio < 1.5)                                return false;
+    // Preset filters — stock must pass at least one selected preset (OR logic)
+    if (activePresets.size > 0) {
+      const passesAny = [...activePresets].some(idx => {
+        const pf = screenerPresets[idx].f;
+        if (pf.relativeStrength_min !== undefined && s.relativeStrength < pf.relativeStrength_min) return false;
+        if (pf.salesGrowth_min      !== undefined && s.salesGrowth      < pf.salesGrowth_min)      return false;
+        if (pf.epsGrowth_min        !== undefined && s.epsGrowth        < pf.epsGrowth_min)        return false;
+        if (pf.rvolRatio_min        !== undefined && s.rvolRatio        < pf.rvolRatio_min)        return false;
+        if (pf.marketCap_min        !== undefined && s.marketCap        < pf.marketCap_min)        return false;
+        if (pf.techRating           !== undefined && !pf.techRating.includes(s.techRating))        return false;
+        return true;
+      });
+      if (!passesAny) return false;
+    }
+    // Manual filters — all must pass (AND logic)
+    if (rs90      && s.relativeStrength < 90)                                 return false;
+    if (rs7090    && (s.relativeStrength < 70 || s.relativeStrength >= 90))   return false;
+    if (rsLt40    && s.relativeStrength >= 40)                                return false;
+    if (salesGt20 && s.salesGrowth < 20)                                      return false;
+    if (epsGt25   && s.epsGrowth   < 25)                                      return false;
+    if (marginPos && s.grossMargin <= 10)                                      return false;
+    if (ratingBuy && !["Strong Buy", "Buy"].includes(s.techRating))           return false;
+    if (mcGt10    && s.marketCap < 10)                                        return false;
+    if (rvolGt15  && s.rvolRatio < 1.5)                                       return false;
     return true;
   });
 
@@ -86,6 +105,9 @@ export function ScreenerScreen() {
   const selWatch = watchData.find(w => w.ticker === selSym);
   const selMover = moversData.find(m => m.ticker === selSym);
   const selPx    = selWatch?.price ?? selMover?.price ?? 0;
+
+  /* how many "More" presets (index >= 4) are active */
+  const moreActiveCount = [...activePresets].filter(i => i >= 4).length;
 
   return (
     <>
@@ -104,7 +126,7 @@ export function ScreenerScreen() {
       <div style={{ padding: "0 18px 18px" }}>
 
         {/* ── Filter card ── */}
-        <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card" style={{ marginBottom: 14, overflow: "visible" }}>
 
           <div className="filt-hdr">
             Filters
@@ -120,30 +142,65 @@ export function ScreenerScreen() {
               fontSize: ".66rem", letterSpacing: ".05em", textTransform: "uppercase",
               color: "var(--text-dim-solid)", fontWeight: 600, marginRight: 4,
             }}>Presets</span>
-            {screenerPresets.slice(0, 4).map((p, i) => (
-              <button key={p.name} onClick={() => applyPreset(i)} style={{
-                fontSize: ".72rem", padding: "4px 11px", borderRadius: 6, cursor: "pointer",
-                fontFamily: "var(--f-body)",
-                border: `1px solid ${activePreset === i ? "var(--ai)" : "var(--border)"}`,
-                background: activePreset === i ? "var(--ai-dim)" : "var(--surface-2)",
-                color: activePreset === i ? "var(--text-hi)" : "var(--text-dim-solid)",
-              }}>{p.name}</button>
-            ))}
-            <details className="dd">
-              <summary style={{
-                cursor: "pointer", fontSize: ".72rem", padding: "4px 11px",
-                background: "var(--surface-2)", border: "1px solid var(--border)",
-                borderRadius: 6, color: "var(--text-dim-solid)", listStyle: "none",
-              }}>More ▾</summary>
-              <div className="dd-menu">
-                <div className="ddlbl">{screenerPresets.length} preset screens</div>
-                {screenerPresets.map((p, i) => (
-                  <button key={p.name} onClick={() => applyPreset(i)}>
-                    {p.name}<small>{p.desc}</small>
-                  </button>
-                ))}
-              </div>
-            </details>
+            {screenerPresets.slice(0, 4).map((p, i) => {
+              const on = activePresets.has(i);
+              return (
+                <button key={p.name} onClick={() => togglePreset(i)} style={{
+                  fontSize: ".72rem", padding: "4px 11px", borderRadius: 6, cursor: "pointer",
+                  fontFamily: "var(--f-body)",
+                  border: `1px solid ${on ? "var(--ai)" : "var(--border)"}`,
+                  background: on ? "var(--ai-dim)" : "var(--surface-2)",
+                  color: on ? "var(--text-hi)" : "var(--text-dim-solid)",
+                }}>{p.name}</button>
+              );
+            })}
+
+            {/* More dropdown — controlled, multi-select, close on outside click */}
+            <div ref={ddRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setDdOpen(o => !o)}
+                style={{
+                  fontSize: ".72rem", padding: "4px 11px", borderRadius: 6, cursor: "pointer",
+                  fontFamily: "var(--f-body)",
+                  border: `1px solid ${moreActiveCount > 0 ? "var(--ai)" : ddOpen ? "var(--brand)" : "var(--border)"}`,
+                  background: moreActiveCount > 0 ? "var(--ai-dim)" : ddOpen ? "var(--brand-dim)" : "var(--surface-2)",
+                  color: moreActiveCount > 0 || ddOpen ? "var(--text-hi)" : "var(--text-dim-solid)",
+                }}
+              >
+                More{moreActiveCount > 0 ? ` (${moreActiveCount})` : ""} {ddOpen ? "▴" : "▾"}
+              </button>
+              {ddOpen && (
+                <div className="dd-menu" style={{ minWidth: 280 }}>
+                  <div className="ddlbl">{screenerPresets.length} preset screens — select multiple</div>
+                  {screenerPresets.map((p, i) => {
+                    const on = activePresets.has(i);
+                    return (
+                      <button
+                        key={p.name}
+                        onClick={() => togglePreset(i)}
+                        style={{ display: "flex", alignItems: "flex-start", gap: 8, background: on ? "var(--ai-dim)" : undefined }}
+                      >
+                        <span style={{
+                          flexShrink: 0, width: 14, height: 14, marginTop: 2,
+                          border: `1.5px solid ${on ? "var(--ai)" : "var(--border-strong)"}`,
+                          borderRadius: 4, background: on ? "var(--ai)" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {on && (
+                            <svg viewBox="0 0 24 24" fill="none" style={{ width: 9, height: 9 }}>
+                              <path d="M20 6L9 17l-5-5" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </span>
+                        <span>
+                          {p.name}<small>{p.desc}</small>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Filter groups — horizontal */}
