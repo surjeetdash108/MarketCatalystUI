@@ -109,7 +109,6 @@ const THEMES: Theme[] = [
 export function ThemesScreen() {
   const [themeId, setThemeId] = useState<string>(THEMES[0].id);
   const [sel, setSel]         = useState<string | null>(THEMES[0].stocks[0]?.s ?? null);
-  const [thTf, setThTf]       = useState("3M");
 
   const theme  = THEMES.find(t => t.id === themeId) ?? THEMES[0];
   const stocks = theme.stocks;
@@ -189,8 +188,6 @@ export function ThemesScreen() {
         <StockPanelLayout
           selectedSym={sel ?? ""}
           chartPx={stocks.find(s => s.s === sel)?.price ?? 0}
-          tf={thTf}
-          onTfChange={setThTf}
           chartEmptyText="Select a stock to see chart"
           detailEmptyText="Select a stock to see its detail here."
           listCard={

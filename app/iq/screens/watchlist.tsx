@@ -11,8 +11,6 @@ export function WatchlistScreen() {
   const [addOpen, setAddOpen]           = useState(false);
   const [newSym, setNewSym]             = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [wlTf, setWlTf] = useState("3M");
-
   const list = watchData.filter(w => items.includes(w.ticker));
   const up   = list.filter(w => w.pctChange > 0).length;
   const dn   = list.filter(w => w.pctChange < 0).length;
@@ -82,8 +80,6 @@ export function WatchlistScreen() {
         <StockPanelLayout
           selectedSym={sel ?? ""}
           chartPx={selData?.price ?? 0}
-          tf={wlTf}
-          onTfChange={setWlTf}
           chartEmptyText="Select a stock to see chart"
           detailEmptyText="Add a stock to see its detail here."
           listCard={

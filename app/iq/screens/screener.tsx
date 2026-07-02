@@ -35,7 +35,6 @@ export function ScreenerScreen() {
 
   /* ── Selection / chart state ── */
   const [scrSel, setScrSel] = useState("");
-  const [scrTf,  setScrTf]  = useState("3M");
 
   function applyPreset(idx: number) {
     const f = screenerPresets[idx].f;
@@ -180,8 +179,6 @@ export function ScreenerScreen() {
         <StockPanelLayout
           selectedSym={selSym}
           chartPx={selPx}
-          tf={scrTf}
-          onTfChange={setScrTf}
           chartEmptyText="Select a stock from the results"
           detailEmptyText="Select a stock from the results to see its full analysis."
           listCard={

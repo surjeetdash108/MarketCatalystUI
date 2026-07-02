@@ -1,8 +1,9 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { CandleChart, Spark } from "./utils";
+import { CandleChart, RsiPane, earnHistory, Spark } from "./utils";
+import { stockInfo, watch as watchData, screenerStocks } from "./data";
 
 /* ── Shared dynamic embed — one definition for all screens ── */
 export const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
@@ -19,6 +20,47 @@ function TrashIcon() {
       <path d="M19 6l-1 14H6L5 6" />
       <path d="M10 11v6M14 11v6" />
       <path d="M9 6V4h6v2" />
+    </svg>
+  );
+}
+
+/* ── EPS surprise bars (mirrored from stock.tsx) ── */
+function EarnPane({ sym, base }: { sym: string; base: number }) {
+  const hist = earnHistory(sym, Math.max(0.5, base)).slice(0, 8).reverse();
+  const W = 720, H = 80, PADL = 40, PADR = 20, PADT = 10, PADB = 18;
+  const iw = W - PADL - PADR;
+  const ih = H - PADT - PADB;
+  const mid = PADT + ih / 2;
+  const gw = iw / hist.length;
+  const bw = Math.min(gw * 0.45, 26);
+  const maxS = Math.max(8, ...hist.map(x => Math.abs(x.surp)));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      <line x1={PADL} y1={mid} x2={W - PADR} y2={mid}
+        stroke="var(--border)" strokeDasharray="3 3" strokeWidth="1" />
+      {hist.map((q, i) => {
+        const beat = q.surp >= 0;
+        const cx = PADL + gw * i + gw / 2;
+        const barH = Math.max(4, (Math.abs(q.surp) / maxS) * (ih / 2 - 4));
+        const rx = (cx - bw / 2).toFixed(1);
+        const ry = beat ? (mid - barH).toFixed(1) : mid.toFixed(1);
+        const color = beat ? "var(--up)" : "var(--down)";
+        const labelY = beat ? (mid - barH - 4).toFixed(1) : (mid + barH + 9).toFixed(1);
+        return (
+          <g key={q.q}>
+            <rect x={rx} y={ry} width={bw.toFixed(1)} height={barH.toFixed(1)} rx="2" fill={color} opacity="0.88" />
+            <text x={cx.toFixed(1)} y={labelY} textAnchor="middle" fill={color} fontSize="7.5" fontFamily="JetBrains Mono,monospace">
+              {beat ? "+" : ""}{q.surp.toFixed(1)}%
+            </text>
+            <text x={cx.toFixed(1)} y={(H - 3).toFixed(1)} textAnchor="middle"
+              fill="#69748680" fontSize="7.5" fontFamily="JetBrains Mono,monospace">
+              {q.q.replace(" ", "'")}
+            </text>
+          </g>
+        );
+      })}
+      <text x={PADL - 4} y={(mid - 2).toFixed(1)} textAnchor="end" fill="#69748680" fontSize="7" fontFamily="JetBrains Mono,monospace">BEAT</text>
+      <text x={PADL - 4} y={(mid + 10).toFixed(1)} textAnchor="end" fill="#69748680" fontSize="7" fontFamily="JetBrains Mono,monospace">MISS</text>
     </svg>
   );
 }
@@ -96,29 +138,82 @@ export function StockListCard({
   );
 }
 
-/* ── ChartCard: right-side chart with timeframe toolbar ── */
+/* ── ChartCard: full-featured self-contained chart (mirrors stock details) ── */
 export function ChartCard({
-  sym, px, tf, onTfChange,
+  sym, px,
   emptyText = "Select a stock to see chart",
 }: {
   sym: string;
   px: number;
-  tf: string;
-  onTfChange: (tf: string) => void;
   emptyText?: string;
 }) {
+  const [tf, setTf] = useState("3M");
+  const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
+  const [maStep, setMaStep] = useState(0);
+  const [emaStep, setEmaStep] = useState(0);
+  const [showVol, setShowVol] = useState(true);
+  const [showRsi, setShowRsi] = useState(false);
+  const [showEarnings, setShowEarnings] = useState(false);
+
+  const erDate = watchData.find(w => w.ticker === sym)?.nextEarningsDate ?? "—";
+  const eps = stockInfo[sym]?.eps ?? 1;
+  const rs = screenerStocks.find(s => s.ticker === sym)?.relativeStrength ?? 50;
+  const rsiVal = Math.round(38 + rs * 0.36);
+
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       {sym ? (
         <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-          <div className="chart-toolbar">
-            {["1D","1W","1M","3M","6M","1Y","5Y"].map(r => (
-              <button key={r} className={`rng tfbtn${tf === r ? " on" : ""}`} onClick={() => onTfChange(r)}>{r}</button>
+          <div className="chart-toolbar" style={{ flexWrap: "wrap", gap: "4px 0", paddingBottom: 8 }}>
+            {(["1D","1W","1M","3M","6M","1Y","5Y"] as const).map(r => (
+              <button key={r} className={`rng tfbtn${tf === r ? " on" : ""}`} onClick={() => setTf(r)}>{r}</button>
             ))}
+            <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+            {(["Candles","Hollow","Bars","Line","Area"] as const).map(ct => (
+              <button key={ct} className={`rng ctype-btn${chartType === ct ? " on" : ""}`} onClick={() => setChartType(ct)}>{ct}</button>
+            ))}
+            <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+            <button className={`rng indbtn${maStep > 0 ? " on" : ""}`} onClick={() => setMaStep(s => (s + 1) % 5)}>
+              MA {[9,21,50,200].map((v, i) => (
+                <span key={v} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>
+                  {i > 0 ? "/" : ""}{v}
+                </span>
+              ))}
+            </button>
+            <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`} onClick={() => setEmaStep(s => (s + 1) % 5)}>
+              EMA {[9,21,50,200].map((v, i) => (
+                <span key={v} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>
+                  {i > 0 ? "/" : ""}{v}
+                </span>
+              ))}
+            </button>
+            <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
+            <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
+            <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
           </div>
-          <div style={{ padding: "0 14px 14px", flex: 1 }}>
-            <CandleChart sym={sym} tf={tf} px={px} maStep={0} emaStep={0} showVol chartType="candles" />
+          <div style={{ padding: "0 14px 0" }}>
+            <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} />
           </div>
+          {showRsi && (
+            <div style={{ padding: "0 14px 4px" }}>
+              <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
+                <span>RSI (14)</span>
+                <span className="mono" style={{ color: "var(--warn)" }}>
+                  {rsiVal} · {rsiVal > 70 ? "overbought" : rsiVal < 40 ? "weak" : "neutral-to-strong"}
+                </span>
+              </div>
+              <RsiPane sym={sym} tf={tf} />
+            </div>
+          )}
+          {showEarnings && (
+            <div style={{ borderTop: "1px solid var(--border)", padding: "0 14px 8px" }}>
+              <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Earnings · EPS Surprise</span>
+                <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>Next: {erDate}</span>
+              </div>
+              <EarnPane sym={sym} base={eps} />
+            </div>
+          )}
         </div>
       ) : (
         <div className="card" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -131,15 +226,13 @@ export function ChartCard({
 
 /* ── StockPanelLayout: top row (list + chart) + bottom stock detail ── */
 export function StockPanelLayout({
-  listCard, selectedSym, chartPx, tf, onTfChange,
+  listCard, selectedSym, chartPx,
   chartEmptyText,
   detailEmptyText = "Select a stock to see its full analysis.",
 }: {
   listCard: ReactNode;
   selectedSym: string;
   chartPx: number;
-  tf: string;
-  onTfChange: (tf: string) => void;
   chartEmptyText?: string;
   detailEmptyText?: string;
 }) {
@@ -147,7 +240,7 @@ export function StockPanelLayout({
     <>
       <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
         {listCard}
-        <ChartCard sym={selectedSym} px={chartPx} tf={tf} onTfChange={onTfChange} emptyText={chartEmptyText} />
+        <ChartCard sym={selectedSym} px={chartPx} emptyText={chartEmptyText} />
       </div>
       {selectedSym ? (
         <StockScreenEmbed initialSym={selectedSym} hideHeader hideChart />

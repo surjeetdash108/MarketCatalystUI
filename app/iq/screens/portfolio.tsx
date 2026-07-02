@@ -17,7 +17,6 @@ function usd(v: number) {
 export function PortfolioScreen() {
   const [holdings, setHoldings] = useState(() => [...folioData]);
   const [pfSel, setPfSel]       = useState(folioData[0]?.ticker ?? "");
-  const [pfTf, setPfTf]         = useState("3M");
   const [shares, setShares]     = useState<Record<string, number>>(() => {
     const base = { ...DEFAULT_SHARES };
     folioData.forEach(f => { if (!(f.ticker in base)) base[f.ticker] = 10; });
@@ -136,8 +135,6 @@ export function PortfolioScreen() {
         <StockPanelLayout
           selectedSym={pfSel}
           chartPx={sel?.price ?? 0}
-          tf={pfTf}
-          onTfChange={setPfTf}
           chartEmptyText="Select a holding to see chart"
           detailEmptyText="Add a holding to see its detail here."
           listCard={
