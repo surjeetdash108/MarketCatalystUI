@@ -745,78 +745,8 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
 // Stock tickers that can be starred/added to watchlist from search
 const SEARCHABLE_STOCKS = ["NVDA","AAPL","MSFT","TSLA","META","AMZN","GOOGL","AMD","AVGO","SMCI","COIN","UBER","PLTR","JPM","V"];
 
-// ---- Command palette ----
-function CommandPalette({ onClose, onNavigate }: { onClose: () => void; onNavigate: (href: string) => void }) {
-  const [q, setQ] = useState("");
-  const [starred, setStarred] = useState<Set<string>>(() => new Set());
-
-  const stockMatches = q.length >= 1
-    ? SEARCHABLE_STOCKS.filter(s => s.toLowerCase().startsWith(q.toLowerCase()))
-    : [];
-
-  function toggleStar(sym: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    setStarred(prev => {
-      const next = new Set(prev);
-      if (next.has(sym)) next.delete(sym); else next.add(sym);
-      return next;
-    });
-  }
-
-  return (
-    <>
-      <div className="palette-scrim" onClick={onClose} />
-      <div className="palette">
-        <div className="palette-input">
-          <span className="palette-icon">⌕</span>
-          <input
-            placeholder="Jump to a ticker, fund or stock…"
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            autoFocus
-          />
-        </div>
-        <div className="palette-list">
-          {/* Stock matches with star icon */}
-          {stockMatches.map(sym => (
-            <div key={sym} className="palette-item"
-              onClick={() => {
-                if (typeof window !== "undefined") localStorage.setItem("iq-stock", sym);
-                onNavigate("/menu/stock"); onClose();
-              }}>
-              <div className="palette-item-icon" style={{ color: "var(--brand-2)", fontWeight: 700, fontFamily: "var(--f-mono)" }}>
-                {sym[0]}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div className="palette-item-label">{sym}</div>
-                <div className="palette-item-sub">Stock · click to open</div>
-              </div>
-              <button
-                title={starred.has(sym) ? "Remove from watchlist" : "Add to watchlist"}
-                onClick={e => toggleStar(sym, e)}
-                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", color: starred.has(sym) ? "var(--warn)" : "var(--text-dim-solid)", padding: "0 4px" }}>
-                {starred.has(sym) ? "★" : "☆"}
-              </button>
-            </div>
-          ))}
-          {q.length === 0 && (
-            <div style={{ padding: "14px 16px", color: "var(--text-dim-solid)", fontSize: 13 }}>
-              Type a ticker symbol to search stocks…
-            </div>
-          )}
-          {q.length > 0 && stockMatches.length === 0 && (
-            <div style={{ padding: "14px 16px", color: "var(--text-dim-solid)", fontSize: 13 }}>No stocks matching &ldquo;{q}&rdquo;</div>
-          )}
-        </div>
-        {starred.size > 0 && (
-          <div style={{ padding: "8px 14px", borderTop: "1px solid var(--border-soft)", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-            ★ Starred: {[...starred].join(", ")}
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
+// Ticker bar items — static, doubled for infinite scroll
+const tickerItems = [...pulse, ...pulse];
 
 // ---- Main IQ Shell ----
 export function IQShell({ children }: { children: React.ReactNode }) {
@@ -966,9 +896,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     await signOut(firebaseAuth);
     window.location.href = "/";
   }
-
-  // Ticker content (doubled for infinite scroll)
-  const tickerItems = [...pulse, ...pulse];
 
   return (
     <AuthGuard>

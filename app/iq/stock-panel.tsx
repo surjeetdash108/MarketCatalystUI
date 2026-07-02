@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import { type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { CandleChart, Spark } from "./utils";
 
@@ -71,10 +71,10 @@ export function StockListCard({
   title, headerRight, isEmpty, emptyMessage = "No items.", children,
 }: {
   title: string;
-  headerRight?: React.ReactNode;
+  headerRight?: ReactNode;
   isEmpty?: boolean;
   emptyMessage?: string;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column" }}>
@@ -134,7 +134,7 @@ export function StockPanelLayout({
   chartEmptyText,
   detailEmptyText = "Select a stock to see its full analysis.",
 }: {
-  listCard: React.ReactNode;
+  listCard: ReactNode;
   selectedSym: string;
   chartPx: number;
   tf: string;

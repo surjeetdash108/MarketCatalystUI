@@ -14,11 +14,6 @@ function usd(v: number) {
   return v >= 1000 ? `$${(v / 1000).toFixed(1)}K` : `$${v.toFixed(2)}`;
 }
 
-function convPill(conv: string) {
-  const c = conv === "High" ? "up" : conv === "Low" ? "dn" : "amc";
-  return <span className={`pill ${c}`}>{conv}</span>;
-}
-
 export function PortfolioScreen() {
   const [holdings, setHoldings] = useState(() => [...folioData]);
   const [pfSel, setPfSel]       = useState(folioData[0]?.s ?? "");

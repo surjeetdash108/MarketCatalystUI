@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 
 // ---- Number formatting ----
 export function fmt(n: number, d = 2): string {
@@ -263,10 +263,6 @@ export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
 // ---- Candlestick chart (matches HTML genOHLC + candleChart) ----
 type OHLCBar = { o: number; h: number; l: number; c: number; v: number };
 
-function _hash(s: string): number {
-  return hashStr(s);
-}
-
 function _seed(n: number) {
   let s = n;
   return () => { s = (Math.imul(1664525, s) + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
@@ -307,7 +303,7 @@ function genOHLC(sym: string, tf: string, px: number): OHLCBar[] {
     "3M": [64, 1.1], "6M": [120, 1.3], "1Y": [252, 1.8], "5Y": [260, 2.6],
   };
   const [n, volat] = C[tf] ?? [64, 1.1];
-  const rnd = _seed(_hash(sym + tf) + 7);
+  const rnd = _seed(hashStr(sym + tf) + 7);
   let price = px * (tf === "5Y" ? 0.32 : tf === "1Y" ? 0.6 : 0.86);
   const out: OHLCBar[] = [];
   const bias = 0.08;
@@ -336,7 +332,7 @@ export function CandleChart({
   const [tip, setTip] = useState<{ html: string; left: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const data = genOHLC(sym, tf, px);
+  const data = useMemo(() => genOHLC(sym, tf, px), [sym, tf, px]);
   const n = data.length;
   const W = 720, PH = 224, VH = showVol ? 54 : 0, GAP = showVol ? 10 : 0, PADT = 12, PADB = 18, axisW = 46;
   const H = PADT + PH + GAP + VH + PADB;
@@ -490,7 +486,7 @@ export function CandleChart({
 
 export function RsiPane({ sym, tf }: { sym: string; tf: string }) {
   const w = 720, h = 72;
-  const rnd = _seed(_hash(sym + tf + "rsi"));
+  const rnd = _seed(hashStr(sym + tf + "rsi"));
   let v = 52;
   const r: number[] = [];
   for (let i = 0; i < 90; i++) {
