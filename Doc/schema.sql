@@ -114,26 +114,35 @@ CREATE TABLE company_peers (
 );
 
 -- Full US ticker universe (Doc/openapi.yaml: TickerListing;
--- Firestore: tickers/{ticker}; written by
--- backend/src/sync/ticker-universe.job.ts). Reference metadata only — no
--- fundamentals; deliberately NOT foreign-keyed to companies(ticker), since
--- most rows here won't have a matching companies row (that stays limited
--- to the curated ~200-ticker fundamentals universe). MUTABLE/upsert-latest,
--- refreshed weekly — no history kept.
+-- Firestore: tickers/{ticker}). Reference columns written weekly by
+-- backend/src/sync/ticker-universe.job.ts; price/pct_change/volume written
+-- daily by backend/src/sync/market-quotes.job.ts (a near-free byproduct of
+-- the same grouped-daily diff /market-movers already computes — see
+-- backend/src/vendors/polygon/polygon-diff.util.ts). Still no fundamentals
+-- (P/E, sector, etc.) for the full universe — deliberately NOT foreign-keyed
+-- to companies(ticker), since most rows here won't have a matching companies
+-- row (that stays limited to the curated 241-ticker fundamentals universe).
+-- MUTABLE/upsert-latest either way — no history kept.
 CREATE TABLE tickers (
-  ticker            TEXT PRIMARY KEY,
-  name              TEXT,
-  market            TEXT,
-  locale            TEXT,
-  primary_exchange  TEXT,               -- Polygon MIC code, e.g. XNAS, XNYS
-  type              TEXT,               -- e.g. CS (common stock), ETF, ADRC, WARRANT
-  active            BOOLEAN NOT NULL DEFAULT true,
-  currency_name     TEXT,
-  cik               TEXT,
-  composite_figi    TEXT,
-  share_class_figi  TEXT,
-  source            TEXT,               -- 'polygon'
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+  ticker              TEXT PRIMARY KEY,
+  name                TEXT,
+  market              TEXT,
+  locale              TEXT,
+  primary_exchange    TEXT,               -- Polygon MIC code, e.g. XNAS, XNYS
+  type                TEXT,               -- e.g. CS (common stock), ETF, ADRC, WARRANT
+  active              BOOLEAN NOT NULL DEFAULT true,
+  currency_name       TEXT,
+  cik                 TEXT,
+  composite_figi      TEXT,
+  share_class_figi    TEXT,
+  source              TEXT,               -- 'polygon'
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  price               DOUBLE PRECISION,    -- NULL until market-quotes.job.ts has run for this ticker
+  pct_change          DOUBLE PRECISION,
+  volume              DOUBLE PRECISION,
+  as_of_date          DATE,
+  quote_source        TEXT,               -- 'polygon'
+  quote_updated_at    TIMESTAMPTZ
 );
 CREATE INDEX idx_tickers_type ON tickers(type);
 CREATE INDEX idx_tickers_exchange ON tickers(primary_exchange);

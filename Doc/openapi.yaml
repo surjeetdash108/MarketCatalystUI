@@ -118,6 +118,8 @@ paths:
       tags: [Ops]
       summary: Backend liveness check
       x-status: live
+      x-consumed-by:
+        - "Not screen-facing — no StockWise screen calls this. Used for manual health checks and could back a future uptime monitor."
       x-primary-source: none (self-check)
       operationId: getHealth
       responses:
@@ -137,6 +139,8 @@ paths:
       tags: [Ops]
       summary: List every registered sync job with running + last-run state
       x-status: live
+      x-consumed-by:
+        - "Not a StockWise screen — consumed by backendUI (backendUI/index.html), the separate static ops dashboard, not the Next.js app."
       operationId: listSyncJobs
       responses:
         "200":
@@ -153,6 +157,8 @@ paths:
       tags: [Ops]
       summary: Last-run status for every job (no running-state)
       x-status: live
+      x-consumed-by:
+        - "Not a StockWise screen — ops-only, same as GET /sync/jobs."
       operationId: getAllSyncStatus
       responses:
         "200":
@@ -169,6 +175,8 @@ paths:
       tags: [Ops]
       summary: Last-run status for one job
       x-status: live
+      x-consumed-by:
+        - "Not a StockWise screen — ops-only, same as GET /sync/jobs."
       operationId: getSyncStatus
       parameters:
         - $ref: "#/components/parameters/JobName"
@@ -185,6 +193,8 @@ paths:
       tags: [Ops]
       summary: Manually trigger a sync job (for testing)
       x-status: live
+      x-consumed-by:
+        - "Not a StockWise screen — ops-only, same as GET /sync/jobs."
       operationId: runSyncJob
       parameters:
         - $ref: "#/components/parameters/JobName"
@@ -209,11 +219,15 @@ paths:
     get:
       tags: [Companies]
       summary: List company reference + fundamentals data
-      description: |
-        Powers Dashboard heatmap-mini/themes overlay, Themes, Watchlist,
-        Portfolio, Screener (market cap + P/E only), and the Stock Detail
-        quote header.
       x-status: live
+      x-consumed-by:
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Market Heatmap mini (per-stock market cap/%change), Portfolio Pulse mini (live price/% on holdings), Watchlist mini (live price/% on watched tickers)"
+        - "Screener (app/iq/screens/screener.tsx) — Market cap, P/E columns"
+        - "Market Heatmap (app/iq/screens/heatmap.tsx) — Stock cells (market cap, % change)"
+        - "Themes (app/iq/screens/themes.tsx) — Per-stock price/% change on each theme's stock list"
+        - "Portfolio Pulse (app/iq/screens/portfolio.tsx) — Price/% change on demo or real holdings"
+        - "Watchlist (app/iq/screens/watchlist.tsx) — Price/% change on demo or real watched tickers"
+        - "Stock Detail (app/iq/screens/stock.tsx) — Price, % change, market cap, P/E, dividend yield, beta, sector (single-point merge, tagged \"live quote · FMP\")"
       x-primary-source: >-
         FMP `/stable/profile` + `/stable/ratios-ttm` + `/stable/stock-peers`
         (backend/src/vendors/fmp), synced daily at 02:00 ET for a rotating
@@ -275,6 +289,8 @@ paths:
       tags: [Companies]
       summary: Single company by ticker
       x-status: live
+      x-consumed-by:
+        - "Same screens/features as GET /companies above — the frontend subscribes to the whole companies collection via useCollection() and merges client-side rather than fetching one ticker at a time, so this single-ticker path documents the equivalent Firestore doc shape, not a distinct call site."
       x-primary-source: FMP `/stable/profile` + `/stable/ratios-ttm` + `/stable/stock-peers`
       x-alternate-source: Polygon `/v2/aggs/ticker/{ticker}/prev` (price fields only, faster refresh)
       x-fallback-behavior: >-
@@ -298,36 +314,45 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   # ────────────────────────────────────────────────────────────────────────
-  # TICKERS — live (full US universe, reference metadata only)
+  # TICKERS — live (full US universe: reference metadata + daily price)
   # ────────────────────────────────────────────────────────────────────────
   /tickers:
     get:
       tags: [Companies]
-      summary: Full US ticker universe (discovery only — no fundamentals)
+      summary: Full US ticker universe — reference data + daily price (no fundamentals)
       description: >-
-        Answers "what tickers exist" (name/exchange/type/active/cik) for
-        essentially the entire US market, not just the ~200-name curated
-        universe `/companies` covers. Deliberately separate from
-        `/companies`: this is cheap, bulk reference metadata with no
-        fundamentals attached — use it to discover a ticker exists, then
-        `GET /companies/{ticker}` if you want its price/P-E/etc (which may
-        return 404 if that specific ticker isn't in the curated fundamentals
-        universe yet).
+        Answers "what tickers exist" (name/exchange/type/active/cik) AND
+        "what's it trading at" (price/%change/volume) for essentially the
+        entire US market, not just the 241-ticker curated universe
+        `/companies` covers. The price fields are effectively free: Polygon's
+        grouped-daily endpoint returns the whole market's EOD bars in one
+        call, already fetched daily for `/market-movers` — this just writes
+        the rest of that same response instead of discarding it. Still no
+        fundamentals (P/E, sector, dividend yield, peers, beta) for the full
+        universe — that needs one FMP call per ticker, which doesn't scale
+        here yet; use `GET /companies/{ticker}` for that on the curated
+        subset (may 404 outside it).
       x-status: live
+      x-consumed-by:
+        - "Not consumed by any screen today — no app/iq/screens/*.tsx file reads this collection yet (verified by grepping every useCollection() call). Backend data is now complete (reference + price for the whole market); wiring a screen to it (e.g. expanding Screener's picker beyond the curated 241) is a separate, not-yet-done step."
       x-primary-source: >-
-        Polygon `/v3/reference/tickers`, paginated (~1000/page), synced
-        weekly (Sunday 03:00 ET) — reference data changes far less often
-        than price/fundamentals, and a full pull is tens of thousands of
-        Firestore writes, not worth repeating daily.
+        Reference fields: Polygon `/v3/reference/tickers`, paginated
+        (~1000/page), synced weekly (Sunday 03:00 ET) —
+        ticker-universe.job.ts. Price fields: Polygon grouped-daily EOD bars
+        diffed across the two most recent trading days (same 2-call diff
+        `/market-movers` uses, see backend/src/vendors/polygon/polygon-diff.util.ts),
+        synced daily at 18:07 ET — market-quotes.job.ts. Both merge onto the
+        same `tickers/{ticker}` doc.
       x-alternate-source: >-
         SEC EDGAR `company_tickers.json` — completely free, no key, no rate
         limit, and already fetched elsewhere in this backend (Form 4 CIK
         lookups) — but narrower coverage (SEC filers only, no ETF/type/
-        exchange/active-flag distinction) so it's a cross-reference for CIK
-        mapping, not a replacement discovery source.
+        exchange/active-flag distinction, no price at all) so it's a
+        cross-reference for CIK mapping, not a replacement discovery source.
       x-write-pattern: >-
-        MUTABLE / upsert-latest. `tickers/{ticker}` is overwritten on every
-        weekly run; no history is kept for this reference data.
+        MUTABLE / upsert-latest. `tickers/{ticker}` is overwritten (merged)
+        on every weekly reference-data run and every daily price run; no
+        history is kept for either.
       operationId: listTickers
       parameters:
         - name: type
@@ -370,10 +395,12 @@ paths:
       tags: [MarketMovers]
       summary: Top gainers/losers (EOD)
       description: |
-        Powers Market Movers (all 4 tabs), Dashboard Market Movers widget.
         RVOL/catalyst/weekly-% columns are NOT in this feed (see mock-merge
         note) — only price/pctChange/volume/sector/cap are real.
       x-status: live
+      x-consumed-by:
+        - "Market Movers (app/iq/screens/movers.tsx) — Mover rows (price/%change/name/sector/cap); live-only tickers not in the mock set are appended with neutral placeholders"
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Market Movers widget (Gainers/Losers/Most Active tabs)"
       x-primary-source: >-
         Polygon grouped-daily bars (`/v2/aggs/grouped/locale/us/market/stocks/{date}`),
         diffed across the two most recent trading days, top/bottom 20 by
@@ -442,6 +469,8 @@ paths:
         snapshot), this never loses a day: each closed trading day gets its
         own permanent document, written once and never overwritten.
       x-status: live
+      x-consumed-by:
+        - "Not consumed by any screen today — no screen reads market_movers_history yet, only the latest-snapshot market_movers collection. Written for a future trend/history UI."
       x-primary-source: Same sync as GET /market-movers — see that path for vendor/fallback details.
       x-write-pattern: IMMUTABLE / append-only. Insert with ON CONFLICT (ticker, direction, as_of_date) DO NOTHING once migrated to a relational store (see Doc/schema.sql market_movers_history).
       operationId: listMarketMoverHistory
@@ -484,6 +513,9 @@ paths:
       tags: [Sectors]
       summary: Sector-level performance snapshot
       x-status: live
+      x-consumed-by:
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Market Heatmap mini (sector %)"
+        - "Market Heatmap (app/iq/screens/heatmap.tsx) — Sector cells (% change)"
       x-primary-source: >-
         FMP `/stable/sector-performance-snapshot`, synced daily at 18:00 ET
         (with up to 5 days of lookback if the latest trading day has no data yet).
@@ -524,6 +556,8 @@ paths:
         day's sector performance, unlike GET /sectors which only shows the
         latest snapshot.
       x-status: live
+      x-consumed-by:
+        - "Not consumed by any screen today — same as market-movers/history, written for a future trend UI, not read yet."
       x-primary-source: Same sync as GET /sectors — see that path for vendor details.
       x-write-pattern: IMMUTABLE / append-only. Insert with ON CONFLICT (sector, as_of_date) DO NOTHING once migrated to a relational store (see Doc/schema.sql sectors_history).
       operationId: listSectorHistory
@@ -562,11 +596,17 @@ paths:
       tags: [Indices]
       summary: Market pulse indices (ETF-proxied)
       description: |
-        Powers Dashboard pulse strip + VIX card, Macro & VIX screen.
         **All 9 values are ETF proxies, not real index levels** — see
         `isProxy`/`note` fields. Neither Polygon nor Finnhub's current keys
-        allow real index/CFD quotes (both confirmed 401/403).
+        allow real index/CFD quotes (both confirmed 401/403). NOT consumed
+        by Macro & VIX (screens/macro.tsx) — its VIX/market-regime cards
+        stay hardcoded deliberately; VIXY is a decaying futures ETN, not
+        the spot VIX level, and overlaying it there without heavy caveats
+        risked misrepresenting it as the real index.
       x-status: live
+      x-consumed-by:
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Market Pulse strip (6 of 9 indices shown), VIX card"
+        - "Shell (app/iq/shell.tsx) — Top ticker strip on every screen, and the index drawer it opens (both via the shared mergePulse() helper in app/iq/live-market-indices.ts)"
       x-primary-source: >-
         Finnhub `/quote` on liquid ETF proxies (SPY, QQQ, DIA, IWM, GLD, USO,
         UUP, TLT, VIXY), synced daily at 18:05 ET.
@@ -607,6 +647,8 @@ paths:
         day's index level, unlike GET /market-indices which only shows the
         latest snapshot.
       x-status: live
+      x-consumed-by:
+        - "Not consumed by any screen today — same as market-movers/history, written for a future trend UI, not read yet."
       x-primary-source: Same sync as GET /market-indices — see that path for vendor details.
       x-write-pattern: IMMUTABLE / append-only. Insert with ON CONFLICT (symbol, as_of_date) DO NOTHING once migrated to a relational store (see Doc/schema.sql market_indices_history).
       operationId: listMarketIndexHistory
@@ -642,6 +684,8 @@ paths:
       tags: [Indices]
       summary: Single index/proxy by symbol
       x-status: live
+      x-consumed-by:
+        - "Same screens as GET /market-indices above — the frontend subscribes to the whole collection and merges/looks up client-side rather than fetching one symbol at a time."
       x-primary-source: Finnhub `/quote` (ETF proxy)
       x-alternate-source: Polygon Indices API (real index value, needs add-on)
       operationId: getMarketIndex
@@ -668,11 +712,10 @@ paths:
     get:
       tags: [Earnings]
       summary: Earnings calendar with estimate/actual EPS + revenue
-      description: |
-        Powers Earnings Hub (EPS overlay only — session/guidance/reaction/
-        implied-move/call transcripts are still illustrative, not in this
-        feed) and Dashboard's Earnings Today widget.
       x-status: live
+      x-consumed-by:
+        - "Earnings Hub (app/iq/screens/earnings.tsx) — EPS estimate/actual overlaid onto the matching EARN_CAL row by ticker, tagged \"live EPS · FMP\" pill; session/guidance/reaction/implied-move/call transcripts stay illustrative (not in this feed)"
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Earnings Today widget"
       x-primary-source: >-
         FMP `/stable/earnings-calendar`, full refresh daily at 06:00 ET
         for a rolling forward window.
@@ -723,12 +766,14 @@ paths:
       tags: [Analyst]
       summary: Analyst consensus snapshot for a ticker
       description: |
-        Powers the "Live analyst consensus" card on the Analyst Actions
-        screen. This is a Buy/Hold/Sell **vote-count snapshot**, not an
-        event feed — it has no firm name, no action type, no price target,
-        no date. The per-firm upgrade/downgrade table on that screen stays
+        This is a Buy/Hold/Sell **vote-count snapshot**, not an event feed —
+        it has no firm name, no action type, no price target, no date. The
+        per-firm upgrade/downgrade table on Analyst Actions stays
         illustrative until `/analyst-actions/events` (below) is built.
       x-status: live
+      x-consumed-by:
+        - "Analyst Actions (app/iq/screens/analyst.tsx) — \"Live analyst consensus\" card, and a live-consensus badge on matching table rows (cross-referenced by ticker)"
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Analyst Actions mini-list, consensus pill shown next to matching tickers (per-firm action rows stay mock — no live per-firm feed exists)"
       x-primary-source: >-
         FMP `/stable/grades-consensus`, synced daily at 06:00 ET for a
         rotating 60-ticker batch.
@@ -763,6 +808,8 @@ paths:
         rating change, price target change, date) needs an event-level feed;
         FMP's consensus endpoint above cannot reconstruct it.
       x-status: planned
+      x-consumed-by:
+        - "Intended for Analyst Actions (app/iq/screens/analyst.tsx) — the per-firm action table (firm, rating change, PT, cluster alerts), currently 100% static (data.analyst) since no event-level feed exists yet"
       x-primary-source: >-
         Benzinga Ratings API — real-time per-firm upgrade/downgrade/
         initiation/reiteration events with price targets. Blocked, no key.
@@ -787,6 +834,9 @@ paths:
       tags: [Insider]
       summary: Form 4 insider buy/sell transactions
       x-status: live
+      x-consumed-by:
+        - "Insider & Institutional (app/iq/screens/insider.tsx) — Insider transaction feed, real rows tagged \"live\", concatenated with the original mock feed"
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Insider & Institutional mini (latest 5 real Form 4 filings prepended to the mock insider mini-list)"
       x-primary-source: >-
         SEC EDGAR Form 4 XML (`data.sec.gov/submissions/CIK{cik}.json` +
         per-filing XML), nightly at 01:30 ET, 20 tickers per run, 3 most
@@ -833,6 +883,8 @@ paths:
       tags: [Insider]
       summary: Institutional fund summary (13F)
       x-status: live
+      x-consumed-by:
+        - "Insider & Institutional (app/iq/screens/insider.tsx) — \"Live overlap (CUSIP-matched, real)\" section, alongside the nested positions path below, cross-referencing exact CUSIPs across real 13F filings; shown additively, not replacing the original mock cross-fund cards"
       x-primary-source: SEC EDGAR 13F-HR filings, nightly at 01:00 ET
       x-alternate-source: >-
         WhaleWisdom / Fintel — nicer aggregation UX over the same SEC data;
@@ -868,6 +920,8 @@ paths:
         Keyed by CUSIP, not ticker — the SEC 13F schema has no ticker field.
         Rows are capped at 200 per filing (largest positions by value first).
       x-status: live
+      x-consumed-by:
+        - "Insider & Institutional (app/iq/screens/insider.tsx) — same \"Live overlap (CUSIP-matched, real)\" section as GET /fund-holdings/{cik} above"
       x-primary-source: SEC EDGAR 13F-HR information table, nightly at 01:00 ET
       x-alternate-source: WhaleWisdom / Fintel (same underlying data, nicer UX, no speed gain)
       x-write-pattern: >-
@@ -911,10 +965,12 @@ paths:
       tags: [News]
       summary: Company news headlines
       description: |
-        Powers Commentary/News (Live/Premarket/After Hours/Macro tabs) and
-        Dashboard's Live Market Feed. INTERIM source — no category tagging
-        richness or real-time push (polled batch every 30 min).
+        INTERIM source — no category tagging richness or real-time push
+        (polled batch every 30 min).
       x-status: live
+      x-consumed-by:
+        - "Commentary (app/iq/screens/commentary.tsx) — Live tab (merged ahead of mock commentary items), Premarket/After Hours/My names/Macro tabs (filtered by ET hour or ticker, appended to the corresponding mock arrays), NewsDrawer per-ticker history (shown above the mock buildNewsHistory() narrative section)"
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Live Market Feed (falls back to mock feed items when none have synced for the tracked universe yet)"
       x-primary-source: >-
         Finnhub `/company-news`, synced every 30 min during market hours,
         80 tickers per run cycling the full universe, last 2 days lookback.
@@ -971,15 +1027,13 @@ paths:
       tags: [IPOs]
       summary: IPO calendar (recent + pipeline)
       description: >-
-        Powers ipos.tsx's new "Live IPO Calendar" card, additive alongside
-        the screen's existing illustrative Recent IPO Performance / Upcoming
-        Pipeline tables (untouched — Finnhub's calendar has no current
-        trading price or day-1 return, so it can't be merged into those
-        return-calculation rows). FMP's `/stable/ipos-calendar` is still
-        confirmed RESTRICTED on the current plan, but Finnhub's IPO calendar
-        turned out to be a separate endpoint from its blocked economic
-        calendar — verified 2026-07-07 with a real call, not assumed.
+        FMP's `/stable/ipos-calendar` is still confirmed RESTRICTED on the
+        current plan, but Finnhub's IPO calendar turned out to be a separate
+        endpoint from its blocked economic calendar — verified 2026-07-07
+        with a real call, not assumed.
       x-status: live
+      x-consumed-by:
+        - "IPOs (app/iq/screens/ipos.tsx) — new, additive \"Live IPO Calendar\" card, shown once the collection has synced data; the screen's original Stats strip / Recent IPO Performance / Upcoming Pipeline tables stay untouched — Finnhub's calendar has no current trading price or day-1 return, so it can't be merged into those return-calculation rows"
       x-primary-source: >-
         Finnhub `/calendar/ipo`, synced daily at 06:15 ET over a
         [today-45d, today+90d] window. Free tier, same key already in use
@@ -1030,12 +1084,12 @@ paths:
       tags: [Macro]
       summary: Latest reading per key US economic indicator
       description: >-
-        Powers Macro & VIX screen's "Live Economic Indicators" card, additive
-        alongside the screen's existing illustrative economic-calendar tabs
-        (untouched). NOT a forward-looking calendar — FRED has no
-        consensus-estimate field and no verified scheduled-release-date
-        source, so this only ever reports what has actually been published.
+        NOT a forward-looking calendar — FRED has no consensus-estimate
+        field and no verified scheduled-release-date source, so this only
+        ever reports what has actually been published.
       x-status: live
+      x-consumed-by:
+        - "Macro & VIX (app/iq/screens/macro.tsx) — new, additive \"Live Economic Indicators\" card, shown once the collection has synced data; the screen's Market regime/VIX cards and Last/This/Next Week economic calendar tabs stay untouched (fixed illustrative dates, so live FRED readings aren't force-fit into them)"
       x-primary-source: >-
         FRED (Federal Reserve Economic Data) `/series/observations`, latest 2
         observations per curated series (see backend/src/common/macro-series.ts),
@@ -1078,11 +1132,11 @@ paths:
       tags: [Dividends]
       summary: Upcoming ex-dividend calendar
       description: >-
-        Powers macro.tsx's new "Live Dividend Calendar" card, additive
-        alongside the screen's existing illustrative dividend calendar
-        (untouched — no fictional-date mismatch issue here since this is a
-        flat list, not a fixed "today"-anchored calendar grid).
+        No fictional-date mismatch issue here since this is a flat list, not
+        a fixed "today"-anchored calendar grid — unlike /macro-events above.
       x-status: live
+      x-consumed-by:
+        - "Macro & VIX (app/iq/screens/macro.tsx) — new, additive \"Live Dividend Calendar\" card, alongside the screen's existing illustrative dividend calendar (chip grid/month view, untouched)"
       x-primary-source: >-
         FMP `/stable/dividends-calendar` — verified working 2026-07-07
         (unlike the confirmed-restricted economic-calendar/ipos-calendar on
@@ -1126,15 +1180,15 @@ paths:
       tags: [Options]
       summary: Options reference data (real strikes/expirations + delayed last price/volume) for a curated ticker list
       description: >-
-        Powers options.tsx's new "Live Options Reference" card, additive
-        alongside the screen's existing simulated full chain table (bid/ask,
-        IV, greeks, OI — untouched, still simulated). Options SNAPSHOT and
-        NBBO quotes are confirmed 403 NOT_AUTHORIZED on the current Polygon
-        plan (verified 2026-07-07) — real-time bid/ask, IV, greeks, and open
-        interest genuinely aren't available without a plan upgrade or a
-        Tradier key. Covers OPTIONS_UNIVERSE only (8 curated liquid
-        tickers), not every stock on the Options Chain screen's picker.
+        Options SNAPSHOT and NBBO quotes are confirmed 403 NOT_AUTHORIZED on
+        the current Polygon plan (verified 2026-07-07) — real-time bid/ask,
+        IV, greeks, and open interest genuinely aren't available without a
+        plan upgrade or a Tradier key. Covers OPTIONS_UNIVERSE only (8
+        curated liquid tickers), not every stock on the Options Chain
+        screen's picker.
       x-status: live
+      x-consumed-by:
+        - "Options Chain (app/iq/screens/options.tsx) — new, additive \"Live Options Reference\" card for the currently-selected ticker (when it's in OPTIONS_UNIVERSE and has synced data); the screen's original simulated full chain table (bid/ask, IV, greeks, OI) stays untouched"
       x-primary-source: >-
         Polygon `/v3/reference/options/contracts` (nearest-expiration
         strikes/types) + `/v2/aggs/ticker/{contract}/range/1/day/...`
@@ -1173,6 +1227,8 @@ paths:
       summary: Unusual options activity (sweeps, large premium, high vol/OI)
       description: NOT IMPLEMENTED. Blocked — `UNUSUAL_WHALES_API_KEY` is empty in `backend/.env`.
       x-status: planned
+      x-consumed-by:
+        - "No dedicated UI section exists yet anywhere in the app — not just unbuilt on the backend. Intended home is Options Chain (app/iq/screens/options.tsx), but no unusual-flow widget/table has been designed there yet either (checked: no reference to 'unusual flow', 'sweep', or similar in options.tsx)."
       x-primary-source: Unusual Whales WebSocket flow feed
       x-alternate-source: >-
         FlowAlgo / Cheddar Flow — comparable tier and latency; no clear
@@ -1195,6 +1251,8 @@ paths:
       summary: Large block / dark-pool prints
       description: NOT IMPLEMENTED. Blocked — no vendor key configured.
       x-status: planned
+      x-consumed-by:
+        - "No dedicated UI section exists yet. The only trace of this concept in the app today is a single hardcoded illustrative headline in Commentary's mock feed (app/iq/data.ts — a \"Block Trade\" category news item), not a real block-trades table or widget on any screen."
       x-primary-source: Unusual Whales dark-pool print feed
       x-alternate-source: >-
         FINRA ADF/OTC Transparency data — free, but T+1 delayed and far
@@ -1217,6 +1275,8 @@ paths:
       summary: EOD or weekly AI narrative recap
       description: NOT IMPLEMENTED. Recap screen is 100% static.
       x-status: planned
+      x-consumed-by:
+        - "Intended for Recaps (app/iq/screens/recap.tsx) — every element (index cards, news briefing, key stories, sector heatmap, movers, internals), currently 100% hardcoded"
       x-primary-source: >-
         Polygon EOD index/sector data (structured inputs) + Anthropic Claude
         (narrative generation). Blocked — `ANTHROPIC_API_KEY` not set.
@@ -1236,7 +1296,7 @@ paths:
         "501": { $ref: "#/components/responses/NotImplemented" }
 
   # ────────────────────────────────────────────────────────────────────────
-  # STOCK HISTORY — planned
+  # STOCK HISTORY — live (3M/6M/1Y only)
   # ────────────────────────────────────────────────────────────────────────
   /stock-history/{ticker}:
     get:
@@ -1250,6 +1310,8 @@ paths:
         for a future Screener RS-Rating computation (not built yet — needs
         its own ranking job once enough of TICKER_UNIVERSE has history).
       x-status: live
+      x-consumed-by:
+        - "Stock Detail (app/iq/screens/stock.tsx) — Candle chart for 3M/6M/1Y timeframes only (both the main chart and the StockChartExpanded modal), via the useOhlcvBars() hook; tagged \"live · Polygon\" pill when in use. RSI/MACD panes are NOT computed from these real bars yet — still the seeded generator."
       x-primary-source: >-
         Polygon `/v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}`, synced
         daily at 03:00 ET for TICKER_UNIVERSE (rotating batch, same pattern
@@ -1298,6 +1360,9 @@ paths:
       tags: [UserData]
       summary: Get the signed-in user's watchlist
       x-status: live
+      x-consumed-by:
+        - "Watchlist (app/iq/screens/watchlist.tsx) — real watchlist takes over from the demo data.watch list automatically once the signed-in user has saved one"
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Watchlist mini widget's real-data path (falls back to data.watch if the user has no saved watchlist)"
       x-primary-source: Firestore `users/{uid}/watchlists/default` — written directly by the client SDK, no vendor involved.
       operationId: getWatchlist
       parameters:
@@ -1314,6 +1379,8 @@ paths:
       tags: [UserData]
       summary: Add a ticker to the watchlist
       x-status: live
+      x-consumed-by:
+        - "Same screens as the GET above."
       operationId: addToWatchlist
       parameters:
         - $ref: "#/components/parameters/Uid"
@@ -1341,6 +1408,8 @@ paths:
       tags: [UserData]
       summary: Remove a ticker from the watchlist
       x-status: live
+      x-consumed-by:
+        - "Same screens as GET /users/{uid}/watchlist above."
       operationId: removeFromWatchlist
       parameters:
         - $ref: "#/components/parameters/Uid"
@@ -1355,6 +1424,9 @@ paths:
       tags: [UserData]
       summary: List the signed-in user's portfolio holdings
       x-status: live
+      x-consumed-by:
+        - "Portfolio Pulse (app/iq/screens/portfolio.tsx) — real holdings take over from the demo data.folio + DEFAULT_SHARES once the signed-in user adds any"
+        - "Dashboard (app/iq/screens/dashboard.tsx) — Portfolio Pulse mini widget's real-data path (falls back to data.folio if the user has no saved holdings)"
       x-primary-source: Firestore `users/{uid}/portfolios/default/holdings/{ticker}`
       operationId: listHoldings
       parameters:
@@ -1378,6 +1450,8 @@ paths:
       tags: [UserData]
       summary: Add a holding
       x-status: live
+      x-consumed-by:
+        - "Same screens as the GET above."
       operationId: addHolding
       parameters:
         - $ref: "#/components/parameters/Uid"
@@ -1401,6 +1475,8 @@ paths:
       tags: [UserData]
       summary: Remove a holding
       x-status: live
+      x-consumed-by:
+        - "Same screens as GET /users/{uid}/portfolio/holdings above."
       operationId: removeHolding
       parameters:
         - $ref: "#/components/parameters/Uid"
@@ -1415,6 +1491,8 @@ paths:
       tags: [UserData]
       summary: Get user settings (alerts, font)
       x-status: live
+      x-consumed-by:
+        - "Shell (app/iq/shell.tsx) — IQShell theme/font preference, combined with a localStorage cache"
       x-primary-source: Firestore `settings/{uid}`
       operationId: getSettings
       parameters:
@@ -1431,6 +1509,8 @@ paths:
       tags: [UserData]
       summary: Update user settings
       x-status: live
+      x-consumed-by:
+        - "Same screen as the GET above (Shell)."
       operationId: updateSettings
       parameters:
         - $ref: "#/components/parameters/Uid"
@@ -1454,6 +1534,8 @@ paths:
       tags: [UserData]
       summary: List the signed-in user's notes for a ticker
       x-status: live
+      x-consumed-by:
+        - "Stock Detail (app/iq/screens/stock.tsx) — Chart notes (save/load/delete); the only feature on this screen that was already live before this session's work"
       x-primary-source: Firestore `stock_comments` (client SDK, owner-scoped by security rules)
       operationId: listStockComments
       parameters:
@@ -1484,6 +1566,8 @@ paths:
       tags: [UserData]
       summary: Add a note to a ticker
       x-status: live
+      x-consumed-by:
+        - "Same screen as the GET above (Stock Detail)."
       operationId: addStockComment
       requestBody:
         required: true
@@ -1511,6 +1595,8 @@ paths:
       tags: [UserData]
       summary: Delete a note
       x-status: live
+      x-consumed-by:
+        - "Same screen as GET /stock-comments above (Stock Detail)."
       operationId: deleteStockComment
       parameters:
         - name: id
@@ -1763,9 +1849,15 @@ components:
     TickerListing:
       type: object
       description: >-
-        Firestore `tickers/{ticker}` — written by ticker-universe.job.ts.
-        Reference metadata only; no price/fundamentals (see Company for
-        that, on the curated subset that has it).
+        Firestore `tickers/{ticker}` — reference fields (ticker, name,
+        market, ...) written weekly by ticker-universe.job.ts; price/
+        pctChange/volume fields written daily by market-quotes.job.ts,
+        merged onto the same doc. A ticker market-quotes.job.ts sees before
+        ticker-universe.job.ts has ever discovered it still gets a doc,
+        just missing name/exchange/etc. until the next weekly sync. Full
+        fundamentals (P/E, sector, dividend yield, peers, beta) are NOT
+        here at any tier — see Company for that, on the curated
+        TICKER_UNIVERSE subset only (241 tickers, not the whole market).
       properties:
         ticker: { type: string, example: NVDA }
         name: { type: string, nullable: true, example: NVIDIA Corp }
@@ -1780,6 +1872,12 @@ components:
         shareClassFigi: { type: string, nullable: true }
         source: { type: string, example: polygon }
         updatedAt: { type: string, format: date-time }
+        price: { type: number, nullable: true, description: "Written by market-quotes.job.ts — null until that job has run at least once for this ticker." }
+        pctChange: { type: number, nullable: true }
+        volume: { type: number, nullable: true }
+        asOfDate: { type: string, format: date, nullable: true }
+        quoteSource: { type: string, nullable: true, example: polygon }
+        quoteUpdatedAt: { type: string, format: date-time, nullable: true }
 
     MarketMover:
       type: object

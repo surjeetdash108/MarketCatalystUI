@@ -11,6 +11,18 @@ _Last verified: 2026-07-07, against the actual code in `app/iq/screens/*.tsx` an
 
 ---
 
+## Backend-only data (complete, but not wired to any screen yet)
+
+`tickers/{ticker}` now has real, complete data for essentially the **entire US market** (~10,000+ tickers), not just the curated 241-ticker `TICKER_UNIVERSE` `companies` covers — but zero screens read this collection today (verified by grepping every `useCollection()` call in `app/iq/screens/*.tsx`). It has two independently-synced parts:
+- **Reference metadata** (name, exchange, type, active, cik) — weekly, `ticker-universe.job.ts`
+- **Price/%change/volume** (new) — daily, `market-quotes.job.ts`. Essentially free: reuses the same 2-call Polygon grouped-daily diff `market-movers.job.ts` already computes for the whole market and then discards outside its top/bottom 20 — see `backend/src/vendors/polygon/polygon-diff.util.ts`.
+
+Still missing at this full-market scale: fundamentals (P/E, sector, dividend yield, peers, beta) — that needs one FMP call per ticker, which doesn't scale here without a verified quota increase, so it stays limited to the curated 241.
+
+No screen currently benefits from this — wiring it in (e.g. expanding Screener's ticker picker, or a global search, beyond the curated 241 to the full market) is a separate, not-yet-done step.
+
+---
+
 ## Shell / Layout (all screens)
 
 | Element | Source | Status |

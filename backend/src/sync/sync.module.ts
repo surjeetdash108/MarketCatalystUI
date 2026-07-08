@@ -13,6 +13,7 @@ import { IposJob } from './ipos.job';
 import { MacroEventsJob } from './macro-events.job';
 import { MarketIndicesJob } from './market-indices.job';
 import { MarketMoversJob } from './market-movers.job';
+import { MarketQuotesJob } from './market-quotes.job';
 import { NewsJob } from './news.job';
 import { OptionsChainsJob } from './options-chains.job';
 import { Sec13FJob } from './sec-13f.job';
@@ -50,6 +51,7 @@ import { TickerUniverseJob } from './ticker-universe.job';
     OptionsChainsJob,
     DividendsJob,
     StockHistoryJob,
+    MarketQuotesJob,
   ],
 })
 export class SyncModule {}
