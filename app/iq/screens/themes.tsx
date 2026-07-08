@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cls, arr, sign } from "../utils";
+import { useCollection } from "../hooks/useCollection";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
 interface ThemeStock { s: string; n: string; price: number; c: number; }
@@ -106,12 +107,29 @@ const THEMES: Theme[] = [
   },
 ];
 
+interface CompanyDoc {
+  id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
+}
+
+/** Merges live Firestore company prices into the mock theme stocks — never drops a mock stock. */
+function mergeThemeStocks(mock: ThemeStock[], byTicker: Map<string, CompanyDoc>): (ThemeStock & { live: boolean })[] {
+  return mock.map(s => {
+    const c = byTicker.get(s.s);
+    if (!c || c.price == null) return { ...s, live: false };
+    return { s: s.s, n: c.name ?? s.n, price: c.price, c: c.pctChange ?? s.c, live: true };
+  });
+}
+
 export function ThemesScreen() {
+  const { data: companies } = useCollection<CompanyDoc>("companies");
+  const byTicker = new Map(companies.map(c => [c.ticker, c]));
+
   const [themeId, setThemeId] = useState<string>(THEMES[0].id);
   const [sel, setSel]         = useState<string | null>(THEMES[0].stocks[0]?.s ?? null);
 
   const theme  = THEMES.find(t => t.id === themeId) ?? THEMES[0];
-  const stocks = theme.stocks;
+  const stocks = mergeThemeStocks(theme.stocks, byTicker);
+  const liveCount = stocks.filter(s => s.live).length;
 
   const up      = stocks.filter(s => s.c > 0).length;
   const dn      = stocks.filter(s => s.c < 0).length;
@@ -138,6 +156,7 @@ export function ThemesScreen() {
             {stocks.length} stocks · avg <span className={avg >= 0 ? "up" : "down"}>{avgLabel}</span>
             {leader  && <> · Leader: <b>{leader.s}</b> <span className="up">{sign(leader.c)}</span></>}
             {laggard && laggard.s !== leader?.s && <> · Laggard: <b>{laggard.s}</b> <span className="down">{sign(laggard.c)}</span></>}
+            {liveCount > 0 && <> · <span style={{ color: "var(--up)" }}>{liveCount} live</span></>}
           </div>
         </div>
       </div>
@@ -181,6 +200,7 @@ export function ThemesScreen() {
               <span className="src-chip">Up {up}/{stocks.length}</span>
               <span className="src-chip">Avg {avgLabel}</span>
               {leader && <span className="src-chip">Leader {leader.s}</span>}
+              {liveCount > 0 && <span className="src-chip">{liveCount}/{stocks.length} live</span>}
             </div>
           </div>
         </div>

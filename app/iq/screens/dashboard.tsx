@@ -1,30 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { collection, doc, onSnapshot } from "firebase/firestore";
+import { firebaseAuth, firebaseDb } from "../../firebase";
 import { useIQActions, ExpandBtn } from "../shell";
-import { pulse, wmn, movers, earnings, folio, analyst, watch, sectorList, screenerStocks, Mover, SectorRow } from "../data";
+import { pulse as mockPulse, wmn, movers as mockMovers, earnings as mockEarnings, folio, analyst, watch, sectorList, screenerStocks, type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol } from "../utils";
+import { useCollection } from "../hooks/useCollection";
+import { mergePulse, type IndexDoc } from "../live-market-indices";
 
-const LIVE_FEED = [
-  {
-    cat: "Earnings", col: "var(--up)", time: "9:31a",
-    t: '<b style="color:var(--text-hi)">NVDA</b> beats EPS 18%, raises FY25',
-    why: "AI data-center demand still accelerating.",
-  },
-  {
-    cat: "Analyst", col: "var(--brand-2)", time: "9:18a",
-    t: 'MS upgrades <b style="color:var(--text-hi)">CRM</b> to Overweight, PT $340',
-    why: "Sell-side turning constructive on margins.",
-  },
-  {
-    cat: "Macro", col: "var(--warn)", time: "8:30a",
-    t: 'May core CPI <b style="color:var(--text-hi)">+0.2%</b> m/m, below est.',
-    why: "Lifts September rate-cut odds; yields fell.",
-  },
-];
-
-const INSIDER_MINI = [
+const INSIDER_MINI_MOCK = [
   { s: "NVDA", role: "CEO",        dir: "buy",  val: "4.8M" },
   { s: "MSFT", role: "CFO",        dir: "buy",  val: "2.2M" },
   { s: "META", role: "Director",   dir: "buy",  val: "880K" },
@@ -44,10 +30,6 @@ const MARKET_INTERNALS = [
   { k: "McClellan Osc",  v: "+38.5",  note: "breadth expanding",  up: true  },
   { k: "Put/Call Ratio", v: "0.82",   note: "neutral",             up: null  },
 ] as { k: string; v: string; note: string; up: boolean | null }[];
-
-const EARN_MOVERS = [...earnings]
-  .filter(e => e.priceReaction !== null)
-  .sort((a, b) => Math.abs(b.priceReaction!) - Math.abs(a.priceReaction!));
 
 const FG_HISTORY = [
   { date: "Jun 25", val: 62, label: "Greed"       },
@@ -113,14 +95,82 @@ function DpRow({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function DashPopContent({ sym, block }: { sym: string; block: PopBlock }) {
+// ---- live Firestore doc shapes ----
+interface LiveMoverDoc {
+  id: string; ticker: string; name: string | null; price: number; pctChange: number;
+  volume: number; sector: string | null; cap: string | null; direction: "gainer" | "loser"; asOfDate: string;
+}
+interface LiveEarningsDoc {
+  id: string; ticker: string; date: string; epsEstimate: number | null; epsActual: number | null;
+}
+interface CompanyDoc {
+  id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null; marketCap: number | null;
+}
+interface SectorApiDoc { id: string; sector: string; pctChange: number; }
+interface InsiderTxDoc {
+  id: string; ticker: string; ownerName: string | null; officerTitle: string | null;
+  acquiredOrDisposed: string; shares: number; pricePerShare: number | null; transactionDate: string;
+}
+interface AnalystConsensusDoc {
+  id: string; ticker: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; consensus: string;
+}
+interface HoldingDoc {
+  id: string; ticker: string; shares: number; positionSize: "Small" | "Medium" | "Large"; conviction: "High" | "Medium" | "Low";
+}
+
+
+function mergeMoversData(mock: Mover[], live: LiveMoverDoc[]): Mover[] {
+  const liveByTicker = new Map(live.map(l => [l.ticker, l]));
+  const merged = mock.map(m => {
+    const l = liveByTicker.get(m.ticker);
+    if (!l) return m;
+    liveByTicker.delete(m.ticker);
+    return { ...m, price: l.price, pctChange: l.pctChange, name: l.name ?? m.name, sector: l.sector ?? m.sector, cap: (l.cap as Mover["cap"]) ?? m.cap };
+  });
+  for (const l of liveByTicker.values()) {
+    merged.push({
+      ticker: l.ticker, name: l.name ?? l.ticker, price: l.price, pctChange: l.pctChange,
+      rvolRatio: 1, relativeStrength: 50, catalystLabel: "No known catalyst",
+      maPosture: l.pctChange >= 0 ? "Above 50/200" : "Below 50/200", owned: false,
+      sector: l.sector ?? "Unclassified", cap: (l.cap as Mover["cap"]) ?? "Mid", weekPct: l.pctChange,
+      techContext: `Live EOD data as of ${l.asOfDate}.`, newsContext: "Live market data.",
+    });
+  }
+  return merged;
+}
+
+function mergeEarningsData(mock: Earning[], live: LiveEarningsDoc[]): Earning[] {
+  const liveByTicker = new Map(live.map(l => [l.ticker, l]));
+  return mock.map(e => {
+    const l = liveByTicker.get(e.ticker);
+    if (!l) return e;
+    return { ...e, epsEstimate: l.epsEstimate ?? e.epsEstimate, epsActual: l.epsActual ?? e.epsActual };
+  });
+}
+
+function mergeSectorListData(base: SectorRow[], companies: CompanyDoc[], sectorsLive: SectorApiDoc[]): SectorRow[] {
+  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
+  const sectorPctByName = new Map(sectorsLive.map(s => [s.sector, s.pctChange]));
+  return base.map(row => {
+    const liveSectorPct = sectorPctByName.get(row.name);
+    const items: [string, number, number][] = row.items.map(([sym, mcap, chg]) => {
+      const c = companyByTicker.get(sym);
+      if (!c) return [sym, mcap, chg];
+      const liveMcap = c.marketCap != null ? c.marketCap / 1e9 : mcap;
+      return [sym, liveMcap, c.pctChange ?? chg];
+    });
+    return { ...row, pctChange: liveSectorPct ?? row.pctChange, items };
+  });
+}
+
+function DashPopContent({ sym, block, movers, earnings, watchlist, portfolio }: { sym: string; block: PopBlock; movers: Mover[]; earnings: Earning[]; watchlist: WatchItem[]; portfolio: FolioItem[] }) {
   const mv  = movers.find(x => x.ticker ===sym);
   const er  = earnings.find(x => x.ticker ===sym);
   const an  = analyst.find(x => x.ticker ===sym);
-  const w   = watch.find(x => x.ticker ===sym);
-  const pf  = folio.find(x => x.ticker ===sym);
+  const w   = watchlist.find(x => x.ticker ===sym);
+  const pf  = portfolio.find(x => x.ticker ===sym);
   const scr = screenerStocks.find(x => x.ticker ===sym);
-  const ins = INSIDER_MINI.find(x => x.s === sym);
+  const ins = INSIDER_MINI_MOCK.find(x => x.s === sym);
   const name = mv?.name ?? er?.name ?? an?.name ?? w?.name ?? scr?.name ?? sym;
 
   let body: React.ReactNode;
@@ -256,9 +306,76 @@ function analystDir(type: string) {
 export function DashboardScreen() {
   const { openStock, openMoverModal, openEarnings, openSector, openIndex } = useIQActions();
 
+  const { data: liveIndices } = useCollection<IndexDoc>("market_indices");
+  const { data: liveMovers } = useCollection<LiveMoverDoc>("market_movers");
+  const { data: liveEarnings } = useCollection<LiveEarningsDoc>("earnings_events");
+  const { data: companies } = useCollection<CompanyDoc>("companies");
+  const { data: sectorsLive } = useCollection<SectorApiDoc>("sectors");
+  const { data: liveInsiderTx } = useCollection<InsiderTxDoc>("insider_transactions");
+  const { data: consensusLive } = useCollection<AnalystConsensusDoc>("analyst_actions");
+
+  const pulse = mergePulse(mockPulse, liveIndices);
+  const movers = mergeMoversData(mockMovers, liveMovers);
+  const earnings = mergeEarningsData(mockEarnings, liveEarnings);
+  const mergedSectorList = mergeSectorListData(sectorList, companies, sectorsLive);
+  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
+  const consensusByTicker = new Map(consensusLive.map(c => [c.ticker, c]));
+
+  const liveInsiderMini = liveInsiderTx.slice(0, 5).map(x => ({
+    s: x.ticker,
+    role: x.officerTitle ?? x.ownerName ?? "Filer",
+    dir: (x.acquiredOrDisposed === "A" ? "buy" : "sell") as "buy" | "sell",
+    val: x.pricePerShare ? (x.shares * x.pricePerShare / 1e6).toFixed(2) + "M" : "0",
+    live: true,
+  }));
+  const INSIDER_MINI = liveInsiderMini.length > 0 ? [...liveInsiderMini, ...INSIDER_MINI_MOCK] : INSIDER_MINI_MOCK;
+
+  // Real watchlist/portfolio (signed-in user) — takes over from the demo
+  // mock arrays the moment either exists, exactly matching the pattern
+  // already used on the standalone Watchlist/Portfolio screens.
+  const uid = firebaseAuth.currentUser?.uid ?? null;
+  const [realWatchTickers, setRealWatchTickers] = useState<string[]>([]);
+  const [realHoldings, setRealHoldings] = useState<HoldingDoc[]>([]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const unsubWatch = onSnapshot(doc(firebaseDb, "users", uid, "watchlists", "default"), snap => {
+      setRealWatchTickers((snap.data()?.tickers as string[] | undefined) ?? []);
+    });
+    const unsubHoldings = onSnapshot(collection(firebaseDb, "users", uid, "portfolios", "default", "holdings"), snap => {
+      setRealHoldings(snap.docs.map(d => ({ id: d.id, ...d.data() }) as HoldingDoc));
+    });
+    return () => { unsubWatch(); unsubHoldings(); };
+  }, [uid]);
+
+  const isRealWatch = realWatchTickers.length > 0;
+  const watchMini: WatchItem[] = isRealWatch
+    ? realWatchTickers.map(t => {
+        const c = companyByTicker.get(t);
+        return {
+          ticker: t, name: c?.name ?? t, price: c?.price ?? 0, pctChange: c?.pctChange ?? 0,
+          nextEarningsDate: "—", lastAnalystAction: null, hasOptions: false, latestHeadline: "—",
+        };
+      })
+    : watch;
+
+  const isRealFolio = realHoldings.length > 0;
+  const folioMini: FolioItem[] = isRealFolio
+    ? realHoldings.map(h => {
+        const c = companyByTicker.get(h.ticker);
+        return {
+          ticker: h.ticker, name: c?.name ?? h.ticker, price: c?.price ?? 0, pctChange: c?.pctChange ?? 0,
+          gainLossPct: 0, positionSize: h.positionSize, conviction: h.conviction, eventNote: "—",
+        };
+      })
+    : folio;
+
   const leaders  = [...screenerStocks].sort((a, b) => b.relativeStrength - a.relativeStrength).slice(0, 3);
   const laggards = [...screenerStocks].sort((a, b) => a.relativeStrength - b.relativeStrength).slice(0, 3);
 
+  const EARN_MOVERS = [...earnings]
+    .filter(e => e.priceReaction !== null)
+    .sort((a, b) => Math.abs(b.priceReaction!) - Math.abs(a.priceReaction!));
 
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [moversTab, setMoversTab] = useState<0 | 1 | 2>(0);
@@ -452,14 +569,14 @@ export function DashboardScreen() {
             {(() => {
               // Top 16 stocks by market cap across all sectors (deduplicated)
               const seen = new Set<string>();
-              const top16 = sectorList
+              const top16 = mergedSectorList
                 .flatMap(sd => sd.items.map(([sym, mcap, chg]) => ({ sym, mcap, chg, sd })))
                 .sort((a, b) => b.mcap - a.mcap)
                 .filter(s => { if (seen.has(s.sym)) return false; seen.add(s.sym); return true; })
                 .slice(0, 16);
 
               // Group back by sector, preserving sector order
-              const groups = sectorList
+              const groups = mergedSectorList
                 .map(sd => ({ sd, stocks: top16.filter(s => s.sd === sd) }))
                 .filter(g => g.stocks.length > 0);
 
@@ -532,7 +649,14 @@ export function DashboardScreen() {
                   {...mr(a.ticker, "analyst")}
                 >
                   <StockLogo sym={a.ticker} size={26} />
-                  <span className="tkr">{a.ticker}</span>
+                  <span className="tkr">
+                    {a.ticker}
+                    {consensusByTicker.has(a.ticker) && (
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginLeft: 4, fontSize: ".58rem" }}>
+                        live: {consensusByTicker.get(a.ticker)!.consensus}
+                      </span>
+                    )}
+                  </span>
                   <span className="mid">{a.firm} → <b style={{ color: "var(--text-hi)" }}>{a.newRating}</b></span>
                   <span className="r">{analystDir(a.actionType)}</span>
                 </div>
@@ -584,11 +708,22 @@ export function DashboardScreen() {
               <button className="link" onClick={() => setDrawer("portfolio")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                <span className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>$128,430</span>
-                <span className="mono up" style={{ fontWeight: 600 }}>▲ +1.42%</span>
-              </div>
-              {folio.slice(0, 4).map(f => {
+              {isRealFolio ? (() => {
+                const totalVal = realHoldings.reduce((s, h) => s + h.shares * (companyByTicker.get(h.ticker)?.price ?? 0), 0);
+                const dayPL = realHoldings.reduce((s, h) => s + h.shares * (companyByTicker.get(h.ticker)?.price ?? 0) * (companyByTicker.get(h.ticker)?.pctChange ?? 0) / 100, 0);
+                return (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                    <span className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>${totalVal >= 1000 ? (totalVal / 1000).toFixed(1) + "K" : totalVal.toFixed(2)}</span>
+                    <span className={`mono ${cls(dayPL)}`} style={{ fontWeight: 600 }}>{arr(dayPL)} {dayPL >= 0 ? "+" : ""}${Math.abs(dayPL).toFixed(2)}</span>
+                  </div>
+                );
+              })() : (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                  <span className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>$128,430</span>
+                  <span className="mono up" style={{ fontWeight: 600 }}>▲ +1.42%</span>
+                </div>
+              )}
+              {folioMini.slice(0, 4).map(f => {
                 const dayC = movers.find(m => m.ticker === f.ticker)?.pctChange ?? f.pctChange;
                 return (
                   <div key={f.ticker} className="minirow" style={{ cursor: "pointer" }}
@@ -614,7 +749,7 @@ export function DashboardScreen() {
               <button className="link" onClick={() => setDrawer("watchlist")}>View all →</button>
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
-              {watch.slice(0, 5).map(w => (
+              {watchMini.slice(0, 5).map(w => (
                 <div key={w.ticker} className="minirow" style={{ cursor: "pointer" }}
                   onClick={() => openStock(w.ticker)}
                   {...mr(w.ticker, "watchlist")}
@@ -622,7 +757,9 @@ export function DashboardScreen() {
                   <StockLogo sym={w.ticker} size={26} />
                   <span className="tkr">{w.ticker}</span>
                   <span className="mid">
-                    {w.hasOptions ? <span className="pill opt">⚡</span> : null}{w.hasOptions ? " " : ""}ER {w.nextEarningsDate}
+                    {isRealWatch
+                      ? (companyByTicker.get(w.ticker) ? "live" : "not synced")
+                      : <>{w.hasOptions ? <span className="pill opt">⚡</span> : null}{w.hasOptions ? " " : ""}ER {w.nextEarningsDate}</>}
                   </span>
                   <span className={`r ${cls(w.pctChange)}`}>{sign(w.pctChange)}</span>
                 </div>
@@ -664,28 +801,7 @@ export function DashboardScreen() {
               <Link className="link" href="/menu/commentary">Commentary →</Link>
             </div>
             <div className="card-b" style={{ paddingTop: 2 }}>
-              {LIVE_FEED.map((f, i) => (
-                <div key={i} style={{
-                  display: "flex", gap: 10, padding: "9px 0",
-                  borderBottom: i < LIVE_FEED.length - 1 ? "1px solid var(--border-soft)" : undefined,
-                }}>
-                  <div style={{ flexShrink: 0, width: 62 }}>
-                    <span className="pill" style={{ background: "var(--surface-3)", color: f.col }}>{f.cat}</span>
-                    <div style={{ fontFamily: "var(--f-mono)", fontSize: ".6rem", color: "var(--text-dim-solid)", marginTop: 5 }}>
-                      {f.time}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: ".8rem", color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: f.t }} />
-                    <div style={{
-                      fontSize: ".72rem", color: "var(--text-dim-solid)",
-                      borderLeft: `2px solid ${f.col}55`, paddingLeft: 8, marginTop: 4,
-                    }}>
-                      <b style={{ color: "var(--ai)", fontWeight: 600 }}>Why · </b>{f.why}
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <LiveFeedList />
             </div>
           </div>
         </div>
@@ -734,15 +850,21 @@ export function DashboardScreen() {
             </div>
             <div className="card-b">
               <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                <span className="big">14.18</span>
-                <span className="mono down" style={{ fontWeight: 600 }}>▼ -2.51%</span>
+                <span className="big">{liveIndices.find(i => i.id === "VIX")?.value.toFixed(2) ?? "14.18"}</span>
+                <span className="mono down" style={{ fontWeight: 600 }}>
+                  {liveIndices.find(i => i.id === "VIX") ? sign(liveIndices.find(i => i.id === "VIX")!.pctChange) : "▼ -2.51%"}
+                </span>
               </div>
               <div className="pctl" style={{ marginTop: 12 }}><i style={{ width: "22%" }} /></div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
                 <span>12-mo pct: 22nd</span>
                 <span>Trend: falling</span>
               </div>
-              <div className="note">VIX at 14 is low — a calm, risk-on tape.</div>
+              <div className="note">
+                {liveIndices.find(i => i.id === "VIX")
+                  ? `Shown via ${liveIndices.find(i => i.id === "VIX")!.proxyTicker} (ETF proxy) — ${liveIndices.find(i => i.id === "VIX")!.note}`
+                  : "VIX at 14 is low — a calm, risk-on tape."}
+              </div>
             </div>
           </div>
         </div>
@@ -842,7 +964,14 @@ export function DashboardScreen() {
                 <div key={i} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
                   onClick={() => { openStock(a.ticker); setDrawer(null); }}>
                   <StockLogo sym={a.ticker} size={22} />
-                  <span className="tkr">{a.ticker}<small>{a.name}</small></span>
+                  <span className="tkr">
+                    {a.ticker}<small>{a.name}</small>
+                    {consensusByTicker.has(a.ticker) && (
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginLeft: 4, fontSize: ".58rem" }}>
+                        live: {consensusByTicker.get(a.ticker)!.consensus}
+                      </span>
+                    )}
+                  </span>
                   <span className="mid" style={{ fontSize: ".74rem" }}>{a.firm} <b style={{ color: "var(--text-hi)" }}>{a.previousRating} &rarr; {a.newRating}</b></span>
                   <span className="r">{analystDir(a.actionType)}</span>
                 </div>
@@ -899,18 +1028,20 @@ export function DashboardScreen() {
               )}
 
               {/* Watchlist */}
-              {drawer === "watchlist" && watch.map(w => (
+              {drawer === "watchlist" && watchMini.map(w => (
                 <div key={w.ticker} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
                   onClick={() => { openStock(w.ticker); setDrawer(null); }}>
                   <StockLogo sym={w.ticker} size={22} />
                   <span className="tkr">{w.ticker}<small>{w.name}</small></span>
-                  <span className="mid">ER {w.nextEarningsDate}{w.hasOptions ? <span className="pill opt" style={{ marginLeft: 4 }}>&#x26A1;</span> : null}</span>
+                  <span className="mid">
+                    {isRealWatch ? (companyByTicker.get(w.ticker) ? "live" : "not synced") : <>ER {w.nextEarningsDate}{w.hasOptions ? <span className="pill opt" style={{ marginLeft: 4 }}>&#x26A1;</span> : null}</>}
+                  </span>
                   <span className={`r ${cls(w.pctChange)}`}>{sign(w.pctChange)}</span>
                 </div>
               ))}
 
               {/* Portfolio */}
-              {drawer === "portfolio" && folio.map(f => {
+              {drawer === "portfolio" && folioMini.map(f => {
                 const dayC = movers.find(m => m.ticker === f.ticker)?.pctChange ?? f.pctChange;
                 return (
                   <div key={f.ticker} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
@@ -1093,9 +1224,86 @@ export function DashboardScreen() {
             else openStock(pop.sym);
           }}
         >
-          <DashPopContent sym={pop.sym} block={pop.block} />
+          <DashPopContent sym={pop.sym} block={pop.block} movers={movers} earnings={earnings} watchlist={watchMini} portfolio={folioMini} />
         </div>
       )}
     </div>
   );
+}
+
+/** Live Market Feed — real synced news, falling back to the original mock items if none are synced yet. */
+function LiveFeedList() {
+  interface NewsDoc { id: string; ticker: string; headline: string; category: string; publishedAt: string; source: string; }
+  const { data: news } = useCollection<NewsDoc>("news");
+  const recent = [...news].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()).slice(0, 5);
+
+  const MOCK_LIVE_FEED = [
+    {
+      cat: "Earnings", col: "var(--up)", time: "9:31a",
+      t: '<b style="color:var(--text-hi)">NVDA</b> beats EPS 18%, raises FY25',
+      why: "AI data-center demand still accelerating.",
+    },
+    {
+      cat: "Analyst", col: "var(--brand-2)", time: "9:18a",
+      t: 'MS upgrades <b style="color:var(--text-hi)">CRM</b> to Overweight, PT $340',
+      why: "Sell-side turning constructive on margins.",
+    },
+    {
+      cat: "Macro", col: "var(--warn)", time: "8:30a",
+      t: 'May core CPI <b style="color:var(--text-hi)">+0.2%</b> m/m, below est.',
+      why: "Lifts September rate-cut odds; yields fell.",
+    },
+  ];
+
+  if (recent.length === 0) {
+    return <>
+      {MOCK_LIVE_FEED.map((f, i) => (
+        <div key={i} style={{
+          display: "flex", gap: 10, padding: "9px 0",
+          borderBottom: i < MOCK_LIVE_FEED.length - 1 ? "1px solid var(--border-soft)" : undefined,
+        }}>
+          <div style={{ flexShrink: 0, width: 62 }}>
+            <span className="pill" style={{ background: "var(--surface-3)", color: f.col }}>{f.cat}</span>
+            <div style={{ fontFamily: "var(--f-mono)", fontSize: ".6rem", color: "var(--text-dim-solid)", marginTop: 5 }}>
+              {f.time}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: ".8rem", color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: f.t }} />
+            <div style={{
+              fontSize: ".72rem", color: "var(--text-dim-solid)",
+              borderLeft: `2px solid ${f.col}55`, paddingLeft: 8, marginTop: 4,
+            }}>
+              <b style={{ color: "var(--ai)", fontWeight: 600 }}>Why · </b>{f.why}
+            </div>
+          </div>
+        </div>
+      ))}
+    </>;
+  }
+
+  return <>
+    {recent.map((f, i) => (
+      <div key={f.id} style={{
+        display: "flex", gap: 10, padding: "9px 0",
+        borderBottom: i < recent.length - 1 ? "1px solid var(--border-soft)" : undefined,
+      }}>
+        <div style={{ flexShrink: 0, width: 62 }}>
+          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{f.category}</span>
+          <div style={{ fontFamily: "var(--f-mono)", fontSize: ".6rem", color: "var(--text-dim-solid)", marginTop: 5 }}>
+            {new Date(f.publishedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: ".8rem", color: "var(--text)" }}><b style={{ color: "var(--text-hi)" }}>{f.ticker}</b> · {f.headline}</div>
+          <div style={{
+            fontSize: ".72rem", color: "var(--text-dim-solid)",
+            borderLeft: "2px solid var(--brand-2)55", paddingLeft: 8, marginTop: 4,
+          }}>
+            {f.source}
+          </div>
+        </div>
+      </div>
+    ))}
+  </>;
 }

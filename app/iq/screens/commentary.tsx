@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { commentary, watch, folio, movers, analyst, screenerStocks, stockInfo, sectorByName } from "../data";
 import { sign, fmt, hashStr, earnHistory, StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
@@ -47,6 +48,71 @@ function catCol(c: string): string {
   if (c === "Earnings") return "var(--warn)";
   if (c === "Technical") return "var(--up)";
   return "var(--text-dim-solid)";
+}
+
+/* ── Live news doc shape + helpers ── */
+interface NewsDoc {
+  id: string;
+  ticker: string;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  category: string;
+  publishedAt: string; // ISO
+}
+
+type CommentaryItem = { cat: string; accent: string; time: string; text: string; why: string; live?: boolean };
+
+function etHour(iso: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour: "numeric", minute: "numeric", hour12: false,
+  }).formatToParts(new Date(iso));
+  const h = Number(parts.find(p => p.type === "hour")?.value ?? 12);
+  const m = Number(parts.find(p => p.type === "minute")?.value ?? 0);
+  return h + m / 60;
+}
+
+function etTimeLabel(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true,
+  }).formatToParts(new Date(iso));
+  const hour = parts.find(p => p.type === "hour")?.value ?? "12";
+  const minute = parts.find(p => p.type === "minute")?.value ?? "00";
+  const dayPeriod = (parts.find(p => p.type === "dayPeriod")?.value ?? "AM").toLowerCase()[0];
+  return `${hour}:${minute}${dayPeriod}`;
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+
+function liveCatAccent(c: string): string {
+  if (c === "earnings") return "var(--warn)";
+  if (c === "merger") return "var(--ai)";
+  if (c === "company") return "var(--brand-2)";
+  return "var(--text-dim-solid)";
+}
+function liveCatLabel(c: string): string {
+  if (c === "earnings") return "Earnings";
+  if (c === "merger") return "M&A";
+  if (c === "company") return "Company";
+  return "Macro";
+}
+
+function liveToCommentaryItem(n: NewsDoc): CommentaryItem {
+  return {
+    cat: liveCatLabel(n.category),
+    accent: liveCatAccent(n.category),
+    time: etTimeLabel(n.publishedAt),
+    text: `<b>${n.ticker}</b> ${n.headline}`,
+    why: n.summary || `via ${n.source}`,
+    live: true,
+  };
 }
 
 /* ── Build the news-history items for a ticker ── */
@@ -130,7 +196,7 @@ function buildNewsHistory(sym: string): NewsItem[] {
 
 /* ── Feed item component ── */
 function FeedItem({ item, i, total, onItemClick }: {
-  item: typeof commentary[0];
+  item: CommentaryItem;
   i: number;
   total: number;
   onItemClick: (ticker: string | null) => void;
@@ -161,6 +227,7 @@ function FeedItem({ item, i, total, onItemClick }: {
         )}
         <span className="pill" style={{ background: "var(--surface-3)", color: item.accent, marginTop: 1 }}>{item.cat}</span>
         <div className="mono" style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{item.time}</div>
+        {item.live && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".58rem" }}>live</span>}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: ".88rem", color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: item.text }} />
@@ -179,12 +246,13 @@ function FeedItem({ item, i, total, onItemClick }: {
 }
 
 /* ── News Drawer ── */
-function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
+function NewsDrawer({ sym, allNews, onClose }: { sym: string; allNews: NewsDoc[]; onClose: () => void }) {
   const { openStockFull } = useIQActions();
   const info = stockInfo[sym];
   const ss   = screenerStocks.find(x => x.ticker === sym);
   const nm   = info?.name ?? ss?.name ?? sym;
   const items = buildNewsHistory(sym);
+  const liveItems = allNews.filter(n => n.ticker === sym).sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 
   return (
     <>
@@ -204,6 +272,30 @@ function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
         </div>
 
         <div className="drawer-b">
+          {liveItems.length > 0 && (
+            <>
+              <div className="ai-sec"><div className="h">{sym} · live synced headlines</div></div>
+              {liveItems.map(item => (
+                <a key={item.id} href={item.url} target="_blank" rel="noreferrer"
+                  className="minirow" style={{ alignItems: "flex-start", gap: 10, cursor: "pointer", marginBottom: 12, textDecoration: "none" }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ lineHeight: 1.5 }}>
+                      <span className="pill" style={{ background: "var(--surface-3)", color: liveCatAccent(item.category), marginRight: 6, fontSize: ".66rem" }}>
+                        {liveCatLabel(item.category)}
+                      </span>
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginRight: 6, fontSize: ".58rem" }}>live</span>
+                      <span style={{ fontSize: ".84rem", color: "var(--text)" }}>{item.headline}</span>
+                    </div>
+                    <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 3 }}>
+                      {item.source} · {timeAgo(item.publishedAt)}
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </>
+          )}
+
           <div className="ai-sec"><div className="h">{sym} · recent headlines</div></div>
 
           {items.map((item, i) => (
@@ -228,7 +320,7 @@ function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
             Open full stock page →
           </button>
           <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8, textAlign: "center" }}>
-            Aggregated, illustrative news history · not investment advice.
+            Aggregated news history · illustrative context plus live synced headlines where available · not investment advice.
           </div>
         </div>
       </div>
@@ -239,6 +331,7 @@ function NewsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
 /* ── Main commentary screen ── */
 export function CommentaryScreen() {
   const router = useRouter();
+  const { data: liveNews } = useCollection<NewsDoc>("news");
   const [activeTab,     setActiveTab]     = useState(0);
   const [search,        setSearch]        = useState("");
   const [newsDrawer,    setNewsDrawer]    = useState<string | null>(null);
@@ -251,6 +344,15 @@ export function CommentaryScreen() {
     ...folio.map(f => f.ticker),
   ]);
 
+  const liveConverted: CommentaryItem[] = [...liveNews]
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+    .map(liveToCommentaryItem);
+
+  const livePremarket  = liveNews.filter(n => etHour(n.publishedAt) < 9.5).map(liveToCommentaryItem);
+  const liveAfterHours = liveNews.filter(n => etHour(n.publishedAt) >= 16).map(liveToCommentaryItem);
+  const liveMacro       = liveNews.filter(n => n.category !== "company").map(liveToCommentaryItem);
+  const liveMyFeed       = liveNews.filter(n => mySymbols.has(n.ticker)).map(liveToCommentaryItem);
+
   const myFeed = commentary.filter(item =>
     [...mySymbols].some(sym => item.text.includes(`>${sym}<`) || item.text.includes(`<b>${sym}</b>`))
   );
@@ -259,12 +361,18 @@ export function CommentaryScreen() {
     ["Macro", "Fed/Rates"].includes(item.cat)
   );
 
-  const tabFeed = (() => {
-    if (activeTab === 0) return commentary;
-    if (activeTab === 1) return PREMARKET;
-    if (activeTab === 2) return AFTERHOURS;
-    if (activeTab === 3) return myFeed.length > 0 ? myFeed : commentary;
-    if (activeTab === 4) return macroFeed.length > 0 ? macroFeed : commentary;
+  const tabFeed: CommentaryItem[] = (() => {
+    if (activeTab === 0) return [...liveConverted, ...commentary];
+    if (activeTab === 1) return [...livePremarket, ...PREMARKET];
+    if (activeTab === 2) return [...liveAfterHours, ...AFTERHOURS];
+    if (activeTab === 3) {
+      const combined = [...liveMyFeed, ...myFeed];
+      return combined.length > 0 ? combined : commentary;
+    }
+    if (activeTab === 4) {
+      const combined = [...liveMacro, ...macroFeed];
+      return combined.length > 0 ? combined : commentary;
+    }
     return commentary;
   })();
 
@@ -517,7 +625,7 @@ export function CommentaryScreen() {
 
       {/* News history sliding drawer */}
       {newsDrawer && (
-        <NewsDrawer sym={newsDrawer} onClose={() => setNewsDrawer(null)} />
+        <NewsDrawer sym={newsDrawer} allNews={liveNews} onClose={() => setNewsDrawer(null)} />
       )}
     </>
   );

@@ -2,6 +2,20 @@
 
 Project Plan \| v1.1 \| June 2026
 
+> **⚠ Implementation status (2026-07-05):** This plan describes the original
+> proposed stack — AWS ECS, Redis, ClickHouse, BullMQ, Fastify, Stripe
+> billing. What was actually built is simpler: a single NestJS backend
+> (`backend/`) syncing Polygon/FMP/Finnhub/SEC EDGAR directly into
+> Firestore on cron schedules, with no Redis/ClickHouse/BullMQ/Stripe/
+> Fastify/ECS anywhere in the stack. No subscription billing exists yet;
+> Firestore's tier-gating rules are relaxed to "any authenticated user"
+> pending that decision. For what's actually implemented, see
+> `Doc/openapi.yaml` (the real API contract, with per-endpoint
+> `x-status: live|planned`), `Doc/schema.sql` (relational schema if
+> migrating off Firestore), and `backend/src/sync/` (the real jobs). The
+> phases/timelines below are kept for historical/roadmap context, not as a
+> description of current reality.
+
 1\. Executive Summary
 
 This document is the master project plan for building a subscription-based active investor intelligence platform that consolidates Briefing.com, Earnings Hub, and MarketSurge into a single product with AI-powered insights. The platform targets active retail investors, swing traders, and portfolio investors who need live market intelligence, earnings research, analyst actions, 13F tracking, and peer/group context in one workflow.

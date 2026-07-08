@@ -2,6 +2,29 @@
 
 import { useState, useRef } from "react";
 import { StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
+
+interface MacroEventDoc {
+  id: string;
+  name: string;
+  seriesId: string;
+  unit: string;
+  importance: "high" | "medium" | "low";
+  eventDate: string;
+  actual: number | null;
+  previous: number | null;
+  source: string;
+}
+
+interface DividendDoc {
+  id: string;
+  ticker: string;
+  exDividendDate: string;
+  paymentDate: string | null;
+  dividendAmount: number;
+  yieldPct: number | null;
+  frequency: string | null;
+}
 
 // ── Economic calendar ────────────────────────────────────────────────────────
 const ECO_TABS = ["Last month", "Last week", "This week", "Next week", "This month"];
@@ -342,7 +365,26 @@ function divMonthCal(year: number, month1: number) {
 }
 
 // ── Main screen ──────────────────────────────────────────────────────────────
+const IMPORTANCE_RANK: Record<MacroEventDoc["importance"], number> = { high: 0, medium: 1, low: 2 };
+
+function formatMacroValue(value: number | null, unit: string): string {
+  if (value == null) return "—";
+  if (unit === "%") return `${value.toFixed(2)}%`;
+  if (unit === "index") return value.toFixed(1);
+  if (unit === "thousands") return `${Math.round(value).toLocaleString()}K`;
+  if (unit === "$ millions") return `$${Math.round(value).toLocaleString()}M`;
+  if (unit === "$ billions") return `$${Math.round(value).toLocaleString()}B`;
+  if (unit === "claims") return Math.round(value).toLocaleString();
+  return value.toString();
+}
+
 export function MacroScreen() {
+  const { data: macroLive } = useCollection<MacroEventDoc>("macro_events");
+  const macroLiveSorted = [...macroLive].sort((a, b) => IMPORTANCE_RANK[a.importance] - IMPORTANCE_RANK[b.importance]);
+
+  const { data: liveDividends } = useCollection<DividendDoc>("dividends");
+  const liveDividendsSorted = [...liveDividends].sort((a, b) => a.exDividendDate.localeCompare(b.exDividendDate));
+
   const [ecoTab,    setEcoTab]    = useState(2);
   const [divTab,    setDivTab]    = useState<DivTabKey>("week");
   const [monthOff,  setMonthOff]  = useState(0);
@@ -631,6 +673,83 @@ export function MacroScreen() {
           </div>
         </div>
       </div>
+
+      {/* ── Live economic indicators (FRED) — additive, doesn't touch the illustrative calendar above ── */}
+      {macroLiveSorted.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div className="card">
+            <div className="card-h">
+              <h3>Live Economic Indicators</h3>
+              <span className="pill ai" style={{ fontSize: ".68rem" }}>live · FRED</span>
+            </div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Indicator</th><th>Impact</th>
+                    <th className="num">Latest</th><th className="num">Prior</th><th>As of</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {macroLiveSorted.map(m => (
+                    <tr key={m.id}>
+                      <td><b style={{ color: "var(--text-hi)" }}>{m.name}</b></td>
+                      <td>
+                        <span className={`pill ${m.importance === "high" ? "dn" : m.importance === "medium" ? "amc" : ""}`}
+                          style={m.importance === "low" ? { background: "var(--surface-3)", color: "var(--text-dim-solid)" } : undefined}>
+                          {m.importance === "high" ? "High" : m.importance === "medium" ? "Med" : "Low"}
+                        </span>
+                      </td>
+                      <td className="num"><b>{formatMacroValue(m.actual, m.unit)}</b></td>
+                      <td className="num">{formatMacroValue(m.previous, m.unit)}</td>
+                      <td style={{ fontSize: ".76rem", color: "var(--text-dim-solid)" }}>{m.eventDate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Live dividend calendar (FMP) — additive, doesn't touch the illustrative dividend calendar above ── */}
+      {liveDividendsSorted.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div className="card">
+            <div className="card-h">
+              <h3>Live Dividend Calendar</h3>
+              <span className="pill ai" style={{ fontSize: ".68rem" }}>live · FMP</span>
+            </div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>Ticker</th><th>Ex-div date</th><th>Pay date</th>
+                    <th className="num">Amount</th><th className="num">Yield</th><th>Frequency</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {liveDividendsSorted.slice(0, 30).map(d => (
+                    <tr key={d.id}>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                          <StockLogo sym={d.ticker} size={20} />
+                          <b style={{ color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>{d.ticker}</b>
+                        </div>
+                      </td>
+                      <td>{d.exDividendDate}</td>
+                      <td>{d.paymentDate ?? "—"}</td>
+                      <td className="num">${d.dividendAmount.toFixed(2)}</td>
+                      <td className="num">{d.yieldPct != null ? <span className="up">{d.yieldPct.toFixed(2)}%</span> : "—"}</td>
+                      <td>{d.frequency ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* ── VIX Sensitive Stocks ── */}

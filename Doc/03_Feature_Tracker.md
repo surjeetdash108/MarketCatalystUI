@@ -1,6 +1,16 @@
 # StockWise — Feature Tracker
 v1.3 | June 2026
 
+> **⚠ Implementation status (2026-07-05):** The frontend UI completion
+> notes below are accurate. However, "real-time WebSocket data" / backend
+> integration notes scattered throughout (Dashboard F-01, Movers, Analyst
+> Actions, etc.) describe a Redis/WebSocket architecture that was never
+> built — real data instead flows from `backend/src/sync/*.job.ts` cron
+> jobs into Firestore, read directly by the frontend via `useCollection()`.
+> See `Doc/screen-data-sources.md` for an accurate, currently-maintained
+> per-screen live/static breakdown, and `Doc/openapi.yaml` for the real
+> data contract.
+
 **Status values:** Not Started | In Progress | In Review | Complete  
 **Tier:** Free+ | Pro+ | Premium | All
 

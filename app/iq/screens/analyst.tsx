@@ -4,8 +4,20 @@ import { useState } from "react";
 import { useIQActions } from "../shell";
 import { analyst } from "../data";
 import { sign, cls, StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
 
 const TABS = ["All", "Upgrades", "Downgrades", "Initiations", "PT changes"];
+
+// Live source is FMP's grades-consensus snapshot: a current Buy/Hold/Sell vote
+// count per ticker, not a per-firm upgrade/downgrade event feed (that needs
+// Benzinga, blocked on a missing key). So this is additive — a real "what does
+// the Street think right now" card — not a replacement for the mock event table,
+// which depicts individual firm actions no live source can reconstruct yet.
+interface ConsensusDoc {
+  id: string; ticker: string;
+  strongBuy: number; buy: number; hold: number; sell: number; strongSell: number;
+  consensus: string;
+}
 
 function dirPill(dir: string) {
   if (dir === "up")   return <span className="pill up">▲ Upgrade</span>;
@@ -36,10 +48,15 @@ function computeClusters() {
 
 export function AnalystScreen() {
   const { openStock } = useIQActions();
+  const { data: liveConsensus } = useCollection<ConsensusDoc>("analyst_actions");
   const [tab, setTab]               = useState(0);
   const [clustersOnly, setClustersOnly] = useState(false);
 
   const { byS, clusters, upgrades } = computeClusters();
+  const consensusByTicker = new Map(liveConsensus.map(c => [c.ticker, c]));
+  const liveRows = [...liveConsensus].sort((a, b) =>
+    (b.strongBuy + b.buy) - (a.strongBuy + a.buy)
+  ).slice(0, 8);
 
   const filtered = analyst.filter(a => {
     if (clustersOnly && (byS[a.ticker]?.actionsLast30Days ?? 0) < 5) return false;
@@ -108,6 +125,37 @@ export function AnalystScreen() {
         </div>
       </div>
 
+      {/* ── Live analyst consensus (FMP grades-consensus, real) ── */}
+      {liveRows.length > 0 && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="card-h">
+            <h3>Live analyst consensus</h3>
+            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)" }}>live · FMP</span>
+          </div>
+          <div className="card-b" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
+            {liveRows.map(c => {
+              const total = c.strongBuy + c.buy + c.hold + c.sell + c.strongSell || 1;
+              return (
+                <div key={c.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(c.ticker)}>
+                  <StockLogo sym={c.ticker} size={20} />
+                  <span className="tkr">{c.ticker}</span>
+                  <span className="mid" style={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
+                    <span style={{ width: `${c.strongBuy / total * 100}%`, minWidth: c.strongBuy ? 3 : 0, height: 6, background: "var(--up)", borderRadius: 2 }} />
+                    <span style={{ width: `${c.buy / total * 100}%`, minWidth: c.buy ? 3 : 0, height: 6, background: "var(--up)", opacity: .6, borderRadius: 2 }} />
+                    <span style={{ width: `${c.hold / total * 100}%`, minWidth: c.hold ? 3 : 0, height: 6, background: "var(--text-dim-solid)", opacity: .5, borderRadius: 2 }} />
+                    <span style={{ width: `${c.sell / total * 100}%`, minWidth: c.sell ? 3 : 0, height: 6, background: "var(--down)", opacity: .6, borderRadius: 2 }} />
+                    <span style={{ width: `${c.strongSell / total * 100}%`, minWidth: c.strongSell ? 3 : 0, height: 6, background: "var(--down)", borderRadius: 2 }} />
+                  </span>
+                  <span className="r" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                    {c.strongBuy + c.buy}B / {c.hold}H / {c.sell + c.strongSell}S
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── AI take · CRM cluster — full width, between signal cards and filter bar ── */}
       <div className="ai-block" style={{ marginBottom: 14 }}>
         <div className="card-h">
@@ -167,6 +215,11 @@ export function AnalystScreen() {
                             {clusterBadge && (
                               <span className="pill" style={{ background: "rgba(245,170,60,.18)", color: "var(--warn)", marginLeft: 4, fontSize: ".62rem" }}>
                                 {byS[a.ticker].actionsLast30Days}+ /30d
+                              </span>
+                            )}
+                            {consensusByTicker.has(a.ticker) && (
+                              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginLeft: 4, fontSize: ".62rem" }}>
+                                live consensus: {consensusByTicker.get(a.ticker)!.consensus}
                               </span>
                             )}
                           </span>

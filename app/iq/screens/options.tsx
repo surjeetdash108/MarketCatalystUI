@@ -3,6 +3,23 @@
 import { useState, useMemo } from "react";
 import { movers } from "../data";
 import { fmt, sign, cls, arr, StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
+
+interface LiveOptionContract {
+  contractTicker: string;
+  contractType: "call" | "put";
+  strike: number;
+  expirationDate: string;
+  lastClose: number | null;
+  lastVolume: number | null;
+  lastBarDate: string | null;
+}
+interface OptionsChainDoc {
+  id: string;
+  underlyingTicker: string;
+  contracts: LiveOptionContract[];
+  note: string;
+}
 
 const EXTRA_STOCKS = [
   { s: "AAPL",  n: "Apple",          p:  189.98, c:  1.02 },
@@ -105,6 +122,8 @@ export function OptionsScreen() {
   const [selSym, setSelSym] = useState(stockList[0]?.s ?? "NVDA");
   const [expIdx, setExpIdx] = useState(0);
   const [query,  setQuery]  = useState("");
+  const { data: liveChains } = useCollection<OptionsChainDoc>("options_chains");
+  const liveChain = liveChains.find(c => c.underlyingTicker === selSym);
 
   const cur     = stockList.find(s => s.s === selSym) ?? stockList[0];
   const rows    = useMemo(() => buildChain(cur.s, cur.p, expIdx), [cur.s, cur.p, expIdx]);
@@ -228,6 +247,43 @@ export function OptionsScreen() {
           <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 10 }}>
             Simulated data for informational purposes only — not investment advice. OI &amp; volume are illustrative.
           </div>
+
+          {/* ── Live options reference (Polygon) — additive, doesn't touch the simulated chain above ── */}
+          {liveChain && liveChain.contracts.length > 0 && (
+            <div className="card" style={{ marginTop: 14 }}>
+              <div className="card-h">
+                <h3>Live Options Reference · {cur.s}</h3>
+                <span className="pill ai" style={{ fontSize: ".68rem" }}>live · Polygon (delayed)</span>
+              </div>
+              <div style={{ padding: "0 14px 6px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                {liveChain.note}
+              </div>
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Type</th><th className="num">Strike</th><th>Expiration</th>
+                      <th className="num">Last close</th><th className="num">Volume</th><th>As of</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...liveChain.contracts]
+                      .sort((a, b) => a.expirationDate.localeCompare(b.expirationDate) || a.strike - b.strike)
+                      .map(c => (
+                        <tr key={c.contractTicker}>
+                          <td className={c.contractType === "call" ? "up" : "down"}>{c.contractType}</td>
+                          <td className="num">{c.strike}</td>
+                          <td>{c.expirationDate}</td>
+                          <td className="num">{c.lastClose != null ? `$${c.lastClose.toFixed(2)}` : "—"}</td>
+                          <td className="num">{c.lastVolume ?? "—"}</td>
+                          <td style={{ fontSize: ".76rem", color: "var(--text-dim-solid)" }}>{c.lastBarDate ?? "—"}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

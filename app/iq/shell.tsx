@@ -17,8 +17,10 @@ import { firebaseAuth, firebaseDb } from "../firebase";
 import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
-import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail } from "./data";
+import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail, type PulseItem } from "./data";
 import { fmt, sign, cls, arr, SemiGauge } from "./utils";
+import { useCollection } from "./hooks/useCollection";
+import { mergePulse, type IndexDoc } from "./live-market-indices";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -519,8 +521,8 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
 }
 
 // ---- Index drawer (openIndex) ----
-function IndexDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
-  const x = pulse[idx];
+function IndexDrawer({ idx, pulse: livePulse, onClose }: { idx: number; pulse: PulseItem[]; onClose: () => void }) {
+  const x = livePulse[idx];
   if (!x) return null;
   const dec = x.value > 1000 ? 0 : 2;
   const dollar = x.value - x.prevClose;
@@ -746,15 +748,18 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
 // Stock tickers that can be starred/added to watchlist from search
 const SEARCHABLE_STOCKS = ["NVDA","AAPL","MSFT","TSLA","META","AMZN","GOOGL","AMD","AVGO","SMCI","COIN","UBER","PLTR","JPM","V"];
 
-// Ticker bar items — static, doubled for infinite scroll
-const tickerItems = [...pulse, ...pulse];
-
 // ---- Main IQ Shell ----
 export function IQShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
+
+  // Same live merge Dashboard's Market Pulse widget uses — keeps the top
+  // ticker strip and the index drawer it opens in sync with each other.
+  const { data: liveIndices } = useCollection<IndexDoc>("market_indices");
+  const livePulse = mergePulse(pulse, liveIndices);
+  const tickerItems = [...livePulse, ...livePulse];
 
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark";
@@ -1143,7 +1148,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <FundDrawer idx={drawer.idx} onClose={() => setDrawer(null)} />
           )}
           {drawer?.type === "index" && (
-            <IndexDrawer idx={drawer.idx} onClose={() => setDrawer(null)} />
+            <IndexDrawer idx={drawer.idx} pulse={livePulse} onClose={() => setDrawer(null)} />
           )}
           {drawer?.type === "feargreed" && (
             <FearGreedDrawer onClose={() => setDrawer(null)} />

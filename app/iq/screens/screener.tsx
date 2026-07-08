@@ -1,8 +1,31 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { screenerStocks, screenerPresets, watch as watchData, movers as moversData } from "../data";
+import { screenerStocks, screenerPresets, watch as watchData, movers as moversData, type ScreenerStock } from "../data";
+import { useCollection } from "../hooks/useCollection";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
+
+interface CompanyDoc {
+  id: string; ticker: string; marketCap: number | null; peRatio: number | null; price: number | null; pctChange: number | null;
+}
+
+// Live companies data covers marketCap/peRatio/price — genuinely wireable.
+// relativeStrength/salesGrowth/epsGrowth/grossMargin/rvolRatio/techRating are
+// proprietary technical-analysis scores no connected vendor supplies (would
+// need a computed-from-price-history backend, which doesn't exist yet), so
+// those filters/columns stay illustrative and are marked as such.
+function mergeScreenerStocks(mock: ScreenerStock[], byTicker: Map<string, CompanyDoc>): (ScreenerStock & { live: boolean })[] {
+  return mock.map(s => {
+    const c = byTicker.get(s.ticker);
+    if (!c) return { ...s, live: false };
+    return {
+      ...s,
+      marketCap: c.marketCap != null ? c.marketCap / 1e9 : s.marketCap,
+      peRatio: c.peRatio ?? s.peRatio,
+      live: c.marketCap != null || c.peRatio != null,
+    };
+  });
+}
 
 function CheckOpt({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
   return (
@@ -21,6 +44,11 @@ function CheckOpt({ label, on, onToggle }: { label: string; on: boolean; onToggl
 }
 
 export function ScreenerScreen() {
+  const { data: companies } = useCollection<CompanyDoc>("companies");
+  const byTicker = new Map(companies.map(c => [c.ticker, c]));
+  const universe = mergeScreenerStocks(screenerStocks, byTicker);
+  const liveCount = universe.filter(s => s.live).length;
+
   /* ── Preset multi-select ── */
   const [activePresets, setActivePresets] = useState<Set<number>>(new Set());
 
@@ -69,7 +97,7 @@ export function ScreenerScreen() {
   }
 
   /* ── Filtered results ── */
-  const filtered = screenerStocks.filter(s => {
+  const filtered = universe.filter(s => {
     // Preset filters — stock must pass at least one selected preset (OR logic)
     if (activePresets.size > 0) {
       const passesAny = [...activePresets].some(idx => {
@@ -114,6 +142,7 @@ export function ScreenerScreen() {
       <div className="page-head">
         <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
           {filtered.length} match{filtered.length !== 1 ? "es" : ""}
+          {liveCount > 0 && <> · <span style={{ color: "var(--up)" }}>{liveCount} live cap/PE</span></>}
         </span>
         <button className="btn primary">
           <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>

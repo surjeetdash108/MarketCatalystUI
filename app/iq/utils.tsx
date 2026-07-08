@@ -261,7 +261,7 @@ export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
 }
 
 // ---- Candlestick chart (matches HTML genOHLC + candleChart) ----
-type OHLCBar = { o: number; h: number; l: number; c: number; v: number };
+export type OHLCBar = { o: number; h: number; l: number; c: number; v: number };
 
 function _seed(n: number) {
   let s = n;
@@ -323,16 +323,21 @@ function genOHLC(sym: string, tf: string, px: number): OHLCBar[] {
 }
 
 export function CandleChart({
-  sym, tf, px, maStep = 0, emaStep = 0, showVol = true, chartType = "candles",
+  sym, tf, px, maStep = 0, emaStep = 0, showVol = true, chartType = "candles", realBars,
 }: {
   sym: string; tf: string; px: number;
   maStep?: number; emaStep?: number;
   showVol?: boolean; chartType?: string;
+  /** Real OHLCV bars for this ticker/timeframe, oldest-first — falls back to the simulated generator when omitted or too short to plot. */
+  realBars?: OHLCBar[];
 }) {
   const [tip, setTip] = useState<{ html: string; left: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const data = useMemo(() => genOHLC(sym, tf, px), [sym, tf, px]);
+  const data = useMemo(
+    () => (realBars && realBars.length > 1 ? realBars : genOHLC(sym, tf, px)),
+    [sym, tf, px, realBars],
+  );
   const n = data.length;
   const W = 720, PH = 224, VH = showVol ? 54 : 0, GAP = showVol ? 10 : 0, PADT = 12, PADB = 18, axisW = 46;
   const H = PADT + PH + GAP + VH + PADB;

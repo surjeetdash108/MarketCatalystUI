@@ -3,6 +3,24 @@
 import { useState } from "react";
 import { useIQActions } from "../shell";
 import { cls, sign, StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
+
+interface IpoEventDoc {
+  id: string;
+  date: string;
+  symbol: string | null;
+  name: string;
+  exchange: string | null;
+  priceLow: number | null;
+  priceHigh: number | null;
+  status: "expected" | "priced" | "filed" | "withdrawn";
+}
+
+function formatIpoPrice(low: number | null, high: number | null): string {
+  if (low == null && high == null) return "—";
+  if (low != null && high != null && low !== high) return `$${low.toFixed(2)}–$${high.toFixed(2)}`;
+  return `$${(low ?? high)!.toFixed(2)}`;
+}
 
 const RECENT_IPOS = [
   { s: "RDDT", n: "Reddit",        date: "Mar 21 '24", offer: 34,   cur: 52.40,  day1: 48,  sec: "Internet"  },
@@ -30,6 +48,8 @@ const SECTOR_OPTIONS = [
 export function IPOsScreen() {
   const { openStock } = useIQActions();
   const [sector, setSector] = useState("All");
+  const { data: liveIpos } = useCollection<IpoEventDoc>("ipos");
+  const liveIposSorted = [...liveIpos].sort((a, b) => b.date.localeCompare(a.date));
 
   const filtered = RECENT_IPOS.filter(r => sector === "All" || r.sec === sector);
 
@@ -179,6 +199,53 @@ export function IPOsScreen() {
           </table>
         </div>
       </div>
+
+      {/* ── Live IPO calendar (Finnhub) — additive, doesn't touch the tables above ── */}
+      {liveIposSorted.length > 0 && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="card-h">
+            <h3>Live IPO Calendar</h3>
+            <span className="pill ai" style={{ fontSize: ".68rem" }}>live · Finnhub</span>
+          </div>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Symbol</th>
+                  <th>Date</th>
+                  <th>Exchange</th>
+                  <th className="num">Price</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveIposSorted.slice(0, 25).map(e => (
+                  <tr key={e.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {e.symbol && <StockLogo sym={e.symbol} size={22} />}
+                        <b style={{ color: "var(--text-hi)" }}>{e.name}</b>
+                      </div>
+                    </td>
+                    <td style={{ fontFamily: "var(--f-mono)", fontWeight: 700, color: "var(--text-hi)" }}>
+                      {e.symbol || "—"}
+                    </td>
+                    <td>{e.date}</td>
+                    <td>{e.exchange || "—"}</td>
+                    <td className="num">{formatIpoPrice(e.priceLow, e.priceHigh)}</td>
+                    <td>
+                      <span className={`pill ${e.status === "priced" ? "up" : e.status === "withdrawn" ? "down" : "amc"}`}>
+                        {e.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <p style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 10 }}>
         Returns measured from IPO offer price. Source (production): SEC EDGAR + Polygon.io. Informational only — not investment advice.

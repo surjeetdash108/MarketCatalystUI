@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { movers, analyst, earnings, watch, folio } from "../data";
+import { movers as mockMovers, analyst, earnings, watch, folio, type Mover } from "../data";
 import { fmt, sign, cls, arr, Spark, StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
 
 const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   () => import("./stock").then(m => ({ default: m.StockScreen })),
@@ -19,7 +20,61 @@ const TABS = [
 type TabKey = "win" | "lose" | "vol" | "week";
 const CAPS = ["All", "Mega", "Large", "Mid", "Small"];
 
-function computeTrending() {
+interface LiveMoverDoc {
+  id: string; ticker: string; name: string | null; price: number; pctChange: number;
+  volume: number; sector: string | null; cap: string | null; direction: "gainer" | "loser"; asOfDate: string;
+}
+
+/**
+ * Merges live Firestore market_movers data into the original mock list —
+ * never removes a mock row. Matching tickers get real price/%change/sector/
+ * cap; live-only tickers (not in the original mock set) are appended with
+ * neutral placeholders for fields that have no real data source yet (RVOL,
+ * catalyst, weekly change, technical/news context).
+ */
+function mergeMovers(mock: Mover[], live: LiveMoverDoc[]): { list: Mover[]; liveCount: number } {
+  const liveByTicker = new Map(live.map(l => [l.ticker, l]));
+  let liveCount = 0;
+
+  const merged = mock.map(m => {
+    const l = liveByTicker.get(m.ticker);
+    if (!l) return m;
+    liveByTicker.delete(m.ticker);
+    liveCount++;
+    return {
+      ...m,
+      price: l.price,
+      pctChange: l.pctChange,
+      name: l.name ?? m.name,
+      sector: l.sector ?? m.sector,
+      cap: (l.cap as Mover["cap"]) ?? m.cap,
+    };
+  });
+
+  for (const l of liveByTicker.values()) {
+    liveCount++;
+    merged.push({
+      ticker: l.ticker,
+      name: l.name ?? l.ticker,
+      price: l.price,
+      pctChange: l.pctChange,
+      rvolRatio: 1,
+      relativeStrength: 50,
+      catalystLabel: "No known catalyst",
+      maPosture: l.pctChange >= 0 ? "Above 50/200" : "Below 50/200",
+      owned: false,
+      sector: l.sector ?? "Unclassified",
+      cap: (l.cap as Mover["cap"]) ?? "Mid",
+      weekPct: l.pctChange,
+      techContext: `Live EOD data as of ${l.asOfDate}. RVOL/technical context not available for this synced name yet.`,
+      newsContext: "Live market data — catalyst not yet available from a connected news source.",
+    });
+  }
+
+  return { list: merged, liveCount };
+}
+
+function computeTrending(movers: Mover[]) {
   const srcs: Record<string, Set<string>> = {};
   const add = (s: string, src: string) => {
     if (!srcs[s]) srcs[s] = new Set();
@@ -37,6 +92,9 @@ function computeTrending() {
 }
 
 export function MoversScreen() {
+  const { data: liveMovers } = useCollection<LiveMoverDoc>("market_movers");
+  const { list: movers, liveCount } = mergeMovers(mockMovers, liveMovers);
+
   const [tab,          setTab]          = useState<TabKey>("win");
   const [sector,       setSector]       = useState("All");
   const [cap,          setCap]          = useState("All");
@@ -64,8 +122,8 @@ export function MoversScreen() {
   filtered.forEach(m => { tally[m.sector] = (tally[m.sector] || 0) + 1; });
   const sectorTally = Object.entries(tally).sort((a, b) => b[1] - a[1]);
 
-  const trending = computeTrending();
-  const val = (m: typeof movers[0]) => tab === "week" ? m.weekPct : m.pctChange;
+  const trending = computeTrending(movers);
+  const val = (m: Mover) => tab === "week" ? m.weekPct : m.pctChange;
 
   return (
     <>
@@ -75,6 +133,11 @@ export function MoversScreen() {
             <button key={k} className={`tab${k === tab ? " on" : ""}`} onClick={() => setTab(k as TabKey)}>{l}</button>
           ))}
         </div>
+        {liveCount > 0 && (
+          <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+            {liveCount} names backed by live EOD data
+          </span>
+        )}
       </div>
 
       {/* Trending across reports */}

@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { folio as folioData } from "../data";
+import { useEffect, useState } from "react";
+import { doc, onSnapshot, setDoc, deleteDoc, collection, Timestamp } from "firebase/firestore";
+import { firebaseDb, firebaseAuth } from "../../firebase";
+import { folio as folioData, type FolioItem } from "../data";
+import { useCollection } from "../hooks/useCollection";
 import { cls, arr, sign } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
@@ -10,12 +13,34 @@ const DEFAULT_SHARES: Record<string, number> = {
   HD: 15, MSFT: 60, AMZN: 80, PLTR: 1000,
 };
 
+interface CompanyDoc {
+  id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
+}
+interface HoldingDoc {
+  id: string; // ticker
+  ticker: string;
+  shares: number;
+  positionSize: "Small" | "Medium" | "Large";
+  conviction: "High" | "Medium" | "Low";
+}
+
+function portfolioRef(uid: string) {
+  return doc(firebaseDb, "users", uid, "portfolios", "default");
+}
+function holdingsCol(uid: string) {
+  return collection(firebaseDb, "users", uid, "portfolios", "default", "holdings");
+}
+
 function usd(v: number) {
   return v >= 1000 ? `$${(v / 1000).toFixed(1)}K` : `$${v.toFixed(2)}`;
 }
 
 export function PortfolioScreen() {
-  const [holdings, setHoldings] = useState(() => [...folioData]);
+  const uid = firebaseAuth.currentUser?.uid ?? null;
+  const { data: companies } = useCollection<CompanyDoc>("companies");
+  const byTicker = new Map(companies.map(c => [c.ticker, c]));
+
+  const [holdings, setHoldings] = useState<FolioItem[]>(() => [...folioData]);
   const [pfSel, setPfSel]       = useState(folioData[0]?.ticker ?? "");
   const [shares, setShares]     = useState<Record<string, number>>(() => {
     const base = { ...DEFAULT_SHARES };
@@ -31,30 +56,66 @@ export function PortfolioScreen() {
   const [newSize, setNewSize]       = useState<"Small"|"Medium"|"Large">("Small");
   const [newConv, setNewConv]       = useState<"High"|"Medium"|"Low">("Medium");
 
-  const sel      = holdings.find(h => h.ticker === pfSel);
-  const totalVal = holdings.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price, 0);
-  const dayPL    = holdings.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price * h.pctChange / 100, 0);
-  const green    = holdings.filter(h => h.pctChange > 0).length;
-  const driver   = [...holdings].sort((a, b) => (shares[b.ticker] ?? 10) * b.price - (shares[a.ticker] ?? 10) * a.price)[0];
-  const leader   = [...holdings].sort((a, b) => b.pctChange - a.pctChange)[0];
-  const laggard  = [...holdings].sort((a, b) => a.pctChange - b.pctChange)[0];
+  // Firestore persistence layered on top of the demo portfolio: once signed in,
+  // saved holdings (if any) take over; an empty/missing subcollection keeps the demo names.
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = onSnapshot(holdingsCol(uid), (snap) => {
+      if (snap.empty) return;
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }) as HoldingDoc);
+      const nextShares: Record<string, number> = {};
+      const nextHoldings: FolioItem[] = rows.map(r => {
+        nextShares[r.ticker] = r.shares;
+        const mock = folioData.find(f => f.ticker === r.ticker);
+        return mock ?? {
+          ticker: r.ticker, name: r.ticker, price: 100, pctChange: 0, gainLossPct: 0,
+          positionSize: r.positionSize, conviction: r.conviction, eventNote: "—",
+        };
+      });
+      setHoldings(nextHoldings);
+      setShares(nextShares);
+      setPfSel(prev => prev || nextHoldings[0]?.ticker || "");
+    });
+    return () => unsub();
+  }, [uid]);
+
+  // Live price/% overlay — merged on top of the mock/demo holdings, never dropping a row.
+  const merged = holdings.map(h => {
+    const live = byTicker.get(h.ticker);
+    if (!live || live.price == null) return { ...h, live: false as const };
+    return { ...h, price: live.price, pctChange: live.pctChange ?? h.pctChange, live: true as const };
+  });
+  const liveCount = merged.filter(h => h.live).length;
+
+  const sel      = merged.find(h => h.ticker === pfSel);
+  const totalVal = merged.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price, 0);
+  const dayPL    = merged.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price * h.pctChange / 100, 0);
+  const green    = merged.filter(h => h.pctChange > 0).length;
+  const driver   = [...merged].sort((a, b) => (shares[b.ticker] ?? 10) * b.price - (shares[a.ticker] ?? 10) * a.price)[0];
+  const leader   = [...merged].sort((a, b) => b.pctChange - a.pctChange)[0];
+  const laggard  = [...merged].sort((a, b) => a.pctChange - b.pctChange)[0];
   const driverWt = driver && totalVal > 0
     ? ((shares[driver.ticker] ?? 10) * driver.price / totalVal * 100).toFixed(0) : "0";
 
-  function addHolding() {
+  async function addHolding() {
     if (!newSym.trim()) return;
     const s = newSym.trim().toUpperCase();
     if (holdings.find(h => h.ticker === s)) { setAddOpen(false); return; }
     setHoldings(prev => [...prev, { ticker: s, name: s, price: 100, pctChange: 0, gainLossPct: 0, positionSize: newSize, conviction: newConv, eventNote: "—" }]);
     setShares(prev => ({ ...prev, [s]: 10 }));
     setNewSym(""); setAddOpen(false);
+    if (uid) {
+      await setDoc(portfolioRef(uid), { name: "My Portfolio", createdAt: Timestamp.now() }, { merge: true });
+      await setDoc(doc(holdingsCol(uid), s), { ticker: s, shares: 10, positionSize: newSize, conviction: newConv, addedAt: Timestamp.now() });
+    }
   }
 
-  function removeHolding(sym: string) {
+  async function removeHolding(sym: string) {
     const next = holdings.find(h => h.ticker !== sym);
     setHoldings(prev => prev.filter(h => h.ticker !== sym));
     if (pfSel === sym) setPfSel(next?.ticker ?? "");
     setConfirmDel(null);
+    if (uid) await deleteDoc(doc(holdingsCol(uid), sym));
   }
 
   function startImport() {
@@ -69,10 +130,11 @@ export function PortfolioScreen() {
       <div className="page-head">
         <div>
           <div className="page-sub">
-            {holdings.length} holdings · {usd(totalVal)} ·{" "}
+            {merged.length} holdings · {usd(totalVal)} ·{" "}
             <span className={cls(dayPL)}>
               {dayPL >= 0 ? "+" : ""}{usd(Math.abs(dayPL))} today
             </span>
+            {liveCount > 0 && <> · <span style={{ color: "var(--up)" }}>{liveCount} live</span></>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -120,7 +182,7 @@ export function PortfolioScreen() {
               <li>
                 <span className="bullet" />
                 <span>
-                  <b>Net:</b> {green} of {holdings.length} green; day P/L{" "}
+                  <b>Net:</b> {green} of {merged.length} green; day P/L{" "}
                   <b className={cls(dayPL)}>{dayPL >= 0 ? "+" : ""}{usd(Math.abs(dayPL))}</b>.
                 </span>
               </li>
@@ -143,13 +205,13 @@ export function PortfolioScreen() {
               headerRight={
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
                   <span style={{ fontFamily: "var(--f-mono)", fontSize: ".8rem", fontWeight: 700, color: "var(--text-hi)" }}>{usd(totalVal)}</span>
-                  <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{holdings.length} names</span>
+                  <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{merged.length} names</span>
                 </div>
               }
-              isEmpty={holdings.length === 0}
+              isEmpty={merged.length === 0}
               emptyMessage='No holdings — click "Add holding".'
             >
-              {holdings.map((f, i) => (
+              {merged.map((f, i) => (
                 <StockRow
                   key={f.ticker}
                   sym={f.ticker}

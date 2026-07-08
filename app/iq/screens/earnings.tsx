@@ -4,6 +4,18 @@ import { useState } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
 import { earnings, stockInfo, type Earning } from "../data";
 import { fmt, cls, sign, earnHistory, EarnQ, StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
+
+// Live source (FMP earnings calendar) has ticker/date/epsEstimate/epsActual —
+// no session (BMO/AMC), guidance, price reaction, or implied move, which the
+// mock EARN_CAL/CALLS_DATA supply. So EPS numbers are overlaid live when a
+// synced doc exists for the ticker; everything else (session, guidance,
+// call summaries/transcripts) stays the illustrative mock, clearly unmarked
+// as such since no vendor (Benzinga real-time, Claude) is wired for it yet.
+interface LiveEarningsDoc {
+  id: string; ticker: string; date: string;
+  epsEstimate: number | null; epsActual: number | null;
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -701,6 +713,7 @@ const COMPANY_BIO: Record<string, string> = {
 
 export function EarningsScreen() {
   const { openStockFull } = useIQActions();
+  const { data: liveEarnings } = useCollection<LiveEarningsDoc>("earnings_events");
   const [tab, setTab] = useState<TabKey>("week");
   const [sel, setSel]           = useState<string>(() => earnsForTab("week")[0]?.s ?? "GOOG");
   const [monthOff, setMonthOff] = useState(0);
@@ -902,8 +915,15 @@ export function EarningsScreen() {
 
   // ── Detail section ────────────────────────────────────────────────────────
 
-  const selEarning: Earning = earnings.find(e => e.ticker === sel)
+  const baseEarning: Earning = earnings.find(e => e.ticker === sel)
     ?? (() => { const cal = EARN_CAL.find(e => e.s === sel); return cal ? calToEarning(cal) : calToEarning(EARN_CAL[0]); })();
+
+  const liveMatches = liveEarnings.filter(e => e.ticker === sel).sort((a, b) => b.date.localeCompare(a.date));
+  const liveMatch = liveMatches[0];
+  const isLiveEarning = !!liveMatch && (liveMatch.epsEstimate != null || liveMatch.epsActual != null);
+  const selEarning: Earning = isLiveEarning
+    ? { ...baseEarning, epsEstimate: liveMatch.epsEstimate ?? baseEarning.epsEstimate, epsActual: liveMatch.epsActual ?? baseEarning.epsActual }
+    : baseEarning;
 
   const _si   = stockInfo[sel];
   const _base = Math.max(0.05, ((_si?.price ?? 100) / (_si?.peRatio ?? 25)) / 4);
@@ -960,6 +980,9 @@ export function EarningsScreen() {
               <span className={`pill ${selEarning.session.includes("pre") || selEarning.session.includes("Before") ? "bmo" : "amc"}`} style={{ marginLeft: 4 }}>
                 {selEarning.session}
               </span>
+              {isLiveEarning && (
+                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)" }}>live EPS · FMP</span>
+              )}
               {/* Action buttons — inline, same row */}
               <div style={{ display: "flex", gap: 6, marginLeft: 4 }}>
               <button

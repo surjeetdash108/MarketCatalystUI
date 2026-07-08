@@ -2,6 +2,22 @@
 
 v1.1 | June 2026
 
+> **⚠ Implementation status (2026-07-05):** The tier-gating design below
+> (Stripe custom claims, Free/Pro/Premium collection-level blocks, Fastify
+> API middleware field-stripping, ECS workers) was never implemented — no
+> subscription/billing system exists yet. The real `firestore.rules` (same
+> folder) relaxes every originally tier-gated collection to
+> `allow read: if isAuthenticated()`, with an explicit
+> `// TODO(tier-gating)` comment marking where to restore this design once
+> Stripe/subscriptions actually exist. All market-data writes are still
+> server-only via the NestJS backend's Admin SDK
+> (`backend/src/common/firebase-admin.provider.ts`), matching Principle 2
+> below — that part is accurate. §3 (`stock_comments`) is accurate and
+> implemented as described. The collection list is also incomplete — see
+> the real `firestore.rules` for `tickers`, `market_movers_history`,
+> `sectors_history`, and `market_indices_history`, none of which existed
+> when this doc was written.
+
 The deployable rules file is `firestore.rules` in this folder. Deploy with:
 
 ```bash

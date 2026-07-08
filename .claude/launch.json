@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:dev"],
+      "cwd": "backend",
+      "port": 4100
+    },
+    {
+      "name": "backendUI",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-l", "4200", "."],
+      "cwd": "backendUI",
+      "port": 4200
+    }
+  ]
+}

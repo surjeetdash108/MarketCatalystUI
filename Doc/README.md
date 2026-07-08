@@ -2,6 +2,14 @@
 
 A subscription-based active-investor research platform that consolidates earnings, analyst actions, market movers, screening, insider/institutional flows, macro, and portfolio tools into a single dark-themed terminal. Built with Next.js 16 App Router (static export), Firebase Auth + Firestore, and Redux Toolkit.
 
+15 of 18 screens now read at least some live data, additively merged onto the original mock UI (nothing was deleted to make room for it) — see `Doc/screen-data-sources.md` for the accurate, per-screen breakdown of what's real vs. still illustrative, and why. Options Chain's main bid/ask/IV/greeks/OI table stays simulated (Polygon's options snapshot is confirmed 403 on the current plan; would need an upgrade or a Tradier key), and Recaps remains fully static (blocked on `ANTHROPIC_API_KEY` + a new job).
+
+---
+
+## Backend (`backend/`)
+
+A separate NestJS service, not part of this Next.js app, syncs vendor data (Polygon, FMP, Finnhub, FRED, SEC EDGAR) into Firestore on cron schedules — this app reads the results via the Firestore client SDK, same as any other collection, and never calls a vendor directly or holds a vendor key. See `backend/README.md` for how to run it, `Doc/openapi.yaml` for the full documented data contract, and `Doc/schema.sql` for the equivalent relational schema if this ever migrates off Firestore.
+
 ---
 
 ## Project Structure
@@ -112,6 +120,8 @@ Runs on Next.js 16.2.9 with `output: 'export'`. All 24 routes are pre-rendered a
 | State | Redux Toolkit |
 | Styling | CSS custom properties (no Tailwind) |
 | Hosting | Firebase Hosting |
-| Data (planned) | Polygon.io, FMP, Benzinga, Unusual Whales, SEC EDGAR |
-| AI (planned) | Claude API (claude-sonnet-4-6) |
-| Payments (planned) | Stripe |
+| Backend | Separate NestJS service (`backend/`) — see its own README |
+| Data — live | Polygon.io, FMP, Finnhub, FRED, SEC EDGAR (via `backend/`, synced to Firestore) |
+| Data — blocked (no key / plan restriction) | Benzinga, Tradier, Unusual Whales |
+| AI (planned) | Claude API — needs `ANTHROPIC_API_KEY`, not yet obtained |
+| Payments (planned) | Stripe — not yet implemented; Firestore tier-gating is currently relaxed to any authenticated user |

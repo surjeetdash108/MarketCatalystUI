@@ -74,16 +74,33 @@ service cloud.firestore {
       allow write: if false;  // Admin SDK only
     }
 
+    // Full US ticker universe (name/exchange/type/active/cik only — no
+    // fundamentals; see companies/{ticker} for that) — all authenticated users
+    match /tickers/{ticker} {
+      allow read:  if isAuthenticated();
+      allow write: if false;  // Admin SDK only
+    }
+
+    // Historical daily OHLCV bars — append-only, one immutable doc per
+    // (ticker, date). Feeds Stock Detail's chart; a future RS-Rating
+    // computation depends on this accumulating history first.
+    match /ohlcv_bars/{barId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
     // Earnings calendar + actuals — all authenticated users
     match /earnings_events/{eventId} {
       allow read:  if isAuthenticated();
       allow write: if false;
     }
 
-    // AI-generated earnings summaries — Pro and Premium only
-    // (Free users see a teaser in the UI via API middleware, not raw Firestore)
+    // AI-generated earnings summaries
+    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions
+    // are wired up. Relaxed to all authenticated users during the backend
+    // migration since no code sets the `tier` custom claim yet.
     match /earnings_summaries/{summaryId} {
-      allow read:  if isAuthenticated() && isProOrPremium();
+      allow read:  if isAuthenticated();
       allow write: if false;
     }
 
@@ -112,44 +129,109 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Options flow (unusual activity) — Pro and Premium only
+    // Append-only history of market_movers — one immutable doc per
+    // (date, direction, ticker), never overwritten by a later sync.
+    match /market_movers_history/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Options flow (unusual activity)
+    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions exist.
     match /options_flow/{flowId} {
-      allow read:  if isAuthenticated() && isProOrPremium();
+      allow read:  if isAuthenticated();
       allow write: if false;
     }
 
-    // Block trades — Pro and Premium only
+    // Block trades
+    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions exist.
     match /block_trades/{tradeId} {
-      allow read:  if isAuthenticated() && isProOrPremium();
+      allow read:  if isAuthenticated();
       allow write: if false;
     }
 
-    // 13F fund holdings — Pro and Premium only
+    // 13F fund holdings
     // Covers fund document, filings sub-collection, and positions sub-sub-collection
+    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions exist.
     match /fund_holdings/{cik} {
-      allow read:  if isAuthenticated() && isProOrPremium();
+      allow read:  if isAuthenticated();
       allow write: if false;
 
       match /filings/{filingId} {
-        allow read:  if isAuthenticated() && isProOrPremium();
+        allow read:  if isAuthenticated();
         allow write: if false;
 
         match /positions/{ticker} {
-          allow read:  if isAuthenticated() && isProOrPremium();
+          allow read:  if isAuthenticated();
           allow write: if false;
         }
       }
     }
 
-    // Story stocks — Premium only
+    // Story stocks
+    // TODO(tier-gating): restore `isPremium()` once Stripe/subscriptions exist.
     match /story_stocks/{storyId} {
-      allow read:  if isAuthenticated() && isPremium();
+      allow read:  if isAuthenticated();
       allow write: if false;
     }
 
-    // EOD and weekly recaps — Pro and Premium only
+    // EOD and weekly recaps
+    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions exist.
     match /recaps/{recapId} {
-      allow read:  if isAuthenticated() && isProOrPremium();
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Live market indices (S&P 500, Nasdaq, VIX, yields, commodities, DXY, etc.)
+    match /market_indices/{symbol} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Append-only history of market_indices — one immutable doc per
+    // (date, symbol), never overwritten by a later sync.
+    match /market_indices_history/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Sector heatmap / theme performance
+    match /sectors/{sectorId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Append-only history of sectors — one immutable doc per (date, sector),
+    // never overwritten by a later sync.
+    match /sectors_history/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // IPO calendar (recent + pipeline)
+    match /ipos/{ipoId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Dividend calendar
+    match /dividends/{ticker} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Form 4 insider transactions (individual buy/sell rows)
+    match /insider_transactions/{id} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Options chain reference data — real strikes/expirations + delayed
+    // last close/volume per contract (Polygon). Bid/ask, IV, greeks, and
+    // open interest are NOT here — confirmed 403 on the current Polygon
+    // plan; options.tsx's main chain table stays simulated for those.
+    match /options_chains/{ticker} {
+      allow read:  if isAuthenticated();
       allow write: if false;
     }
 

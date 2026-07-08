@@ -6,6 +6,18 @@ import { stockInfo, watch, movers as moversData, folio, earnings as earningsData
 import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, earnHistory, EarnQ, EarningsGrowthChart } from "../utils";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
+import { useCollection } from "../hooks/useCollection";
+import { useOhlcvBars } from "../hooks/useOhlcvBars";
+
+interface CompanyDoc {
+  id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
+  marketCap: number | null; peRatio: number | null; dividendYield: number | null; beta: number | null;
+  sector: string | null;
+}
+
+function fmtMarketCapB(billions: number): string {
+  return billions >= 1000 ? `$${(billions / 1000).toFixed(2)}T` : billions >= 10 ? `$${Math.round(billions)}B` : `$${billions.toFixed(1)}B`;
+}
 
 interface StockNote {
   id: string;
@@ -316,6 +328,7 @@ function StockChartExpanded({
   const [showVol, setShowVol] = useState(initialShowVol);
   const [showRsi, setShowRsi] = useState(initialShowRsi);
   const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
+  const realBars = useOhlcvBars(sym, tf);
   const isUp = px > 0;
   return (
     <div>
@@ -338,7 +351,7 @@ function StockChartExpanded({
         <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
         <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
       </div>
-      <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} />
+      <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars} />
       {showRsi && (
         <div style={{ marginTop: 4 }}>
           <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
@@ -370,6 +383,7 @@ function StockChartExpanded({
 
 export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean } = {}) {
   const { openStock, openSector } = useIQActions();
+  const { data: companies } = useCollection<CompanyDoc>("companies");
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
     if (typeof window !== "undefined") return localStorage.getItem("iq-stock") || "NVDA";
@@ -390,6 +404,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [maStep, setMaStep] = useState(0);
   const [emaStep, setEmaStep] = useState(0);
+  const realBars = useOhlcvBars(sym, tfActive);
 
   // ── Notes (Firebase stock_comments) ──────────────────────────────────────
   const [notes, setNotes]       = useState<StockNote[]>([]);
@@ -466,7 +481,21 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     news: [],
     insiderActivity: [],
   };
-  const data = info ?? fallbackData;
+  const liveCompany = companies.find(c => c.ticker === sym);
+  const isLiveStock = !!liveCompany && liveCompany.price != null;
+  const data: StockInfo = isLiveStock
+    ? {
+        ...(info ?? fallbackData),
+        name: liveCompany.name ?? (info ?? fallbackData).name,
+        price: liveCompany.price ?? (info ?? fallbackData).price,
+        pctChange: liveCompany.pctChange ?? (info ?? fallbackData).pctChange,
+        marketCap: liveCompany.marketCap != null ? fmtMarketCapB(liveCompany.marketCap / 1e9) : (info ?? fallbackData).marketCap,
+        peRatio: liveCompany.peRatio ?? (info ?? fallbackData).peRatio,
+        dividendYield: liveCompany.dividendYield ?? (info ?? fallbackData).dividendYield,
+        beta: liveCompany.beta ?? (info ?? fallbackData).beta,
+        sector: liveCompany.sector ?? (info ?? fallbackData).sector,
+      }
+    : (info ?? fallbackData);
   const isUp = data.pctChange >= 0;
   const p = data.price;
 
@@ -630,7 +659,14 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             </div>
             <div className="sd-name">
               <h1>{sym}</h1>
-              <div className="sub">{data.name} · {ex} · {group}</div>
+              <div className="sub">
+                {data.name} · {ex} · {group}
+                {isLiveStock && (
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginLeft: 6, fontSize: ".62rem" }}>
+                    live quote · FMP
+                  </span>
+                )}
+              </div>
             </div>
             <div className="sd-px">
               <div className="p">${fmt(p, 2)}</div>
@@ -676,6 +712,11 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
               <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
               <div style={{ flex: 1 }} />
+              {realBars && (
+                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem", marginRight: 6 }}>
+                  live · Polygon
+                </span>
+              )}
               <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>drag-free · hover for OHLC</span>
               <ExpandBtn
                 title={`${sym} · Price Chart`}
@@ -695,7 +736,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               onContextMenu={handleChartRightClick}>
               <CandleChart sym={sym} tf={tfActive} px={p}
                 maStep={maStep} emaStep={emaStep}
-                showVol={showVol} chartType={chartType.toLowerCase()} />
+                showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars} />
             </div>
             {showRsi && (
               <div id="rsiHost">

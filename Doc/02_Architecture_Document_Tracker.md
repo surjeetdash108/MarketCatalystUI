@@ -2,6 +2,20 @@
 
 System Architecture Document \| v1.1 \| June 2026
 
+> **⚠ Implementation status (2026-07-05):** This document describes the
+> originally proposed 5-layer architecture (ECS workers, ClickHouse, Redis,
+> BullMQ, Fastify REST + WebSocket gateway). The actual implementation is a
+> single NestJS service (`backend/`) with scheduled cron jobs
+> (`@nestjs/schedule`) writing directly to Firestore — no ClickHouse,
+> Redis, BullMQ, WebSocket gateway, or Fastify exist in the real stack, and
+> there is no REST API exposed to the frontend (the Next.js app reads
+> Firestore directly via the client SDK). Vendor calls go through a small
+> adapter layer (`backend/src/adapters/`) with automatic fallback between
+> two vendors for company profiles and market movers — not described here
+> at all. See `Doc/openapi.yaml` for the real data contract (documented as
+> REST for portability, even though it's actually served via Firestore
+> reads) and `backend/src/` for the real code.
+
 1\. Architecture Overview
 
 The platform is a multi-tier, event-driven web application built around a real-time data ingestion pipeline, a REST + WebSocket API layer, a React single-page application, and a set of AI generation workers. The architecture prioritizes low-latency data delivery, horizontal scalability of stateless API nodes, and clean separation between the ingestion, storage, serving, and presentation layers.

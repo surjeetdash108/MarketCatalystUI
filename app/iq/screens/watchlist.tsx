@@ -1,17 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { doc, onSnapshot, setDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
+import { firebaseDb, firebaseAuth } from "../../firebase";
 import { watch as watchData } from "../data";
+import { useCollection } from "../hooks/useCollection";
 import { arr, sign } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
+interface CompanyDoc {
+  id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
+}
+
+function watchlistRef(uid: string) {
+  return doc(firebaseDb, "users", uid, "watchlists", "default");
+}
+
 export function WatchlistScreen() {
-  const [items, setItems]               = useState<string[]>(() => watchData.map(w => w.ticker));
-  const [sel, setSel]                   = useState<string | null>(() => watchData[0]?.ticker ?? null);
-  const [addOpen, setAddOpen]           = useState(false);
-  const [newSym, setNewSym]             = useState("");
+  const uid = firebaseAuth.currentUser?.uid ?? null;
+  const { data: companies } = useCollection<CompanyDoc>("companies");
+  const byTicker = new Map(companies.map(c => [c.ticker, c]));
+
+  const [items, setItems]                 = useState<string[]>(() => watchData.map(w => w.ticker));
+  const [sel, setSel]                     = useState<string | null>(() => watchData[0]?.ticker ?? null);
+  const [addOpen, setAddOpen]             = useState(false);
+  const [newSym, setNewSym]               = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const list = watchData.filter(w => items.includes(w.ticker));
+
+  // Firestore persistence layered on top of the demo watchlist: once signed in,
+  // a saved list (if any) takes over; an empty/missing doc keeps the demo names.
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = onSnapshot(watchlistRef(uid), (snap) => {
+      const tickers = snap.data()?.tickers as string[] | undefined;
+      if (tickers && tickers.length > 0) {
+        setItems(tickers);
+        setSel(prev => prev ?? tickers[0] ?? null);
+      }
+    });
+    return () => unsub();
+  }, [uid]);
+
+  const list = items.map(sym => {
+    const w = watchData.find(x => x.ticker === sym);
+    const c = byTicker.get(sym);
+    const live = c?.price != null;
+    return {
+      ticker: sym,
+      name: c?.name ?? w?.name ?? sym,
+      price: c?.price ?? w?.price ?? 0,
+      pctChange: c?.pctChange ?? w?.pctChange ?? 0,
+      live,
+    };
+  });
+  const liveCount = list.filter(w => w.live).length;
   const up   = list.filter(w => w.pctChange > 0).length;
   const dn   = list.filter(w => w.pctChange < 0).length;
   const best  = [...list].sort((a, b) => b.pctChange - a.pctChange)[0];
@@ -23,22 +65,28 @@ export function WatchlistScreen() {
     (worst && worst.ticker !== best?.ticker ? `, <b>${worst.ticker}</b> lagged (${sign(worst.pctChange)})` : "") +
     `. Broad market: Nasdaq <b class="up">+1.02%</b>, S&P 500 <b class="up">+0.73%</b>.`;
 
-  function addStock() {
+  async function addStock() {
     const s = newSym.trim().toUpperCase();
-    if (!s || items.includes(s)) { setNewSym(""); setAddOpen(false); return; }
-    setItems(prev => [...prev, s]);
-    setSel(s);
     setNewSym("");
     setAddOpen(false);
+    if (!s || items.includes(s)) return;
+    setItems(prev => [...prev, s]);
+    setSel(s);
+    if (uid) {
+      await setDoc(watchlistRef(uid), { name: "My Watchlist", tickers: arrayUnion(s), createdAt: Timestamp.now() }, { merge: true });
+    }
   }
 
-  function deleteStock(sym: string) {
+  async function deleteStock(sym: string) {
+    setConfirmDelete(null);
     setItems(prev => {
       const next = prev.filter(s => s !== sym);
       if (sel === sym) setSel(next[0] ?? null);
       return next;
     });
-    setConfirmDelete(null);
+    if (uid) {
+      await setDoc(watchlistRef(uid), { tickers: arrayRemove(sym) }, { merge: true });
+    }
   }
 
   const selData = list.find(w => w.ticker === sel);
@@ -73,6 +121,8 @@ export function WatchlistScreen() {
               <span className="src-chip">Up {up}/{list.length}</span>
               <span className="src-chip">Nasdaq +1.02%</span>
               <span className="src-chip">S&amp;P +0.73%</span>
+              {liveCount > 0 && <span className="src-chip">{liveCount}/{list.length} live</span>}
+              {uid && <span className="src-chip">Synced to your account</span>}
             </div>
           </div>
         </div>
@@ -89,26 +139,21 @@ export function WatchlistScreen() {
               isEmpty={items.length === 0}
               emptyMessage='No stocks — click "Add stock".'
             >
-              {items.map((sym, i) => {
-                const w  = watchData.find(x => x.ticker === sym);
-                const px = w?.price ?? 0;
-                const c  = w?.pctChange  ?? 0;
-                return (
-                  <StockRow
-                    key={sym}
-                    sym={sym}
-                    name={w?.name ?? sym}
-                    seed={i + 3}
-                    sparkUp={c >= 0}
-                    isSelected={sel === sym}
-                    onClick={() => setSel(sym)}
-                    onDelete={() => setConfirmDelete(sym)}
-                    valueTop={px >= 1000 ? `$${(px / 1000).toFixed(2)}K` : `$${px.toFixed(2)}`}
-                    valueBottom={`${arr(c)} ${sign(c)}`}
-                    valueBottomClass={c >= 0 ? "up" : "down"}
-                  />
-                );
-              })}
+              {list.map((w, i) => (
+                <StockRow
+                  key={w.ticker}
+                  sym={w.ticker}
+                  name={w.name}
+                  seed={i + 3}
+                  sparkUp={w.pctChange >= 0}
+                  isSelected={sel === w.ticker}
+                  onClick={() => setSel(w.ticker)}
+                  onDelete={() => setConfirmDelete(w.ticker)}
+                  valueTop={w.price >= 1000 ? `$${(w.price / 1000).toFixed(2)}K` : `$${w.price.toFixed(2)}`}
+                  valueBottom={`${arr(w.pctChange)} ${sign(w.pctChange)}`}
+                  valueBottomClass={w.pctChange >= 0 ? "up" : "down"}
+                />
+              ))}
             </StockListCard>
           }
         />

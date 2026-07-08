@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import { useIQActions } from "../shell";
-import { sectorList, movers, screenerStocks } from "../data";
+import { sectorList, movers, screenerStocks, type SectorRow } from "../data";
 import { sign, heatCol, fmt, cls, StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
 
 const TABS = ["Stocks", "S&P 500"];
 const HEADER_H = 24;
@@ -47,15 +48,52 @@ interface HoverStock {
   peers: [string, number, number][];
 }
 
+interface CompanyDoc {
+  id: string; ticker: string; price: number | null; pctChange: number | null; marketCap: number | null;
+}
+interface SectorApiDoc {
+  id: string; sector: string; pctChange: number;
+}
+
+/**
+ * Merges live company price/%change/marketCap and live sector %change into
+ * the original curated sectorList — never drops a sector or stock, only
+ * overrides values where real data exists.
+ */
+function mergeSectorList(base: SectorRow[], companies: CompanyDoc[], sectorsLive: SectorApiDoc[]): SectorRow[] {
+  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
+  const sectorPctByName = new Map(sectorsLive.map(s => [s.sector, s.pctChange]));
+
+  return base.map(row => {
+    const liveSectorPct = sectorPctByName.get(row.name);
+    const items: [string, number, number][] = row.items.map(([sym, mcap, chg]) => {
+      const c = companyByTicker.get(sym);
+      if (!c) return [sym, mcap, chg];
+      const liveMcap = c.marketCap != null ? c.marketCap / 1e9 : mcap; // stored in $, sectorList uses $B
+      const liveChg = c.pctChange ?? chg;
+      return [sym, liveMcap, liveChg];
+    });
+    return {
+      ...row,
+      pctChange: liveSectorPct ?? row.pctChange,
+      items,
+    };
+  });
+}
+
 export function HeatmapScreen() {
   const { openSector, openStockFull } = useIQActions();
+  const { data: companies } = useCollection<CompanyDoc>("companies");
+  const { data: sectorsLive } = useCollection<SectorApiDoc>("sectors");
+  const mergedSectorList = mergeSectorList(sectorList, companies, sectorsLive);
+
   const [tab, setTab]     = useState(0);
   const [hover, setHover] = useState<HoverStock | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showHover = (e: React.MouseEvent, sym: string, chg: number, mcap: number) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    const sector = sectorList.find(g => g.items.some(([s]) => s === sym));
+    const sector = mergedSectorList.find(g => g.items.some(([s]) => s === sym));
     const peers  = sector ? [...sector.items].sort((a, b) => b[1] - a[1]) : [];
     const estH   = 160 + 34 + peers.length * 27; // header rows + label + peer rows
     const maxH   = Math.min(estH, window.innerHeight - 16);
@@ -66,7 +104,7 @@ export function HeatmapScreen() {
   const hideHover   = () => { hoverTimer.current = setTimeout(() => setHover(null), 200); };
   const cancelHover = () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); };
 
-  const sorted = [...sectorList].sort(
+  const sorted = [...mergedSectorList].sort(
     (a, b) => b.items.reduce((s, i) => s + i[1], 0) - a.items.reduce((s, i) => s + i[1], 0)
   );
   const sectorItems   = sorted.map(g => ({ key: g.name, weight: g.items.reduce((s, i) => s + i[1], 0) }));

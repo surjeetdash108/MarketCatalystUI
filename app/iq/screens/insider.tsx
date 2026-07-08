@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { collection, getDocs, query, orderBy, limit as fbLimit } from "firebase/firestore";
+import { firebaseDb } from "../../firebase";
 import { useIQActions } from "../shell";
-import { funds, fundDetail } from "../data";
+import { funds as mockFunds, fundDetail, type Fund } from "../data";
 import { StockLogo } from "../utils";
+import { useCollection } from "../hooks/useCollection";
 
 // ---- types ----
 type InsFilter   = "All" | "Buys" | "Sells" | "10% owners" | "Clusters";
@@ -13,7 +16,7 @@ type InstSort    = "owners" | "move";
 type DrawerState = { kind: "insider"; sym: string } | { kind: "inst"; sym: string; sn: string } | null;
 
 // ---- insider feed ----
-interface Tx { s: string; role: string; det: string; dir: "buy" | "sell"; val: string; date: string; }
+interface Tx { s: string; role: string; det: string; dir: "buy" | "sell"; val: string; date: string; live?: boolean; }
 
 const BUYERS: Tx[] = [
   { s:"AMR",  role:"Director",                                det:"bought 10,000 sh @ $199.80–$201.64",  dir:"buy",  val:"2.0M",   date:"6/12"       },
@@ -37,7 +40,7 @@ const SELLERS: Tx[] = [
   { s:"JOE",  role:"10% owner (Bruce Berkowitz / Fairholme)", det:"sold 184,700 sh",                      dir:"sell", val:"12.1M",  date:"6/12–6/16"  },
   { s:"RILY", role:"Chairman & Co-CEO",                       det:"sold 195,492 sh",                      dir:"sell", val:"1.8M",   date:"6/16"       },
 ];
-const FEED: Tx[] = [...BUYERS, ...SELLERS];
+const MOCK_FEED: Tx[] = [...BUYERS, ...SELLERS];
 
 // ---- institutional pool ----
 const INST_POOL = [
@@ -112,7 +115,7 @@ function insiderHistory(sym: string) {
 }
 function instHolders(sym: string) {
   const out: { fund: string; mgr: string; pct: number; act: string }[] = [];
-  funds.forEach(fd => {
+  mockFunds.forEach(fd => {
     const dt = fundDetail[fd.fundName];
     if (!dt) return;
     const hit = dt.holdings.find(x => x[0] === sym);
@@ -158,12 +161,45 @@ function QBar({ chg }: { chg: number }) {
   );
 }
 
+// ---- Firestore doc shapes (see backend/src/sync/sec-13f.job.ts and sec-form4.job.ts) ----
+interface InsiderTxDoc {
+  id: string; ticker: string; issuerName: string | null; ownerName: string | null; isOfficer: boolean;
+  officerTitle: string | null; transactionDate: string; transactionCode: string;
+  acquiredOrDisposed: "A" | "D" | string; shares: number; pricePerShare: number | null;
+}
+interface FundHoldingDoc {
+  id: string; fundName: string; latestFilingDate: string; latestAccessionNumber: string;
+  totalPositions: number; totalValue: number;
+}
+interface PositionDoc { id: string; cusip: string; nameOfIssuer: string; value: number; shares: number; }
+
+function fmtValue(v: number) {
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
+  return `$${v}`;
+}
+async function fetchPositions(cik: string, accessionNumber: string): Promise<PositionDoc[]> {
+  const col = collection(firebaseDb, `fund_holdings/${cik}/filings/${accessionNumber}/positions`);
+  const snap = await getDocs(query(col, orderBy("value", "desc"), fbLimit(25)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PositionDoc);
+}
+/** Loosely matches "Berkshire Hathaway" (live) with "Berkshire Hathaway" or "Berkshire" (mock) etc. */
+function fuzzyFundMatch(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const na = norm(a), nb = norm(b);
+  return na.includes(nb) || nb.includes(na);
+}
+
 // ---- insider stock drawer ----
-function InsiderDrawer({ sym, onClose, onOpenFull }: { sym: string; onClose: () => void; onOpenFull: (s: string) => void }) {
-  const txns  = FEED.filter(x => x.s === sym);
+function InsiderDrawer({ sym, liveTxns, onClose, onOpenFull }: {
+  sym: string; liveTxns: InsiderTxDoc[]; onClose: () => void; onOpenFull: (s: string) => void;
+}) {
+  const txns  = MOCK_FEED.filter(x => x.s === sym);
+  const liveForSym = liveTxns.filter(x => x.ticker === sym);
   const hist  = insiderHistory(sym);
-  const nBuy  = txns.filter(x => x.dir === "buy").length;
-  const nSell = txns.filter(x => x.dir === "sell").length;
+  const nBuy  = txns.filter(x => x.dir === "buy").length + liveForSym.filter(x => x.acquiredOrDisposed === "A").length;
+  const nSell = txns.filter(x => x.dir === "sell").length + liveForSym.filter(x => x.acquiredOrDisposed === "D").length;
   const read  = nBuy > nSell
     ? `Net <b class="up">insider buying</b> in ${sym} — insiders adding is generally a constructive signal.`
     : nSell > nBuy
@@ -187,6 +223,31 @@ function InsiderDrawer({ sym, onClose, onOpenFull }: { sym: string; onClose: () 
             <span className="pill up">{nBuy} buy filing{nBuy !== 1 ? "s" : ""}</span>
             <span className="pill dn">{nSell} sell filing{nSell !== 1 ? "s" : ""}</span>
           </div>
+
+          {liveForSym.length > 0 && (
+            <>
+              <div className="ai-sec"><div className="h">Live SEC EDGAR Form 4 filings</div></div>
+              {liveForSym.map((x) => (
+                <div key={x.id} className="minirow" style={{ alignItems: "flex-start" }}>
+                  <span className="tr-badge" style={{ background: x.acquiredOrDisposed === "A" ? "var(--up)22" : "var(--down)22", color: x.acquiredOrDisposed === "A" ? "var(--up)" : "var(--down)", flexShrink: 0 }}>
+                    {x.acquiredOrDisposed === "A" ? "BUY" : "SELL"}
+                  </span>
+                  <span className="mid" style={{ marginLeft: 8 }}>
+                    <b style={{ color: "var(--text-hi)" }}>{x.ownerName ?? "Unknown filer"}</b>
+                    {x.officerTitle && <span style={{ color: "var(--text-dim-solid)" }}> · {x.officerTitle}</span>}
+                    <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                      {x.shares.toLocaleString()} sh{x.pricePerShare ? ` @ $${x.pricePerShare.toFixed(2)}` : ""} · {x.transactionDate}
+                    </div>
+                  </span>
+                  {x.pricePerShare && (
+                    <span className={`r ${x.acquiredOrDisposed === "A" ? "up" : "down"}`}>
+                      {x.acquiredOrDisposed === "A" ? "+" : "−"}{fmtValue(x.shares * x.pricePerShare)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
 
           <div className="ai-sec"><div className="h">Recent insider transactions · last 5 sessions</div></div>
           {txns.length ? txns.map((x, i) => (
@@ -341,8 +402,42 @@ export function InsiderScreen() {
   const [instSort,   setInstSort]   = useState<InstSort>("owners");
   const [drawer,     setDrawer]     = useState<DrawerState>(null);
 
+  const { data: liveInsiderTx } = useCollection<InsiderTxDoc>("insider_transactions");
+  const { data: liveFunds } = useCollection<FundHoldingDoc>("fund_holdings");
+
+  // Real cross-fund overlap (CUSIP-matched across live 13F positions) — additive, alongside the mock "Cross-fund signals" card.
+  const [liveOverlap, setLiveOverlap] = useState<Array<{ cusip: string; name: string; funds: string[] }> | null>(null);
+  useEffect(() => {
+    if (view !== "13f" || liveOverlap !== null || liveFunds.length === 0) return;
+    (async () => {
+      const byCusip = new Map<string, { name: string; funds: string[] }>();
+      for (const f of liveFunds) {
+        if (!f.latestAccessionNumber) continue;
+        const positions = await fetchPositions(f.id, f.latestAccessionNumber);
+        for (const p of positions) {
+          const existing = byCusip.get(p.cusip);
+          if (existing) existing.funds.push(f.fundName);
+          else byCusip.set(p.cusip, { name: p.nameOfIssuer, funds: [f.fundName] });
+        }
+      }
+      setLiveOverlap([...byCusip.entries()].map(([cusip, v]) => ({ cusip, ...v })).filter(x => x.funds.length >= 2).sort((a, b) => b.funds.length - a.funds.length));
+    })();
+  }, [view, liveFunds, liveOverlap]);
+
   const openIns  = (sym: string) => setDrawer({ kind: "insider", sym });
   const openInst = (sym: string) => setDrawer({ kind: "inst", sym, sn: INST_SN[sym] || sym });
+
+  // Merge real Form 4 filings into the feed as additional rows (never removes mock rows).
+  const liveFeed: Tx[] = liveInsiderTx.map(x => ({
+    s: x.ticker,
+    role: x.officerTitle ?? x.ownerName ?? "Filer",
+    det: `${x.acquiredOrDisposed === "A" ? "acquired" : "disposed"} ${x.shares.toLocaleString()} sh${x.pricePerShare ? ` @ $${x.pricePerShare.toFixed(2)}` : ""} (live SEC EDGAR)`,
+    dir: x.acquiredOrDisposed === "A" ? "buy" : "sell",
+    val: x.pricePerShare ? (x.shares * x.pricePerShare / 1e6).toFixed(2) + "M" : "0",
+    date: x.transactionDate,
+    live: true,
+  }));
+  const FEED = [...MOCK_FEED, ...liveFeed];
 
   // ---- insider filter + sort ----
   const filtered = FEED.filter(x => {
@@ -379,6 +474,19 @@ export function InsiderScreen() {
     instSort === "move" ? Math.abs(b.lastQ) - Math.abs(a.lastQ) : b.owners - a.owners
   );
   const activeInst = [...INST_DATA].sort((a, b) => b.owners - a.owners).slice(0, 6);
+
+  // Merge live fund_holdings data into the mock fund cards (aum/positions/top holding), by fuzzy name match.
+  const mergedFunds: (Fund & { live?: boolean })[] = mockFunds.map(f => {
+    const live = liveFunds.find(lf => fuzzyFundMatch(lf.fundName, f.fundName));
+    if (!live) return f;
+    return {
+      ...f,
+      aum: fmtValue(live.totalValue),
+      totalPositions: live.totalPositions,
+      quarter: `Filed ${live.latestFilingDate}`,
+      live: true,
+    };
+  });
 
   return (
     <>
@@ -421,7 +529,7 @@ export function InsiderScreen() {
           <div className="card">
             <div className="card-h">
               <h3>{insFilter === "All" ? "All activity" : insFilter} · {list.length} filings</h3>
-              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Form 4 · last 5 sessions</span>
+              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Form 4 · {liveFeed.length} live + {MOCK_FEED.length} sample</span>
             </div>
             <div className="card-b" style={{ paddingTop: 2, overflowX: "auto" }}>
               <table className="tbl" id="insTbl">
@@ -448,7 +556,8 @@ export function InsiderScreen() {
                       </td>
                       <td style={{ whiteSpace: "normal", lineHeight: 1.4 }}>
                         {x.role}
-                        {isCluster(x) && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)", marginLeft: 6 }}>cluster</span>}
+                        {x.live && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginLeft: 6 }}>live</span>}
+                        {!x.live && isCluster(x) && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)", marginLeft: 6 }}>cluster</span>}
                       </td>
                       <td style={{ whiteSpace: "normal", lineHeight: 1.4, color: "var(--text-dim-solid)" }}>{x.det}</td>
                       <td className="num"><b className={x.dir === "buy" ? "up" : "down"}>{x.dir === "buy" ? "+" : "−"}${x.val}</b></td>
@@ -460,7 +569,7 @@ export function InsiderScreen() {
             </div>
           </div>
           <p style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 10 }}>
-            Click any row for that company&#8217;s full insider history. Source (production): SEC Form 4 via EDGAR. Informational only — not investment advice.
+            Click any row for that company&#8217;s full insider history. Rows marked &ldquo;live&rdquo; are real SEC Form 4 filings via EDGAR; the rest are illustrative sample data. Informational only — not investment advice.
           </p>
         </>
       )}
@@ -528,17 +637,17 @@ export function InsiderScreen() {
           </div>
 
           <div style={{ margin: "20px 0 10px", fontSize: ".74rem", textTransform: "uppercase" as const, letterSpacing: ".06em", color: "var(--text-dim-solid)", fontWeight: 700 }}>
-            Top tracked funds · latest 13F filings
+            Top tracked funds · latest 13F filings {liveFunds.length > 0 && <span style={{ color: "var(--up)" }}>· live where synced</span>}
           </div>
 
           <div className="dash" style={{ marginBottom: 14 }}>
-            {funds.map((f, i) => (
+            {mergedFunds.map((f) => (
               <div key={f.fundName} className="col-4">
                 <div className="fundcard" onClick={() => setDrawer({ kind: "inst", sym: f.topHolding, sn: INST_SN[f.topHolding] || f.topHolding })}>
                   <div style={{ display: "flex", gap: 11, alignItems: "center", marginBottom: 12 }}>
                     <div className="av">{f.avatar}</div>
                     <div>
-                      <div className="nm">{f.fundName}</div>
+                      <div className="nm">{f.fundName}{f.live && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginLeft: 6, fontSize: ".6rem" }}>live</span>}</div>
                       <div className="mgr">{f.managerName}</div>
                     </div>
                   </div>
@@ -622,6 +731,23 @@ export function InsiderScreen() {
                       <span className="r ai-c">◆</span>
                     </div>
                   ))}
+
+                  <div style={{ fontSize: ".7rem", textTransform: "uppercase" as const, letterSpacing: ".06em", color: "var(--brand-2)", fontWeight: 700, margin: "12px 0 6px" }}>
+                    Live overlap (CUSIP-matched, real)
+                  </div>
+                  {liveOverlap === null ? (
+                    <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid)" }}>Computing…</div>
+                  ) : liveOverlap.length === 0 ? (
+                    <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid)" }}>No overlap found yet in synced 13F data.</div>
+                  ) : liveOverlap.slice(0, 5).map(o => (
+                    <div key={o.cusip} className="minirow">
+                      <span className="mid">
+                        <b style={{ color: "var(--text-hi)" }}>{o.name}</b>
+                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{o.funds.join(", ")}</div>
+                      </span>
+                      <span className="r">{o.funds.length} funds</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -631,7 +757,7 @@ export function InsiderScreen() {
 
       {/* ---- drawers ---- */}
       {drawer?.kind === "insider" && (
-        <InsiderDrawer sym={drawer.sym} onClose={() => setDrawer(null)} onOpenFull={openStockFull} />
+        <InsiderDrawer sym={drawer.sym} liveTxns={liveInsiderTx} onClose={() => setDrawer(null)} onOpenFull={openStockFull} />
       )}
       {drawer?.kind === "inst" && (
         <InstDrawer sym={drawer.sym} sn={drawer.sn} onClose={() => setDrawer(null)} onOpenFull={openStockFull} />
