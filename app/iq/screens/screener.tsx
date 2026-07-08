@@ -7,13 +7,16 @@ import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
 interface CompanyDoc {
   id: string; ticker: string; marketCap: number | null; peRatio: number | null; price: number | null; pctChange: number | null;
+  rsRating: number | null;
 }
 
-// Live companies data covers marketCap/peRatio/price — genuinely wireable.
-// relativeStrength/salesGrowth/epsGrowth/grossMargin/rvolRatio/techRating are
-// proprietary technical-analysis scores no connected vendor supplies (would
-// need a computed-from-price-history backend, which doesn't exist yet), so
-// those filters/columns stay illustrative and are marked as such.
+// Live companies data covers marketCap/peRatio/price, and now relativeStrength
+// (rsRating — an independent from-scratch approximation of an IBD-style RS
+// score, computed by backend/src/sync/rs-rating.job.ts from real ohlcv_bars;
+// null until that job has run against enough real history). salesGrowth/
+// epsGrowth/grossMargin/rvolRatio/techRating are still proprietary scores no
+// connected vendor supplies and no computation exists for yet, so those
+// filters/columns stay illustrative and are marked as such.
 function mergeScreenerStocks(mock: ScreenerStock[], byTicker: Map<string, CompanyDoc>): (ScreenerStock & { live: boolean })[] {
   return mock.map(s => {
     const c = byTicker.get(s.ticker);
@@ -22,7 +25,8 @@ function mergeScreenerStocks(mock: ScreenerStock[], byTicker: Map<string, Compan
       ...s,
       marketCap: c.marketCap != null ? c.marketCap / 1e9 : s.marketCap,
       peRatio: c.peRatio ?? s.peRatio,
-      live: c.marketCap != null || c.peRatio != null,
+      relativeStrength: c.rsRating ?? s.relativeStrength,
+      live: c.marketCap != null || c.peRatio != null || c.rsRating != null,
     };
   });
 }

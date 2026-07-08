@@ -73,6 +73,7 @@ Listens on `PORT` from `.env` (default 4100).
 | `dividends` | FMP `/stable/dividends-calendar` (verified working 2026-07-07 — unlike the confirmed-restricted economic-calendar/ipos-calendar on this same plan) | Daily 06:20 ET | `dividends/{ticker}` |
 | `stock-history` | Polygon EOD aggregates, incremental via per-ticker `sync_watermarks` (~300-day backfill, then only new days each run) | Daily 03:00 ET, rotating 60-ticker batch | `ohlcv_bars/{ticker}_{date}` |
 | `market-quotes` | Polygon grouped-daily, diffed across 2 days (same diff `market-movers` uses — see `polygon-diff.util.ts`) — near-free, no new API calls beyond what movers already makes | Daily 18:07 ET | `tickers/{ticker}` (price/pctChange/volume merged onto the reference doc, for the WHOLE market, not just the curated 241) |
+| `rs-rating` | None — pure internal computation from `ohlcv_bars`, no vendor call, no key. An independent from-scratch approximation of an IBD-style relative-strength score, not the literal proprietary IBD formula. Writes nothing useful until `stock-history` has accumulated enough real history. | Daily 04:00 ET | `companies/{ticker}` (`rsRating` field only, merged) |
 
 Not yet built (see `Doc/openapi.yaml`'s `x-status: planned` paths for what
 each needs):

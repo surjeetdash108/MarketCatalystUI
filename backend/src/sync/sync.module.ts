@@ -16,6 +16,7 @@ import { MarketMoversJob } from './market-movers.job';
 import { MarketQuotesJob } from './market-quotes.job';
 import { NewsJob } from './news.job';
 import { OptionsChainsJob } from './options-chains.job';
+import { RsRatingJob } from './rs-rating.job';
 import { Sec13FJob } from './sec-13f.job';
 import { SecForm4Job } from './sec-form4.job';
 import { SectorsJob } from './sectors.job';
@@ -52,6 +53,7 @@ import { TickerUniverseJob } from './ticker-universe.job';
     DividendsJob,
     StockHistoryJob,
     MarketQuotesJob,
+    RsRatingJob,
   ],
 })
 export class SyncModule {}

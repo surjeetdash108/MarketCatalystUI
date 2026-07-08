@@ -102,7 +102,9 @@ CREATE TABLE companies (
   dividend_yield      DOUBLE PRECISION,
   dividend_per_share  DOUBLE PRECISION,
   source              TEXT,                       -- 'fmp' | 'polygon' — which CompanyProfileAdapter served THIS row (may differ from the configured primary; see warnings)
-  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  rs_rating           SMALLINT CHECK (rs_rating BETWEEN 1 AND 99),  -- written by rs-rating.job.ts, NOT companies.job.ts — see that job's docblock. An independent from-scratch approximation of an IBD-style score, not the literal proprietary IBD formula. NULL until enough real ohlcv_bars history exists.
+  rs_rating_updated_at TIMESTAMPTZ
 );
 CREATE INDEX idx_companies_sector ON companies(sector);
 

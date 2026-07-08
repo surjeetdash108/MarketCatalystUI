@@ -1,6 +1,6 @@
 # StockWise Screen Data Sources
 
-_Last verified: 2026-07-07, against the actual code in `app/iq/screens/*.tsx` and `backend/src/sync/*.job.ts`. See `Doc/openapi.yaml` for the full data contract and `Doc/schema.sql` if this ever migrates off Firestore._
+_Last verified: 2026-07-08, against the actual code in `app/iq/screens/*.tsx` and `backend/src/sync/*.job.ts`. See `Doc/openapi.yaml` for the full data contract and `Doc/schema.sql` if this ever migrates off Firestore._
 
 > **Legend**
 > - ✅ **Live** — data comes from a real Firestore collection written by a backend sync job (or Firebase Auth/user-owned Firestore data)
@@ -104,9 +104,11 @@ All 14 original widgets are intact; live data is merged in via `useCollection()`
 
 | Element | Data | Status |
 |---|---|---|
-| Market cap, P/E | `companies` merged onto `data.screenerStocks` by ticker | 🟡 Hybrid |
-| RS Rating, sales/EPS growth %, gross margin, RVOL, Tech Rating | `data.screenerStocks` — hardcoded. These are proprietary computed technical/fundamental-growth scores no vendor sells directly. `/stock-history` (the prerequisite historical price series) is now live, but the ranking computation itself isn't built yet — needs a dedicated job once enough of TICKER_UNIVERSE has accumulated history | 🔴 Static |
+| Market cap, P/E, Relative Strength | `companies` merged onto `data.screenerStocks` by ticker — `rsRating` (from the new `rs-rating.job.ts`) overrides `relativeStrength` when available, feeding the existing RS 90+/70-90/<40 filter buttons and the "RS {n}" sparkline label unchanged | 🟡 Hybrid |
+| Sales/EPS growth %, gross margin, RVOL, Tech Rating | `data.screenerStocks` — hardcoded. Still proprietary computed scores no vendor sells directly and no computation exists for yet | 🔴 Static |
 | Filter/preset logic | Unchanged, operates on the merged list above | ✅ Live inputs, static logic |
+
+`rs-rating.job.ts` is an independent, from-scratch approximation of an IBD-style relative-strength score (most-recent-quarter-weighted trailing returns from real `ohlcv_bars`, ranked 1-99 within `TICKER_UNIVERSE`) — not the literal proprietary IBD formula, and it writes nothing meaningful until `stock-history.job.ts` has accumulated enough real bar history first.
 
 ---
 
@@ -217,15 +219,14 @@ Two further vendor paths are still scaffolded but inert if real bid/ask/greeks a
 
 ---
 
-## Summary (accurate as of 2026-07-07)
+## Summary (accurate as of 2026-07-08)
 
 | Category | Screens |
 |---|---|
 | ✅ Fully live (no mock fallback in normal operation) | Stock notes (`stock_comments`); real user watchlist/portfolio once saved |
-| 🟡 Hybrid (live data merged onto intact original mock UI) | Dashboard (all 3 mini-widgets now included), Earnings Hub, Market Movers, Market Heatmap, Analyst Actions (partially), Screener (partially), Themes, Portfolio Pulse, Watchlist, Stock Detail (price/fundamentals + 3M/6M/1Y chart), Insider & Institutional, Commentary, Macro & VIX (Live Economic Indicators + Live Dividend Calendar cards), IPOs (Live IPO Calendar card), Options Chain (Live Options Reference card, curated 8-ticker universe only), shell ticker strip |
-| 🔴 Fully static, blocked on vendor plan/key | Recaps (needs Claude + a new job); Options Chain's main bid/ask/IV/greeks/OI table (needs a Polygon plan upgrade or a Tradier key) |
-| 🔴 Fully static, pending job run/restart | Macro & VIX's, IPOs', Options Chain's, and Dividends' live cards, plus Stock Detail's real chart — all five jobs are code-complete, keys are set, just need the backend restarted and each job run once |
-| 🔴 Fully static, no computation built yet | Screener's RS Rating/growth scores — the prerequisite `/stock-history` data now exists, but the ranking computation itself isn't built |
+| 🟡 Hybrid (live data merged onto intact original mock UI) | Dashboard (all 3 mini-widgets now included), Earnings Hub, Market Movers, Market Heatmap, Analyst Actions (partially), Screener (market cap/P-E/RS now all live), Themes, Portfolio Pulse, Watchlist, Stock Detail (price/fundamentals + 3M/6M/1Y chart), Insider & Institutional, Commentary, Macro & VIX (Live Economic Indicators + Live Dividend Calendar cards), IPOs (Live IPO Calendar card), Options Chain (Live Options Reference card, curated 8-ticker universe only), shell ticker strip |
+| 🔴 Fully static, blocked on vendor plan/key | Recaps (needs Claude + a new job); Options Chain's main bid/ask/IV/greeks/OI table (needs a Polygon plan upgrade or a Tradier key); Analyst Actions event table/Earnings guidance-reaction/richer News (need Benzinga) |
+| 🔴 Fully static, pending job run/restart | Macro & VIX's, IPOs', Options Chain's, and Dividends' live cards, plus Stock Detail's real chart and Screener's RS Rating — all six jobs are code-complete, keys are set (RS Rating needs none), just need the backend restarted and each job run once — RS Rating specifically also needs `stock-history` to have accumulated real history first |
 
 ---
 
@@ -238,8 +239,8 @@ Two further vendor paths are still scaffolded but inert if real bid/ask/greeks a
 | Options Chain's live card | Code is done (no key needed, Polygon's already active) — just restart the backend and `POST /sync/options-chains/run` once |
 | Macro & VIX's dividend card | Code is done (no key needed, FMP's already active) — just restart the backend and `POST /sync/dividends/run` once |
 | Stock Detail's real chart (3M/6M/1Y) | Code is done (no key needed, Polygon's already active) — just restart the backend and `POST /sync/stock-history/run` a few times (rotating batch, ~4 runs to cover all of TICKER_UNIVERSE once) |
+| Screener's real RS Rating | Code is done, no key needed — restart the backend, run `stock-history` a few times first (to accumulate real bars), then `POST /sync/rs-rating/run` |
 | **Options Chain's real bid/ask/IV/greeks/OI — highest-value remaining gap** | Either upgrade the Polygon plan, or get a free `TRADIER_ACCESS_TOKEN` and finish the existing `tradier.service.ts` stub |
-| Screener's real RS Rating | Needs a dedicated ranking/percentile job on top of `ohlcv_bars`, once enough of TICKER_UNIVERSE has accumulated history |
 | Recaps | Build a Polygon-EOD-recap job + obtain `ANTHROPIC_API_KEY` |
 | Analyst Actions event table, Earnings session/guidance/reaction, richer News | All need a Benzinga key (`BENZINGA_API_KEY`, currently empty) |
 

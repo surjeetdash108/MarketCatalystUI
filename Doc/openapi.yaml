@@ -219,10 +219,15 @@ paths:
     get:
       tags: [Companies]
       summary: List company reference + fundamentals data
+      description: >-
+        Two independent jobs write to this collection: companies.job.ts
+        (fundamentals, daily) and rs-rating.job.ts (just the `rsRating`
+        field, also daily, pure internal computation — see that job's
+        docblock, no vendor call involved).
       x-status: live
       x-consumed-by:
         - "Dashboard (app/iq/screens/dashboard.tsx) — Market Heatmap mini (per-stock market cap/%change), Portfolio Pulse mini (live price/% on holdings), Watchlist mini (live price/% on watched tickers)"
-        - "Screener (app/iq/screens/screener.tsx) — Market cap, P/E columns"
+        - "Screener (app/iq/screens/screener.tsx) — Market cap, P/E, and Relative Strength columns/filters (rsRating merged onto relativeStrength when available)"
         - "Market Heatmap (app/iq/screens/heatmap.tsx) — Stock cells (market cap, % change)"
         - "Themes (app/iq/screens/themes.tsx) — Per-stock price/% change on each theme's stock list"
         - "Portfolio Pulse (app/iq/screens/portfolio.tsx) — Price/% change on demo or real holdings"
@@ -231,8 +236,10 @@ paths:
       x-primary-source: >-
         FMP `/stable/profile` + `/stable/ratios-ttm` + `/stable/stock-peers`
         (backend/src/vendors/fmp), synced daily at 02:00 ET for a rotating
-        60-ticker batch of the 200-name curated universe
-        (backend/src/common/ticker-universe.ts).
+        60-ticker batch of the 241-name curated universe
+        (backend/src/common/ticker-universe.ts). `rsRating` specifically is
+        computed daily at 04:00 ET by rs-rating.job.ts from `ohlcv_bars`
+        history — not from FMP at all, see /stock-history above.
       x-alternate-source: >-
         Polygon `/v3/reference/tickers` + `/v2/aggs/ticker/{t}/prev` for the
         price/quote/market-cap fields ONLY — Polygon snapshots refresh faster
@@ -1307,11 +1314,12 @@ paths:
         tagged "live · Polygon") — 1D/1W (need intraday, only daily bars are
         stored) and 5Y (need more history than the ~300-day backfill covers)
         still fall back to the simulated generator. Also the prerequisite
-        for a future Screener RS-Rating computation (not built yet — needs
-        its own ranking job once enough of TICKER_UNIVERSE has history).
+        for Screener's RS Rating (see rs-rating.job.ts / the Company
+        schema's `rsRating` field, and GET /companies above).
       x-status: live
       x-consumed-by:
         - "Stock Detail (app/iq/screens/stock.tsx) — Candle chart for 3M/6M/1Y timeframes only (both the main chart and the StockChartExpanded modal), via the useOhlcvBars() hook; tagged \"live · Polygon\" pill when in use. RSI/MACD panes are NOT computed from these real bars yet — still the seeded generator."
+        - "Indirectly, Screener (app/iq/screens/screener.tsx) — rs-rating.job.ts reads this same ohlcv_bars data to compute the Relative Strength column/filters; no screen queries /stock-history directly for that purpose, but it's the underlying dependency"
       x-primary-source: >-
         Polygon `/v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}`, synced
         daily at 03:00 ET for TICKER_UNIVERSE (rotating batch, same pattern
@@ -1845,6 +1853,19 @@ components:
           description: Structured degradation notes (see AdapterWarning) — e.g. a fallback was used, or ratios-ttm failed for this symbol. Empty array, never omitted, when the fetch was fully clean.
           items: { $ref: "#/components/schemas/AdapterWarning" }
         updatedAt: { type: string, format: date-time }
+        rsRating:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 99
+          description: >-
+            Written by backend/src/sync/rs-rating.job.ts, NOT companies.job.ts
+            — an independent, from-scratch approximation of an IBD-style
+            relative-strength score (most-recent-quarter-weighted trailing
+            returns, ranked 1-99 within TICKER_UNIVERSE), not the literal
+            proprietary IBD formula. Null until enough real ohlcv_bars
+            history has accumulated for this ticker.
+        rsRatingUpdatedAt: { type: string, format: date-time, nullable: true }
 
     TickerListing:
       type: object
