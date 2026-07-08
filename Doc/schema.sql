@@ -543,6 +543,9 @@ CREATE TABLE news_articles (
   source        TEXT,
   url           TEXT,
   category      TEXT,
+  sentiment           TEXT CHECK (sentiment IN ('positive','negative','neutral')), -- Polygon-only; null when served via Finnhub fallback
+  sentiment_reasoning TEXT,   -- Polygon-only; null when served via Finnhub fallback
+  keywords            TEXT[] NOT NULL DEFAULT '{}', -- empty when served via Finnhub fallback
   published_at  TIMESTAMPTZ NOT NULL,
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );

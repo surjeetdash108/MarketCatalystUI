@@ -11,15 +11,15 @@ _Last verified: 2026-07-08, against the actual code in `app/iq/screens/*.tsx` an
 
 ---
 
-## Backend-only data (complete, but not wired to any screen yet)
+## Full-market ticker data (`tickers/{ticker}`)
 
-`tickers/{ticker}` now has real, complete data for essentially the **entire US market** (~10,000+ tickers), not just the curated 241-ticker `TICKER_UNIVERSE` `companies` covers — but zero screens read this collection today (verified by grepping every `useCollection()` call in `app/iq/screens/*.tsx`). It has two independently-synced parts:
+Real, complete data for essentially the **entire US market** (~10,000+ tickers), not just the curated 241-ticker `TICKER_UNIVERSE` `companies` covers. Two independently-synced parts:
 - **Reference metadata** (name, exchange, type, active, cik) — weekly, `ticker-universe.job.ts`
-- **Price/%change/volume** (new) — daily, `market-quotes.job.ts`. Essentially free: reuses the same 2-call Polygon grouped-daily diff `market-movers.job.ts` already computes for the whole market and then discards outside its top/bottom 20 — see `backend/src/vendors/polygon/polygon-diff.util.ts`.
+- **Price/%change/volume** — daily, `market-quotes.job.ts`. Essentially free: reuses the same 2-call Polygon grouped-daily diff `market-movers.job.ts` already computes for the whole market and then discards outside its top/bottom 20 — see `backend/src/vendors/polygon/polygon-diff.util.ts`.
 
 Still missing at this full-market scale: fundamentals (P/E, sector, dividend yield, peers, beta) — that needs one FMP call per ticker, which doesn't scale here without a verified quota increase, so it stays limited to the curated 241.
 
-No screen currently benefits from this — wiring it in (e.g. expanding Screener's ticker picker, or a global search, beyond the curated 241 to the full market) is a separate, not-yet-done step.
+**Now wired to one consumer**: the shell's Cmd+K/top search bar (`app/iq/hooks/useTickerSearch.ts`) searches this full collection by ticker prefix — see the Shell/Layout section below. Screener's own ticker picker/filters still only cover the curated 241 — expanding Screener itself to the full universe is a separate, not-yet-done step.
 
 ---
 
@@ -32,6 +32,7 @@ No screen currently benefits from this — wiring it in (e.g. expanding Screener
 | Auth session / redirect | Firebase Auth `onAuthStateChanged` → Redux | ✅ Live |
 | Theme preference | `IQShell` useState + Firestore `settings/{uid}` (font/alert) + localStorage cache | ✅ Live |
 | **Ticker strip prices** (top of every screen) | `app/iq/shell.tsx` now uses the same `mergePulse()` helper (extracted to `app/iq/live-market-indices.ts`) as Dashboard's own Market Pulse widget — both read `market_indices` and stay in sync; the index drawer it opens now receives the same merged array as a prop instead of re-reading the stale static one | 🟡 Hybrid |
+| **Cmd+K / top search bar** (new) | Real ticker-prefix search over the full `tickers` collection (~10,000+ tickers, real price/%change), via `app/iq/hooks/useTickerSearch.ts` — a scoped on-demand Firestore query, not a full-collection subscription (see that file's docblock for why). The original curated 15-name `SEARCHABLE_STOCKS` list stays as the "quick access" suggestions shown before typing anything, and fills in any gaps if a typed prefix matches a curated name not yet returned by the live query | 🟡 Hybrid |
 | Cmd+K starred stocks | `IQShell` useState `starred: Set<string>` — in-memory per session | 🔴 Static (session-only) |
 
 ---
@@ -48,7 +49,7 @@ All 14 original widgets are intact; live data is merged in via `useCollection()`
 | Market Heatmap mini | `sectors` + `companies` merged onto `data.sectorList` (sector %, per-stock market cap/%change real) | 🟡 Hybrid |
 | Earnings Today widget | `earnings_events` merged onto `data.earnings` by ticker (EPS estimate/actual real; session/guidance/reaction still mock) | 🟡 Hybrid |
 | Insider & Institutional mini | `insider_transactions` (latest 5 real Form 4 filings) prepended to the mock insider mini-list | 🟡 Hybrid |
-| Live Market Feed | Real `news` docs shown when any exist for the tracked universe; falls back to the original mock feed items when none have synced yet | 🟡 Hybrid |
+| Live Market Feed | Real `news` docs shown when any exist for the tracked universe; falls back to the original mock feed items when none have synced yet. Polygon-primary as of 2026-07-08 — docs now carry `sentiment`/`sentimentReasoning`/`keywords` when served from Polygon (null/empty on Finnhub fallback) | 🟡 Hybrid |
 | What Matters Now (AI card) | `data.wmn` — hardcoded (needs Claude; see Recaps note below) | 🔴 Static |
 | Fear & Greed gauge | Hardcoded `62` | 🔴 Static |
 | Analyst Actions mini-list | `analyst_actions` consensus pill shown next to matching tickers; per-firm action rows stay `data.analyst` (no live per-firm event feed exists) | 🟡 Hybrid |
@@ -194,7 +195,7 @@ Two further vendor paths are still scaffolded but inert if real bid/ask/greeks a
 
 | Element | Data | Status |
 |---|---|---|
-| Live tab | Real `news` docs merged in ahead of the original mock `commentary` items | 🟡 Hybrid |
+| Live tab | Real `news` docs merged in ahead of the original mock `commentary` items. Polygon-primary as of 2026-07-08 — carries per-ticker `sentiment`/`sentimentReasoning`/`keywords` (null/empty on Finnhub fallback) | 🟡 Hybrid |
 | Premarket / After Hours / My names / Macro tabs | Real `news` filtered by ET hour or ticker, appended to the corresponding original mock arrays (`PREMARKET`, `AFTERHOURS`, etc.) | 🟡 Hybrid |
 | NewsDrawer (per-ticker history) | Live `news` section shown above the original mock `buildNewsHistory()` narrative section — both present | 🟡 Hybrid |
 | "Before the Bell" / "General perspective" sidebar cards | Hardcoded | 🔴 Static |
@@ -224,7 +225,7 @@ Two further vendor paths are still scaffolded but inert if real bid/ask/greeks a
 | Category | Screens |
 |---|---|
 | ✅ Fully live (no mock fallback in normal operation) | Stock notes (`stock_comments`); real user watchlist/portfolio once saved |
-| 🟡 Hybrid (live data merged onto intact original mock UI) | Dashboard (all 3 mini-widgets now included), Earnings Hub, Market Movers, Market Heatmap, Analyst Actions (partially), Screener (market cap/P-E/RS now all live), Themes, Portfolio Pulse, Watchlist, Stock Detail (price/fundamentals + 3M/6M/1Y chart), Insider & Institutional, Commentary, Macro & VIX (Live Economic Indicators + Live Dividend Calendar cards), IPOs (Live IPO Calendar card), Options Chain (Live Options Reference card, curated 8-ticker universe only), shell ticker strip |
+| 🟡 Hybrid (live data merged onto intact original mock UI) | Dashboard (all 3 mini-widgets now included), Earnings Hub, Market Movers, Market Heatmap, Analyst Actions (partially), Screener (market cap/P-E/RS now all live), Themes, Portfolio Pulse, Watchlist, Stock Detail (price/fundamentals + 3M/6M/1Y chart), Insider & Institutional, Commentary, Macro & VIX (Live Economic Indicators + Live Dividend Calendar cards), IPOs (Live IPO Calendar card), Options Chain (Live Options Reference card, curated 8-ticker universe only), shell ticker strip, shell Cmd+K search (full-market ticker search) |
 | 🔴 Fully static, blocked on vendor plan/key | Recaps (needs Claude + a new job); Options Chain's main bid/ask/IV/greeks/OI table (needs a Polygon plan upgrade or a Tradier key); Analyst Actions event table/Earnings guidance-reaction/richer News (need Benzinga) |
 | 🔴 Fully static, pending job run/restart | Macro & VIX's, IPOs', Options Chain's, and Dividends' live cards, plus Stock Detail's real chart and Screener's RS Rating — all six jobs are code-complete, keys are set (RS Rating needs none), just need the backend restarted and each job run once — RS Rating specifically also needs `stock-history` to have accumulated real history first |
 
@@ -242,6 +243,7 @@ Two further vendor paths are still scaffolded but inert if real bid/ask/greeks a
 | Screener's real RS Rating | Code is done, no key needed — restart the backend, run `stock-history` a few times first (to accumulate real bars), then `POST /sync/rs-rating/run` |
 | **Options Chain's real bid/ask/IV/greeks/OI — highest-value remaining gap** | Either upgrade the Polygon plan, or get a free `TRADIER_ACCESS_TOKEN` and finish the existing `tradier.service.ts` stub |
 | Recaps | Build a Polygon-EOD-recap job + obtain `ANTHROPIC_API_KEY` |
-| Analyst Actions event table, Earnings session/guidance/reaction, richer News | All need a Benzinga key (`BENZINGA_API_KEY`, currently empty) |
+| Analyst Actions event table, Earnings session/guidance/reaction | Need a Benzinga key (`BENZINGA_API_KEY`, currently empty) |
+| News category tagging + real-time push | News itself upgraded to Polygon-primary 2026-07-08 (sentiment/reasoning/keywords, no key needed) — only per-firm category tags and sub-minute push still need Benzinga |
 
 See `Doc/openapi.yaml` for the full, per-endpoint version of this table (`x-status`, `x-primary-source`, `x-alternate-source`, `x-fallback-behavior`).

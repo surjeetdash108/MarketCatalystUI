@@ -58,6 +58,21 @@ export interface MoverEnrichment {
   cap: CapBucket | null;
 }
 
+export interface CanonicalNewsArticle {
+  id: string;
+  ticker: string;
+  headline: string;
+  summary: string | null;
+  source: string;
+  url: string;
+  category: string | null;
+  /** Per-ticker sentiment classification — structurally absent on some sources (e.g. Finnhub), not just unavailable this run. */
+  sentiment: 'positive' | 'negative' | 'neutral' | null;
+  sentimentReasoning: string | null;
+  keywords: string[];
+  publishedAt: string;
+}
+
 // ---- Warnings + result envelope (mirror Doc/openapi.yaml AdapterWarning) ----
 
 /**
@@ -108,11 +123,21 @@ export interface MoverEnrichmentAdapter {
   enrichTicker(ticker: string): Promise<AdapterResult<MoverEnrichment> | null>;
 }
 
+export interface NewsAdapter {
+  readonly sourceName: string;
+  fetchNews(
+    ticker: string,
+    from: string,
+    to: string,
+  ): Promise<AdapterResult<CanonicalNewsArticle[]>>;
+}
+
 // ---- DI tokens (bind these to a concrete adapter in adapters.module.ts) ----
 
 export const COMPANY_PROFILE_ADAPTER = Symbol('COMPANY_PROFILE_ADAPTER');
 export const MOVERS_ADAPTER = Symbol('MOVERS_ADAPTER');
 export const MOVER_ENRICHMENT_ADAPTER = Symbol('MOVER_ENRICHMENT_ADAPTER');
+export const NEWS_ADAPTER = Symbol('NEWS_ADAPTER');
 
 // ---- Shared helper (was duplicated inline in market-movers.job.ts) ----
 

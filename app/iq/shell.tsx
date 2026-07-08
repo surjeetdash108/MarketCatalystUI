@@ -20,6 +20,7 @@ import { menuItems } from "../dashboard/menu-items";
 import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail, type PulseItem } from "./data";
 import { fmt, sign, cls, arr, SemiGauge } from "./utils";
 import { useCollection } from "./hooks/useCollection";
+import { useTickerSearch } from "./hooks/useTickerSearch";
 import { mergePulse, type IndexDoc } from "./live-market-indices";
 
 // ---- Route helpers ----
@@ -799,6 +800,20 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [searchQ, setSearchQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchStarred, setSearchStarred] = useState<Set<string>>(() => new Set());
+  // Full ~10,000-ticker universe search (on-demand, scoped query — see
+  // useTickerSearch's docblock) — SEARCHABLE_STOCKS below stays as the
+  // curated "quick access" list shown before the user types anything.
+  const tickerSearchResults = useTickerSearch(searchQ);
+  const searchMatches: Array<{ sym: string; name: string | null; price: number | null; pctChange: number | null }> = searchQ
+    ? (() => {
+        const bySym = new Map(tickerSearchResults.map(r => [r.ticker, r]));
+        const curated = SEARCHABLE_STOCKS.filter(s => s.toLowerCase().startsWith(searchQ.toLowerCase()) && !bySym.has(s));
+        return [
+          ...tickerSearchResults.map(r => ({ sym: r.ticker, name: r.name, price: r.price, pctChange: r.pctChange })),
+          ...curated.map(s => ({ sym: s, name: null, price: null, pctChange: null })),
+        ];
+      })()
+    : SEARCHABLE_STOCKS.map(s => ({ sym: s, name: null, price: null, pctChange: null }));
   const cmdRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLElement>(null);
   const [drawer, setDrawer] = useState<
@@ -975,8 +990,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     onKeyDown={e => {
                       if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); }
                       if (e.key === "Enter") {
-                        const matches = SEARCHABLE_STOCKS.filter(s => s.toLowerCase().startsWith(searchQ.toLowerCase()));
-                        if (matches[0]) { localStorage.setItem("iq-stock", matches[0]); router.push("/menu/stock"); setSearchOpen(false); setSearchQ(""); }
+                        if (searchMatches[0]) { localStorage.setItem("iq-stock", searchMatches[0].sym); router.push("/menu/stock"); setSearchOpen(false); setSearchQ(""); }
                       }
                     }}
                   />
@@ -984,26 +998,32 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 </div>
                 {searchOpen && (
                   <div className="cmd-dropdown">
-                    {SEARCHABLE_STOCKS.filter(s => !searchQ || s.toLowerCase().startsWith(searchQ.toLowerCase())).map(sym => (
-                      <div key={sym} className="palette-item"
+                    {searchMatches.map(m => (
+                      <div key={m.sym} className="palette-item"
                         onMouseDown={e => e.preventDefault()}
-                        onClick={() => { localStorage.setItem("iq-stock", sym); router.push("/menu/stock"); setSearchOpen(false); setSearchQ(""); }}
+                        onClick={() => { localStorage.setItem("iq-stock", m.sym); router.push("/menu/stock"); setSearchOpen(false); setSearchQ(""); }}
                       >
-                        <div className="palette-item-icon" style={{ color: "var(--brand-2)", fontWeight: 700, fontFamily: "var(--f-mono)" }}>{sym[0]}</div>
+                        <div className="palette-item-icon" style={{ color: "var(--brand-2)", fontWeight: 700, fontFamily: "var(--f-mono)" }}>{m.sym[0]}</div>
                         <div style={{ flex: 1 }}>
-                          <div className="palette-item-label">{sym}</div>
-                          <div className="palette-item-sub">Stock · click to open</div>
+                          <div className="palette-item-label">{m.sym}</div>
+                          <div className="palette-item-sub">{m.name ?? "Stock"} · click to open</div>
                         </div>
+                        {m.price != null && (
+                          <div style={{ textAlign: "right", marginRight: 4 }}>
+                            <div className="mono" style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>{fmt(m.price)}</div>
+                            {m.pctChange != null && <div className={`mono ${cls(m.pctChange)}`} style={{ fontSize: ".68rem" }}>{sign(m.pctChange)}</div>}
+                          </div>
+                        )}
                         <button
-                          title={searchStarred.has(sym) ? "Remove from watchlist" : "Add to watchlist"}
+                          title={searchStarred.has(m.sym) ? "Remove from watchlist" : "Add to watchlist"}
                           onMouseDown={e => e.preventDefault()}
-                          onClick={e => { e.stopPropagation(); setSearchStarred(prev => { const n = new Set(prev); n.has(sym) ? n.delete(sym) : n.add(sym); return n; }); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", color: searchStarred.has(sym) ? "var(--warn)" : "var(--text-dim-solid)", padding: "0 4px" }}>
-                          {searchStarred.has(sym) ? "★" : "☆"}
+                          onClick={e => { e.stopPropagation(); setSearchStarred(prev => { const n = new Set(prev); n.has(m.sym) ? n.delete(m.sym) : n.add(m.sym); return n; }); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", color: searchStarred.has(m.sym) ? "var(--warn)" : "var(--text-dim-solid)", padding: "0 4px" }}>
+                          {searchStarred.has(m.sym) ? "★" : "☆"}
                         </button>
                       </div>
                     ))}
-                    {searchQ && SEARCHABLE_STOCKS.filter(s => s.toLowerCase().startsWith(searchQ.toLowerCase())).length === 0 && (
+                    {searchQ && searchMatches.length === 0 && (
                       <div style={{ padding: "12px 15px", color: "var(--text-dim-solid)", fontSize: 13 }}>No results for &ldquo;{searchQ}&rdquo;</div>
                     )}
                   </div>

@@ -341,7 +341,8 @@ paths:
         subset (may 404 outside it).
       x-status: live
       x-consumed-by:
-        - "Not consumed by any screen today — no app/iq/screens/*.tsx file reads this collection yet (verified by grepping every useCollection() call). Backend data is now complete (reference + price for the whole market); wiring a screen to it (e.g. expanding Screener's picker beyond the curated 241) is a separate, not-yet-done step."
+        - "Shell (app/iq/shell.tsx) — Cmd+K / top search bar, via app/iq/hooks/useTickerSearch.ts. NOT a useCollection() full-collection subscription (that would download all ~10,000 docs on every page load, since the shell wraps every screen) — instead a scoped, on-demand Firestore range query (where ticker >= Q AND ticker < Q+highChar, limited to 20 results), fired only when the user types, debounced 200ms. Ticker-prefix matching only; company-name search (e.g. typing \"Apple\" to find AAPL) isn't implemented — would need a normalized lowercase name field added to ticker-universe.job.ts first."
+        - "Screener (app/iq/screens/screener.tsx) does NOT read this collection — its picker is still limited to the curated 241-ticker TICKER_UNIVERSE via the companies collection. Expanding Screener itself to the full universe is a separate, not-yet-done step."
       x-primary-source: >-
         Reference fields: Polygon `/v3/reference/tickers`, paginated
         (~1000/page), synced weekly (Sunday 03:00 ET) —
@@ -972,19 +973,25 @@ paths:
       tags: [News]
       summary: Company news headlines
       description: |
-        INTERIM source — no category tagging richness or real-time push
-        (polled batch every 30 min).
+        Polygon-primary as of 2026-07-08: adds per-ticker sentiment +
+        sentiment_reasoning and free-text keywords Finnhub structurally
+        lacks, still polled batch every 30 min (no true push either way).
       x-status: live
       x-consumed-by:
         - "Commentary (app/iq/screens/commentary.tsx) — Live tab (merged ahead of mock commentary items), Premarket/After Hours/My names/Macro tabs (filtered by ET hour or ticker, appended to the corresponding mock arrays), NewsDrawer per-ticker history (shown above the mock buildNewsHistory() narrative section)"
         - "Dashboard (app/iq/screens/dashboard.tsx) — Live Market Feed (falls back to mock feed items when none have synced for the tracked universe yet)"
       x-primary-source: >-
-        Finnhub `/company-news`, synced every 30 min during market hours,
+        Polygon `/v2/reference/news`, synced every 30 min during market hours,
         80 tickers per run cycling the full universe, last 2 days lookback.
+        Adapter-selected via NEWS_SOURCE (see backend/src/adapters/adapters.module.ts);
+        falls back to Finnhub `/company-news` (NEWS_FALLBACK_SOURCE) on failure,
+        served with a FALLBACK_USED warning when that happens.
       x-alternate-source: >-
-        Benzinga real-time newsfeed with category tagging (earnings/M&A/
-        macro classification built in, vs. Finnhub's flat category string) —
-        near-instant push vs. Finnhub's 30-min poll cadence; blocked, no key.
+        Benzinga real-time newsfeed with per-firm category tagging
+        (earnings/M&A/macro classification built in) and near-instant push
+        vs. Polygon/Finnhub's 30-min poll cadence; blocked, no key. Neither
+        Polygon nor Finnhub sells this — a Benzinga key would be additive,
+        not a straight swap.
       x-write-pattern: >-
         IMMUTABLE / append-only. Doc id is `{ticker}_{articleId}` — a
         published article's headline/summary never change, and the same
@@ -2119,7 +2126,10 @@ components:
         summary: { type: string }
         source: { type: string }
         url: { type: string, format: uri }
-        category: { type: string }
+        category: { type: string, nullable: true }
+        sentiment: { type: string, enum: [positive, negative, neutral], nullable: true, description: "Polygon-only — null when served by the Finnhub fallback (structurally absent there)." }
+        sentimentReasoning: { type: string, nullable: true, description: "Polygon-only — null when served by the Finnhub fallback." }
+        keywords: { type: array, items: { type: string }, description: "Empty when served by the Finnhub fallback." }
         publishedAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 

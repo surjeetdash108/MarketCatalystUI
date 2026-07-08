@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { FinnhubModule } from '../vendors/finnhub/finnhub.module';
+import { FinnhubService } from '../vendors/finnhub/finnhub.service';
 import { FmpModule } from '../vendors/fmp/fmp.module';
 import { FmpService } from '../vendors/fmp/fmp.service';
 import { PolygonModule } from '../vendors/polygon/polygon.module';
@@ -7,33 +9,39 @@ import { PolygonService } from '../vendors/polygon/polygon.service';
 import { CompositeCompanyProfileAdapter } from './composite-company-profile.adapter';
 import { CompositeMoverEnrichmentAdapter } from './composite-mover-enrichment.adapter';
 import { CompositeMoversAdapter } from './composite-movers.adapter';
+import { CompositeNewsAdapter } from './composite-news.adapter';
+import { FinnhubNewsAdapter } from './finnhub-news.adapter';
 import { FmpCompanyProfileAdapter } from './fmp-company-profile.adapter';
 import { FmpMoverEnrichmentAdapter } from './fmp-mover-enrichment.adapter';
 import { FmpMoversAdapter } from './fmp-movers.adapter';
 import { PolygonCompanyProfileAdapter } from './polygon-company-profile.adapter';
 import { PolygonMoverEnrichmentAdapter } from './polygon-mover-enrichment.adapter';
 import { PolygonMoversAdapter } from './polygon-movers.adapter';
+import { PolygonNewsAdapter } from './polygon-news.adapter';
 import {
   COMPANY_PROFILE_ADAPTER,
   MOVER_ENRICHMENT_ADAPTER,
   MOVERS_ADAPTER,
+  NEWS_ADAPTER,
 } from './types';
 
-const VALID_SOURCES = ['fmp', 'polygon', 'none'] as const;
-type SourceName = (typeof VALID_SOURCES)[number];
+const FMP_POLYGON_SOURCES = ['fmp', 'polygon', 'none'] as const;
+const NEWS_SOURCES = ['polygon', 'finnhub', 'none'] as const;
 
-function parseSource(
+/** Generic over each factory's own valid-source set, rather than one shared union every factory would have to filter against. */
+function parseSource<S extends string>(
   config: ConfigService,
   key: string,
-  fallbackDefault: SourceName,
-): SourceName {
+  validSources: readonly S[],
+  fallbackDefault: S,
+): S {
   const raw = config.get<string>(key, fallbackDefault);
-  if (!VALID_SOURCES.includes(raw as SourceName)) {
+  if (!validSources.includes(raw as S)) {
     throw new Error(
-      `Unknown ${key}="${raw}" — expected one of: ${VALID_SOURCES.join(', ')}`,
+      `Unknown ${key}="${raw}" — expected one of: ${validSources.join(', ')}`,
     );
   }
-  return raw as SourceName;
+  return raw as S;
 }
 
 /**
@@ -51,7 +59,7 @@ function parseSource(
  * bare null/empty result) when every configured source fails.
  */
 @Module({
-  imports: [FmpModule, PolygonModule],
+  imports: [FmpModule, PolygonModule, FinnhubModule],
   providers: [
     FmpCompanyProfileAdapter,
     PolygonCompanyProfileAdapter,
@@ -59,6 +67,8 @@ function parseSource(
     PolygonMoversAdapter,
     FmpMoverEnrichmentAdapter,
     PolygonMoverEnrichmentAdapter,
+    PolygonNewsAdapter,
+    FinnhubNewsAdapter,
     {
       provide: COMPANY_PROFILE_ADAPTER,
       inject: [ConfigService, FmpService, PolygonService],
@@ -70,11 +80,13 @@ function parseSource(
         const primarySource = parseSource(
           config,
           'COMPANY_PROFILE_SOURCE',
+          FMP_POLYGON_SOURCES,
           'fmp',
         );
         const fallbackSource = parseSource(
           config,
           'COMPANY_PROFILE_FALLBACK_SOURCE',
+          FMP_POLYGON_SOURCES,
           'polygon',
         );
 
@@ -104,10 +116,16 @@ function parseSource(
         fmp: FmpService,
         polygon: PolygonService,
       ) => {
-        const primarySource = parseSource(config, 'MOVERS_SOURCE', 'polygon');
+        const primarySource = parseSource(
+          config,
+          'MOVERS_SOURCE',
+          FMP_POLYGON_SOURCES,
+          'polygon',
+        );
         const fallbackSource = parseSource(
           config,
           'MOVERS_FALLBACK_SOURCE',
+          FMP_POLYGON_SOURCES,
           'fmp',
         );
 
@@ -140,11 +158,13 @@ function parseSource(
         const primarySource = parseSource(
           config,
           'MOVER_ENRICHMENT_SOURCE',
+          FMP_POLYGON_SOURCES,
           'fmp',
         );
         const fallbackSource = parseSource(
           config,
           'MOVER_ENRICHMENT_FALLBACK_SOURCE',
+          FMP_POLYGON_SOURCES,
           'polygon',
         );
 
@@ -166,7 +186,51 @@ function parseSource(
         return new CompositeMoverEnrichmentAdapter(primary, fallback);
       },
     },
+    {
+      provide: NEWS_ADAPTER,
+      inject: [ConfigService, PolygonService, FinnhubService],
+      useFactory: (
+        config: ConfigService,
+        polygon: PolygonService,
+        finnhub: FinnhubService,
+      ) => {
+        const primarySource = parseSource(
+          config,
+          'NEWS_SOURCE',
+          NEWS_SOURCES,
+          'polygon',
+        );
+        const fallbackSource = parseSource(
+          config,
+          'NEWS_FALLBACK_SOURCE',
+          NEWS_SOURCES,
+          'finnhub',
+        );
+
+        const bySource = {
+          polygon: () => new PolygonNewsAdapter(polygon),
+          finnhub: () => new FinnhubNewsAdapter(finnhub),
+          none: () => null,
+        };
+        if (primarySource === 'none') {
+          throw new Error(
+            'NEWS_SOURCE cannot be "none" — a primary source is required',
+          );
+        }
+        const primary = bySource[primarySource]();
+        const fallback =
+          fallbackSource === 'none' || fallbackSource === primarySource
+            ? null
+            : bySource[fallbackSource]();
+        return new CompositeNewsAdapter(primary, fallback);
+      },
+    },
   ],
-  exports: [COMPANY_PROFILE_ADAPTER, MOVERS_ADAPTER, MOVER_ENRICHMENT_ADAPTER],
+  exports: [
+    COMPANY_PROFILE_ADAPTER,
+    MOVERS_ADAPTER,
+    MOVER_ENRICHMENT_ADAPTER,
+    NEWS_ADAPTER,
+  ],
 })
 export class AdaptersModule {}

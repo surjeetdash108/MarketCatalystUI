@@ -10,6 +10,26 @@ A subscription-based active-investor research platform that consolidates earning
 
 A separate NestJS service, not part of this Next.js app, syncs vendor data (Polygon, FMP, Finnhub, FRED, SEC EDGAR) into Firestore on cron schedules — this app reads the results via the Firestore client SDK, same as any other collection, and never calls a vendor directly or holds a vendor key. See `backend/README.md` for how to run it, `Doc/openapi.yaml` for the full documented data contract, and `Doc/schema.sql` for the equivalent relational schema if this ever migrates off Firestore.
 
+### Data flow (verified 2026-07-08)
+
+```
+Vendor APIs (Polygon, FMP, Finnhub, FRED, SEC EDGAR)
+        │  17 NestJS cron jobs, each on its own periodic interval
+        │  (daily/weekly/every-30-min — see backend/README.md's job table)
+        ▼
+   Cloud Firestore  (backend/src/common/firebase-admin.provider.ts — Admin SDK, server-only)
+        │  onSnapshot() real-time listeners (app/iq/hooks/useCollection.ts, useOhlcvBars.ts)
+        ▼
+   Next.js app (this repo) — every live screen element
+```
+
+Confirmed end-to-end, not assumed:
+- Every one of the 17 sync jobs in `backend/src/sync/*.job.ts` has a real `@Cron(...)` schedule — none are one-off or manually-triggered-only.
+- Zero vendor API domains or vendor API keys are referenced anywhere in `app/` (grepped for Polygon/FMP/Finnhub/FRED/SEC EDGAR URLs and every `NEXT_PUBLIC_*_API_KEY` var name — no matches).
+- `.env.local` (frontend env) had 3 live, populated `NEXT_PUBLIC_*` vendor keys left over from before the backend migration, unused by any code — blanked out 2026-07-08 as a security cleanup (was gitignored, never committed, so not a git-history leak, but no reason for a live credential to sit there once the frontend stopped calling vendors directly).
+
+Where the requirement isn't yet fully met: not every screen element has a live source wired up yet (some genuinely have none — AI content needs Claude, some are intentionally curated/editorial, not vendor data at all). See `Doc/screen-data-sources.md` for the exhaustive, per-element breakdown of what's live vs. still illustrative, and exactly why for each one.
+
 ---
 
 ## Project Structure

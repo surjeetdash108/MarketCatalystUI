@@ -56,6 +56,30 @@ interface PolygonOptionContractsResponse {
   status: string;
 }
 
+export interface PolygonNewsInsight {
+  ticker: string;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  sentiment_reasoning: string;
+}
+
+export interface PolygonNewsArticle {
+  id: string;
+  publisher: { name: string };
+  title: string;
+  author?: string;
+  published_utc: string;
+  article_url: string;
+  tickers: string[];
+  description?: string;
+  keywords?: string[];
+  insights?: PolygonNewsInsight[];
+}
+
+interface PolygonNewsResponse {
+  results?: PolygonNewsArticle[];
+  status: string;
+}
+
 const BASE_URL = 'https://api.polygon.io';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -78,6 +102,13 @@ const PAGE_DELAY_MS = 12_500;
  * equity side. So getOptionContracts/getOptionLatestBar below can supply
  * real strikes/expirations and a real (delayed) last price/volume — never
  * a real bid/ask, IV, or open interest.
+ *
+ * News (`/v2/reference/news`) also confirmed working 2026-07-08, and
+ * genuinely richer than Finnhub's `/company-news`: multi-ticker tagging,
+ * `keywords`, and per-ticker `insights` (sentiment + a reasoning string) —
+ * none of which Finnhub's endpoint has. No analyst-ratings or earnings-
+ * guidance/reaction product exists on Polygon at all (checked, both 404) —
+ * this is specifically a news upgrade, not a broader Benzinga replacement.
  */
 @Injectable()
 export class PolygonService {
@@ -191,5 +222,20 @@ export class PolygonService {
       `${BASE_URL}/v2/aggs/ticker/${optionTicker}/range/1/day/${fromDate}/${toDate}?sort=desc&limit=1&apiKey=${this.apiKey}`,
     );
     return res.results?.[0] ?? null;
+  }
+
+  /** Recent news mentioning `ticker` (may be multi-ticker articles) within [from, to], newest first. */
+  async getNews(
+    ticker: string,
+    from: string,
+    to: string,
+    limit = 10,
+  ): Promise<PolygonNewsArticle[]> {
+    const res = await fetchJson<PolygonNewsResponse>(
+      `${BASE_URL}/v2/reference/news?ticker=${ticker}` +
+        `&published_utc.gte=${from}&published_utc.lte=${to}` +
+        `&order=desc&sort=published_utc&limit=${limit}&apiKey=${this.apiKey}`,
+    );
+    return res.results ?? [];
   }
 }

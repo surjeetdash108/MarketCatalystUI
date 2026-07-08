@@ -63,7 +63,7 @@ Listens on `PORT` from `.env` (default 4100).
 | `market-indices` | Finnhub (ETF proxies — see the job's docblock for caveats) | Daily 18:05 ET | `market_indices/{symbol}` + `market_indices_history/{date}_{symbol}` |
 | `earnings` | FMP | Daily 06:00 ET | `earnings_events/{ticker}_{date}` |
 | `analyst-actions` | FMP (consensus snapshot, not a per-firm event feed) | Daily 06:00 ET, rotating batch | `analyst_actions/{ticker}` |
-| `news` | Finnhub | Every 30 min, market hours | `news/{ticker}_{articleId}` |
+| `news` | Polygon `/v2/reference/news` (primary, verified 2026-07-08 — adds sentiment/reasoning/keywords Finnhub lacks) → Finnhub `/company-news` (fallback); adapter-selected via `NEWS_SOURCE`/`NEWS_FALLBACK_SOURCE` | Every 30 min, market hours | `news/{ticker}_{articleId}` |
 | `sec-13f` | SEC EDGAR | Nightly 01:00 ET | `fund_holdings/{cik}(/filings/{accessionNumber}/positions/{cusip})` |
 | `sec-form4` | SEC EDGAR | Nightly 01:30 ET, rotating batch | `insider_transactions/{accessionNumber}_{i}` |
 | `ticker-universe` | Polygon (full US ticker discovery — no fundamentals) | Weekly, Sunday 03:00 ET | `tickers/{ticker}` |

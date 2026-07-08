@@ -1,10 +1,12 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { AllSourcesFailedError } from '../adapters/adapter-error';
+import { NEWS_ADAPTER } from '../adapters/types';
+import type { NewsAdapter } from '../adapters/types';
 import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { chunkedBatchSet } from '../common/firestore-batch.util';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { TICKER_UNIVERSE } from '../common/ticker-universe';
-import { FinnhubService } from '../vendors/finnhub/finnhub.service';
 import { SyncRegistry } from './sync-registry.service';
 
 const JOB_NAME = 'news';
@@ -19,16 +21,21 @@ function isoDate(d: Date) {
 }
 
 /**
- * INTERIM source: Finnhub /company-news gives per-symbol recent headlines,
- * not Benzinga's category-tagged real-time feed. Switch to Benzinga (Wave 3)
- * once that key is provided for richer tagging + faster delivery.
+ * Vendor-agnostic by design, same as the adapters used elsewhere: this job
+ * only calls the injected NewsAdapter (see ../adapters/types.ts), never a
+ * vendor service directly. Which vendor(s) actually back it — including
+ * automatic fallback — is chosen once in adapters.module.ts (NEWS_SOURCE /
+ * NEWS_FALLBACK_SOURCE). Polygon is the default primary as of 2026-07-08
+ * (richer than Finnhub: sentiment + reasoning, keywords, multi-ticker
+ * tagging — see PolygonNewsAdapter/PolygonService's docblocks); Finnhub is
+ * the fallback, having been the sole source until this change.
  */
 @Injectable()
 export class NewsJob implements OnModuleInit {
   private readonly logger = new Logger(NewsJob.name);
 
   constructor(
-    private readonly finnhub: FinnhubService,
+    @Inject(NEWS_ADAPTER) private readonly news: NewsAdapter,
     private readonly firebase: FirebaseAdminService,
     private readonly meta: SyncMetaService,
     private readonly registry: SyncRegistry,
@@ -57,33 +64,46 @@ export class NewsJob implements OnModuleInit {
       from.setUTCDate(from.getUTCDate() - LOOKBACK_DAYS);
 
       const docs: Array<{ id: string; data: Record<string, unknown> }> = [];
+      let fallbackCount = 0;
 
       for (const symbol of batch) {
         try {
-          const articles = await this.finnhub.getCompanyNews(
+          const result = await this.news.fetchNews(
             symbol,
             isoDate(from),
             isoDate(to),
           );
-          for (const a of articles.slice(0, 5)) {
+          if (result.warnings.some((w) => w.code === 'FALLBACK_USED')) {
+            fallbackCount++;
+          }
+          for (const a of result.data.slice(0, 5)) {
             docs.push({
               id: `${symbol}_${a.id}`,
               data: {
-                ticker: symbol,
+                ticker: a.ticker,
                 headline: a.headline,
                 summary: a.summary,
                 source: a.source,
                 url: a.url,
                 category: a.category,
-                publishedAt: new Date(a.datetime * 1000).toISOString(),
+                sentiment: a.sentiment,
+                sentimentReasoning: a.sentimentReasoning,
+                keywords: a.keywords,
+                publishedAt: a.publishedAt,
                 updatedAt: new Date().toISOString(),
               },
             });
           }
         } catch (err) {
-          this.logger.error(
-            `Failed fetching news for ${symbol}: ${(err as Error).message}`,
-          );
+          if (err instanceof AllSourcesFailedError) {
+            this.logger.error(
+              `${symbol}: every configured news source failed — ${err.attempts.map((a) => `${a.source}: ${a.error}`).join(' | ')}`,
+            );
+          } else {
+            this.logger.error(
+              `Failed fetching news for ${symbol}: ${(err as Error).message}`,
+            );
+          }
         }
         await sleep(DELAY_MS);
       }
@@ -93,8 +113,16 @@ export class NewsJob implements OnModuleInit {
         JOB_NAME,
         (cursor + BATCH_SIZE) % TICKER_UNIVERSE.length,
       );
-      await this.meta.record(JOB_NAME, { ok: true, count: docs.length });
-      return { count: docs.length };
+      await this.meta.record(JOB_NAME, {
+        ok: true,
+        count: docs.length,
+        ...(fallbackCount > 0
+          ? {
+              error: `${fallbackCount}/${batch.length} tickers served by fallback news source`,
+            }
+          : {}),
+      });
+      return { count: docs.length, fallbackCount };
     } catch (err) {
       await this.meta.record(JOB_NAME, {
         ok: false,
