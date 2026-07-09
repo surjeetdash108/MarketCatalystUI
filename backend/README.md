@@ -23,7 +23,13 @@ directly — each has two working vendor implementations behind a
 `Composite*Adapter` with automatic fallback, so a vendor outage degrades
 gracefully (tagged with a `FALLBACK_USED` warning) instead of failing the
 sync. Every job records its last-run status to the `sync_meta` Firestore
-collection, readable via `GET /sync/jobs`.
+collection, readable via `GET /sync/jobs`. As of 2026-07-09, each job also
+declares which collection(s) it writes to and its cron schedule once, at
+registration time (`backend/src/common/sync-registry.service.ts`,
+`JobMeta`) — `sync_meta/{jobName}` persists these alongside every run
+result, so "which table did this job affect, and how often does it run"
+is answerable straight from Firestore, not just from reading this table or
+the job's source.
 
 ## Running it
 
@@ -35,7 +41,14 @@ npm run start:dev      # watch mode, restarts on file changes
 
 Requires either `service-account.json` (Firebase service account key) or
 `gcloud auth application-default login` for Firestore access — see
-`FirebaseAdminService` for the fallback order.
+`FirebaseAdminService` for the fallback order. **Prefer the service-account
+key for anything beyond a quick local check**: the ADC path depends on a
+personal Google login that expires and needs an interactive browser reauth
+(`invalid_grant`/`invalid_rapt` in the logs) — it has silently broken sync
+more than once in practice. Firebase Console → project → Project Settings →
+Service Accounts → "Generate new private key" → save as
+`backend/service-account.json` (gitignored); no code or env change needed,
+`FirebaseAdminService` prefers it automatically when present.
 
 `macro-events` additionally needs a free `FRED_API_KEY` from
 https://fredaccount.stlouisfed.org/apikeys — without it the job logs a
@@ -48,10 +61,11 @@ Listens on `PORT` from `.env` (default 4100).
 | Endpoint | Purpose |
 |---|---|
 | `GET /health` | Liveness check |
-| `GET /sync/jobs` | Every registered job + running state + last-run status (used by `backendUI/index.html`, a static ops dashboard — `npx serve -l 4200 backendUI`) |
+| `GET /sync/jobs` | Every registered job + running state + last-run status + collections affected + cron schedule + next scheduled run time (used by `backendUI/index.html`, a static ops dashboard — `npx serve -l 4200 backendUI`). Collections/schedule/next-run come from the in-process registry (`nextRunAt` computed fresh per request via the `cron` package's `CronJob.nextDate()` — the same library `@nestjs/schedule` itself uses), so they're populated even when Firestore itself is unreachable (`metaError` set) — only the last-run fields depend on Firestore in that case. |
 | `GET /sync/status` | Raw `sync_meta` for every job |
 | `GET /sync/:job/status` | `sync_meta` for one job |
 | `POST /sync/:job/run` | Manually trigger a job (for testing) |
+| `POST /sync/run-all` | Manually trigger every registered job, sequentially — not parallel, since several jobs already self-throttle against a single vendor (SEC EDGAR's 10 req/sec, news.job.ts's per-ticker delay) and concurrent execution would stack unrelated bursts for no benefit. A job already mid-run is skipped, not double-invoked; one job's failure doesn't stop the rest. Backs the "Run all now" button in `backendUI/index.html` — hits every configured vendor back-to-back and can take a few minutes for all 17 jobs, real quota cost, not a cheap action. |
 
 ## Sync jobs
 

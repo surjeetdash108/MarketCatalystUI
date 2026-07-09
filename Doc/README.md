@@ -4,7 +4,9 @@ A subscription-based active-investor research platform that consolidates earning
 
 15 of 18 screens now read at least some live data, additively merged onto the original mock UI (nothing was deleted to make room for it) — see `Doc/screen-data-sources.md` for the accurate, per-screen breakdown of what's real vs. still illustrative, and why. Options Chain's main bid/ask/IV/greeks/OI table stays simulated (Polygon's options snapshot is confirmed 403 on the current plan; would need an upgrade or a Tradier key), and Recaps remains fully static (blocked on `ANTHROPIC_API_KEY` + a new job).
 
-Recent additions (2026-07-08/09): full US ticker universe (~10,000+ tickers, price-only) wired to the Cmd+K search bar; Screener's RS Rating now computed from real OHLCV history instead of not existing at all; news upgraded to Polygon-primary (adds sentiment/reasoning/keywords) with Finnhub as automatic fallback; Portfolio's computed totals (`totalValue`/`dayPL`/`dayPLPct`) are now materialized into Firestore alongside the existing holdings CRUD, so something outside the browser can read portfolio value without recomputing it.
+Recent additions (2026-07-08/09): full US ticker universe (~10,000+ tickers, price-only) wired to the Cmd+K search bar; Screener's RS Rating now computed from real OHLCV history instead of not existing at all; news upgraded to Polygon-primary (adds sentiment/reasoning/keywords) with Finnhub as automatic fallback; Portfolio's computed totals (`totalValue`/`dayPL`/`dayPLPct`) are now materialized into Firestore alongside the existing holdings CRUD, so something outside the browser can read portfolio value without recomputing it; a missing Firestore composite index on `ohlcv_bars` (`ticker`+`barDate`, needed by RS Rating and the Stock Detail chart) was found and deployed via a new `firestore.indexes.json`.
+
+Ops tooling (2026-07-09, backend-only — not part of the StockWise app itself): every sync job now declares which Firestore collection(s) it writes and its cron schedule once, at registration (`backend/src/common/sync-registry.service.ts`); `sync_meta/{jobName}` persists this alongside every run result, and `GET /sync/jobs` additionally computes each job's next scheduled fire time on the fly (via the same `cron` library `@nestjs/schedule` uses internally, so it can't drift from what actually fires). A new `POST /sync/run-all` triggers every job sequentially for manual testing. `backendUI/index.html` (a static ops dashboard, `npx serve -l 4200 backendUI`) surfaces all of this — collections affected, interval, next run — plus a confirm-gated "Run all now" button.
 
 ---
 
@@ -12,7 +14,7 @@ Recent additions (2026-07-08/09): full US ticker universe (~10,000+ tickers, pri
 
 A separate NestJS service, not part of this Next.js app, syncs vendor data (Polygon, FMP, Finnhub, FRED, SEC EDGAR) into Firestore on cron schedules — this app reads the results via the Firestore client SDK, same as any other collection, and never calls a vendor directly or holds a vendor key. See `backend/README.md` for how to run it, `Doc/openapi.yaml` for the full documented data contract, and `Doc/schema.sql` for the equivalent relational schema if this ever migrates off Firestore.
 
-### Data flow (verified 2026-07-08)
+### Data flow (verified 2026-07-09)
 
 ```
 Vendor APIs (Polygon, FMP, Finnhub, FRED, SEC EDGAR)

@@ -5,7 +5,7 @@ import { chunkedBatchSet } from '../common/firestore-batch.util';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { TICKER_UNIVERSE } from '../common/ticker-universe';
 import { SecEdgarService } from '../vendors/sec-edgar/sec-edgar.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'sec-form4';
 const BATCH_SIZE = 20; // company lookups are expensive (submissions + per-filing index + xml)
@@ -57,7 +57,11 @@ export class SecForm4Job implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['insider_transactions'],
+      cronExpression: '30 1 * * *',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 01:30 ET nightly, staggered after the 13F job.

@@ -23,10 +23,13 @@ const REAL_DATA_TIMEFRAMES = new Set(["3M", "6M", "1Y"]);
  * usable real data yet, so callers fall back to the simulated generator.
  *
  * This where()+orderBy() combination needs a Firestore composite index —
- * same requirement stock_comments' query already has elsewhere in this
- * file, managed directly in the Firebase console rather than tracked in
- * this repo. If it's missing, Firestore's own error includes a one-click
- * link to create it.
+ * tracked in `firestore.indexes.json` at the repo root (deployed via
+ * `firebase deploy --only firestore:indexes`), NOT managed ad hoc in the
+ * Firebase console. That file declares (ticker ASC, barDate DESC) — the
+ * direction backend/src/sync/rs-rating.job.ts's query needs — but Firestore
+ * composite indexes are bidirectional: the same index also serves this
+ * hook's ASC query by scanning in reverse, so one index entry correctly
+ * covers both call sites; it does not need a second entry for ASC.
  */
 export function useOhlcvBars(sym: string, tf: string): OHLCBar[] | undefined {
   const [bars, setBars] = useState<OHLCBar[]>([]);

@@ -10,7 +10,7 @@ import type {
 } from '../adapters/types';
 import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'market-movers';
 const TOP_N = 20;
@@ -51,7 +51,11 @@ export class MarketMoversJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['market_movers', 'market_movers_history'],
+      cronExpression: '0 18 * * 1-5',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 18:00 ET, well after market close and the EOD aggregation window.

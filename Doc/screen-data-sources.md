@@ -1,6 +1,6 @@
 # StockWise Screen Data Sources
 
-_Last verified: 2026-07-09, against the actual code in `app/iq/screens/*.tsx` and `backend/src/sync/*.job.ts`. See `Doc/openapi.yaml` for the full data contract and `Doc/schema.sql` if this ever migrates off Firestore._
+_Last verified: 2026-07-09, against the actual code in `app/iq/screens/*.tsx` and `backend/src/sync/*.job.ts`. See `Doc/openapi.yaml` for the full data contract and `Doc/schema.sql` if this ever migrates off Firestore. (2026-07-09 also added backend ops tooling — sync_meta collections/cron/next-run tracking, `POST /sync/run-all`, `backendUI/index.html` dashboard polish — none of which touches a StockWise screen, so nothing below changed from this pass.)_
 
 > **Legend**
 > - ✅ **Live** — data comes from a real Firestore collection written by a backend sync job (or Firebase Auth/user-owned Firestore data)

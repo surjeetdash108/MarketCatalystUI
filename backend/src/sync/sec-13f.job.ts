@@ -4,7 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { FUND_UNIVERSE } from '../common/fund-universe';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { SecEdgarService } from '../vendors/sec-edgar/sec-edgar.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'sec-13f';
 
@@ -34,7 +34,15 @@ export class Sec13FJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: [
+        'fund_holdings',
+        'fund_holdings/{cik}/filings',
+        'fund_holdings/{cik}/filings/{id}/positions',
+      ],
+      cronExpression: '0 1 * * *',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 01:00 ET nightly, per SEC's own "batch overnight" guidance.

@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { TICKER_UNIVERSE } from '../common/ticker-universe';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'rs-rating';
 const BARS_PER_TICKER = 260; // ~1 trading year
@@ -43,7 +43,11 @@ export class RsRatingJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['companies'],
+      cronExpression: '0 4 * * *',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 04:00 ET daily — after stock-history's 03:00 ET batch has had time to finish.

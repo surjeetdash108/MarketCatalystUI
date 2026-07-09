@@ -4,7 +4,7 @@ import { MACRO_SERIES } from '../common/macro-series';
 import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { FredService } from '../vendors/fred/fred.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'macro-events';
 
@@ -27,7 +27,11 @@ export class MacroEventsJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['macro_events'],
+      cronExpression: '10 18 * * 1-5',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 18:10 ET daily — after the ~8:30am ET release window and offset from

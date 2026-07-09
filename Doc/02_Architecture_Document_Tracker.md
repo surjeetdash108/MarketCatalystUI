@@ -17,10 +17,19 @@ System Architecture Document \| v1.1 \| June 2026
 > 2026-07-08 — a materialized portfolio-totals summary) is written directly
 > by the Next.js app via the Firestore client SDK, never through the
 > backend, since `firestore.rules` already scopes those paths to
-> `isOwner(uid)`. See `Doc/openapi.yaml` for the real data contract
-> (documented as REST for portability, even though it's actually served via
-> Firestore reads), `Doc/screen-data-sources.md` for the most current
-> per-screen breakdown, and `backend/src/` for the real code.
+> `isOwner(uid)`. Also not described here: Firestore composite indexes are
+> declared in a `firestore.indexes.json` (added 2026-07-08, deployed via
+> `firebase deploy --only firestore:indexes`) alongside `firestore.rules`;
+> and every sync job now declares its own Firestore collection(s) + cron
+> schedule once at registration (`SyncRegistry` in `backend/src/common/`,
+> deliberately placed in the `@Global()` `CommonModule` rather than
+> `SyncModule` so `SyncMetaService` can inject it without a circular module
+> import) — persisted into `sync_meta` on every run and exposed via
+> `GET /sync/jobs`/`POST /sync/run-all`, an ops-only dashboard
+> (`backendUI/index.html`), not a StockWise feature. See `Doc/openapi.yaml`
+> for the real data contract (documented as REST for portability, even
+> though it's actually served via Firestore reads), `Doc/screen-data-sources.md`
+> for the most current per-screen breakdown, and `backend/src/` for the real code.
 
 1\. Architecture Overview
 

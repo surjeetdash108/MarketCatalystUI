@@ -4,7 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { candidateTradingDays } from '../common/trading-days.util';
 import { FmpService } from '../vendors/fmp/fmp.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'sectors';
 const MAX_LOOKBACK_DAYS = 5;
@@ -29,7 +29,11 @@ export class SectorsJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['sectors', 'sectors_history'],
+      cronExpression: '0 18 * * 1-5',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 18:00 ET daily, after market close settles.

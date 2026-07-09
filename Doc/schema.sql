@@ -559,13 +559,23 @@ CREATE INDEX idx_news_category ON news_articles(category);
 -- Firestore: sync_meta/{jobName}; written by backend/src/common/sync-meta.service.ts)
 -- ============================================================================
 
+-- collections/cron_expression/time_zone (added 2026-07-09) are written on
+-- every record() call, sourced from SyncRegistry.JobMeta — declared once
+-- per job at registration time, right next to its @Cron(...) decorator, so
+-- schedule and description can't drift apart. Answers "which table did
+-- this job affect, and how often does it run" straight from Firestore
+-- itself, without reading backend source. See backend/src/common/
+-- sync-registry.service.ts.
 CREATE TABLE sync_meta (
-  job_name        TEXT PRIMARY KEY,      -- e.g. 'market-movers', 'companies', 'sec-13f', ...
-  last_synced_at  TIMESTAMPTZ,
-  last_status     TEXT CHECK (last_status IN ('ok','error')),
-  last_count      INTEGER,
-  last_error      TEXT,
-  cursor          INTEGER                -- rotating ticker-universe cursor for batched jobs (companies, analyst-actions, sec-form4, news)
+  job_name         TEXT PRIMARY KEY,     -- e.g. 'market-movers', 'companies', 'sec-13f', ...
+  last_synced_at   TIMESTAMPTZ,
+  last_status      TEXT CHECK (last_status IN ('ok','error')),
+  last_count       INTEGER,
+  last_error       TEXT,
+  cursor           INTEGER,              -- rotating ticker-universe cursor for batched jobs (companies, analyst-actions, sec-form4, news)
+  collections      TEXT[],               -- Firestore collection path(s) this job writes to, e.g. {'market_movers','market_movers_history'}
+  cron_expression  TEXT,                 -- raw cron string, e.g. '*/30 9-16 * * 1-5'
+  time_zone        TEXT                  -- e.g. 'America/New_York' — every job schedules in market-local time
 );
 
 -- High-water mark for incremental time-series ingestion (Firestore:

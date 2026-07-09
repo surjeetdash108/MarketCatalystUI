@@ -7,7 +7,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { chunkedBatchSet } from '../common/firestore-batch.util';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { TICKER_UNIVERSE } from '../common/ticker-universe';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'news';
 const BATCH_SIZE = 80;
@@ -42,7 +42,11 @@ export class NewsJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['news'],
+      cronExpression: '*/30 9-16 * * 1-5',
+      timeZone: 'America/New_York',
+    });
   }
 
   // Every 30 min during market hours — news is time-sensitive even on a free plan.

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { FirebaseAdminService } from './firebase-admin.provider';
+import { SyncRegistry } from './sync-registry.service';
 
 export interface SyncResult {
   ok: boolean;
@@ -11,14 +12,34 @@ export interface SyncResult {
 export class SyncMetaService {
   private readonly logger = new Logger(SyncMetaService.name);
 
-  constructor(private readonly firebase: FirebaseAdminService) {}
+  constructor(
+    private readonly firebase: FirebaseAdminService,
+    private readonly registry: SyncRegistry,
+  ) {}
 
+  /**
+   * Looked up from the registry (declared once per job at registration
+   * time, next to its @Cron(...) — see SyncRegistry.JobMeta) rather than
+   * passed in by every call site, so every one of the ~30 existing
+   * meta.record(...) calls across the 17 job files keeps working
+   * unchanged. Lands in the sync_meta/{jobName} doc itself so "which
+   * collection(s) did this affect, and how often does it run" is
+   * answerable straight from Firestore, not just from backend source.
+   */
   async record(jobName: string, result: SyncResult) {
+    const jobMeta = this.registry.getMeta(jobName);
     const doc = {
       lastSyncedAt: new Date().toISOString(),
       lastStatus: result.ok ? 'ok' : 'error',
       lastCount: result.count ?? null,
       lastError: result.error ?? null,
+      ...(jobMeta
+        ? {
+            collections: jobMeta.collections,
+            cronExpression: jobMeta.cronExpression,
+            timeZone: jobMeta.timeZone,
+          }
+        : {}),
     };
 
     try {

@@ -13,8 +13,11 @@ Project Plan \| v1.1 \| June 2026
 > note was first added, further build-out has continued in the same
 > direction (not a stack change): full US ticker-universe price coverage,
 > an IBD-style RS Rating computed from real OHLCV history, a Polygon-primary
-> news adapter with automatic Finnhub fallback, and materialized portfolio
-> totals written back to Firestore. For what's actually implemented, see
+> news adapter with automatic Finnhub fallback, materialized portfolio
+> totals written back to Firestore, and backend ops tooling (per-job
+> Firestore-collection/cron-schedule/next-run tracking, a manual
+> "run all jobs" trigger) — the last of these is purely an internal ops
+> dashboard, not a StockWise feature. For what's actually implemented, see
 > `Doc/openapi.yaml` (the real API contract, with per-endpoint
 > `x-status: live|planned`), `Doc/schema.sql` (relational schema if
 > migrating off Firestore), `Doc/screen-data-sources.md` (per-screen live/

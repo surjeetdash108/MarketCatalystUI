@@ -4,7 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { OPTIONS_UNIVERSE } from '../common/options-universe';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { PolygonService } from '../vendors/polygon/polygon.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'options-chains';
 const CONTRACTS_PER_TICKER = 20;
@@ -39,7 +39,11 @@ export class OptionsChainsJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['options_chains'],
+      cronExpression: '0 19 * * 1-5',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 19:00 ET daily — after market-indices (18:05) and macro-events (18:10).

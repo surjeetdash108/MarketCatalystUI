@@ -212,6 +212,48 @@ paths:
         "502": { $ref: "#/components/responses/UpstreamError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /sync/run-all:
+    post:
+      tags: [Ops]
+      summary: Manually trigger every registered sync job (for testing)
+      x-status: live
+      x-consumed-by:
+        - "Not a StockWise screen — ops-only. \"Run all now\" button in backendUI/index.html, added 2026-07-09."
+      x-write-pattern: >-
+        Runs every job sequentially, not in parallel — several jobs already
+        rate-limit themselves internally against a single vendor (e.g.
+        news.job.ts's per-ticker delay, SEC EDGAR's 10 req/sec throttle in
+        sec-13f/sec-form4), and concurrent execution would stack unrelated
+        jobs' bursts on top of each other for no benefit. A job already
+        mid-run (its own cron fired concurrently) is skipped, not
+        double-invoked. One job's failure doesn't stop the rest. This hits
+        every configured vendor API back-to-back and can take a few minutes
+        for all 17 jobs — a real action with real vendor-quota cost, not a
+        cheap health check.
+      operationId: runAllSyncJobs
+      responses:
+        "201":
+          description: Every job attempted; per-job outcome in `results`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  succeeded: { type: integer }
+                  failed: { type: integer }
+                  skipped: { type: integer, description: "Jobs already mid-run when run-all started" }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        job: { type: string }
+                        ok: { type: boolean }
+                        skipped: { type: boolean }
+                        count: { type: integer, nullable: true }
+                        error: { type: string, nullable: true }
+
   # ────────────────────────────────────────────────────────────────────────
   # COMPANIES — live
   # ────────────────────────────────────────────────────────────────────────
@@ -1815,6 +1857,13 @@ components:
 
     SyncJobStatus:
       type: object
+      description: >-
+        GET /sync/jobs's per-job entry. `collections`/`cronExpression`/
+        `timeZone` (added 2026-07-09) come from the in-process SyncRegistry
+        (declared once per job at registration time, next to its
+        @Cron(...)) — always populated even when Firestore itself is
+        unreachable (see `metaError`), unlike lastSyncedAt/lastStatus/
+        lastCount/lastError which depend on reading sync_meta.
       properties:
         name: { type: string, example: market-movers }
         isRunning: { type: boolean }
@@ -1823,15 +1872,30 @@ components:
         lastStatus: { type: string, enum: [ok, error], nullable: true }
         lastCount: { type: integer, nullable: true }
         lastError: { type: string, nullable: true }
+        collections: { type: array, items: { type: string }, example: ["market_movers", "market_movers_history"] }
+        cronExpression: { type: string, example: "0 18 * * 1-5" }
+        timeZone: { type: string, example: "America/New_York" }
+        nextRunAt: { type: string, format: date-time, nullable: true, description: "Added 2026-07-09. Computed fresh on every call via the `cron` package's CronJob.nextDate() (the same library @nestjs/schedule's @Cron(...) uses internally, so this always agrees with when the job will actually fire) — never cached/stored, never re-derived by hand-rolled cron math. Null only if cronExpression itself fails to parse." }
+        metaError: { type: string, nullable: true, description: "Set instead of the last* fields when sync_meta itself couldn't be read (e.g. Firestore auth failure) — the job still appears with its registry-known collections/schedule." }
 
     SyncMeta:
       type: object
+      description: >-
+        Firestore `sync_meta/{jobName}` — persisted on every run by
+        SyncMetaService.record(). collections/cronExpression/timeZone
+        (added 2026-07-09) are looked up from SyncRegistry at record time
+        and written alongside the run result, so this doc alone answers
+        "which table did this job affect, and how often does it run"
+        without reading backend source.
       properties:
         job: { type: string }
         lastSyncedAt: { type: string, format: date-time, nullable: true }
         lastStatus: { type: string, nullable: true }
         lastCount: { type: integer, nullable: true }
         lastError: { type: string, nullable: true }
+        collections: { type: array, items: { type: string }, nullable: true }
+        cronExpression: { type: string, nullable: true }
+        timeZone: { type: string, nullable: true }
 
     Company:
       type: object

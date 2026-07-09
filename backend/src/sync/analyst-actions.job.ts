@@ -4,7 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { TICKER_UNIVERSE } from '../common/ticker-universe';
 import { FmpService } from '../vendors/fmp/fmp.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'analyst-actions';
 const BATCH_SIZE = 60;
@@ -30,7 +30,11 @@ export class AnalystActionsJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['analyst_actions'],
+      cronExpression: '0 6 * * *',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 06:00 ET daily.

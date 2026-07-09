@@ -4,7 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { chunkedBatchSet } from '../common/firestore-batch.util';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { FinnhubService } from '../vendors/finnhub/finnhub.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'ipos';
 const LOOKBACK_DAYS = 45;
@@ -60,7 +60,11 @@ export class IposJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['ipos'],
+      cronExpression: '15 6 * * *',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 06:15 ET daily — alongside the other calendar-style jobs.

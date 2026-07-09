@@ -22,9 +22,11 @@ import { SecForm4Job } from './sec-form4.job';
 import { SectorsJob } from './sectors.job';
 import { StockHistoryJob } from './stock-history.job';
 import { SyncController } from './sync.controller';
-import { SyncRegistry } from './sync-registry.service';
 import { TickerUniverseJob } from './ticker-universe.job';
 
+// SyncRegistry now lives in CommonModule (@Global()) — see common/common.module.ts.
+// It moved out of this module's own providers so SyncMetaService (also in
+// CommonModule) can inject it without a circular module import.
 @Module({
   imports: [
     PolygonModule,
@@ -36,7 +38,6 @@ import { TickerUniverseJob } from './ticker-universe.job';
   ],
   controllers: [SyncController],
   providers: [
-    SyncRegistry,
     MarketMoversJob,
     CompaniesJob,
     EarningsJob,

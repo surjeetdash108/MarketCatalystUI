@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { FinnhubService } from '../vendors/finnhub/finnhub.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'market-indices';
 
@@ -105,7 +105,11 @@ export class MarketIndicesJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['market_indices', 'market_indices_history'],
+      cronExpression: '5 18 * * 1-5',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 18:05 ET daily, after close.

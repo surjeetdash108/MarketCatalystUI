@@ -4,7 +4,7 @@ import { chunkedBatchSet } from '../common/firestore-batch.util';
 import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { PolygonService } from '../vendors/polygon/polygon.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'ticker-universe';
 
@@ -35,7 +35,11 @@ export class TickerUniverseJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['tickers'],
+      cronExpression: '0 3 * * 0',
+      timeZone: 'America/New_York',
+    });
   }
 
   // Sunday 03:00 ET — low-traffic window, clear of the weekday EOD jobs.

@@ -6,7 +6,7 @@ import type { CompanyProfileAdapter } from '../adapters/types';
 import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { TICKER_UNIVERSE } from '../common/ticker-universe';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'companies';
 const BATCH_SIZE = 60; // keeps daily vendor call volume conservative
@@ -44,7 +44,11 @@ export class CompaniesJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['companies'],
+      cronExpression: '0 2 * * *',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 02:00 ET daily — fundamentals don't move intraday.

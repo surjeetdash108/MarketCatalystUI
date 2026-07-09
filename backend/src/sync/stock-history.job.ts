@@ -4,7 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { TICKER_UNIVERSE } from '../common/ticker-universe';
 import { PolygonService } from '../vendors/polygon/polygon.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'stock-history';
 const BATCH_SIZE = 60; // same rotating-batch size as companies.job.ts
@@ -47,7 +47,11 @@ export class StockHistoryJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['ohlcv_bars'],
+      cronExpression: '0 3 * * *',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 03:00 ET daily — after companies (02:00), before market hours.

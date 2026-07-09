@@ -5,7 +5,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { diffGroupedDaily } from '../vendors/polygon/polygon-diff.util';
 import { PolygonService } from '../vendors/polygon/polygon.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'market-quotes';
 
@@ -42,7 +42,11 @@ export class MarketQuotesJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['tickers'],
+      cronExpression: '7 18 * * 1-5',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 18:07 ET daily — after market-movers/sectors (18:00), before market-indices (18:05)... actually after both, avoiding an exact-second collision.

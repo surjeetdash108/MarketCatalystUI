@@ -4,7 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { chunkedBatchSet } from '../common/firestore-batch.util';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { FmpService } from '../vendors/fmp/fmp.service';
-import { SyncRegistry } from './sync-registry.service';
+import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'earnings';
 const LOOKAHEAD_DAYS = 30;
@@ -26,7 +26,11 @@ export class EarningsJob implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.registry.register(JOB_NAME, () => this.run());
+    this.registry.register(JOB_NAME, () => this.run(), {
+      collections: ['earnings_events'],
+      cronExpression: '0 6 * * *',
+      timeZone: 'America/New_York',
+    });
   }
 
   // 06:00 ET daily full refresh.
