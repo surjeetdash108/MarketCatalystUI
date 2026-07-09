@@ -1,16 +1,18 @@
 # StockWise — Task Tracker
 v1.5 | June 2026
 
-> **⚠ Implementation status (2026-07-05):** Nearly every infra task below
-> (AWS VPC, ECS, Redis, ClickHouse, Stripe, Fastify, WebSocket gateway)
-> describes a stack that was never built and isn't planned to be — the
-> actual backend is a single NestJS service (`backend/`) using
-> `@nestjs/schedule` cron jobs writing directly to Cloud Firestore, with no
-> AWS/ECS/Redis/ClickHouse/BullMQ/Stripe/Fastify/WebSocket layer anywhere.
-> For what's actually implemented and what's genuinely still pending, see
-> `Doc/openapi.yaml` (per-endpoint `x-status: live|planned`) and
-> `Doc/schema.sql`. This file is retained for historical planning context,
-> not as a live task board.
+> **⚠ Implementation status (updated 2026-07-09, first noted 2026-07-05):**
+> Nearly every infra task below (AWS VPC, ECS, Redis, ClickHouse, Stripe,
+> Fastify, WebSocket gateway) describes a stack that was never built and
+> isn't planned to be — the actual backend is a single NestJS service
+> (`backend/`) using `@nestjs/schedule` cron jobs (17, one per collection)
+> writing directly to Cloud Firestore, with no AWS/ECS/Redis/ClickHouse/
+> BullMQ/Stripe/Fastify/WebSocket layer anywhere. For what's actually
+> implemented and what's genuinely still pending — including the live
+> in-session task board this file doesn't reflect — see `Doc/openapi.yaml`
+> (per-endpoint `x-status: live|planned`), `Doc/schema.sql`, and
+> `Doc/screen-data-sources.md`. This file is retained for historical
+> planning context, not as a live task board.
 
 **Status:** Not Started | In Progress | In Review | Done  
 **Priority:** P0 = MVP blocker | P1 = high quality | P2 = nice to have  

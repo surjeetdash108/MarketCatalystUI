@@ -1442,7 +1442,11 @@ paths:
       x-consumed-by:
         - "Portfolio Pulse (app/iq/screens/portfolio.tsx) — real holdings take over from the demo data.folio + DEFAULT_SHARES once the signed-in user adds any"
         - "Dashboard (app/iq/screens/dashboard.tsx) — Portfolio Pulse mini widget's real-data path (falls back to data.folio if the user has no saved holdings)"
-      x-primary-source: Firestore `users/{uid}/portfolios/default/holdings/{ticker}`
+      x-primary-source: >-
+        Firestore `users/{uid}/portfolios/default/holdings/{ticker}` — see
+        also the parent `Portfolio` schema/doc, which carries a materialized
+        totalValue/dayPL/dayPLPct summary written client-side (debounced) as
+        of 2026-07-08, separate from this per-ticker holdings list.
       operationId: listHoldings
       parameters:
         - $ref: "#/components/parameters/Uid"
@@ -2142,6 +2146,28 @@ components:
           type: array
           items: { type: string }
         createdAt: { type: string, format: date-time }
+
+    Portfolio:
+      type: object
+      description: >-
+        Firestore `users/{uid}/portfolios/default` — the parent doc of the
+        `holdings` subcollection. `name`/`createdAt` are written once on the
+        first holding add; `totalValue`/`dayPL`/`dayPLPct`/`holdingsCount`/
+        `updatedAt` are a materialized summary, written client-side
+        (debounced ~3s) by app/iq/screens/portfolio.tsx whenever holdings or
+        live prices change meaningfully. Display in the app never reads this
+        cached summary back — it's recomputed live from holdings + companies
+        on every render for zero-latency UI; the stored copy exists so
+        something outside the browser (future notifications, a backend job,
+        historical tracking) can read portfolio value without recomputing it.
+      properties:
+        name: { type: string, example: My Portfolio }
+        createdAt: { type: string, format: date-time }
+        totalValue: { type: number, description: "sum(shares * livePrice) across holdings" }
+        dayPL: { type: number, description: "sum(shares * livePrice * pctChange / 100) across holdings" }
+        dayPLPct: { type: number, description: "dayPL as a % of yesterday's total value" }
+        holdingsCount: { type: integer }
+        updatedAt: { type: string, format: date-time, description: "Set on every materialized-summary write, not on holding add/remove alone." }
 
     Holding:
       type: object

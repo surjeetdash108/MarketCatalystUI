@@ -617,6 +617,26 @@ CREATE TABLE watchlist_tickers (
   PRIMARY KEY (watchlist_id, ticker)
 );
 
+-- Parent doc of `holdings` below (Firestore: users/{uid}/portfolios/default).
+-- One row per user, same flattening as `holdings.uid` — Firestore's "default"
+-- portfolio-id segment is dropped since only one portfolio per user exists.
+-- total_value/day_pl/day_pl_pct/holdings_count/updated_at are a materialized
+-- summary written client-side (debounced ~3s) by portfolio.tsx whenever
+-- holdings or live prices change meaningfully — see Doc/openapi.yaml's
+-- Portfolio schema for the full write-pattern note. The app's own UI never
+-- reads this cached summary back (recomputes live on every render); it
+-- exists for anything outside the browser to read portfolio value cheaply.
+CREATE TABLE portfolios (
+  uid             TEXT PRIMARY KEY REFERENCES users(uid) ON DELETE CASCADE,
+  name            TEXT NOT NULL DEFAULT 'My Portfolio',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  total_value     DOUBLE PRECISION,
+  day_pl          DOUBLE PRECISION,
+  day_pl_pct      DOUBLE PRECISION,
+  holdings_count  INTEGER,
+  updated_at      TIMESTAMPTZ
+);
+
 CREATE TABLE holdings (
   id             BIGSERIAL PRIMARY KEY,
   uid            TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,

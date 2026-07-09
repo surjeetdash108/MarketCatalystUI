@@ -2,16 +2,20 @@
 
 v1.0 | June 2026
 
-> **⚠ Drifted from implementation (2026-07-05):** Several schemas below
-> (`analyst_actions`, `earnings_events`, `news`, `market_movers`, etc.) were
-> planned with richer fields than what's actually implemented — e.g.
-> `analyst_actions` was planned as a per-event upgrade/downgrade feed but is
-> actually a Buy/Hold/Sell consensus-vote snapshot today (FMP
-> `grades-consensus`, not Benzinga). The vendor cost/tier tables in §1-3
-> below are still a reasonable reference for vendor selection and pricing,
-> but for the actual field-level schema and which vendor is really wired
-> per collection today, see `Doc/openapi.yaml` (authoritative, kept in sync
-> with `backend/src/sync/*.job.ts`) and `Doc/schema.sql`.
+> **⚠ Drifted from implementation (updated 2026-07-09, first noted
+> 2026-07-05):** Several schemas below (`analyst_actions`, `earnings_events`,
+> `news`, `market_movers`, etc.) were planned with richer fields than what's
+> actually implemented — e.g. `analyst_actions` was planned as a per-event
+> upgrade/downgrade feed but is actually a Buy/Hold/Sell consensus-vote
+> snapshot today (FMP `grades-consensus`, not Benzinga). `news` has drifted
+> the other way — Polygon (primary as of 2026-07-08) actually exceeds what
+> was originally planned, adding per-ticker sentiment/reasoning/keywords
+> neither the original plan nor Finnhub (the fallback) carry. The vendor
+> cost/tier tables in §1-3 below are still a reasonable reference for vendor
+> selection and pricing, but for the actual field-level schema and which
+> vendor is really wired per collection today, see `Doc/openapi.yaml`
+> (authoritative, kept in sync with `backend/src/sync/*.job.ts` and
+> `backend/src/adapters/`) and `Doc/schema.sql`.
 
 ---
 

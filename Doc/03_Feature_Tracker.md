@@ -1,13 +1,18 @@
 # StockWise — Feature Tracker
 v1.3 | June 2026
 
-> **⚠ Implementation status (2026-07-05):** The frontend UI completion
-> notes below are accurate. However, "real-time WebSocket data" / backend
-> integration notes scattered throughout (Dashboard F-01, Movers, Analyst
-> Actions, etc.) describe a Redis/WebSocket architecture that was never
-> built — real data instead flows from `backend/src/sync/*.job.ts` cron
-> jobs into Firestore, read directly by the frontend via `useCollection()`.
-> See `Doc/screen-data-sources.md` for an accurate, currently-maintained
+> **⚠ Implementation status (updated 2026-07-09, first noted 2026-07-05):**
+> The frontend UI completion notes below are accurate. However, "real-time
+> WebSocket data" / backend integration notes scattered throughout
+> (Dashboard F-01, Movers, Analyst Actions, etc.) describe a Redis/WebSocket
+> architecture that was never built — real data instead flows from
+> `backend/src/sync/*.job.ts` cron jobs into Firestore, read directly by the
+> frontend via `useCollection()` (or a scoped query hook for large/growing
+> collections — see `useOhlcvBars.ts`/`useTickerSearch.ts`). Shipped since
+> this note was first added: full US ticker-universe search (Cmd+K),
+> Screener's RS Rating, a Polygon-primary news upgrade, and materialized
+> portfolio totals on top of the pre-existing watchlist/holdings CRUD. See
+> `Doc/screen-data-sources.md` for an accurate, currently-maintained
 > per-screen live/static breakdown, and `Doc/openapi.yaml` for the real
 > data contract.
 

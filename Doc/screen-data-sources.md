@@ -1,6 +1,6 @@
 # StockWise Screen Data Sources
 
-_Last verified: 2026-07-08, against the actual code in `app/iq/screens/*.tsx` and `backend/src/sync/*.job.ts`. See `Doc/openapi.yaml` for the full data contract and `Doc/schema.sql` if this ever migrates off Firestore._
+_Last verified: 2026-07-09, against the actual code in `app/iq/screens/*.tsx` and `backend/src/sync/*.job.ts`. See `Doc/openapi.yaml` for the full data contract and `Doc/schema.sql` if this ever migrates off Firestore._
 
 > **Legend**
 > - ✅ **Live** — data comes from a real Firestore collection written by a backend sync job (or Firebase Auth/user-owned Firestore data)
@@ -142,6 +142,7 @@ FMP's `ipos-calendar` is still confirmed restricted on the current plan, but Fin
 | Price / % change on any holding, demo or real | `companies` merged in by ticker | 🟡 Hybrid |
 | "Import from photo" | Simulated OCR flow (`PARSED` fixed fake result) — restored as originally designed, not a real image-recognition integration | 🔴 Static |
 | AI portfolio summary (drivers/leaders/laggards) | Computed client-side from the merged holdings above — real once the underlying prices are real | 🟡 Hybrid |
+| Materialized portfolio summary (new, 2026-07-08) | `totalValue`/`dayPL`/`dayPLPct`/`holdingsCount` written (debounced ~3s) onto the `users/{uid}/portfolios/default` doc whenever holdings or live prices change meaningfully. Not read back by any screen — the UI stays purely live-computed for zero latency; this is a cache for future consumers outside the browser (notifications, a backend job, historical tracking) | ✅ Live |
 
 ---
 

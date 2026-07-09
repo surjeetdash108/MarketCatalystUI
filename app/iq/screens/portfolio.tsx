@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { doc, onSnapshot, setDoc, deleteDoc, collection, Timestamp } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { folio as folioData, type FolioItem } from "../data";
@@ -90,12 +90,36 @@ export function PortfolioScreen() {
   const sel      = merged.find(h => h.ticker === pfSel);
   const totalVal = merged.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price, 0);
   const dayPL    = merged.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price * h.pctChange / 100, 0);
+  const dayPLPct = totalVal > 0 ? (dayPL / (totalVal - dayPL)) * 100 : 0;
   const green    = merged.filter(h => h.pctChange > 0).length;
   const driver   = [...merged].sort((a, b) => (shares[b.ticker] ?? 10) * b.price - (shares[a.ticker] ?? 10) * a.price)[0];
   const leader   = [...merged].sort((a, b) => b.pctChange - a.pctChange)[0];
   const laggard  = [...merged].sort((a, b) => a.pctChange - b.pctChange)[0];
   const driverWt = driver && totalVal > 0
     ? ((shares[driver.ticker] ?? 10) * driver.price / totalVal * 100).toFixed(0) : "0";
+
+  // Materialize the computed summary into Firestore (debounced) so anything
+  // outside this browser tab — notifications, a future backend job, historical
+  // tracking — can read portfolio value without recomputing it from holdings +
+  // live prices. Display above stays purely client-derived/live; this write is
+  // a side effect, never the render source, so it adds no latency to the UI.
+  const lastWritten = useRef<{ totalVal: number; dayPL: number } | null>(null);
+  useEffect(() => {
+    if (!uid || merged.length === 0) return;
+    const timer = setTimeout(() => {
+      const prev = lastWritten.current;
+      if (prev && Math.abs(prev.totalVal - totalVal) < 0.01 && Math.abs(prev.dayPL - dayPL) < 0.01) return;
+      lastWritten.current = { totalVal, dayPL };
+      setDoc(portfolioRef(uid), {
+        totalValue: totalVal,
+        dayPL,
+        dayPLPct,
+        holdingsCount: merged.length,
+        updatedAt: Timestamp.now(),
+      }, { merge: true });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [uid, totalVal, dayPL, dayPLPct, merged.length]);
 
   async function addHolding() {
     if (!newSym.trim()) return;

@@ -2,19 +2,25 @@
 
 Project Plan \| v1.1 \| June 2026
 
-> **⚠ Implementation status (2026-07-05):** This plan describes the original
-> proposed stack — AWS ECS, Redis, ClickHouse, BullMQ, Fastify, Stripe
-> billing. What was actually built is simpler: a single NestJS backend
-> (`backend/`) syncing Polygon/FMP/Finnhub/SEC EDGAR directly into
-> Firestore on cron schedules, with no Redis/ClickHouse/BullMQ/Stripe/
-> Fastify/ECS anywhere in the stack. No subscription billing exists yet;
-> Firestore's tier-gating rules are relaxed to "any authenticated user"
-> pending that decision. For what's actually implemented, see
+> **⚠ Implementation status (updated 2026-07-09, first noted 2026-07-05):**
+> This plan describes the original proposed stack — AWS ECS, Redis,
+> ClickHouse, BullMQ, Fastify, Stripe billing. What was actually built is
+> simpler: a single NestJS backend (`backend/`) syncing
+> Polygon/FMP/Finnhub/FRED/SEC EDGAR directly into Firestore via 17 cron
+> jobs, with no Redis/ClickHouse/BullMQ/Stripe/Fastify/ECS anywhere in the
+> stack. No subscription billing exists yet; Firestore's tier-gating rules
+> are relaxed to "any authenticated user" pending that decision. Since this
+> note was first added, further build-out has continued in the same
+> direction (not a stack change): full US ticker-universe price coverage,
+> an IBD-style RS Rating computed from real OHLCV history, a Polygon-primary
+> news adapter with automatic Finnhub fallback, and materialized portfolio
+> totals written back to Firestore. For what's actually implemented, see
 > `Doc/openapi.yaml` (the real API contract, with per-endpoint
 > `x-status: live|planned`), `Doc/schema.sql` (relational schema if
-> migrating off Firestore), and `backend/src/sync/` (the real jobs). The
-> phases/timelines below are kept for historical/roadmap context, not as a
-> description of current reality.
+> migrating off Firestore), `Doc/screen-data-sources.md` (per-screen live/
+> static breakdown, most current), and `backend/src/sync/` (the real jobs).
+> The phases/timelines below are kept for historical/roadmap context, not
+> as a description of current reality.
 
 1\. Executive Summary
 

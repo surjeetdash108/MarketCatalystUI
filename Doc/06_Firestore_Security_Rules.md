@@ -2,21 +2,29 @@
 
 v1.1 | June 2026
 
-> **⚠ Implementation status (2026-07-05):** The tier-gating design below
-> (Stripe custom claims, Free/Pro/Premium collection-level blocks, Fastify
-> API middleware field-stripping, ECS workers) was never implemented — no
-> subscription/billing system exists yet. The real `firestore.rules` (same
-> folder) relaxes every originally tier-gated collection to
-> `allow read: if isAuthenticated()`, with an explicit
-> `// TODO(tier-gating)` comment marking where to restore this design once
-> Stripe/subscriptions actually exist. All market-data writes are still
-> server-only via the NestJS backend's Admin SDK
+> **⚠ Implementation status (updated 2026-07-09, first noted 2026-07-05):**
+> The tier-gating design below (Stripe custom claims, Free/Pro/Premium
+> collection-level blocks, Fastify API middleware field-stripping, ECS
+> workers) was never implemented — no subscription/billing system exists
+> yet. The real `firestore.rules` (same folder) relaxes every originally
+> tier-gated collection to `allow read: if isAuthenticated()`, with an
+> explicit `// TODO(tier-gating)` comment marking where to restore this
+> design once Stripe/subscriptions actually exist. All market-data writes
+> are still server-only via the NestJS backend's Admin SDK
 > (`backend/src/common/firebase-admin.provider.ts`), matching Principle 2
 > below — that part is accurate. §3 (`stock_comments`) is accurate and
 > implemented as described. The collection list is also incomplete — see
 > the real `firestore.rules` for `tickers`, `market_movers_history`,
 > `sectors_history`, and `market_indices_history`, none of which existed
-> when this doc was written.
+> when this doc was written. `portfolios/{id}` also now carries a
+> materialized `totalValue`/`dayPL`/`dayPLPct`/`holdingsCount`/`updatedAt`
+> summary (2026-07-08), written client-side under the same existing
+> `allow update: if isOwner(uid)` rule — no rule change was needed for it.
+> A composite Firestore index (`firestore.indexes.json`, new as of
+> 2026-07-08 — none existed before) is now deployed for `ohlcv_bars`
+> (`ticker` + `barDate`), required by both the RS Rating job and the Stock
+> Detail chart's live-history hook; deploy with
+> `firebase deploy --only firestore:indexes`.
 
 The deployable rules file is `firestore.rules` in this folder. Deploy with:
 

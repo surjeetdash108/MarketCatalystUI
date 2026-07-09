@@ -2,19 +2,25 @@
 
 System Architecture Document \| v1.1 \| June 2026
 
-> **⚠ Implementation status (2026-07-05):** This document describes the
-> originally proposed 5-layer architecture (ECS workers, ClickHouse, Redis,
-> BullMQ, Fastify REST + WebSocket gateway). The actual implementation is a
-> single NestJS service (`backend/`) with scheduled cron jobs
-> (`@nestjs/schedule`) writing directly to Firestore — no ClickHouse,
-> Redis, BullMQ, WebSocket gateway, or Fastify exist in the real stack, and
-> there is no REST API exposed to the frontend (the Next.js app reads
-> Firestore directly via the client SDK). Vendor calls go through a small
-> adapter layer (`backend/src/adapters/`) with automatic fallback between
-> two vendors for company profiles and market movers — not described here
-> at all. See `Doc/openapi.yaml` for the real data contract (documented as
-> REST for portability, even though it's actually served via Firestore
-> reads) and `backend/src/` for the real code.
+> **⚠ Implementation status (updated 2026-07-09, first noted 2026-07-05):**
+> This document describes the originally proposed 5-layer architecture (ECS
+> workers, ClickHouse, Redis, BullMQ, Fastify REST + WebSocket gateway). The
+> actual implementation is a single NestJS service (`backend/`) with
+> scheduled cron jobs (`@nestjs/schedule`) writing directly to Firestore —
+> no ClickHouse, Redis, BullMQ, WebSocket gateway, or Fastify exist in the
+> real stack, and there is no REST API exposed to the frontend (the Next.js
+> app reads Firestore directly via the client SDK). Vendor calls go through
+> a small adapter layer (`backend/src/adapters/`) with automatic fallback
+> between two vendors each for company profiles, market movers, mover
+> enrichment, and (added 2026-07-08) news — not described here at all.
+> Client-owned data (watchlists, portfolio holdings, and — added
+> 2026-07-08 — a materialized portfolio-totals summary) is written directly
+> by the Next.js app via the Firestore client SDK, never through the
+> backend, since `firestore.rules` already scopes those paths to
+> `isOwner(uid)`. See `Doc/openapi.yaml` for the real data contract
+> (documented as REST for portability, even though it's actually served via
+> Firestore reads), `Doc/screen-data-sources.md` for the most current
+> per-screen breakdown, and `backend/src/` for the real code.
 
 1\. Architecture Overview
 

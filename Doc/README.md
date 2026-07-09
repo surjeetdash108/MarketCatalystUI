@@ -4,6 +4,8 @@ A subscription-based active-investor research platform that consolidates earning
 
 15 of 18 screens now read at least some live data, additively merged onto the original mock UI (nothing was deleted to make room for it) — see `Doc/screen-data-sources.md` for the accurate, per-screen breakdown of what's real vs. still illustrative, and why. Options Chain's main bid/ask/IV/greeks/OI table stays simulated (Polygon's options snapshot is confirmed 403 on the current plan; would need an upgrade or a Tradier key), and Recaps remains fully static (blocked on `ANTHROPIC_API_KEY` + a new job).
 
+Recent additions (2026-07-08/09): full US ticker universe (~10,000+ tickers, price-only) wired to the Cmd+K search bar; Screener's RS Rating now computed from real OHLCV history instead of not existing at all; news upgraded to Polygon-primary (adds sentiment/reasoning/keywords) with Finnhub as automatic fallback; Portfolio's computed totals (`totalValue`/`dayPL`/`dayPLPct`) are now materialized into Firestore alongside the existing holdings CRUD, so something outside the browser can read portfolio value without recomputing it.
+
 ---
 
 ## Backend (`backend/`)
