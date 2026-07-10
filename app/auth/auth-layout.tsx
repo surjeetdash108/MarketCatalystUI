@@ -47,7 +47,7 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
             color: "#fff", letterSpacing: "-.02em",
             animation: "spUp .7s ease .5s both", opacity: 0,
           }}>
-            StockWise
+            MarketCatalyst
           </div>
 
           {/* Shimmer tag */}
@@ -115,7 +115,7 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
                 </svg>
               </span>
               <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: ".95rem", color: "#fff" }}>
-                StockWise
+                MarketCatalyst
               </span>
             </Link>
             {children}

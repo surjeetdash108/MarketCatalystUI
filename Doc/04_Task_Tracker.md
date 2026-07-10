@@ -1,4 +1,4 @@
-# StockWise — Task Tracker
+# MarketCatalyst — Task Tracker
 v1.5 | June 2026
 
 > **⚠ Implementation status (updated 2026-07-09, first noted 2026-07-05):**
@@ -169,7 +169,7 @@ v1.5 | June 2026
 
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
-| T-102 | Build StockWise marketing landing page: hw-* sections, scroll-reveal, inline login modal, landing.css | Frontend | 3d | P0 | FE Eng 1 | S-02 | **Done** | `app/page.tsx` + `app/landing.css`. All animations present. |
+| T-102 | Build MarketCatalyst marketing landing page: hw-* sections, scroll-reveal, inline login modal, landing.css | Frontend | 3d | P0 | FE Eng 1 | S-02 | **Done** | `app/page.tsx` + `app/landing.css`. All animations present. |
 
 ### Auth Pages — `/auth/*`
 
@@ -191,7 +191,7 @@ v1.5 | June 2026
 
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
-| T-081 | Redesign auth pages to StockWise dark theme: two-panel AuthLayout, CSS variables, Google + email/password | Frontend | 2d | P0 | FE Eng 1 | S-02 | **Done** | auth-layout.tsx + login/signup/forgot forms. |
+| T-081 | Redesign auth pages to MarketCatalyst dark theme: two-panel AuthLayout, CSS variables, Google + email/password | Frontend | 2d | P0 | FE Eng 1 | S-02 | **Done** | auth-layout.tsx + login/signup/forgot forms. |
 | T-103 | Fix auth routing: modal logo → close modal, signup "Sign in" → `/`, forgot "Back" → `/` | Frontend | 0.5d | P0 | FE Eng 1 | S-02 | **Done** | All auth pages return to / (landing). |
 
 ---
@@ -689,7 +689,7 @@ v1.5 | June 2026
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
 | T-077 | Build IQShell: sidebar nav, topbar, drawer system, AI Copilot panel, Cmd+K, profile dropdown | Frontend | 5d | P0 | FE Eng 1 | S-03 | **Done** | shell.tsx. IQActionsContext. 14 screens. |
-| T-078 | Build StockWise design system (iq.css): CSS custom properties, dark/light themes, layout primitives | Frontend | 3d | P0 | FE Eng 1 | S-03 | **Done** | Imported globally in app/layout.tsx. |
+| T-078 | Build MarketCatalyst design system (iq.css): CSS custom properties, dark/light themes, layout primitives | Frontend | 3d | P0 | FE Eng 1 | S-03 | **Done** | Imported globally in app/layout.tsx. |
 | T-082 | Wire dark mode to Firestore settings/{uid}; localStorage fast cache; ThemeConfirmModal | Frontend | 1d | P0 | FE Eng 1 | S-03 | **Done** | settings.tsx + shell.tsx + firestore.rules. |
 | T-114 | Extend Cmd+K: SEARCHABLE_STOCKS constant + starred stocks (Set state + toggleStar) | Frontend | 0.5d | P1 | FE Eng 1 | S-08 | **Done** | shell.tsx. |
 | T-123 | Code cleanup: remove dead code, centralise hashStr/EarnQ/earnHistory in utils.tsx | Cleanup | 1d | P1 | FE Eng 1 | S-10 | **Done** | Zero TS errors. No UI changes. |

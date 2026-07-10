@@ -681,7 +681,7 @@ const aiReplies = [
 
 function CopilotPanel({ onClose }: { onClose: () => void }) {
   const [messages, setMessages] = useState<CopilotMsg[]>([
-    { role: "ai", text: "Hello! I'm your StockWise AI Copilot. Ask me about markets, your portfolio, earnings, or any stock." },
+    { role: "ai", text: "Hello! I'm your MarketCatalyst AI Copilot. Ask me about markets, your portfolio, earnings, or any stock." },
   ]);
   const [input, setInput] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -943,7 +943,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
                   </svg>
                 </div>
-                <div className="wordmark">StockWise<span>Market Intelligence</span></div>
+                <div className="wordmark">MarketCatalyst<span>Market Intelligence</span></div>
               </div>
               <div className="nav-clock">
                 {navTime.day} · <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{navTime.time} ET</span>
@@ -976,7 +976,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
                   </svg>
                 </div>
-                <div className="wordmark">StockWise<span>Market Intelligence</span></div>
+                <div className="wordmark">MarketCatalyst<span>Market Intelligence</span></div>
               </div>
               <div className="cmd-wrap" ref={cmdRef}>
                 <div className={`cmd${searchOpen ? " cmd-active" : ""}`}>
@@ -1120,7 +1120,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
                   </svg>
                 </div>
-                <div className="wordmark">StockWise<span>Market Intelligence</span></div>
+                <div className="wordmark">MarketCatalyst<span>Market Intelligence</span></div>
                 <button className="mob-nav-close" onClick={() => setNavOpen(false)} aria-label="Close navigation">✕</button>
               </div>
               {(["Intelligence", "Context", "My Money"] as const).map(group => (
@@ -1146,7 +1146,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <main className="main">
               {children}
               <footer className="disclaimer-bar">
-                StockWise LLC is not a registered investment advisor and does not manage client assets. Information and tools on this platform are for informational and educational purposes only and do not constitute investment advice. StockWise is a data provider, not a stock-picks or alert service. Trading stocks and options carries risk — consult your own financial advisor.
+                MarketCatalyst LLC is not a registered investment advisor and does not manage client assets. Information and tools on this platform are for informational and educational purposes only and do not constitute investment advice. MarketCatalyst is a data provider, not a stock-picks or alert service. Trading stocks and options carries risk — consult your own financial advisor.
               </footer>
             </main>
           </div>

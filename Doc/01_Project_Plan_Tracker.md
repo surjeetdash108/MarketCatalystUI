@@ -1,4 +1,4 @@
-**StockWise — Market Intelligence Terminal**
+**MarketCatalyst — Market Intelligence Terminal**
 
 Project Plan \| v1.1 \| June 2026
 
@@ -29,7 +29,7 @@ Project Plan \| v1.1 \| June 2026
 
 This document is the master project plan for building a subscription-based active investor intelligence platform that consolidates Briefing.com, Earnings Hub, and MarketSurge into a single product with AI-powered insights. The platform targets active retail investors, swing traders, and portfolio investors who need live market intelligence, earnings research, analyst actions, 13F tracking, and peer/group context in one workflow.
 
-The project (branded **StockWise**) is structured in two phases: MVP (18 weeks) delivering core market data, earnings workspace, and portfolio features; and Phase 2 (additional 20 weeks) adding institutional intelligence, AI Copilot, and mobile. The full UI shell, design system, auth pages, and marketing landing page are complete as of June 2026.
+The project (branded **MarketCatalyst**) is structured in two phases: MVP (18 weeks) delivering core market data, earnings workspace, and portfolio features; and Phase 2 (additional 20 weeks) adding institutional intelligence, AI Copilot, and mobile. The full UI shell, design system, auth pages, and marketing landing page are complete as of June 2026.
 
 2\. Project Phases
 
@@ -106,7 +106,7 @@ Frontend (Current)
 
 -   **Redux Toolkit** for global state (auth slice + profile slice); no Zustand, no React Query
 
--   **StockWise custom CSS design system** (`iq.css`) with CSS custom properties — no TailwindCSS for StockWise screens. Branding: "Stock**Wise**" wordmark with `--ai` cyan accent on "Wise"; logo uses brand→ai gradient with SVG bolt icon.
+-   **MarketCatalyst custom CSS design system** (`iq.css`) with CSS custom properties — no TailwindCSS for MarketCatalyst screens. Branding: "Stock**Wise**" wordmark with `--ai` cyan accent on "Wise"; logo uses brand→ai gradient with SVG bolt icon.
 
 -   Recharts / D3 for charts and heatmaps (Phase 2 — static data currently)
 

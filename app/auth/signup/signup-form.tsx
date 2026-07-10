@@ -137,7 +137,7 @@ export function SignupForm() {
       <h1 style={{
         fontFamily: "var(--f-display)", fontSize: "1.55rem",
         fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
-      }}>Join StockWise</h1>
+      }}>Join MarketCatalyst</h1>
       <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
         Set up your market intelligence workspace in seconds.
       </p>

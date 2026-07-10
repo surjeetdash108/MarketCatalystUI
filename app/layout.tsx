@@ -58,7 +58,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "StockWise — Market Intelligence Terminal",
+  title: "MarketCatalyst — Market Intelligence Terminal",
   description: "From ticker to thesis in under 60 seconds. Earnings, movers, analyst actions, insider flows and your portfolio — all in one terminal.",
 };
 

@@ -1,4 +1,4 @@
-# StockWise — Market Intelligence Terminal
+# MarketCatalyst — Market Intelligence Terminal
 
 A subscription-based active-investor research platform that consolidates earnings, analyst actions, market movers, screening, insider/institutional flows, macro, and portfolio tools into a single dark-themed terminal. Built with Next.js 16 App Router (static export), Firebase Auth + Firestore, and Redux Toolkit.
 
@@ -74,7 +74,7 @@ Landing (/)
   └── "Sign up" button →  /auth/signup  →  success  →  /dashboard
         └── "Sign in"  →  / (landing page, open modal manually)
 
-Auth pages all carry StockWise logo → / (landing page)
+Auth pages all carry MarketCatalyst logo → / (landing page)
 ```
 
 ---

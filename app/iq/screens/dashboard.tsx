@@ -420,10 +420,10 @@ export function DashboardScreen() {
 
   function downloadRecap(which: string) {
     if (typeof window === "undefined") return;
-    const blob = new Blob([`StockWise ${which} Recap`], { type: "text/plain" });
+    const blob = new Blob([`MarketCatalyst ${which} Recap`], { type: "text/plain" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = `StockWise-Recap-${which}.txt`; a.click();
+    a.href = url; a.download = `MarketCatalyst-Recap-${which}.txt`; a.click();
     URL.revokeObjectURL(url);
   }
 
