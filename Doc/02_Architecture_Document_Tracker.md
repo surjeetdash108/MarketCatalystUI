@@ -1,4 +1,4 @@
-**StockWise — Market Intelligence Terminal**
+**MarketCatalyst — Market Intelligence Terminal**
 
 System Architecture Document \| v1.1 \| June 2026
 
@@ -148,13 +148,13 @@ State Management — Redux Toolkit
 
 Routing — Next.js App Router
 
--   `/` → **StockWise landing page** (marketing page, `app/page.tsx`). Animated dark background, full `hw-*` sections (hero, commitment, 5-step journey, 14 workspace cards, CTA). "Log in" opens an inline modal overlay (no navigation); "Sign up" navigates to `/auth/signup`.
+-   `/` → **MarketCatalyst landing page** (marketing page, `app/page.tsx`). Animated dark background, full `hw-*` sections (hero, commitment, 5-step journey, 14 workspace cards, CTA). "Log in" opens an inline modal overlay (no navigation); "Sign up" navigates to `/auth/signup`.
 -   `/auth/login` → Standalone login page (AuthLayout two-panel + LoginForm). Logo → `/`.
 -   `/auth/signup` → Create Account (AuthLayout + SignupForm). "Sign in" link → `/`. Logo → `/`.
 -   `/auth/forgot-password` → Password Reset (AuthLayout + ForgotForm). "Back to sign in" → `/`. Logo → `/`.
 -   **AuthLayout mobile fix** (`app/auth/auth-layout.tsx`): classes `lp-auth-cols`, `lp-auth-left`, and `lp-auth-form` are now correctly applied to the JSX container elements, enabling the inline `<style>` media queries to take effect. At `≤900px` the two columns stack vertically; at `≤600px` the marketing panel (`lp-auth-left`) is hidden and the form card becomes full-width. Previously `lp-auth-cols` was absent from the JSX so the layout never collapsed on any device.
 -   `/dashboard` → IQ Dashboard screen
--   `/menu/[slug]` → all StockWise screens (earnings, movers, heatmap, analyst, screener, ipos, portfolio, watchlist, stock, insider, commentary, recap, macro, manage-plan)
+-   `/menu/[slug]` → all MarketCatalyst screens (earnings, movers, heatmap, analyst, screener, ipos, portfolio, watchlist, stock, insider, commentary, recap, macro, manage-plan)
 -   `/settings` → Settings screen
 -   `/profile/edit` → Profile edit
 -   Protected routes: all IQ routes guarded by `AuthGuard` component (checks Redux `state.auth.status === "ready"` and `state.auth.user`; redirects to `/` if not authenticated).
@@ -175,7 +175,7 @@ Auth Navigation Map
   └─ Logo              → /
 ```
 
-StockWise Shell & Component Architecture
+MarketCatalyst Shell & Component Architecture
 
 -   **`IQShell`** (`app/iq/shell.tsx`): the main authenticated shell. Wraps each page individually (not a Next.js layout). Contains the sidebar nav (3 groups: Intelligence / Context / My Money), topbar with "Stock**Wise**" branding, drawer system (stock/earnings/sector/fund/index/feargreed), AI Copilot panel, Cmd+K palette, and profile dropdown. Holds `theme` state and exposes it via `IQActionsContext`. **Mobile nav**: on `≤767px` the sidebar rail becomes `position:fixed; left:0; width:min(260px,80vw); transform:translateX(-100%)` and slides in when the `.mob-open` class is applied. New shell elements: `.mob-ham` (hamburger button in topbar), `.mob-brand` (logo in topbar), `.mob-rail-head` (rail header with close button), `.mob-nav-close`, `.mob-nav-scrim`. The scrim (`.mob-nav-scrim`, z-index 100) is placed **inside** the `.app` div so it shares `.app`'s stacking context with the rail (z-index 200) — prevents z-index bleed to unrelated layers.
 
@@ -221,7 +221,7 @@ Shared Utility Components (`app/iq/utils.tsx`)
 
 -   **`earnHistory(sym, base)`**: Exported function returning 10-quarter deterministic EPS history. Formula: `(Math.abs(s.charCodeAt(0)*31 + (s.charCodeAt(1)||7)*17 + i*13) % 97) / 97`. Shared by stock.tsx, earnings.tsx, and commentary.tsx — eliminates three separate identical implementations.
 
-Design System — StockWise (`iq.css`)
+Design System — MarketCatalyst (`iq.css`)
 
 -   All styling is via a custom CSS design system in `app/iq.css`, imported globally in `app/layout.tsx`. Two mobile responsive breakpoints are defined: `@media (max-width: 767px)` (mobile) and `@media (max-width: 860px)` (tablet, options sidebar).
 

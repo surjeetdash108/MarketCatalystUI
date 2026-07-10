@@ -1353,7 +1353,7 @@ export default function LandingPage() {
         <nav className="hw-nav">
           <Link href="/" className="hw-brand">
             <span className="hw-logo"><LogoMark /></span>
-            StockWise
+            MarketCatalyst
           </Link>
           <div className="hw-nav-cta">
             <button className="hw-ghost" onClick={() => openAuth("login")}>Log in</button>
@@ -1363,7 +1363,7 @@ export default function LandingPage() {
 
         {/* ---- HERO ---- */}
         <section className="mq-hero">
-          <div className="mq-kicker">StockWise · Market Intelligence</div>
+          <div className="mq-kicker">MarketCatalyst · Market Intelligence</div>
           <h1 className="mq-title">Every market view.<br />One scroll.</h1>
           <p className="mq-sub">
             The entire market, narrated. Scroll through every research view — movers, earnings, analysts, your book — each with an AI read that tells you <em>what</em> moved, and <em>why</em>. Ticker to thesis, without leaving the page.
@@ -1455,7 +1455,7 @@ export default function LandingPage() {
               <button className="mqg-x" onClick={() => setAuthOpen(false)}>✕</button>
               <div className="au-head">
                 <span className="hw-logo"><LogoMark size={15} /></span>
-                StockWise
+                MarketCatalyst
               </div>
               <div className="au-tabs">
                 <button className={`au-tab${authMode === "signup" ? " on" : ""}`} onClick={() => setAuthMode("signup")}>Sign up</button>
@@ -1530,7 +1530,7 @@ export default function LandingPage() {
             </button>
           </div>
           <p style={{ fontSize: ".74rem", color: "#666", marginTop: "16px" }}>
-            StockWise is a research terminal for informational purposes — not investment advice.
+            MarketCatalyst is a research terminal for informational purposes — not investment advice.
           </p>
         </div>
 

@@ -1,4 +1,4 @@
-# StockWise Screen Data Sources
+# MarketCatalyst Screen Data Sources
 
 > **Legend**
 > - ✅ **Dynamic** — data comes from a live source (Firebase Auth, Firestore, real API)

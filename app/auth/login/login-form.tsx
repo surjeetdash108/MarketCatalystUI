@@ -131,7 +131,7 @@ export function LoginForm() {
       <h1 style={{
         fontFamily: "var(--f-display)", fontSize: "1.55rem",
         fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
-      }}>Sign in to StockWise</h1>
+      }}>Sign in to MarketCatalyst</h1>
       <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
         Access your market intelligence terminal.
       </p>
@@ -223,7 +223,7 @@ export function LoginForm() {
       </form>
 
       <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
-        New to StockWise?{" "}
+        New to MarketCatalyst?{" "}
         <Link href="/auth/signup" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Create an account
         </Link>

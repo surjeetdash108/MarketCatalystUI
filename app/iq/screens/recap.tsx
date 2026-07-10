@@ -231,11 +231,11 @@ export function RecapScreen() {
   const pageSectors = sectorList.slice(pageStart, pageStart + SEC_PAGE);
 
   function downloadRecap(which: string) {
-    const blob = new Blob([`StockWise ${which} Recap — ${recap.date}`], { type: "text/plain" });
+    const blob = new Blob([`MarketCatalyst ${which} Recap — ${recap.date}`], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `StockWise-Recap-${which}.txt`;
+    a.download = `MarketCatalyst-Recap-${which}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   }
