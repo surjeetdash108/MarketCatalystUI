@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: StockWise (FinApp26) Market Data API
+  title: MarketCatalyst (FinApp26) Market Data API
   version: 1.0.0
   description: |
-    Canonical read API for every screen in StockWise. This documents the **data
+    Canonical read API for every screen in MarketCatalyst. This documents the **data
     contract** the frontend consumes — today implemented as direct Firestore
     reads (via `useCollection()` in `app/iq/hooks/useCollection.ts`) rather than
     a deployed REST gateway, so every path below maps 1:1 to a Firestore
@@ -62,7 +62,7 @@ info:
     write patterns (`ON CONFLICT ... DO NOTHING` vs `DO UPDATE`) if you
     migrate off Firestore.
   contact:
-    name: StockWise Engineering
+    name: MarketCatalyst Engineering
     email: hello@inc108.com
 servers:
   - url: https://api.finapp26.app/v1
@@ -119,7 +119,7 @@ paths:
       summary: Backend liveness check
       x-status: live
       x-consumed-by:
-        - "Not screen-facing — no StockWise screen calls this. Used for manual health checks and could back a future uptime monitor."
+        - "Not screen-facing — no MarketCatalyst screen calls this. Used for manual health checks and could back a future uptime monitor."
       x-primary-source: none (self-check)
       operationId: getHealth
       responses:
@@ -140,7 +140,7 @@ paths:
       summary: List every registered sync job with running + last-run state
       x-status: live
       x-consumed-by:
-        - "Not a StockWise screen — consumed by backendUI (backendUI/index.html), the separate static ops dashboard, not the Next.js app."
+        - "Not a MarketCatalyst screen — consumed by backendUI (backendUI/index.html), the separate static ops dashboard, not the Next.js app."
       operationId: listSyncJobs
       responses:
         "200":
@@ -158,7 +158,7 @@ paths:
       summary: Last-run status for every job (no running-state)
       x-status: live
       x-consumed-by:
-        - "Not a StockWise screen — ops-only, same as GET /sync/jobs."
+        - "Not a MarketCatalyst screen — ops-only, same as GET /sync/jobs."
       operationId: getAllSyncStatus
       responses:
         "200":
@@ -176,7 +176,7 @@ paths:
       summary: Last-run status for one job
       x-status: live
       x-consumed-by:
-        - "Not a StockWise screen — ops-only, same as GET /sync/jobs."
+        - "Not a MarketCatalyst screen — ops-only, same as GET /sync/jobs."
       operationId: getSyncStatus
       parameters:
         - $ref: "#/components/parameters/JobName"
@@ -194,7 +194,7 @@ paths:
       summary: Manually trigger a sync job (for testing)
       x-status: live
       x-consumed-by:
-        - "Not a StockWise screen — ops-only, same as GET /sync/jobs."
+        - "Not a MarketCatalyst screen — ops-only, same as GET /sync/jobs."
       operationId: runSyncJob
       parameters:
         - $ref: "#/components/parameters/JobName"
@@ -218,7 +218,7 @@ paths:
       summary: Manually trigger every registered sync job (for testing)
       x-status: live
       x-consumed-by:
-        - "Not a StockWise screen — ops-only. \"Run all now\" button in backendUI/index.html, added 2026-07-09."
+        - "Not a MarketCatalyst screen — ops-only. \"Run all now\" button in backendUI/index.html, added 2026-07-09."
       x-write-pattern: >-
         Runs every job sequentially, not in parallel — several jobs already
         rate-limit themselves internally against a single vendor (e.g.

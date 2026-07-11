@@ -26,7 +26,7 @@ System Architecture Document \| v1.1 \| June 2026
 > `SyncModule` so `SyncMetaService` can inject it without a circular module
 > import) — persisted into `sync_meta` on every run and exposed via
 > `GET /sync/jobs`/`POST /sync/run-all`, an ops-only dashboard
-> (`backendUI/index.html`), not a StockWise feature. See `Doc/openapi.yaml`
+> (`backendUI/index.html`), not a MarketCatalyst feature. See `Doc/openapi.yaml`
 > for the real data contract (documented as REST for portability, even
 > though it's actually served via Firestore reads), `Doc/screen-data-sources.md`
 > for the most current per-screen breakdown, and `backend/src/` for the real code.

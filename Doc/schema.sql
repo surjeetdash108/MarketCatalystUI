@@ -1,7 +1,7 @@
 -- ============================================================================
--- StockWise (FinApp26) — relational schema mirror
+-- MarketCatalyst (FinApp26) — relational schema mirror
 -- ============================================================================
--- Purpose: a drop-in relational model of the data StockWise currently keeps
+-- Purpose: a drop-in relational model of the data MarketCatalyst currently keeps
 -- in Firestore, so that migrating off Firestore (to Postgres, or adapted to
 -- MySQL/SQLite) doesn't require redesigning the data model from scratch.
 -- Every table below corresponds 1:1 to a schema in Doc/openapi.yaml and to a

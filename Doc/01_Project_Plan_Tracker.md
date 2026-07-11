@@ -17,7 +17,7 @@ Project Plan \| v1.1 \| June 2026
 > totals written back to Firestore, and backend ops tooling (per-job
 > Firestore-collection/cron-schedule/next-run tracking, a manual
 > "run all jobs" trigger) — the last of these is purely an internal ops
-> dashboard, not a StockWise feature. For what's actually implemented, see
+> dashboard, not a MarketCatalyst feature. For what's actually implemented, see
 > `Doc/openapi.yaml` (the real API contract, with per-endpoint
 > `x-status: live|planned`), `Doc/schema.sql` (relational schema if
 > migrating off Firestore), `Doc/screen-data-sources.md` (per-screen live/
