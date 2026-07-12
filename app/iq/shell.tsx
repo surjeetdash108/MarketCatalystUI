@@ -22,6 +22,7 @@ import { fmt, sign, cls, arr, SemiGauge } from "./utils";
 import { useCollection } from "./hooks/useCollection";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { mergePulse, type IndexDoc } from "./live-market-indices";
+import { getMarketStatus, type MarketStatus } from "./market-status";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -776,6 +777,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     return { day, time };
   });
+  const [mkt, setMkt] = useState<MarketStatus>(() => getMarketStatus());
 
   useEffect(() => {
     const tick = () => {
@@ -784,7 +786,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
         day: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
         time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
       });
+      setMkt(getMarketStatus(d));
     };
+    tick(); // correct any build-time (static-export) value right after hydration
     const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
   }, []);
@@ -1029,9 +1033,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
               </div>
-              <div className="statuspill">
+              <div className={`statuspill${mkt.phase === "open" ? "" : mkt.phase === "closed" ? " mkt-closed" : " mkt-ext"}`}>
                 <div className="dot" />
-                Markets Open
+                {mkt.label}
               </div>
               <button
                 className="iconbtn"

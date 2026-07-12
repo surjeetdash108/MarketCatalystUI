@@ -4,6 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { candidateTradingDays } from '../common/trading-days.util';
 import { FmpService } from '../vendors/fmp/fmp.service';
+import { PolygonService } from '../vendors/polygon/polygon.service';
 import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'sectors';
@@ -22,6 +23,7 @@ export class SectorsJob implements OnModuleInit {
   private readonly logger = new Logger(SectorsJob.name);
 
   constructor(
+    private readonly polygon: PolygonService,
     private readonly fmp: FmpService,
     private readonly firebase: FirebaseAdminService,
     private readonly meta: SyncMetaService,
@@ -44,19 +46,33 @@ export class SectorsJob implements OnModuleInit {
 
   async run() {
     try {
+      // Polygon (SPDR sector-ETF proxies) primary; FMP's snapshot as fallback.
       let rows: Awaited<
         ReturnType<FmpService['getSectorPerformanceSnapshot']>
       > = [];
-      for (const date of candidateTradingDays(new Date(), MAX_LOOKBACK_DAYS)) {
-        rows = await this.fmp.getSectorPerformanceSnapshot(date);
-        if (rows.length > 0) break;
-        this.logger.log(
-          `No sector performance data for ${date} — trying prior day`,
+      let source = 'polygon';
+      try {
+        rows = await this.polygon.getSectorPerformance();
+        if (rows.length === 0) {
+          throw new Error('Polygon returned no sector-ETF data');
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Polygon sectors failed, falling back to FMP: ${(err as Error).message}`,
         );
+        source = 'fmp';
+        rows = [];
+        for (const date of candidateTradingDays(new Date(), MAX_LOOKBACK_DAYS)) {
+          rows = await this.fmp.getSectorPerformanceSnapshot(date);
+          if (rows.length > 0) break;
+          this.logger.log(
+            `No sector performance data for ${date} — trying prior day`,
+          );
+        }
       }
       if (rows.length === 0) {
         throw new Error(
-          `No sector performance data found in last ${MAX_LOOKBACK_DAYS} candidate days`,
+          `No sector performance data found (Polygon + FMP fallback both empty)`,
         );
       }
 
@@ -76,6 +92,7 @@ export class SectorsJob implements OnModuleInit {
           // averageChange from FMP is already in percentage-point units (e.g. 1.75 == 1.75%)
           pctChange: Math.round(row.averageChange * 100) / 100,
           asOfDate: row.date,
+          source,
           updatedAt: new Date().toISOString(),
         };
         batch.set(col.doc(slug(row.sector)), doc, { merge: true });

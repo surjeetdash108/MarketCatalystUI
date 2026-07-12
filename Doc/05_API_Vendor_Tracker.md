@@ -55,8 +55,10 @@ v1.0 | June 2026
 | Options chain (calls + puts, IV, OI) | Tradier (Free) | Polygon.io Options REST | ✅ Tradier free with brokerage account | Powers Options Chain screen `/menu/options` |
 | Options flow + unusual activity | Unusual Whales (Paid) | Tradier (options chains, free) | ⚠️ Tradier free for chains only | Unusual Whales needed for "unusual" flow detection |
 | Block trade data | Polygon.io (Paid — same subscription) | Intrinio | ❌ Needs paid | Polygon Trades API covers block detection |
-| Company reference + fundamentals | FMP (Paid) | Finnhub | ✅ Finnhub basic | FMP has sector/group/MarketSurge-style data |
-| Sector and industry group data | FMP (Paid) | Polygon | ❌ Free tiers insufficient | FMP sector/industry grouping matches MarketSurge model |
+| Company reference + fundamentals | **Polygon** (migrated 2026-07-12) | FMP (Paid) | ✅ Polygon free tier | Polygon `/v3/reference/tickers` + `/vX/reference/financials` (TTM EPS → computed P/E). FMP fallback still the only source for peers, beta, dividend yield. |
+| Sector and industry group data | **Polygon** (migrated 2026-07-12) | FMP (Paid) | ✅ Polygon free tier | 11 SPDR sector-ETF proxies, day-over-day % (proxy, not cap-weighted). FMP snapshot as fallback. |
+| Dividends calendar | **Polygon** (migrated 2026-07-12) | FMP (Paid) | ✅ Polygon free tier | Polygon `/v3/reference/dividends`. No yield field on Polygon (null; present only via FMP fallback). |
+| IPO calendar | **Polygon** (migrated 2026-07-12) | Finnhub (Free) | ✅ Polygon free tier | Polygon `/vX/reference/ipos` by listing_date. FMP's ipos-calendar restricted. |
 
 ---
 

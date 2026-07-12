@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { FinnhubService } from '../vendors/finnhub/finnhub.service';
+import { PolygonService } from '../vendors/polygon/polygon.service';
 import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'market-indices';
@@ -98,6 +99,7 @@ export class MarketIndicesJob implements OnModuleInit {
   private readonly logger = new Logger(MarketIndicesJob.name);
 
   constructor(
+    private readonly polygon: PolygonService,
     private readonly finnhub: FinnhubService,
     private readonly firebase: FirebaseAdminService,
     private readonly meta: SyncMetaService,
@@ -135,7 +137,17 @@ export class MarketIndicesJob implements OnModuleInit {
 
       for (const idx of INDEX_PROXIES) {
         try {
-          const quote = await this.finnhub.getQuote(idx.proxyTicker);
+          // Polygon (day-over-day from daily aggs) primary; Finnhub /quote
+          // fallback if Polygon has no bars for this proxy.
+          let source = 'polygon';
+          let quote:
+            | Awaited<ReturnType<PolygonService['getDailyQuote']>>
+            | Awaited<ReturnType<FinnhubService['getQuote']>> =
+            await this.polygon.getDailyQuote(idx.proxyTicker);
+          if (!quote) {
+            quote = await this.finnhub.getQuote(idx.proxyTicker);
+            source = 'finnhub';
+          }
           const doc = {
             label: idx.label,
             proxyTicker: idx.proxyTicker,
@@ -146,6 +158,7 @@ export class MarketIndicesJob implements OnModuleInit {
             pctChange: quote.dp,
             open: quote.o,
             prevClose: quote.pc,
+            source,
             updatedAt: new Date().toISOString(),
           };
           batch.set(col.doc(idx.symbol), doc, { merge: true });

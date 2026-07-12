@@ -251,15 +251,24 @@
   font-size: 11px; font-weight: 600; color: var(--up);
   margin-left: auto;
 }
+/* Market-session states — dot + ping inherit the pill's text color. */
+.statuspill.mkt-ext {
+  background: var(--warn-dim); border-color: var(--warn); color: var(--warn);
+}
+.statuspill.mkt-closed {
+  background: var(--down-dim); border-color: var(--down); color: var(--down);
+}
 .dot {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--up);
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
   position: relative;
 }
 .dot::after {
   content: ''; position: absolute; inset: -3px;
-  border-radius: 50%; border: 1.5px solid var(--up);
+  border-radius: 50%; border: 1.5px solid currentColor;
   animation: iq-ping 2s ease infinite;
 }
+/* No "live" ping once the market is closed. */
+.statuspill.mkt-closed .dot::after { animation: none; }
 @keyframes iq-ping {
   0% { opacity: .6; transform: scale(.8); }
   70% { opacity: 0; transform: scale(2); }

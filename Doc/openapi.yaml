@@ -340,8 +340,15 @@ paths:
       x-status: live
       x-consumed-by:
         - "Same screens/features as GET /companies above — the frontend subscribes to the whole companies collection via useCollection() and merges client-side rather than fetching one ticker at a time, so this single-ticker path documents the equivalent Firestore doc shape, not a distinct call site."
-      x-primary-source: FMP `/stable/profile` + `/stable/ratios-ttm` + `/stable/stock-peers`
-      x-alternate-source: Polygon `/v2/aggs/ticker/{ticker}/prev` (price fields only, faster refresh)
+      x-primary-source: >-
+        Polygon (migrated 2026-07-12): `/v3/reference/tickers` (name, market cap,
+        sector, exchange), daily aggs for price/%change, and
+        `/vX/reference/financials` timeframe=ttm for diluted EPS → computed
+        P/E = price ÷ EPS.
+      x-alternate-source: >-
+        FMP `/stable/profile` + `/stable/ratios-ttm` + `/stable/stock-peers`
+        (fallback). Still the ONLY source for peers, beta, and dividend yield —
+        Polygon has no product for those, so they are null on Polygon-served docs.
       x-fallback-behavior: >-
         Same automatic FMP-then-Polygon fallback as `GET /companies` — see
         that path's x-fallback-behavior for the full mechanics. A 404 here
@@ -567,13 +574,14 @@ paths:
         - "Dashboard (app/iq/screens/dashboard.tsx) — Market Heatmap mini (sector %)"
         - "Market Heatmap (app/iq/screens/heatmap.tsx) — Sector cells (% change)"
       x-primary-source: >-
-        FMP `/stable/sector-performance-snapshot`, synced daily at 18:00 ET
-        (with up to 5 days of lookback if the latest trading day has no data yet).
+        Polygon (migrated 2026-07-12): the 11 SPDR sector ETFs (XLK, XLF, XLE,
+        XLV, XLI, XLP, XLY, XLU, XLB, XLRE, XLC) as proxies, day-over-day %
+        from daily aggs, mapped back to FMP's sector names so the frontend
+        merge is unchanged. Note: an ETF-proxy move, not a cap-weighted
+        constituent average. Synced daily at 18:00 ET.
       x-alternate-source: >-
-        Polygon grouped-daily bars aggregated in-house by a ticker→sector
-        mapping — would refresh faster (any time after Polygon's own EOD
-        window, no dependency on FMP's own snapshot lag) but requires
-        building and maintaining that mapping table, which doesn't exist yet.
+        FMP `/stable/sector-performance-snapshot` (fallback, with up to 5 days
+        of lookback if the latest trading day has no data yet).
       x-write-pattern: >-
         MUTABLE / upsert-latest — `sectors/{sectorSlug}` is overwritten
         every sync. A sibling append-only collection,
@@ -658,13 +666,15 @@ paths:
         - "Dashboard (app/iq/screens/dashboard.tsx) — Market Pulse strip (6 of 9 indices shown), VIX card"
         - "Shell (app/iq/shell.tsx) — Top ticker strip on every screen, and the index drawer it opens (both via the shared mergePulse() helper in app/iq/live-market-indices.ts)"
       x-primary-source: >-
-        Finnhub `/quote` on liquid ETF proxies (SPY, QQQ, DIA, IWM, GLD, USO,
-        UUP, TLT, VIXY), synced daily at 18:05 ET.
+        Polygon (migrated 2026-07-12): day-over-day quote from daily aggs on the
+        same liquid ETF proxies (SPY, QQQ, DIA, IWM, GLD, USO, UUP, TLT, VIXY),
+        synced daily at 18:05 ET. Near-zero marginal cost — those ETFs are
+        already in the whole-market grouped-daily pull.
       x-alternate-source: >-
-        Polygon Indices API (`I:SPX`, `I:VIX`, `I:NDX`, ...) — gives the real
-        index value instead of a correlated-but-not-identical ETF (TLT is NOT
-        the 10Y yield, VIXY is a decaying futures ETN NOT the spot VIX);
-        requires the Polygon Indices add-on, not currently subscribed.
+        Finnhub `/quote` on the same ETF proxies (fallback). The Polygon
+        Indices add-on (`I:SPX`, `I:VIX`, ...) would give the real index value
+        instead of a correlated ETF (TLT is NOT the 10Y yield, VIXY is a
+        decaying futures ETN NOT the spot VIX) — not currently subscribed.
       x-write-pattern: >-
         MUTABLE / upsert-latest — `market_indices/{symbol}` is overwritten
         every sync. A sibling append-only collection,
@@ -736,8 +746,8 @@ paths:
       x-status: live
       x-consumed-by:
         - "Same screens as GET /market-indices above — the frontend subscribes to the whole collection and merges/looks up client-side rather than fetching one symbol at a time."
-      x-primary-source: Finnhub `/quote` (ETF proxy)
-      x-alternate-source: Polygon Indices API (real index value, needs add-on)
+      x-primary-source: Polygon daily aggs (ETF proxy, migrated 2026-07-12)
+      x-alternate-source: Finnhub `/quote` (ETF proxy, fallback); Polygon Indices add-on for real index values (not subscribed)
       operationId: getMarketIndex
       parameters:
         - name: symbol
@@ -1091,12 +1101,12 @@ paths:
       x-consumed-by:
         - "IPOs (app/iq/screens/ipos.tsx) — new, additive \"Live IPO Calendar\" card, shown once the collection has synced data; the screen's original Stats strip / Recent IPO Performance / Upcoming Pipeline tables stay untouched — Finnhub's calendar has no current trading price or day-1 return, so it can't be merged into those return-calculation rows"
       x-primary-source: >-
-        Finnhub `/calendar/ipo`, synced daily at 06:15 ET over a
-        [today-45d, today+90d] window. Free tier, same key already in use
-        for news/earnings/quotes.
+        Polygon `/vX/reference/ipos` (migrated 2026-07-12), filtered by
+        listing_date over a [today-45d, today+90d] window, synced daily at
+        06:15 ET. Free tier, same key already in use for aggs/news/reference.
       x-alternate-source: >-
-        FMP `/stable/ipos-calendar` — confirmed RESTRICTED on the current
-        plan; would need an upgrade. Nasdaq/NYSE public calendar scraping is
+        Finnhub `/calendar/ipo` (fallback, free tier). FMP `/stable/ipos-calendar`
+        is confirmed RESTRICTED on the current plan. Nasdaq/NYSE public calendar scraping is
         a further fallback if Finnhub's free tier ever changes.
       x-write-pattern: >-
         MUTABLE / upsert-latest — `ipos/{date}_{symbol|slug}` is overwritten
@@ -1194,13 +1204,13 @@ paths:
       x-consumed-by:
         - "Macro & VIX (app/iq/screens/macro.tsx) — new, additive \"Live Dividend Calendar\" card, alongside the screen's existing illustrative dividend calendar (chip grid/month view, untouched)"
       x-primary-source: >-
-        FMP `/stable/dividends-calendar` — verified working 2026-07-07
-        (unlike the confirmed-restricted economic-calendar/ipos-calendar on
-        this same plan), synced daily at 06:20 ET over a
-        [today, today+30d] forward window.
+        Polygon `/v3/reference/dividends` (migrated 2026-07-12), filtered by
+        ex_dividend_date over a [today, today+30d] forward window, synced daily
+        at 06:20 ET. Caveat: Polygon has no dividend YIELD, so `yieldPct` is
+        null on Polygon-served docs (present only via the FMP fallback).
       x-alternate-source: >-
-        Nasdaq dividend calendar — free but less structured/slower to parse
-        than FMP's maintained JSON endpoint.
+        FMP `/stable/dividends-calendar` (fallback; adds yield). Nasdaq dividend
+        calendar is a further free but less-structured option.
       x-write-pattern: >-
         MUTABLE / upsert-latest — `dividends/{ticker}` is overwritten every
         sync with that ticker's next upcoming ex-dividend event, same
@@ -1868,10 +1878,13 @@ components:
         name: { type: string, example: market-movers }
         isRunning: { type: boolean }
         runningSince: { type: string, format: date-time, nullable: true }
-        lastSyncedAt: { type: string, format: date-time, nullable: true }
-        lastStatus: { type: string, enum: [ok, error], nullable: true }
+        lastSyncedAt: { type: string, format: date-time, nullable: true, description: "Most recent attempt of any outcome (overwritten every run)." }
+        lastStatus: { type: string, enum: [ok, error], nullable: true, description: "Outcome of the most recent attempt = current health." }
         lastCount: { type: integer, nullable: true }
-        lastError: { type: string, nullable: true }
+        lastError: { type: string, nullable: true, description: "Error of the last failure; persists across later successes (paired with lastFailedAt)." }
+        lastSuccessAt: { type: string, format: date-time, nullable: true, description: "Added 2026-07-12. Last successful run — written only on success, so it survives later failures (independent of lastFailedAt)." }
+        lastSuccessCount: { type: integer, nullable: true, description: "Added 2026-07-12. Doc count of the last successful run." }
+        lastFailedAt: { type: string, format: date-time, nullable: true, description: "Added 2026-07-12. Last failed run — written only on failure, so it survives later successes (its message is in lastError)." }
         collections: { type: array, items: { type: string }, example: ["market_movers", "market_movers_history"] }
         cronExpression: { type: string, example: "0 18 * * 1-5" }
         timeZone: { type: string, example: "America/New_York" }
@@ -1889,10 +1902,13 @@ components:
         without reading backend source.
       properties:
         job: { type: string }
-        lastSyncedAt: { type: string, format: date-time, nullable: true }
-        lastStatus: { type: string, nullable: true }
+        lastSyncedAt: { type: string, format: date-time, nullable: true, description: "Most recent attempt of any outcome (overwritten every run)." }
+        lastStatus: { type: string, nullable: true, description: "Outcome of the most recent attempt = current health ('ok' | 'error')." }
         lastCount: { type: integer, nullable: true }
-        lastError: { type: string, nullable: true }
+        lastError: { type: string, nullable: true, description: "Error of the last failure; persists across later successes (paired with lastFailedAt)." }
+        lastSuccessAt: { type: string, format: date-time, nullable: true, description: "Added 2026-07-12. Last successful run — written only on success, so it survives later failures." }
+        lastSuccessCount: { type: integer, nullable: true, description: "Added 2026-07-12. Doc count of the last successful run." }
+        lastFailedAt: { type: string, format: date-time, nullable: true, description: "Added 2026-07-12. Last failed run — written only on failure, so it survives later successes (its message is in lastError)." }
         collections: { type: array, items: { type: string }, nullable: true }
         cronExpression: { type: string, nullable: true }
         timeZone: { type: string, nullable: true }

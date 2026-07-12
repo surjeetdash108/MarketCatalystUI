@@ -28,11 +28,23 @@ export class SyncMetaService {
    */
   async record(jobName: string, result: SyncResult) {
     const jobMeta = this.registry.getMeta(jobName);
+    const now = new Date().toISOString();
     const doc = {
-      lastSyncedAt: new Date().toISOString(),
+      // Most recent attempt of any outcome + its status — overwritten each run,
+      // so lastStatus always reflects current health ('ok' | 'error').
+      lastSyncedAt: now,
       lastStatus: result.ok ? 'ok' : 'error',
       lastCount: result.count ?? null,
-      lastError: result.error ?? null,
+      // Success and failure land in SEPARATE fields (written only on that
+      // outcome) so one never erases the other: after a job succeeds and then
+      // later fails you can still read when it last succeeded, and after it
+      // recovers you can still read when it last failed and why. The
+      // merge:true set() below is what preserves the field this run leaves
+      // untouched. (Previously a single lastSyncedAt/lastError pair was
+      // overwritten every run, so the prior outcome was lost.)
+      ...(result.ok
+        ? { lastSuccessAt: now, lastSuccessCount: result.count ?? null }
+        : { lastFailedAt: now, lastError: result.error ?? null }),
       ...(jobMeta
         ? {
             collections: jobMeta.collections,

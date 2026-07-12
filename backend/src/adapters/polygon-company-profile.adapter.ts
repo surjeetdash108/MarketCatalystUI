@@ -37,9 +37,9 @@ export class PolygonCompanyProfileAdapter implements CompanyProfileAdapter {
     const warnings: AdapterWarning[] = [
       {
         code: 'FIELD_NOT_SUPPORTED',
-        field: 'peRatio,eps,dividendYield,dividendPerShare,peers',
+        field: 'dividendYield,dividendPerShare,peers',
         message:
-          'Polygon reference/tickers has no fundamentals ratios or peer list — these fields are structurally null on this source, not a transient failure.',
+          'Polygon has no dividend-yield or peer-list product — these fields are structurally null on this source, not a transient failure. (eps/peRatio ARE populated below from /vX/reference/financials.)',
       },
     ];
 
@@ -88,6 +88,24 @@ export class PolygonCompanyProfileAdapter implements CompanyProfileAdapter {
       });
     }
 
+    // TTM EPS from Polygon fundamentals, and a computed P/E = price / EPS.
+    let eps: number | null = null;
+    let peRatio: number | null = null;
+    try {
+      eps = await this.polygon.getTtmEps(ticker);
+      if (eps != null && price != null && eps > 0) {
+        peRatio = Math.round((price / eps) * 100) / 100;
+      }
+    } catch (err) {
+      const reason = (err as Error).message;
+      this.logger.warn(`Failed fetching TTM EPS for ${ticker}: ${reason}`);
+      warnings.push({
+        code: 'SUB_REQUEST_FAILED',
+        field: 'eps,peRatio',
+        message: `TTM financials request failed: ${reason}`,
+      });
+    }
+
     const data: CanonicalCompany = {
       ticker,
       name: (details.name as string) ?? null,
@@ -102,8 +120,8 @@ export class PolygonCompanyProfileAdapter implements CompanyProfileAdapter {
       volume: null,
       averageVolume: null,
       description: (details.description as string) ?? null,
-      peRatio: null,
-      eps: null,
+      peRatio,
+      eps,
       dividendYield: null,
       dividendPerShare: null,
       peers: [],

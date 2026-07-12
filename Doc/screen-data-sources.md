@@ -2,6 +2,8 @@
 
 _Last verified: 2026-07-09, against the actual code in `app/iq/screens/*.tsx` and `backend/src/sync/*.job.ts`. See `Doc/openapi.yaml` for the full data contract and `Doc/schema.sql` if this ever migrates off Firestore. (2026-07-09 also added backend ops tooling — sync_meta collections/cron/next-run tracking, `POST /sync/run-all`, `backendUI/index.html` dashboard polish — none of which touches a MarketCatalyst screen, so nothing below changed from this pass.)_
 
+> **Update 2026-07-12 — backend vendor migration to Polygon.** Several jobs were re-pointed to Polygon as primary (FMP/Finnhub kept as fallback), so the *source* of already-live data changed even though **what's live did not** (live/dynamic stays ~44%, static ~56%). Now Polygon-primary: **dividends** (`/v3/reference/dividends`), **IPOs** (`/vX/reference/ipos`), **sector performance** (SPDR sector-ETF proxies), **index quotes** (ETF-proxy daily aggs), and **company profile** — including **P/E now computed from Polygon `/vX/reference/financials` TTM EPS**. Stays non-Polygon (no product exists): **earnings calendar** + **analyst consensus** (FMP; Polygon 404s), **peers** + **dividend yield** (null on Polygon), **macro** (FRED), **SEC filings** (EDGAR). Frontend "live quote · FMP"/"Live Dividend Calendar (FMP)" pill/label text still says FMP in code — cosmetic, the data underneath is now Polygon; a follow-up. Also this session: Stock Detail candles fixed (Firestore index/query-direction bug) and a live market-open/closed indicator added to the shell header._
+
 > **Legend**
 > - ✅ **Live** — data comes from a real Firestore collection written by a backend sync job (or Firebase Auth/user-owned Firestore data)
 > - 🟡 **Hybrid** — live data is merged additively on top of the original mock content (matching tickers get real values; the rest of the mock stays, so nothing was deleted to make room for live data)
@@ -216,7 +218,7 @@ Two further vendor paths are still scaffolded but inert if real bid/ask/greeks a
 | Element | Data | Status |
 |---|---|---|
 | "Live Economic Indicators" card (CPI, unemployment, payrolls, Fed funds, 10Y yield, etc.) | New, additive `macro_events` (FRED) card — shows only once the collection has synced data; doesn't touch the calendar below | 🟡 Hybrid |
-| "Live Dividend Calendar" card (new) | New, additive `dividends` (FMP) card — real upcoming ex-dividend dates, pay dates, amount, yield, frequency across the whole market, not just curated tickers | 🟡 Hybrid |
+| "Live Dividend Calendar" card (new) | New, additive `dividends` card (Polygon-primary as of 2026-07-12, FMP fallback) — real upcoming ex-dividend dates, pay dates, amount, frequency across the whole market. NOTE: yield is null on Polygon-served docs (Polygon has no dividend-yield field; present only when the FMP fallback runs) | 🟡 Hybrid |
 | Market regime card, VIX card, Last/This/Next Week economic calendars, Dividend calendar (chip grid/month view), VIX Sensitive Stocks table | Hardcoded | 🔴 Static — the economic calendar tabs are a fixed illustrative "today" (fictional dates), not a real date range, so live FRED readings aren't force-fit into them; see the note above `MacroEventsJob` for why |
 
 ---
@@ -239,7 +241,7 @@ Two further vendor paths are still scaffolded but inert if real bid/ask/greeks a
 | Macro & VIX's live card | `FRED_API_KEY` is already set — just restart the backend (`npm run start:dev`) and `POST /sync/macro-events/run` once |
 | IPOs' live card | Code is done (no key needed, Finnhub's already active) — just restart the backend and `POST /sync/ipos/run` once |
 | Options Chain's live card | Code is done (no key needed, Polygon's already active) — just restart the backend and `POST /sync/options-chains/run` once |
-| Macro & VIX's dividend card | Code is done (no key needed, FMP's already active) — just restart the backend and `POST /sync/dividends/run` once |
+| Macro & VIX's dividend card | Code is done (no key needed; Polygon-primary as of 2026-07-12, FMP fallback) — just restart the backend and `POST /sync/dividends/run` once |
 | Stock Detail's real chart (3M/6M/1Y) | Code is done (no key needed, Polygon's already active) — just restart the backend and `POST /sync/stock-history/run` a few times (rotating batch, ~4 runs to cover all of TICKER_UNIVERSE once) |
 | Screener's real RS Rating | Code is done, no key needed — restart the backend, run `stock-history` a few times first (to accumulate real bars), then `POST /sync/rs-rating/run` |
 | **Options Chain's real bid/ask/IV/greeks/OI — highest-value remaining gap** | Either upgrade the Polygon plan, or get a free `TRADIER_ACCESS_TOKEN` and finish the existing `tradier.service.ts` stub |

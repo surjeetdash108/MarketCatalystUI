@@ -4,6 +4,7 @@ import { FirebaseAdminService } from '../common/firebase-admin.provider';
 import { chunkedBatchSet } from '../common/firestore-batch.util';
 import { SyncMetaService } from '../common/sync-meta.service';
 import { FinnhubService } from '../vendors/finnhub/finnhub.service';
+import { PolygonService } from '../vendors/polygon/polygon.service';
 import { SyncRegistry } from '../common/sync-registry.service';
 
 const JOB_NAME = 'ipos';
@@ -53,6 +54,7 @@ export class IposJob implements OnModuleInit {
   private readonly logger = new Logger(IposJob.name);
 
   constructor(
+    private readonly polygon: PolygonService,
     private readonly finnhub: FinnhubService,
     private readonly firebase: FirebaseAdminService,
     private readonly meta: SyncMetaService,
@@ -80,10 +82,29 @@ export class IposJob implements OnModuleInit {
       const to = new Date();
       to.setUTCDate(to.getUTCDate() + LOOKAHEAD_DAYS);
 
-      const events = await this.finnhub.getIpoCalendar(
-        isoDate(from),
-        isoDate(to),
-      );
+      // Polygon primary; fall back to Finnhub's IPO calendar if it errors.
+      // Typed to the common shape both vendors return (Polygon's free-form
+      // status string widens Finnhub's stricter union).
+      let events: Array<{
+        date: string;
+        symbol: string | null;
+        name: string;
+        exchange: string | null;
+        price: string | null;
+        numberOfShares: number | null;
+        totalSharesValue: number | null;
+        status: string;
+      }>;
+      let source = 'polygon';
+      try {
+        events = await this.polygon.getIpoCalendar(isoDate(from), isoDate(to));
+      } catch (err) {
+        this.logger.warn(
+          `Polygon IPOs failed, falling back to Finnhub: ${(err as Error).message}`,
+        );
+        events = await this.finnhub.getIpoCalendar(isoDate(from), isoDate(to));
+        source = 'finnhub';
+      }
 
       const docs = events.map((e) => {
         const { low, high } = parsePriceRange(e.price);
@@ -100,7 +121,7 @@ export class IposJob implements OnModuleInit {
             numberOfShares: e.numberOfShares,
             totalSharesValue: e.totalSharesValue,
             status: e.status,
-            source: 'finnhub',
+            source,
             updatedAt: new Date().toISOString(),
           },
         };

@@ -184,6 +184,14 @@
   .badge-error .dot { background: var(--down); }
   .badge-never { background: rgba(245,185,66,0.12); color: var(--warn); }
   .badge-never .dot { background: var(--warn); }
+  .badge-metaerr { background: rgba(255,84,112,0.12); color: var(--down); cursor: help; }
+  .badge-metaerr .dot { background: var(--down); }
+  .meta-banner {
+    background: rgba(255,84,112,0.10); border: 1px solid rgba(255,84,112,0.35);
+    color: var(--down); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;
+    font-size: 13px; line-height: 1.5;
+  }
+  .meta-banner code { background: rgba(0,0,0,0.35); padding: 1px 6px; border-radius: 4px; color: #fff; }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -202,6 +210,8 @@
     vertical-align: bottom;
     cursor: help;
   }
+  .ok-time { color: var(--up); cursor: help; }
+  .fail-time { color: var(--down); cursor: help; }
   .run-btn {
     background: transparent;
     border: 1px solid var(--border);
@@ -229,6 +239,7 @@
     <span class="muted" style="font-size:12px;">auto-refreshes every 5s</span>
   </div>
   <div id="runAllResult" class="run-all-result" style="display:none;"></div>
+  <div id="metaBanner" class="meta-banner" style="display:none;"></div>
 
   <div class="cards">
     <div class="card"><div class="n" id="cardTotal">–</div><div class="l">Services</div></div>
@@ -291,6 +302,11 @@ function esc(s) {
 function statusBadge(job) {
   if (job.isRunning) {
     return `<span class="badge badge-running"><span class="dot"></span>Running</span>`;
+  }
+  // metaError means sync_meta couldn't be READ (e.g. Firestore auth expired) —
+  // run history is unknown, NOT confirmed "never run". Don't conflate the two.
+  if (job.metaError) {
+    return `<span class="badge badge-metaerr" title="${esc(job.metaError)}"><span class="dot"></span>Meta unreachable</span>`;
   }
   if (!job.lastSyncedAt) {
     return `<span class="badge badge-never"><span class="dot"></span>Never run</span>`;
@@ -366,6 +382,22 @@ function render(jobs) {
   document.getElementById('cardOk').textContent = ok;
   document.getElementById('cardError').textContent = errored;
 
+  // If sync_meta can't be read, EVERY job comes back with null run history and
+  // would otherwise all read "Never run" — which hides the real cause. Surface
+  // it as an infra banner instead (one shared error, not 17 per-job failures).
+  const metaErr = jobs.find(j => j.metaError)?.metaError;
+  const banner = document.getElementById('metaBanner');
+  if (metaErr) {
+    const isAuth = /invalid_grant|invalid_rapt|reauth|UNAUTHENTICATED|permission|credential/i.test(metaErr);
+    banner.innerHTML =
+      `<b>Firestore unreachable — run history below is unknown, not "never run".</b><br>` +
+      `<span class="muted">${esc(metaErr)}</span>` +
+      (isAuth ? `<br>Likely fix: re-authenticate the backend's credentials (<code>gcloud auth application-default login</code>) and restart it.` : '');
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+
   if (total === 0) {
     document.getElementById('tableWrap').innerHTML = `<div class="empty">No sync jobs registered.</div>`;
     return;
@@ -379,8 +411,9 @@ function render(jobs) {
         <td class="job-name">${esc(job.name)}</td>
         <td>${statusBadge(job)}</td>
         <td>${lastRunBadge(job)}</td>
-        <td class="muted">${fmtTime(job.lastSyncedAt) ?? '—'}</td>
-        <td class="muted">${job.lastCount ?? '—'}</td>
+        <td class="muted">${job.lastSuccessAt ? `<span class="ok-time" title="${esc(job.lastSuccessAt)}">${fmtTime(job.lastSuccessAt)}</span>` : '—'}</td>
+        <td class="muted">${job.lastFailedAt ? `<span class="fail-time" title="${esc(job.lastFailedAt)}">${fmtTime(job.lastFailedAt)}</span>` : '—'}</td>
+        <td class="muted">${(job.lastSuccessCount ?? job.lastCount) ?? '—'}</td>
         <td>${fmtCollections(job.collections)}</td>
         <td class="muted">${fmtCron(job.cronExpression, job.timeZone)}</td>
         <td class="muted">${fmtNextRun(job.nextRunAt)}</td>
@@ -394,7 +427,7 @@ function render(jobs) {
       <table>
         <colgroup>
           <col class="col-service"><col class="col-state"><col class="col-lastrun">
-          <col class="col-time"><col class="col-count"><col class="col-cols">
+          <col class="col-time"><col class="col-time"><col class="col-count"><col class="col-cols">
           <col class="col-interval"><col class="col-nextrun"><col class="col-error"><col class="col-action">
         </colgroup>
         <thead>
@@ -402,7 +435,8 @@ function render(jobs) {
             <th>Service</th>
             <th>State</th>
             <th>Last Run</th>
-            <th>Last Run Time</th>
+            <th>Last Success</th>
+            <th>Last Failed</th>
             <th>Docs</th>
             <th>Collections Affected</th>
             <th>Interval</th>

@@ -94,6 +94,13 @@ export class SyncController {
         lastStatus: (m?.lastStatus as string) ?? null,
         lastCount: (m?.lastCount as number) ?? null,
         lastError: (m?.lastError as string) ?? null,
+        // Independently-persisted last success and last failure (see
+        // SyncMetaService.record) — either can be present without the other,
+        // so the dashboard can show "last ran OK at X" and "last failed at Y"
+        // side by side instead of only the most recent outcome.
+        lastSuccessAt: (m?.lastSuccessAt as string) ?? null,
+        lastSuccessCount: (m?.lastSuccessCount as number) ?? null,
+        lastFailedAt: (m?.lastFailedAt as string) ?? null,
         // Registry copy (in-memory, always available) — same values
         // sync_meta persists per run, shown here even when Firestore itself
         // is unreachable (metaError set) so "what does this job affect and

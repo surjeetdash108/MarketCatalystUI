@@ -568,10 +568,17 @@ CREATE INDEX idx_news_category ON news_articles(category);
 -- sync-registry.service.ts.
 CREATE TABLE sync_meta (
   job_name         TEXT PRIMARY KEY,     -- e.g. 'market-movers', 'companies', 'sec-13f', ...
-  last_synced_at   TIMESTAMPTZ,
-  last_status      TEXT CHECK (last_status IN ('ok','error')),
-  last_count       INTEGER,
-  last_error       TEXT,
+  last_synced_at   TIMESTAMPTZ,          -- most recent attempt of ANY outcome (overwritten every run)
+  last_status      TEXT CHECK (last_status IN ('ok','error')),  -- outcome of that most recent attempt = current health
+  last_count       INTEGER,              -- doc count of the most recent attempt
+  last_error       TEXT,                 -- error of the LAST FAILURE; persists across later successes (paired with last_failed_at)
+  -- last_success_* and last_failed_at are written only on that outcome, so one
+  -- never erases the other: after a job succeeds then later fails you can still
+  -- read when it last succeeded, and after it recovers you can still read when
+  -- it last failed. (Added 2026-07-12; see SyncMetaService.record.)
+  last_success_at    TIMESTAMPTZ,        -- last successful run
+  last_success_count INTEGER,            -- doc count of that last successful run
+  last_failed_at     TIMESTAMPTZ,        -- last failed run (its message is in last_error)
   cursor           INTEGER,              -- rotating ticker-universe cursor for batched jobs (companies, analyst-actions, sec-form4, news)
   collections      TEXT[],               -- Firestore collection path(s) this job writes to, e.g. {'market_movers','market_movers_history'}
   cron_expression  TEXT,                 -- raw cron string, e.g. '*/30 9-16 * * 1-5'
