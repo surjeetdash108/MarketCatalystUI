@@ -748,7 +748,26 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
 }
 
 // Stock tickers that can be starred/added to watchlist from search
-const SEARCHABLE_STOCKS = ["NVDA","AAPL","MSFT","TSLA","META","AMZN","GOOGL","AMD","AVGO","SMCI","COIN","UBER","PLTR","JPM","V"];
+// Curated quick-access list (shown before typing, and as a name/symbol-matched
+// fallback while the live `tickers` search warms up / before ticker-universe
+// backfills nameLower). Names let it match by company name too — e.g. "Apple".
+const SEARCHABLE_STOCKS: Array<{ sym: string; name: string }> = [
+  { sym: "NVDA", name: "NVIDIA" },
+  { sym: "AAPL", name: "Apple" },
+  { sym: "MSFT", name: "Microsoft" },
+  { sym: "TSLA", name: "Tesla" },
+  { sym: "META", name: "Meta Platforms" },
+  { sym: "AMZN", name: "Amazon" },
+  { sym: "GOOGL", name: "Alphabet (Google)" },
+  { sym: "AMD", name: "Advanced Micro Devices" },
+  { sym: "AVGO", name: "Broadcom" },
+  { sym: "SMCI", name: "Super Micro Computer" },
+  { sym: "COIN", name: "Coinbase" },
+  { sym: "UBER", name: "Uber Technologies" },
+  { sym: "PLTR", name: "Palantir" },
+  { sym: "JPM", name: "JPMorgan Chase" },
+  { sym: "V", name: "Visa" },
+];
 
 // ---- Main IQ Shell ----
 export function IQShell({ children }: { children: React.ReactNode }) {
@@ -810,14 +829,19 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const tickerSearchResults = useTickerSearch(searchQ);
   const searchMatches: Array<{ sym: string; name: string | null; price: number | null; pctChange: number | null }> = searchQ
     ? (() => {
+        const q = searchQ.toLowerCase();
         const bySym = new Map(tickerSearchResults.map(r => [r.ticker, r]));
-        const curated = SEARCHABLE_STOCKS.filter(s => s.toLowerCase().startsWith(searchQ.toLowerCase()) && !bySym.has(s));
+        // Curated fallback matches by ticker OR company-name prefix, deduped
+        // against whatever the live query already returned.
+        const curated = SEARCHABLE_STOCKS.filter(
+          s => (s.sym.toLowerCase().startsWith(q) || s.name.toLowerCase().startsWith(q)) && !bySym.has(s.sym),
+        );
         return [
           ...tickerSearchResults.map(r => ({ sym: r.ticker, name: r.name, price: r.price, pctChange: r.pctChange })),
-          ...curated.map(s => ({ sym: s, name: null, price: null, pctChange: null })),
+          ...curated.map(s => ({ sym: s.sym, name: s.name, price: null, pctChange: null })),
         ];
       })()
-    : SEARCHABLE_STOCKS.map(s => ({ sym: s, name: null, price: null, pctChange: null }));
+    : SEARCHABLE_STOCKS.map(s => ({ sym: s.sym, name: s.name, price: null, pctChange: null }));
   const cmdRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLElement>(null);
   const [drawer, setDrawer] = useState<

@@ -28,47 +28,83 @@ const PREFIX_UPPER_BOUND = String.fromCharCode(0xf8ff);
  * hook lives in the shell, which wraps every screen). Instead this runs a
  * single scoped range query per search, only when there's a query.
  *
- * Ticker-prefix only, case-insensitive via uppercasing (tickers are always
- * uppercase) — a range query on a single field needs no composite index,
- * unlike an equality + different-field-orderBy query (see useOhlcvBars).
- * Company-NAME search (e.g. typing "Apple" to find AAPL) is NOT
- * implemented — would need a normalized lowercase name field added to the
- * sync job first, which doesn't exist yet.
+ * Matches by BOTH ticker symbol AND company name, via two parallel
+ * single-field prefix range queries — `ticker` (uppercased; tickers are
+ * always uppercase) and `nameLower` (lowercased company name, written by
+ * ticker-universe.job.ts). Each is a single-field range, which Firestore
+ * serves from its automatic single-field index — no composite index needed
+ * (unlike useOhlcvBars). Results are merged and de-duplicated by ticker,
+ * with symbol matches ranked ahead of name matches.
+ *
+ * Prefix-only, by design (Firestore has no substring/full-text search): a
+ * name query matches names STARTING with the text ("App" → "Apple Inc."),
+ * not a word in the middle ("Motor" won't find "Ford Motor Co"). A real
+ * mid-word/fuzzy search would need a search service (Algolia/Typesense) or
+ * a stored keyword-token array — out of scope here.
+ *
+ * NOTE: `nameLower` only exists on ticker docs written after that field was
+ * added, so name search returns nothing until ticker-universe.job re-runs.
  */
+function mapDoc(data: Record<string, unknown>): TickerSearchResult {
+  return {
+    ticker: data.ticker as string,
+    name: (data.name as string | undefined) ?? null,
+    price: (data.price as number | undefined) ?? null,
+    pctChange: (data.pctChange as number | undefined) ?? null,
+  };
+}
+
 export function useTickerSearch(rawQuery: string): TickerSearchResult[] {
   const [results, setResults] = useState<TickerSearchResult[]>([]);
 
   useEffect(() => {
-    const q = rawQuery.trim().toUpperCase();
-    if (!q) {
+    const trimmed = rawQuery.trim();
+    if (!trimmed) {
       setResults([]);
       return;
     }
+    const upper = trimmed.toUpperCase();
+    const lower = trimmed.toLowerCase();
+    const tickers = collection(firebaseDb, "tickers");
 
     const handle = setTimeout(() => {
-      const fsQuery = query(
-        collection(firebaseDb, "tickers"),
-        where("ticker", ">=", q),
-        where("ticker", "<", q + PREFIX_UPPER_BOUND),
-        orderBy("ticker"),
-        limit(MAX_RESULTS),
+      const bySymbol = getDocs(
+        query(
+          tickers,
+          where("ticker", ">=", upper),
+          where("ticker", "<", upper + PREFIX_UPPER_BOUND),
+          orderBy("ticker"),
+          limit(MAX_RESULTS),
+        ),
       );
-      getDocs(fsQuery)
-        .then((snap) => {
-          setResults(
-            snap.docs.map((d) => {
-              const data = d.data();
-              return {
-                ticker: data.ticker as string,
-                name: (data.name as string | undefined) ?? null,
-                price: (data.price as number | undefined) ?? null,
-                pctChange: (data.pctChange as number | undefined) ?? null,
-              };
-            }),
-          );
+      const byName = getDocs(
+        query(
+          tickers,
+          where("nameLower", ">=", lower),
+          where("nameLower", "<", lower + PREFIX_UPPER_BOUND),
+          orderBy("nameLower"),
+          limit(MAX_RESULTS),
+        ),
+      );
+
+      Promise.all([bySymbol, byName])
+        .then(([symbolSnap, nameSnap]) => {
+          // Symbol matches first, then name matches; de-dupe by ticker.
+          const seen = new Set<string>();
+          const merged: TickerSearchResult[] = [];
+          for (const snap of [symbolSnap, nameSnap]) {
+            for (const d of snap.docs) {
+              const r = mapDoc(d.data());
+              if (r.ticker && !seen.has(r.ticker)) {
+                seen.add(r.ticker);
+                merged.push(r);
+              }
+            }
+          }
+          setResults(merged.slice(0, MAX_RESULTS));
         })
         .catch((err) => {
-          console.error(`Ticker search failed for "${q}":`, err);
+          console.error(`Ticker search failed for "${trimmed}":`, err);
           setResults([]);
         });
     }, DEBOUNCE_MS);

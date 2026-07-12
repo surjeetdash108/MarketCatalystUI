@@ -64,6 +64,10 @@ export class TickerUniverseJob implements OnModuleInit {
           data: {
             ticker: t.ticker,
             name: t.name ?? null,
+            // Lowercased company name for case-insensitive prefix search from
+            // the Cmd+K bar (useTickerSearch runs a range query on this).
+            // Firestore auto-indexes single fields, so no composite index needed.
+            nameLower: t.name ? t.name.toLowerCase() : null,
             market: t.market ?? null,
             locale: t.locale ?? null,
             primaryExchange: t.primary_exchange ?? null,
