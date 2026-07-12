@@ -407,6 +407,15 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const [showEarnings, setShowEarnings] = useState(false);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [maStep, setMaStep] = useState(0);
+
+  // Live overlays for the detail panels — real analyst consensus, news, insider
+  // transactions (from their Firestore collections) and real 52-week levels
+  // (from a year of ohlcv_bars). Each falls back to the existing mock when its
+  // collection is empty, so nothing goes blank before the jobs have run.
+  const { data: liveConsensus } = useCollection<{ id: string; ticker: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }>("analyst_actions");
+  const { data: liveNews } = useCollection<{ id: string; ticker: string; headline: string; publishedAt: string }>("news");
+  const { data: liveInsider } = useCollection<{ id: string; ticker: string; ownerName: string | null; acquiredOrDisposed: string; shares: number; transactionDate: string }>("insider_transactions");
+  const yearBars = useOhlcvBars(sym, "1Y");
   const [emaStep, setEmaStep] = useState(0);
   const realBars = useOhlcvBars(sym, tfActive);
 
@@ -487,19 +496,47 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   };
   const liveCompany = companies.find(c => c.ticker === sym);
   const isLiveStock = !!liveCompany && liveCompany.price != null;
-  const data: StockInfo = isLiveStock
-    ? {
-        ...(info ?? fallbackData),
-        name: liveCompany.name ?? (info ?? fallbackData).name,
-        price: liveCompany.price ?? (info ?? fallbackData).price,
-        pctChange: liveCompany.pctChange ?? (info ?? fallbackData).pctChange,
-        marketCap: liveCompany.marketCap != null ? fmtMarketCapB(liveCompany.marketCap / 1e9) : (info ?? fallbackData).marketCap,
-        peRatio: liveCompany.peRatio ?? (info ?? fallbackData).peRatio,
-        dividendYield: liveCompany.dividendYield ?? (info ?? fallbackData).dividendYield,
-        beta: liveCompany.beta ?? (info ?? fallbackData).beta,
-        sector: liveCompany.sector ?? (info ?? fallbackData).sector,
-      }
-    : (info ?? fallbackData);
+
+  // Real 52-week high/low from a year of daily bars (fallback: mock range).
+  const yr = yearBars ?? [];
+  const week52 = yr.length > 1
+    ? { high: Math.max(...yr.map(b => b.h)), low: Math.min(...yr.map(b => b.l)) }
+    : null;
+  // Real news / insider for this ticker, mapped into the panels' shapes.
+  const symNews = liveNews
+    .filter(n => n.ticker === sym)
+    .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+    .slice(0, 6)
+    .map(n => ({ headline: n.headline, date: (n.publishedAt ?? "").slice(0, 10) }));
+  const symInsider = liveInsider
+    .filter(x => x.ticker === sym)
+    .sort((a, b) => (b.transactionDate ?? "").localeCompare(a.transactionDate ?? ""))
+    .slice(0, 8)
+    .map(x => ({
+      name: x.ownerName ?? "Insider",
+      action: `${x.acquiredOrDisposed === "A" ? "Buy" : "Sell"} ${Math.round(x.shares ?? 0).toLocaleString("en-US")} sh`,
+      date: (x.transactionDate ?? "").slice(0, 10),
+    }));
+
+  const base = info ?? fallbackData;
+  const data: StockInfo = {
+    ...base,
+    ...(isLiveStock
+      ? {
+          name: liveCompany.name ?? base.name,
+          price: liveCompany.price ?? base.price,
+          pctChange: liveCompany.pctChange ?? base.pctChange,
+          marketCap: liveCompany.marketCap != null ? fmtMarketCapB(liveCompany.marketCap / 1e9) : base.marketCap,
+          peRatio: liveCompany.peRatio ?? base.peRatio,
+          dividendYield: liveCompany.dividendYield ?? base.dividendYield,
+          beta: liveCompany.beta ?? base.beta,
+          sector: liveCompany.sector ?? base.sector,
+        }
+      : {}),
+    ...(week52 ? { week52High: week52.high, week52Low: week52.low } : {}),
+    ...(symNews.length ? { news: symNews } : {}),
+    ...(symInsider.length ? { insiderActivity: symInsider } : {}),
+  };
   const isUp = data.pctChange >= 0;
   const p = data.price;
 
@@ -510,7 +547,29 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const mc = ss?.marketCap ?? 100;
   const gv = RATING_VAL[rating] ?? 0;
   const tone = gv > 0.6 ? "var(--up)" : gv > 0 ? "#7bdcae" : gv < -0.6 ? "var(--down)" : gv < 0 ? "#ff9aab" : "var(--text-dim-solid)";
-  const rc = ratingCounts(rating);
+  // Real analyst consensus (Buy/Neutral/Sell counts) from analyst_actions when
+  // available; the proprietary "MarketSurge" rating (rc.m) stays illustrative.
+  const rcBase = ratingCounts(rating);
+  const consensusDoc = liveConsensus.find(c => c.ticker === sym);
+  const rc = consensusDoc
+    ? {
+        ...rcBase,
+        o: [
+          consensusDoc.sell + consensusDoc.strongSell,
+          consensusDoc.hold,
+          consensusDoc.strongBuy + consensusDoc.buy,
+        ] as [number, number, number],
+        ol: (() => {
+          const bull = consensusDoc.strongBuy + consensusDoc.buy;
+          const bear = consensusDoc.sell + consensusDoc.strongSell;
+          if (bull > bear && consensusDoc.strongBuy >= consensusDoc.buy) return "Strong Buy";
+          if (bull > bear) return "Buy";
+          if (bear > bull && consensusDoc.strongSell >= consensusDoc.sell) return "Strong Sell";
+          if (bear > bull) return "Sell";
+          return "Neutral";
+        })(),
+      }
+    : rcBase;
 
   const ex = EXCHANGE[sym] ?? "NASDAQ";
   const group = data.sector ?? ss?.sector ?? "Technology";
