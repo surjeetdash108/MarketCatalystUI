@@ -833,8 +833,10 @@ export function IQShell({ children }: { children: React.ReactNode }) {
         const bySym = new Map(tickerSearchResults.map(r => [r.ticker, r]));
         // Curated fallback matches by ticker OR company-name prefix, deduped
         // against whatever the live query already returned.
+        // Substring (not just prefix) match, so "google" finds "Alphabet
+        // (Google)" and "oogl" finds GOOGL. Cheap because this list is small.
         const curated = SEARCHABLE_STOCKS.filter(
-          s => (s.sym.toLowerCase().startsWith(q) || s.name.toLowerCase().startsWith(q)) && !bySym.has(s.sym),
+          s => (s.sym.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) && !bySym.has(s.sym),
         );
         return [
           ...tickerSearchResults.map(r => ({ sym: r.ticker, name: r.name, price: r.price, pctChange: r.pctChange })),

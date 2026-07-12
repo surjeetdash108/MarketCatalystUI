@@ -68,6 +68,20 @@ export class TickerUniverseJob implements OnModuleInit {
             // the Cmd+K bar (useTickerSearch runs a range query on this).
             // Firestore auto-indexes single fields, so no composite index needed.
             nameLower: t.name ? t.name.toLowerCase() : null,
+            // Whole-word tokens of the name + the ticker, for array-contains
+            // search (e.g. "motor" finds "Ford Motor Company"). Complements the
+            // nameLower prefix query — a query word matches if it equals any
+            // token. (Does NOT solve mid-word substrings or aliases where the
+            // legal name differs, e.g. "google" → "Alphabet Inc." — that needs
+            // a search service or a curated alias list.)
+            searchTokens: t.name
+              ? Array.from(
+                  new Set([
+                    ...t.name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
+                    t.ticker.toLowerCase(),
+                  ]),
+                )
+              : [t.ticker.toLowerCase()],
             market: t.market ?? null,
             locale: t.locale ?? null,
             primaryExchange: t.primary_exchange ?? null,

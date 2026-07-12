@@ -42,6 +42,14 @@ const SEARCH_SYMS = [
   ...movers.map(m => m.ticker),
 ].filter((v, i, a) => a.indexOf(v) === i).sort();
 
+// symbol → company name, so search can match by name too (e.g. "apple" → AAPL)
+const SEARCH_NAMES: Record<string, string> = {};
+for (const s of screenerStocks) if (s.name) SEARCH_NAMES[s.ticker] = s.name;
+for (const sym of Object.keys(stockInfo)) {
+  const n = (stockInfo as Record<string, { name?: string }>)[sym]?.name;
+  if (n && !SEARCH_NAMES[sym]) SEARCH_NAMES[sym] = n;
+}
+
 function catCol(c: string): string {
   if (c === "Catalyst") return "var(--brand-2)";
   if (c === "Analyst" || c === "Coverage") return "var(--ai)";
@@ -386,8 +394,9 @@ export function CommentaryScreen() {
   })();
 
   const q = search.trim().toUpperCase();
+  const ql = q.toLowerCase();
   const suggestions = q.length >= 1
-    ? SEARCH_SYMS.filter(s => s.startsWith(q) || s.includes(q)).slice(0, 8)
+    ? SEARCH_SYMS.filter(s => s.includes(q) || (SEARCH_NAMES[s] ?? "").toLowerCase().includes(ql)).slice(0, 8)
     : [];
 
   function openNews(sym: string) {

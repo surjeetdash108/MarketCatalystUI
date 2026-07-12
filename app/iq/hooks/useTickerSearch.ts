@@ -28,19 +28,21 @@ const PREFIX_UPPER_BOUND = String.fromCharCode(0xf8ff);
  * hook lives in the shell, which wraps every screen). Instead this runs a
  * single scoped range query per search, only when there's a query.
  *
- * Matches by BOTH ticker symbol AND company name, via two parallel
- * single-field prefix range queries — `ticker` (uppercased; tickers are
- * always uppercase) and `nameLower` (lowercased company name, written by
- * ticker-universe.job.ts). Each is a single-field range, which Firestore
- * serves from its automatic single-field index — no composite index needed
- * (unlike useOhlcvBars). Results are merged and de-duplicated by ticker,
- * with symbol matches ranked ahead of name matches.
+ * Matches by ticker symbol AND company name, via three parallel queries over
+ * the `tickers` collection, merged and de-duplicated by ticker (symbol match
+ * ranked first, then name-prefix, then token):
+ *   1. `ticker` prefix range (uppercased) — "GOOG" → GOOGL
+ *   2. `nameLower` prefix range (lowercased) — "app" → "Apple Inc."
+ *   3. `searchTokens` array-contains (lowercased whole word) — "motor" → "Ford
+ *      Motor Company"
+ * All three use Firestore's automatic single-field indexes (incl. the array
+ * index for token), so no composite index is needed (unlike useOhlcvBars).
  *
- * Prefix-only, by design (Firestore has no substring/full-text search): a
- * name query matches names STARTING with the text ("App" → "Apple Inc."),
- * not a word in the middle ("Motor" won't find "Ford Motor Co"). A real
- * mid-word/fuzzy search would need a search service (Algolia/Typesense) or
- * a stored keyword-token array — out of scope here.
+ * Still cannot do (Firestore has no substring/full-text/alias search): mid-word
+ * fragments ("oogle") and aliases where the legal name differs ("google" →
+ * "Alphabet Inc."). Those are handled only by the shell's curated alias list,
+ * or would need a search service (Algolia/Typesense). The curated list in
+ * shell.tsx does substring matching, so "google" works there for top tickers.
  *
  * NOTE: `nameLower` only exists on ticker docs written after that field was
  * added, so name search returns nothing until ticker-universe.job re-runs.
@@ -86,13 +88,23 @@ export function useTickerSearch(rawQuery: string): TickerSearchResult[] {
           limit(MAX_RESULTS),
         ),
       );
+      // Whole-word token match, e.g. "motor" → "Ford Motor Company". Matches a
+      // full name word or the ticker (case-insensitive) — served by the
+      // automatic array index on searchTokens.
+      const byToken = getDocs(
+        query(
+          tickers,
+          where("searchTokens", "array-contains", lower),
+          limit(MAX_RESULTS),
+        ),
+      );
 
-      Promise.all([bySymbol, byName])
-        .then(([symbolSnap, nameSnap]) => {
-          // Symbol matches first, then name matches; de-dupe by ticker.
+      Promise.all([bySymbol, byName, byToken])
+        .then(([symbolSnap, nameSnap, tokenSnap]) => {
+          // Symbol matches first, then name-prefix, then token; de-dupe by ticker.
           const seen = new Set<string>();
           const merged: TickerSearchResult[] = [];
-          for (const snap of [symbolSnap, nameSnap]) {
+          for (const snap of [symbolSnap, nameSnap, tokenSnap]) {
             for (const d of snap.docs) {
               const r = mapDoc(d.data());
               if (r.ticker && !seen.has(r.ticker)) {
