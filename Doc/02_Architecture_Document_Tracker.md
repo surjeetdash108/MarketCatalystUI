@@ -173,6 +173,12 @@ State Management — Redux Toolkit
 
 -   **`redux-provider.tsx`**: wraps the app in `<Provider store={store}><FirebaseListener />{children}</Provider>` inside `app/layout.tsx`.
 
+Error handling & monitoring (2026-07-12)
+
+-   **Error boundaries**: `app/error.tsx` (route-segment) and `app/global-error.tsx` (root layout) — a thrown render/runtime error in a client component shows a recoverable fallback ("Try again" / reload) instead of a white screen, keeping the rest of the app alive. Both call `Sentry.captureException`.
+-   **Sentry**: `app/sentry-init.tsx` (`SentryInit`, mounted in `app/layout.tsx`) inits `@sentry/browser`; the backend inits `@sentry/node` in `main.ts`. Both are **DSN-gated no-ops** until `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` are set.
+-   **Backend resilience** (`backend/src/main.ts`): process-level `unhandledRejection`/`uncaughtException` handlers (log via Nest `Logger` + `Sentry.captureException`, do NOT exit — a failing sync job never takes the API down), plus `enableShutdownHooks()`. Pair with a supervisor (PM2) + the `/health` endpoint for clean restarts in prod.
+
 -   **Typed hooks**: `useAppSelector` and `useAppDispatch` (from `store/hooks.ts`) wrap the RTK hooks with `RootState` and `AppDispatch` types.
 
 Routing — Next.js App Router

@@ -134,7 +134,7 @@ Infrastructure (Planned)
 
 -   Stripe for subscription billing (Free / Pro / Premium tiers)
 
--   Datadog for observability, PagerDuty for alerting
+-   Datadog for observability, PagerDuty for alerting (planned). **Error monitoring is already scaffolded** via Sentry — `@sentry/browser` (frontend, `app/sentry-init.tsx`) + `@sentry/node` (backend, `main.ts`), wired into the error boundaries + process handlers; DSN-gated (no-op until `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` are set).
 
 Data Vendors
 

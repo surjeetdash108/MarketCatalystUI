@@ -18,6 +18,16 @@ Changes (2026-07-12):
 - **Ticker search by company name** — `ticker-universe.job` now also writes `nameLower` (case-insensitive) and `searchTokens` (name words + ticker) onto `tickers/{ticker}`; `useTickerSearch` runs three parallel queries (ticker prefix + name prefix + token) and merges. Requires a ticker-universe re-run to backfill the fields. Firestore can't do mid-word/alias search ("google" → "Alphabet Inc."); the shell's curated list does substring matching for the top names.
 - **Firestore purging guidance** — the unbounded time-series (`ohlcv_bars` #1, then `news`, `*_history`, SEC data) should use **native TTL policies** (`expireAt` field per collection: `ohlcv_bars` = barDate+~400d, `news` = publishedAt+~90d). All new compute jobs write **bounded** snapshots, adding nothing to growth. The one-time backfill write bursts need Firestore on **Blaze** (Spark's 20k-writes/day cap is what surfaced the `RESOURCE_EXHAUSTED` errors).
 
+Reliability & hardening (2026-07-12):
+- **Crash isolation** — frontend gains Next.js error boundaries (`app/error.tsx` route-level, `app/global-error.tsx` root-level): a component error shows a recoverable fallback instead of a white screen, and the rest of the app keeps working. Backend `main.ts` gains process-level `unhandledRejection`/`uncaughtException` handlers so a single failing cron/sync job logs and the API keeps serving (never tears the process down), plus `enableShutdownHooks()` for graceful SIGTERM/SIGINT.
+- **Proper logging** — backend `console.log` replaced with the Nest `Logger` (tagged `[Bootstrap]`/`[Process]`, stack traces on errors).
+- **Error monitoring (Sentry)** — `@sentry/browser` (frontend, inited in `app/sentry-init.tsx`) and `@sentry/node` (backend, inited in `main.ts`), wired into the error boundaries + process handlers. **DSN-gated: a safe no-op until `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` are set**, then monitoring turns on with no further code. `tracesSampleRate: 0` (errors only, negligible overhead).
+- **Dead code removed** — unused `app/dashboard/{sidebar,back-button,sign-out-button,user-avatar}.tsx` (0 imports; `auth-guard`/`menu-items` kept).
+- **Unimplemented buttons wired** — Analyst "My names"/"PT >15% move" filters, Screener "Save screen" (persists filters to localStorage), Settings "Delete account" (Firebase `deleteUser` behind a typed confirmation). Payment/AI/transcript buttons deliberately left (blocked on Stripe/Claude/data — not faked).
+- **Forgot-password fix** — no longer leaks account existence: an unknown email shows the same neutral "if an account exists…" message as a real one (was showing a nonsensical "Email or password is incorrect"), and the redundant `window.alert` was removed. *Verified live.*
+- **Profile image control** — the raw file input is now a styled **Upload/Change image button** (hidden native input), and the "Stored as profile_image" hint string was removed.
+- **Dev-server note** — the recurring Turbopack `FATAL /shot-helper/page` panic is caused by the screenshot tooling injecting/removing a transient route, leaving orphaned `.next` output; `rm -rf .next` + restart clears it. It does not affect production (static export) or normal Turbopack dev.
+
 ---
 
 ## Backend (`backend/`)
