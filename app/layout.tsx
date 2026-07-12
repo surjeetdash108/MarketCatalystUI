@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk, JetBrains_Mono, Inter, DM_Sans, Plus_Jakarta_Sans, IBM_Plex_Sans, Outfit, Manrope } from "next/font/google";
 import { FirebaseAnalytics } from "./firebase-analytics";
+import { SentryInit } from "./sentry-init";
 import { ReduxProvider } from "./store/redux-provider";
 import "./globals.css";
 import "./iq.css";
@@ -74,6 +75,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <FirebaseAnalytics />
+        <SentryInit />
         <ReduxProvider>{children}</ReduxProvider>
       </body>
     </html>
