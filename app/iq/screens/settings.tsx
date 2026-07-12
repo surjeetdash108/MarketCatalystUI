@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signOut } from "firebase/auth";
+import { signOut, deleteUser } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { firebaseAuth, firebaseDb } from "../../firebase";
@@ -129,6 +129,38 @@ export function SettingsScreen() {
     }
   }
   const [schMsg, setSchMsg] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDeleteAccount() {
+    const current = firebaseAuth.currentUser;
+    if (!current) {
+      window.alert("You must be signed in to delete your account.");
+      return;
+    }
+    // Destructive + irreversible — require an explicit typed confirmation.
+    const confirmText = window.prompt(
+      'This permanently deletes your account and all data. This cannot be undone.\n\nType "DELETE" to confirm:',
+    );
+    if (confirmText !== "DELETE") return;
+
+    setDeleting(true);
+    try {
+      await deleteUser(current);
+      window.location.href = "/";
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/requires-recent-login") {
+        window.alert(
+          "For security, please sign out and sign back in, then delete your account again.",
+        );
+      } else {
+        window.alert(
+          err instanceof Error ? err.message : "Unable to delete account. Please try again.",
+        );
+      }
+      setDeleting(false);
+    }
+  }
 
   function scheduleRecap(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -401,8 +433,8 @@ export function SettingsScreen() {
                   Permanently remove your account and all data. This cannot be undone.
                 </div>
               </div>
-              <button className="iq-btn-danger" style={{ flexShrink: 0 }}>
-                Delete
+              <button className="iq-btn-danger" style={{ flexShrink: 0 }} disabled={deleting} onClick={handleDeleteAccount}>
+                {deleting ? "Deleting…" : "Delete"}
               </button>
             </div>
           </div>

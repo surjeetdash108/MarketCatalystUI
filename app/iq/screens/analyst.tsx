@@ -51,6 +51,8 @@ export function AnalystScreen() {
   const { data: liveConsensus } = useCollection<ConsensusDoc>("analyst_actions");
   const [tab, setTab]               = useState(0);
   const [clustersOnly, setClustersOnly] = useState(false);
+  const [myNames, setMyNames]       = useState(false);
+  const [ptMove, setPtMove]         = useState(false);
 
   const { byS, clusters, upgrades } = computeClusters();
   const consensusByTicker = new Map(liveConsensus.map(c => [c.ticker, c]));
@@ -60,6 +62,8 @@ export function AnalystScreen() {
 
   const filtered = analyst.filter(a => {
     if (clustersOnly && (byS[a.ticker]?.actionsLast30Days ?? 0) < 5) return false;
+    if (myNames && !a.owned) return false;
+    if (ptMove && !(a.prevPriceTarget > 0 && (a.newPriceTarget - a.prevPriceTarget) / a.prevPriceTarget > 0.15)) return false;
     if (tab === 1) return a.actionType === "up";
     if (tab === 2) return a.actionType === "down";
     if (tab === 3) return a.actionType === "init";
@@ -176,8 +180,8 @@ export function AnalystScreen() {
 
       {/* ── Filter bar ── */}
       <div className="fbar">
-        <button className="chip on">My names</button>
-        <button className="chip">PT &gt;15% move</button>
+        <button className={`chip${myNames ? " on" : ""}`} onClick={() => setMyNames(o => !o)}>My names</button>
+        <button className={`chip${ptMove ? " on" : ""}`} onClick={() => setPtMove(o => !o)}>PT &gt;15% move</button>
         <button className={`chip${clustersOnly ? " on" : ""}`} onClick={() => setClustersOnly(o => !o)}>
           Clusters only
         </button>

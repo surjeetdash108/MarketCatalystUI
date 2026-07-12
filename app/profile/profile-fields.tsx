@@ -180,15 +180,26 @@ export function ProfileFields({
             style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "2px solid var(--border-strong)" }}
           />
           <div style={{ flex: 1 }}>
+            {/* Native file input is hidden; the label acts as the trigger button. */}
             <input
               id="profile-image"
               type="file"
               accept="image/*"
-              style={{ fontSize: 12.5, color: "var(--text)", width: "100%" }}
+              style={{ display: "none" }}
               onChange={e => handleImageChange(e.target.files?.[0])}
             />
+            <label
+              htmlFor="profile-image"
+              style={{
+                display: "inline-block", padding: "7px 16px", borderRadius: "var(--r-sm)",
+                border: "1px solid var(--border-strong)", background: "var(--surface-2)",
+                color: "var(--text)", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              {profile.profile_image ? "Change image" : "Upload image"}
+            </label>
             <div style={{ fontSize: 11, color: "var(--text-dim-solid)", marginTop: 4 }}>
-              Max 650 KB · Stored as <span style={{ fontFamily: "var(--f-mono)", color: "var(--text)" }}>profile_image</span>
+              Max 650 KB
             </div>
           </div>
         </div>

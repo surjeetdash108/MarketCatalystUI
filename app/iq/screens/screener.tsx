@@ -91,6 +91,26 @@ export function ScreenerScreen() {
   const [mcGt10,     setMcGt10]     = useState(true);
   const [rvolGt15,   setRvolGt15]   = useState(false);
 
+  /* ── Save / restore the current screen (filter set) to localStorage ── */
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("iq-screener-filters");
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (Array.isArray(s.activePresets)) setActivePresets(new Set(s.activePresets));
+      setRs90(!!s.rs90); setRs7090(!!s.rs7090); setRsLt40(!!s.rsLt40);
+      setSalesGt20(!!s.salesGt20); setEpsGt25(!!s.epsGt25); setMarginPos(!!s.marginPos);
+      setRatingBuy(!!s.ratingBuy); setMcGt10(s.mcGt10 ?? true); setRvolGt15(!!s.rvolGt15);
+    } catch { /* ignore malformed saved filters */ }
+  }, []);
+  function saveScreen() {
+    const state = { activePresets: [...activePresets], rs90, rs7090, rsLt40, salesGt20, epsGt25, marginPos, ratingBuy, mcGt10, rvolGt15 };
+    try { localStorage.setItem("iq-screener-filters", JSON.stringify(state)); } catch { /* storage full/blocked */ }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  }
+
   /* ── More dropdown ── */
   const [ddOpen, setDdOpen] = useState(false);
   const ddRef = useRef<HTMLDivElement>(null);
@@ -172,11 +192,11 @@ export function ScreenerScreen() {
           {filtered.length} match{filtered.length !== 1 ? "es" : ""}
           {liveCount > 0 && <> · <span style={{ color: "var(--up)" }}>{liveCount} live cap/PE</span></>}
         </span>
-        <button className="btn primary">
+        <button className="btn primary" onClick={saveScreen}>
           <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
             <path d="M5 5h14v14l-7-4-7 4z" stroke="#fff" strokeWidth="2" strokeLinejoin="round" />
           </svg>
-          Save screen
+          {saved ? "Saved ✓" : "Save screen"}
         </button>
       </div>
 

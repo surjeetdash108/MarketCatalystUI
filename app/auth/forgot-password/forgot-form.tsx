@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { firebaseAuth } from "../../firebase";
-import { getAuthErrorMessage, showError } from "../auth-utils";
+import { getAuthErrorMessage } from "../auth-utils";
 
 const label: React.CSSProperties = {
   display: "block", fontSize: ".72rem", fontWeight: 600,
@@ -24,11 +24,24 @@ export function ForgotForm() {
     setError(""); setSuccess(""); setIsSubmitting(true);
     try {
       await sendPasswordResetEmail(firebaseAuth, email);
-      setSuccess("Password reset email sent. Check your inbox.");
     } catch (err) {
-      const msg = getAuthErrorMessage(err);
-      setError(msg); showError(msg);
-    } finally { setIsSubmitting(false); }
+      const code = (err as { code?: string })?.code;
+      // Surface only genuine input/rate errors. Crucially, do NOT reveal
+      // `auth/user-not-found` — that would leak which emails have accounts
+      // (account enumeration). It falls through to the same neutral success
+      // message below, so a wrong email looks identical to a real one.
+      if (code === "auth/invalid-email") {
+        setError("Enter a valid email address."); setIsSubmitting(false); return;
+      }
+      if (code === "auth/too-many-requests") {
+        setError("Too many attempts. Please wait a moment and try again."); setIsSubmitting(false); return;
+      }
+      if (code && code !== "auth/user-not-found") {
+        setError(getAuthErrorMessage(err)); setIsSubmitting(false); return;
+      }
+    }
+    setSuccess("If an account exists for that email, a password reset link has been sent. Check your inbox.");
+    setIsSubmitting(false);
   }
 
   return (
