@@ -32,13 +32,20 @@ interface LiveMoverDoc {
  * neutral placeholders for fields that have no real data source yet (RVOL,
  * catalyst, weekly change, technical/news context).
  */
-function mergeMovers(mock: Mover[], live: LiveMoverDoc[]): { list: Mover[]; liveCount: number } {
+function mergeMovers(
+  mock: Mover[],
+  live: LiveMoverDoc[],
+  companyRvol: Map<string, number | null>,
+): { list: Mover[]; liveCount: number } {
   const liveByTicker = new Map(live.map(l => [l.ticker, l]));
   let liveCount = 0;
+  // Real relative volume from technical-indicators.job (companies.rvol), when
+  // available — otherwise keep the row's existing (mock/placeholder) value.
+  const rv = (ticker: string, fallback: number) => companyRvol.get(ticker) ?? fallback;
 
   const merged = mock.map(m => {
     const l = liveByTicker.get(m.ticker);
-    if (!l) return m;
+    if (!l) return { ...m, rvolRatio: rv(m.ticker, m.rvolRatio) };
     liveByTicker.delete(m.ticker);
     liveCount++;
     return {
@@ -48,6 +55,7 @@ function mergeMovers(mock: Mover[], live: LiveMoverDoc[]): { list: Mover[]; live
       name: l.name ?? m.name,
       sector: l.sector ?? m.sector,
       cap: (l.cap as Mover["cap"]) ?? m.cap,
+      rvolRatio: rv(m.ticker, m.rvolRatio),
     };
   });
 
@@ -58,7 +66,7 @@ function mergeMovers(mock: Mover[], live: LiveMoverDoc[]): { list: Mover[]; live
       name: l.name ?? l.ticker,
       price: l.price,
       pctChange: l.pctChange,
-      rvolRatio: 1,
+      rvolRatio: rv(l.ticker, 1),
       relativeStrength: 50,
       catalystLabel: "No known catalyst",
       maPosture: l.pctChange >= 0 ? "Above 50/200" : "Below 50/200",
@@ -93,7 +101,9 @@ function computeTrending(movers: Mover[]) {
 
 export function MoversScreen() {
   const { data: liveMovers } = useCollection<LiveMoverDoc>("market_movers");
-  const { list: movers, liveCount } = mergeMovers(mockMovers, liveMovers);
+  const { data: rvolCompanies } = useCollection<{ id: string; ticker: string; rvol: number | null }>("companies");
+  const companyRvol = new Map(rvolCompanies.map(c => [c.ticker, c.rvol]));
+  const { list: movers, liveCount } = mergeMovers(mockMovers, liveMovers, companyRvol);
 
   const [tab,          setTab]          = useState<TabKey>("win");
   const [sector,       setSector]       = useState("All");

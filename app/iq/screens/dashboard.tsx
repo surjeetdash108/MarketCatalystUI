@@ -312,6 +312,12 @@ export function DashboardScreen() {
   const { data: companies } = useCollection<CompanyDoc>("companies");
   const { data: sectorsLive } = useCollection<SectorApiDoc>("sectors");
   const { data: liveInsiderTx } = useCollection<InsiderTxDoc>("insider_transactions");
+  // Live Fear & Greed (fear-greed.job → market_sentiment/fear_greed); falls
+  // back to the illustrative 62/"Greed" until the job has run.
+  const { data: marketSentiment } = useCollection<{ id: string; value?: number; label?: string }>("market_sentiment");
+  const fearGreed = marketSentiment.find(d => d.id === "fear_greed");
+  const fgVal = fearGreed?.value ?? 62;
+  const fgLabel = fearGreed?.label ?? "Greed";
   const { data: consensusLive } = useCollection<AnalystConsensusDoc>("analyst_actions");
 
   const pulse = mergePulse(mockPulse, liveIndices);
@@ -876,11 +882,11 @@ export function DashboardScreen() {
               <h3>Fear &amp; Greed</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <button className="link" onClick={() => setDrawer("fg-history")}>History →</button>
-                <ExpandBtn title="Fear & Greed Index" node={<SemiGauge val={62} label="Greed" id="fg-modal" />} />
+                <ExpandBtn title="Fear & Greed Index" node={<SemiGauge val={fgVal} label={fgLabel} id="fg-modal" />} />
               </div>
             </div>
             <div className="card-b gauge-wrap">
-              <SemiGauge val={62} label="Greed" id="fg" />
+              <SemiGauge val={fgVal} label={fgLabel} id="fg" />
               <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
                 Previous close: <b style={{ color: "var(--text)" }}>58</b>
               </div>

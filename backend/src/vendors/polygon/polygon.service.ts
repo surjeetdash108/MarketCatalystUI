@@ -196,6 +196,48 @@ export class PolygonService {
   }
 
   /**
+   * Income-statement fundamentals per fiscal period (newest first) from
+   * /vX/reference/financials — the inputs for YoY growth + gross margin in
+   * fundamentals-growth.job.ts. `timeframe` is 'annual' | 'quarterly' | 'ttm'.
+   */
+  async getIncomeStatements(
+    ticker: string,
+    timeframe = 'annual',
+    limit = 2,
+  ): Promise<
+    Array<{
+      fiscalYear: string | null;
+      revenue: number | null;
+      costOfRevenue: number | null;
+      grossProfit: number | null;
+      dilutedEps: number | null;
+    }>
+  > {
+    const res = await fetchJson<{
+      results?: Array<{
+        fiscal_year?: string;
+        financials?: {
+          income_statement?: Record<string, { value?: number }>;
+        };
+      }>;
+    }>(
+      `${BASE_URL}/vX/reference/financials?ticker=${ticker}` +
+        `&timeframe=${timeframe}&limit=${limit}&apiKey=${this.apiKey}`,
+    );
+    return (res.results ?? []).map((p) => {
+      const inc = p.financials?.income_statement ?? {};
+      const v = (k: string) => inc[k]?.value ?? null;
+      return {
+        fiscalYear: p.fiscal_year ?? null,
+        revenue: v('revenues'),
+        costOfRevenue: v('cost_of_revenue'),
+        grossProfit: v('gross_profit'),
+        dilutedEps: v('diluted_earnings_per_share'),
+      };
+    });
+  }
+
+  /**
    * Sector performance via the 11 SPDR sector ETFs as proxies — Polygon
    * replacement for FMP's sector-performance-snapshot (sectors.job.ts).
    * Returned in FMP's field shape ({date, sector, exchange, averageChange})

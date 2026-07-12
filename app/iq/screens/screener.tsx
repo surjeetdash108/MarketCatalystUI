@@ -8,15 +8,32 @@ import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 interface CompanyDoc {
   id: string; ticker: string; marketCap: number | null; peRatio: number | null; price: number | null; pctChange: number | null;
   rsRating: number | null;
+  // Computed by the backend score jobs (technical-indicators / tech-rating /
+  // fundamentals-growth) from real ohlcv_bars + Polygon financials.
+  techRating: number | null;      // 1-99 composite
+  rvol: number | null;            // relative-volume ratio
+  revenueGrowthYoY: number | null; // decimal (0.064 = 6.4%)
+  epsGrowthYoY: number | null;     // decimal
+  grossMargin: number | null;      // decimal (0.469 = 46.9%)
 }
 
-// Live companies data covers marketCap/peRatio/price, and now relativeStrength
-// (rsRating — an independent from-scratch approximation of an IBD-style RS
-// score, computed by backend/src/sync/rs-rating.job.ts from real ohlcv_bars;
-// null until that job has run against enough real history). salesGrowth/
-// epsGrowth/grossMargin/rvolRatio/techRating are still proprietary scores no
-// connected vendor supplies and no computation exists for yet, so those
-// filters/columns stay illustrative and are marked as such.
+// Maps the numeric 1-99 tech rating onto the mock's string categories so the
+// existing rating filter (Strong Buy / Buy / Neutral / Sell / Strong Sell)
+// keeps working unchanged.
+function ratingLabel(n: number): string {
+  if (n >= 90) return "Strong Buy";
+  if (n >= 70) return "Buy";
+  if (n >= 40) return "Neutral";
+  if (n >= 20) return "Sell";
+  return "Strong Sell";
+}
+
+// Live companies data now covers marketCap/peRatio/price, relativeStrength
+// (rsRating), AND the previously-illustrative proprietary scores — techRating,
+// RVOL, sales/EPS growth, and gross margin — all computed by the backend score
+// jobs from real ohlcv_bars + Polygon financials. Each falls back to the mock
+// value until its job has run. Growth/margin are stored as decimals and scaled
+// to the mock's percentage units here; techRating is mapped to its label.
 function mergeScreenerStocks(mock: ScreenerStock[], byTicker: Map<string, CompanyDoc>): (ScreenerStock & { live: boolean })[] {
   return mock.map(s => {
     const c = byTicker.get(s.ticker);
@@ -26,7 +43,14 @@ function mergeScreenerStocks(mock: ScreenerStock[], byTicker: Map<string, Compan
       marketCap: c.marketCap != null ? c.marketCap / 1e9 : s.marketCap,
       peRatio: c.peRatio ?? s.peRatio,
       relativeStrength: c.rsRating ?? s.relativeStrength,
-      live: c.marketCap != null || c.peRatio != null || c.rsRating != null,
+      techRating: c.techRating != null ? ratingLabel(c.techRating) : s.techRating,
+      rvolRatio: c.rvol ?? s.rvolRatio,
+      salesGrowth: c.revenueGrowthYoY != null ? c.revenueGrowthYoY * 100 : s.salesGrowth,
+      epsGrowth: c.epsGrowthYoY != null ? c.epsGrowthYoY * 100 : s.epsGrowth,
+      grossMargin: c.grossMargin != null ? c.grossMargin * 100 : s.grossMargin,
+      live:
+        c.marketCap != null || c.peRatio != null || c.rsRating != null ||
+        c.techRating != null || c.rvol != null || c.revenueGrowthYoY != null,
     };
   });
 }

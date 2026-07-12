@@ -104,7 +104,25 @@ CREATE TABLE companies (
   source              TEXT,                       -- 'fmp' | 'polygon' — which CompanyProfileAdapter served THIS row (may differ from the configured primary; see warnings)
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   rs_rating           SMALLINT CHECK (rs_rating BETWEEN 1 AND 99),  -- written by rs-rating.job.ts, NOT companies.job.ts — see that job's docblock. An independent from-scratch approximation of an IBD-style score, not the literal proprietary IBD formula. NULL until enough real ohlcv_bars history exists.
-  rs_rating_updated_at TIMESTAMPTZ
+  rs_rating_updated_at TIMESTAMPTZ,
+  -- Computed indicator/score columns (added 2026-07-12), written by the
+  -- no-vendor compute jobs, NOT companies.job.ts. All NULL until enough real
+  -- ohlcv_bars history (or a Polygon financials call) exists.
+  rsi14                DOUBLE PRECISION,   -- technical-indicators.job (RSI 14, from ohlcv_bars)
+  macd                 DOUBLE PRECISION,   -- technical-indicators.job (MACD 12/26 line)
+  macd_signal          DOUBLE PRECISION,   -- technical-indicators.job (9-period signal)
+  macd_histogram       DOUBLE PRECISION,   -- technical-indicators.job (line - signal)
+  rvol                 DOUBLE PRECISION,   -- technical-indicators.job (relative volume, latest ÷ 20-day avg)
+  technicals_updated_at TIMESTAMPTZ,
+  tech_rating          SMALLINT CHECK (tech_rating BETWEEN 1 AND 99),  -- tech-rating.job (composite momentum/trend/RSI percentile)
+  sector_rank          INTEGER,            -- tech-rating.job (this stock's rank WITHIN its sector by tech_rating)
+  sector_rank_total    INTEGER,            -- tech-rating.job (number of ranked stocks in the sector)
+  tech_rating_updated_at TIMESTAMPTZ,
+  revenue_growth_yoy   DOUBLE PRECISION,   -- fundamentals-growth.job (decimal, 0.064 = 6.4%; from Polygon financials)
+  eps_growth_yoy       DOUBLE PRECISION,   -- fundamentals-growth.job (decimal)
+  gross_margin         DOUBLE PRECISION,   -- fundamentals-growth.job (decimal, 0.469 = 46.9%)
+  fundamentals_fiscal_year TEXT,           -- fiscal year the growth/margin figures are for
+  fundamentals_updated_at  TIMESTAMPTZ
 );
 CREATE INDEX idx_companies_sector ON companies(sector);
 
@@ -128,6 +146,8 @@ CREATE TABLE company_peers (
 CREATE TABLE tickers (
   ticker              TEXT PRIMARY KEY,
   name                TEXT,
+  name_lower          TEXT,               -- lowercased name for case-insensitive prefix search (added 2026-07-12)
+  search_tokens       TEXT[] NOT NULL DEFAULT '{}', -- name words + ticker, for whole-word (array-contains) name search
   market              TEXT,
   locale              TEXT,
   primary_exchange    TEXT,               -- Polygon MIC code, e.g. XNAS, XNYS
@@ -277,6 +297,30 @@ CREATE TABLE market_indices_history (
   PRIMARY KEY (symbol, as_of_date)
 );
 CREATE INDEX idx_market_indices_history_date ON market_indices_history(as_of_date DESC);
+
+
+-- ============================================================================
+-- LIVE — Market sentiment / Fear & Greed (Firestore: market_sentiment/fear_greed;
+-- written by backend/src/sync/fear-greed.job.ts). A CNN-style 0-100 index
+-- (approximation, not the licensed CNN index) composed from free Polygon data:
+-- SPY-vs-125d-MA momentum, market breadth (share of names closing up), VIXY-vs-
+-- 50d-MA volatility (inverted), and SPY-vs-TLT safe-haven. One row (id
+-- 'fear_greed'); component sub-scores normalized into a child table.
+-- ============================================================================
+CREATE TABLE market_sentiment (
+  id          TEXT PRIMARY KEY,            -- 'fear_greed'
+  value       SMALLINT NOT NULL CHECK (value BETWEEN 0 AND 100),
+  label       TEXT NOT NULL,              -- Extreme Fear | Fear | Neutral | Greed | Extreme Greed
+  as_of_date  DATE,
+  source      TEXT NOT NULL DEFAULT 'polygon',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE market_sentiment_components (
+  sentiment_id  TEXT NOT NULL REFERENCES market_sentiment(id) ON DELETE CASCADE,
+  component     TEXT NOT NULL,            -- momentum | breadth | volatility | safeHaven
+  score         SMALLINT NOT NULL CHECK (score BETWEEN 0 AND 100),
+  PRIMARY KEY (sentiment_id, component)
+);
 
 
 -- ============================================================================
@@ -533,6 +577,11 @@ CREATE INDEX idx_fund_positions_value ON fund_positions(cik, accession_number, v
 -- ============================================================================
 -- LIVE — News (Doc/openapi.yaml: NewsArticle;
 -- Firestore: news/{ticker}_{articleId}; written by backend/src/sync/news.job.ts)
+-- As of 2026-07-12 the news adapter AGGREGATES multiple sources (NEWS_SOURCE=
+-- aggregate): Polygon + Finnhub fetched in parallel and merged/de-duped per
+-- ticker, rather than primary-or-fallback — so a ticker's rows can now come
+-- from several vendors (each row's `source` says which). sentiment/keywords are
+-- still Polygon-only (null/empty on Finnhub-sourced rows).
 -- ============================================================================
 
 CREATE TABLE news_articles (
@@ -824,7 +873,8 @@ CREATE TABLE recap_sector_performance (
 );
 
 -- ============================================================================
--- Summary: 30 LIVE tables mirroring implemented Firestore collections
+-- Summary: 32 LIVE tables mirroring implemented Firestore collections
+-- (incl. market_sentiment + market_sentiment_components, added 2026-07-12)
 -- (including the market_movers/sectors/market_indices "latest" + "_history"
 -- pairs, sync_watermarks, and tickers), 11 PLANNED tables for the
 -- x-status: planned OpenAPI paths. No helper views needed — the "latest"

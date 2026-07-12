@@ -712,13 +712,13 @@ export function MacroScreen() {
         </div>
       )}
 
-      {/* ── Live dividend calendar (FMP) — additive, doesn't touch the illustrative dividend calendar above ── */}
+      {/* ── Live dividend calendar (Polygon-primary as of 2026-07-12, FMP fallback) — additive, doesn't touch the illustrative dividend calendar above ── */}
       {liveDividendsSorted.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <div className="card">
             <div className="card-h">
               <h3>Live Dividend Calendar</h3>
-              <span className="pill ai" style={{ fontSize: ".68rem" }}>live · FMP</span>
+              <span className="pill ai" style={{ fontSize: ".68rem" }}>live · Polygon</span>
             </div>
             <div className="tbl-wrap">
               <table className="tbl">

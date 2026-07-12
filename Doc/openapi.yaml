@@ -1957,6 +1957,45 @@ components:
             proprietary IBD formula. Null until enough real ohlcv_bars
             history has accumulated for this ticker.
         rsRatingUpdatedAt: { type: string, format: date-time, nullable: true }
+        # Computed indicator/score fields (added 2026-07-12) — written by the
+        # no-vendor compute jobs (technical-indicators / tech-rating /
+        # fundamentals-growth), NOT companies.job.ts. All null until enough real
+        # ohlcv_bars history (or a Polygon financials call) exists.
+        rsi14: { type: number, nullable: true, description: "RSI(14) from real ohlcv_bars (technical-indicators.job)." }
+        macd: { type: number, nullable: true, description: "MACD(12/26) line (technical-indicators.job)." }
+        macdSignal: { type: number, nullable: true, description: "MACD 9-period signal line." }
+        macdHistogram: { type: number, nullable: true, description: "MACD line minus signal." }
+        rvol: { type: number, nullable: true, description: "Relative volume: latest day's volume ÷ 20-day average." }
+        technicalsUpdatedAt: { type: string, format: date-time, nullable: true }
+        techRating: { type: integer, nullable: true, minimum: 1, maximum: 99, description: "1-99 composite technical rating (tech-rating.job): momentum 50% + price-vs-50d-MA trend 30% + RSI 20%, percentile-ranked. Approximation, not the proprietary IBD formula." }
+        sectorRank: { type: integer, nullable: true, description: "This stock's rank WITHIN its sector by techRating (tech-rating.job)." }
+        sectorRankTotal: { type: integer, nullable: true, description: "Number of ranked stocks in the sector." }
+        techRatingUpdatedAt: { type: string, format: date-time, nullable: true }
+        revenueGrowthYoY: { type: number, nullable: true, description: "YoY revenue growth as a decimal (0.064 = 6.4%), from Polygon annual financials (fundamentals-growth.job)." }
+        epsGrowthYoY: { type: number, nullable: true, description: "YoY diluted-EPS growth as a decimal." }
+        grossMargin: { type: number, nullable: true, description: "Gross margin as a decimal (0.469 = 46.9%)." }
+        fundamentalsFiscalYear: { type: string, nullable: true }
+        fundamentalsUpdatedAt: { type: string, format: date-time, nullable: true }
+
+    MarketSentiment:
+      type: object
+      description: >-
+        Firestore `market_sentiment/fear_greed` — written by
+        backend/src/sync/fear-greed.job.ts. A CNN-style 0-100 Fear & Greed index
+        (approximation, not the licensed CNN index) composed from free Polygon
+        data: SPY-vs-125d-MA momentum, market breadth, VIXY-vs-50d-MA volatility
+        (inverted), and SPY-vs-TLT safe-haven. Replaces the Dashboard's hardcoded
+        gauge. x-status: live.
+      properties:
+        value: { type: integer, minimum: 0, maximum: 100 }
+        label: { type: string, enum: [Extreme Fear, Fear, Neutral, Greed, Extreme Greed] }
+        components:
+          type: object
+          additionalProperties: { type: integer, minimum: 0, maximum: 100 }
+          description: "Per-component 0-100 sub-scores (momentum, breadth, volatility, safeHaven)."
+        asOfDate: { type: string, nullable: true }
+        source: { type: string }
+        updatedAt: { type: string, format: date-time }
 
     TickerListing:
       type: object
@@ -1973,6 +2012,8 @@ components:
       properties:
         ticker: { type: string, example: NVDA }
         name: { type: string, nullable: true, example: NVIDIA Corp }
+        nameLower: { type: string, nullable: true, description: "Added 2026-07-12. Lowercased company name for case-insensitive prefix search from the Cmd+K bar (useTickerSearch)." }
+        searchTokens: { type: array, items: { type: string }, description: "Added 2026-07-12. Name words + ticker (lowercased) for whole-word array-contains name search." }
         market: { type: string, nullable: true, example: stocks }
         locale: { type: string, nullable: true, example: us }
         primaryExchange: { type: string, nullable: true, description: "Polygon MIC code, e.g. XNAS, XNYS" }

@@ -13,6 +13,10 @@ interface CompanyDoc {
   id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
   marketCap: number | null; peRatio: number | null; dividendYield: number | null; beta: number | null;
   sector: string | null;
+  // Real technicals from technical-indicators.job (null until it has run).
+  rsi14: number | null; macd: number | null; macdSignal: number | null; macdHistogram: number | null;
+  // Sector rank from tech-rating.job; source records which vendor served the profile.
+  sectorRank: number | null; sectorRankTotal: number | null; source: string | null;
 }
 
 function fmtMarketCapB(billions: number): string {
@@ -357,7 +361,7 @@ function StockChartExpanded({
           <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
             <span>RSI (14)</span>
             <span className="mono" style={{ color: "var(--warn)" }}>
-              {Math.round(38 + rs * 0.36)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
+              {Math.round(rsi)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
             </span>
           </div>
           <RsiPane sym={sym} tf={tf} />
@@ -522,7 +526,11 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const rev = ni / ((mg / 100) || 0.2);
   const fcf = ni * 0.9;
   const debt = mc * 0.04;
-  const rsi = Math.round(38 + rs * 0.36);
+  // Real RSI(14)/MACD from technical-indicators.job when available; otherwise
+  // the original seeded approximations so the panel never goes blank.
+  const rsi = liveCompany?.rsi14 != null ? liveCompany.rsi14 : Math.round(38 + rs * 0.36);
+  const macd = liveCompany?.macd != null ? liveCompany.macd : data.pctChange * 2.6;
+  const macdBuy = liveCompany?.macd != null ? macd >= (liveCompany.macdSignal ?? 0) : isUp;
   const dollar = Math.abs(data.pctChange / 100 * p);
   const avgVol = Math.max(1, Math.round(mc * 1000 / p * 0.012));
 
@@ -542,7 +550,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
 
   const indRows: [string, string, string][] = [
     ["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
-    ["MACD (12,26)", (data.pctChange * 2.6).toFixed(1), isUp ? "Buy" : "Sell"],
+    ["MACD (12,26)", macd.toFixed(1), macdBuy ? "Buy" : "Sell"],
     ["Stoch %K", (50 + data.pctChange * 4).toFixed(1), (50 + data.pctChange * 4) > 80 ? "Sell" : "Buy"],
     ["ADX (14)", (20 + Math.abs(data.pctChange) * 2).toFixed(1), isUp ? "Buy" : "Sell"],
     ["EMA 50", nf(p * 0.94), isUp ? "Buy" : "Sell"],
@@ -575,6 +583,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const sectorTrend = sectorInfo?.trend ?? "Flat";
   const trendPill = sectorTrend === "Improving" ? "up" : sectorTrend === "Deteriorating" ? "dn" : "hold";
   const grank = sectorInfo?.rank ?? 0;
+  // Stock's rank WITHIN its sector (distinct from grank, the sector-vs-sectors
+  // rank above) — from tech-rating.job; shown as a small badge when available.
+  const inSectorRank = liveCompany?.sectorRank ?? null;
+  const inSectorTotal = liveCompany?.sectorRankTotal ?? null;
   const topSectors = sectorList.slice(0, 5);
 
   const peers = screenerStocks
@@ -661,9 +673,14 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <h1>{sym}</h1>
               <div className="sub">
                 {data.name} · {ex} · {group}
+                {inSectorRank != null && inSectorTotal != null && (
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", marginLeft: 6, fontSize: ".62rem" }}>
+                    #{inSectorRank} of {inSectorTotal} in sector
+                  </span>
+                )}
                 {isLiveStock && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginLeft: 6, fontSize: ".62rem" }}>
-                    live quote · FMP
+                    live quote · {liveCompany?.source ? liveCompany.source[0].toUpperCase() + liveCompany.source.slice(1) : "Polygon"}
                   </span>
                 )}
               </div>
@@ -743,7 +760,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 <div style={{ padding: "6px 14px 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
                   <span>RSI (14)</span>
                   <span className="mono" style={{ color: "var(--warn)" }}>
-                    {Math.round(38 + rs * 0.36)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
+                    {Math.round(rsi)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
                   </span>
                 </div>
                 <div style={{ padding: "0 14px 4px" }}><RsiPane sym={sym} tf={tfActive} /></div>
@@ -1273,7 +1290,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                       ["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
                       ["Stoch %K", (50 + data.pctChange * 4).toFixed(1), (50 + data.pctChange * 4) > 80 ? "Sell" : "Buy"],
                       ["CCI (14)", (data.pctChange * 15).toFixed(1), isUp ? "Buy" : "Sell"],
-                      ["MACD (12,26)", (data.pctChange * 2.6).toFixed(1), isUp ? "Buy" : "Sell"],
+                      ["MACD (12,26)", macd.toFixed(1), macdBuy ? "Buy" : "Sell"],
                       ["Williams %R", String(-(100 - rsi).toFixed(0)), rsi > 70 ? "Overbought" : "Neutral"],
                       ["Bull/Bear Power", (data.pctChange * 3.2).toFixed(1), isUp ? "Buy" : "Sell"],
                       ["ADX (14)", (20 + Math.abs(data.pctChange) * 2).toFixed(1), Math.abs(data.pctChange) > 2 ? "Strong" : "Weak"],
