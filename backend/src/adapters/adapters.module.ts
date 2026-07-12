@@ -6,6 +6,7 @@ import { FmpModule } from '../vendors/fmp/fmp.module';
 import { FmpService } from '../vendors/fmp/fmp.service';
 import { PolygonModule } from '../vendors/polygon/polygon.module';
 import { PolygonService } from '../vendors/polygon/polygon.service';
+import { AggregatingNewsAdapter } from './aggregating-news.adapter';
 import { CompositeCompanyProfileAdapter } from './composite-company-profile.adapter';
 import { CompositeMoverEnrichmentAdapter } from './composite-mover-enrichment.adapter';
 import { CompositeMoversAdapter } from './composite-movers.adapter';
@@ -26,7 +27,10 @@ import {
 } from './types';
 
 const FMP_POLYGON_SOURCES = ['fmp', 'polygon', 'none'] as const;
-const NEWS_SOURCES = ['polygon', 'finnhub', 'none'] as const;
+const NEWS_SOURCES = ['polygon', 'finnhub', 'aggregate', 'none'] as const;
+// 'aggregate' fans out to all of these and merges; not itself selectable as a
+// single primary/fallback source.
+const NEWS_SINGLE_SOURCES = ['polygon', 'finnhub', 'none'] as const;
 
 /** Generic over each factory's own valid-source set, rather than one shared union every factory would have to filter against. */
 function parseSource<S extends string>(
@@ -194,32 +198,42 @@ function parseSource<S extends string>(
         polygon: PolygonService,
         finnhub: FinnhubService,
       ) => {
-        const primarySource = parseSource(
+        const mode = parseSource(
           config,
           'NEWS_SOURCE',
           NEWS_SOURCES,
-          'polygon',
-        );
-        const fallbackSource = parseSource(
-          config,
-          'NEWS_FALLBACK_SOURCE',
-          NEWS_SOURCES,
-          'finnhub',
+          'aggregate', // default: use every free source and merge (2026-07-12)
         );
 
-        const bySource = {
-          polygon: () => new PolygonNewsAdapter(polygon),
-          finnhub: () => new FinnhubNewsAdapter(finnhub),
-          none: () => null,
-        };
-        if (primarySource === 'none') {
+        const makePolygon = () => new PolygonNewsAdapter(polygon);
+        const makeFinnhub = () => new FinnhubNewsAdapter(finnhub);
+
+        // Multi-source: fan out to every free news vendor and merge/dedupe,
+        // rather than serving from a single primary with the other as fallback.
+        if (mode === 'aggregate') {
+          return new AggregatingNewsAdapter([makePolygon(), makeFinnhub()]);
+        }
+        if (mode === 'none') {
           throw new Error(
             'NEWS_SOURCE cannot be "none" — a primary source is required',
           );
         }
-        const primary = bySource[primarySource]();
+
+        // Legacy single-primary-with-fallback mode (NEWS_SOURCE=polygon|finnhub).
+        const bySource = {
+          polygon: makePolygon,
+          finnhub: makeFinnhub,
+          none: () => null,
+        };
+        const fallbackSource = parseSource(
+          config,
+          'NEWS_FALLBACK_SOURCE',
+          NEWS_SINGLE_SOURCES,
+          'finnhub',
+        );
+        const primary = bySource[mode]();
         const fallback =
-          fallbackSource === 'none' || fallbackSource === primarySource
+          fallbackSource === 'none' || fallbackSource === mode
             ? null
             : bySource[fallbackSource]();
         return new CompositeNewsAdapter(primary, fallback);
