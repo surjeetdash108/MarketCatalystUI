@@ -298,13 +298,13 @@ Cmd+K Command Bar
 
 **Current (Frontend MVP)**
 
--   **Firebase Hosting**: serves the Next.js static export (`out/` directory). Project ID: `fin-app26`. Deployed via `firebase deploy --only hosting`. Clean URLs enabled; all routes rewrite to `index.html` for SPA navigation.
+-   **Firebase Hosting**: serves the Next.js static export (`out/` directory). Project ID: `market-catalyst-502415`. Deployed via `firebase deploy --only hosting`. Clean URLs enabled; all routes rewrite to `index.html` for SPA navigation.
 
 -   **Firebase Authentication**: email/password + Google OAuth. Firebase ID tokens issued client-side; `FirebaseListener` monitors `onAuthStateChanged` and syncs to Redux store. **iOS Safari fix** (`app/firebase.ts`): `firebaseAuth` is now initialised via `initializeAuth` (not `getAuth`) with `persistence: [indexedDBLocalPersistence, browserLocalPersistence]` and `popupRedirectResolver: browserPopupRedirectResolver`, wrapped in a try/catch fallback to `getAuth` for hot-reload re-initialisation safety. All Google sign-in handlers (LoginForm, SignupForm, landing page) use popup-first with redirect fallback: `signInWithPopup` → on `auth/popup-blocked` → `signInWithRedirect`. `LoginForm` and `SignupForm` both call `getRedirectResult(firebaseAuth)` in a `useEffect` on mount to pick up pending redirect credentials. Fixes iOS Safari ITP which blocks cross-origin cookies used by the `firebaseapp.com` redirect domain.
 
 -   **Landing page fixes** (`app/landing.css`, `app/page.tsx`): `.lp-root.mq-root` background is now `transparent` (was `#000`), unblocking the WebGL wave canvas rendered behind the root element. `ScaledScreen` now uses a `ResizeObserver` to compute `scale = containerWidth / 1200` dynamically instead of the previous hardcoded constant, fixing glance-modal card previews at any container width.
 
--   **Cloud Firestore**: primary data store. Collections live: `users/{uid}` (profile), `settings/{uid}` (user preferences including dark mode), `stock_comments` (user chart notes — saved from Stock Detail page right-click context menu; schema: `{uid, sym, name, comment, createdAt: Timestamp}`). Security rules enforced via `firestore.rules` (deployed via `firebase deploy --only firestore:rules`). Firebase project: `fin-app26`.
+-   **Cloud Firestore**: primary data store. Collections live: `users/{uid}` (profile), `settings/{uid}` (user preferences including dark mode), `stock_comments` (user chart notes — saved from Stock Detail page right-click context menu; schema: `{uid, sym, name, comment, createdAt: Timestamp}`). Security rules enforced via `firestore.rules` (deployed via `firebase deploy --only firestore:rules`). Firebase project: `market-catalyst-502415`.
 
 **Planned (Backend / Phase 2 — not yet deployed)**
 
