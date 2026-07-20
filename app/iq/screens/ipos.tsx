@@ -22,7 +22,16 @@ function formatIpoPrice(low: number | null, high: number | null): string {
   return `$${(low ?? high)!.toFixed(2)}`;
 }
 
-const RECENT_IPOS = [
+interface IpoRow {
+  s: string; n: string; date: string;
+  offer: number | null;
+  /** Current price and day-1 return require aftermarket pricing, which the
+   *  ipos feed does not carry — null for every live row. */
+  cur: number | null; day1: number | null;
+  sec: string; live?: boolean;
+}
+
+const RECENT_IPOS: IpoRow[] = [
   { s: "RDDT", n: "Reddit",        date: "Mar 21 '24", offer: 34,   cur: 52.40,  day1: 48,  sec: "Internet"  },
   { s: "ALAB", n: "Astera Labs",   date: "Mar 20 '24", offer: 36,   cur: 71.20,  day1: 72,  sec: "Semis"     },
   { s: "ARM",  n: "Arm Holdings",  date: "Sep 14 '23", offer: 51,   cur: 118.30, day1: 25,  sec: "Semis"     },
@@ -51,12 +60,31 @@ export function IPOsScreen() {
   const { data: liveIpos } = useCollection<IpoEventDoc>("ipos");
   const liveIposSorted = [...liveIpos].sort((a, b) => b.date.localeCompare(a.date));
 
-  const filtered = RECENT_IPOS.filter(r => sector === "All" || r.sec === sector);
+  // Live ipos docs carry the offering, not its aftermarket performance, so
+  // cur/day1 stay null and the performance tiles below report "—" rather than
+  // computing a return from a fabricated current price.
+  const liveRows: IpoRow[] = liveIposSorted.map(e => ({
+    s: e.symbol ?? "—",
+    n: e.name,
+    date: e.date,
+    offer: e.priceLow != null && e.priceHigh != null ? (e.priceLow + e.priceHigh) / 2 : e.priceLow ?? e.priceHigh,
+    cur: null,
+    day1: null,
+    sec: e.exchange ?? "—",
+    live: true,
+  }));
+  const rows = liveRows.length > 0 ? liveRows : RECENT_IPOS;
+  const usingLive = liveRows.length > 0;
+  const filtered = rows.filter(r => sector === "All" || r.sec === sector);
 
-  const winners = filtered.filter(r => r.cur > r.offer).length;
-  const returns = filtered.map(r => (r.cur - r.offer) / r.offer * 100).sort((a, b) => a - b);
-  const median  = returns[Math.floor(returns.length / 2)] ?? 0;
-  const best    = filtered.length > 0 ? filtered.reduce((a, b) => (b.cur - b.offer) / b.offer > (a.cur - a.offer) / a.offer ? b : a) : null;
+  // Only rows with BOTH an offer price and a current price can produce a return.
+  const perf = filtered.filter(
+    (r): r is IpoRow & { cur: number; offer: number } => r.cur != null && r.offer != null && r.offer !== 0,
+  );
+  const winners = perf.filter(r => r.cur > r.offer).length;
+  const returns = perf.map(r => (r.cur - r.offer) / r.offer * 100).sort((a, b) => a - b);
+  const median  = returns.length ? returns[Math.floor(returns.length / 2)] : null;
+  const best    = perf.length > 0 ? perf.reduce((a, b) => (b.cur - b.offer) / b.offer > (a.cur - a.offer) / a.offer ? b : a) : null;
   const bestRet = best ? ((best.cur - best.offer) / best.offer * 100).toFixed(0) : "—";
 
   return (
@@ -68,7 +96,7 @@ export function IPOsScreen() {
             <div className="card-b" style={{ textAlign: "center", padding: "18px" }}>
               <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Trading above offer</div>
               <div className="mono up" style={{ fontSize: "1.6rem", fontWeight: 700 }}>
-                {winners}/{filtered.length || RECENT_IPOS.length}
+                {perf.length ? `${winners}/${perf.length}` : "—"}
               </div>
             </div>
           </div>
@@ -87,8 +115,8 @@ export function IPOsScreen() {
           <div className="card">
             <div className="card-b" style={{ textAlign: "center", padding: "18px" }}>
               <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Median since IPO</div>
-              <div className={`mono ${cls(median)}`} style={{ fontSize: "1.6rem", fontWeight: 700 }}>
-                {sign(median)}
+              <div className={`mono ${median != null ? cls(median) : ""}`} style={{ fontSize: "1.6rem", fontWeight: 700 }}>
+                {median != null ? sign(median) : "—"}
               </div>
             </div>
           </div>
@@ -110,7 +138,7 @@ export function IPOsScreen() {
         </select>
         <div className="spacer" />
         <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center" }}>
-          {filtered.length} of {RECENT_IPOS.length} shown
+          {filtered.length} of {rows.length} shown{usingLive ? "" : " · sample data"}
         </span>
       </div>
 
@@ -138,7 +166,8 @@ export function IPOsScreen() {
                   <td colSpan={7} style={{ padding: 16, color: "var(--text-dim-solid)" }}>No IPOs match your filter.</td>
                 </tr>
               ) : filtered.map(r => {
-                const ret = (r.cur - r.offer) / r.offer * 100;
+                // null when the feed has no aftermarket price — rendered as "—" below.
+                  const ret = r.cur != null && r.offer != null && r.offer !== 0 ? (r.cur - r.offer) / r.offer * 100 : null;
                 return (
                   <tr key={r.s} onClick={() => openStock(r.s)} style={{ cursor: "pointer" }}>
                     <td>
@@ -152,11 +181,11 @@ export function IPOsScreen() {
                     </td>
                     <td>{r.sec}</td>
                     <td>{r.date}</td>
-                    <td className="num">${r.offer.toFixed(2)}</td>
-                    <td className="num">${r.cur.toFixed(2)}</td>
-                    <td className={`num ${cls(r.day1)}`}>{sign(r.day1)}</td>
-                    <td className={`num ${cls(ret)}`}>
-                      <b>{sign(ret)}</b>
+                    <td className="num">{r.offer != null ? `$${r.offer.toFixed(2)}` : "—"}</td>
+                    <td className="num">{r.cur != null ? `$${r.cur.toFixed(2)}` : "—"}</td>
+                    <td className={`num ${r.day1 != null ? cls(r.day1) : ""}`}>{r.day1 != null ? sign(r.day1) : "—"}</td>
+                    <td className={`num ${ret != null ? cls(ret) : ""}`}>
+                      <b>{ret != null ? sign(ret) : "—"}</b>
                     </td>
                   </tr>
                 );

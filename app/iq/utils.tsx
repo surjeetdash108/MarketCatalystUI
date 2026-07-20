@@ -217,7 +217,7 @@ export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
           <line x1={PADL} y1={t.y.toFixed(1)} x2={W - PADR} y2={t.y.toFixed(1)}
             stroke="var(--border-soft)" strokeDasharray="2 4" />
           <text x={(PADL - 4).toFixed(1)} y={(t.y + 3.5).toFixed(1)} textAnchor="end"
-            style={{ fill: "var(--text-dim-solid)", fontSize: "8px" }}>
+            style={{ fill: "var(--text-dim-solid)", fontSize: "0.5rem" }}>
             {t.label}
           </text>
         </g>
@@ -234,17 +234,17 @@ export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
               width={bw.toFixed(1)} height={barH.toFixed(1)} rx="3"
               style={{ fill: beat ? "var(--up)" : "var(--down)", opacity: 0.85 }} />
             <text x={cx.toFixed(1)} y={(barY - 4).toFixed(1)} textAnchor="middle"
-              style={{ fill: "var(--text-hi)", fontSize: "8.5px", fontWeight: 600 }}>
+              style={{ fill: "var(--text-hi)", fontSize: "0.5312rem", fontWeight: 600 }}>
               ${x.a.toFixed(2)}
             </text>
             {yoy !== undefined && (
               <text x={cx.toFixed(1)} y={(barY - 14).toFixed(1)} textAnchor="middle"
-                style={{ fill: yoy >= 0 ? "var(--up)" : "var(--down)", fontSize: "7.5px", fontWeight: 700 }}>
+                style={{ fill: yoy >= 0 ? "var(--up)" : "var(--down)", fontSize: "0.4688rem", fontWeight: 700 }}>
                 {yoy >= 0 ? "+" : ""}{yoy.toFixed(0)}% YoY
               </text>
             )}
             <text x={cx.toFixed(1)} y={H - 8} textAnchor="middle"
-              style={{ fill: "var(--text-dim-solid)", fontSize: "8.5px" }}>
+              style={{ fill: "var(--text-dim-solid)", fontSize: "0.5312rem" }}>
               {x.q.replace(" ", "'")}
             </text>
           </g>

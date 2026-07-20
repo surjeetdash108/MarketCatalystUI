@@ -180,7 +180,7 @@ function DashPopContent({ sym, block, movers, earnings, watchlist, portfolio }: 
       body = <>
         <DpRow label="When">{er.session === "BMO" ? "Before open" : er.session === "AMC" ? "After close" : er.session}</DpRow>
         <DpRow label="EPS est → act">
-          ${er.epsEstimate}{er.epsActual != null && <> → ${er.epsActual} <span className={er.epsActual >= er.epsEstimate ? "up" : "down"}>({er.epsActual >= er.epsEstimate ? "beat" : "miss"})</span></>}
+          {er.epsEstimate != null ? `$${er.epsEstimate}` : "—"}{er.epsActual != null && er.epsEstimate != null && <> → ${er.epsActual} <span className={er.epsActual >= er.epsEstimate ? "up" : "down"}>({er.epsActual >= er.epsEstimate ? "beat" : "miss"})</span></>}
         </DpRow>
         <DpRow label="Guidance">
           <span className={er.guidanceStatus === "Raised" ? "up" : er.guidanceStatus === "Lowered" ? "down" : ""}>{er.guidanceStatus ?? "—"}</span>
@@ -936,8 +936,8 @@ export function DashboardScreen() {
                     <span className={`pill ${e.session.includes("pre") ? "bmo" : "amc"}`}>{e.session}</span>
                   </span>
                   <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                    EPS est <span className="mono">${e.epsEstimate}</span>
-                    {e.epsActual != null && <> &rarr; <span className={`mono ${e.epsActual >= e.epsEstimate ? "up" : "down"}`}>${e.epsActual}</span></>}
+                    EPS est <span className="mono">{e.epsEstimate != null ? `$${e.epsEstimate}` : "—"}</span>
+                    {e.epsActual != null && e.epsEstimate != null && <> &rarr; <span className={`mono ${e.epsActual >= e.epsEstimate ? "up" : "down"}`}>${e.epsActual}</span></>}
                   </span>
                   <span className={`r ${e.priceReaction != null ? cls(e.priceReaction) : ""}`}>
                     {e.priceReaction != null ? sign(e.priceReaction) : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}

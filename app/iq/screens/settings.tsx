@@ -67,7 +67,7 @@ function ConfirmModal({
           <div style={{
             marginBottom: 14, padding: "8px 12px",
             background: "var(--down-dim)", border: "1px solid var(--down)",
-            borderRadius: "var(--r-sm)", fontSize: 12, color: "var(--down)", fontWeight: 600,
+            borderRadius: "var(--r-sm)", fontSize: "0.75rem", color: "var(--down)", fontWeight: 600,
           }}>{error}</div>
         )}
 
@@ -113,7 +113,7 @@ function Pending() {
       padding: "1px 9px", borderRadius: 99,
       background: "var(--warn-dim)", color: "var(--warn)",
       border: "1px solid var(--warn)",
-      fontSize: 11, fontWeight: 700, letterSpacing: ".02em",
+      fontSize: "0.6875rem", fontWeight: 700, letterSpacing: ".02em",
     }}>
       Pending
     </span>
@@ -283,7 +283,7 @@ export function SettingsScreen() {
             {profileIncomplete && (
               <span style={{
                 marginLeft: 10, padding: "2px 10px", borderRadius: 99,
-                fontSize: 11, fontWeight: 700,
+                fontSize: "0.6875rem", fontWeight: 700,
                 background: "var(--warn-dim)", color: "var(--warn)",
                 border: "1px solid var(--warn)",
               }}>
@@ -296,7 +296,7 @@ export function SettingsScreen() {
               <div style={{
                 marginBottom: 14, padding: "9px 12px",
                 background: "var(--warn-dim)", border: "1px solid var(--warn)",
-                borderRadius: "var(--r-sm)", fontSize: 12, color: "var(--warn)",
+                borderRadius: "var(--r-sm)", fontSize: "0.75rem", color: "var(--warn)",
                 fontWeight: 600, lineHeight: 1.5,
               }}>
                 Your profile is incomplete. Fields marked “Pending” still need details — tap Edit Profile to finish setting up.
@@ -305,7 +305,7 @@ export function SettingsScreen() {
             <ProfileRow label="Name" value={profile?.name} />
             <div className="fin-row">
               <span className="fin-lbl">Email</span>
-              <span className="fin-val mono" style={{ fontSize: 12.5 }}>{user?.email || "—"}</span>
+              <span className="fin-val mono" style={{ fontSize: "0.7812rem" }}>{user?.email || "—"}</span>
             </div>
             <ProfileRow label="Mobile number" value={profile?.mobileNumber} />
             <ProfileRow label="Age" value={profile?.age} />
@@ -339,8 +339,8 @@ export function SettingsScreen() {
           <div className="card-b">
             <div className="iq-toggle-row">
               <div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-hi)" }}>Dark mode</div>
-                <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginTop: 2 }}>
+                <div style={{ fontSize: "0.8438rem", fontWeight: 600, color: "var(--text-hi)" }}>Dark mode</div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
                   Toggle between dark and light interface
                 </div>
               </div>
@@ -355,8 +355,8 @@ export function SettingsScreen() {
             </div>
             <div className="iq-toggle-row" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-soft)" }}>
               <div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-hi)" }}>Alerts</div>
-                <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginTop: 2 }}>
+                <div style={{ fontSize: "0.8438rem", fontWeight: 600, color: "var(--text-hi)" }}>Alerts</div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
                   Receive price alerts and market notifications
                 </div>
               </div>
@@ -405,19 +405,19 @@ export function SettingsScreen() {
                 {/* Label + description */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize: 14.5, fontWeight: 700,
+                    fontSize: "0.9062rem", fontWeight: 700,
                     color: font === f.key ? "var(--brand-2)" : "var(--text-hi)",
                     fontFamily: f.stack,
                     marginBottom: 2,
                   }}>
                     {f.label}
                   </div>
-                  <div style={{ fontSize: 11.5, color: "var(--text-dim-solid)" }}>{f.desc}</div>
+                  <div style={{ fontSize: "0.7188rem", color: "var(--text-dim-solid)" }}>{f.desc}</div>
                 </div>
 
                 {/* Live preview */}
                 <div style={{
-                  fontSize: 13, color: "var(--text)",
+                  fontSize: "0.8125rem", color: "var(--text)",
                   fontFamily: f.stack, whiteSpace: "nowrap",
                   opacity: 0.72,
                 }}>
@@ -434,7 +434,7 @@ export function SettingsScreen() {
             <h3>Plan</h3>
             <span style={{
               marginLeft: 10, padding: "2px 10px", borderRadius: 99,
-              fontSize: 11, fontWeight: 700,
+              fontSize: "0.6875rem", fontWeight: 700,
               background: isPremium ? "var(--brand-dim)" : "var(--surface-3)",
               color: isPremium ? "var(--brand-2)" : "var(--text-dim-solid)",
               border: `1px solid ${isPremium ? "var(--brand)" : "var(--border)"}`,
@@ -443,13 +443,13 @@ export function SettingsScreen() {
             </span>
           </div>
           <div className="card-b">
-            <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 12 }}>
+            <div style={{ fontSize: "0.8125rem", color: "var(--text)", marginBottom: 12 }}>
               {isPremium
                 ? "You have access to all MarketCatalyst features."
                 : "Upgrade to Premium to unlock AI Copilot, full screener, portfolio tools, and more."}
             </div>
             <button className="planbtn" style={{ maxWidth: 180 }} onClick={() => window.location.href = "/manage-plan"}>
-              <span style={{ fontSize: 13 }}>◈</span>
+              <span style={{ fontSize: "0.8125rem" }}>◈</span>
               Manage Plan
             </button>
           </div>
@@ -501,8 +501,8 @@ export function SettingsScreen() {
           <div className="card-b">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-hi)" }}>Delete account</div>
-                <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginTop: 2 }}>
+                <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-hi)" }}>Delete account</div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
                   Permanently remove your account and all data. This cannot be undone.
                 </div>
               </div>

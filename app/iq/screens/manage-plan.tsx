@@ -22,8 +22,8 @@ const FEATURES = [
 
 function Check({ ok }: { ok: boolean }) {
   return ok
-    ? <span style={{ color: "var(--up)", fontSize: 15, fontWeight: 700 }}>✓</span>
-    : <span style={{ color: "var(--text-dim-solid)", fontSize: 13 }}>—</span>;
+    ? <span style={{ color: "var(--up)", fontSize: "0.9375rem", fontWeight: 700 }}>✓</span>
+    : <span style={{ color: "var(--text-dim-solid)", fontSize: "0.8125rem" }}>—</span>;
 }
 
 export function ManagePlanScreen() {
@@ -53,7 +53,7 @@ export function ManagePlanScreen() {
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                   <span style={{
-                    padding: "3px 12px", borderRadius: 99, fontSize: 11.5, fontWeight: 700,
+                    padding: "3px 12px", borderRadius: 99, fontSize: "0.7188rem", fontWeight: 700,
                     background: isPremium ? "var(--brand-dim)" : "var(--surface-3)",
                     color: isPremium ? "var(--brand-2)" : "var(--text-dim-solid)",
                     border: `1px solid ${isPremium ? "var(--brand)" : "var(--border)"}`,
@@ -61,17 +61,17 @@ export function ManagePlanScreen() {
                     {isPremium ? "◈ Premium" : "Free"}
                   </span>
                   {isPremium && (
-                    <span style={{ fontSize: 12, color: "var(--text-dim-solid)" }}>Active</span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)" }}>Active</span>
                   )}
                 </div>
-                <div style={{ fontSize: 13, color: "var(--text)", marginTop: 4 }}>{displayName}</div>
-                <div style={{ fontSize: 11.5, color: "var(--text-dim-solid)" }}>{email}</div>
+                <div style={{ fontSize: "0.8125rem", color: "var(--text)", marginTop: 4 }}>{displayName}</div>
+                <div style={{ fontSize: "0.7188rem", color: "var(--text-dim-solid)" }}>{email}</div>
               </div>
               {!isPremium && (
                 <button style={{
                   padding: "9px 20px", borderRadius: 99,
                   background: "var(--brand)", border: "none",
-                  color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  color: "#fff", fontSize: "0.8125rem", fontWeight: 700, cursor: "pointer",
                 }}>
                   ◈ Upgrade to Premium
                 </button>
@@ -80,7 +80,7 @@ export function ManagePlanScreen() {
                 <button style={{
                   padding: "9px 20px", borderRadius: 99,
                   background: "var(--surface-2)", border: "1px solid var(--border)",
-                  color: "var(--text)", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                  color: "var(--text)", fontSize: "0.8125rem", fontWeight: 500, cursor: "pointer",
                 }}>
                   Manage Billing
                 </button>
@@ -95,12 +95,12 @@ export function ManagePlanScreen() {
           <div className="card" style={{ opacity: isPremium ? 0.6 : 1 }}>
             <div className="card-h">
               <h3>Free</h3>
-              <span style={{ marginLeft: "auto", fontSize: 20, fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>$0</span>
+              <span style={{ marginLeft: "auto", fontSize: "1.25rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>$0</span>
             </div>
             <div className="card-b">
-              <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginBottom: 10 }}>Core market intelligence tools</div>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>Core market intelligence tools</div>
               {!isPremium && (
-                <div style={{ padding: "6px 12px", borderRadius: 99, background: "var(--surface-3)", border: "1px solid var(--border)", textAlign: "center", fontSize: 12, color: "var(--text-dim-solid)", fontWeight: 600 }}>Current Plan</div>
+                <div style={{ padding: "6px 12px", borderRadius: 99, background: "var(--surface-3)", border: "1px solid var(--border)", textAlign: "center", fontSize: "0.75rem", color: "var(--text-dim-solid)", fontWeight: 600 }}>Current Plan</div>
               )}
             </div>
           </div>
@@ -115,21 +115,21 @@ export function ManagePlanScreen() {
               <div style={{
                 position: "absolute", top: -10, right: 16,
                 background: "var(--brand)", color: "#fff",
-                fontSize: 10, fontWeight: 700, padding: "2px 10px", borderRadius: 99,
+                fontSize: "0.625rem", fontWeight: 700, padding: "2px 10px", borderRadius: 99,
                 letterSpacing: ".06em",
               }}>YOUR PLAN</div>
             )}
             <div className="card-h">
               <h3 style={{ color: "var(--brand-2)" }}>◈ Premium</h3>
-              <span style={{ marginLeft: "auto", fontSize: 20, fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>$19<span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-dim-solid)" }}>/mo</span></span>
+              <span style={{ marginLeft: "auto", fontSize: "1.25rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>$19<span style={{ fontSize: "0.8125rem", fontWeight: 400, color: "var(--text-dim-solid)" }}>/mo</span></span>
             </div>
             <div className="card-b">
-              <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginBottom: 10 }}>Full suite — AI, unlimited stocks, all screens</div>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>Full suite — AI, unlimited stocks, all screens</div>
               {!isPremium && (
                 <button style={{
                   width: "100%", padding: "8px", borderRadius: 99,
                   background: "var(--brand)", border: "none",
-                  color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  color: "#fff", fontSize: "0.8125rem", fontWeight: 700, cursor: "pointer",
                 }}>
                   Upgrade Now
                 </button>
@@ -167,25 +167,25 @@ export function ManagePlanScreen() {
         <div className="card col-12">
           <div className="card-h"><h3>Billing & Support</h3></div>
           <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 13, color: "var(--text)" }}>
+            <div style={{ fontSize: "0.8125rem", color: "var(--text)" }}>
               Billing is managed via Stripe. All plans are billed monthly and can be cancelled at any time.
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button style={{
                 padding: "7px 16px", borderRadius: 99,
                 background: "var(--surface-2)", border: "1px solid var(--border)",
-                color: "var(--text)", fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+                color: "var(--text)", fontSize: "0.7812rem", fontWeight: 500, cursor: "pointer",
               }}>View Invoices</button>
               <button style={{
                 padding: "7px 16px", borderRadius: 99,
                 background: "var(--surface-2)", border: "1px solid var(--border)",
-                color: "var(--text)", fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+                color: "var(--text)", fontSize: "0.7812rem", fontWeight: 500, cursor: "pointer",
               }}>Update Payment Method</button>
               {isPremium && (
                 <button style={{
                   padding: "7px 16px", borderRadius: 99,
                   background: "var(--surface-2)", border: "1px solid var(--down)",
-                  color: "var(--down)", fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+                  color: "var(--down)", fontSize: "0.7812rem", fontWeight: 500, cursor: "pointer",
                 }}>Cancel Subscription</button>
               )}
             </div>

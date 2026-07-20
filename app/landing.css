@@ -147,7 +147,7 @@
   z-index: 1;
 }
 .mq-kicker {
-  font: 700 12px var(--f-display, 'Space Grotesk', sans-serif);
+  font: 700 0.75rem var(--f-display, 'Space Grotesk', sans-serif);
   letter-spacing: .24em;
   text-transform: uppercase;
   color: #8a8a8a;
@@ -177,7 +177,7 @@
   align-items: center;
   gap: 10px;
   color: #777;
-  font: 600 11px var(--f-display, 'Space Grotesk', sans-serif);
+  font: 600 0.6875rem var(--f-display, 'Space Grotesk', sans-serif);
   letter-spacing: .22em;
   text-transform: uppercase;
 }
@@ -239,7 +239,7 @@
 
 /* Card header — text at top */
 .mq-head { flex: none; padding: 26px 30px 18px; }
-.mq-head .mq-num { font: 700 11px var(--f-mono, 'Space Mono', monospace); letter-spacing: .2em; text-transform: uppercase; color: #7e8ca8; }
+.mq-head .mq-num { font: 700 0.6875rem var(--f-mono, 'Space Mono', monospace); letter-spacing: .2em; text-transform: uppercase; color: #7e8ca8; }
 .mq-head h3 { font-family: var(--f-display, 'Space Grotesk', sans-serif); font-weight: 800; font-size: 2rem; color: #fff; margin: 9px 0 7px; letter-spacing: -.015em; }
 .mq-head p { font-size: 1rem; line-height: 1.5; color: #9aa6bd; margin: 0; }
 
@@ -249,7 +249,7 @@
 
 .mq-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
 .mq-chip {
-  font: 600 10px var(--f-mono, 'Space Mono', monospace);
+  font: 600 0.625rem var(--f-mono, 'Space Mono', monospace);
   letter-spacing: .04em;
   text-transform: uppercase;
   color: #aeb6c6;
@@ -260,7 +260,7 @@
 }
 .mq-go {
   margin-top: 18px;
-  font: 700 12px var(--f-mono, 'Space Mono', monospace);
+  font: 700 0.75rem var(--f-mono, 'Space Mono', monospace);
   letter-spacing: .1em;
   color: #fff;
   opacity: 0;
@@ -271,7 +271,7 @@
   margin-top: 30px;
   text-align: center;
   color: #fff;
-  font: 700 14px var(--f-display, 'Space Grotesk', sans-serif);
+  font: 700 0.875rem var(--f-display, 'Space Grotesk', sans-serif);
   letter-spacing: .14em;
   text-transform: uppercase;
   height: 18px;
@@ -279,7 +279,7 @@
 .mq-hint {
   margin-top: 10px;
   color: #5e5e5e;
-  font: 600 11px var(--f-display, 'Space Grotesk', sans-serif);
+  font: 600 0.6875rem var(--f-display, 'Space Grotesk', sans-serif);
   letter-spacing: .16em;
   text-transform: uppercase;
 }
@@ -320,7 +320,7 @@
   bottom: 18px; left: 0; right: 0;
   text-align: center;
   color: #6b7488;
-  font: 600 11px var(--f-display, 'Space Grotesk', sans-serif);
+  font: 600 0.6875rem var(--f-display, 'Space Grotesk', sans-serif);
   letter-spacing: .16em;
   text-transform: uppercase;
 }
@@ -357,7 +357,7 @@
   background: rgba(20,25,38,.85);
   color: #fff;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 34px;
   text-align: center;
   display: flex; align-items: center; justify-content: center;
@@ -373,7 +373,7 @@
   flex-shrink: 0;
 }
 .mqg-info { width: 45%; padding: 34px 32px; overflow-y: auto; }
-.mqg-kicker { font: 700 12px var(--f-display, 'Space Grotesk', sans-serif); letter-spacing: .18em; text-transform: uppercase; color: var(--ai, #34E2F0); }
+.mqg-kicker { font: 700 0.75rem var(--f-display, 'Space Grotesk', sans-serif); letter-spacing: .18em; text-transform: uppercase; color: var(--ai, #34E2F0); }
 .mqg-info h2 { font-family: var(--f-display, 'Space Grotesk', sans-serif); font-weight: 800; font-size: 2rem; color: #fff; margin: 10px 0 12px; letter-spacing: -.01em; }
 .mqg-info p { color: #aeb6c6; line-height: 1.62; font-size: .98rem; margin: 0 0 18px; }
 .mqg-feat { list-style: none; padding: 0; margin: 0 0 24px; display: flex; flex-direction: column; gap: 11px; }
@@ -407,7 +407,7 @@
   padding: 28px 28px 22px;
   box-shadow: 0 40px 110px rgba(0,0,0,.62);
 }
-.auth-panel .mqg-x { position: absolute; top: 13px; right: 13px; width: 32px; height: 32px; border-radius: 9px; border: 1px solid #2a2f3e; background: rgba(20,25,38,.85); color: #fff; cursor: pointer; font-size: 12px; }
+.auth-panel .mqg-x { position: absolute; top: 13px; right: 13px; width: 32px; height: 32px; border-radius: 9px; border: 1px solid #2a2f3e; background: rgba(20,25,38,.85); color: #fff; cursor: pointer; font-size: 0.75rem; }
 .au-head {
   display: flex;
   align-items: center;
@@ -554,14 +554,14 @@
   background: #000;
   color: #fff;
   border: 1px solid #fff;
-  font: 700 10px var(--f-display, 'Space Grotesk', sans-serif);
+  font: 700 0.625rem var(--f-display, 'Space Grotesk', sans-serif);
   letter-spacing: .1em;
   text-transform: uppercase;
   padding: 4px 12px;
   border-radius: 999px;
   white-space: nowrap;
 }
-.mqp-tier { font: 700 13px var(--f-display, 'Space Grotesk', sans-serif); letter-spacing: .14em; text-transform: uppercase; color: #9a9a9a; }
+.mqp-tier { font: 700 0.8125rem var(--f-display, 'Space Grotesk', sans-serif); letter-spacing: .14em; text-transform: uppercase; color: #9a9a9a; }
 .mqp-card.hot .mqp-tier { color: #555; }
 .mqp-price { font-family: var(--f-display, 'Space Grotesk', sans-serif); font-weight: 800; font-size: 2.6rem; color: #fff; margin: 8px 0 2px; }
 .mqp-card.hot .mqp-price { color: #000; }

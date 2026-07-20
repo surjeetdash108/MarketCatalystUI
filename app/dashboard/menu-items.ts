@@ -8,7 +8,7 @@ export const menuItems = [
   { label: 'Screener', slug: 'screener', group: 'Intelligence', icon: '🔍', badge: null },
   { label: 'Themes', slug: 'themes', group: 'Intelligence', icon: '◈', badge: null },
   { label: 'IPO Corner', slug: 'ipos', group: 'Intelligence', icon: '🚀', badge: null },
-  { label: 'Stock Detail', slug: 'stock', group: 'Intelligence', icon: '📊', badge: null },
+  { label: 'Search', slug: 'stock', group: 'Intelligence', icon: '📊', badge: null },
   { label: 'Options', slug: 'options', group: 'Intelligence', icon: '◈', badge: null },
   { label: 'Insider & Institutional', slug: 'insider', group: 'Intelligence', icon: '📄', badge: null },
   // ---- Context group ----

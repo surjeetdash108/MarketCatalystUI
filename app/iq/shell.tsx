@@ -20,6 +20,7 @@ import { menuItems } from "../dashboard/menu-items";
 import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail, type PulseItem } from "./data";
 import { fmt, sign, cls, arr, SemiGauge } from "./utils";
 import { useCollection } from "./hooks/useCollection";
+import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { mergePulse, type IndexDoc } from "./live-market-indices";
 import { getMarketStatus, type MarketStatus } from "./market-status";
@@ -240,8 +241,12 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
   const { openStockFull } = useIQActions();
   const e = earningsData.find(x => x.ticker ===sym);
   const posted = e && e.epsActual != null;
-  const epsBeat = e && e.epsActual != null ? ((e.epsActual - e.epsEstimate) / Math.abs(e.epsEstimate) * 100) : null;
-  const revBeat = e && e.revenueActual != null ? ((e.revenueActual - e.revenueEstimate) / Math.abs(e.revenueEstimate) * 100) : null;
+  const epsBeat = e && e.epsActual != null && e.epsEstimate != null && e.epsEstimate !== 0
+    ? ((e.epsActual - e.epsEstimate) / Math.abs(e.epsEstimate) * 100)
+    : null;
+  const revBeat = e && e.revenueActual != null && e.revenueEstimate != null && e.revenueEstimate !== 0
+    ? ((e.revenueActual - e.revenueEstimate) / Math.abs(e.revenueEstimate) * 100)
+    : null;
 
   return (
     <>
@@ -269,7 +274,7 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
                   <div className="k">EPS · actual vs est</div>
                   <div className="v">${e.epsActual}</div>
                   <div className={`s ${(epsBeat ?? 0) >= 0 ? "up" : "dn"}`}>
-                    est ${e.epsEstimate} · {epsBeat != null ? `${epsBeat > 0 ? "+" : ""}${epsBeat.toFixed(1)}%` : ""}
+                    est {e.epsEstimate != null ? `$${e.epsEstimate}` : "—"} · {epsBeat != null ? `${epsBeat > 0 ? "+" : ""}${epsBeat.toFixed(1)}%` : ""}
                   </div>
                 </div>
                 <div className="m">
@@ -318,7 +323,7 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
                   </div>
                   <div className="ai-sec">
                     <div className="h">Bear case</div>
-                    <p>Much of the upside may be priced in. Implied move was ±{e.impliedMove}% — actual {Math.abs(e.priceReaction ?? 0).toFixed(1)}% {Math.abs(e.priceReaction ?? 0) > e.impliedMove ? "exceeded" : "was within"} expectations.</p>
+                    <p>Much of the upside may be priced in. Implied move was {e.impliedMove != null ? `±${e.impliedMove}%` : "n/a"} — actual {Math.abs(e.priceReaction ?? 0).toFixed(1)}% {e.impliedMove != null && Math.abs(e.priceReaction ?? 0) > e.impliedMove ? "exceeded" : "was within"} expectations.</p>
                   </div>
                   <div className="ai-sec">
                     <div className="h">Guidance detail</div>
@@ -1063,7 +1068,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                       </div>
                     ))}
                     {searchQ && searchMatches.length === 0 && (
-                      <div style={{ padding: "12px 15px", color: "var(--text-dim-solid)", fontSize: 13 }}>No results for &ldquo;{searchQ}&rdquo;</div>
+                      <div style={{ padding: "12px 15px", color: "var(--text-dim-solid)", fontSize: "0.8125rem" }}>No results for &ldquo;{searchQ}&rdquo;</div>
                     )}
                   </div>
                 )}
@@ -1092,6 +1097,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 onClick={() => setCopilotOpen(o => !o)}>
                 ✦
               </button>
+              {/* Bell sits immediately left of the profile avatar. */}
+              <NotificationBell />
               <div className="profile-dropdown-wrap" ref={profileDropdownRef}>
                 <div
                   className="topbar-avatar"

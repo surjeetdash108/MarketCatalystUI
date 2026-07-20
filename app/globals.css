@@ -18,6 +18,26 @@
   }
 }
 
+/* ── Global typography scale ─────────────────────────────────────────────────
+   THE single lever for text size across the entire app.
+
+   Every font-size in iq.css, landing.css and the components is expressed in rem
+   (previously it was a three-way split: 249 rem in CSS, 98 px in CSS, and 53
+   bare numeric px inline — so a root change only moved a third of the text and
+   left the rest behind, looking inconsistent rather than larger).
+
+   112.5% = 18px root. Effect on the most common sizes:
+     0.62rem   9.9px -> 11.2px   (was the smallest text in the app)
+     0.72rem  11.5px -> 13.0px
+     0.78rem  12.5px -> 14.0px   (body)
+     0.82rem  13.1px -> 14.8px
+
+   To adjust everything, change this one number: 100% restores the old sizes,
+   125% would be 20px root. */
+html {
+  font-size: 112.5%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

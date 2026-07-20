@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { StockLogo } from "../utils";
 import { useCollection } from "../hooks/useCollection";
+import { rangeFor, inRange, fmtMonthDay, rangeLabel, type RangeTabKey } from "../calendar-range";
 
 interface MacroEventDoc {
   id: string;
@@ -97,6 +98,48 @@ const CAL_NEXT: MacroEvent[] = [
 ];
 const ECO_CALS = [CAL_LAST_MONTH, CAL_LAST, CAL_THIS, CAL_NEXT, CAL_THIS_MONTH];
 
+/** ECO_TABS index -> shared calendar range key. */
+const ECO_TAB_RANGE: RangeTabKey[] = ["lmonth", "prev", "week", "next", "month"];
+
+const DOW_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Live macro_events doc -> the row shape this calendar renders. */
+function toMacroEvent(d: MacroEventDoc): MacroEvent {
+  const dt = new Date(d.eventDate + "T00:00:00Z");
+  const unit = d.unit === "%" ? "%" : "";
+  const val = (v: number | null) => (v == null ? "—" : `${v}${unit}`);
+  return {
+    ev: d.name,
+    date: fmtMonthDay(d.eventDate),
+    day: DOW_ABBR[dt.getUTCDay()] ?? "",
+    tier: d.importance === "high" ? "High" : d.importance === "medium" ? "Med" : "Low",
+    prev: val(d.previous),
+    // FRED publishes observations, not consensus forecasts — there is no
+    // estimate to show, and no beat/miss to derive from one. Leaving `surprise`
+    // blank is honest; colouring it from actual-vs-previous would present a
+    // direction-of-change as a surprise against expectations.
+    est: "—",
+    actual: val(d.actual),
+    surprise: "",
+    note: `${d.seriesId} · ${d.source}`,
+  };
+}
+
+/**
+ * Economic-calendar rows for a tab. Live macro_events is authoritative; the
+ * hardcoded CAL_* arrays render only when no live data exists at all.
+ */
+function ecoRowsFor(tabIdx: number, live: MacroEventDoc[], now: Date): MacroEvent[] {
+  if (live.length > 0) {
+    const r = rangeFor(ECO_TAB_RANGE[tabIdx] ?? "month", now);
+    return live
+      .filter(d => d.eventDate && inRange(d.eventDate, r))
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate) || a.name.localeCompare(b.name))
+      .map(toMacroEvent);
+  }
+  return ECO_CALS[tabIdx] ?? [];
+}
+
 // ── Dividend calendar data ───────────────────────────────────────────────────
 type DivTabKey = "lmonth" | "prev" | "yest" | "today" | "tom" | "week" | "next" | "month";
 const DIV_RANGES: [DivTabKey, string][] = [
@@ -120,7 +163,7 @@ interface DivStock {
   exDate: string; payDate: string;   // display strings, e.g. "Jun 25"
   exMonth: number; exDay: number;    // for calendar + filter
   payMonth: number; payDay: number;  // for pay-date section in day view
-  amount: number; yld: number; freq: string; streak: number;
+  amount: number; yld: number | null; freq: string; streak: number | null;
   weekDay: number;                   // 0=Mon..4=Fri for week-grid view
 }
 
@@ -177,23 +220,57 @@ const DIV_STOCKS: DivStock[] = [
   { sym: "GIS",  name: "General Mills",   sector: "Staples",     exDate: "May 28", payDate: "Jun 6",  exMonth: 5, exDay: 28, payMonth: 6, payDay: 6,  amount: 0.59, yld: 3.56, freq: "Quarterly",    streak: 25, weekDay: 1 },
 ];
 
-// ── Filter helpers ───────────────────────────────────────────────────────────
-function exDivFor(tab: DivTabKey): DivStock[] {
-  if (tab === "today")  return DIV_STOCKS.filter(s => s.exMonth === 6 && s.exDay === 25);
-  if (tab === "yest")   return DIV_STOCKS.filter(s => s.exMonth === 6 && s.exDay === 24);
-  if (tab === "tom")    return DIV_STOCKS.filter(s => s.exMonth === 6 && s.exDay === 26);
-  if (tab === "week")   return DIV_STOCKS.filter(s => s.exMonth === 6 && s.exDay >= 22 && s.exDay <= 26);
-  if (tab === "prev")   return DIV_STOCKS.filter(s => s.exMonth === 6 && s.exDay >= 15 && s.exDay <= 19);
-  if (tab === "next")   return DIV_STOCKS.filter(s => (s.exMonth === 6 && s.exDay >= 29) || (s.exMonth === 7 && s.exDay <= 3));
-  if (tab === "lmonth") return DIV_STOCKS.filter(s => s.exMonth === 5);
-  if (tab === "month")  return DIV_STOCKS.filter(s => s.exMonth === 6);
+/** Live Firestore dividend -> the shape the calendar renders. */
+function toDivStock(d: DividendDoc): DivStock {
+  const [, em, ed] = d.exDividendDate.split("-").map(Number);
+  const pay = d.paymentDate ? d.paymentDate.split("-").map(Number) : null;
+  const exDate = new Date(d.exDividendDate + "T00:00:00Z");
+  return {
+    sym: d.ticker,
+    // Company name and sector are not on the dividend doc; showing the ticker is
+    // honest, whereas inventing a name would not be.
+    name: d.ticker,
+    sector: "—",
+    exDate: fmtMonthDay(d.exDividendDate),
+    payDate: fmtMonthDay(d.paymentDate),
+    exMonth: em, exDay: ed,
+    payMonth: pay ? pay[1] : 0, payDay: pay ? pay[2] : 0,
+    amount: d.dividendAmount ?? 0,
+    // Polygon does not return dividend yield — null renders as "n/a" rather
+    // than a fabricated 0%.
+    yld: d.yieldPct ?? null,
+    freq: d.frequency ?? "—",
+    streak: null,
+    weekDay: (exDate.getUTCDay() + 6) % 7,
+  };
+}
+
+
+/**
+ * Ex-dividend rows for a tab. Live Firestore data is authoritative; the mock
+ * array is only used when no live data exists at all, so a demo still renders.
+ */
+function exDivFor(tab: DivTabKey, live: DividendDoc[], now: Date): DivStock[] {
+  if (live.length > 0) {
+    const r = rangeFor(tab as RangeTabKey, now);
+    return live
+      .filter(d => d.exDividendDate && inRange(d.exDividendDate, r))
+      .sort((a, b) => a.exDividendDate.localeCompare(b.exDividendDate) || a.ticker.localeCompare(b.ticker))
+      .map(toDivStock);
+  }
   return [];
 }
 
-function payDivFor(tab: DivTabKey): DivStock[] {
-  if (tab === "today") return DIV_STOCKS.filter(s => s.payMonth === 6 && s.payDay === 25);
-  if (tab === "yest")  return DIV_STOCKS.filter(s => s.payMonth === 6 && s.payDay === 24);
-  if (tab === "tom")   return DIV_STOCKS.filter(s => s.payMonth === 6 && s.payDay === 26);
+/** Pay-date rows, same rules. Only the single-day tabs show a pay-date block. */
+function payDivFor(tab: DivTabKey, live: DividendDoc[], now: Date): DivStock[] {
+  if (tab !== "today" && tab !== "yest" && tab !== "tom") return [];
+  if (live.length > 0) {
+    const r = rangeFor(tab as RangeTabKey, now);
+    return live
+      .filter(d => d.paymentDate && inRange(d.paymentDate, r))
+      .sort((a, b) => a.ticker.localeCompare(b.ticker))
+      .map(toDivStock);
+  }
   return [];
 }
 
@@ -238,7 +315,7 @@ function DivHistoryChart({ data }: { data: { year: number; div: number }[] }) {
         return (
           <g key={v}>
             <line x1={PADL} y1={y} x2={W - PADR} y2={y} stroke="var(--border-soft)" strokeDasharray="2 4" />
-            <text x={PADL - 4} y={y + 3.5} textAnchor="end" style={{ fill: "var(--text-dim-solid)", fontSize: "8px" }}>
+            <text x={PADL - 4} y={y + 3.5} textAnchor="end" style={{ fill: "var(--text-dim-solid)", fontSize: "0.5rem" }}>
               ${v.toFixed(2)}
             </text>
           </g>
@@ -253,11 +330,11 @@ function DivHistoryChart({ data }: { data: { year: number; div: number }[] }) {
             <rect x={(cx - bw / 2).toFixed(1)} y={by.toFixed(1)} width={bw.toFixed(1)} height={bh.toFixed(1)} rx="3"
               style={{ fill: "var(--brand-2)", opacity: 0.85 }} />
             <text x={cx.toFixed(1)} y={(by - 4).toFixed(1)} textAnchor="middle"
-              style={{ fill: "var(--text-hi)", fontSize: "7.5px", fontWeight: 600 }}>
+              style={{ fill: "var(--text-hi)", fontSize: "0.4688rem", fontWeight: 600 }}>
               ${d.div.toFixed(2)}
             </text>
             <text x={cx.toFixed(1)} y={H - 6} textAnchor="middle"
-              style={{ fill: "var(--text-dim-solid)", fontSize: "8px" }}>
+              style={{ fill: "var(--text-dim-solid)", fontSize: "0.5rem" }}>
               {d.year}
             </text>
           </g>
@@ -292,8 +369,8 @@ function DividendDrawer({ stock, onClose }: { stock: DivStock; onClose: () => vo
           <div className="metric-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 14 }}>
             <div className="m"><div className="k">Quarterly div</div><div className="v">${stock.amount.toFixed(2)}</div></div>
             <div className="m"><div className="k">Annual div</div><div className="v">${annual.toFixed(2)}</div></div>
-            <div className="m"><div className="k">Yield</div><div className="v up">{stock.yld > 0 ? stock.yld.toFixed(2) + "%" : "—"}</div></div>
-            <div className="m"><div className="k">Div streak</div><div className="v">{stock.streak > 0 ? stock.streak + " yrs" : "—"}</div></div>
+            <div className="m"><div className="k">Yield</div><div className="v up">{stock.yld != null && stock.yld > 0 ? stock.yld.toFixed(2) + "%" : "—"}</div></div>
+            <div className="m"><div className="k">Div streak</div><div className="v">{stock.streak != null && stock.streak > 0 ? stock.streak + " yrs" : "—"}</div></div>
             <div className="m"><div className="k">Frequency</div><div className="v" style={{ fontSize: ".85rem" }}>{stock.freq}</div></div>
             <div className="m"><div className="k">10yr CAGR</div><div className="v up">{cagr.toFixed(1)}%</div></div>
           </div>
@@ -336,7 +413,7 @@ function DividendDrawer({ stock, onClose }: { stock: DivStock; onClose: () => vo
 function DivChip({ d, selected, onSelect }: { d: DivStock; selected: boolean; onSelect: (s: DivStock) => void }) {
   return (
     <button className={`ec-chip${selected ? " on" : ""}`} onClick={() => onSelect(d)}
-      title={`${d.name} · ex-div ${d.exDate} · $${d.amount.toFixed(2)}/qtr · ${d.yld > 0 ? d.yld.toFixed(2) + "% yield" : "growth payer"}`}>
+      title={`${d.name} · ex-div ${d.exDate} · $${d.amount.toFixed(2)}/qtr · ${d.yld != null && d.yld > 0 ? d.yld.toFixed(2) + "% yield" : "yield n/a"}`}>
       <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6" }}>
         {d.sym[0]}
         <img
@@ -383,9 +460,13 @@ export function MacroScreen() {
   const macroLiveSorted = [...macroLive].sort((a, b) => IMPORTANCE_RANK[a.importance] - IMPORTANCE_RANK[b.importance]);
 
   const { data: liveDividends } = useCollection<DividendDoc>("dividends");
+  // One clock for the whole screen so tabs cannot disagree mid-render.
+  const now = new Date();
   const liveDividendsSorted = [...liveDividends].sort((a, b) => a.exDividendDate.localeCompare(b.exDividendDate));
 
   const [ecoTab,    setEcoTab]    = useState(2);
+  // Live macro_events drives the calendar; CAL_* renders only when empty.
+  const ecoRows = ecoRowsFor(ecoTab, macroLive, now);
   const [divTab,    setDivTab]    = useState<DivTabKey>("week");
   const [monthOff,  setMonthOff]  = useState(0);
   const [selStock,  setSelStock]  = useState<DivStock | null>(null);
@@ -414,8 +495,8 @@ export function MacroScreen() {
   let divCalNode: React.ReactNode = null;
 
   if (isDivDay) {
-    const exStocks  = exDivFor(divTab);
-    const payStocks = payDivFor(divTab);
+    const exStocks  = exDivFor(divTab, liveDividends, now);
+    const payStocks = payDivFor(divTab, liveDividends, now);
     divCalNode = (
       <div className="card">
         <div className="card-h">
@@ -452,7 +533,7 @@ export function MacroScreen() {
         <div className="card-b" style={{ paddingTop: 12 }}>
           <div className="ec-grid">
             {["Mon", "Tue", "Wed", "Thu", "Fri"].map((dn, di) => {
-              const dayStocks = exDivFor(divTab).filter(s => s.weekDay === di);
+              const dayStocks = exDivFor(divTab, liveDividends, now).filter(s => s.weekDay === di);
               const isToday   = isCurrentWeek && di === todayWeekDay;
               return (
                 <div key={dn} className={`ec-day${isToday ? " is-today" : ""}`}>
@@ -471,9 +552,11 @@ export function MacroScreen() {
       </div>
     );
   } else if (isDivLMon) {
-    const stocks = exDivFor("lmonth");
-    const high   = stocks.filter(s => s.yld >= 2.5);
-    const growth = stocks.filter(s => s.yld < 2.5);
+    const stocks = exDivFor("lmonth", liveDividends, now);
+    // A null yield means "vendor did not supply it", which is NOT the same as a
+    // low yield — bucketing those as growth payers would invent a claim.
+    const high   = stocks.filter(s => s.yld != null && s.yld >= 2.5);
+    const growth = stocks.filter(s => s.yld != null && s.yld < 2.5);
     divCalNode = (
       <div className="card">
         <div className="card-h">
@@ -625,7 +708,7 @@ export function MacroScreen() {
             <div className="card-h">
               <h3>Economic calendar</h3>
               <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-                {ECO_CALS[ecoTab].length} events
+                {ecoRows.length} events
               </span>
             </div>
             <div className="tbl-wrap" style={{ flex: 1 }}>
@@ -638,7 +721,7 @@ export function MacroScreen() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ECO_CALS[ecoTab].map(e => (
+                  {ecoRows.map(e => (
                     <tr key={e.ev + e.date}>
                       <td>
                         <b style={{ color: "var(--text-hi)" }}>{e.ev}</b>

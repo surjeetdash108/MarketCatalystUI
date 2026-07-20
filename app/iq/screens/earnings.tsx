@@ -5,6 +5,7 @@ import { useIQActions, ExpandBtn } from "../shell";
 import { earnings, stockInfo, type Earning } from "../data";
 import { fmt, cls, sign, earnHistory, EarnQ, StockLogo } from "../utils";
 import { useCollection } from "../hooks/useCollection";
+import { rangeFor, inRange, type RangeTabKey } from "../calendar-range";
 
 // Live source (FMP earnings calendar) has ticker/date/epsEstimate/epsActual —
 // no session (BMO/AMC), guidance, price reaction, or implied move, which the
@@ -40,10 +41,12 @@ const DOWS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 interface EarnCalItem {
   s: string; n: string; sec: string;
-  sess: "BMO" | "AMC";
+  // Live earnings_events has no session/guidance/reaction/implied-move data, so
+  // these are nullable. Rendering a default would fabricate a claim.
+  sess: "BMO" | "AMC" | null;
   month: number; day: number;
   weekDay: number; // 0=Mon … 4=Fri
-  epsE: number; epsA: number | null; implied: number;
+  epsE: number | null; epsA: number | null; implied: number | null;
   guide: "Raised" | "In-line" | "Lowered" | null;
   react: number | null;
 }
@@ -88,18 +91,41 @@ const EARN_CAL: EarnCalItem[] = [
   { s:"ACN",  n:"Accenture",      sec:"Consulting", sess:"BMO", month:7, day:3,  weekDay:4, epsE:3.14,  epsA:null,  implied:3.2, guide:null,      react:null },
 ];
 
-function earnsForTab(t: TabKey): EarnCalItem[] {
-  switch (t) {
-    case "today":  return EARN_CAL.filter(e => e.month === 6 && e.day === 25);
-    case "yest":   return EARN_CAL.filter(e => e.month === 6 && e.day === 24);
-    case "tom":    return EARN_CAL.filter(e => e.month === 6 && e.day === 26);
-    case "week":   return EARN_CAL.filter(e => e.month === 6 && e.day >= 22 && e.day <= 26);
-    case "prev":   return EARN_CAL.filter(e => e.month === 6 && e.day >= 15 && e.day <= 19);
-    case "next":   return EARN_CAL.filter(e => (e.month === 6 && e.day >= 29) || (e.month === 7 && e.day <= 3));
-    case "lmonth": return EARN_CAL.filter(e => e.month === 5);
-    case "month":  return EARN_CAL.filter(e => e.month === 6);
-  }
+/** Live earnings_events doc -> the row shape this calendar renders. */
+function toEarnCalItem(d: LiveEarningsDoc): EarnCalItem {
+  const [, m, day] = d.date.split("-").map(Number);
+  const dt = new Date(d.date + "T00:00:00Z");
+  return {
+    s: d.ticker,
+    n: d.ticker,        // no company name on the earnings doc
+    sec: "—",
+    sess: null,         // not supplied by the vendor feed
+    month: m, day,
+    weekDay: (dt.getUTCDay() + 6) % 7,
+    epsE: d.epsEstimate,
+    epsA: d.epsActual,
+    implied: null,
+    guide: null,
+    react: null,
+  };
 }
+
+/**
+ * Earnings rows for a tab. Live earnings_events is authoritative; the hardcoded
+ * EARN_CAL renders only when no live data exists at all. Replaces filters that
+ * were pinned to `month === 6 && day === 25`, freezing every tab to June 2026.
+ */
+function earnsForTab(t: TabKey, live: LiveEarningsDoc[], now: Date): EarnCalItem[] {
+  if (live.length > 0) {
+    const r = rangeFor(t as RangeTabKey, now);
+    return live
+      .filter(d => d.date && inRange(d.date, r))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.ticker.localeCompare(b.ticker))
+      .map(toEarnCalItem);
+  }
+  return [];
+}
+
 
 function calToEarning(cal: EarnCalItem): Earning {
   return {
@@ -187,7 +213,7 @@ function EpsChart({ hist }: { hist: EarnQ[] }) {
     if (i % 2 === 0 || i === n - 1) {
       labels.push(
         <text key={`l${i}`} x={cx} y={H - 10} textAnchor="middle"
-          style={{ fill: "var(--text-dim-solid)", fontSize: "9px" }}>
+          style={{ fill: "var(--text-dim-solid)", fontSize: "0.5625rem" }}>
           {x.q.replace(" ", "'")}
         </text>
       );
@@ -238,7 +264,7 @@ function IncChart({ inc }: { inc: IncRow[] }) {
     });
     labels.push(
       <text key={`l${i}`} x={gx + gw / 2} y={H - 8} textAnchor="middle"
-        style={{ fill: "var(--text-dim-solid)", fontSize: "9px" }}>
+        style={{ fill: "var(--text-dim-solid)", fontSize: "0.5625rem" }}>
         {x.c.replace(" ", "'")}
       </text>
     );
@@ -714,8 +740,10 @@ const COMPANY_BIO: Record<string, string> = {
 export function EarningsScreen() {
   const { openStockFull } = useIQActions();
   const { data: liveEarnings } = useCollection<LiveEarningsDoc>("earnings_events");
+  // One clock for the whole screen so tabs cannot disagree mid-render.
+  const now = new Date();
   const [tab, setTab] = useState<TabKey>("week");
-  const [sel, setSel]           = useState<string>(() => earnsForTab("week")[0]?.s ?? "GOOG");
+  const [sel, setSel]           = useState<string>(() => earnsForTab("week", liveEarnings, now)[0]?.s ?? "GOOG");
   const [monthOff, setMonthOff] = useState(0);
   const [earnDay, setEarnDay]   = useState<number | null>(null);
   const [selectedCall,   setSelectedCall]   = useState<CallEntry | null>(null);
@@ -732,7 +760,7 @@ export function EarningsScreen() {
   let calNode: React.ReactNode = null;
 
   if (isDay) {
-    const items = earnsForTab(tab);
+    const items = earnsForTab(tab, liveEarnings, now);
     const bmo = items.filter(e => e.sess === "BMO");
     const amc = items.filter(e => e.sess === "AMC");
     const dayLabels: Record<TabKey, string> = {
@@ -764,7 +792,7 @@ export function EarningsScreen() {
       </div>
     );
   } else if (isLMon) {
-    const items = earnsForTab("lmonth");
+    const items = earnsForTab("lmonth", liveEarnings, now);
     calNode = (
       <div className="card">
         <div className="card-h">
@@ -781,7 +809,7 @@ export function EarningsScreen() {
       </div>
     );
   } else if (isWeek) {
-    const items = earnsForTab(tab);
+    const items = earnsForTab(tab, liveEarnings, now);
     const days  = ["Mon", "Tue", "Wed", "Thu", "Fri"];
     const selDayIdx = items.find(e => e.s === sel)?.weekDay ?? -1;
     const weekLabel: Record<TabKey, string> = {
@@ -936,7 +964,7 @@ export function EarningsScreen() {
 
   const aiRead = selEarning
     ? `${sel} ${selEarning.epsActual != null
-        ? (selEarning.epsActual >= selEarning.epsEstimate ? "beat" : "missed") + " EPS estimates"
+        ? (selEarning.epsEstimate != null && selEarning.epsActual >= selEarning.epsEstimate ? "beat" : "missed") + " EPS estimates"
         : "reports " + selEarning.session
       }. Guidance ${selEarning.guidanceStatus === "Raised" ? "was raised — bullish" : selEarning.guidanceStatus === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${selEarning.priceReaction != null ? `Shares reacted ${sign(selEarning.priceReaction)} on the print.` : `Options imply a ±${selEarning.impliedMove}% move.`}`
     : `${sel} reports next quarter.`;
@@ -953,7 +981,7 @@ export function EarningsScreen() {
               onClick={() => {
                 setTab(k);
                 setEarnDay(null);
-                const items = earnsForTab(k);
+                const items = earnsForTab(k, liveEarnings, now);
                 if (items.length > 0) setSel(items[0].s);
               }}
             >
@@ -1027,12 +1055,12 @@ export function EarningsScreen() {
             <div className="metric-grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 12 }}>
               <div className="m">
                 <div className="k">EPS estimate</div>
-                <div className="v">${selEarning.epsEstimate.toFixed(2)}</div>
+                <div className="v">{selEarning.epsEstimate != null ? `$${selEarning.epsEstimate.toFixed(2)}` : "—"}</div>
               </div>
               <div className="m">
                 <div className="k">EPS actual</div>
                 {selEarning.epsActual != null
-                  ? <div className={`v ${selEarning.epsActual >= selEarning.epsEstimate ? "up" : "down"}`}>${selEarning.epsActual.toFixed(2)}</div>
+                  ? <div className={`v ${selEarning.epsEstimate != null && selEarning.epsActual >= selEarning.epsEstimate ? "up" : "down"}`}>${selEarning.epsActual.toFixed(2)}</div>
                   : <div className="v" style={{ color: "var(--text-dim-solid)" }}>Pending</div>}
               </div>
               <div className="m">

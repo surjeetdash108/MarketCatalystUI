@@ -193,12 +193,12 @@ export function ProfileFields({
               style={{
                 display: "inline-block", padding: "7px 16px", borderRadius: "var(--r-sm)",
                 border: "1px solid var(--border-strong)", background: "var(--surface-2)",
-                color: "var(--text)", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                color: "var(--text)", fontSize: "0.7812rem", fontWeight: 600, cursor: "pointer",
               }}
             >
               {profile.profile_image ? "Change image" : "Upload image"}
             </label>
-            <div style={{ fontSize: 11, color: "var(--text-dim-solid)", marginTop: 4 }}>
+            <div style={{ fontSize: "0.6875rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
               Max 650 KB
             </div>
           </div>
@@ -226,7 +226,7 @@ export function ProfileFields({
               <label key={ac} style={{
                 display: "flex", alignItems: "center", gap: 7,
                 padding: "6px 14px", borderRadius: 99, cursor: "pointer",
-                fontSize: 13, fontWeight: 500,
+                fontSize: "0.8125rem", fontWeight: 500,
                 background: checked ? "var(--brand-dim)" : "var(--surface-2)",
                 border: `1px solid ${checked ? "var(--brand)" : "var(--border)"}`,
                 color: checked ? "var(--brand-2)" : "var(--text)",
@@ -238,7 +238,7 @@ export function ProfileFields({
                   onChange={() => toggleAssetClass(ac)}
                   style={{ display: "none" }}
                 />
-                {checked && <span style={{ fontSize: 11, fontWeight: 700 }}>✓</span>}
+                {checked && <span style={{ fontSize: "0.6875rem", fontWeight: 700 }}>✓</span>}
                 {ac}
               </label>
             );

@@ -33,7 +33,7 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
         }} />
         <div style={{
           fontFamily: "'Inter', sans-serif",
-          fontSize: 11, letterSpacing: "0.14em",
+          fontSize: "0.6875rem", letterSpacing: "0.14em",
           textTransform: "uppercase", fontWeight: 600,
           color: "#697486",
           animation: "iq-fade 1.6s ease-in-out infinite",

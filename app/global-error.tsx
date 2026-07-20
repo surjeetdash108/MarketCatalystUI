@@ -38,7 +38,7 @@ export default function GlobalError({
         <div style={{ textAlign: "center", maxWidth: 440 }}>
           <div
             style={{
-              fontSize: 13,
+              fontSize: "0.8125rem",
               fontWeight: 700,
               letterSpacing: ".1em",
               textTransform: "uppercase",

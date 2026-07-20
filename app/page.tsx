@@ -141,7 +141,7 @@ function DashThumb() {
                 <div key={e.ticker} className="minirow">
                   <span className="tkr">{e.ticker}<small>{e.name}</small></span>
                   <span className="mid"><span className={`pill ${e.session.includes("pre") ? "bmo" : "amc"}`}>{e.session}</span></span>
-                  <span className={`r ${e.epsActual !== null ? cls(e.epsActual - e.epsEstimate) : ""}`}>{e.epsActual !== null ? sign(e.epsActual - e.epsEstimate) : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}</span>
+                  <span className={`r ${e.epsActual !== null && e.epsEstimate !== null ? cls(e.epsActual - e.epsEstimate) : ""}`}>{e.epsActual !== null && e.epsEstimate !== null ? sign(e.epsActual - e.epsEstimate) : <span style={{ color: "var(--text-dim-solid)" }}>pending</span>}</span>
                 </div>
               ))}
             </div>
@@ -466,7 +466,7 @@ function StockDetailContent() {
   return (
     <>
       <div className="sd-head">
-        <div className="sd-logo" style={{ width: 46, height: 46, borderRadius: 12, background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f-display)", fontWeight: 800, fontSize: 18 }}>N</div>
+        <div className="sd-logo" style={{ width: 46, height: 46, borderRadius: 12, background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--f-display)", fontWeight: 800, fontSize: "1.125rem" }}>N</div>
         <div className="sd-name">
           <h1 style={{ fontFamily: "var(--f-mono)", fontSize: "1.5rem", fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.01em", margin: 0 }}>NVDA</h1>
           <div className="sub" style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>NVIDIA Corp &middot; NASDAQ &middot; Semiconductors</div>

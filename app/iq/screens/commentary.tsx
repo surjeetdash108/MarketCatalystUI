@@ -428,11 +428,11 @@ export function CommentaryScreen() {
 
         {/* Ticker search bar */}
         <div className="fbar" style={{ marginBottom: 12, position: "relative" }}>
-          <div style={{ position: "relative", minWidth: 260 }}>
+          <div style={{ position: "relative", minWidth: "8.125rem" }}>
             <input
               ref={searchRef}
               className="mv-sel"
-              placeholder="Search a stock for its news…"
+              placeholder="Search stock…"
               value={search}
               onChange={e => { setSearch(e.target.value); setSuggOpen(true); }}
               onFocus={() => setSuggOpen(true)}

@@ -75,7 +75,7 @@ export function ProfileEditForm() {
   if (profileStatus === "loading" || (profileStatus === "idle" && !savedProfile)) {
     return (
       <div className="card">
-        <div className="card-b" style={{ color: "var(--text-dim-solid)", fontSize: 13 }}>
+        <div className="card-b" style={{ color: "var(--text-dim-solid)", fontSize: "0.8125rem" }}>
           Loading profile details…
         </div>
       </div>
@@ -96,10 +96,10 @@ export function ProfileEditForm() {
             }}
           />
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
+            <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
               {profile.name || "Investor profile"}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-dim-solid)", marginTop: 2 }}>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
               {profile.investmentExperience || "Investment profile"}
             </div>
           </div>
@@ -117,7 +117,7 @@ export function ProfileEditForm() {
               <div style={{
                 marginTop: 14, padding: "9px 13px", borderRadius: "var(--r-sm)",
                 background: "var(--down-dim)", border: "1px solid var(--down)",
-                fontSize: 13, color: "var(--down)",
+                fontSize: "0.8125rem", color: "var(--down)",
               }}>
                 {error}
               </div>
@@ -126,7 +126,7 @@ export function ProfileEditForm() {
               <div style={{
                 marginTop: 14, padding: "9px 13px", borderRadius: "var(--r-sm)",
                 background: "var(--up-dim)", border: "1px solid var(--up)",
-                fontSize: 13, color: "var(--up)",
+                fontSize: "0.8125rem", color: "var(--up)",
               }}>
                 {success}
               </div>

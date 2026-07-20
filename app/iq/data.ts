@@ -6,10 +6,12 @@ export interface PulseItem { label: string; value: number; change: number; open:
 export interface WMNItem { headline: string; body: string; tag: 'macro' | 'earn' | 'sector'; }
 export interface Earning {
   ticker: string; name: string; session: string; marketCap: string; sector: string;
-  epsEstimate: number; epsActual: number | null;
-  revenueEstimate: number; revenueActual: number | null;
+  // nullable: the live earnings feed supplies estimate/actual only, and not
+  // for every row — a 0 default would read as a real forecast of zero.
+  epsEstimate: number | null; epsActual: number | null;
+  revenueEstimate: number | null; revenueActual: number | null;
   guidanceStatus: string | null; priceReaction: number | null;
-  tags: string[]; owned: boolean; impliedMove: number;
+  tags: string[]; owned: boolean; impliedMove: number | null;
 }
 export interface Mover {
   ticker: string; name: string; price: number; pctChange: number; rvolRatio: number; relativeStrength: number;

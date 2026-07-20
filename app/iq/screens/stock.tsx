@@ -212,7 +212,7 @@ function EarnEpsChart({ hist }: { hist: EarnQ[] }) {
             <rect x={(cx + 2).toFixed(1)} y={(PADT + ih - ah).toFixed(1)} width={bw.toFixed(1)} height={ah.toFixed(1)} rx="2" style={{ fill: x.surp >= 0 ? "var(--up)" : "var(--down)" }} />
             <circle cx={cx.toFixed(1)} cy={my.toFixed(1)} r="2.6" style={{ fill: "var(--brand-2)" }} />
             {(i % 2 === 0 || i === n - 1) && (
-              <text x={cx.toFixed(1)} y={H - 10} textAnchor="middle" style={{ fill: "var(--text-dim-solid)", fontSize: "9px" }}>
+              <text x={cx.toFixed(1)} y={H - 10} textAnchor="middle" style={{ fill: "var(--text-dim-solid)", fontSize: "0.5625rem" }}>
                 {x.q.replace(" ", "'")}
               </text>
             )}
@@ -253,7 +253,7 @@ function EarnIncChart({ inc }: { inc: IncRow[] }) {
               );
             })}
             <text x={(gx + gw / 2).toFixed(1)} y={H - 8} textAnchor="middle"
-              style={{ fill: "var(--text-dim-solid)", fontSize: "9px" }}>
+              style={{ fill: "var(--text-dim-solid)", fontSize: "0.5625rem" }}>
               {x.c}
             </text>
           </g>
@@ -683,10 +683,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               value={search}
               onChange={e => setSearch(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && search) selectSym(search.toUpperCase()); }}
-              placeholder="Search symbol…"
+              placeholder="Search symbol or company…"
               style={{
                 background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)",
-                padding: "5px 10px", fontSize: 12.5, color: "var(--text-hi)", outline: "none", width: 140,
+                padding: "5px 10px", fontSize: "0.7812rem", color: "var(--text-hi)", outline: "none", width: "13.125rem",
                 fontFamily: "var(--f-mono)",
               }}
             />
@@ -701,7 +701,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                     onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "")}>
                     <div onMouseDown={() => selectSym(s)}
-                      style={{ flex: 1, cursor: "pointer", fontSize: 12.5, color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>
+                      style={{ flex: 1, cursor: "pointer", fontSize: "0.7812rem", color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>
                       {s}
                     </div>
                     <button
@@ -1633,7 +1633,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             const avgMv = (hist10.reduce((a, h) => a + Math.abs(h.mv), 0) / hist10.length).toFixed(1);
             const erEnt = earningsData.find(e => e.ticker === sym);
             const aiRead = erEnt
-              ? `${sym} ${erEnt.epsActual != null ? (erEnt.epsActual >= erEnt.epsEstimate ? "beat" : "missed") + " EPS estimates" : "reports " + erEnt.session}. Guidance ${erEnt.guidanceStatus === "Raised" ? "was raised — bullish" : erEnt.guidanceStatus === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${erEnt.priceReaction != null ? "Shares reacted " + (erEnt.priceReaction >= 0 ? "+" : "") + erEnt.priceReaction + "% on the print." : `Options imply a ±${erEnt.impliedMove}% move.`}`
+              ? `${sym} ${erEnt.epsActual != null ? (erEnt.epsEstimate != null && erEnt.epsActual >= erEnt.epsEstimate ? "beat" : "missed") + " EPS estimates" : "reports " + erEnt.session}. Guidance ${erEnt.guidanceStatus === "Raised" ? "was raised — bullish" : erEnt.guidanceStatus === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${erEnt.priceReaction != null ? "Shares reacted " + (erEnt.priceReaction >= 0 ? "+" : "") + erEnt.priceReaction + "% on the print." : `Options imply a ±${erEnt.impliedMove}% move.`}`
               : `${data.name} reports around ${erDate !== "—" ? erDate : "next quarter"}.`;
             return (
               <div className="side-drawer" style={{ zIndex: 52 }}>
@@ -1781,11 +1781,11 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                               <rect x={bx} y={by} width={bw} height={bh} rx={2}
                                 style={{ fill: isLast ? "var(--brand-2)" : "var(--surface-3)" }} />
                               <text x={bx + bw / 2} y={by - 3} textAnchor="middle"
-                                style={{ fill: isLast ? "var(--brand-2)" : "var(--text-dim-solid)", fontSize: "7px" }}>
+                                style={{ fill: isLast ? "var(--brand-2)" : "var(--text-dim-solid)", fontSize: "0.4375rem" }}>
                                 ${v.toFixed(2)}
                               </text>
                               <text x={bx + bw / 2} y={H - 5} textAnchor="middle"
-                                style={{ fill: "var(--text-dim-solid)", fontSize: "8px" }}>
+                                style={{ fill: "var(--text-dim-solid)", fontSize: "0.5rem" }}>
                                 {QLABELS[i]}
                               </text>
                             </g>
