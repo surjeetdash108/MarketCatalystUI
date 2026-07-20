@@ -821,6 +821,11 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [expandedChart, setExpandedChart] = useState<{ title: string; node: ReactNode } | null>(null);
+  // Collapsed-rail tooltip. A CSS ::after cannot be used here: .rail sets
+  // overflow-x:hidden (and overflow-y:auto forces the other axis to compute as
+  // auto), so anything drawn to the right of an item is clipped. A fixed-position
+  // element positioned from the hovered item's rect escapes that entirely.
+  const [navTip, setNavTip] = useState<{ label: string; top: number } | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("iq-nav-collapsed") === "1";
@@ -988,21 +993,24 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   </svg>
                 </div>
                 <div className="wordmark">MarketCatalyst<span>Market Intelligence</span></div>
+                <button
+                  className="nav-collapse-btn"
+                  onClick={() => setNavCollapsed(c => { const next = !c; localStorage.setItem("iq-nav-collapsed", next ? "1" : "0"); return next; })}
+                  aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+                  title={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+                >
+                  {/* Panel-collapse glyph: a framed rail with a chevron showing
+                      which way the sidebar will move. */}
+                  <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M9 3v18" />
+                    {navCollapsed ? <path d="m14 9 3 3-3 3" /> : <path d="m16 15-3-3 3-3" />}
+                  </svg>
+                </button>
               </div>
               <div className="nav-clock">
                 {navTime.day} · <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{navTime.time} ET</span>
               </div>
-              <button
-                className="nav-collapse-btn"
-                onClick={() => setNavCollapsed(c => { const next = !c; localStorage.setItem("iq-nav-collapsed", next ? "1" : "0"); return next; })}
-                aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
-              >
-                <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  {navCollapsed
-                    ? <path d="M9 18l6-6-6-6" />
-                    : <path d="M15 18l-6-6 6-6" />}
-                </svg>
-              </button>
             </div>
 
             {/* Topbar */}
@@ -1177,7 +1185,17 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     const href = slugToHref(item.slug);
                     const isActive = pathname === href;
                     return (
-                      <Link key={item.slug} href={href} className={`navitem${isActive ? " active" : ""}`} title={item.label}>
+                      <Link
+                          key={item.slug}
+                          href={href}
+                          className={`navitem${isActive ? " active" : ""}`}
+                          onMouseEnter={e => {
+                            if (!navCollapsed) return;
+                            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setNavTip({ label: item.label, top: r.top + r.height / 2 });
+                          }}
+                          onMouseLeave={() => setNavTip(null)}
+                        >
                         <div className="nicon"><NavIcon slug={item.slug} /></div>
                         <span className="nav-label">{item.label}</span>
                         {item.badge && <span className="nav-tag">{item.badge}</span>}
@@ -1188,6 +1206,11 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               ))}
 
             </nav>
+
+            {/* Rendered outside .rail so overflow-x:hidden cannot clip it. */}
+            {navCollapsed && navTip && (
+              <div className="nav-tip" style={{ top: navTip.top }}>{navTip.label}</div>
+            )}
 
             {/* Main content */}
             <main className="main">

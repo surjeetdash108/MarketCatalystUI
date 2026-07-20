@@ -68,7 +68,7 @@ interface PopState {
 
 const BLOCK_LABEL: Record<PopBlock, string> = {
   earnings:  "Earnings",
-  movers:    "Market Movers",
+  movers:    "Movers",
   analyst:   "Analyst action",
   watchlist: "Watchlist",
   portfolio: "Portfolio",
@@ -540,7 +540,7 @@ export function DashboardScreen() {
         <div className="col-4">
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
-              <h3>Market Movers</h3>
+              <h3>Movers</h3>
               <button className="link" onClick={() => setDrawer("movers")}>View all →</button>
             </div>
             <div style={{ display: "flex", gap: 4, padding: "6px 13px 0" }}>
@@ -912,7 +912,7 @@ export function DashboardScreen() {
               <div style={{ flex: 1 }}>
                 <div className="drawer-title">
                   {drawer === "earnings"    && "Earnings Calendar"}
-                  {drawer === "movers"      && "Market Movers"}
+                  {drawer === "movers"      && "Movers"}
                   {drawer === "analyst"     && "Analyst Actions"}
                   {drawer === "earn-movers" && "Biggest Earnings Movers"}
                   {drawer === "internals"   && "Market Internals"}

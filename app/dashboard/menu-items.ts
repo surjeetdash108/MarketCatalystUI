@@ -2,7 +2,7 @@ export const menuItems = [
   // ---- Intelligence group ----
   { label: 'Dashboard', slug: 'dashboard', group: 'Intelligence', icon: '⬛', badge: null },
   { label: 'Earnings Hub', slug: 'earnings', group: 'Intelligence', icon: '📋', badge: null },
-  { label: 'Market Movers', slug: 'movers', group: 'Intelligence', icon: '📈', badge: null },
+  { label: 'Movers', slug: 'movers', group: 'Intelligence', icon: '📈', badge: null },
   { label: 'Market Heatmap', slug: 'heatmap', group: 'Intelligence', icon: '🟩', badge: null },
   { label: 'Analyst Actions', slug: 'analyst', group: 'Intelligence', icon: '🔔', badge: null },
   { label: 'Screener', slug: 'screener', group: 'Intelligence', icon: '🔍', badge: null },

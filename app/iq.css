@@ -147,21 +147,29 @@
 .app.nav-collapsed .nav-tag { display: none; }
 .app.nav-collapsed .brandcell { align-items: center; padding: 0 8px; }
 .app.nav-collapsed .brand-top { justify-content: center; width: 100%; }
+/* Collapsed the rail is ~54px of usable width — not enough for the logo and the
+   toggle side by side. The toggle wins: it is the only way back out, whereas the
+   logo is decorative and returns on expand. `margin-left: 0` undoes the
+   right-push so it centres. */
+.app.nav-collapsed .logo { display: none; }
+.app.nav-collapsed .nav-collapse-btn { margin-left: 0; }
 .app.nav-collapsed .rail { padding: 10px 6px 8px; align-items: center; }
 .app.nav-collapsed .navitem { justify-content: center; padding: 7px; gap: 0; }
 
 /* collapse toggle button — floats on the right border of brandcell, doesn't affect flex flow */
+/* Sits inline at the right end of the brand row (not floating off the rail's
+   edge), so it reads as part of the sidebar header. `margin-left: auto` is what
+   pushes it right — .brand-top is a flex row. */
 .nav-collapse-btn {
-  position: absolute; right: -13px; top: 50%; transform: translateY(-50%);
-  z-index: 20;
+  margin-left: auto;
+  flex: none;
   display: flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; border-radius: 50%;
-  background: var(--surface-1); border: 1px solid var(--border);
+  width: 26px; height: 26px; border-radius: 6px;
+  background: transparent; border: none;
   color: var(--text-dim-solid); cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,.25);
-  transition: background .13s, color .13s, border-color .13s;
+  transition: background .13s, color .13s;
 }
-.nav-collapse-btn:hover { background: var(--surface-3); color: var(--text-hi); border-color: var(--brand); }
+.nav-collapse-btn:hover { background: var(--surface-3); color: var(--text-hi); }
 
 /* brand cell */
 .brandcell {
@@ -1515,7 +1523,8 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .ec-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-3); border: 1px solid transparent; border-radius: 8px; padding: 3px 9px 3px 3px; margin: 0 5px 5px 0; font-size: .74rem; font-weight: 600; color: var(--text-hi); cursor: pointer; font-family: inherit; }
 .ec-chip:hover { border-color: var(--brand-2); }
 .ec-chip.on { border-color: transparent; background: rgba(124,108,245,.16); }
-.ec-chip .ec-logo { width: 19px; height: 19px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: .62rem; font-weight: 800; flex-shrink: 0; position: relative; overflow: hidden; }
+.ec-chip /* 1.5x the original 19px, matching TICKER_LOGO_SCALE in utils.tsx. */
+.ec-logo { width: 28.5px; height: 28.5px; border-radius: 7.5px; display: inline-flex; align-items: center; justify-content: center; font-size: .93rem; font-weight: 800; flex-shrink: 0; position: relative; overflow: hidden; }
 .ec-chip .ec-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; border-radius: inherit; }
 .ec-none { font-size: .72rem; color: var(--text-dim-solid); }
 .call-row { display: flex; align-items: center; gap: 12px; background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; text-align: left; font-family: inherit; width: 100%; transition: border-color .13s; }
@@ -2216,3 +2225,41 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .notif-detail p { margin: 0 0 8px; font-size: .78rem; line-height: 1.55; color: var(--text-dim-solid); }
 .notif-link { font-size: .74rem; font-weight: 600; color: var(--brand-2, #7C6CF5); text-decoration: none; }
 .notif-link:hover { text-decoration: underline; }
+
+/* ── Collapsed-nav tooltip ───────────────────────────────────────────────────
+   Only shown when the rail is collapsed to icons. Fixed-positioned and rendered
+   outside .rail because that element sets overflow-x:hidden, which would clip a
+   pseudo-element drawn beside the icon. `left` matches the collapsed rail width
+   (3.875rem) plus a small gap. */
+.nav-tip {
+  position: fixed;
+  left: calc(3.875rem + 6px);
+  transform: translateY(-50%);
+  z-index: 300;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--surface-3, #1d2532);
+  color: var(--text-hi, #EAEFF6);
+  border: 1px solid var(--border);
+  font-size: .82rem;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,.28);
+  animation: nav-tip-in .12s ease-out;
+}
+/* Small arrow pointing back at the icon. */
+.nav-tip::before {
+  content: '';
+  position: absolute;
+  left: -4px; top: 50%;
+  width: 7px; height: 7px;
+  transform: translateY(-50%) rotate(45deg);
+  background: inherit;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+@keyframes nav-tip-in {
+  from { opacity: 0; transform: translateY(-50%) translateX(-3px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}

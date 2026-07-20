@@ -60,14 +60,24 @@ export function Spark({ seed, up, w = 80, h = 26 }: { seed: number; up: boolean;
 
 // ---- Stock logo — real logo via Parqet CDN, letter avatar fallback ----
 const _LP = ['#6366f1','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f59e0b','#ef4444','#22c55e','#0ea5e9','#f97316'];
+/**
+ * Global multiplier for every ticker logo in the app.
+ *
+ * Applied INSIDE the component rather than by editing ~47 call sites, so the
+ * 10 different sizes passed around the app all scale together and stay in
+ * proportion. Change this one number to resize every ticker icon.
+ */
+export const TICKER_LOGO_SCALE = 1.5;
+
 export function StockLogo({ sym, size = 22 }: { sym: string; size?: number }) {
   const idx = sym.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % _LP.length;
+  const px = Math.round(size * TICKER_LOGO_SCALE);
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: size, height: size, borderRadius: Math.round(size * 0.3),
+      width: px, height: px, borderRadius: Math.round(px * 0.3),
       background: _LP[idx], color: '#fff',
-      fontSize: Math.round(size * 0.44), fontWeight: 800,
+      fontSize: Math.round(px * 0.44), fontWeight: 800,
       fontFamily: 'var(--f-display)', flexShrink: 0, lineHeight: 1,
       position: 'relative', overflow: 'hidden',
     }}>
