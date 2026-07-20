@@ -110,7 +110,7 @@ Frontend (Current)
 
 -   Recharts / D3 for charts and heatmaps (Phase 2 — static data currently)
 
--   **Firebase Hosting** for static site deployment (project: `fin-app26`)
+-   **Firebase Hosting** for static site deployment (project: `market-catalyst-502415`)
 
 -   **Firebase Authentication** — email/password + Google OAuth
 

@@ -27,6 +27,12 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+backend/.env
+
+# firebase admin credentials — NEVER commit (contains a private key)
+service-account.json
+**/service-account.json
+*-firebase-adminsdk-*.json
 
 # vercel
 .vercel

@@ -12,16 +12,7 @@ import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDVjZmJ11qzbPIvruwOHiTiMWvjTcUmhuk",
-  // Google sign-in redirects to https://<authDomain>/__/auth/handler. The custom
-  // domain marketcatalyst.ai has no DNS record, so that redirect died with
-  // DNS_PROBE_FINISHED_NXDOMAIN and login could never complete. The
-  // firebaseapp.com domain is provisioned by Firebase automatically and always
-  // resolves. Override via NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN once the custom
-  // domain's DNS is configured AND it is added under
-  // Firebase Console > Authentication > Settings > Authorized domains.
-  authDomain:
-    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ??
-    "market-catalyst-502415.firebaseapp.com",
+  authDomain: "market-catalyst-502415.firebaseapp.com",
   projectId: "market-catalyst-502415",
   storageBucket: "market-catalyst-502415.firebasestorage.app",
   messagingSenderId: "741318166823",

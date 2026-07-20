@@ -37,11 +37,11 @@ v1.5 | June 2026
 
 | ID | Task | Type | Est. | Pri | Assignee | Sprint | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
-| T-002a | Enable Firestore (Native mode) in Firebase project fin-app26, us-east1 region | Infra | 0.5d | P0 | Infra Eng | S-01 | Not Started | Native mode required — not Datastore mode |
+| T-002a | Enable Firestore (Native mode) in Firebase project market-catalyst-502415, us-east1 region | Infra | 0.5d | P0 | Infra Eng | S-01 | Not Started | Native mode required — not Datastore mode |
 | T-002b | Create Firebase service account key; store JSON in AWS Secrets Manager as `firebase-service-account` | Infra | 0.5d | P0 | Infra Eng | S-01 | Not Started | SA needs Firestore read/write + Auth admin roles |
 | T-002c | Inject secret into ECS env var; verify Admin SDK `admin.firestore().collection('test').get()` health check from api-service container | Infra | 0.5d | P0 | Infra Eng | S-01 | Not Started | Already done for frontend; this is server-side |
 | T-079 | Migrate state management from Zustand+React Query to Redux Toolkit: auth-slice, profile-slice, FirebaseListener, ReduxProvider, typed hooks | Frontend | 2d | P0 | FE Eng 1 | S-02 | **Done** | store.ts + slices + firebase-listener.tsx + hooks.ts. `authStateReady()` before subscribing. |
-| T-080 | Replace Vite + React SPA with Next.js App Router (static export). Firebase Hosting. | Infra | 2d | P0 | Infra Eng | S-01 | **Done** | fin-app26. `firebase deploy --only hosting`. |
+| T-080 | Replace Vite + React SPA with Next.js App Router (static export). Firebase Hosting. | Infra | 2d | P0 | Infra Eng | S-01 | **Done** | market-catalyst-502415. `firebase deploy --only hosting`. |
 | T-093 | Add Firestore settings/{uid} security rule; deploy firestore.rules | Infra | 0.5d | P0 | Infra Eng | S-03 | **Done** | `match /settings/{uid} { allow read, write: if isOwner(uid); }` |
 
 #### Redis
