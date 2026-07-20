@@ -5,7 +5,7 @@ import { useIQActions, ExpandBtn } from "../shell";
 import { earnings, stockInfo, type Earning } from "../data";
 import { fmt, cls, sign, earnHistory, EarnQ, StockLogo } from "../utils";
 import { useCollection } from "../hooks/useCollection";
-import { rangeFor, inRange, type RangeTabKey } from "../calendar-range";
+import { EarningsCalendar } from "./earnings-calendar";
 
 // Live source (FMP earnings calendar) has ticker/date/epsEstimate/epsActual —
 // no session (BMO/AMC), guidance, price reaction, or implied move, which the
@@ -21,18 +21,6 @@ interface LiveEarningsDoc {
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface IncRow  { c: string; rev: number; cogs: number; gp: number; opex: number; oi: number; ni: number; eps: number; }
-
-type TabKey = "yest" | "today" | "tom" | "week" | "next" | "prev" | "month" | "lmonth";
-const RANGES: [TabKey, string][] = [
-  ["lmonth", "Last Month"],
-  ["prev",   "Last Week"],
-  ["yest",   "Yesterday"],
-  ["today",  "Today"],
-  ["tom",    "Tomorrow"],
-  ["week",   "This Week"],
-  ["next",   "Next Week"],
-  ["month",  "Month"],
-];
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOWS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -109,23 +97,6 @@ function toEarnCalItem(d: LiveEarningsDoc): EarnCalItem {
     react: null,
   };
 }
-
-/**
- * Earnings rows for a tab. Live earnings_events is authoritative; the hardcoded
- * EARN_CAL renders only when no live data exists at all. Replaces filters that
- * were pinned to `month === 6 && day === 25`, freezing every tab to June 2026.
- */
-function earnsForTab(t: TabKey, live: LiveEarningsDoc[], now: Date): EarnCalItem[] {
-  if (live.length > 0) {
-    const r = rangeFor(t as RangeTabKey, now);
-    return live
-      .filter(d => d.date && inRange(d.date, r))
-      .sort((a, b) => a.date.localeCompare(b.date) || a.ticker.localeCompare(b.ticker))
-      .map(toEarnCalItem);
-  }
-  return [];
-}
-
 
 function calToEarning(cal: EarnCalItem): Earning {
   return {
@@ -740,206 +711,14 @@ const COMPANY_BIO: Record<string, string> = {
 export function EarningsScreen() {
   const { openStockFull } = useIQActions();
   const { data: liveEarnings } = useCollection<LiveEarningsDoc>("earnings_events");
-  // One clock for the whole screen so tabs cannot disagree mid-render.
-  const now = new Date();
-  const [tab, setTab] = useState<TabKey>("week");
-  const [sel, setSel]           = useState<string>(() => earnsForTab("week", liveEarnings, now)[0]?.s ?? "GOOG");
-  const [monthOff, setMonthOff] = useState(0);
-  const [earnDay, setEarnDay]   = useState<number | null>(null);
+  // The calendar owns the date; this screen only tracks which company the user
+  // picked, since the detail card below is driven by it.
+  const [sel, setSel] = useState<string>("AAPL");
   const [selectedCall,   setSelectedCall]   = useState<CallEntry | null>(null);
   const [playingCallSym, setPlayingCallSym] = useState<string | null>(null);
   const [cardPlaying,     setCardPlaying]     = useState<string | null>(null);
   const [aiModalSym,      setAiModalSym]      = useState<string | null>(null);
 
-  const isDay   = tab === "today" || tab === "tom" || tab === "yest";
-  const isWeek  = tab === "week"  || tab === "next" || tab === "prev";
-  const isLMon  = tab === "lmonth";
-
-  // ── Calendar rendering ────────────────────────────────────────────────────
-
-  let calNode: React.ReactNode = null;
-
-  if (isDay) {
-    const items = earnsForTab(tab, liveEarnings, now);
-    const bmo = items.filter(e => e.sess === "BMO");
-    const amc = items.filter(e => e.sess === "AMC");
-    const dayLabels: Record<TabKey, string> = {
-      today: "Today · Thu Jun 25", yest: "Yesterday · Wed Jun 24", tom: "Tomorrow · Fri Jun 26",
-      week: "", next: "", prev: "", month: "", lmonth: "",
-    };
-    calNode = (
-      <div className="card">
-        <div className="card-h">
-          <h3>{dayLabels[tab]} · {items.length} companies reporting</h3>
-          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-            tap a logo for history
-          </span>
-        </div>
-        <div className="card-b" style={{ paddingTop: 10 }}>
-          <div className="ec-lbl">Before open</div>
-          <div style={{ marginBottom: 12 }}>
-            {bmo.length
-              ? bmo.map(e => <EcChip key={e.s} sym={e.s} selected={sel === e.s} onSelect={setSel} />)
-              : <span className="ec-none">None</span>}
-          </div>
-          <div className="ec-lbl">After close</div>
-          <div>
-            {amc.length
-              ? amc.map(e => <EcChip key={e.s} sym={e.s} selected={sel === e.s} onSelect={setSel} />)
-              : <span className="ec-none">None</span>}
-          </div>
-        </div>
-      </div>
-    );
-  } else if (isLMon) {
-    const items = earnsForTab("lmonth", liveEarnings, now);
-    calNode = (
-      <div className="card">
-        <div className="card-h">
-          <h3>Last Month · May 2026 · earnings recap</h3>
-          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-            {items.length} companies · tap a logo for history
-          </span>
-        </div>
-        <div className="card-b" style={{ paddingTop: 10, display: "flex", flexWrap: "wrap", gap: 4 }}>
-          {items.map(e => (
-            <EcChip key={e.s} sym={e.s} selected={sel === e.s} onSelect={setSel} />
-          ))}
-        </div>
-      </div>
-    );
-  } else if (isWeek) {
-    const items = earnsForTab(tab, liveEarnings, now);
-    const days  = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-    const selDayIdx = items.find(e => e.s === sel)?.weekDay ?? -1;
-    const weekLabel: Record<TabKey, string> = {
-      week: "This Week · Jun 22–26", next: "Next Week · Jun 29–Jul 3",
-      prev: "Last Week · Jun 15–19", today: "", tom: "", yest: "", month: "", lmonth: "",
-    };
-    calNode = (
-      <div className="card">
-        <div className="card-h">
-          <h3>Earnings · {weekLabel[tab]}</h3>
-          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-            {items.length} companies · tap logo for history
-          </span>
-        </div>
-        <div className="card-b" style={{ paddingTop: 12 }}>
-          <div className="ec-grid">
-            {days.map((dn, di) => {
-              const bmo = items.filter(e => e.weekDay === di && e.sess === "BMO");
-              const amc = items.filter(e => e.weekDay === di && e.sess === "AMC");
-              const isToday = tab === "week" && di === 3; // Thursday Jun 25
-              const isSel   = di === selDayIdx;
-              return (
-                <div key={dn} className={`ec-day${isToday ? " is-today" : ""}${isSel && !isToday ? " is-sel" : ""}`}>
-                  <div className="ec-dh">{dn}{isToday ? " · Today" : ""}</div>
-                  <div className="ec-sess">
-                    <div className="ec-lbl">Before open</div>
-                    {bmo.length
-                      ? bmo.map(e => <EcChip key={e.s} sym={e.s} selected={sel === e.s} onSelect={setSel} />)
-                      : <span className="ec-none">—</span>}
-                  </div>
-                  <div className="ec-sess">
-                    <div className="ec-lbl">After close</div>
-                    {amc.length
-                      ? amc.map(e => <EcChip key={e.s} sym={e.s} selected={sel === e.s} onSelect={setSel} />)
-                      : <span className="ec-none">—</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  } else {
-    // Month view
-    const md = monthCalData(monthOff);
-    const dayList = earnDay ? (md.map[earnDay] ?? []) : [];
-    const todayMark = monthOff === 0 ? 25 : -1; // Jun 25 is today
-
-    calNode = (
-      <>
-        <div className="ecm-wrap">
-          <div className="ecm-monthbar">
-            <button className="ecm-nav" onClick={() => { setMonthOff(o => o - 1); setEarnDay(null); }}>←</button>
-            <div className="ecm-month">{MONTHS[md.M]} {md.Y} · earnings calendar</div>
-            <button className="ecm-nav" onClick={() => { setMonthOff(o => o + 1); setEarnDay(null); }}>→</button>
-          </div>
-          <div className="ecm-head">
-            {DOWS.map(d => <div key={d}>{d}</div>)}
-          </div>
-          <div className="ecm-grid">
-            {Array.from({ length: md.first }, (_, i) => (
-              <div key={`e${i}`} className="ecm-cell ecm-empty" />
-            ))}
-            {Array.from({ length: md.days }, (_, i) => {
-              const d   = i + 1;
-              const lst = md.map[d] ?? [];
-              const isT = d === todayMark;
-              const isSel = d === earnDay;
-              const hasSel = lst.length > 0;
-              return (
-                <div
-                  key={d}
-                  className={`ecm-cell${hasSel ? " has" : ""}${isT ? " is-today" : ""}${isSel ? " sel" : ""}`}
-                  onClick={hasSel ? () => { setEarnDay(d); if (lst[0]) setSel(lst[0]); } : undefined}
-                >
-                  <div className="ecm-d">
-                    {d}
-                    {isT && <span className="ecm-t">Today</span>}
-                  </div>
-                  {lst.length > 0 && (
-                    <>
-                      <div className="ecm-logos">
-                        {lst.slice(0, 3).map(sym => (
-                          <span key={sym} className="ecm-logo" style={{ background: "#27314a", color: "#cdd6e6" }}>
-                            {sym[0]}
-                            <img
-                              src={`https://assets.parqet.com/logos/symbol/${sym}?format=png`}
-                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                              alt=""
-                            />
-                          </span>
-                        ))}
-                        {lst.length > 3 && <span className="ecm-more">+{lst.length - 3}</span>}
-                      </div>
-                      <div className="ecm-n">{lst.length} report{lst.length > 1 ? "s" : ""}</div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {earnDay && (
-          <div className="card" style={{ marginTop: 14 }}>
-            <div className="card-h">
-              <h3>{MONTHS[md.M]} {earnDay}, {md.Y} · {dayList.length} reporting</h3>
-              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
-                tap a logo for history
-              </span>
-            </div>
-            <div className="card-b" style={{ paddingTop: 10, display: "flex", flexWrap: "wrap" }}>
-              {dayList.length
-                ? dayList.map(sym => <EcChip key={sym} sym={sym} selected={sel === sym} onSelect={setSel} />)
-                : <span className="ec-none">No earnings scheduled for this date.</span>}
-            </div>
-          </div>
-        )}
-
-        {!earnDay && (
-          <div className="card" style={{ marginTop: 14 }}>
-            <div className="card-b" style={{ color: "var(--text-dim-solid)" }}>
-              Click a date with reports to see the companies.
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
 
   // ── Detail section ────────────────────────────────────────────────────────
 
@@ -971,29 +750,12 @@ export function EarningsScreen() {
 
   return (
     <>
-      {/* ── Page head ──────────────────────────────────────────────────── */}
-      <div className="page-head">
-        <div className="tabs">
-          {RANGES.map(([k, l]) => (
-            <button
-              key={k}
-              className={`tab${tab === k ? " active" : ""}`}
-              onClick={() => {
-                setTab(k);
-                setEarnDay(null);
-                const items = earnsForTab(k, liveEarnings, now);
-                if (items.length > 0) setSel(items[0].s);
-              }}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
-
-
-      {/* ── Calendar ───────────────────────────────────────────────────── */}
-      {calNode}
+      {/* ── Calendar ───────────────────────────────────────────────────────
+          Date-anchored Day/Week views. The eight fixed range tabs (Last Month …
+          Month) are gone: they could only reach eight preset windows, so any
+          other date was unreachable. Selecting a row drives the detail card
+          below, which is what the old logo chips did. */}
+      <EarningsCalendar selected={sel} onSelect={setSel} />
 
       {/* ── Selected company inline detail (below calendar, no drawer) ── */}
       {selEarning && (
