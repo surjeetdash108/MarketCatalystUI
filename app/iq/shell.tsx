@@ -955,6 +955,15 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const profileImage = profile?.profile_image || user?.photoURL || null;
   const tier = profile?.tier === "free" ? "Free" : "Premium";
 
+  // First-time Google sign-ins arrive with only name/email — flag the profile as
+  // incomplete (drives the "Pending" pill on My Profile) until every field is filled.
+  const profileIncomplete =
+    !profile ||
+    (["name", "mobileNumber", "age", "incomeRange", "investmentExperience",
+      "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue"] as const)
+      .some(f => String(profile[f] ?? "").trim() === "") ||
+    (profile.preferredAssetClasses?.length ?? 0) === 0;
+
   async function handleSignOut() {
     await signOut(firebaseAuth);
     window.location.href = "/";
@@ -1109,6 +1118,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     {/* Menu items */}
                     <button className="pd-item" onClick={() => { router.push("/profile/edit"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">👤</span> My Profile
+                      {profileIncomplete && <span className="pd-pending">Pending</span>}
                     </button>
                     <button className="pd-item" onClick={() => { router.push("/settings"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">⚙</span> Settings

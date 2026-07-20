@@ -13,6 +13,7 @@ import {
   checkAndRedirectIfLoggedIn,
   completeGoogleLogin,
   getAuthErrorMessage,
+  shouldUseGoogleRedirect,
   showError,
 } from "../auth-utils";
 
@@ -90,15 +91,31 @@ export function LoginForm() {
 
   async function handleGoogle() {
     setError(""); setIsSubmitting(true);
+
+    // On mobile browsers and standalone PWAs, popups are unreliable — Safari
+    // dismisses the cross-origin auth popup (yielding auth/popup-closed-by-user)
+    // and, added to the home screen, popups don't open at all. Use the redirect
+    // flow there; it's completed by getRedirectResult() in the mount effect above.
+    if (shouldUseGoogleRedirect()) {
+      try {
+        await signInWithRedirect(firebaseAuth, googleAuthProvider);
+        // Page navigates away — leave isSubmitting set so the button stays disabled.
+      } catch (err) {
+        const msg = getAuthErrorMessage(err);
+        setError(msg); showError(msg);
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     try {
-      // signInWithPopup works on iOS Safari when called directly from a user gesture.
-      // signInWithRedirect is unreliable on iOS due to Safari ITP blocking cross-origin cookies.
+      // Desktop: signInWithPopup works when called directly from a user gesture.
       const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
       await completeGoogleLogin(result);
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
-        // Popup was blocked (rare in modern browsers) — fall back to redirect
+        // Popup was blocked (rare on desktop) — fall back to redirect.
         try {
           await signInWithRedirect(firebaseAuth, googleAuthProvider);
         } catch (redirectErr) {
@@ -106,6 +123,9 @@ export function LoginForm() {
           setError(msg); showError(msg);
           setIsSubmitting(false);
         }
+      } else if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        // User dismissed the popup — reset quietly, no error alert.
+        setIsSubmitting(false);
       } else {
         const msg = getAuthErrorMessage(err);
         setError(msg); showError(msg);

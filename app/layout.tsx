@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk, JetBrains_Mono, Inter, DM_Sans, Plus_Jakarta_Sans, IBM_Plex_Sans, Outfit, Manrope } from "next/font/google";
+import { Geist, Space_Grotesk, JetBrains_Mono, Inter, DM_Sans, Plus_Jakarta_Sans, IBM_Plex_Sans, Outfit, Manrope } from "next/font/google";
 import { FirebaseAnalytics } from "./firebase-analytics";
 import { SentryInit } from "./sentry-init";
 import { ReduxProvider } from "./store/redux-provider";
@@ -9,11 +9,6 @@ import "./landing.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
@@ -59,8 +54,24 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://marketcatalyst.ai"),
   title: "MarketCatalyst — Market Intelligence Terminal",
   description: "From ticker to thesis in under 60 seconds. Earnings, movers, analyst actions, insider flows and your portfolio — all in one terminal.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: "https://marketcatalyst.ai",
+    siteName: "MarketCatalyst",
+    title: "MarketCatalyst — Market Intelligence Terminal",
+    description: "From ticker to thesis in under 60 seconds. Earnings, movers, analyst actions, insider flows and your portfolio — all in one terminal.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MarketCatalyst — Market Intelligence Terminal",
+    description: "From ticker to thesis in under 60 seconds. Earnings, movers, analyst actions, insider flows and your portfolio — all in one terminal.",
+  },
 };
 
 export default function RootLayout({
@@ -71,7 +82,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${inter.variable} ${dmSans.variable} ${plusJakartaSans.variable} ${ibmPlexSans.variable} ${outfit.variable} ${manrope.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${inter.variable} ${dmSans.variable} ${plusJakartaSans.variable} ${ibmPlexSans.variable} ${outfit.variable} ${manrope.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <FirebaseAnalytics />

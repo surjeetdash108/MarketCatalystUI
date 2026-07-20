@@ -19,6 +19,7 @@ import {
 import {
   completeGoogleLogin,
   getAuthErrorMessage,
+  shouldUseGoogleRedirect,
   showError,
 } from "../auth-utils";
 
@@ -95,6 +96,21 @@ export function SignupForm() {
 
   async function handleGoogle() {
     setError(""); setIsSubmitting(true);
+
+    // Mobile browsers / standalone PWAs: popups are dismissed by Safari ITP
+    // (auth/popup-closed-by-user) or blocked entirely — use the redirect flow,
+    // completed by getRedirectResult() in the mount effect above.
+    if (shouldUseGoogleRedirect()) {
+      try {
+        await signInWithRedirect(firebaseAuth, googleAuthProvider);
+      } catch (err) {
+        const msg = getAuthErrorMessage(err);
+        setError(msg); showError(msg);
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     try {
       const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
       await completeGoogleLogin(result);
@@ -108,6 +124,8 @@ export function SignupForm() {
           setError(msg); showError(msg);
           setIsSubmitting(false);
         }
+      } else if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        setIsSubmitting(false);
       } else {
         const msg = getAuthErrorMessage(err);
         setError(msg); showError(msg);

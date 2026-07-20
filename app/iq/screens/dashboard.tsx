@@ -327,14 +327,20 @@ export function DashboardScreen() {
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
   const consensusByTicker = new Map(consensusLive.map(c => [c.ticker, c]));
 
+  // key MUST come from the Firestore doc id, not ticker+dir: a single ticker can
+  // have dozens of insider filings in the same direction (CRWD has 42 disposals),
+  // so ticker+dir collides constantly on real data. It only looked unique against
+  // the 5-row mock.
   const liveInsiderMini = liveInsiderTx.slice(0, 5).map(x => ({
+    key: x.id,
     s: x.ticker,
     role: x.officerTitle ?? x.ownerName ?? "Filer",
     dir: (x.acquiredOrDisposed === "A" ? "buy" : "sell") as "buy" | "sell",
     val: x.pricePerShare ? (x.shares * x.pricePerShare / 1e6).toFixed(2) + "M" : "0",
     live: true,
   }));
-  const INSIDER_MINI = liveInsiderMini.length > 0 ? [...liveInsiderMini, ...INSIDER_MINI_MOCK] : INSIDER_MINI_MOCK;
+  const insiderMock = INSIDER_MINI_MOCK.map(m => ({ ...m, key: `mock-${m.s}-${m.dir}` }));
+  const INSIDER_MINI = liveInsiderMini.length > 0 ? [...liveInsiderMini, ...insiderMock] : insiderMock;
 
   // Real watchlist/portfolio (signed-in user) — takes over from the demo
   // mock arrays the moment either exists, exactly matching the pattern
@@ -783,7 +789,7 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
               {INSIDER_MINI.map(x => (
-                <div key={x.s + x.dir} className="minirow" style={{ cursor: "pointer" }}
+                <div key={x.key} className="minirow" style={{ cursor: "pointer" }}
                   onClick={() => openStock(x.s)}
                   {...mr(x.s, "insider")}
                 >
@@ -1065,7 +1071,7 @@ export function DashboardScreen() {
 
               {/* Insider */}
               {drawer === "insider" && INSIDER_MINI.map(x => (
-                <div key={x.s + x.dir} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
+                <div key={x.key} className="minirow" style={{ cursor: "pointer", padding: "7px 0" }}
                   onClick={() => { openStock(x.s); setDrawer(null); }}>
                   <StockLogo sym={x.s} size={22} />
                   <span className="tkr">{x.s}</span>

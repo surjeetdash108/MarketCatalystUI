@@ -6,6 +6,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { firebaseAuth, firebaseDb } from "../../firebase";
 import { useAppSelector } from "../../store/hooks";
+import type { StoredProfile } from "../../store/profile-slice";
 import { useIQActions, type FontKey } from "../shell";
 
 const FONTS: { key: FontKey; label: string; desc: string; stack: string }[] = [
@@ -102,6 +103,33 @@ function ConfirmModal({
 }
 
 
+// Orange "Pending" chip shown when a profile field has no value yet — first-time
+// Google sign-ins arrive with only name/email, so the rest reads as Pending until
+// the user completes their profile.
+function Pending() {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center",
+      padding: "1px 9px", borderRadius: 99,
+      background: "var(--warn-dim)", color: "var(--warn)",
+      border: "1px solid var(--warn)",
+      fontSize: 11, fontWeight: 700, letterSpacing: ".02em",
+    }}>
+      Pending
+    </span>
+  );
+}
+
+function ProfileRow({ label, value }: Readonly<{ label: string; value?: string | null }>) {
+  const filled = value != null && value.trim() !== "";
+  return (
+    <div className="fin-row">
+      <span className="fin-lbl">{label}</span>
+      {filled ? <span className="fin-val">{value}</span> : <Pending />}
+    </div>
+  );
+}
+
 export function SettingsScreen() {
   const router = useRouter();
   const { user } = useAppSelector(state => state.auth);
@@ -169,6 +197,17 @@ export function SettingsScreen() {
   }
 
   const isPremium = profile?.tier !== "free";
+
+  // Fields the user must fill in themselves (name arrives from Google, email from
+  // auth). If any is blank the profile is flagged incomplete so the user knows to update it.
+  const requiredProfileFields: (keyof StoredProfile)[] = [
+    "name", "mobileNumber", "age", "incomeRange", "investmentExperience",
+    "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue",
+  ];
+  const profileIncomplete =
+    !profile ||
+    requiredProfileFields.some(f => String(profile[f] ?? "").trim() === "") ||
+    (profile.preferredAssetClasses?.length ?? 0) === 0;
 
   async function applyFont(key: FontKey) {
     if (key === font) return;
@@ -239,16 +278,50 @@ export function SettingsScreen() {
 
         {/* Account */}
         <div className="card col-12">
-          <div className="card-h"><h3>Account</h3></div>
+          <div className="card-h">
+            <h3>Account</h3>
+            {profileIncomplete && (
+              <span style={{
+                marginLeft: 10, padding: "2px 10px", borderRadius: 99,
+                fontSize: 11, fontWeight: 700,
+                background: "var(--warn-dim)", color: "var(--warn)",
+                border: "1px solid var(--warn)",
+              }}>
+                Incomplete
+              </span>
+            )}
+          </div>
           <div className="card-b">
-            <div className="fin-row">
-              <span className="fin-lbl">Name</span>
-              <span className="fin-val">{profile?.name || "—"}</span>
-            </div>
+            {profileIncomplete && (
+              <div style={{
+                marginBottom: 14, padding: "9px 12px",
+                background: "var(--warn-dim)", border: "1px solid var(--warn)",
+                borderRadius: "var(--r-sm)", fontSize: 12, color: "var(--warn)",
+                fontWeight: 600, lineHeight: 1.5,
+              }}>
+                Your profile is incomplete. Fields marked “Pending” still need details — tap Edit Profile to finish setting up.
+              </div>
+            )}
+            <ProfileRow label="Name" value={profile?.name} />
             <div className="fin-row">
               <span className="fin-lbl">Email</span>
               <span className="fin-val mono" style={{ fontSize: 12.5 }}>{user?.email || "—"}</span>
             </div>
+            <ProfileRow label="Mobile number" value={profile?.mobileNumber} />
+            <ProfileRow label="Age" value={profile?.age} />
+            <ProfileRow label="Income range" value={profile?.incomeRange} />
+            <ProfileRow label="Investment experience" value={profile?.investmentExperience} />
+            <ProfileRow label="Investment goals" value={profile?.investmentGoals} />
+            <ProfileRow label="Risk tolerance" value={profile?.riskTolerance} />
+            <ProfileRow label="Investment horizon" value={profile?.investmentHorizon} />
+            <ProfileRow
+              label="Current portfolio value"
+              value={profile?.currentPortfolioValue ? `$${profile.currentPortfolioValue}` : ""}
+            />
+            <ProfileRow
+              label="Preferred asset classes"
+              value={profile?.preferredAssetClasses?.join(", ")}
+            />
             <div style={{ display: "flex", gap: 8, marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
               <button className="iq-btn-ghost" onClick={() => router.push("/profile/edit")}>
                 Edit Profile
