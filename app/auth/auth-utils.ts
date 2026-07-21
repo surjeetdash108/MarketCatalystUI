@@ -4,6 +4,23 @@ import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { firebaseAuth, firebaseDb } from "../firebase";
 import { emptyInvestorProfile } from "../profile/profile-fields";
 
+/**
+ * Where a user lands after authentication. The single fixed admin account goes
+ * to the admin console; everyone else to the normal app.
+ *
+ * Centralised deliberately: this is used by EVERY post-auth redirect path
+ * (email/password login, Google sign-in, and the already-signed-in bounce).
+ * When it lived only in the login form, signing in with Google — or simply
+ * arriving already-authenticated — sent the admin to /dashboard instead.
+ */
+export const ADMIN_EMAIL = (
+  process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@marketcatalyst.ai"
+).toLowerCase();
+
+export function destinationFor(email?: string | null): string {
+  return (email ?? "").trim().toLowerCase() === ADMIN_EMAIL ? "/admin" : "/dashboard";
+}
+
 export function getAuthErrorMessage(error: unknown): string {
   if (error instanceof FirebaseError) {
     switch (error.code) {
@@ -61,12 +78,12 @@ export async function completeGoogleLogin(userCredential: UserCredential) {
     return;
   }
 
-  window.location.href = "/dashboard";
+  window.location.href = destinationFor(userCredential.user.email);
 }
 
 export async function checkAndRedirectIfLoggedIn() {
   await firebaseAuth.authStateReady();
   if (firebaseAuth.currentUser) {
-    window.location.href = "/dashboard";
+    window.location.href = destinationFor(firebaseAuth.currentUser.email);
   }
 }

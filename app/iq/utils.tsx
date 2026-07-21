@@ -499,17 +499,31 @@ export function CandleChart({
   );
 }
 
-export function RsiPane({ sym, tf }: { sym: string; tf: string }) {
+export function RsiPane({
+  sym, tf, series,
+}: {
+  sym: string; tf: string;
+  /** Real rolling RSI(14) from companies.rsi14Series — falls back to the simulated walk when absent. */
+  series?: number[];
+}) {
   const w = 720, h = 72;
-  const rnd = _seed(hashStr(sym + tf + "rsi"));
-  let v = 52;
-  const r: number[] = [];
-  for (let i = 0; i < 90; i++) {
-    v += Math.sin(i * 0.22) * 4 + (rnd() - 0.5) * 6 + (i > 72 ? 2.2 : 0);
-    v = Math.max(22, Math.min(86, v));
-    r.push(v);
-  }
-  const X = (i: number) => 40 + i * ((w - 60) / 89);
+  // The fallback below is a seeded sine-plus-noise walk, NOT an RSI. It stays
+  // only for tickers outside the synced universe, where the alternative is an
+  // empty pane; technical-indicators.job.ts now computes the real line from the
+  // same bars the chart plots.
+  const r: number[] = useMemo(() => {
+    if (series && series.length > 1) return series;
+    const rnd = _seed(hashStr(sym + tf + "rsi"));
+    let v = 52;
+    const out: number[] = [];
+    for (let i = 0; i < 90; i++) {
+      v += Math.sin(i * 0.22) * 4 + (rnd() - 0.5) * 6 + (i > 72 ? 2.2 : 0);
+      v = Math.max(22, Math.min(86, v));
+      out.push(v);
+    }
+    return out;
+  }, [series, sym, tf]);
+  const X = (i: number) => 40 + i * ((w - 60) / Math.max(1, r.length - 1));
   const Yp = (p: number) => 8 + (h - 16) * (1 - p / 100);
   const line = r.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)} ${Yp(p).toFixed(1)}`).join(" ");
   return (
@@ -540,3 +554,26 @@ export function actionColor(type: string): string {
   if (type === 'downgrade') return 'var(--down)';
   return 'var(--brand-2)';
 }
+
+/**
+ * Small honesty label for data that is sample/illustrative rather than live.
+ * Standardises the ipos.tsx "· sample data" pattern so screens stop presenting
+ * fallback/mock content as if it were live (delivery-plan R21).
+ */
+export function SampleBadge({ text = "Sample data", title }: { text?: string; title?: string }) {
+  return (
+    <span
+      title={title ?? "Illustrative data — not a live feed"}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "2px 8px", borderRadius: 999, fontSize: ".62rem", fontWeight: 700,
+        letterSpacing: ".04em", textTransform: "uppercase",
+        background: "rgba(255,186,0,.15)", color: "var(--warn, #ffba00)",
+        verticalAlign: "middle",
+      }}
+    >
+      ⚠ {text}
+    </span>
+  );
+}
+

@@ -5,7 +5,7 @@ import { collection, getDocs, query, orderBy, limit as fbLimit } from "firebase/
 import { firebaseDb } from "../../firebase";
 import { useIQActions } from "../shell";
 import { funds as mockFunds, fundDetail, type Fund } from "../data";
-import { StockLogo } from "../utils";
+import { StockLogo, SampleBadge } from "../utils";
 import { useCollection } from "../hooks/useCollection";
 
 // ---- types ----
@@ -397,6 +397,7 @@ export function InsiderScreen() {
   const { openStockFull } = useIQActions();
   const [view,       setView]       = useState<"insider" | "13f">("insider");
   const [insFilter,  setInsFilter]  = useState<InsFilter>("All");
+  const [insSearch,  setInsSearch]  = useState("");
   const [insSort,    setInsSort]    = useState<InsSort>("value");
   const [instFilter, setInstFilter] = useState<InstFilter>("All");
   const [instSort,   setInstSort]   = useState<InstSort>("owners");
@@ -440,7 +441,9 @@ export function InsiderScreen() {
   const FEED = [...MOCK_FEED, ...liveFeed];
 
   // ---- insider filter + sort ----
+  const insQ = insSearch.trim().toUpperCase();
   const filtered = FEED.filter(x => {
+    if (insQ && !(x.s?.toUpperCase().includes(insQ))) return false;
     if (insFilter === "Buys")       return x.dir === "buy";
     if (insFilter === "Sells")      return x.dir === "sell";
     if (insFilter === "10% owners") return /10% owner/.test(x.role);
@@ -520,6 +523,7 @@ export function InsiderScreen() {
             {(["All", "Buys", "Sells", "10% owners", "Clusters"] as InsFilter[]).map(c => (
               <button key={c} className={`chip${insFilter === c ? " on" : ""}`} onClick={() => setInsFilter(c)}>{c}</button>
             ))}
+            <input value={insSearch} onChange={e => setInsSearch(e.target.value)} placeholder="Search ticker…" style={{ marginLeft: 8, background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "5px 10px", color: "var(--text)", fontSize: ".78rem", width: "9rem" }} />
             <div style={{ flex: 1 }} />
             <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center", marginRight: 6 }}>Sort</span>
             <button className={`chip${insSort === "value" ? " on" : ""}`} onClick={() => setInsSort("value")}>Value</button>
@@ -683,7 +687,7 @@ export function InsiderScreen() {
             <div className="col-8">
               <div className="ai-block">
                 <div className="card-h">
-                  <h3 className="ai-c">◆ AI 13F Summary · Berkshire Hathaway · Q1 2024</h3>
+                  <h3 className="ai-c">◆ AI 13F Summary · Berkshire Hathaway · Q1 2024 <SampleBadge /></h3>
                   <span className="pill ai">Auto-generated</span>
                 </div>
                 <div className="card-b">
@@ -699,7 +703,7 @@ export function InsiderScreen() {
 
             <div className="col-4">
               <div className="card">
-                <div className="card-h"><h3>Cross-fund signals</h3></div>
+                <div className="card-h"><h3>Cross-fund signals <SampleBadge title="These cross-fund lists are illustrative; the CUSIP-matched overlap card below is real" /></h3></div>
                 <div className="card-b">
                   <div style={{ fontSize: ".7rem", textTransform: "uppercase" as const, letterSpacing: ".06em", color: "var(--up)", fontWeight: 700, margin: "4px 0 6px" }}>
                     Most owned (3+ funds)

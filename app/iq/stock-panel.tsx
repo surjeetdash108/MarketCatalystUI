@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { CandleChart, RsiPane, earnHistory, Spark } from "./utils";
 import { stockInfo, watch as watchData, screenerStocks } from "./data";
 import { ExpandBtn } from "./shell";
+import { useChartBars } from "./hooks/useChartBars";
+import { useCompany } from "./hooks/useCompany";
 
 /* ── Shared dynamic embed — one definition for all screens ── */
 export const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
@@ -157,7 +159,11 @@ function ChartCardExpanded({
   const [showVol, setShowVol] = useState(initialShowVol);
   const [showRsi, setShowRsi] = useState(initialShowRsi);
   const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
-  const rsiVal = Math.round(38 + rs * 0.36);
+  const realBars = useChartBars(sym, tf);
+  const company = useCompany(sym);
+  // Real RSI(14) when the indicators job has run for this ticker; the old
+  // `38 + rs * 0.36` was a linear restatement of the RS rank, not an RSI.
+  const rsiVal = company?.rsi14 != null ? Math.round(company.rsi14) : Math.round(38 + rs * 0.36);
   return (
     <div>
       <div className="chart-toolbar" style={{ flexWrap: "wrap", gap: "4px 0", paddingBottom: 8 }}>
@@ -179,14 +185,14 @@ function ChartCardExpanded({
         <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
         <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
       </div>
-      <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} />
+      <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars} />
       {showRsi && (
         <div style={{ marginTop: 4 }}>
           <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
             <span>RSI (14)</span>
             <span className="mono" style={{ color: "var(--warn)" }}>{rsiVal} · {rsiVal > 70 ? "overbought" : rsiVal < 40 ? "weak" : "neutral-to-strong"}</span>
           </div>
-          <RsiPane sym={sym} tf={tf} />
+          <RsiPane sym={sym} tf={tf} series={company?.rsi14Series ?? undefined} />
         </div>
       )}
       {showEarnings && (
@@ -219,10 +225,18 @@ export function ChartCard({
   const [showRsi, setShowRsi] = useState(false);
   const [showEarnings, setShowEarnings] = useState(false);
 
+  // Real bars for whichever timeframe is selected. This component previously
+  // called CandleChart WITHOUT `realBars`, so every chart on Watchlist,
+  // Portfolio, Themes and Screener rendered a seeded random walk even for
+  // tickers whose bars were already synced and plotted correctly one screen
+  // over in Stock Detail. Wiring this prop is the whole fix.
+  const realBars = useChartBars(sym, tf);
+  const company = useCompany(sym);
+
   const erDate = watchData.find(w => w.ticker === sym)?.nextEarningsDate ?? "—";
   const eps = stockInfo[sym]?.eps ?? 1;
   const rs = screenerStocks.find(s => s.ticker === sym)?.relativeStrength ?? 50;
-  const rsiVal = Math.round(38 + rs * 0.36);
+  const rsiVal = company?.rsi14 != null ? Math.round(company.rsi14) : Math.round(38 + rs * 0.36);
 
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -270,7 +284,7 @@ export function ChartCard({
             />
           </div>
           <div style={{ padding: "0 14px 0" }}>
-            <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} />
+            <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars} />
           </div>
           {showRsi && (
             <div style={{ padding: "0 14px 4px" }}>
@@ -280,7 +294,7 @@ export function ChartCard({
                   {rsiVal} · {rsiVal > 70 ? "overbought" : rsiVal < 40 ? "weak" : "neutral-to-strong"}
                 </span>
               </div>
-              <RsiPane sym={sym} tf={tf} />
+              <RsiPane sym={sym} tf={tf} series={company?.rsi14Series ?? undefined} />
             </div>
           )}
           {showEarnings && (

@@ -12,6 +12,7 @@ import { firebaseAuth, googleAuthProvider } from "../../firebase";
 import {
   checkAndRedirectIfLoggedIn,
   completeGoogleLogin,
+  destinationFor,
   getAuthErrorMessage,
   shouldUseGoogleRedirect,
   showError,
@@ -82,7 +83,7 @@ export function LoginForm() {
     setError(""); setIsSubmitting(true);
     try {
       await signInWithEmailAndPassword(firebaseAuth, email, password);
-      window.location.href = "/dashboard";
+      window.location.href = destinationFor(email);
     } catch (err) {
       const msg = getAuthErrorMessage(err);
       setError(msg); showError(msg);

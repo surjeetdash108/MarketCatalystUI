@@ -11,6 +11,8 @@ export interface MarketStatus {
   phase: MarketPhase;
   /** Short label for the header pill, e.g. "Markets Open". */
   label: string;
+  /** True when this came from the exchange feed rather than the local clock. */
+  fromVendor?: boolean;
 }
 
 // NYSE/Nasdaq full-closure holidays, by observed date (YYYY-MM-DD). Extend yearly.
@@ -60,4 +62,33 @@ export function getMarketStatus(now: Date = new Date()): MarketStatus {
   if (minutes >= PRE && minutes < OPEN) return { phase: "pre", label: "Pre-Market" };
   if (minutes >= CLOSE && minutes < AFTER_END) return { phase: "after", label: "After Hours" };
   return { phase: "closed", label: "Markets Closed" };
+}
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? "http://localhost:4100";
+
+/**
+ * Session state from the exchange feed via our backend
+ * (`GET /live/market-status`, Polygon `/v1/marketstatus/now`).
+ *
+ * The local computation above stays as the fallback, and as the value rendered
+ * on first paint before this resolves — but it cannot know about an unscheduled
+ * halt, and its holiday list is hand-maintained (so it silently goes stale every
+ * January) and treats early-close half-days as full sessions. The vendor answers
+ * all three correctly.
+ *
+ * Returns null on any failure so the caller keeps the computed value rather than
+ * blanking the header.
+ */
+export async function fetchMarketStatus(): Promise<MarketStatus | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/live/market-status`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { phase?: MarketPhase; label?: string };
+    if (!body.phase || !body.label) return null;
+    return { phase: body.phase, label: body.label, fromVendor: true };
+  } catch {
+    // Backend unreachable (offline, cold start, local dev without it running).
+    return null;
+  }
 }

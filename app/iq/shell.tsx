@@ -17,13 +17,25 @@ import { firebaseAuth, firebaseDb } from "../firebase";
 import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
+import { FeatureFlagProvider, useFlag, type FlagKey } from "./feature-flags";
+
+/**
+ * Hides a nav item when its release flag is off. A `null` flag is always shown.
+ * Split into its own component because the nav is rendered inside a .map(), and
+ * a hook (useFlag) cannot be called inside a callback.
+ */
+function NavItemGate({ flag, children }: { flag: FlagKey | null; children: React.ReactNode }) {
+  const on = useFlag((flag ?? "FF_DASHBOARD") as FlagKey);
+  if (flag && !on) return null;
+  return <>{children}</>;
+}
 import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail, type PulseItem } from "./data";
 import { fmt, sign, cls, arr, SemiGauge } from "./utils";
 import { useCollection } from "./hooks/useCollection";
 import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { mergePulse, type IndexDoc } from "./live-market-indices";
-import { getMarketStatus, type MarketStatus } from "./market-status";
+import { getMarketStatus, fetchMarketStatus, type MarketStatus } from "./market-status";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -810,7 +822,11 @@ export function IQShell({ children }: { children: React.ReactNode }) {
         day: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
         time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
       });
-      setMkt(getMarketStatus(d));
+      // Local clock first so the pill is never empty, then let the vendor's
+      // answer overwrite it — it knows about halts and early closes that the
+      // hardcoded holiday list cannot.
+      setMkt(prev => (prev.fromVendor ? prev : getMarketStatus(d)));
+      void fetchMarketStatus().then(v => { if (v) setMkt(v); });
     };
     tick(); // correct any build-time (static-export) value right after hydration
     const id = setInterval(tick, 60_000);
@@ -981,6 +997,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthGuard>
+      <FeatureFlagProvider>
       <IQActionsContext.Provider value={actions}>
         <div className="iq-root" data-theme={theme} data-font={font}>
           <div className={`app${navCollapsed ? " nav-collapsed" : ""}`}>
@@ -1185,8 +1202,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     const href = slugToHref(item.slug);
                     const isActive = pathname === href;
                     return (
+                      <NavItemGate key={item.slug} flag={item.flag as FlagKey | null}>
                       <Link
-                          key={item.slug}
                           href={href}
                           className={`navitem${isActive ? " active" : ""}`}
                           onMouseEnter={e => {
@@ -1200,6 +1217,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                         <span className="nav-label">{item.label}</span>
                         {item.badge && <span className="nav-tag">{item.badge}</span>}
                       </Link>
+                      </NavItemGate>
                     );
                   })}
                 </div>
@@ -1269,6 +1287,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
         </div>
       </IQActionsContext.Provider>
+      </FeatureFlagProvider>
     </AuthGuard>
   );
 }

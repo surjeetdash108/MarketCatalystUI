@@ -18,6 +18,13 @@ const INSIDER_MINI_MOCK = [
   { s: "TSLA", role: "10% owner",  dir: "sell", val: "22.4M" },
 ];
 
+interface BreadthDoc {
+  id: string; date: string;
+  advancers: number; decliners: number; unchanged?: number; netAdvancers: number;
+  upVolume: number; downVolume: number; breadthPct: number; breadthSentiment: number;
+  trin: number | null;
+}
+
 const MARKET_INTERNALS = [
   { k: "Advancing",      v: "2,186",  note: "NYSE+NASDAQ",         up: true  },
   { k: "Declining",      v: "1,247",  note: "",                    up: false },
@@ -315,6 +322,24 @@ export function DashboardScreen() {
   // Live Fear & Greed (fear-greed.job → market_sentiment/fear_greed); falls
   // back to the illustrative 62/"Greed" until the job has run.
   const { data: marketSentiment } = useCollection<{ id: string; value?: number; label?: string }>("market_sentiment");
+  const { data: breadth } = useCollection<BreadthDoc>("market_breadth");
+  // Latest two breadth days drive Market Internals + the F&G history sparkline,
+  // replacing the hardcoded MARKET_INTERNALS / FG_HISTORY arrays.
+  const breadthSorted = [...breadth].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  const latestBreadth = breadthSorted[0];
+  const fgLabelFor = (v: number) => v >= 75 ? "Extreme Greed" : v >= 60 ? "Greed" : v >= 45 ? "Neutral" : v >= 25 ? "Fear" : "Extreme Fear";
+  const liveInternals = latestBreadth ? [
+    { k: "Advancing", v: latestBreadth.advancers.toLocaleString(), note: "universe", up: true },
+    { k: "Declining", v: latestBreadth.decliners.toLocaleString(), note: "", up: false },
+    { k: "Unchanged", v: (latestBreadth.unchanged ?? 0).toLocaleString(), note: "", up: null },
+    { k: "Net Advancers", v: (latestBreadth.netAdvancers >= 0 ? "+" : "") + latestBreadth.netAdvancers.toLocaleString(), note: latestBreadth.netAdvancers >= 0 ? "bullish" : "bearish", up: latestBreadth.netAdvancers >= 0 },
+    { k: "Up Volume", v: Math.round((latestBreadth.upVolume / Math.max(1, latestBreadth.upVolume + latestBreadth.downVolume)) * 100) + "%", note: "", up: true },
+    { k: "Down Volume", v: Math.round((latestBreadth.downVolume / Math.max(1, latestBreadth.upVolume + latestBreadth.downVolume)) * 100) + "%", note: "", up: false },
+    { k: "TRIN (Arms)", v: latestBreadth.trin != null ? latestBreadth.trin.toFixed(2) : "—", note: "< 1 = bullish", up: latestBreadth.trin != null ? latestBreadth.trin < 1 : null },
+  ] as typeof MARKET_INTERNALS : MARKET_INTERNALS;
+  const fgHistory = breadthSorted.length > 0
+    ? breadthSorted.slice(0, 20).map(b => ({ date: (b.date ?? "").slice(5), val: b.breadthSentiment ?? 50, label: fgLabelFor(b.breadthSentiment ?? 50) }))
+    : FG_HISTORY;
   const fearGreed = marketSentiment.find(d => d.id === "fear_greed");
   const fgVal = fearGreed?.value ?? 62;
   const fgLabel = fearGreed?.label ?? "Greed";
@@ -731,7 +756,7 @@ export function DashboardScreen() {
                 );
               })() : (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                  <span className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>$128,430</span>
+                  <span className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-dim-solid)" }}>—</span>
                   <span className="mono up" style={{ fontWeight: 600 }}>▲ +1.42%</span>
                 </div>
               )}
@@ -862,7 +887,7 @@ export function DashboardScreen() {
             </div>
             <div className="card-b">
               <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                <span className="big">{liveIndices.find(i => i.id === "VIX")?.value.toFixed(2) ?? "14.18"}</span>
+                <span className="big">{liveIndices.find(i => i.id === "VIX")?.value?.toFixed(2) ?? "—"}</span>
                 <span className="mono down" style={{ fontWeight: 600 }}>
                   {liveIndices.find(i => i.id === "VIX") ? sign(liveIndices.find(i => i.id === "VIX")!.pctChange) : "▼ -2.51%"}
                 </span>
@@ -894,7 +919,7 @@ export function DashboardScreen() {
             <div className="card-b gauge-wrap">
               <SemiGauge val={fgVal} label={fgLabel} id="fg" />
               <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                Previous close: <b style={{ color: "var(--text)" }}>58</b>
+                Previous close: <b style={{ color: "var(--text)" }}>{breadthSorted[1]?.breadthSentiment ?? "—"}</b>
               </div>
             </div>
           </div>
@@ -1024,7 +1049,7 @@ export function DashboardScreen() {
                     </div>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {MARKET_INTERNALS.filter(x => !["Advancing","Declining"].includes(x.k)).map(x => (
+                    {liveInternals.filter(x => !["Advancing","Declining"].includes(x.k)).map(x => (
                       <div key={x.k} style={{
                         background: "var(--surface-1)", border: "1px solid var(--border)",
                         borderRadius: 10, padding: "11px 13px",
@@ -1102,7 +1127,7 @@ export function DashboardScreen() {
                       <text x="4" y="84"  fill="rgba(47,230,166,.8)" fontSize="7" fontFamily="JetBrains Mono,monospace">Extreme Greed</text>
                       {/* Line */}
                       {(() => {
-                        const pts = [...FG_HISTORY].reverse();
+                        const pts = [...fgHistory].reverse();
                         const n = pts.length;
                         const toY = (v: number) => 90 - (v / 100) * 90;
                         const toX = (i: number) => 60 + i * ((440 - 70) / (n - 1));

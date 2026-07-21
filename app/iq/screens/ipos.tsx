@@ -14,6 +14,11 @@ interface IpoEventDoc {
   priceLow: number | null;
   priceHigh: number | null;
   status: "expected" | "priced" | "filed" | "withdrawn";
+  // Aftermarket pricing (ipos.job enrichment) — real, when the IPO has listed.
+  offerPrice?: number | null;
+  currentPrice?: number | null;
+  day1Close?: number | null;
+  returnSinceIpoPct?: number | null;
 }
 
 function formatIpoPrice(low: number | null, high: number | null): string {
@@ -67,9 +72,9 @@ export function IPOsScreen() {
     s: e.symbol ?? "—",
     n: e.name,
     date: e.date,
-    offer: e.priceLow != null && e.priceHigh != null ? (e.priceLow + e.priceHigh) / 2 : e.priceLow ?? e.priceHigh,
-    cur: null,
-    day1: null,
+    offer: e.offerPrice ?? (e.priceLow != null && e.priceHigh != null ? (e.priceLow + e.priceHigh) / 2 : e.priceLow ?? e.priceHigh),
+    cur: e.currentPrice ?? null,
+    day1: e.day1Close ?? null,
     sec: e.exchange ?? "—",
     live: true,
   }));

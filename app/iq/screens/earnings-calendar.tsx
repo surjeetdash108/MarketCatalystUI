@@ -45,17 +45,6 @@ interface CompanyDoc {
   marketCap?: number | null;
 }
 
-interface IpoDoc {
-  id: string;
-  date?: string;
-  symbol?: string;
-  name?: string | null;
-  exchange?: string | null;
-  priceLow?: number | null;
-  priceHigh?: number | null;
-  totalSharesValue?: number | null;
-}
-
 interface NewsLite {
   id: string;
   ticker?: string;
@@ -257,7 +246,6 @@ export function EarningsCalendar({
 }) {
   const { data: events, loading } = useCollection<LiveEarningsDoc>("earnings_events");
   const { data: companies } = useCollection<CompanyDoc>("companies");
-  const { data: ipos } = useCollection<IpoDoc>("ipos");
   const { data: news } = useCollection<NewsLite>("news");
 
   const [mode, setMode] = useState<"day" | "week">("day");
@@ -341,14 +329,6 @@ export function EarningsCalendar({
 
   const dayRows = useMemo(() => rowsFor(anchor), [rowsFor, anchor]);
 
-  const dayIpos = useMemo(
-    () => ipos.filter(i => i.date === anchor),
-    [ipos, anchor],
-  );
-  const weekIpos = useMemo(
-    () => ipos.filter(i => i.date && days.includes(i.date)),
-    [ipos, days],
-  );
 
   const step = (dir: 1 | -1) => setAnchor(a => addDays(a, mode === "day" ? dir : dir * 7));
 
@@ -391,68 +371,22 @@ export function EarningsCalendar({
       </div>
 
       {mode === "day" ? (
-        <>
-          {dayIpos.length > 0 && <IpoBlock ipos={dayIpos} />}
-          <DayTable
-            rows={dayRows}
-            view={view}
-            selected={selected}
-            onSelect={onSelect}
-            loading={loading}
-            date={anchor}
-          />
-        </>
+        <DayTable
+          rows={dayRows}
+          view={view}
+          selected={selected}
+          onSelect={onSelect}
+          loading={loading}
+          date={anchor}
+        />
       ) : (
         <WeekGrid
           days={days}
           rowsFor={rowsFor}
-          ipos={weekIpos}
           selected={selected}
           onSelect={onSelect}
           onOpenDay={(iso) => { setAnchor(iso); setMode("day"); }}
         />
-      )}
-    </div>
-  );
-}
-
-// ── Upcoming IPOs ────────────────────────────────────────────────────────────
-
-function IpoBlock({ ipos }: { ipos: IpoDoc[] }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div className="ecal-ipo">
-      <button className="ecal-ipo-h" onClick={() => setOpen(o => !o)}>
-        <span className="ecal-ipo-icon" aria-hidden>▲</span>
-        Upcoming IPOs <span className="ecal-ipo-n">{ipos.length}</span>
-        <span className="ecal-ipo-chev" aria-hidden>{open ? "▴" : "▾"}</span>
-      </button>
-      {open && (
-        <div className="ecal-tablewrap">
-          <table className="ecal-table">
-            <thead>
-              <tr>
-                <th>Symbol</th><th>Company</th><th>Exchange</th>
-                <th className="r">Price Range</th><th className="r">Est. Market Cap</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ipos.map(i => (
-                <tr key={i.id}>
-                  <td className="ecal-sym">{i.symbol ?? "—"}</td>
-                  <td className="ecal-name">{i.name ?? "—"}</td>
-                  <td>{i.exchange ?? "—"}</td>
-                  <td className="r">
-                    {i.priceLow != null && i.priceHigh != null
-                      ? `$${i.priceLow.toFixed(2)} – $${i.priceHigh.toFixed(2)}`
-                      : "—"}
-                  </td>
-                  <td className="r">{fmtCap(i.totalSharesValue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       )}
     </div>
   );
@@ -546,11 +480,10 @@ function DayTable({
 // ── Week view ────────────────────────────────────────────────────────────────
 
 function WeekGrid({
-  days, rowsFor, ipos, selected, onSelect, onOpenDay,
+  days, rowsFor, selected, onSelect, onOpenDay,
 }: {
   days: string[];
   rowsFor: (iso: string) => CalRow[];
-  ipos: IpoDoc[];
   selected: string;
   onSelect: (t: string) => void;
   onOpenDay: (iso: string) => void;
@@ -561,7 +494,6 @@ function WeekGrid({
       {days.map(iso => {
         const rows = rowsFor(iso);
         const p = parts(iso);
-        const dayIpos = ipos.filter(i => i.date === iso);
         return (
           <div key={iso} className={`ecal-col${iso === today ? " today" : ""}`}>
             <div className="ecal-colh">
@@ -572,12 +504,6 @@ function WeekGrid({
               <button className="ecal-expand" onClick={() => onOpenDay(iso)} aria-label={`Open ${fmtDayLabel(iso)}`}>⤢</button>
             </div>
 
-            {dayIpos.length > 0 && (
-              <div className="ecal-colipo">
-                <div className="ecal-colipo-h">{dayIpos.length} IPO{dayIpos.length === 1 ? "" : "s"}</div>
-                {dayIpos.map(i => <div key={i.id} className="ecal-colipo-s">{i.symbol}</div>)}
-              </div>
-            )}
 
             <div className="ecal-collist">
               {rows.length === 0 && <div className="ecal-colnone">—</div>}

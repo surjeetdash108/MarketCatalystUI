@@ -129,33 +129,58 @@ export function AnalystScreen() {
         </div>
       </div>
 
-      {/* ── Live analyst consensus (FMP grades-consensus, real) ── */}
+      {/* ── Live analyst consensus (FMP grades-consensus, real) — Buy/Hold/Sell numbers ── */}
       {liveRows.length > 0 && (
         <div className="card" style={{ marginBottom: 14 }}>
           <div className="card-h">
             <h3>Live analyst consensus</h3>
             <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)" }}>live · FMP</span>
           </div>
-          <div className="card-b" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
-            {liveRows.map(c => {
-              const total = c.strongBuy + c.buy + c.hold + c.sell + c.strongSell || 1;
-              return (
-                <div key={c.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(c.ticker)}>
-                  <StockLogo sym={c.ticker} size={20} />
-                  <span className="tkr">{c.ticker}</span>
-                  <span className="mid" style={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
-                    <span style={{ width: `${c.strongBuy / total * 100}%`, minWidth: c.strongBuy ? 3 : 0, height: 6, background: "var(--up)", borderRadius: 2 }} />
-                    <span style={{ width: `${c.buy / total * 100}%`, minWidth: c.buy ? 3 : 0, height: 6, background: "var(--up)", opacity: .6, borderRadius: 2 }} />
-                    <span style={{ width: `${c.hold / total * 100}%`, minWidth: c.hold ? 3 : 0, height: 6, background: "var(--text-dim-solid)", opacity: .5, borderRadius: 2 }} />
-                    <span style={{ width: `${c.sell / total * 100}%`, minWidth: c.sell ? 3 : 0, height: 6, background: "var(--down)", opacity: .6, borderRadius: 2 }} />
-                    <span style={{ width: `${c.strongSell / total * 100}%`, minWidth: c.strongSell ? 3 : 0, height: 6, background: "var(--down)", borderRadius: 2 }} />
-                  </span>
-                  <span className="r" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                    {c.strongBuy + c.buy}B / {c.hold}H / {c.sell + c.strongSell}S
-                  </span>
-                </div>
-              );
-            })}
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th className="num">Buy</th>
+                  <th className="num">Hold</th>
+                  <th className="num">Sell</th>
+                  <th className="num">Total</th>
+                  <th>Distribution</th>
+                  <th>Consensus</th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveRows.map(c => {
+                  const buy = c.strongBuy + c.buy;
+                  const sell = c.sell + c.strongSell;
+                  const total = buy + c.hold + sell || 1;
+                  return (
+                    <tr key={c.ticker} onClick={() => openStock(c.ticker)} style={{ cursor: "pointer" }}>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <StockLogo sym={c.ticker} size={22} />
+                          <b style={{ color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>{c.ticker}</b>
+                        </div>
+                      </td>
+                      <td className="num"><b style={{ color: "var(--up)" }}>{buy}</b></td>
+                      <td className="num" style={{ color: "var(--text-dim-solid)" }}>{c.hold}</td>
+                      <td className="num"><b style={{ color: sell > 0 ? "var(--down)" : "var(--text-dim-solid)" }}>{sell}</b></td>
+                      <td className="num" style={{ color: "var(--text-dim-solid)" }}>{total}</td>
+                      <td style={{ minWidth: 110 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 1, height: 8 }}>
+                          <span style={{ width: `${buy / total * 100}%`, minWidth: buy ? 3 : 0, height: 8, background: "var(--up)", borderRadius: 2 }} />
+                          <span style={{ width: `${c.hold / total * 100}%`, minWidth: c.hold ? 3 : 0, height: 8, background: "var(--text-dim-solid)", opacity: .5, borderRadius: 2 }} />
+                          <span style={{ width: `${sell / total * 100}%`, minWidth: sell ? 3 : 0, height: 8, background: "var(--down)", borderRadius: 2 }} />
+                        </span>
+                      </td>
+                      <td>
+                        <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontWeight: 700 }}>{c.consensus}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

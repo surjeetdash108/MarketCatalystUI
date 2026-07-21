@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TickerSearchInput } from "../ticker-search-input";
 import { doc, onSnapshot, setDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { watch as watchData } from "../data";
@@ -171,14 +172,14 @@ export function WatchlistScreen() {
             </div>
             <div className="drawer-b" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Ticker symbol</label>
-                <input
+                <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Ticker or company name</label>
+                <TickerSearchInput
                   autoFocus
-                  style={{ width: "100%", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)", fontSize: ".9rem" }}
-                  placeholder="e.g. TSLA"
+                  placeholder="Ticker or company name — e.g. Apple"
                   value={newSym}
-                  onChange={e => setNewSym(e.target.value.toUpperCase())}
-                  onKeyDown={e => { if (e.key === "Enter") addStock(); }}
+                  onChange={v => setNewSym(v.toUpperCase())}
+                  onPick={t => { setNewSym(t); }}
+                  onEnter={addStock}
                 />
               </div>
               <button className="btn primary" style={{ width: "100%" }} onClick={addStock}>

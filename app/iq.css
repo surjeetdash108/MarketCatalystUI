@@ -2440,3 +2440,95 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .ecal-cell-sub .up { color: var(--up); }
 .ecal-cell-sub .dn { color: var(--down); }
 .ecal-cell-eps { color: var(--text-dim-solid); }
+
+/* ── Live price evaluation (our SSE pipeline vs TradingView widget) ───────── */
+
+.lc-wrap {
+  background: var(--surface-1); border: 1px solid var(--border-soft);
+  border-radius: 12px; overflow: hidden; margin-bottom: 14px;
+}
+.lc-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 11px 14px; border-bottom: 1px solid var(--border-soft);
+}
+.lc-head h3 { margin: 0; font-size: .92rem; color: var(--text-hi); font-weight: 700; }
+.lc-sub { font-size: .7rem; color: var(--text-dim-solid); }
+
+/* Stacked, both full-width — matches the width of our own chart card so the
+   two are compared on data rather than on how much room each got. */
+.lc-cols { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--border-soft); }
+.lc-col { background: var(--surface-1); display: flex; flex-direction: column; min-width: 0; }
+.lc-colh {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 9px 13px; border-bottom: 1px solid var(--border-soft);
+}
+.lc-tag { font-size: .68rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
+.lc-tag.ours { background: var(--brand-dim, rgba(90,160,255,.16)); color: var(--brand-2); }
+.lc-tag.tv { background: rgba(140,120,255,.16); color: #a99bff; }
+.lc-path { font-size: .66rem; color: var(--text-dim-solid); font-family: var(--f-mono); }
+
+.lc-body { padding: 13px; display: flex; flex-direction: column; gap: 11px; }
+.lc-tvbody { padding: 0; gap: 0; }
+
+.lc-statusrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .72rem; color: var(--text-dim-solid); }
+.lc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.lc-dot.on { background: var(--up); box-shadow: 0 0 0 3px rgba(0,200,120,.15); }
+.lc-dot.off { background: var(--text-dim-solid); }
+.lc-badge {
+  margin-left: auto; font-size: .62rem; font-family: var(--f-mono);
+  padding: 2px 7px; border-radius: 5px;
+  background: var(--surface-3); color: var(--text-dim-solid);
+}
+
+.lc-price { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.lc-last {
+  font-family: var(--f-display); font-weight: 800; font-size: 1.9rem;
+  color: var(--text-hi); font-variant-numeric: tabular-nums;
+  transition: color .25s;
+}
+.lc-last.up { color: var(--up); }
+.lc-last.dn { color: var(--down); }
+.lc-chg { font-family: var(--f-mono); font-size: .86rem; }
+.lc-chg.up { color: var(--up); }
+.lc-chg.dn { color: var(--down); }
+
+.lc-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+@media (max-width: 1100px) { .lc-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 700px)  { .lc-grid { grid-template-columns: repeat(2, 1fr); } }
+.lc-m { background: var(--surface-2); border-radius: 8px; padding: 7px 9px; }
+.lc-mk { font-size: .62rem; color: var(--text-dim-solid); text-transform: uppercase; letter-spacing: .05em; }
+.lc-mv {
+  font-family: var(--f-mono); font-size: .84rem; color: var(--text-hi);
+  margin-top: 2px; font-variant-numeric: tabular-nums;
+}
+.lc-mv.up { color: var(--up); }
+.lc-mv.dn { color: var(--down); }
+.lc-mv.warn { color: var(--warn, #ffba00); }
+
+.lc-note {
+  font-size: .7rem; color: var(--text-dim-solid); line-height: 1.5;
+  padding: 9px 11px; background: var(--surface-2); border-radius: 8px;
+}
+.lc-tvbody .lc-note { border-radius: 0; }
+.lc-note b { color: var(--text-hi); }
+.lc-warn { border-left: 2px solid var(--warn, #ffba00); }
+
+/* Full-width chart height. Our CandleChart is a 720x318 SVG scaled to 100%
+   width, so it renders at ~0.44 x container width; 520px keeps TradingView in
+   the same visual ballpark on a typical desktop. */
+.lc-tv { height: 520px; width: 100%; }
+@media (max-width: 700px) { .lc-tv { height: 380px; } }
+.lc-tag.poll { background: rgba(0,200,120,.16); color: var(--up); }
+
+/* ── Feature-flag "coming soon" placeholder ──────────────────────────────── */
+.ff-comingsoon {
+  max-width: 32rem; margin: 8vh auto; padding: 2rem; text-align: center;
+  background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 14px;
+}
+.ff-cs-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px; margin-bottom: 12px;
+  background: rgba(255,186,0,.15); color: var(--warn, #ffba00);
+  font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+}
+.ff-comingsoon h2 { margin: 0 0 6px; font-size: 1.1rem; color: var(--text-hi); }
+.ff-comingsoon p { margin: 0; font-size: .84rem; color: var(--text-dim-solid); }

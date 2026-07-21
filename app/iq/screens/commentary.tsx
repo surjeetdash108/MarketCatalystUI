@@ -4,8 +4,9 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { commentary, watch, folio, movers, analyst, screenerStocks, stockInfo, sectorByName } from "../data";
-import { sign, fmt, hashStr, earnHistory, StockLogo } from "../utils";
+import { sign, fmt, hashStr, earnHistory, StockLogo, SampleBadge } from "../utils";
 import { useCollection } from "../hooks/useCollection";
+import { useExtendedHours } from "../hooks/useExtendedHours";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
@@ -369,6 +370,14 @@ export function CommentaryScreen() {
     ["Macro", "Fed/Rates"].includes(item.cat)
   );
 
+  // Real extended-hours moves for the names the user actually tracks, polled
+  // only while the Premarket (1) or After Hours (2) tab is showing.
+  const extHours = useExtendedHours(
+    [...mySymbols],
+    activeTab === 1 ? "pre" : "after",
+    activeTab === 1 || activeTab === 2,
+  );
+
   const tabFeed: CommentaryItem[] = (() => {
     if (activeTab === 0) return [...liveConverted, ...commentary];
     if (activeTab === 1) return [...livePremarket, ...PREMARKET];
@@ -491,6 +500,37 @@ export function CommentaryScreen() {
                 <h3>{feedLabel.title}</h3>
                 {feedLabel.badge}
               </div>
+              {/* Real extended-hours moves, ahead of the news list. Replaces the
+                  invented "NVDA AH +7.1%" lines that never referred to a session. */}
+              {(activeTab === 1 || activeTab === 2) && extHours.movers.length > 0 && (
+                <div style={{ padding: "8px 14px 10px", borderBottom: "1px solid var(--border-soft)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".04em" }}>
+                      {activeTab === 1 ? "Pre-market movers" : "After-hours movers"}
+                    </span>
+                    <span style={{ fontSize: ".62rem", color: "var(--text-dim-solid)" }}>
+                      · delayed ~15 min
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {extHours.movers.slice(0, 12).map(m => (
+                      <span
+                        key={m.ticker}
+                        className="pill"
+                        style={{
+                          background: "var(--surface-3)",
+                          color: m.changePct >= 0 ? "var(--up)" : "var(--down)",
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: ".7rem",
+                        }}
+                        title={m.price != null ? `Last $${m.price.toFixed(2)}` : undefined}
+                      >
+                        {m.ticker} {m.changePct >= 0 ? "+" : ""}{m.changePct.toFixed(2)}%
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="card-b" style={{ paddingTop: 2, maxHeight: 620, overflowY: "auto" }}>
                 {tabFeed.length === 0 ? (
                   <div style={{ padding: "18px 0", color: "var(--text-dim-solid)", fontSize: ".84rem" }}>
@@ -530,7 +570,7 @@ export function CommentaryScreen() {
                     </svg>
                   </div>
                   <div>
-                    <h2 style={{ fontSize: ".92rem" }}>Before the Bell</h2>
+                    <h2 style={{ fontSize: ".92rem" }}>Before the Bell <SampleBadge /></h2>
                     <div className="meta">pushed 8:30a ET</div>
                   </div>
                 </div>
@@ -544,7 +584,7 @@ export function CommentaryScreen() {
 
             <div className="card">
               <div className="card-h">
-                <h3>After the Close</h3>
+                <h3>After the Close <SampleBadge /></h3>
                 <span className="pill amc">within 30 min</span>
               </div>
               <div className="card-b">
@@ -558,7 +598,7 @@ export function CommentaryScreen() {
             </div>
 
             <div className="card" style={{ flex: 1 }}>
-              <div className="card-h"><h3>General perspective</h3></div>
+              <div className="card-h"><h3>General perspective <SampleBadge /></h3></div>
               <div className="card-b">
                 <div className="note">
                   Regime reads <b style={{ color: "var(--text-hi)" }}>Risk-On Rally</b>: breadth strong, yields easing, cyclicals leading defensives. Cheap-hedging environment with VIX at 14.

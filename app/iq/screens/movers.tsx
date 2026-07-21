@@ -32,22 +32,57 @@ interface LiveMoverDoc {
  * neutral placeholders for fields that have no real data source yet (RVOL,
  * catalyst, weekly change, technical/news context).
  */
+/** Technical fields from technical-indicators.job / tech-rating.job. */
+interface CompanyTech {
+  id: string; ticker: string;
+  rvol: number | null;
+  sma50: number | null; sma200: number | null;
+  aboveSma50: boolean | null; aboveSma200: boolean | null;
+  week5ChangePct: number | null;
+  rsi14: number | null; macd: number | null;
+  rsRating: number | null;
+}
+
+/** Real MA posture from price-vs-SMA flags (was faked from the day's sign). */
+function maPostureFrom(t: CompanyTech | undefined, fallback: string): string {
+  if (!t || (t.aboveSma50 == null && t.aboveSma200 == null)) return fallback;
+  const a50 = t.aboveSma50, a200 = t.aboveSma200;
+  if (a50 == null || a200 == null) {
+    const one = a50 ?? a200;
+    return one ? "Above key MA" : "Below key MA";
+  }
+  if (a50 && a200) return "Above 50 & 200";
+  if (!a50 && !a200) return "Below 50 & 200";
+  return a50 ? "Above 50, below 200" : "Below 50, above 200";
+}
+
+/** Real technical context string from live indicators. */
+function techContextFrom(t: CompanyTech | undefined, asOf: string): string {
+  if (!t) return `Live EOD data as of ${asOf}.`;
+  const bits: string[] = [];
+  if (t.rsi14 != null) bits.push(`RSI ${t.rsi14.toFixed(0)}`);
+  if (t.macd != null) bits.push(`MACD ${t.macd >= 0 ? "bullish" : "bearish"}`);
+  if (t.rsRating != null) bits.push(`RS ${Math.round(t.rsRating)}`);
+  if (t.rvol != null) bits.push(`RVOL ${t.rvol.toFixed(2)}×`);
+  return bits.length ? bits.join(" · ") : `Live EOD data as of ${asOf}.`;
+}
+
 function mergeMovers(
   mock: Mover[],
   live: LiveMoverDoc[],
-  companyRvol: Map<string, number | null>,
+  companyTech: Map<string, CompanyTech>,
+  tickersInNews: Set<string>,
 ): { list: Mover[]; liveCount: number } {
   const liveByTicker = new Map(live.map(l => [l.ticker, l]));
   let liveCount = 0;
-  // Real relative volume from technical-indicators.job (companies.rvol), when
-  // available — otherwise keep the row's existing (mock/placeholder) value.
-  const rv = (ticker: string, fallback: number) => companyRvol.get(ticker) ?? fallback;
+  const rv = (ticker: string, fallback: number) => companyTech.get(ticker)?.rvol ?? fallback;
 
   const merged = mock.map(m => {
     const l = liveByTicker.get(m.ticker);
     if (!l) return { ...m, rvolRatio: rv(m.ticker, m.rvolRatio) };
     liveByTicker.delete(m.ticker);
     liveCount++;
+    const t = companyTech.get(m.ticker);
     return {
       ...m,
       price: l.price,
@@ -56,26 +91,38 @@ function mergeMovers(
       sector: l.sector ?? m.sector,
       cap: (l.cap as Mover["cap"]) ?? m.cap,
       rvolRatio: rv(m.ticker, m.rvolRatio),
+      // Live overrides for the previously-static fields, when we have the data.
+      maPosture: maPostureFrom(t, m.maPosture),
+      weekPct: t?.week5ChangePct ?? m.weekPct,
+      techContext: techContextFrom(t, l.asOfDate),
+      catalystLabel: tickersInNews.has(m.ticker) ? "Recent news" : m.catalystLabel,
+      relativeStrength: t?.rsRating ?? m.relativeStrength,
     };
   });
 
   for (const l of liveByTicker.values()) {
     liveCount++;
+    const t = companyTech.get(l.ticker);
+    const inNews = tickersInNews.has(l.ticker);
     merged.push({
       ticker: l.ticker,
       name: l.name ?? l.ticker,
       price: l.price,
       pctChange: l.pctChange,
       rvolRatio: rv(l.ticker, 1),
-      relativeStrength: 50,
-      catalystLabel: "No known catalyst",
-      maPosture: l.pctChange >= 0 ? "Above 50/200" : "Below 50/200",
+      relativeStrength: t?.rsRating ?? 50,
+      catalystLabel: inNews ? "Recent news" : "No known catalyst",
+      // Real MA posture when technicals exist; "MA data pending" while the
+      // compute job hasn't reached this ticker (honest, not fabricated).
+      maPosture: maPostureFrom(t, "MA data pending"),
       owned: false,
       sector: l.sector ?? "Unclassified",
       cap: (l.cap as Mover["cap"]) ?? "Mid",
-      weekPct: l.pctChange,
-      techContext: `Live EOD data as of ${l.asOfDate}. RVOL/technical context not available for this synced name yet.`,
-      newsContext: "Live market data — catalyst not yet available from a connected news source.",
+      weekPct: t?.week5ChangePct ?? l.pctChange,
+      techContext: techContextFrom(t, l.asOfDate),
+      newsContext: inNews
+        ? "Recent synced headlines exist for this ticker — see Commentary."
+        : "No recent synced news for this ticker.",
     });
   }
 
@@ -101,9 +148,13 @@ function computeTrending(movers: Mover[]) {
 
 export function MoversScreen() {
   const { data: liveMovers } = useCollection<LiveMoverDoc>("market_movers");
-  const { data: rvolCompanies } = useCollection<{ id: string; ticker: string; rvol: number | null }>("companies");
-  const companyRvol = new Map(rvolCompanies.map(c => [c.ticker, c.rvol]));
-  const { list: movers, liveCount } = mergeMovers(mockMovers, liveMovers, companyRvol);
+  const { data: techCompanies } = useCollection<CompanyTech>("companies");
+  const { data: liveNews } = useCollection<{ id: string; ticker: string }>("news");
+  const companyTech = new Map(techCompanies.map(c => [c.ticker, c]));
+  // Tickers with at least one recent synced article — a light, honest catalyst
+  // signal (was hardcoded "No known catalyst" for every live row).
+  const tickersInNews = new Set(liveNews.map(a => a.ticker).filter(Boolean));
+  const { list: movers, liveCount } = mergeMovers(mockMovers, liveMovers, companyTech, tickersInNews);
 
   const [tab,          setTab]          = useState<TabKey>("win");
   const [sector,       setSector]       = useState("All");

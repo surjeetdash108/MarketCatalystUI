@@ -10,6 +10,7 @@ import { IPOsScreen } from "../../iq/screens/ipos";
 import { PortfolioScreen } from "../../iq/screens/portfolio";
 import { WatchlistScreen } from "../../iq/screens/watchlist";
 import { StockScreen } from "../../iq/screens/stock";
+import { ScreenGate } from "../../iq/feature-flags";
 import { InsiderScreen } from "../../iq/screens/insider";
 import { CommentaryScreen } from "../../iq/screens/commentary";
 import { RecapScreen } from "../../iq/screens/recap";
@@ -33,7 +34,7 @@ const SCREENS: Record<string, React.ReactNode> = {
   ipos:        <IPOsScreen />,
   portfolio:   <PortfolioScreen />,
   watchlist:   <WatchlistScreen />,
-  stock:       <StockScreen />,
+  stock:       <StockScreen showLiveCompare />,
   options:     <OptionsScreen />,
   insider:     <InsiderScreen />,
   commentary:  <CommentaryScreen />,
@@ -50,5 +51,5 @@ export default async function MenuPage({
   const screen = SCREENS[slug];
   if (!screen) notFound();
 
-  return <IQShell>{screen}</IQShell>;
+  return <IQShell><ScreenGate slug={slug}>{screen}</ScreenGate></IQShell>;
 }

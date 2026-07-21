@@ -7,17 +7,54 @@ import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, earnHis
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { useCollection } from "../hooks/useCollection";
-import { useOhlcvBars } from "../hooks/useOhlcvBars";
+import { LiveCompare } from "../live-compare";
+import { useChartBars } from "../hooks/useChartBars";
+import { useCompany } from "../hooks/useCompany";
+import { useDividendHistory, quarterLabel, shortDate, daysUntil } from "../hooks/useDividendHistory";
+import { useFinancials } from "../hooks/useFinancials";
+import { useTickerSearch } from "../hooks/useTickerSearch";
 
 interface CompanyDoc {
   id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
   marketCap: number | null; peRatio: number | null; dividendYield: number | null; beta: number | null;
-  sector: string | null;
+  sector: string | null; exchange: string | null;
   // Real technicals from technical-indicators.job (null until it has run).
   rsi14: number | null; macd: number | null; macdSignal: number | null; macdHistogram: number | null;
   // Sector rank from tech-rating.job; source records which vendor served the profile.
   sectorRank: number | null; sectorRankTotal: number | null; source: string | null;
+  sma50?: number | null; sma200?: number | null; rvol?: number | null; rsRating?: number | null;
+  // Fields below replace values this screen used to derive from price multiples
+  // or a seeded PRNG. All computed by technical-indicators.job from the same
+  // ohlcv_bars the chart plots; peers/dividends come from the companies job.
+  rsi14Series?: number[] | null;
+  smaLadder?: Record<string, number | null> | null;
+  emaLadder?: Record<string, number | null> | null;
+  vwap?: number | null;
+  high52?: number | null; low52?: number | null;
+  pctFromHigh52?: number | null; pctFromLow52?: number | null;
+  avgVolume20?: number | null; avgVolume50?: number | null;
+  peers?: string[] | null; dividendPerShare?: number | null;
 }
+
+/**
+ * Rows of the Moving Averages drawer: [label, ladder, period, legacy multiple].
+ * The trailing number is the price multiple this row used to display before the
+ * real ladder existed; kept only as a fallback for unsynced tickers.
+ */
+const MA_LADDER_ROWS: Array<[string, "sma" | "ema", number, number]> = [
+  ["SMA 10", "sma", 10, 0.982],
+  ["SMA 20", "sma", 20, 0.964],
+  ["SMA 30", "sma", 30, 0.944],
+  ["SMA 50", "sma", 50, 0.906],
+  ["SMA 100", "sma", 100, 0.822],
+  ["SMA 200", "sma", 200, 0.740],
+  ["EMA 10", "ema", 10, 0.988],
+  ["EMA 20", "ema", 20, 0.968],
+  ["EMA 30", "ema", 30, 0.948],
+  ["EMA 50", "ema", 50, 0.938],
+  ["EMA 100", "ema", 100, 0.848],
+  ["EMA 200", "ema", 200, 0.762],
+];
 
 function fmtMarketCapB(billions: number): string {
   return billions >= 1000 ? `$${(billions / 1000).toFixed(2)}T` : billions >= 10 ? `$${Math.round(billions)}B` : `$${billions.toFixed(1)}B`;
@@ -332,7 +369,10 @@ function StockChartExpanded({
   const [showVol, setShowVol] = useState(initialShowVol);
   const [showRsi, setShowRsi] = useState(initialShowRsi);
   const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
-  const realBars = useOhlcvBars(sym, tf);
+  const realBars = useChartBars(sym, tf);
+  // Read directly rather than threading the parent's `liveCompany` through — this
+  // component is rendered standalone inside the expand modal.
+  const company = useCompany(sym);
   const isUp = px > 0;
   return (
     <div>
@@ -364,7 +404,7 @@ function StockChartExpanded({
               {Math.round(rsi)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
             </span>
           </div>
-          <RsiPane sym={sym} tf={tf} />
+          <RsiPane sym={sym} tf={tf} series={company?.rsi14Series ?? undefined} />
         </div>
       )}
       {showEarnings && (
@@ -385,7 +425,7 @@ function StockChartExpanded({
   );
 }
 
-export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean } = {}) {
+export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean; showLiveCompare?: boolean } = {}) {
   const { openStock, openSector } = useIQActions();
   const { data: companies } = useCollection<CompanyDoc>("companies");
   const [sym, setSym] = useState(() => {
@@ -415,9 +455,13 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const { data: liveConsensus } = useCollection<{ id: string; ticker: string; strongBuy: number; buy: number; hold: number; sell: number; strongSell: number }>("analyst_actions");
   const { data: liveNews } = useCollection<{ id: string; ticker: string; headline: string; publishedAt: string }>("news");
   const { data: liveInsider } = useCollection<{ id: string; ticker: string; ownerName: string | null; acquiredOrDisposed: string; shares: number; transactionDate: string }>("insider_transactions");
-  const yearBars = useOhlcvBars(sym, "1Y");
+  const yearBars = useChartBars(sym, "1Y");
+  const divHist = useDividendHistory(sym);
+  const fin = useFinancials(sym);
+  // Latest daily bar for REAL pivots (was fixed multiples of price).
+  const lastBar = yearBars && yearBars.length > 0 ? yearBars[yearBars.length - 1] : null;
   const [emaStep, setEmaStep] = useState(0);
-  const realBars = useOhlcvBars(sym, tfActive);
+  const realBars = useChartBars(sym, tfActive);
 
   // ── Notes (Firebase stock_comments) ──────────────────────────────────────
   const [notes, setNotes]       = useState<StockNote[]>([]);
@@ -465,9 +509,17 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     setCtxMenu({ x: e.clientX, y: e.clientY });
   }
 
-  const suggestions = SYMBOLS.filter(s =>
-    search && s.toLowerCase().startsWith(search.toLowerCase())
-  );
+  // Live search over the full ~10k-ticker universe by BOTH symbol and company
+  // name (useTickerSearch). Falls back to the static symbol list only when the
+  // live query returns nothing (offline / universe not yet synced).
+  const liveResults = useTickerSearch(search);
+  const suggestions: { ticker: string; name: string | null }[] = liveResults.length > 0
+    ? liveResults.map(r => ({ ticker: r.ticker, name: r.name }))
+    : (search
+        ? SYMBOLS
+            .filter(s => s.toLowerCase().startsWith(search.toLowerCase()))
+            .map(s => ({ ticker: s, name: null }))
+        : []);
 
   const info = stockInfo[sym];
   const ss = screenerStocks.find(x => x.ticker ===sym);
@@ -591,12 +643,46 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const macd = liveCompany?.macd != null ? liveCompany.macd : data.pctChange * 2.6;
   const macdBuy = liveCompany?.macd != null ? macd >= (liveCompany.macdSignal ?? 0) : isUp;
   const dollar = Math.abs(data.pctChange / 100 * p);
-  const avgVol = Math.max(1, Math.round(mc * 1000 / p * 0.012));
+  // Real 20-session average volume, in millions. The fallback below is the old
+  // formula — market cap over price times a constant — which is a function of
+  // company size, not of how much stock actually trades.
+  const avgVol = liveCompany?.avgVolume20 != null
+    ? Math.max(0.1, Math.round((liveCompany.avgVolume20 / 1e6) * 10) / 10)
+    : Math.max(1, Math.round(mc * 1000 / p * 0.012));
+  // Session VWAP straight off the last daily bar.
+  const vwap = liveCompany?.vwap ?? null;
 
   const cap = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : v >= 10 ? `$${Math.round(v)}B` : `$${v.toFixed(1)}B`;
   const nf = (x: number) => Math.round(x).toLocaleString("en-US");
-  const lo = p * (rs > 60 ? 0.58 : 0.78), hi = p * 1.02;
-  const S1 = p * 0.965, S2 = p * 0.93, R1 = p * 1.03, R2 = p * 1.06;
+  // True rolling-52-week range from a year of daily highs/lows. These were
+  // `p * 0.58` and `p * 1.02` — fixed multiples of the CURRENT price, which
+  // means the "52W High" was always ~2% above spot and the range moved with the
+  // last tick instead of with the year.
+  const lo = liveCompany?.low52 ?? p * (rs > 60 ? 0.58 : 0.78);
+  const hi = liveCompany?.high52 ?? p * 1.02;
+  const has52w = liveCompany?.high52 != null && liveCompany?.low52 != null;
+
+  /** One Moving-Averages drawer row from the real ladder, or the legacy multiple. */
+  const maRow = (
+    label: string,
+    kind: "sma" | "ema",
+    period: number,
+    fallbackMultiple: number,
+  ): [string, string, string] => {
+    const ladder = kind === "sma" ? liveCompany?.smaLadder : liveCompany?.emaLadder;
+    const value = ladder?.[String(period)] ?? null;
+    if (value == null) {
+      return [label, nf(p * fallbackMultiple), (period >= 200 ? rs > 50 : isUp) ? "Buy" : "Sell"];
+    }
+    return [label, nf(value), p >= value ? "Buy" : "Sell"];
+  };
+  // Classic pivots from the last real daily bar (H/L/C); fall back to the old
+  // price-multiple estimate only when bars haven't loaded.
+  const _pv = lastBar ? (lastBar.h + lastBar.l + lastBar.c) / 3 : p;
+  const S1 = lastBar ? 2 * _pv - lastBar.h : p * 0.965;
+  const S2 = lastBar ? _pv - (lastBar.h - lastBar.l) : p * 0.93;
+  const R1 = lastBar ? 2 * _pv - lastBar.l : p * 1.03;
+  const R2 = lastBar ? _pv + (lastBar.h - lastBar.l) : p * 1.06;
 
   const trendTxt = isUp && rs >= 70
     ? "<b>Strong uptrend.</b> Higher highs and higher lows; momentum confirmed by recent strength."
@@ -612,8 +698,8 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     ["MACD (12,26)", macd.toFixed(1), macdBuy ? "Buy" : "Sell"],
     ["Stoch %K", (50 + data.pctChange * 4).toFixed(1), (50 + data.pctChange * 4) > 80 ? "Sell" : "Buy"],
     ["ADX (14)", (20 + Math.abs(data.pctChange) * 2).toFixed(1), isUp ? "Buy" : "Sell"],
-    ["EMA 50", nf(p * 0.94), isUp ? "Buy" : "Sell"],
-    ["SMA 200", nf(p * 0.74), rs > 50 ? "Buy" : "Sell"],
+    ["SMA 50", liveCompany?.sma50 != null ? nf(liveCompany.sma50) : nf(p * 0.94), (liveCompany?.sma50 != null ? p >= liveCompany.sma50 : isUp) ? "Buy" : "Sell"],
+    ["SMA 200", liveCompany?.sma200 != null ? nf(liveCompany.sma200) : nf(p * 0.74), (liveCompany?.sma200 != null ? p >= liveCompany.sma200 : rs > 50) ? "Buy" : "Sell"],
   ];
 
   const finRows: [string, number[], string, string][] = [
@@ -636,7 +722,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     ["Q2 24", qeps * 0.9,  5  * beatSign],
     ["Q1 24", qeps * 0.85, 4  * beatSign],
   ];
-  const hist10 = earnHistory(sym, qeps);
+  const hist10 = fin.hasData && fin.epsHistory.length > 0 ? fin.epsHistory : earnHistory(sym, qeps);
 
   const sectorInfo = sectorByName[group];
   const sectorTrend = sectorInfo?.trend ?? "Flat";
@@ -648,10 +734,22 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const inSectorTotal = liveCompany?.sectorRankTotal ?? null;
   const topSectors = sectorList.slice(0, 5);
 
-  const peers = screenerStocks
-    .filter(x => x.sector === group && x.ticker !== sym)
-    .slice(0, 5)
-    .map(x => ({ t: x.ticker, c: (x.relativeStrength - 50) / 10 }));
+  // Real peers from Polygon /v1/related-companies (synced onto the company doc),
+  // with each peer's real day change looked up from `companies`. Previously this
+  // took whatever shared the sector in the static screener list and invented the
+  // "change" as `(relativeStrength - 50) / 10` — a rescaled RS rank wearing a
+  // percentage sign. Falls back to the old sector filter for tickers the peers
+  // job hasn't reached, so the card never empties.
+  const livePeerTickers = liveCompany?.peers?.filter(t => t !== sym) ?? [];
+  const peers = livePeerTickers.length > 0
+    ? livePeerTickers.slice(0, 5).map(t => {
+        const c = companies.find(x => x.ticker === t);
+        return { t, c: c?.pctChange ?? 0, real: c?.pctChange != null };
+      })
+    : screenerStocks
+        .filter(x => x.sector === group && x.ticker !== sym)
+        .slice(0, 5)
+        .map(x => ({ t: x.ticker, c: (x.relativeStrength - 50) / 10, real: false }));
   const pcs = peers.map(x => x.c);
   const pmx = pcs.length ? Math.max(...pcs) : 0;
   const pmn = pcs.length ? Math.min(...pcs) : 0;
@@ -694,22 +792,23 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <div style={{
                 position: "absolute", top: "100%", left: 0, background: "var(--surface-1)",
                 border: "1px solid var(--border)", borderRadius: "var(--r-sm)", zIndex: 20,
-                minWidth: 180, marginTop: 2,
+                minWidth: 280, marginTop: 2,
               }}>
-                {suggestions.slice(0, 6).map(s => (
-                  <div key={s} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 6px 12px" }}
+                {suggestions.slice(0, 8).map(r => (
+                  <div key={r.ticker} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 6px 12px", gap: 8 }}
                     onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                    <div onMouseDown={() => selectSym(s)}
-                      style={{ flex: 1, cursor: "pointer", fontSize: "0.7812rem", color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>
-                      {s}
+                    <div onMouseDown={() => selectSym(r.ticker)}
+                      style={{ flex: 1, cursor: "pointer", minWidth: 0 }}>
+                      <span style={{ fontSize: "0.7812rem", color: "var(--text-hi)", fontFamily: "var(--f-mono)" }}>{r.ticker}</span>
+                      {r.name && <span style={{ fontSize: "0.68rem", color: "var(--text-dim-solid)", marginLeft: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>}
                     </div>
                     <button
-                      onMouseDown={e => { e.preventDefault(); toggleWatchlist(s); }}
-                      title={watchedSet.has(s) ? "Remove from watchlist" : "Add to watchlist"}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 4px",
-                        color: watchedSet.has(s) ? "var(--warn)" : "var(--text-dim-solid)", lineHeight: 1 }}>
-                      {watchedSet.has(s) ? "★" : "☆"}
+                      onMouseDown={e => { e.preventDefault(); toggleWatchlist(r.ticker); }}
+                      title={watchedSet.has(r.ticker) ? "Remove from watchlist" : "Add to watchlist"}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 4px", flexShrink: 0,
+                        color: watchedSet.has(r.ticker) ? "var(--warn)" : "var(--text-dim-solid)", lineHeight: 1 }}>
+                      {watchedSet.has(r.ticker) ? "★" : "☆"}
                     </button>
                   </div>
                 ))}
@@ -753,6 +852,16 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
       )}
 
       <div className="sd-grid" style={hideHeader ? { paddingTop: 0 } : undefined}>
+
+        {/* Live-price evaluation: our SSE pipeline beside the TradingView
+            widget, for comparing the two approaches. Search page only — the
+            embedded copies of this screen (movers drawer, watchlist, portfolio)
+            must not each open their own stream. */}
+        {showLiveCompare && (
+          <div style={{ gridColumn: "1 / -1" }}>
+            <LiveCompare ticker={sym} exchange={liveCompany?.exchange ?? null} />
+          </div>
+        )}
 
         {/* Full-width chart */}
         {!hideChart && <div style={{ gridColumn: "1 / -1" }}>
@@ -822,7 +931,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                     {Math.round(rsi)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
                   </span>
                 </div>
-                <div style={{ padding: "0 14px 4px" }}><RsiPane sym={sym} tf={tfActive} /></div>
+                <div style={{ padding: "0 14px 4px" }}><RsiPane sym={sym} tf={tfActive} series={liveCompany?.rsi14Series ?? undefined} /></div>
               </div>
             )}
             {showEarnings && (
@@ -930,7 +1039,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
 
           {/* Financials — grouped bar chart */}
           {(() => {
-            const inc     = earnIncome(mc, mg, p, finPeriod);
+            const inc     = fin.hasData && fin.incomeRows.length > 0 ? fin.incomeRows : earnIncome(mc, mg, p, finPeriod);
             const histEps = finPeriod === "Q" ? hist10.slice(0, 10) : earnHistAnnual(hist10);
             const beatsOf = histEps.filter(h => h.surp >= 0).length;
             const latestA = histEps[0]?.a ?? 0;
@@ -1111,26 +1220,51 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
         {/* Dividend history — row 3, col 1 */}
         {/* alignSelf stretch is default on grid children; explicit here for clarity */}
         {(() => {
-          const annualDiv = p * (data.dividendYield / 100);
-          const qDiv = annualDiv / 4;
+          // Real payments when the corporate-actions job has covered this ticker.
+          // The `else` branch is the original extrapolation — quarterly amount
+          // decayed by a fixed 6.5%/yr and an ex-day derived from the ticker's
+          // first character — kept only so unsynced names still render.
+          const hasReal = divHist?.isPayer && divHist.history.length > 0;
+          const annualDiv = divHist?.ttmTotal ?? p * (data.dividendYield / 100);
+          const qDiv = hasReal && divHist.ttmPayments > 0
+            ? annualDiv / divHist.ttmPayments
+            : annualDiv / 4;
           const exDay = 6 + (sym.charCodeAt(0) % 22);
-          const payoutRatio = data.dividendYield > 0 && data.eps > 0
+          const payoutRatio = annualDiv > 0 && data.eps > 0
             ? Math.min(99, Math.round((annualDiv / data.eps) * 100)) : 0;
-          const DROWS = [
-            { label: "Q2'25", mo: "Apr", dy: exDay },
-            { label: "Q1'25", mo: "Jan", dy: exDay },
-            { label: "Q4'24", mo: "Oct", dy: exDay },
-            { label: "Q3'24", mo: "Jul", dy: exDay },
-            { label: "Q2'24", mo: "Apr", dy: exDay },
-          ];
-          const divRows = DROWS.map((r, i) => ({ ...r, perShare: qDiv / Math.pow(1.065, i / 4) }));
+          const yieldPct = divHist?.yieldPct ?? data.dividendYield;
+          const growthLabel = divHist?.cagr5yPct != null
+            ? `${divHist.cagr5yPct >= 0 ? "+" : ""}${divHist.cagr5yPct.toFixed(1)}% / yr · payout ${payoutRatio}%`
+            : yieldPct > 0 ? `payout ${payoutRatio}%` : "No dividend declared";
+          // Next ex-date is the first future one in the real history; the vendor
+          // publishes declared-but-not-yet-ex events, so this is a real countdown.
+          const nextEx = hasReal
+            ? divHist.history.map(h => daysUntil(h.exDividendDate)).find(d => d != null) ?? null
+            : (yieldPct > 0 ? exDay - 1 : null);
+          const divRows = hasReal
+            ? divHist.history.slice(0, 5).map(h => ({
+                label: quarterLabel(h.exDividendDate),
+                ex: shortDate(h.exDividendDate),
+                perShare: h.amount,
+                special: h.dividendType != null && h.dividendType !== "CD",
+              }))
+            : [
+                { label: "Q2'25", mo: "Apr" }, { label: "Q1'25", mo: "Jan" },
+                { label: "Q4'24", mo: "Oct" }, { label: "Q3'24", mo: "Jul" },
+                { label: "Q2'24", mo: "Apr" },
+              ].map((r, i) => ({
+                label: r.label,
+                ex: `${r.mo} ${exDay}`,
+                perShare: qDiv / Math.pow(1.065, i / 4),
+                special: false,
+              }));
           return (
             <div className="card">
               <div className="card-h">
                 <h3>Dividend history</h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {data.dividendYield > 0
-                    ? <span className="pill up">{data.dividendYield.toFixed(2)}% yield</span>
+                  {yieldPct > 0
+                    ? <span className="pill up">{yieldPct.toFixed(2)}% yield</span>
                     : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>}
                   <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                 </div>
@@ -1138,21 +1272,27 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <div className="card-b" style={{ paddingTop: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                   <div className="cd">
-                    <span className="num">{data.dividendYield > 0 ? exDay - 1 : "—"}</span>
+                    <span className="num">{nextEx ?? "—"}</span>
                     <span className="u">days to<br />ex-div</span>
                   </div>
                   <div>
-                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>5-yr dividend growth</div>
-                    <div style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>
-                      {data.dividendYield > 0 ? `+6.5% / yr · payout ${payoutRatio}%` : "No dividend declared"}
+                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>
+                      5-yr dividend growth
+                      {divHist != null && divHist.increaseStreakYears > 0 && (
+                        <span style={{ color: "var(--up)" }}> · {divHist.increaseStreakYears}y streak</span>
+                      )}
                     </div>
+                    <div style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>{growthLabel}</div>
                   </div>
                 </div>
-                {data.dividendYield > 0 ? divRows.map(q => (
-                  <div key={q.label} className="minirow">
+                {yieldPct > 0 ? divRows.map(q => (
+                  <div key={`${q.label}-${q.ex}`} className="minirow">
                     <span className="tkr" style={{ width: 60 }}>{q.label}</span>
-                    <span className="mid mono">${q.perShare.toFixed(4)}/sh</span>
-                    <span className="r" style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>ex {q.mo} {q.dy}</span>
+                    <span className="mid mono">
+                      ${q.perShare.toFixed(4)}/sh
+                      {q.special && <span style={{ color: "var(--warn)", marginLeft: 4 }}>special</span>}
+                    </span>
+                    <span className="r" style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>ex {q.ex}</span>
                   </div>
                 )) : (
                   [["Annual dividend","—"],["Quarterly","—"],["Payout ratio","—"],["5-yr growth","—"],["Ex-div date","—"]].map(r => (
@@ -1163,8 +1303,12 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   ))
                 )}
                 <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
-                  <span className="mid">Annual ({data.dividendYield > 0 ? "4 payments" : "no payments"})</span>
-                  <span className="r" style={{ color: "var(--text-hi)" }}>{data.dividendYield > 0 ? `$${annualDiv.toFixed(2)}/sh` : "—"}</span>
+                  <span className="mid">
+                    Annual ({yieldPct > 0
+                      ? `${divHist?.ttmPayments ?? 4} payment${(divHist?.ttmPayments ?? 4) === 1 ? "" : "s"}`
+                      : "no payments"})
+                  </span>
+                  <span className="r" style={{ color: "var(--text-hi)" }}>{yieldPct > 0 ? `$${annualDiv.toFixed(2)}/sh` : "—"}</span>
                 </div>
               </div>
             </div>
@@ -1369,20 +1513,21 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 <table className="ind-tbl">
                   <tbody>
                     {([
-                      ["SMA 10",  nf(p * 0.982), isUp ? "Buy" : "Sell"],
-                      ["SMA 20",  nf(p * 0.964), isUp ? "Buy" : "Sell"],
-                      ["SMA 30",  nf(p * 0.944), isUp ? "Buy" : "Sell"],
-                      ["SMA 50",  nf(p * 0.906), isUp ? "Buy" : "Sell"],
-                      ["SMA 100", nf(p * 0.822), isUp ? "Buy" : "Sell"],
-                      ["SMA 200", nf(p * 0.740), rs > 50 ? "Buy" : "Sell"],
-                      ["EMA 10",  nf(p * 0.988), isUp ? "Buy" : "Sell"],
-                      ["EMA 20",  nf(p * 0.968), isUp ? "Buy" : "Sell"],
-                      ["EMA 30",  nf(p * 0.948), isUp ? "Buy" : "Sell"],
-                      ["EMA 50",  nf(p * 0.938), isUp ? "Buy" : "Sell"],
-                      ["EMA 100", nf(p * 0.848), isUp ? "Buy" : "Sell"],
-                      ["EMA 200", nf(p * 0.762), rs > 50 ? "Buy" : "Sell"],
+                      // Every SMA/EMA row below was a fixed multiple of the current
+                      // price (SMA 50 = p * 0.906), which makes the "moving
+                      // average" move with the last tick and always sit the same
+                      // distance below spot. maRow reads the real ladder computed
+                      // from daily closes, and the Buy/Sell verdict becomes the
+                      // actual price-vs-MA comparison rather than the sign of the
+                      // day's move. Fallbacks keep the old multiples for tickers
+                      // the indicators job hasn't covered.
+                      ...MA_LADDER_ROWS.map(([label, kind, period, fallback]) =>
+                        maRow(label, kind as "sma" | "ema", period as number, fallback as number)),
                       ["Ichimoku Base", nf(p * 0.970), isUp ? "Buy" : "Sell"],
-                      ["VWAP",    nf(p * 0.994), isUp ? "Above" : "Below"],
+                      // Real session VWAP off the last daily bar.
+                      ["VWAP",
+                        vwap != null ? nf(vwap) : nf(p * 0.994),
+                        (vwap != null ? p >= vwap : isUp) ? "Above" : "Below"],
                       ["Hull MA (9)", nf(p * 0.991), isUp ? "Buy" : "Sell"],
                     ] as [string, string, string][]).map(r => (
                       <tr key={r[0]}>
@@ -1627,7 +1772,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
 
           {/* Financials */}
           {innerDrawer === "financials" && (() => {
-            const inc = earnIncome(mc, mg, p, finPeriod);
+            const inc = fin.hasData && fin.incomeRows.length > 0 ? fin.incomeRows : earnIncome(mc, mg, p, finPeriod);
             const fb = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
             const beats10 = hist10.filter(h => h.surp >= 0).length;
             const avgMv = (hist10.reduce((a, h) => a + Math.abs(h.mv), 0) / hist10.length).toFixed(1);
@@ -1733,29 +1878,50 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
           })()}
 
           {innerDrawer === "dividend" && (() => {
-            const annualDiv = p * (data.dividendYield / 100);
-            const qDiv = annualDiv / 4;
-            const QLABELS = ["Q3'24","Q4'24","Q1'25","Q2'25","Q3'25","Q4'25","Q1'26","Q2'26"];
-            const divAmts = QLABELS.map((_, i) => qDiv * Math.pow(1 / 1.065, (7 - i) / 4));
+            // Real payments when synced. The QLABELS/`Math.pow(1/1.065, …)` path
+            // below was a fabricated series: eight quarters back-extrapolated from
+            // the current amount at a fixed growth rate, with hardcoded "Jul/Aug
+            // 2025" dates that never advanced.
+            const hasReal = divHist?.isPayer && divHist.history.length > 0;
+            const recent = hasReal ? divHist.history.slice(0, 8).reverse() : [];
+            const annualDiv = divHist?.ttmTotal ?? p * (data.dividendYield / 100);
+            const perYear = hasReal && divHist.ttmPayments > 0 ? divHist.ttmPayments : 4;
+            const qDiv = annualDiv / perYear;
+            const yieldPct = divHist?.yieldPct ?? data.dividendYield;
+            const QLABELS = hasReal
+              ? recent.map(h => quarterLabel(h.exDividendDate))
+              : ["Q3'24","Q4'24","Q1'25","Q2'25","Q3'25","Q4'25","Q1'26","Q2'26"];
+            const divAmts = hasReal
+              ? recent.map(h => h.amount)
+              : QLABELS.map((_, i) => qDiv * Math.pow(1 / 1.065, (7 - i) / 4));
             const maxAmt = Math.max(...divAmts) * 1.15 || 1;
             const W = 420, H = 110, PADB = 22, PADT = 14;
             const bw = W / QLABELS.length * 0.55;
             const gap = W / QLABELS.length;
-            const exDay = 6 + (sym.charCodeAt(0) % 22);
-            const payDay = exDay + 30;
+            // Next declared-but-not-yet-paid event, if the vendor has published one.
+            const upcoming = hasReal
+              ? divHist.history.find(h => daysUntil(h.exDividendDate) != null) ?? null
+              : null;
+            const freqLabel = { 1: "Annual", 2: "Semi-Annual", 4: "Quarterly", 12: "Monthly" }[
+              divHist?.frequency ?? 4
+            ] ?? "Quarterly";
+            const payoutPct = data.eps > 0 ? Math.round((annualDiv / data.eps) * 100) : 0;
+            const growthTxt = divHist?.cagr5yPct != null
+              ? `${divHist.cagr5yPct >= 0 ? "+" : ""}${divHist.cagr5yPct.toFixed(1)}%/yr`
+              : "—";
             return (
               <div className="side-drawer" style={{ zIndex: 52 }}>
                 <div className="drawer-h">
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Dividend History · {sym}</div>
                     <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-                      {data.dividendYield > 0 ? `${data.dividendYield.toFixed(2)}% yield · $${annualDiv.toFixed(2)}/yr` : "No dividend paid"}
+                      {yieldPct > 0 ? `${yieldPct.toFixed(2)}% yield · $${annualDiv.toFixed(2)}/yr` : "No dividend paid"}
                     </div>
                   </div>
                   <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
                 </div>
                 <div className="drawer-b">
-                  {data.dividendYield === 0 ? (
+                  {yieldPct === 0 ? (
                     <div style={{ padding: "24px 0", textAlign: "center", fontSize: ".9rem", color: "var(--text-dim-solid)" }}>
                       {sym} does not currently pay a dividend.
                     </div>
@@ -1764,12 +1930,12 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                       <div className="metric-grid" style={{ marginBottom: 14 }}>
                         <div className="m"><div className="k">Annual</div><div className="v">${annualDiv.toFixed(2)}</div></div>
                         <div className="m"><div className="k">Quarterly</div><div className="v">${qDiv.toFixed(2)}</div></div>
-                        <div className="m"><div className="k">Yield</div><div className="v up">{data.dividendYield.toFixed(2)}%</div></div>
-                        <div className="m"><div className="k">5-yr growth</div><div className="v up">+6.5%/yr</div></div>
-                        <div className="m"><div className="k">Payout ratio</div><div className="v">{Math.round((annualDiv / data.eps) * 100)}%</div></div>
-                        <div className="m"><div className="k">Frequency</div><div className="v">Quarterly</div></div>
+                        <div className="m"><div className="k">Yield</div><div className="v up">{yieldPct.toFixed(2)}%</div></div>
+                        <div className="m"><div className="k">5-yr growth</div><div className={`v${divHist?.cagr5yPct != null && divHist.cagr5yPct >= 0 ? " up" : ""}`}>{growthTxt}</div></div>
+                        <div className="m"><div className="k">Payout ratio</div><div className="v">{payoutPct}%</div></div>
+                        <div className="m"><div className="k">Frequency</div><div className="v">{freqLabel}</div></div>
                       </div>
-                      <div className="ai-sec"><div className="h">Quarterly dividend per share</div></div>
+                      <div className="ai-sec"><div className="h">Dividend per share</div></div>
                       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", margin: "10px 0 14px" }}>
                         {divAmts.map((v, i) => {
                           const bh = (v / maxAmt) * (H - PADT - PADB);
@@ -1792,34 +1958,57 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                           );
                         })}
                       </svg>
-                      <div className="ai-sec"><div className="h">Upcoming dates</div></div>
-                      <div className="minirow" style={{ marginTop: 8 }}>
-                        <span className="mid">Ex-dividend date</span>
-                        <span className="r mono" style={{ color: "var(--warn)" }}>Jul {exDay}, 2025</span>
+                      <div className="ai-sec">
+                        <div className="h">{upcoming ? "Upcoming dates" : "Most recent dates"}</div>
                       </div>
-                      <div className="minirow">
-                        <span className="mid">Payment date</span>
-                        <span className="r mono">Aug {payDay - 31}, 2025</span>
-                      </div>
-                      <div className="minirow">
-                        <span className="mid">Declaration date</span>
-                        <span className="r mono">Jun {Math.max(1, exDay - 10)}, 2025</span>
-                      </div>
+                      {(() => {
+                        // Real declared dates. These were three hardcoded strings
+                        // ("Jul {exDay}, 2025") that never moved with the calendar.
+                        const ev = upcoming ?? (hasReal ? divHist.history[0] : null);
+                        const fmtFull = (d: string | null) =>
+                          d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US",
+                            { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "—";
+                        return (
+                          <>
+                            <div className="minirow" style={{ marginTop: 8 }}>
+                              <span className="mid">Ex-dividend date</span>
+                              <span className="r mono" style={{ color: "var(--warn)" }}>{fmtFull(ev?.exDividendDate ?? null)}</span>
+                            </div>
+                            <div className="minirow">
+                              <span className="mid">Payment date</span>
+                              <span className="r mono">{fmtFull(ev?.paymentDate ?? null)}</span>
+                            </div>
+                            <div className="minirow">
+                              <span className="mid">Declaration date</span>
+                              <span className="r mono">{fmtFull(ev?.declarationDate ?? null)}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                       <div className="card" style={{ marginTop: 14 }}>
                         <div className="card-h"><h3 className="ai-c">◆ AI dividend read · {sym}</h3></div>
                         <div className="card-b">
                           <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>
-                            {sym} yields <b style={{ color: "var(--up)" }}>{data.dividendYield.toFixed(2)}%</b>, paying ${annualDiv.toFixed(2)}/share annually (${qDiv.toFixed(2)} quarterly).
-                            The 5-year dividend CAGR is +6.5% with a payout ratio of {Math.round((annualDiv / data.eps) * 100)}%.
-                            {Math.round((annualDiv / data.eps) * 100) < 60
+                            {sym} yields <b style={{ color: "var(--up)" }}>{yieldPct.toFixed(2)}%</b>, paying ${annualDiv.toFixed(2)}/share over the last twelve months
+                            (${qDiv.toFixed(2)} per payment, {freqLabel.toLowerCase()}).
+                            {divHist?.cagr5yPct != null
+                              ? ` The 5-year dividend CAGR is ${growthTxt} with a payout ratio of ${payoutPct}%.`
+                              : ` Payout ratio is ${payoutPct}%.`}
+                            {divHist != null && divHist.increaseStreakYears > 0
+                              && ` It has raised the annual payout ${divHist.increaseStreakYears} year${divHist.increaseStreakYears === 1 ? "" : "s"} running.`}
+                            {payoutPct > 0 && (payoutPct < 60
                               ? " Payout is conservative — suggests room for future increases."
-                              : " Payout is elevated — monitor earnings coverage carefully."}
-                            {" "}Next ex-date is <b style={{ color: "var(--warn)" }}>Jul {exDay}, 2025</b>.
+                              : " Payout is elevated — monitor earnings coverage carefully.")}
+                            {upcoming?.exDividendDate && (
+                              <> Next ex-date is <b style={{ color: "var(--warn)" }}>{shortDate(upcoming.exDividendDate)}</b>.</>
+                            )}
                           </p>
                         </div>
                       </div>
                       <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 10 }}>
-                        Dividend data is illustrative. Verify with company IR and SEC filings. Not investment advice.
+                        {hasReal
+                          ? "Dividend history from Polygon corporate actions. Verify with company IR and SEC filings. Not investment advice."
+                          : "Dividend data is illustrative — not yet synced for this ticker. Verify with company IR and SEC filings. Not investment advice."}
                       </div>
                     </>
                   )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cls, arr, sign } from "../utils";
+import { cls, arr, sign, SampleBadge } from "../utils";
 import { useCollection } from "../hooks/useCollection";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
@@ -157,6 +157,7 @@ export function ThemesScreen() {
             {leader  && <> · Leader: <b>{leader.s}</b> <span className="up">{sign(leader.c)}</span></>}
             {laggard && laggard.s !== leader?.s && <> · Laggard: <b>{laggard.s}</b> <span className="down">{sign(laggard.c)}</span></>}
             {liveCount > 0 && <> · <span style={{ color: "var(--up)" }}>{liveCount} live</span></>}
+            {liveCount < stocks.length && <> · <SampleBadge text="some prices sample" title="Tickers not in the synced universe show frozen sample prices" /></>}
           </div>
         </div>
       </div>

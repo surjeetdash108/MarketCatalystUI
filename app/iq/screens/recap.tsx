@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { recap, sectorList, earnings } from "../data";
-import { cls, arr, sign, StockLogo, heatCol } from "../utils";
+import { cls, arr, sign, StockLogo, heatCol, SampleBadge } from "../utils";
 
 const SEC_PAGE = 10;
 const SEC_PAGES = Math.ceil(sectorList.length / SEC_PAGE);
@@ -320,7 +320,7 @@ export function RecapScreen() {
       {/* ── Page head ── */}
       <div className="page-head">
         <div>
-          <h1 className="page-title">{activeTab === 1 ? "Weekly Recap" : "End-of-Day Recap"}</h1>
+          <h1 className="page-title">{activeTab === 1 ? "Weekly Recap" : "End-of-Day Recap"} <SampleBadge title="Recap content is illustrative until the Recaps EOD data job (R28) is live" /></h1>
         </div>
         <div className="tabs">
           {TABS.map((t, i) => (

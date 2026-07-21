@@ -2,11 +2,11 @@
 
 import { useRef, useState } from "react";
 import { useIQActions } from "../shell";
-import { sectorList, movers, screenerStocks, type SectorRow } from "../data";
+import { sectorList, type SectorRow } from "../data";
 import { sign, heatCol, fmt, cls, StockLogo } from "../utils";
 import { useCollection } from "../hooks/useCollection";
 
-const TABS = ["Stocks", "S&P 500"];
+const TABS = ["Day %", "Week %"];
 const HEADER_H = 24;
 const APPROX_W = 1100;
 const APPROX_H = 620;
@@ -50,9 +50,26 @@ interface HoverStock {
 
 interface CompanyDoc {
   id: string; ticker: string; price: number | null; pctChange: number | null; marketCap: number | null;
+  // Live technicals (technical-indicators.job / rs-rating.job) — power the
+  // hover tooltip and the Day/Week heat toggle, replacing static data.ts reads.
+  rvol?: number | null; rsRating?: number | null;
+  aboveSma50?: boolean | null; aboveSma200?: boolean | null;
+  week5ChangePct?: number | null;
 }
 interface SectorApiDoc {
   id: string; sector: string; pctChange: number;
+}
+
+type HeatMode = "day" | "week";
+
+/** MA status label from the live price-vs-SMA flags. */
+function maStatusFrom(c: CompanyDoc | undefined): string | null {
+  if (!c || (c.aboveSma50 == null && c.aboveSma200 == null)) return null;
+  const a50 = c.aboveSma50, a200 = c.aboveSma200;
+  if (a50 == null || a200 == null) return (a50 ?? a200) ? "Above key MA" : "Below key MA";
+  if (a50 && a200) return "Above 50 & 200";
+  if (!a50 && !a200) return "Below 50 & 200";
+  return a50 ? "Above 50, below 200" : "Below 50, above 200";
 }
 
 /**
@@ -60,7 +77,12 @@ interface SectorApiDoc {
  * the original curated sectorList — never drops a sector or stock, only
  * overrides values where real data exists.
  */
-function mergeSectorList(base: SectorRow[], companies: CompanyDoc[], sectorsLive: SectorApiDoc[]): SectorRow[] {
+function mergeSectorList(
+  base: SectorRow[],
+  companies: CompanyDoc[],
+  sectorsLive: SectorApiDoc[],
+  mode: HeatMode,
+): SectorRow[] {
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
   const sectorPctByName = new Map(sectorsLive.map(s => [s.sector, s.pctChange]));
 
@@ -69,15 +91,26 @@ function mergeSectorList(base: SectorRow[], companies: CompanyDoc[], sectorsLive
     const items: [string, number, number][] = row.items.map(([sym, mcap, chg]) => {
       const c = companyByTicker.get(sym);
       if (!c) return [sym, mcap, chg];
-      const liveMcap = c.marketCap != null ? c.marketCap / 1e9 : mcap; // stored in $, sectorList uses $B
-      const liveChg = c.pctChange ?? chg;
+      const liveMcap = c.marketCap != null ? c.marketCap / 1e9 : mcap; // $ → $B
+      // Day = live day %change; Week = real 5-session change, falling back to
+      // the day move when a ticker has no week data yet.
+      const liveChg = mode === "week"
+        ? (c.week5ChangePct ?? c.pctChange ?? chg)
+        : (c.pctChange ?? chg);
       return [sym, liveMcap, liveChg];
     });
-    return {
-      ...row,
-      pctChange: liveSectorPct ?? row.pctChange,
-      items,
-    };
+
+    // Day mode uses the vendor sector %; Week has no vendor equivalent, so
+    // derive a cap-weighted average of member week changes.
+    let sectorPct: number;
+    if (mode === "week") {
+      let wSum = 0, wcSum = 0;
+      for (const [, m, ch] of items) { wSum += m; wcSum += m * ch; }
+      sectorPct = wSum > 0 ? wcSum / wSum : row.pctChange;
+    } else {
+      sectorPct = liveSectorPct ?? row.pctChange;
+    }
+    return { ...row, pctChange: sectorPct, items };
   });
 }
 
@@ -85,9 +118,11 @@ export function HeatmapScreen() {
   const { openSector, openStockFull } = useIQActions();
   const { data: companies } = useCollection<CompanyDoc>("companies");
   const { data: sectorsLive } = useCollection<SectorApiDoc>("sectors");
-  const mergedSectorList = mergeSectorList(sectorList, companies, sectorsLive);
 
   const [tab, setTab]     = useState(0);
+  const heatMode: HeatMode = tab === 1 ? "week" : "day";
+  const mergedSectorList = mergeSectorList(sectorList, companies, sectorsLive, heatMode);
+  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
   const [hover, setHover] = useState<HoverStock | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -122,7 +157,7 @@ export function HeatmapScreen() {
       </div>
 
       <div className="fbar">
-        <button className="chip on">Color: % change</button>
+        <button className="chip on">Color: {heatMode === "week" ? "5-day" : "day"} % change</button>
         <div className="spacer" />
         <div className="legend" style={{ gap: 4 }}>
           <span style={{ fontSize: ".66rem", color: "var(--down)" }}>−3%</span>
@@ -239,8 +274,9 @@ export function HeatmapScreen() {
 
       {/* ── Hover tooltip ── */}
       {hover && (() => {
-        const mv  = movers.find(m => m.ticker === hover.sym);
-        const scr = screenerStocks.find(s => s.ticker === hover.sym);
+        // Live company doc (price/RVOL/RS/MA) — was static movers/screenerStocks.
+        const c = companyByTicker.get(hover.sym);
+        const maStatus = maStatusFrom(c);
         return (
           <div className="dash-pop"
             style={{ left: hover.x, top: hover.y, cursor: "default", width: 310, maxHeight: `${window.innerHeight - hover.y - 8}px`, overflowY: "auto" }}
@@ -254,10 +290,10 @@ export function HeatmapScreen() {
               <span className={`pill ${hover.chg >= 0 ? "up" : "dn"}`}>{sign(hover.chg)}</span>
             </div>
             <div className="dp-row"><span>Mkt Cap</span><b>{capFmt(hover.mcap)}</b></div>
-            {mv  && <div className="dp-row"><span>Price</span><b>${fmt(mv.price)}</b></div>}
-            {mv  && <div className="dp-row"><span>RVOL</span><b className={mv.rvolRatio >= 2 ? "up" : ""}>{mv.rvolRatio}×</b></div>}
-            {scr && <div className="dp-row"><span>RS Rating</span><b>{scr.relativeStrength}/99</b></div>}
-            {mv?.maPosture && <div className="dp-row"><span>MA Status</span><b className={cls(mv.pctChange)}>{mv.maPosture}</b></div>}
+            {c?.price != null && <div className="dp-row"><span>Price</span><b>${fmt(c.price)}</b></div>}
+            {c?.rvol != null && <div className="dp-row"><span>RVOL</span><b className={c.rvol >= 2 ? "up" : ""}>{c.rvol.toFixed(2)}×</b></div>}
+            {c?.rsRating != null && <div className="dp-row"><span>RS Rating</span><b>{Math.round(c.rsRating)}/99</b></div>}
+            {maStatus && <div className="dp-row"><span>MA Status</span><b className={cls(hover.chg)}>{maStatus}</b></div>}
 
             {/* Same-sector stock list */}
             {hover.peers.length > 0 && (

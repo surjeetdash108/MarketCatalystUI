@@ -74,6 +74,26 @@ service cloud.firestore {
       allow write: if false;  // Admin SDK only
     }
 
+    // Feature flags — one doc read by every client so the UI can gate screens
+    // live. Server-write-only (toggled via the backend Admin SDK).
+    match /feature_flags/{doc} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Daily market breadth (advancers/decliners/TRIN) — Dashboard internals
+    // + Fear-&-Greed history. Admin SDK only.
+    match /market_breadth/{doc} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // 10-quarter financial statements per ticker — Stock Detail / Earnings.
+    match /financials/{ticker} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
     // Full US ticker universe (name/exchange/type/active/cik only — no
     // fundamentals; see companies/{ticker} for that) — all authenticated users
     match /tickers/{ticker} {
@@ -85,6 +105,30 @@ service cloud.firestore {
     // (ticker, date). Feeds Stock Detail's chart; a future RS-Rating
     // computation depends on this accumulating history first.
     match /ohlcv_bars/{barId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Intraday aggregate bars — ONE doc per (ticker, resolution) holding an
+    // array of bars, not a doc per bar. Feeds the 1D/1W/1M chart timeframes,
+    // which rendered a synthetic random walk before this collection existed.
+    match /intraday_bars/{barsId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Declared dividend history per ticker (payments, annual totals, CAGR,
+    // increase streak) — Stock Detail's dividend card/drawer and the Macro
+    // dividend drawer, all of which previously extrapolated from one amount.
+    match /dividend_history/{ticker} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // Split history per ticker. No UI consumer yet — declared here so the read
+    // is allowed when one lands, since the default-deny at the bottom of this
+    // file would otherwise fail it silently.
+    match /splits/{ticker} {
       allow read:  if isAuthenticated();
       allow write: if false;
     }
@@ -235,10 +279,33 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Composite Fear & Greed reading (fear-greed.job → market_sentiment/fear_greed).
+    // This collection had NO rule, so the default-deny at the bottom of this file
+    // silently rejected every read and the Dashboard gauge fell back to its
+    // hardcoded 62/"Greed" — the job has been writing real values the UI could
+    // not see.
+    match /market_sentiment/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
 
     // ═════════════════════════════════════════════════════════════════════════
     // USER COLLECTIONS — scoped strictly to owning uid
     // ═════════════════════════════════════════════════════════════════════════
+
+    // User notes pinned to a chart. Each doc carries its owner's `uid`. Also
+    // previously unmatched, so the notes feature failed silently on every
+    // read and write.
+    match /stock_comments/{docId} {
+      allow read, delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.comment is string
+                    && request.resource.data.comment.size() <= 2000
+                    && request.resource.data.sym is string;
+      allow update: if false; // notes are immutable — delete and re-create to edit
+    }
 
     match /users/{uid} {
       // Only the user can read their own profile

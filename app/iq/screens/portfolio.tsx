@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { TickerSearchInput } from "../ticker-search-input";
 import { doc, onSnapshot, setDoc, deleteDoc, collection, Timestamp } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { folio as folioData, type FolioItem } from "../data";
@@ -267,12 +268,14 @@ export function PortfolioScreen() {
             </div>
             <div className="drawer-b" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Ticker</label>
-                <input className="inp"
-                  style={{ width: "100%", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "8px 12px", color: "var(--text)", fontSize: ".9rem" }}
-                  placeholder="e.g. NVDA"
-                  value={newSym} onChange={e => setNewSym(e.target.value.toUpperCase())}
-                  onKeyDown={e => { if (e.key === "Enter") addHolding(); }} />
+                <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Ticker or company name</label>
+                <TickerSearchInput
+                  placeholder="Ticker or company name — e.g. Nvidia"
+                  value={newSym}
+                  onChange={v => setNewSym(v.toUpperCase())}
+                  onPick={t => { setNewSym(t); }}
+                  onEnter={addHolding}
+                />
               </div>
               <div>
                 <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Position size</label>
