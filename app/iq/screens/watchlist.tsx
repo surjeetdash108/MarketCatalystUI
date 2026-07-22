@@ -8,6 +8,7 @@ import { watch as watchData } from "../data";
 import { useCollection } from "../hooks/useCollection";
 import { arr, sign } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
+import { trackFeatureOpen } from "../feature-adoption";
 
 interface CompanyDoc {
   id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
@@ -75,6 +76,7 @@ export function WatchlistScreen() {
     setSel(s);
     if (uid) {
       await setDoc(watchlistRef(uid), { name: "My Watchlist", tickers: arrayUnion(s), createdAt: Timestamp.now() }, { merge: true });
+      trackFeatureOpen("watchlist.add");
     }
   }
 
@@ -87,6 +89,7 @@ export function WatchlistScreen() {
     });
     if (uid) {
       await setDoc(watchlistRef(uid), { tickers: arrayRemove(sym) }, { merge: true });
+      trackFeatureOpen("watchlist.remove");
     }
   }
 

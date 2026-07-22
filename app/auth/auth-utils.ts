@@ -74,7 +74,11 @@ export async function completeGoogleLogin(userCredential: UserCredential) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    window.location.href = "/profile/edit";
+    // First Google sign-in: collect the investor profile before the app.
+    // The flag matters — profile/edit is ALSO reachable from the profile menu
+    // for an existing user, and that case must stay put after saving rather
+    // than bouncing to the dashboard.
+    window.location.href = "/profile/edit?onboarding=1";
     return;
   }
 

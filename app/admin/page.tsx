@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { signOut, updatePassword } from "firebase/auth";
-import { firebaseAuth } from "../firebase";
+import { firebaseAuth, firebaseDb } from "../firebase";
+import { doc, updateDoc } from "firebase/firestore";
+import { buildAdminDataset, ADMIN_DATA_KEY, ADMIN_EMAIL } from "./admin-data";
 
 /**
  * Admin console gate. The console itself is the exact static HTML at
@@ -13,12 +15,12 @@ import { firebaseAuth } from "../firebase";
  *
  * The admin is a single fixed account (email never changes; password can).
  */
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@marketcatalyst.ai").toLowerCase();
 
 export default function AdminPage() {
   const [state, setState] = useState<"checking" | "denied" | "ok">("checking");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const emailRef = useRef<string>("");
+  const [dataError, setDataError] = useState<string | null>(null);
 
   // Gate: resolve the session, allow only the admin email.
   useEffect(() => {
@@ -33,6 +35,23 @@ export default function AdminPage() {
       const email = user?.email?.toLowerCase() ?? "";
       emailRef.current = email;
       if (email === ADMIN_EMAIL) {
+        // Stage real Firestore data BEFORE mounting the iframe. The console
+        // renders once at module scope, so anything delivered after its load
+        // would be ignored — see the hand-off comment in console.html.
+        //
+        // Reads happen here, as the signed-in admin, so Firestore rules apply:
+        // isAdmin() is what permits the cross-user `users` read.
+        try {
+          const dataset = await buildAdminDataset();
+          sessionStorage.setItem(ADMIN_DATA_KEY, JSON.stringify(dataset));
+        } catch (err) {
+          // Leave the key unset so the console falls back to its demo data and
+          // shows its own "sample data" banner, rather than rendering an empty
+          // console that looks like a real business with no customers.
+          sessionStorage.removeItem(ADMIN_DATA_KEY);
+          setDataError((err as Error).message);
+        }
+        if (cancelled) return;
         setState("ok");
       } else {
         setState("denied");
@@ -50,6 +69,30 @@ export default function AdminPage() {
       if (d.type === "admin:logout") {
         await signOut(firebaseAuth);
         window.location.replace("/auth/login");
+      }
+      if (d.type === "admin:setPlanFlag") {
+        // The console iframe has no Firebase SDK, so it delegates the write
+        // here, where the admin session lives and Firestore rules authorise it.
+        const reply = (m: Record<string, unknown>) =>
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: "admin:setPlanFlagResult", planId: d.planId, key: d.key, value: d.value, ...m },
+            "*",
+          );
+        try {
+          const planId = String(d.planId);
+          const key = String(d.key);
+          const value = d.value === true;
+          if (!planId || !key) throw new Error("missing planId or key");
+          // Dotted path so only this one entitlement is written — a whole-map
+          // set would clobber a concurrent edit to a different flag.
+          await updateDoc(doc(firebaseDb, "plans", planId), {
+            [`featureFlags.${key}`]: value,
+            updatedAt: new Date().toISOString(),
+          });
+          reply({ ok: true });
+        } catch (err) {
+          reply({ ok: false, error: (err as Error).message });
+        }
       }
       if (d.type === "admin:changePassword") {
         const post = (m: Record<string, unknown>) =>
@@ -80,6 +123,17 @@ export default function AdminPage() {
   }
 
   return (
+    <>
+    {dataError && (
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 10000,
+        padding: "7px 14px", background: "rgba(255,93,122,.16)", color: "#ff5d7a",
+        borderBottom: "1px solid rgba(255,93,122,.4)",
+        font: "600 12px/1.4 system-ui, sans-serif", textAlign: "center",
+      }}>
+        ⚠ Could not load live admin data — showing sample data. {dataError}
+      </div>
+    )}
     <iframe
       ref={iframeRef}
       src="/admin/console.html"
@@ -92,5 +146,6 @@ export default function AdminPage() {
       }
       style={{ border: "none", width: "100vw", height: "100vh", display: "block" }}
     />
+    </>
   );
 }

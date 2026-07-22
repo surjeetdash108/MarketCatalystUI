@@ -17,6 +17,12 @@ function getSaveErrorMessage(error: unknown) {
 
 export function ProfileEditForm() {
   const router = useRouter();
+  // True only on the first-Google-sign-in pass (see completeGoogleLogin).
+  // An existing user editing from the profile menu must stay on this page.
+  const [isOnboarding, setIsOnboarding] = useState(false);
+  useEffect(() => {
+    setIsOnboarding(new URLSearchParams(window.location.search).has("onboarding"));
+  }, []);
   const dispatch = useAppDispatch();
   const { user } = useAppSelector(state => state.auth);
   const { data: savedProfile, status: profileStatus } = useAppSelector(state => state.profile);
@@ -63,6 +69,12 @@ export function ProfileEditForm() {
       await setDoc(doc(firebaseDb, "users", user.uid), { ...profile, updatedAt: serverTimestamp() }, { merge: true });
       dispatch(updateProfileData({ ...profile, uid: user.uid, tier: savedProfile?.tier ?? "free" }));
       setSuccess("Profile updated successfully.");
+      if (isOnboarding) {
+        // Full navigation, not router.push: this is the end of the auth flow and
+        // a hard load guarantees the shell re-reads the freshly written profile.
+        window.location.href = "/dashboard";
+        return;
+      }
     } catch (saveError) {
       const msg = getSaveErrorMessage(saveError);
       setError(msg);
@@ -134,7 +146,7 @@ export function ProfileEditForm() {
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
               <button type="button" className="iq-btn-ghost" onClick={() => router.push("/dashboard")}>
-                Cancel
+                {isOnboarding ? "Skip for now" : "Cancel"}
               </button>
               <button type="button" className="iq-btn-primary" disabled={isSaving} onClick={handleSave}>
                 {isSaving ? "Saving…" : "Save changes"}

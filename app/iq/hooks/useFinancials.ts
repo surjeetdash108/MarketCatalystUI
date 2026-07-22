@@ -20,7 +20,56 @@ export interface QuarterFinancials {
   netIncome: number | null;
   epsActual: number | null;
   epsEstimate: number | null;
+
+  // Balance sheet + cash flow. These arrive on the SAME vendor response that
+  // already served the income statement — financials.job used to discard them
+  // while the UI fabricated the corresponding panels.
+  costOfRevenue: number | null;
+  operatingExpenses: number | null;
+  researchAndDevelopment: number | null;
+  sellingGeneralAndAdministrative: number | null;
+  incomeTaxExpense: number | null;
+  dilutedAverageShares: number | null;
+
+  totalAssets: number | null;
+  currentAssets: number | null;
+  totalLiabilities: number | null;
+  currentLiabilities: number | null;
+  equity: number | null;
+  inventory: number | null;
+  longTermDebt: number | null;
+
+  netCashFlow: number | null;
+  operatingCashFlow: number | null;
+  investingCashFlow: number | null;
+  financingCashFlow: number | null;
+
+  grossMarginPct: number | null;
+  operatingMarginPct: number | null;
+  netMarginPct: number | null;
+  currentRatio: number | null;
+  filingDate: string | null;
 }
+
+/** One balance-sheet / cash-flow column, in $B to match the UI's scale. */
+export type BalanceRow = {
+  c: string;
+  assets: number | null;
+  currentAssets: number | null;
+  liabilities: number | null;
+  currentLiabilities: number | null;
+  equity: number | null;
+  longTermDebt: number | null;
+  inventory: number | null;
+  opCF: number | null;
+  invCF: number | null;
+  finCF: number | null;
+  netCF: number | null;
+  currentRatio: number | null;
+  grossMarginPct: number | null;
+  operatingMarginPct: number | null;
+  netMarginPct: number | null;
+};
 
 export interface FinancialsDoc {
   id: string;
@@ -77,6 +126,38 @@ export function useFinancials(sym: string) {
         };
       });
 
-    return { hasData, quarters, epsHistory, incomeRows };
+    // Balance sheet + cash flow, newest-first like `quarters`. Scaled to $B for
+    // the same reason incomeRows is: every existing panel renders in billions.
+    const b = (v: number | null) => (v == null ? null : v / 1e9);
+    const balanceRows: BalanceRow[] = quarters
+      .filter((q) => q.totalAssets != null || q.operatingCashFlow != null)
+      .map((q) => ({
+        c: label(q),
+        assets: b(q.totalAssets),
+        currentAssets: b(q.currentAssets),
+        liabilities: b(q.totalLiabilities),
+        currentLiabilities: b(q.currentLiabilities),
+        equity: b(q.equity),
+        longTermDebt: b(q.longTermDebt),
+        inventory: b(q.inventory),
+        opCF: b(q.operatingCashFlow),
+        invCF: b(q.investingCashFlow),
+        finCF: b(q.financingCashFlow),
+        netCF: b(q.netCashFlow),
+        currentRatio: q.currentRatio,
+        grossMarginPct: q.grossMarginPct,
+        operatingMarginPct: q.operatingMarginPct,
+        netMarginPct: q.netMarginPct,
+      }));
+
+    return {
+      hasData,
+      quarters,
+      epsHistory,
+      incomeRows,
+      balanceRows,
+      /** Separate from hasData: a ticker can have income rows but no balance sheet. */
+      hasBalanceSheet: balanceRows.length > 0,
+    };
   }, [data, sym]);
 }

@@ -18,15 +18,24 @@ import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
 import { FeatureFlagProvider, useFlag, type FlagKey } from "./feature-flags";
+import { EntitlementProvider } from "./entitlements";
 
 /**
  * Hides a nav item when its release flag is off. A `null` flag is always shown.
  * Split into its own component because the nav is rendered inside a .map(), and
  * a hook (useFlag) cannot be called inside a callback.
  */
-function NavItemGate({ flag, children }: { flag: FlagKey | null; children: React.ReactNode }) {
+function NavItemGate({
+  flag, slug, children,
+}: { flag: FlagKey | null; slug: string; children: React.ReactNode }) {
   const on = useFlag((flag ?? "FF_DASHBOARD") as FlagKey);
+  const entitled = useSlugEntitled(slug);
+  // Hidden when unreleased OR outside the plan. A locked screen is not
+  // advertised in the nav — the upsell belongs on the pricing page, not as a
+  // row of dead links. Reaching it by URL still shows PlanGate's upgrade
+  // message, so the feature is discoverable without being noise.
   if (flag && !on) return null;
+  if (!entitled) return null;
   return <>{children}</>;
 }
 import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail, type PulseItem } from "./data";
@@ -36,6 +45,7 @@ import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { mergePulse, type IndexDoc } from "./live-market-indices";
 import { getMarketStatus, fetchMarketStatus, type MarketStatus } from "./market-status";
+import { useSlugEntitled } from "./entitlement-gate";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -998,6 +1008,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
       <FeatureFlagProvider>
+      <EntitlementProvider>
       <IQActionsContext.Provider value={actions}>
         <div className="iq-root" data-theme={theme} data-font={font}>
           <div className={`app${navCollapsed ? " nav-collapsed" : ""}`}>
@@ -1202,7 +1213,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     const href = slugToHref(item.slug);
                     const isActive = pathname === href;
                     return (
-                      <NavItemGate key={item.slug} flag={item.flag as FlagKey | null}>
+                      <NavItemGate key={item.slug} flag={item.flag as FlagKey | null} slug={item.slug}>
                       <Link
                           href={href}
                           className={`navitem${isActive ? " active" : ""}`}
@@ -1287,6 +1298,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
         </div>
       </IQActionsContext.Provider>
+      </EntitlementProvider>
       </FeatureFlagProvider>
     </AuthGuard>
   );

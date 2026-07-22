@@ -34,6 +34,32 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // The single fixed admin account, matched on the verified token email.
+    // Kept in sync with ADMIN_EMAIL in deploy/env.production.yaml — the backend
+    // AdminGuard checks the same address. Two places, one value: if you change
+    // one, change both, or the admin screens and the admin API will disagree
+    // about who is an admin.
+    // Two accepted proofs, in order of preference:
+    //
+    //   1. A custom claim `admin: true`, set server-side via the Admin SDK.
+    //      Independent of the email address, so rotating the admin's address
+    //      needs no rules deploy.
+    //   2. The fixed admin email — matching backend AdminGuard's ADMIN_EMAIL
+    //      exactly. Kept so access works before the claim propagates (a client
+    //      only sees a new claim after its ID token refreshes).
+    //
+    // NOTE: deliberately NOT requiring `email_verified`. The admin is a
+    // password account created out-of-band and has emailVerified=false, so
+    // demanding verification locked the admin out of their own console while
+    // the backend guard still let the same account through. Verification adds
+    // nothing here anyway: Firebase enforces email uniqueness, so nobody else
+    // can register this address.
+    function isAdmin() {
+      return isAuthenticated()
+             && (request.auth.token.admin == true
+                 || request.auth.token.email == 'admin@marketcatalyst.ai');
+    }
+
     // Request comes from the document owner
     function isOwner(uid) {
       return isAuthenticated() && request.auth.uid == uid;
@@ -78,6 +104,108 @@ service cloud.firestore {
     // live. Server-write-only (toggled via the backend Admin SDK).
     match /feature_flags/{doc} {
       allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
+    // ── Subscriptions & billing ─────────────────────────────────────────────
+    // Every collection below is written ONLY by the backend Admin SDK. Client
+    // writes are refused outright: a client that could write `payments` or its
+    // own `plans` document could grant itself a paid tier for free.
+
+    // Pricing table — readable by all so the upgrade screen can render it.
+    //
+    // The admin may edit ENTITLEMENTS only. Price, currency and billing cycle
+    // stay server-write-only: those must change together with the Stripe price
+    // object, and a client that could rewrite `amount` could set a plan to $0
+    // and subscribe to it. Entitlements carry no such risk — the worst case is
+    // granting or revoking access, which is exactly what this control is for.
+    match /plans/{planId} {
+      allow read: if isAuthenticated();
+
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys()
+                         .hasOnly(['featureFlags', 'updatedAt'])
+                    && request.resource.data.featureFlags is map;
+
+      allow create, delete: if false;
+    }
+
+    // Payment records. A user may read their OWN payments (billing history);
+    // only the admin may read across users.
+    match /payments/{paymentId} {
+      allow read:  if isAdmin()
+                   || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Subscription records, same visibility rule as payments.
+    match /subscriptions/{subId} {
+      allow read:  if isAdmin()
+                   || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── Analytics ───────────────────────────────────────────────────────────
+    // Read is admin-only: per-user API call logs and feature usage are
+    // behavioural data about identifiable people, not market data.
+    match /api_usage/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // Feature adoption: one document per (feature, user), id `{feature}__{uid}`.
+    //
+    // Written by the CLIENT, unlike every other analytics collection here. The
+    // browser cannot reach the backend yet (see POLYGON-FEATURE-CROSSCHECK §2.2),
+    // so a server-mediated write is not available; the alternative was to ship
+    // no adoption data at all.
+    //
+    // The trade-off is explicit: a signed-in user can inflate their OWN counters.
+    // That is acceptable for adoption analytics — it is not billing, and the
+    // blast radius is one user's own row. It is NOT acceptable for payments or
+    // subscriptions, which stay server-write-only above. Move this server-side
+    // once the Hosting rewrite lands.
+    //
+    // The rules below still pin down what may be written: the row must belong to
+    // the caller, must carry the expected shape, and can never be deleted or
+    // reassigned to another user.
+    match /feature_adoption/{docId} {
+      allow read: if isAdmin()
+                  || (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      allow create: if isAuthenticated()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.feature is string
+                    && request.resource.data.feature.size() <= 64
+                    && request.resource.data.openCount is int
+                    && request.resource.data.openCount >= 0;
+
+      // Ownership cannot change hands, and the counter may only move forward —
+      // so a client cannot rewrite history, only add to its own.
+      allow update: if isAuthenticated()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.feature == resource.data.feature
+                    && request.resource.data.openCount is int
+                    && request.resource.data.openCount > resource.data.openCount;
+
+      allow delete: if false;
+    }
+
+    match /revenue_summary/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // Audit trail — admin-readable, never client-writable, never deletable.
+    match /audit_logs/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    match /system_metrics/{docId} {
+      allow read:  if isAdmin();
       allow write: if false;
     }
 
@@ -308,8 +436,12 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      // Only the user can read their own profile
-      allow read: if isOwner(uid);
+      // The user reads their own profile; the admin reads across users to
+      // populate the Users / Subscriptions / Revenue screens. Read only — the
+      // admin console never mutates a subscription from the client, because a
+      // tier change must go through the backend so it is audited and so
+      // `featureFlags` stays consistent with the plan.
+      allow read: if isOwner(uid) || isAdmin();
 
       // Create: server creates user doc on first sign-in via Admin SDK.
       // Allow client create only if uid matches and required fields are present.

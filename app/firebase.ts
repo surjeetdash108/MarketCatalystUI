@@ -10,9 +10,46 @@ import {
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+/** Fallback auth domain — used during SSG/build and on non-hosted origins. */
+const DEFAULT_AUTH_DOMAIN = "market-catalyst-502415.firebaseapp.com";
+
+/**
+ * Domains this app is actually served from. Firebase Hosting serves the auth
+ * helper at `/__/auth/*` on every domain it hosts, so on any of these the
+ * sign-in flow can run SAME-ORIGIN.
+ *
+ * WHY THIS EXISTS — mobile Google sign-in was failing outright.
+ * `shouldUseGoogleRedirect()` picks `signInWithRedirect` on mobile, and since
+ * Firebase JS SDK v9.15 that flow no longer works when `authDomain` differs
+ * from the page's own origin: Safari ITP and Chrome's partitioned storage block
+ * the third-party state the redirect hand-off depends on, so the user is bounced
+ * back with no credential. The app runs on `marketcatalyst.web.app` while
+ * `authDomain` pointed at `…firebaseapp.com` — precisely the broken pairing.
+ *
+ * Pointing `authDomain` at the current host makes the hand-off first-party.
+ * Verified 2026-07-22: `https://marketcatalyst.web.app/__/auth/handler` → 200,
+ * and the host is listed in the project's authorized domains.
+ */
+const SELF_HOSTED_AUTH_DOMAINS = new Set([
+  "marketcatalyst.web.app",
+  "marketcatalyst.firebaseapp.com",
+  "market-catalyst-502415.web.app",
+  "market-catalyst-502415.firebaseapp.com",
+  "marketcatalyst.ai",
+]);
+
+function resolveAuthDomain(): string {
+  if (typeof window === "undefined") return DEFAULT_AUTH_DOMAIN; // build/SSG
+  const host = window.location.hostname;
+  // localhost and preview origins do NOT serve /__/auth/*, so they must keep
+  // the firebaseapp.com handler. Desktop dev uses the popup flow, which works
+  // cross-domain, so this costs nothing locally.
+  return SELF_HOSTED_AUTH_DOMAINS.has(host) ? host : DEFAULT_AUTH_DOMAIN;
+}
+
 const firebaseConfig = {
   apiKey: "AIzaSyDVjZmJ11qzbPIvruwOHiTiMWvjTcUmhuk",
-  authDomain: "market-catalyst-502415.firebaseapp.com",
+  authDomain: resolveAuthDomain(),
   projectId: "market-catalyst-502415",
   storageBucket: "market-catalyst-502415.firebasestorage.app",
   messagingSenderId: "741318166823",

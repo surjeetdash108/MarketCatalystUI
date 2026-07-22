@@ -13,6 +13,15 @@ interface LiveOptionContract {
   lastClose: number | null;
   lastVolume: number | null;
   lastBarDate: string | null;
+  // Per-contract OHLCV. Authorized on the current Polygon plan even though the
+  // options SNAPSHOT (greeks/IV/OI/bid-ask) returns NOT_AUTHORIZED — so this is
+  // real traded data, not a substitute for the quote fields we cannot get.
+  lastOpen: number | null;
+  lastHigh: number | null;
+  lastLow: number | null;
+  lastVwap: number | null;
+  lastTradeCount: number | null;
+  lastRangePct: number | null;
 }
 interface OptionsChainDoc {
   id: string;
@@ -263,22 +272,34 @@ export function OptionsScreen() {
                   <thead>
                     <tr>
                       <th>Type</th><th className="num">Strike</th><th>Expiration</th>
-                      <th className="num">Last close</th><th className="num">Volume</th><th>As of</th>
+                      <th className="num">Open</th><th className="num">High</th><th className="num">Low</th>
+                      <th className="num">Last close</th><th className="num">VWAP</th>
+                      <th className="num">Range</th><th className="num">Volume</th>
+                      <th className="num">Trades</th><th>As of</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[...liveChain.contracts]
                       .sort((a, b) => a.expirationDate.localeCompare(b.expirationDate) || a.strike - b.strike)
-                      .map(c => (
+                      .map(c => {
+                        const px = (v: number | null) => v != null ? `$${v.toFixed(2)}` : "—";
+                        return (
                         <tr key={c.contractTicker}>
                           <td className={c.contractType === "call" ? "up" : "down"}>{c.contractType}</td>
                           <td className="num">{c.strike}</td>
                           <td>{c.expirationDate}</td>
-                          <td className="num">{c.lastClose != null ? `$${c.lastClose.toFixed(2)}` : "—"}</td>
+                          <td className="num">{px(c.lastOpen)}</td>
+                          <td className="num">{px(c.lastHigh)}</td>
+                          <td className="num">{px(c.lastLow)}</td>
+                          <td className="num">{px(c.lastClose)}</td>
+                          <td className="num">{px(c.lastVwap)}</td>
+                          <td className="num">{c.lastRangePct != null ? `${c.lastRangePct.toFixed(1)}%` : "—"}</td>
                           <td className="num">{c.lastVolume ?? "—"}</td>
+                          <td className="num">{c.lastTradeCount ?? "—"}</td>
                           <td style={{ fontSize: ".76rem", color: "var(--text-dim-solid)" }}>{c.lastBarDate ?? "—"}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>

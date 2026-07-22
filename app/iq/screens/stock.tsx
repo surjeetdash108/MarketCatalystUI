@@ -11,6 +11,8 @@ import { LiveCompare } from "../live-compare";
 import { useChartBars } from "../hooks/useChartBars";
 import { useCompany } from "../hooks/useCompany";
 import { useDividendHistory, quarterLabel, shortDate, daysUntil } from "../hooks/useDividendHistory";
+import { useSplits, splitRatio, splitsSince } from "../hooks/useSplits";
+import { trackFeatureOpen } from "../feature-adoption";
 import { useFinancials } from "../hooks/useFinancials";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 
@@ -457,6 +459,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
   const { data: liveInsider } = useCollection<{ id: string; ticker: string; ownerName: string | null; acquiredOrDisposed: string; shares: number; transactionDate: string }>("insider_transactions");
   const yearBars = useChartBars(sym, "1Y");
   const divHist = useDividendHistory(sym);
+  const splits = useSplits(sym);
   const fin = useFinancials(sym);
   // Latest daily bar for REAL pivots (was fixed multiples of price).
   const lastBar = yearBars && yearBars.length > 0 ? yearBars[yearBars.length - 1] : null;
@@ -470,7 +473,14 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
   const [ctxMenu, setCtxMenu]    = useState<{ x: number; y: number } | null>(null);
 
   type InnerDrawer = "techrating" | "peers" | "industry" | "insider" | "keylevels" | "earnings" | "financials" | "dividend" | null;
-  const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
+  const [innerDrawer, setInnerDrawerRaw] = useState<InnerDrawer>(null);
+  // Wrapped rather than tracked at each of the eight call sites: a drawer added
+  // later is then measured automatically instead of being silently absent from
+  // adoption data. Closing (null) is not an open, so it is not counted.
+  const setInnerDrawer = useCallback((d: InnerDrawer) => {
+    if (d) trackFeatureOpen(`stock.drawer.${d}`);
+    setInnerDrawerRaw(d);
+  }, []);
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
 
   const [watchedSet, setWatchedSet] = useState<Set<string>>(() => {
@@ -869,7 +879,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
           <div className="card">
             <div className="chart-toolbar">
               {["1D","1W","1M","3M","6M","1Y","5Y"].map(r => (
-                <button key={r} className={`rng tfbtn${tfActive === r ? " on" : ""}`} onClick={() => setTfActive(r)}>{r}</button>
+                <button key={r} className={`rng tfbtn${tfActive === r ? " on" : ""}`} onClick={() => { trackFeatureOpen(["1D","1W","1M"].includes(r) ? "chart.timeframe.intraday" : ["1Y","5Y"].includes(r) ? "chart.timeframe.long" : "chart.type"); setTfActive(r); }}>{r}</button>
               ))}
               <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
               {(["Candles", "Hollow", "Bars", "Line", "Area"] as const).map(ct => (
@@ -1005,6 +1015,26 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                 </div>
               ))}
             </div>
+            {/* Splits inside the charted window. Bars are refetched with
+                adjusted=true, so a split rewrites the history the chart above
+                is drawing — without this note the price series appears to
+                change for no reason. */}
+            {(() => {
+              const fiveYearsAgo = new Date();
+              fiveYearsAgo.setUTCFullYear(fiveYearsAgo.getUTCFullYear() - 5);
+              const recent = splitsSince(splits, fiveYearsAgo.toISOString().slice(0, 10));
+              if (recent.length === 0) return null;
+              return (
+                <div style={{
+                  padding: "6px 14px 10px", fontSize: ".7rem",
+                  color: "var(--text-dim-solid)", borderTop: "1px solid var(--border-soft)",
+                }}>
+                  <b style={{ color: "var(--text-hi)" }}>Split-adjusted:</b>{" "}
+                  {recent.map(s => `${splitRatio(s)} on ${shortDate(s.executionDate)}`).join(" · ")}
+                  {" — prices before that date are restated."}
+                </div>
+              );
+            })()}
           </div>
 
           {/* AI Technical Analysis */}
@@ -1224,15 +1254,30 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
           // The `else` branch is the original extrapolation — quarterly amount
           // decayed by a fixed 6.5%/yr and an ex-day derived from the ticker's
           // first character — kept only so unsynced names still render.
-          const hasReal = divHist?.isPayer && divHist.history.length > 0;
-          const annualDiv = divHist?.ttmTotal ?? p * (data.dividendYield / 100);
-          const qDiv = hasReal && divHist.ttmPayments > 0
-            ? annualDiv / divHist.ttmPayments
-            : annualDiv / 4;
+          // `isPayer` only means "has dividend history at all", which is NOT the
+          // same as "pays today". ADBE last paid in 2005 and INTC suspended in
+          // 2024 — both have rich history and zero trailing-twelve-month
+          // payments. Gating on isPayer alone rendered their real but
+          // decades-old rows as if current.
+          const hasData = divHist != null;
+          const paysNow = hasData && divHist.ttmPayments > 0;
+          const hasReal = paysNow;
+          // Once real data exists it is authoritative — including when the
+          // answer is "nothing". Falling through to the static mock here put a
+          // fabricated yield on a company that has not paid in twenty years.
+          const yieldPct = hasData ? (divHist.yieldPct ?? 0) : data.dividendYield;
+          const annualDiv = hasData
+            ? (divHist.ttmTotal ?? 0)
+            : p * (data.dividendYield / 100);
+          const qDiv = annualDiv / (paysNow ? divHist.ttmPayments : 4);
           const exDay = 6 + (sym.charCodeAt(0) % 22);
           const payoutRatio = annualDiv > 0 && data.eps > 0
             ? Math.min(99, Math.round((annualDiv / data.eps) * 100)) : 0;
-          const yieldPct = divHist?.yieldPct ?? data.dividendYield;
+          // A lapsed payer gets an explicit line rather than a bare "No dividend",
+          // because "used to pay, stopped" is different information from "never paid".
+          const lapsedSince = hasData && !paysNow && divHist.history.length > 0
+            ? divHist.history[0].exDividendDate
+            : null;
           const growthLabel = divHist?.cagr5yPct != null
             ? `${divHist.cagr5yPct >= 0 ? "+" : ""}${divHist.cagr5yPct.toFixed(1)}% / yr · payout ${payoutRatio}%`
             : yieldPct > 0 ? `payout ${payoutRatio}%` : "No dividend declared";
@@ -1265,7 +1310,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {yieldPct > 0
                     ? <span className="pill up">{yieldPct.toFixed(2)}% yield</span>
-                    : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>}
+                    : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}
+                        title={lapsedSince ? `Last paid ${shortDate(lapsedSince)}` : undefined}>
+                        {lapsedSince ? "Dividend suspended" : "No dividend"}
+                      </span>}
                   <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                 </div>
               </div>
@@ -1863,6 +1911,80 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                       </div>
                     </div>
                   </div>
+                  {/* Balance sheet + cash flow — real, from the same vendor
+                      response that already fed the income statement above. No
+                      fallback: unlike revenue/EPS there was never a fabricated
+                      version of these, so an unsynced ticker shows nothing
+                      rather than something invented. */}
+                  {fin.hasBalanceSheet && (() => {
+                    const bs = fin.balanceRows.slice(0, 5);
+                    const cell = (v: number | null) =>
+                      v == null ? "—" : v >= 1 || v <= -1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
+                    const ROWS: Array<[string, keyof typeof bs[0], boolean]> = [
+                      ["Total assets",        "assets",             true],
+                      ["Current assets",      "currentAssets",      false],
+                      ["Total liabilities",   "liabilities",        true],
+                      ["Current liabilities", "currentLiabilities", false],
+                      ["Long-term debt",      "longTermDebt",       false],
+                      ["Shareholder equity",  "equity",             true],
+                      ["Operating cash flow", "opCF",               true],
+                      ["Investing cash flow", "invCF",              false],
+                      ["Financing cash flow", "finCF",              false],
+                      ["Net change in cash",  "netCF",              true],
+                    ];
+                    return (
+                      <div className="card" style={{ marginBottom: 14 }}>
+                        <div className="card-h">
+                          <h3>Balance sheet &amp; cash flow</h3>
+                          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                            Quarterly
+                          </span>
+                        </div>
+                        <div className="card-b" style={{ paddingTop: 8, overflowX: "auto" }}>
+                          <table className="tbl">
+                            <thead>
+                              <tr>
+                                <th>Item</th>
+                                {bs.map(c => <th key={c.c} className="num">{c.c}</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {ROWS.map(([lbl, key, bold]) => (
+                                <tr key={lbl}>
+                                  <td style={bold ? { fontWeight: 600, color: "var(--text-hi)" } : undefined}>{lbl}</td>
+                                  {bs.map(c => (
+                                    <td key={c.c} className="num"
+                                      style={bold ? { fontWeight: 600, color: "var(--text-hi)" } : undefined}>
+                                      {cell(c[key] as number | null)}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                              <tr>
+                                <td>Current ratio</td>
+                                {bs.map(c => (
+                                  <td key={c.c} className="num"
+                                    style={{ color: c.currentRatio != null && c.currentRatio < 1 ? "var(--down)" : undefined }}>
+                                    {c.currentRatio != null ? c.currentRatio.toFixed(2) : "—"}
+                                  </td>
+                                ))}
+                              </tr>
+                              {([["Gross margin","grossMarginPct"],["Operating margin","operatingMarginPct"],["Net margin","netMarginPct"]] as const).map(([lbl,key]) => (
+                                <tr key={lbl}>
+                                  <td>{lbl}</td>
+                                  {bs.map(c => (
+                                    <td key={c.c} className="num">
+                                      {c[key] != null ? `${(c[key] as number).toFixed(1)}%` : "—"}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {/* AI read */}
                   <div className="ai-block">
                     <div className="card-h"><h3 className="ai-c">◆ AI earnings read · {sym}</h3></div>
@@ -1882,12 +2004,23 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
             // below was a fabricated series: eight quarters back-extrapolated from
             // the current amount at a fixed growth rate, with hardcoded "Jul/Aug
             // 2025" dates that never advanced.
-            const hasReal = divHist?.isPayer && divHist.history.length > 0;
-            const recent = hasReal ? divHist.history.slice(0, 8).reverse() : [];
-            const annualDiv = divHist?.ttmTotal ?? p * (data.dividendYield / 100);
-            const perYear = hasReal && divHist.ttmPayments > 0 ? divHist.ttmPayments : 4;
+            // Same isPayer-vs-pays-today distinction as the card above: a ticker
+            // with history but no trailing-twelve-month payment is not currently
+            // a dividend stock, and must not borrow the mock's yield.
+            const hasData = divHist != null;
+            const paysNow = hasData && divHist.ttmPayments > 0;
+            const hasReal = paysNow;
+            // History is still worth charting for a lapsed payer — it shows the
+            // cut — so `recent` keys off available history, not off paysNow.
+            const recent = hasData && divHist.history.length > 0
+              ? divHist.history.slice(0, 8).reverse()
+              : [];
+            const yieldPct = hasData ? (divHist.yieldPct ?? 0) : data.dividendYield;
+            const annualDiv = hasData
+              ? (divHist.ttmTotal ?? 0)
+              : p * (data.dividendYield / 100);
+            const perYear = paysNow ? divHist.ttmPayments : 4;
             const qDiv = annualDiv / perYear;
-            const yieldPct = divHist?.yieldPct ?? data.dividendYield;
             const QLABELS = hasReal
               ? recent.map(h => quarterLabel(h.exDividendDate))
               : ["Q3'24","Q4'24","Q1'25","Q2'25","Q3'25","Q4'25","Q1'26","Q2'26"];
@@ -1924,6 +2057,14 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                   {yieldPct === 0 ? (
                     <div style={{ padding: "24px 0", textAlign: "center", fontSize: ".9rem", color: "var(--text-dim-solid)" }}>
                       {sym} does not currently pay a dividend.
+                      {/* "Stopped paying" and "never paid" are different facts, and
+                          the real history distinguishes them — so say which. */}
+                      {recent.length > 0 && (
+                        <div style={{ marginTop: 6, fontSize: ".8rem" }}>
+                          Last payment ${recent[recent.length - 1].amount.toFixed(4)}/sh,
+                          ex-date {shortDate(recent[recent.length - 1].exDividendDate)}.
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <>

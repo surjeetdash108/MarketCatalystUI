@@ -125,6 +125,20 @@ td.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-n
 .kv .k{color:var(--dim)}
 .kv .v{text-align:right;font-family:var(--f-mono);color:var(--hi);font-variant-numeric:tabular-nums}
 .usebars{display:flex;flex-direction:column;gap:12px}
+.ftgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:8px}
+.ftrow{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 12px;
+  border:1px solid var(--border);border-radius:9px;background:var(--panel2,#0e131d)}
+.ftrow.busy{opacity:.5;pointer-events:none}
+.ftrow .fl{font-size:12.5px;color:var(--hi)}
+.ftrow .fd{font-size:11px;color:var(--dim);line-height:1.45;margin-top:3px}
+.ftsoon{font-size:10px;color:var(--dim2);font-family:var(--f-mono);border:1px solid var(--border);border-radius:4px;padding:1px 4px;margin-left:4px}
+.sw{position:relative;width:38px;height:21px;border-radius:99px;background:#28324a;
+  border:1px solid var(--border);cursor:pointer;flex-shrink:0;transition:background .15s}
+.sw.on{background:var(--brand)}
+.sw i{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+  background:#fff;transition:transform .15s}
+.sw.on i{transform:translateX(17px)}
+.ftlock{font-size:10px;color:var(--warn);font-family:var(--f-mono)}
 .ub .t{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
 .ub .t b{font-family:var(--f-mono);color:var(--hi)}
 .ub .bar{height:6px;border-radius:4px;background:#1a2338;overflow:hidden}
@@ -324,6 +338,7 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
     <div class="nav" data-view="subs"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M3 9h18" stroke="currentColor" stroke-width="2"/></svg>Subscriptions<span class="badge" id="dunBadge">0</span></div>
     <div class="nav" data-view="revenue"><svg viewBox="0 0 24 24" fill="none"><path d="M4 15l4-4 3 3 5-6 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Revenue</div>
     <div class="nav" data-view="usage"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="0"/><path d="M4 13l3-3 4 4 5-6 4 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Usage &amp; API</div>
+    <div class="nav" data-view="monitor"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Monitor</div>
     <div class="navlbl">Grow</div>
     <div class="nav" data-view="studio"><svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"/><circle cx="17.2" cy="6.8" r="1.3" fill="currentColor"/></svg>Social Studio<span class="badge-ig">IG</span></div>
     <div class="side-foot">
@@ -400,16 +415,28 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 
       <!-- SUBSCRIPTIONS -->
       <section class="view" id="subs">
-        <div class="plancards" id="planCards"></div>
-        <div class="grid2">
+        <!-- Action-first ordering: the two lists that need a human decision
+             (a failing card, a renewal about to hit) come before the plan
+             breakdown, which is reference data and changes slowly. -->
+        <div class="grid2" style="margin-bottom:16px">
           <div class="card">
             <div class="card-h"><h3>Needs attention · failed payments</h3><span class="sub">dunning queue</span></div>
             <table><thead><tr><th>User</th><th>Plan</th><th class="num">Amount</th><th class="num">Retry</th></tr></thead><tbody id="dunningBody"></tbody></table>
           </div>
           <div class="card">
-            <div class="card-h"><h3>Renewing soon</h3><span class="sub">next 7 days</span></div>
+            <div class="card-h"><h3>Renewing soon</h3><span class="sub">next 15 days</span></div>
             <table><thead><tr><th>User</th><th>Plan</th><th class="num">Renews</th></tr></thead><tbody id="renewBody"></tbody></table>
           </div>
+        </div>
+        <div class="plancards" id="planCards"></div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="card-h">
+            <h3>Plan features</h3>
+            <span class="sub" id="planFeatSub">select a plan to enable or disable features</span>
+          </div>
+          <div style="padding:0 16px 8px;display:flex;gap:8px;flex-wrap:wrap" id="planFeatTabs"></div>
+          <div style="padding:0 16px 16px" id="planFeatGrid"></div>
         </div>
       </section>
 
@@ -439,6 +466,16 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
             <div class="card-h"><h3>Feature adoption</h3><span class="sub">% of active users</span></div>
             <div class="usebars" id="adoption"></div>
           </div>
+        </div>
+      </section>
+
+      <section class="view" id="monitor">
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-h" style="padding:14px 16px">
+            <h3>Backend services</h3>
+            <span class="sub" id="monitorSrc">market-catalyst-backend</span>
+          </div>
+          <div id="monitorWrap" style="height:calc(100vh - 190px);min-height:460px"></div>
         </div>
       </section>
 
@@ -522,6 +559,10 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 /* ---------------- mock data ---------------- */
 const AV=['#7c6cf5','#38d6e6','#2fe6a6','#ffb547','#ff5d7a','#9d8dff','#5bd0ff','#ff8a5b'];
 const PRICE={Free:0,Plus:12,Pro:29};
+/* "Renewing soon" horizon: a subscription appears once its expiry date is
+   within this many days. 15 rather than 7 so a renewal is visible a full
+   fortnight ahead, leaving time to act on a failing card. */
+const RENEWAL_WINDOW_DAYS=15;
 const FIRST=['Arvind','Maya','Leo','Sofia','Daniel','Priya','Jonas','Emma','Ravi','Chloe','Marcus','Aisha','Noah','Lena','Omar','Grace','Ivan','Yuki','Diego','Hannah','Kofi','Sara','Ben','Nina','Tariq','Elena','Sam','Zoe','Hugo','Mira'];
 const LAST=['Kumar','Chen','Rossi','Silva','Weber','Patel','Berg','Novak','Menon','Dubois','Reed','Khan','Park','Adler','Haddad','Okafor','Petrov','Tanaka','Marin','Cole','Mensah','Ali','Frost','Volkov','Aziz','Marek','Lund','Wei','Costa','Shah'];
 const COUNTRY=['US','US','US','UK','IN','DE','CA','US','SG','AU','NL','US','BR','US','AE','US','FR','JP','ES','US'];
@@ -530,7 +571,34 @@ function daysAgo(n){const d=new Date(Date.now()-n*864e5);return d;}
 function fmtDate(d){return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'});}
 function rel(d){const days=Math.round((Date.now()-d)/864e5);if(days<=0)return 'today';if(days===1)return 'yesterday';if(days<30)return days+'d ago';return Math.round(days/30)+'mo ago';}
 
-const USERS=[];
+/* ---------- Real data hand-off ----------
+   The React parent (app/admin/page.tsx) reads Firestore, shapes the rows to
+   match DEMO_USERS below, and stages them in sessionStorage BEFORE this iframe
+   loads. Same origin, so sessionStorage is shared.
+
+   Why staging rather than postMessage: every render below runs once at module
+   scope, so data arriving after load would be ignored. Reading it here, before
+   the first render, keeps the whole file's rendering code untouched.
+
+   The seeded generator is kept as a fallback so this page still opens standalone
+   (design review, no Firebase) — but when it is used, IS_DEMO drives a banner so
+   fabricated numbers are never mistaken for real ones. */
+let IS_DEMO = true;
+let REAL = null;
+try {
+  const raw = sessionStorage.getItem('admin:data');
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.users)) {
+      REAL = parsed;
+      IS_DEMO = false;
+    }
+  }
+} catch (e) { /* malformed or blocked storage → demo */ }
+
+if (REAL && REAL.price) { for (const k in REAL.price) PRICE[k] = REAL.price[k]; }
+
+const DEMO_USERS=[];
 for(let i=0;i<30;i++){
   const r=seeded(i+1), r2=seeded(i+50), r3=seeded(i+120);
   let plan = r<0.42?'Free':(r<0.74?'Plus':'Pro');
@@ -541,7 +609,7 @@ for(let i=0;i<30;i++){
   const joined=daysAgo(Math.round(4+ r*520));
   const lastActiveDays = status==='canceled'?Math.round(20+r3*60):Math.round(r3*9);
   const mrr = (status==='active'||status==='trialing'||status==='past_due')?PRICE[plan]:0;
-  USERS.push({
+  DEMO_USERS.push({
     id:'usr_'+(1000+i).toString(36),
     name:fn+' '+ln,
     email:(fn[0]+ln).toLowerCase()+'@'+['gmail.com','proton.me','outlook.com','hey.com','icloud.com'][i%5],
@@ -556,7 +624,15 @@ for(let i=0;i<30;i++){
     ltv: Math.round(PRICE[plan]* (3+r*20))
   });
 }
-const money=n=>'$'+Number(n).toLocaleString('en-US');
+/* Real rows arrive as JSON, so `joined` / `lastActive` are ISO strings; the
+   render code sorts and date-formats them, which needs real Date objects. */
+const USERS = IS_DEMO ? DEMO_USERS : REAL.users.map(u => ({
+  ...u,
+  joined: new Date(u.joined),
+  lastActive: new Date(u.lastActive),
+}));
+
+const money=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const money2=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 /* ---------- KPIs ---------- */
@@ -565,10 +641,27 @@ const mrr=paying.reduce((a,u)=>a+u.mrr,0);
 const activeSubs=USERS.filter(u=>u.plan!=='Free'&&(u.status==='active'||u.status==='trialing')).length;
 const trials=USERS.filter(u=>u.status==='trialing').length;
 const canceled30=USERS.filter(u=>u.status==='canceled').length;
-const churn=(canceled30/USERS.length*100);
+const churn=USERS.length?(canceled30/USERS.length*100):0;
 const arpu=mrr/Math.max(1,paying.length);
 
 function spark(seed,up){const pts=[];let v=50;for(let i=0;i<16;i++){v+=(seeded(seed+i)-0.42)*16;v=Math.max(8,Math.min(92,v));pts.push(v);} const w=70,h=26;const step=w/(pts.length-1);const d=pts.map((p,i)=>(i?'L':'M')+(i*step).toFixed(1)+' '+(h-(p/100*h)).toFixed(1)).join(' ');const c=up?'#2fe6a6':'#ff5d7a';return `<svg width="${w}" height="${h}"><path d="${d}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/></svg>`;}
+
+
+/* Trend chrome. The deltas and sparklines below were invented — hardcoded
+   percentages and a seeded PRNG. Harmless when every number on the page was
+   obviously fake; actively misleading now that the VALUES are real, because
+   "+11.2%" reads as genuine month-over-month growth.
+
+   There is no history to compute a real trend from yet (payments and
+   revenue_summary are empty), so on real data these render as an explicit
+   "no history" dash instead. They return when a rollup exists to compare to. */
+function deltaHtml(d, up){
+  if (!IS_DEMO) return '<div class="d" style="color:var(--dim2)">— no trend history</div>';
+  return '<div class="d ' + (up?'up':'dn') + '">' + (up?'▲':'▼') + ' ' + d + '</div>';
+}
+function sparkHtml(seed, up){
+  return IS_DEMO ? '<div class="spark">' + spark(seed, up) + '</div>' : '';
+}
 
 const KPIS=[
   {k:'Total users',v:USERS.length.toLocaleString(),d:'+8.4%',up:true,s:1},
@@ -579,11 +672,26 @@ const KPIS=[
 ];
 document.getElementById('kpiRow').innerHTML=KPIS.map(x=>`
   <div class="kpi"><div class="k">${x.k}</div><div class="v">${x.v}</div>
-  <div class="d ${x.up?'up':'dn'}">${x.up?'▲':'▼'} ${x.d}</div>
-  <div class="spark">${spark(x.s,x.up)}</div></div>`).join('');
+  ${deltaHtml(x.d, x.up)}
+  ${sparkHtml(x.s, x.up)}</div>`).join('');
 
 /* ---------- MRR area chart ---------- */
 (function(){
+  /* On real data this chart cannot be drawn: it back-casts 12 months of MRR
+     from a seeded PRNG and pins the last point to the true figure, so it looks
+     like a year of measured growth that was never measured. Nothing in
+     Firestore records historical MRR yet (revenue_summary is the intended
+     home). Show the current value and say so, rather than draw a fiction. */
+  if (!IS_DEMO) {
+    document.getElementById('mrrChart').innerHTML =
+      '<div style="height:180px;display:flex;flex-direction:column;align-items:center;'
+      + 'justify-content:center;gap:6px;color:var(--dim2);text-align:center">'
+      + '<div style="font:700 22px/1 JetBrains Mono,monospace;color:#f4f7fc">' + money(mrr) + '</div>'
+      + '<div style="font-size:12px">current MRR</div>'
+      + '<div style="font-size:11px;max-width:280px">No historical series yet — a monthly '
+      + 'revenue_summary rollup is needed before a trend can be charted.</div></div>';
+    return;
+  }
   const months=['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
   let base=mrr*0.55; const data=months.map((m,i)=>{base=base*(1+0.03+seeded(i+3)*0.05);return Math.round(base);});
   data[data.length-1]=mrr;
@@ -662,6 +770,107 @@ renderUsers();
     <div class="price">${PRICE[p]?'$'+PRICE[p]:'Free'}${PRICE[p]?'<small>/mo</small>':''}</div>
     <div class="meta"><span>${activeBy(p)} active</span><span>${money(activeBy(p)*PRICE[p])}/mo</span></div></div>`).join('');
 
+  /* ---------- Per-plan entitlement editor ----------
+     Toggling writes to plans/{id}.featureFlags. This iframe has no Firebase
+     SDK, so the write is delegated to the React parent over postMessage; the
+     parent holds the admin session and Firestore rules authorise it there.
+
+     The switch is updated OPTIMISTICALLY and reverted if the parent reports a
+     failure — a toggle that visibly does nothing until a round-trip completes
+     feels broken, and these writes are near-instant in practice. */
+  const PLANS = (!IS_DEMO && REAL.plans) ? REAL.plans : [];
+  const CATALOG = (!IS_DEMO && REAL.entitlementCatalog) ? REAL.entitlementCatalog : [];
+  /* Staff capabilities are not purchasable: granting adminDashboard to a paying
+     tier would be privilege escalation, not an upsell. Shown, but locked. */
+  const plan_on = (pl, key) => pl.featureFlags[key] === true;
+  let activePlan = PLANS.length ? PLANS[0].id : null;
+  const pendingFlag = {};
+
+  function renderPlanFeatures(){
+    const tabs = document.getElementById('planFeatTabs');
+    const grid = document.getElementById('planFeatGrid');
+    if (!tabs || !grid) return;
+
+    if (!PLANS.length) {
+      tabs.innerHTML = '';
+      grid.innerHTML = '<div style="color:var(--dim2);font-size:12px;padding:6px 0">'
+        + (IS_DEMO ? 'Connect to Firestore to edit plan features.' : 'No plans found.')
+        + '</div>';
+      return;
+    }
+
+    tabs.innerHTML = PLANS.map(pl => {
+      const granted = CATALOG.filter(c => plan_on(pl, c.key)).length;
+      return `<button class="chip${pl.id===activePlan?' on':''}"
+         onclick="selectPlanFeat('${pl.id}')">${pl.name}
+         <span style="opacity:.7;font-family:var(--f-mono);font-size:11px">${granted}</span>
+       </button>`;
+    }).join('');
+
+    const plan = PLANS.find(x => x.id === activePlan);
+    const on = CATALOG.filter(c => plan.featureFlags[c.key]).length;
+    document.getElementById('planFeatSub').textContent =
+      plan.name + ' · ' + on + ' of ' + CATALOG.length + ' features enabled';
+
+    /* Grouped, and every row carries a plain-English line saying what the user
+       gets when it is ON. The key alone (`chartsIntraday`) told an engineer
+       what it was and told nobody else. */
+    const groups = [];
+    CATALOG.forEach(c => {
+      let g = groups.find(x => x.name === (c.group || 'Other'));
+      if (!g) { g = { name: c.group || 'Other', items: [] }; groups.push(g); }
+      g.items.push(c);
+    });
+
+    grid.innerHTML = groups.map(g =>
+      '<div style="margin-bottom:14px">'
+      + '<div style="font:600 10px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;'
+      + 'color:var(--dim2);margin-bottom:7px">' + g.name + '</div>'
+      + '<div class="ftgrid">' + g.items.map(c => {
+          const enabled = plan.featureFlags[c.key] === true;
+          const locked = c.staffOnly;
+          const unbuilt = c.unbuilt;
+          const busy = pendingFlag[plan.id + '.' + c.key];
+          const tags = (locked ? '<span class="ftlock">staff only</span>' : '')
+                     + (unbuilt ? '<span class="ftsoon">not built yet</span>' : '');
+          return '<div class="ftrow' + (busy ? ' busy' : '') + '" id="ft_' + c.key + '">'
+            + '<div style="min-width:0"><div class="fl">' + c.label + ' ' + tags + '</div>'
+            + '<div class="fd">' + c.description + '</div></div>'
+            + (locked
+                ? '<div class="sw" style="opacity:.3;cursor:not-allowed" title="Staff capability — never sold with a plan"><i></i></div>'
+                : '<div class="sw' + (enabled ? ' on' : '') + '" onclick="togglePlanFeat(\'' + c.key + '\')"><i></i></div>')
+            + '</div>';
+        }).join('') + '</div></div>').join('');
+  }
+
+  window.selectPlanFeat = function(id){ activePlan = id; renderPlanFeatures(); };
+
+  window.togglePlanFeat = function(key){
+    const plan = PLANS.find(x => x.id === activePlan);
+    const def = CATALOG.find(c => c.key === key);
+    if (!plan || !def || def.staffOnly) return;
+    const next = !(plan.featureFlags[key] === true);
+    plan.featureFlags[key] = next;              // optimistic
+    pendingFlag[plan.id + '.' + key] = true;
+    renderPlanFeatures();
+    parent.postMessage({ type:'admin:setPlanFlag', planId: plan.id, key: key, value: next }, '*');
+  };
+
+  window.addEventListener('message', function(e){
+    const d = e.data || {};
+    if (d.type !== 'admin:setPlanFlagResult') return;
+    const plan = PLANS.find(x => x.id === d.planId);
+    if (!plan) return;
+    delete pendingFlag[d.planId + '.' + d.key];
+    if (!d.ok) {
+      plan.featureFlags[d.key] = !d.value;      // revert on failure
+      alert('Could not update ' + d.key + ': ' + (d.error || 'unknown error'));
+    }
+    renderPlanFeatures();
+  });
+
+  renderPlanFeatures();
+
   const dun=USERS.filter(u=>u.status==='past_due');
   document.getElementById('dunBadge').textContent=dun.length;
   document.getElementById('dunningBody').innerHTML=dun.map(u=>`<tr onclick="openUser('${u.id}')">
@@ -669,10 +878,10 @@ renderUsers();
     <td>${rowPlan(u.plan)}</td><td class="num" style="color:var(--warn)">${money(PRICE[u.plan])}</td>
     <td class="num muted">in ${1+Math.round(seeded(u.apiCalls)*3)}d</td></tr>`).join('')||emptyRow(4,'No failed payments. ');
 
-  const ren=USERS.filter(u=>u.status==='active'&&u.renewsIn!=null&&u.renewsIn<=7).sort((a,b)=>a.renewsIn-b.renewsIn);
+  const ren=USERS.filter(u=>(u.status==='active'||u.status==='trialing')&&u.renewsIn!=null&&u.renewsIn<=RENEWAL_WINDOW_DAYS).sort((a,b)=>a.renewsIn-b.renewsIn);
   document.getElementById('renewBody').innerHTML=ren.map(u=>`<tr onclick="openUser('${u.id}')">
     <td><div class="user">${avatarEl(u)}<div><div class="nm">${u.name}</div><div class="em">${u.email}</div></div></div></td>
-    <td>${rowPlan(u.plan)}</td><td class="num muted">${u.renewsIn===0?'today':'in '+u.renewsIn+'d'}</td></tr>`).join('')||emptyRow(3,'Nothing renewing this week.');
+    <td>${rowPlan(u.plan)}</td><td class="num muted">${u.renewsIn===0?'today':'in '+u.renewsIn+'d'}</td></tr>`).join('')||emptyRow(3,'Nothing renewing in the next '+RENEWAL_WINDOW_DAYS+' days.');
 })();
 function emptyRow(c,t){return `<tr><td colspan="${c}" style="padding:22px;text-align:center;color:var(--dim2)">${t}</td></tr>`;}
 
@@ -682,10 +891,10 @@ function emptyRow(c,t){return `<tr><td colspan="${c}" style="padding:22px;text-a
   const rk=[
     {k:'MRR',v:money(mrr),d:'+11.2%',up:true,s:2},
     {k:'ARR',v:money(arr),d:'+11.2%',up:true,s:6},
-    {k:'Avg LTV',v:money(Math.round(USERS.reduce((a,u)=>a+u.ltv,0)/USERS.length)),d:'+4.0%',up:true,s:10},
+    {k:'Avg LTV',v:money(USERS.length?Math.round(USERS.reduce((a,u)=>a+u.ltv,0)/USERS.length):0),d:'+4.0%',up:true,s:10},
     {k:'Failed (30d)',v:money(USERS.filter(u=>u.status==='past_due').reduce((a,u)=>a+PRICE[u.plan],0)),d:'2 accounts',up:false,s:14},
   ];
-  document.getElementById('revKpis').innerHTML=rk.map(x=>`<div class="kpi"><div class="k">${x.k}</div><div class="v">${x.v}</div><div class="d ${x.up?'up':'dn'}">${x.up?'▲':'●'} ${x.d}</div><div class="spark">${spark(x.s,x.up)}</div></div>`).join('');
+  document.getElementById('revKpis').innerHTML=rk.map(x=>`<div class="kpi"><div class="k">${x.k}</div><div class="v">${x.v}</div>${deltaHtml(x.d, x.up)}${sparkHtml(x.s, x.up)}</div>`).join('');
   const months=['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
   let base=mrr*0.55;const data=months.map((m,i)=>{base=base*(1+0.03+seeded(i+3)*0.05);return Math.round(base);});data[11]=mrr;
   const mx=Math.max(...data);
@@ -710,13 +919,70 @@ function emptyRow(c,t){return `<tr><td colspan="${c}" style="padding:22px;text-a
     {k:'Price alerts',v:USERS.reduce((a,u)=>a+u.alerts,0),d:'+9%',up:true,s:11},
     {k:'Avg session',v:'7m 42s',d:'+31s',up:true,s:15},
   ];
-  document.getElementById('usageKpis').innerHTML=uk.map(x=>`<div class="kpi"><div class="k">${x.k}</div><div class="v">${x.v}</div><div class="d up">▲ ${x.d}</div><div class="spark">${spark(x.s,true)}</div></div>`).join('');
+  document.getElementById('usageKpis').innerHTML=uk.map(x=>`<div class="kpi"><div class="k">${x.k}</div><div class="v">${x.v}</div>${deltaHtml(x.d, true)}${sparkHtml(x.s, true)}</div>`).join('');
   const top=[...USERS].sort((a,b)=>b.apiCalls-a.apiCalls).slice(0,8);
   document.getElementById('topApiBody').innerHTML=top.map(u=>`<tr onclick="openUser('${u.id}')">
     <td><div class="user">${avatarEl(u)}<div><div class="nm">${u.name}</div><div class="em">${u.email}</div></div></div></td>
     <td>${rowPlan(u.plan)}</td><td class="num">${u.apiCalls.toLocaleString()}</td><td class="num muted">${u.alerts}</td></tr>`).join('');
-  const feats=[['Watchlists',88],['Stock detail charts',76],['Themes',54],['Screener',47],['Ask Copilot (AI)',39],['Price alerts',33],['Options view',18]];
-  document.getElementById('adoption').innerHTML=feats.map(([n,p])=>`<div class="ub"><div class="t">${n}<b>${p}%</b></div><div class="bar"><i style="width:${p}%"></i></div></div>`).join('');
+  /* Feature adoption. The seven hardcoded percentages this replaced were
+     invented, and named features the product does not have. Real rows come
+     from the feature_adoption collection, keyed per (feature, user). */
+  if (IS_DEMO) {
+    const feats=[['Watchlists',88],['Stock detail charts',76],['Themes',54],['Screener',47],['Ask Copilot (AI)',39],['Price alerts',33],['Options view',18]];
+    document.getElementById('adoption').innerHTML=feats.map(([n,p])=>`<div class="ub"><div class="t">${n}<b>${p}%</b></div><div class="bar"><i style="width:${p}%"></i></div></div>`).join('');
+  } else {
+    const rows = REAL.featureAdoption || [];
+    const denom = Math.max(1, USERS.length);
+    const used = rows.filter(r => r.opens > 0);
+    const never = rows.filter(r => r.neverOpened);
+
+    /* Grouped, because the catalog is now 40+ entries spanning screens and
+       in-screen actions — one flat bar list would be unreadable and would bury
+       the comparison that matters (how a feature does against its siblings). */
+    const byGroup = new Map();
+    used.forEach(r => {
+      if (!byGroup.has(r.group)) byGroup.set(r.group, []);
+      byGroup.get(r.group).push(r);
+    });
+
+    const bar = r => {
+      /* Reach — share of users who opened it at least once. Raw opens are shown
+         alongside but do not drive the bar: one user refreshing fifty times is
+         not adoption. */
+      const pct = Math.round((r.users / denom) * 100);
+      return '<div class="ub"><div class="t">' + r.label
+        + '<b>' + pct + '% · ' + r.opens + ' opens</b></div>'
+        + '<div class="bar"><i style="width:' + Math.min(100, pct) + '%"></i></div></div>';
+    };
+
+    const sections = [...byGroup.entries()]
+      .sort((a, b) => {
+        const top = g => Math.max(...g[1].map(r => r.users));
+        return top(b) - top(a);
+      })
+      .map(([group, items]) =>
+        '<div style="margin-bottom:16px">'
+        + '<div style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;'
+        + 'color:var(--dim2);margin-bottom:8px">' + group + '</div>'
+        + '<div style="display:flex;flex-direction:column;gap:10px">'
+        + items.map(bar).join('') + '</div></div>')
+      .join('');
+
+    /* Unused features are the actionable half of this panel: they are what you
+       cut, fix, or promote. Listing them explicitly beats omitting them. */
+    const neverHtml = never.length
+      ? '<div style="margin-top:6px;padding-top:12px;border-top:1px solid var(--border)">'
+        + '<div style="font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;'
+        + 'color:var(--dim2);margin-bottom:6px">Never opened (' + never.length + ' of '
+        + rows.length + ')</div>'
+        + '<div style="font-size:12px;color:var(--dim);line-height:1.8">'
+        + never.map(r => r.label).join(' · ') + '</div></div>'
+      : '';
+
+    document.getElementById('adoption').innerHTML =
+      (sections || '<div style="color:var(--dim2);font-size:12px;padding:8px 0">No feature opens recorded yet.</div>')
+      + neverHtml;
+  }
 })();
 
 /* ---------- drawer ---------- */
@@ -1103,10 +1369,60 @@ function initStudio(){
 initStudio();
 
 /* ---------- nav ---------- */
-const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',studio:'Social Studio <span>· push to Instagram &amp; more</span>'};
+const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>'};
+/* The backend monitor is loaded LAZILY, on first visit to the Monitor tab.
+   Mounting its iframe at page load would fire a cross-origin request on every
+   admin session — including the ones that never open this tab — and, since the
+   backend may be unreachable, would surface a console error each time. */
+let monitorLoaded = false;
+function renderMonitor(){
+  if (monitorLoaded) return;
+  monitorLoaded = true;
+  const wrap = document.getElementById('monitorWrap');
+  const base = (!IS_DEMO && REAL && REAL.backendUrl) ? String(REAL.backendUrl).replace(/\/$/,'') : null;
+
+  const message = (title, detail) =>
+    '<div style="height:100%;display:flex;flex-direction:column;align-items:center;'
+    + 'justify-content:center;gap:8px;text-align:center;padding:32px">'
+    + '<div style="font:600 14px/1.4 var(--f-disp),system-ui;color:var(--hi)">' + title + '</div>'
+    + '<div style="font-size:12.5px;color:var(--dim);max-width:440px;line-height:1.6">' + detail + '</div></div>';
+
+  if (!base) {
+    wrap.innerHTML = message('Backend URL not configured',
+      'Set NEXT_PUBLIC_BACKEND_URL so the console knows where the monitor lives. '
+      + 'Locally this is http://localhost:4100.');
+    return;
+  }
+
+  wrap.innerHTML = message('Connecting to ' + base + ' …', 'Checking /health.');
+
+  /* Probe before embedding. An iframe to an unreachable or 403 origin renders
+     a blank white box with no explanation — a health check lets us say WHY it
+     is empty, which for a private Cloud Run service is the usual case. */
+  fetch(base + '/health', { mode: 'cors' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(() => {
+      const f = document.createElement('iframe');
+      f.src = base + '/';
+      f.style.cssText = 'border:0;width:100%;height:100%;display:block;background:#080B11';
+      f.title = 'Backend monitor';
+      wrap.innerHTML = '';
+      wrap.appendChild(f);
+      document.getElementById('monitorSrc').textContent = base;
+    })
+    .catch(err => {
+      wrap.innerHTML = message('Backend not reachable from the browser',
+        'Could not reach <code style="color:var(--hi)">' + base + '/health</code> — ' + err.message
+        + '.<br><br>Cloud Run runs with <code style="color:var(--hi)">--no-allow-unauthenticated</code>, '
+        + 'so the browser cannot call it directly. A Firebase Hosting rewrite to the service '
+        + 'would fix this and the other endpoint-backed features at the same time.');
+    });
+}
+
 function switchView(name){
   document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.view===name));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id===name));
+  if (name === 'monitor') renderMonitor();
   document.getElementById('pageTitle').innerHTML=TITLES[name]||name;
   document.querySelector('.main').scrollTo({top:0});
 }
@@ -1143,6 +1459,33 @@ function submitPw(){
   m.style.color='var(--dim)'; m.textContent='Updating…';
   parent.postMessage({ type:'admin:changePassword', password:a }, '*');
 }
+/* Sample-data banner. Only shown when the seeded generator supplied the rows —
+   an admin must never mistake 30 fabricated users for their real customer base.
+   Real data suppresses it entirely. */
+/* Staff-exclusion note. Without it, an admin comparing this page to the
+   Firebase console sees one fewer user here and has no way to tell whether
+   that is a filter or a bug. */
+if (!IS_DEMO && REAL.counts && REAL.counts.excludedStaff > 0) {
+  var note = document.createElement('div');
+  note.textContent = REAL.counts.excludedStaff === 1
+    ? 'Staff account excluded from all metrics'
+    : REAL.counts.excludedStaff + ' staff accounts excluded from all metrics';
+  note.style.cssText = 'position:fixed;bottom:0;right:0;z-index:9999;padding:5px 12px;'
+    + 'background:rgba(124,108,245,.14);color:#9d8dff;border-top-left-radius:8px;'
+    + 'border:1px solid rgba(124,108,245,.3);border-right:0;border-bottom:0;'
+    + 'font:600 11px/1.4 system-ui,sans-serif';
+  document.body.appendChild(note);
+}
+
+if (IS_DEMO) {
+  var warn = document.createElement('div');
+  warn.textContent = '⚠ Sample data — not connected to Firestore. Figures below are fabricated.';
+  warn.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:7px 14px;'
+    + 'background:rgba(255,181,71,.16);color:#ffb547;border-top:1px solid rgba(255,181,71,.4);'
+    + 'font:600 12px/1.4 system-ui,sans-serif;letter-spacing:.02em;text-align:center';
+  document.body.appendChild(warn);
+}
+
 /* Parent tells us who is logged in + password results. */
 window.addEventListener('message', function(e){
   var d=e.data||{};

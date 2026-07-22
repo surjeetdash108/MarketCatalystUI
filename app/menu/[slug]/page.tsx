@@ -11,6 +11,8 @@ import { PortfolioScreen } from "../../iq/screens/portfolio";
 import { WatchlistScreen } from "../../iq/screens/watchlist";
 import { StockScreen } from "../../iq/screens/stock";
 import { ScreenGate } from "../../iq/feature-flags";
+import { TrackFeature } from "../../iq/track-feature";
+import { PlanGate } from "../../iq/entitlement-gate";
 import { InsiderScreen } from "../../iq/screens/insider";
 import { CommentaryScreen } from "../../iq/screens/commentary";
 import { RecapScreen } from "../../iq/screens/recap";
@@ -51,5 +53,18 @@ export default async function MenuPage({
   const screen = SCREENS[slug];
   if (!screen) notFound();
 
-  return <IQShell><ScreenGate slug={slug}>{screen}</ScreenGate></IQShell>;
+  return (
+    <IQShell>
+      <ScreenGate slug={slug}>
+        {/* Release gate outside, plan gate inside: "not built yet" and
+            "not in your plan" are different answers and must not be
+            collapsed into one message. Tracking sits inside both, so a
+            screen the user never actually saw is not counted as an open. */}
+        <PlanGate slug={slug}>
+          <TrackFeature feature={slug} />
+          {screen}
+        </PlanGate>
+      </ScreenGate>
+    </IQShell>
+  );
 }
