@@ -346,14 +346,38 @@
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
+/* A <button> now, so a tile is keyboard-reachable and opens its drawer —
+   hence the appearance reset before the original styling. */
 .tk {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 0 16px; font-size: 0.7188rem; font-family: var(--f-mono);
   border-right: 1px solid var(--border-soft);
+  background: none; border-top: 0; border-left: 0; border-bottom: 0;
+  color: inherit; cursor: pointer; align-self: stretch;
 }
+.tk:hover .lbl { color: var(--text-hi); }
+.tk:focus-visible { outline: 1px solid var(--accent, currentColor); outline-offset: -2px; }
 .tk .lbl { color: var(--text-dim-solid); font-weight: 500; }
 .tk .val { color: var(--text-hi); font-weight: 600; }
 .tk .chg { font-size: 0.6562rem; font-weight: 600; }
+
+/* Freshness pill, pinned right and above the fade so the scrolling track
+   passes underneath it rather than shifting it. z-index clears .ticker::after
+   (z-index 2), which would otherwise fade the text out. */
+.tk-status {
+  position: absolute; right: 0; top: 0; bottom: 0; z-index: 3;
+  display: inline-flex; align-items: center;
+  padding: 0 12px 0 20px;
+  font-size: 0.625rem; font-family: var(--f-mono); letter-spacing: 0.02em;
+  color: var(--text-dim-solid);
+  background: linear-gradient(to left, var(--surface-0) 70%, transparent);
+  pointer-events: none; white-space: nowrap;
+}
+.tk-status::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  margin-right: 6px; background: currentColor; opacity: 0.55;
+}
+.tk-status.live { color: var(--up, #16a34a); }
 
 /* rail */
 .rail {
@@ -2532,3 +2556,61 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 }
 .ff-comingsoon h2 { margin: 0 0 6px; font-size: 1.1rem; color: var(--text-hi); }
 .ff-comingsoon p { margin: 0; font-size: .84rem; color: var(--text-dim-solid); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mobile corrections (≤767px) — additions to the app-shell block above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+
+  /* FOOTER — was the worst offender. `.disclaimer-bar` is position:fixed with
+     `left: var(--rail-w)`, which offsets it by the 218px sidebar. On mobile the
+     rail becomes a hidden slide-in drawer, but nothing reset that offset, so on
+     a 375px screen the footer started at x=245 and rendered just 130px wide —
+     35% of the viewport, jammed into the right-hand third. Measured, not
+     guessed. */
+  .disclaimer-bar {
+    left: 0;
+    padding: 6px 12px;
+    font-size: .6rem;
+    line-height: 1.45;
+  }
+
+  /* The fixed footer overlaps the end of scrollable content; .main's 40px is
+     not enough once the bar wraps to two lines at this width. */
+  .main { padding-bottom: 64px; }
+
+  /* HEADER — reclaim horizontal space; 18px side padding is a lot of a 375px
+     screen, and the sticky head competes with the topbar and ticker. */
+  .page-head { padding: 11px 12px; }
+  .page-title { font-size: 1.0625rem; }
+  .page-sub { font-size: .7rem; }
+
+  /* CONTENT — cards and grids */
+  .card-h { padding: 10px 11px; }
+  .card-b { padding: 10px 11px; }
+  .dash, .dgrid { gap: 10px; }
+
+  /* Market pulse: 3 columns is still cramped on a phone. */
+  .pulse { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+  /* Any wide table must scroll inside its own box rather than pushing the
+     page sideways. */
+  .tbl-wrap, .opt-chain-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* OPTIONS CHAIN — this table went from 6 to 12 columns when per-contract
+     OHLCV was wired up, against a 760px min-width. On a phone that is a
+     horizontal scroll nobody can read, so the secondary price columns are
+     dropped and the identifying ones kept: type, strike, expiry, last, volume.
+     Columns are 4 Open, 5 High, 6 Low, 8 VWAP, 9 Range, 11 Trades, 12 As-of. */
+  .opt-chain { min-width: 0; font-size: .7rem; }
+  .opt-chain th:nth-child(4),  .opt-chain td:nth-child(4),
+  .opt-chain th:nth-child(5),  .opt-chain td:nth-child(5),
+  .opt-chain th:nth-child(6),  .opt-chain td:nth-child(6),
+  .opt-chain th:nth-child(8),  .opt-chain td:nth-child(8),
+  .opt-chain th:nth-child(9),  .opt-chain td:nth-child(9),
+  .opt-chain th:nth-child(11), .opt-chain td:nth-child(11),
+  .opt-chain th:nth-child(12), .opt-chain td:nth-child(12) { display: none; }
+
+  /* Nothing may make the page itself scroll sideways. */
+  body { overflow-x: hidden; }
+}
