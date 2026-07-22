@@ -1,4 +1,5 @@
 import type { PulseItem } from "./data";
+import type { TapeItem } from "./hooks/useMarketTape";
 
 export interface IndexDoc {
   id: string; label: string; value: number; change: number; pctChange: number;
@@ -45,4 +46,85 @@ export function mergePulse(mock: PulseItem[], live: IndexDoc[]): PulseItem[] {
       prevClose: l.prevClose ?? p.prevClose,
     };
   });
+}
+
+/**
+ * Overlays the LIVE streamed tape on top of the once-a-day Firestore values.
+ *
+ * `market_indices` is written by a job that runs at 18:05 ET, so between the
+ * opening bell and the close `mergePulse` alone yields yesterday's numbers. The
+ * SSE tape carries the same nine instruments intraday. Applying it here rather
+ * than only in the strip means the Dashboard's Market Pulse widget and the
+ * index drawer read the same values the strip does — the drawer opening on a
+ * price that disagrees with the tile that opened it is exactly the drift
+ * `mergePulse` was factored out to prevent.
+ *
+ * Falls through to the Firestore/mock value for any tile the tape has not
+ * supplied, so a backend outage degrades to today's behaviour rather than a
+ * blank header.
+ */
+export function applyTape(rows: PulseItem[], tape: TapeItem[]): PulseItem[] {
+  if (!tape.length) return rows;
+  const byId = new Map(tape.map(t => [t.id, t]));
+  return rows.map(p => {
+    const id = PULSE_LABEL_TO_INDEX_ID[p.label];
+    const t = id ? byId.get(id) : undefined;
+    if (!t || t.value == null) return p;
+    // Same percent-vs-basis-point split as mergePulse above: the 10Y tile is
+    // quoted in percentage POINTS, so its `change` is already the bp move and
+    // must not be swapped for a relative percentage.
+    return {
+      ...p,
+      value: t.value,
+      change: t.change ?? p.change,
+      open: t.open ?? p.open,
+      prevClose: t.prevClose ?? p.prevClose,
+    };
+  });
+}
+
+/** One tile in the scrolling strip. */
+export interface StripTile {
+  key: string;
+  label: string;
+  value: number;
+  /** Percent move, except on the rate tile where it is a basis-point move. */
+  change: number;
+  kind: "index" | "stock" | "rate";
+  /** Set on stock tiles — opens the stock drawer. */
+  sym?: string;
+  /** Set on index/rate tiles — the row in `pulse` the index drawer expects. */
+  pulseIdx?: number;
+}
+
+/**
+ * Builds the strip: the nine index/macro tiles first (in `pulse` order, so the
+ * `pulseIdx` handed to the index drawer stays valid), then the streamed stocks.
+ *
+ * Tiles with no value are dropped rather than rendered as "—": a scrolling
+ * strip gives the reader no time to interpret a blank, and a missing symbol is
+ * less misleading than an empty one.
+ */
+export function buildTapeStrip(rows: PulseItem[], tape: TapeItem[]): StripTile[] {
+  const indexTiles: StripTile[] = rows.map((p, i) => ({
+    key: `idx-${p.label}`,
+    label: p.label,
+    value: p.value,
+    change: p.change,
+    kind: PULSE_LABEL_TO_INDEX_ID[p.label] === "US10Y" ? "rate" : "index",
+    pulseIdx: i,
+  }));
+
+  const stockTiles: StripTile[] = tape
+    .filter(t => t.kind === "stock" && t.value != null && t.change != null)
+    .map(t => ({
+      key: `stk-${t.id}`,
+      label: t.label,
+      value: t.value as number,
+      change: t.change as number,
+      kind: "stock" as const,
+      sym: t.id,
+    }));
+
+  return [...indexTiles, ...stockTiles];
 }

@@ -1,7 +1,7 @@
 "use client";
 
 // iq.css is imported globally via app/layout.tsx
-import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -43,7 +43,8 @@ import { fmt, sign, cls, arr, SemiGauge } from "./utils";
 import { useCollection } from "./hooks/useCollection";
 import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
-import { mergePulse, type IndexDoc } from "./live-market-indices";
+import { mergePulse, applyTape, buildTapeStrip, type IndexDoc } from "./live-market-indices";
+import { useMarketTape } from "./hooks/useMarketTape";
 import { getMarketStatus, fetchMarketStatus, type MarketStatus } from "./market-status";
 import { useSlugEntitled } from "./entitlement-gate";
 
@@ -803,11 +804,29 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
 
-  // Same live merge Dashboard's Market Pulse widget uses — keeps the top
-  // ticker strip and the index drawer it opens in sync with each other.
+  // Three sources, most-live wins: the streamed SSE tape (intraday) over the
+  // Firestore `market_indices` docs (written once a day at 18:05 ET) over the
+  // static mock. Each layer is a fallback for the one above it, so losing the
+  // backend degrades the strip to yesterday's real closes rather than blanking
+  // it. `livePulse` still feeds the Dashboard widget and the index drawer, so
+  // all three stay in agreement.
   const { data: liveIndices } = useCollection<IndexDoc>("market_indices");
-  const livePulse = mergePulse(pulse, liveIndices);
-  const tickerItems = [...livePulse, ...livePulse];
+  const tape = useMarketTape();
+  const livePulse = useMemo(
+    () => applyTape(mergePulse(pulse, liveIndices), tape.items),
+    [liveIndices, tape.items],
+  );
+  const stripTiles = useMemo(
+    () => buildTapeStrip(livePulse, tape.items),
+    [livePulse, tape.items],
+  );
+  // Duplicated because the marquee keyframe scrolls to translateX(-50%) — the
+  // second copy is what makes the wrap seamless.
+  const tickerItems = useMemo(() => [...stripTiles, ...stripTiles], [stripTiles]);
+  // The strip is ~2.3x longer than the nine tiles the 35s keyframe was tuned
+  // for. Scaling the duration with the tile count keeps the scroll SPEED
+  // constant instead of whipping the longer tape past unreadably fast.
+  const tickerDuration = Math.max(35, Math.round(stripTiles.length * 4));
 
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark";
@@ -1180,15 +1199,36 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
             {/* Ticker */}
             <div className="ticker">
-              <div className="ticker-track">
+              <div className="ticker-track" style={{ animationDuration: `${tickerDuration}s` }}>
                 {tickerItems.map((x, i) => (
-                  <div key={i} className="tk">
+                  <button
+                    key={`${x.key}-${i}`}
+                    type="button"
+                    className="tk"
+                    title={x.kind === "stock" ? `${x.label} — open details` : `${x.label} — open index detail`}
+                    onClick={() =>
+                      x.kind === "stock" && x.sym
+                        ? setDrawer({ type: "stock", sym: x.sym })
+                        : x.pulseIdx !== undefined && setDrawer({ type: "index", idx: x.pulseIdx })
+                    }
+                  >
                     <span className="lbl">{x.label}</span>
                     <span className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</span>
-                    <span className={`chg ${cls(x.change)}`}>{arr(x.change)} {Math.abs(x.change).toFixed(2)}%</span>
-                  </div>
+                    {/* The rate tile's move is in percentage POINTS (a 2bp move
+                        is 0.02), so it must not carry a "%" suffix the way the
+                        price tiles do. */}
+                    <span className={`chg ${cls(x.change)}`}>
+                      {arr(x.change)} {Math.abs(x.change).toFixed(2)}{x.kind === "rate" ? "" : "%"}
+                    </span>
+                  </button>
                 ))}
               </div>
+              {/* An honest label for a feed that is ~15 minutes behind, and a
+                  visible signal when the stream drops — a silently frozen tape
+                  is worse than one that admits it is frozen. */}
+              <span className={`tk-status${tape.connected && !tape.stale ? " live" : ""}`}>
+                {!tape.connected ? "reconnecting…" : tape.stale ? "stale" : "delayed ~15m"}
+              </span>
             </div>
 
             {/* Mobile nav scrim — inside .app so it shares .app's stacking context with the rail */}
