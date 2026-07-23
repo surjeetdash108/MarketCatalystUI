@@ -4,8 +4,86 @@ import { useState } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
 import { fmt, cls, sign, EarnQ, StockLogo, SampleBadge } from "../utils";
 import { useCollection } from "../hooks/useCollection";
-import { useFinancials } from "../hooks/useFinancials";
+import { useFinancials, type EarningsPeriodRow } from "../hooks/useFinancials";
 import { EarningsCalendar } from "./earnings-calendar";
+
+/**
+ * EPS + Sales history with Quarterly / Yearly tabs — actuals only, from Polygon
+ * (`financials` collection). Columns mirror the reference earnings table: EPS,
+ * YoY %CHG, Sales (in $M), YoY %CHG. Forward analyst estimates and the surprise
+ * (%SURP) column are intentionally absent — they need the Benzinga estimates
+ * add-on, which is not on the current plan and not redistributable via Finnhub.
+ */
+function pctCell(v: number | null) {
+  if (v == null) return <td className="num" style={{ color: "var(--text-dim-solid)" }}>–</td>;
+  return <td className={`num ${cls(v)}`}>{(v >= 0 ? "+" : "") + Math.round(v) + "%"}</td>;
+}
+function EpsSalesHistory({ sym, quarterly, annual }: { sym: string; quarterly: EarningsPeriodRow[]; annual: EarningsPeriodRow[] }) {
+  const tabs: { key: "q" | "y"; label: string; head: string; rows: EarningsPeriodRow[] }[] = [
+    { key: "q", label: "Quarterly", head: "Quarter", rows: quarterly },
+    { key: "y", label: "Yearly", head: "Fiscal year", rows: annual },
+  ];
+  const [tab, setTab] = useState<"q" | "y">("q");
+  const active = tabs.find(t => t.key === tab) ?? tabs[0];
+
+  return (
+    <div className="card">
+      <div className="card-h">
+        <h3>{sym} · EPS &amp; Sales history</h3>
+        <div className="trseg2" role="tablist" aria-label="Period">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              className={`tab${tab === t.key ? " active" : ""}`}
+              onClick={() => setTab(t.key)}
+              disabled={t.rows.length === 0}
+              title={t.rows.length === 0 ? "No data synced yet" : undefined}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="card-b" style={{ paddingTop: 8 }}>
+        {active.rows.length === 0 ? (
+          <div style={{ padding: "18px 4px", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
+            No {active.label.toLowerCase()} financials synced for {sym} yet.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>{active.head}</th>
+                  <th className="num">EPS</th>
+                  <th className="num">%CHG</th>
+                  <th className="num">Sales (M)</th>
+                  <th className="num">%CHG</th>
+                </tr>
+              </thead>
+              <tbody>
+                {active.rows.map(r => (
+                  <tr key={r.label}>
+                    <td><b style={{ color: "var(--text-hi)" }}>{r.label}</b></td>
+                    <td className="num">{r.eps == null ? "–" : fmt(r.eps, 2)}</td>
+                    {pctCell(r.epsChg)}
+                    <td className="num">{r.salesM == null ? "–" : fmt(r.salesM, 1)}</td>
+                    {pctCell(r.salesChg)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div style={{ marginTop: 8, fontSize: ".68rem", color: "var(--text-dim-solid)" }}>
+          Actuals from Polygon <code>/vX/reference/financials</code> · %CHG is year-over-year
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * WHERE EVERY NUMBER ON THIS SCREEN COMES FROM
@@ -760,70 +838,9 @@ export function EarningsScreen() {
 
       {/* ── Detail: EPS history + Income statement ─────────────────────── */}
       <div className="dash" style={{ marginTop: 16 }}>
-        {/* col-6: 10-quarter EPS history */}
+        {/* col-6: EPS & Sales history — Quarterly / Yearly tabs (actuals only) */}
         <div className="col-6">
-          <div className="card">
-            <div className="card-h">
-              {/* Says how many quarters we actually hold, not a fixed 10. */}
-              <h3>{sel} · {hist.length ? `${hist.length}-quarter` : "Quarterly"} earnings history</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {/* Only quarters with a real vendor estimate can be scored, so
-                    the denominator is `scored.length`. The old badge divided by
-                    a hardcoded 10 and, once the generator was removed, would
-                    have read "10/10 beats" for almost every ticker — because a
-                    quarter with no estimate has surprise 0, which `>= 0` counted
-                    as a beat. No estimates means no badge. */}
-                {scored.length > 0 && (
-                  <span
-                    className={`pill ${beats / scored.length >= 0.7 ? "up" : beats / scored.length < 0.5 ? "dn" : ""}`}
-                    style={beats / scored.length >= 0.5 && beats / scored.length < 0.7
-                      ? { background: "var(--surface-3)", color: "var(--text-dim-solid)" } : undefined}
-                  >
-                    {beats}/{scored.length} beats
-                  </span>
-                )}
-                {hist.length > 0 && (
-                  <ExpandBtn title={`${sel} · earnings history`} node={<EpsChart hist={hist} />} />
-                )}
-              </div>
-            </div>
-            <div className="card-b" style={{ paddingTop: 8 }}>
-              <div className="ec-legend">
-                <span><i style={{ background: "var(--surface-3)" }} /> EPS estimate</span>
-                <span><i style={{ background: "var(--up)" }} /> Beat</span>
-                <span><i style={{ background: "var(--down)" }} /> Miss</span>
-                <span><i className="ln" style={{ background: "var(--brand-2)" }} /> Stock move %</span>
-              </div>
-              <EpsChart hist={hist} />
-              <details className="ec-det">
-                <summary>Show quarterly table</summary>
-                <div style={{ overflowX: "auto", marginTop: 8 }}>
-                  <table className="tbl">
-                    <thead>
-                      <tr>
-                        <th>Quarter</th>
-                        <th className="num">EPS est</th>
-                        <th className="num">EPS act</th>
-                        <th className="num">Surprise</th>
-                        <th className="num">Stock move</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {hist.map(h => (
-                        <tr key={h.q}>
-                          <td><b style={{ color: "var(--text-hi)" }}>{h.q}</b></td>
-                          <td className="num">${h.e.toFixed(2)}</td>
-                          <td className="num">${h.a.toFixed(2)}</td>
-                          <td className={`num ${cls(h.surp)}`}>{sign(h.surp)}</td>
-                          <td className={`num ${cls(h.mv)}`}>{sign(h.mv)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            </div>
-          </div>
+          <EpsSalesHistory sym={sel} quarterly={fin.quarterlyHistory} annual={fin.annualHistory} />
         </div>
 
         {/* col-6: Income statement */}
