@@ -6,6 +6,7 @@ import { doc, onSnapshot, setDoc, deleteDoc, collection, Timestamp } from "fireb
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { folio as folioData, type FolioItem } from "../data";
 import { useCollection } from "../hooks/useCollection";
+import { useSnapshotQuotes } from "../hooks/useSnapshotQuote";
 import { cls, arr, sign, SampleBadge } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
@@ -54,6 +55,7 @@ export function PortfolioScreen() {
   const [importing, setImporting]   = useState(false);
   const [importDone, setImportDone] = useState(false);
   const [newSym, setNewSym]         = useState("");
+  const [newShares, setNewShares]   = useState<number>(10);
   const [newSize, setNewSize]       = useState<"Small"|"Medium"|"Large">("Small");
   const [newConv, setNewConv]       = useState<"High"|"Medium"|"Low">("Medium");
 
@@ -80,11 +82,17 @@ export function PortfolioScreen() {
     return () => unsub();
   }, [uid]);
 
-  // Live price/% overlay — merged on top of the mock/demo holdings, never dropping a row.
+  // Live delayed prices for every holding, refreshed intraday — takes
+  // precedence over the once-a-day EOD `companies` price. totalVal / dayPL below
+  // recompute from whatever price wins here, so the portfolio total tracks the
+  // live prices automatically.
+  const snaps = useSnapshotQuotes(holdings.map(h => h.ticker));
   const merged = holdings.map(h => {
-    const live = byTicker.get(h.ticker);
-    if (!live || live.price == null) return { ...h, live: false as const };
-    return { ...h, price: live.price, pctChange: live.pctChange ?? h.pctChange, live: true as const };
+    const q = snaps.get(h.ticker.toUpperCase());
+    const eod = byTicker.get(h.ticker);
+    const price = q?.price ?? eod?.price ?? null;
+    if (price == null) return { ...h, live: false as const };
+    return { ...h, price, pctChange: q?.changePct ?? eod?.pctChange ?? h.pctChange, live: true as const };
   });
   const liveCount = merged.filter(h => h.live).length;
 
@@ -125,14 +133,24 @@ export function PortfolioScreen() {
   async function addHolding() {
     if (!newSym.trim()) return;
     const s = newSym.trim().toUpperCase();
+    const qty = Number.isFinite(newShares) && newShares > 0 ? newShares : 10;
     if (holdings.find(h => h.ticker === s)) { setAddOpen(false); return; }
     setHoldings(prev => [...prev, { ticker: s, name: s, price: 100, pctChange: 0, gainLossPct: 0, positionSize: newSize, conviction: newConv, eventNote: "—" }]);
-    setShares(prev => ({ ...prev, [s]: 10 }));
-    setNewSym(""); setAddOpen(false);
+    setShares(prev => ({ ...prev, [s]: qty }));
+    setNewSym(""); setNewShares(10); setAddOpen(false);
     if (uid) {
       await setDoc(portfolioRef(uid), { name: "My Portfolio", createdAt: Timestamp.now() }, { merge: true });
-      await setDoc(doc(holdingsCol(uid), s), { ticker: s, shares: 10, positionSize: newSize, conviction: newConv, addedAt: Timestamp.now() });
+      await setDoc(doc(holdingsCol(uid), s), { ticker: s, shares: qty, positionSize: newSize, conviction: newConv, addedAt: Timestamp.now() });
     }
+  }
+
+  // Update the share quantity of an existing holding — the missing "U" in the
+  // portfolio's CRUD. Persists to Firestore (merge, so positionSize/conviction
+  // survive) so the total recomputes from real share counts, not a fixed 10.
+  async function editShares(sym: string, qty: number) {
+    const n = Math.max(0, Math.round(qty));
+    setShares(prev => ({ ...prev, [sym]: n }));
+    if (uid) await setDoc(doc(holdingsCol(uid), sym), { ticker: sym, shares: n }, { merge: true });
   }
 
   async function removeHolding(sym: string) {
@@ -220,6 +238,26 @@ export function PortfolioScreen() {
           </div>
         </div>
 
+        {/* Editable position for the selected holding — the "U" in CRUD. Shares ×
+            the LIVE price = the position's market value; editing shares persists
+            to Firestore and the portfolio total above recomputes immediately. */}
+        {sel && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px", margin: "0 0 12px", background: "var(--surface-1)", border: "1px solid var(--border-soft)", borderRadius: 10 }}>
+            <span style={{ fontWeight: 700, color: "var(--text-hi)" }}>{sel.ticker}</span>
+            <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Shares</span>
+            <input
+              type="number" min={0} step="any" inputMode="decimal"
+              value={shares[sel.ticker] ?? 10}
+              onChange={e => editShares(sel.ticker, parseFloat(e.target.value))}
+              style={{ width: 90, padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-0)", color: "var(--text-hi)", fontSize: ".85rem", fontFamily: "var(--f-mono)" }}
+            />
+            <span style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
+              × <span className="mono">${sel.price.toFixed(2)}</span>{sel.live ? "" : " (EOD)"} =
+              {" "}<b className="mono" style={{ color: "var(--text-hi)" }}>{usd((shares[sel.ticker] ?? 10) * sel.price)}</b>
+            </span>
+          </div>
+        )}
+
         <StockPanelLayout
           selectedSym={pfSel}
           chartPx={sel?.price ?? 0}
@@ -276,6 +314,16 @@ export function PortfolioScreen() {
                   onChange={v => setNewSym(v.toUpperCase())}
                   onPick={t => { setNewSym(t); }}
                   onEnter={addHolding}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Shares</label>
+                <input
+                  type="number" min={0} step="any" inputMode="decimal"
+                  value={Number.isFinite(newShares) ? newShares : ""}
+                  onChange={e => setNewShares(parseFloat(e.target.value))}
+                  placeholder="e.g. 25"
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-0)", color: "var(--text-hi)", fontSize: ".85rem" }}
                 />
               </div>
               <div>

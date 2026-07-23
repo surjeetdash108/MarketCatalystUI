@@ -45,6 +45,7 @@ import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { mergePulse, applyTape, buildTapeStrip, type IndexDoc } from "./live-market-indices";
 import { useMarketTape } from "./hooks/useMarketTape";
+import { useSnapshotQuotes } from "./hooks/useSnapshotQuote";
 import { getMarketStatus, fetchMarketStatus, type MarketStatus } from "./market-status";
 import { useSlugEntitled } from "./entitlement-gate";
 
@@ -905,6 +906,13 @@ export function IQShell({ children }: { children: React.ReactNode }) {
         ];
       })()
     : SEARCHABLE_STOCKS.map(s => ({ sym: s.sym, name: s.name, price: null, pctChange: null }));
+  // Live delayed prices for the search results, polled only while the palette is
+  // open. Overlays the once-a-day EOD price the search index carries.
+  const searchSnaps = useSnapshotQuotes(searchOpen ? searchMatches.map(m => m.sym) : []);
+  const searchMatchesLive = searchMatches.map(m => {
+    const q = searchSnaps.get(m.sym.toUpperCase());
+    return q?.price != null ? { ...m, price: q.price, pctChange: q.changePct ?? m.pctChange } : m;
+  });
   const cmdRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLElement>(null);
   const [drawer, setDrawer] = useState<
@@ -1103,7 +1111,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 </div>
                 {searchOpen && (
                   <div className="cmd-dropdown">
-                    {searchMatches.map(m => (
+                    {searchMatchesLive.map(m => (
                       <div key={m.sym} className="palette-item"
                         onMouseDown={e => e.preventDefault()}
                         onClick={() => { localStorage.setItem("iq-stock", m.sym); router.push("/menu/stock"); setSearchOpen(false); setSearchQ(""); }}

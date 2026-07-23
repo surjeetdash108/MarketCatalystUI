@@ -6,6 +6,7 @@ import { doc, onSnapshot, setDoc, arrayUnion, arrayRemove, Timestamp } from "fir
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { watch as watchData } from "../data";
 import { useCollection } from "../hooks/useCollection";
+import { useSnapshotQuotes } from "../hooks/useSnapshotQuote";
 import { arr, sign, SampleBadge } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { trackFeatureOpen } from "../feature-adoption";
@@ -43,17 +44,18 @@ export function WatchlistScreen() {
     return () => unsub();
   }, [uid]);
 
+  // Live delayed prices for the watchlist's tickers, refreshed intraday. Takes
+  // precedence over the once-a-day EOD price on `companies`, which takes
+  // precedence over the static mock — most-live wins.
+  const snaps = useSnapshotQuotes(items);
   const list = items.map(sym => {
     const w = watchData.find(x => x.ticker === sym);
     const c = byTicker.get(sym);
-    const live = c?.price != null;
-    return {
-      ticker: sym,
-      name: c?.name ?? w?.name ?? sym,
-      price: c?.price ?? w?.price ?? 0,
-      pctChange: c?.pctChange ?? w?.pctChange ?? 0,
-      live,
-    };
+    const q = snaps.get(sym.toUpperCase());
+    const price = q?.price ?? c?.price ?? w?.price ?? 0;
+    const pctChange = q?.changePct ?? c?.pctChange ?? w?.pctChange ?? 0;
+    const live = q?.price != null || c?.price != null;
+    return { ticker: sym, name: c?.name ?? w?.name ?? sym, price, pctChange, live };
   });
   const liveCount = list.filter(w => w.live).length;
   const up   = list.filter(w => w.pctChange > 0).length;
