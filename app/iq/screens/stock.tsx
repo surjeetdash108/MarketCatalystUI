@@ -206,6 +206,28 @@ function earnIncome(mc: number, mg: number, px: number, period: "Q" | "A"): IncR
   });
 }
 
+/**
+ * Shown wherever real quarterly EPS has not been synced for this ticker.
+ *
+ * Deliberately says WHY rather than just going blank: `financials` is filled by
+ * a nightly job that walks 40 of ~241 tickers per run, so "not yet" is a normal
+ * transient state, not an error the reader should try to act on.
+ */
+function EarnEmpty({ what = "Earnings history" }: { what?: string }) {
+  return (
+    <div style={{
+      padding: "18px 14px", textAlign: "center",
+      fontSize: ".76rem", color: "var(--text-dim-solid)",
+      border: "1px dashed var(--border)", borderRadius: 8,
+    }}>
+      {what} not available for this ticker yet.
+      <div style={{ fontSize: ".68rem", marginTop: 4, opacity: 0.8 }}>
+        Quarterly filings sync on a rolling nightly schedule.
+      </div>
+    </div>
+  );
+}
+
 function earnHistAnnual(hist10: import("../utils").EarnQ[]): import("../utils").EarnQ[] {
   const byYear: Record<string, import("../utils").EarnQ[]> = {};
   hist10.forEach(q => {
@@ -226,6 +248,11 @@ function earnHistAnnual(hist10: import("../utils").EarnQ[]): import("../utils").
 
 function EarnEpsChart({ hist }: { hist: EarnQ[] }) {
   const d = [...hist].reverse();
+  // Guarded here rather than at each of the three call sites. On an empty array
+  // `Math.max(...[])` is -Infinity and `iw / n` divides by zero, so the SVG
+  // below would render with NaN coordinates — silently blank, and impossible to
+  // tell from a chart that simply has no bars.
+  if (d.length === 0) return <EarnEmpty />;
   const W = 560, H = 210, PADL = 30, PADR = 18, PADT = 14, PADB = 30;
   const iw = W - PADL - PADR, ih = H - PADT - PADB;
   const maxE = Math.max(...d.map(x => Math.max(x.e, Math.abs(x.a)))) * 1.15 || 1;
@@ -732,7 +759,16 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
     ["Q2 24", qeps * 0.9,  5  * beatSign],
     ["Q1 24", qeps * 0.85, 4  * beatSign],
   ];
-  const hist10 = fin.hasData && fin.epsHistory.length > 0 ? fin.epsHistory : earnHistory(sym, qeps);
+  // Real quarters only. This used to fall back to earnHistory(sym, qeps), a
+  // generator seeded on the ticker STRING — so a ticker the financials job has
+  // not reached yet rendered a full 10-quarter beat/miss table, a surprise
+  // percentage and a post-print move that were all arithmetic on charCodeAt().
+  // Nothing distinguished it from a real filing on screen. An empty history is
+  // the honest answer; every consumer below now handles the empty case.
+  //
+  // `financials` covers TICKER_UNIVERSE 40 tickers per nightly run, so a given
+  // ticker refreshes about every 6 days and a brand-new one is briefly blank.
+  const hist10 = fin.epsHistory;
 
   const sectorInfo = sectorByName[group];
   const sectorTrend = sectorInfo?.trend ?? "Flat";
@@ -1117,23 +1153,36 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                           <span><i style={{ background: "var(--down)" }} />Miss</span>
                           <span><i className="ln" style={{ background: "var(--brand-2)" }} />Trend</span>
                         </span>
-                        <ExpandBtn title={`${sym} · Earnings Growth (EPS)`} node={<EarningsGrowthChart hist={histEps} />} />
+                        {histEps.length > 0 && (
+                          <ExpandBtn title={`${sym} · Earnings Growth (EPS)`} node={<EarningsGrowthChart hist={histEps} />} />
+                        )}
                       </div>
                     </div>
-                    <EarningsGrowthChart hist={histEps} />
-                    <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
-                      <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                        <b style={{ color: "var(--text-hi)" }}>{beatsOf}/{histEps.length}</b> beats
-                      </div>
-                      <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                        {finPeriod === "Q" ? "Latest qtr" : "Latest FY"} EPS <b style={{ color: "var(--text-hi)" }}>${latestA.toFixed(2)}</b>
-                      </div>
-                      {yoy !== null && (
-                        <div style={{ fontSize: ".7rem" }}>
-                          {finPeriod === "Q" ? "YoY" : "YoY"} <b style={{ color: yoy >= 0 ? "var(--up)" : "var(--down)" }}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</b>
+                    {/* EarningsGrowthChart divides the plot width by d.length, so
+                        an empty history renders an axis with no series rather
+                        than saying anything. "0/0 beats · Latest EPS $0.00"
+                        below reads like a real result for a company that earns
+                        nothing, which is worse than admitting we have no data. */}
+                    {histEps.length === 0 ? (
+                      <EarnEmpty what="EPS history" />
+                    ) : (
+                      <>
+                        <EarningsGrowthChart hist={histEps} />
+                        <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
+                          <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                            <b style={{ color: "var(--text-hi)" }}>{beatsOf}/{histEps.length}</b> beats
+                          </div>
+                          <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                            {finPeriod === "Q" ? "Latest qtr" : "Latest FY"} EPS <b style={{ color: "var(--text-hi)" }}>${latestA.toFixed(2)}</b>
+                          </div>
+                          {yoy !== null && (
+                            <div style={{ fontSize: ".7rem" }}>
+                              {finPeriod === "Q" ? "YoY" : "YoY"} <b style={{ color: yoy >= 0 ? "var(--up)" : "var(--down)" }}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</b>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1787,7 +1836,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                   <span><i className="ln" style={{ background: "var(--brand-2)" }} />Stock move %</span>
                 </div>
                 <EarnEpsChart hist={hist10} />
-                <div style={{ overflowX: "auto", marginTop: 12 }}>
+                {/* Column headers over zero rows read as "this company has no
+                    earnings", so the whole table goes with the data. The chart
+                    above already renders EarnEmpty. */}
+                <div style={{ overflowX: "auto", marginTop: 12, display: hist10.length ? undefined : "none" }}>
                   <table className="tbl">
                     <thead>
                       <tr>
@@ -1811,9 +1863,16 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                     </tbody>
                   </table>
                 </div>
-                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                  {hist10.filter(h => h.surp >= 0).length}/{hist10.length} beats over the last 10 quarters · illustrative.
-                </div>
+                {hist10.length > 0 && (
+                  // Denominator is hist10.length, not a hardcoded 10: the vendor
+                  // returns up to 10 quarters and a recent listing has fewer, so
+                  // "6/10 beats" would have understated a perfect record. The
+                  // "illustrative" disclaimer is gone with the generator — these
+                  // are filed figures now.
+                  <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                    {hist10.filter(h => h.surp >= 0).length}/{hist10.length} beats over the last {hist10.length} quarters.
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1823,7 +1882,11 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
             const inc = fin.hasData && fin.incomeRows.length > 0 ? fin.incomeRows : earnIncome(mc, mg, p, finPeriod);
             const fb = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
             const beats10 = hist10.filter(h => h.surp >= 0).length;
-            const avgMv = (hist10.reduce((a, h) => a + Math.abs(h.mv), 0) / hist10.length).toFixed(1);
+            // Empty history divides by zero -> "NaN%" rendered in the AI read
+            // below. Null means the sentence drops that clause instead.
+            const avgMv = hist10.length
+              ? (hist10.reduce((a, h) => a + Math.abs(h.mv), 0) / hist10.length).toFixed(1)
+              : null;
             const erEnt = earningsData.find(e => e.ticker === sym);
             const aiRead = erEnt
               ? `${sym} ${erEnt.epsActual != null ? (erEnt.epsEstimate != null && erEnt.epsActual >= erEnt.epsEstimate ? "beat" : "missed") + " EPS estimates" : "reports " + erEnt.session}. Guidance ${erEnt.guidanceStatus === "Raised" ? "was raised — bullish" : erEnt.guidanceStatus === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${erEnt.priceReaction != null ? "Shares reacted " + (erEnt.priceReaction >= 0 ? "+" : "") + erEnt.priceReaction + "% on the print." : `Options imply a ±${erEnt.impliedMove}% move.`}`
@@ -1848,7 +1911,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         {erEnt?.priceReaction != null
                           ? <span className={`pill ${erEnt.priceReaction >= 0 ? "up" : "dn"}`}>{erEnt.priceReaction >= 0 ? "+" : ""}{erEnt.priceReaction}% last reaction</span>
-                          : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats10}/10 beats</span>
+                          : hist10.length > 0
+                          ? <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats10}/{hist10.length} beats</span>
+                          : null
                         }
                         <ExpandBtn title={`${sym} · 10-quarter earnings history`} node={<EarnEpsChart hist={hist10} />} />
                       </div>
@@ -1990,7 +2055,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                     <div className="card-h"><h3 className="ai-c">◆ AI earnings read · {sym}</h3></div>
                     <div className="card-b">
                       <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>
-                        {aiRead} History shows <b style={{ color: "var(--text-hi)" }}>{beats10}/10 beats</b> and an average post-print move of <b style={{ color: "var(--text-hi)" }}>{avgMv}%</b>. Watch revenue growth and forward guidance most.
+                        {aiRead}{hist10.length > 0 && <> History shows <b style={{ color: "var(--text-hi)" }}>{beats10}/{hist10.length} beats</b>{avgMv != null && <> and an average post-print move of <b style={{ color: "var(--text-hi)" }}>{avgMv}%</b></>}.</>} Watch revenue growth and forward guidance most.
                       </p>
                     </div>
                   </div>

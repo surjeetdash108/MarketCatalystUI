@@ -2,161 +2,84 @@
 
 import { useState } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
-import { earnings, stockInfo, type Earning } from "../data";
-import { fmt, cls, sign, earnHistory, EarnQ, StockLogo } from "../utils";
+import { fmt, cls, sign, EarnQ, StockLogo, SampleBadge } from "../utils";
 import { useCollection } from "../hooks/useCollection";
+import { useFinancials } from "../hooks/useFinancials";
 import { EarningsCalendar } from "./earnings-calendar";
 
-// Live source (FMP earnings calendar) has ticker/date/epsEstimate/epsActual —
-// no session (BMO/AMC), guidance, price reaction, or implied move, which the
-// mock EARN_CAL/CALLS_DATA supply. So EPS numbers are overlaid live when a
-// synced doc exists for the ticker; everything else (session, guidance,
-// call summaries/transcripts) stays the illustrative mock, clearly unmarked
-// as such since no vendor (Benzinga real-time, Claude) is wired for it yet.
+/**
+ * WHERE EVERY NUMBER ON THIS SCREEN COMES FROM
+ *
+ *   Identity, bio, market cap  `companies`       Polygon /v3/reference/tickers
+ *   EPS estimate / actual      `earnings_events` FMP /stable/earnings-calendar
+ *   10-quarter EPS history     `financials`      Polygon /vX/reference/financials
+ *   Income statement           `financials`      same response as above
+ *
+ * FMP owns only the calendar — Polygon has no earnings-calendar product on this
+ * plan, which is why earnings.job injects FmpService directly with no adapter.
+ * Everything else here is Polygon, read from Firestore.
+ *
+ * This screen used to render `earnHistory()` and `earnIncome()` for its two
+ * biggest panels: generators seeded on the ticker STRING and on market cap,
+ * producing an identical 55%-gross / 22%-opex / 82%-net shape for every company
+ * under hardcoded quarter labels — while the real Polygon quarters for those
+ * same tickers sat unread in `financials`. Both generators are gone, along with
+ * EARN_CAL (33 rows) and COMPANY_BIO (42 hand-written bios).
+ *
+ * What has NO vendor is now OMITTED rather than invented: session (BMO/AMC),
+ * guidance, price reaction and implied move. FMP's calendar carries none of
+ * them. The earnings-call drawer is still authored content and is badged.
+ */
 interface LiveEarningsDoc {
   id: string; ticker: string; date: string;
   epsEstimate: number | null; epsActual: number | null;
+}
+
+/**
+ * Shown wherever `financials` has nothing for the selected ticker.
+ *
+ * Says WHY rather than going blank: financials.job walks 40 of ~241 tickers per
+ * nightly run, so a given ticker refreshes roughly every 6 days and "not yet" is
+ * a normal transient state, not an error worth acting on.
+ */
+function EarnEmpty({ what }: { what: string }) {
+  return (
+    <div style={{
+      padding: "18px 14px", textAlign: "center",
+      fontSize: ".76rem", color: "var(--text-dim-solid)",
+      border: "1px dashed var(--border)", borderRadius: 8, margin: "8px 0",
+    }}>
+      {what} not available for this ticker yet.
+      <div style={{ fontSize: ".68rem", marginTop: 4, opacity: 0.8 }}>
+        Quarterly filings sync on a rolling nightly schedule.
+      </div>
+    </div>
+  );
+}
+
+/** Polygon company profile via companies.job — 241/241 tickers carry these. */
+interface CompanyDoc {
+  id: string;
+  ticker?: string;
+  name?: string | null;
+  description?: string | null;
+  sector?: string | null;
+  marketCap?: number | null;
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface IncRow  { c: string; rev: number; cogs: number; gp: number; opex: number; oi: number; ni: number; eps: number; }
 
-const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const DOWS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-
-// ── Earnings calendar dataset (today = Thu Jun 25, 2026) ─────────────────────
-
-interface EarnCalItem {
-  s: string; n: string; sec: string;
-  // Live earnings_events has no session/guidance/reaction/implied-move data, so
-  // these are nullable. Rendering a default would fabricate a claim.
-  sess: "BMO" | "AMC" | null;
-  month: number; day: number;
-  weekDay: number; // 0=Mon … 4=Fri
-  epsE: number | null; epsA: number | null; implied: number | null;
-  guide: "Raised" | "In-line" | "Lowered" | null;
-  react: number | null;
-}
-
-const EARN_CAL: EarnCalItem[] = [
-  // ── May 2026 (Last Month) ──────────────────────────────────────────────────
-  { s:"AMD",  n:"Adv Micro Dev",  sec:"Semis",      sess:"AMC", month:5, day:2,  weekDay:4, epsE:0.98,  epsA:1.12,  implied:5.2, guide:"Raised",  react: 6.4 },
-  { s:"QCOM", n:"Qualcomm",       sec:"Semis",      sess:"AMC", month:5, day:7,  weekDay:2, epsE:2.19,  epsA:2.33,  implied:4.1, guide:"Raised",  react: 4.8 },
-  { s:"UBER", n:"Uber Tech",      sec:"Software",   sess:"AMC", month:5, day:8,  weekDay:3, epsE:0.51,  epsA:0.64,  implied:4.8, guide:"Raised",  react: 5.2 },
-  { s:"ARM",  n:"Arm Holdings",   sec:"Semis",      sess:"AMC", month:5, day:8,  weekDay:3, epsE:0.38,  epsA:0.45,  implied:6.2, guide:"Raised",  react: 4.6 },
-  { s:"CSCO", n:"Cisco Systems",  sec:"Networking", sess:"AMC", month:5, day:14, weekDay:2, epsE:0.94,  epsA:0.96,  implied:3.1, guide:"In-line", react: 1.8 },
-  { s:"WMT",  n:"Walmart",        sec:"Retail",     sess:"BMO", month:5, day:15, weekDay:3, epsE:0.52,  epsA:0.60,  implied:2.9, guide:"Raised",  react: 5.2 },
-  { s:"HD",   n:"Home Depot",     sec:"Retail",     sess:"BMO", month:5, day:20, weekDay:1, epsE:3.68,  epsA:3.79,  implied:2.8, guide:"In-line", react: 1.4 },
-  { s:"TGT",  n:"Target",         sec:"Retail",     sess:"BMO", month:5, day:20, weekDay:1, epsE:2.05,  epsA:1.82,  implied:4.6, guide:"Lowered", react:-7.8 },
-  { s:"NVDA", n:"Nvidia",         sec:"Semis",      sess:"AMC", month:5, day:22, weekDay:3, epsE:5.56,  epsA:6.57,  implied:7.2, guide:"Raised",  react: 8.2 },
-  { s:"SNOW", n:"Snowflake",      sec:"Software",   sess:"AMC", month:5, day:28, weekDay:2, epsE:-0.24, epsA:-0.15, implied:7.8, guide:"Raised",  react: 6.3 },
-  { s:"MDB",  n:"MongoDB",        sec:"Software",   sess:"AMC", month:5, day:28, weekDay:2, epsE:0.71,  epsA:0.82,  implied:8.4, guide:"Raised",  react: 7.1 },
-  { s:"COST", n:"Costco",         sec:"Retail",     sess:"AMC", month:5, day:29, weekDay:3, epsE:4.04,  epsA:4.11,  implied:2.6, guide:"In-line", react: 2.1 },
-  { s:"CRM",  n:"Salesforce",     sec:"Software",   sess:"AMC", month:5, day:29, weekDay:3, epsE:2.38,  epsA:2.61,  implied:4.2, guide:"Raised",  react: 4.8 },
-  // ── Jun 15–19 (Last Week) ─────────────────────────────────────────────────
-  { s:"ORCL", n:"Oracle",         sec:"Software",   sess:"AMC", month:6, day:16, weekDay:0, epsE:1.68,  epsA:1.74,  implied:3.8, guide:"Raised",  react: 4.2 },
-  { s:"ADBE", n:"Adobe",          sec:"Software",   sess:"AMC", month:6, day:17, weekDay:1, epsE:4.62,  epsA:4.78,  implied:5.1, guide:"Raised",  react: 3.8 },
-  { s:"DAL",  n:"Delta Air Lines",sec:"Airlines",   sess:"BMO", month:6, day:18, weekDay:2, epsE:1.88,  epsA:2.04,  implied:4.6, guide:"Raised",  react: 5.4 },
-  { s:"KR",   n:"Kroger",         sec:"Retail",     sess:"BMO", month:6, day:18, weekDay:2, epsE:1.12,  epsA:1.08,  implied:2.4, guide:"In-line", react:-1.2 },
-  { s:"FDX",  n:"FedEx",          sec:"Logistics",  sess:"AMC", month:6, day:18, weekDay:2, epsE:5.41,  epsA:5.62,  implied:4.2, guide:"Raised",  react: 3.8 },
-  { s:"NKE",  n:"Nike",           sec:"Consumer",   sess:"AMC", month:6, day:19, weekDay:3, epsE:0.88,  epsA:0.72,  implied:5.8, guide:"Lowered", react:-8.4 },
-  // ── Jun 22–26 (This Week) ─────────────────────────────────────────────────
-  { s:"GOOG", n:"Alphabet",       sec:"Internet",   sess:"AMC", month:6, day:23, weekDay:1, epsE:1.84,  epsA:1.89,  implied:3.9, guide:"In-line", react: 1.3 },
-  { s:"META", n:"Meta Platforms", sec:"Social",     sess:"AMC", month:6, day:23, weekDay:1, epsE:4.71,  epsA:4.86,  implied:5.5, guide:"Raised",  react: 3.2 },
-  { s:"MSFT", n:"Microsoft",      sec:"Software",   sess:"AMC", month:6, day:24, weekDay:2, epsE:2.82,  epsA:2.94,  implied:4.1, guide:"In-line", react: 2.1 },
-  { s:"WBA",  n:"Walgreens",      sec:"Healthcare", sess:"BMO", month:6, day:25, weekDay:3, epsE:0.21,  epsA:null,  implied:6.2, guide:null,      react:null },
-  { s:"PAYX", n:"Paychex",        sec:"Software",   sess:"BMO", month:6, day:25, weekDay:3, epsE:1.41,  epsA:null,  implied:2.8, guide:null,      react:null },
-  { s:"CAG",  n:"Conagra Brands", sec:"Staples",    sess:"AMC", month:6, day:25, weekDay:3, epsE:0.64,  epsA:null,  implied:3.2, guide:null,      react:null },
-  { s:"AMZN", n:"Amazon",         sec:"E-Commerce", sess:"AMC", month:6, day:26, weekDay:4, epsE:0.98,  epsA:null,  implied:5.8, guide:null,      react:null },
-  { s:"AAPL", n:"Apple",          sec:"Hardware",   sess:"AMC", month:6, day:26, weekDay:4, epsE:1.50,  epsA:null,  implied:3.2, guide:null,      react:null },
-  // ── Jun 29 – Jul 3 (Next Week) ────────────────────────────────────────────
-  { s:"SMCI", n:"Super Micro",    sec:"Hardware",   sess:"AMC", month:6, day:30, weekDay:1, epsE:0.58,  epsA:null,  implied:9.4, guide:null,      react:null },
-  { s:"MU",   n:"Micron",         sec:"Semis",      sess:"AMC", month:6, day:30, weekDay:1, epsE:1.18,  epsA:null,  implied:6.8, guide:null,      react:null },
-  { s:"LEVI", n:"Levi Strauss",   sec:"Consumer",   sess:"AMC", month:7, day:1,  weekDay:2, epsE:0.32,  epsA:null,  implied:4.4, guide:null,      react:null },
-  { s:"STZ",  n:"Constellation",  sec:"Staples",    sess:"BMO", month:7, day:2,  weekDay:3, epsE:3.41,  epsA:null,  implied:3.8, guide:null,      react:null },
-  { s:"LEN",  n:"Lennar",         sec:"Real Estate",sess:"AMC", month:7, day:2,  weekDay:3, epsE:3.28,  epsA:null,  implied:4.6, guide:null,      react:null },
-  { s:"ACN",  n:"Accenture",      sec:"Consulting", sess:"BMO", month:7, day:3,  weekDay:4, epsE:3.14,  epsA:null,  implied:3.2, guide:null,      react:null },
-];
-
-/** Live earnings_events doc -> the row shape this calendar renders. */
-function toEarnCalItem(d: LiveEarningsDoc): EarnCalItem {
-  const [, m, day] = d.date.split("-").map(Number);
-  const dt = new Date(d.date + "T00:00:00Z");
-  return {
-    s: d.ticker,
-    n: d.ticker,        // no company name on the earnings doc
-    sec: "—",
-    sess: null,         // not supplied by the vendor feed
-    month: m, day,
-    weekDay: (dt.getUTCDay() + 6) % 7,
-    epsE: d.epsEstimate,
-    epsA: d.epsActual,
-    implied: null,
-    guide: null,
-    react: null,
-  };
-}
-
-function calToEarning(cal: EarnCalItem): Earning {
-  return {
-    ticker: cal.s, name: cal.n,
-    session: cal.sess === "BMO" ? "Before open" : "After close",
-    marketCap: "$60B", sector: cal.sec,
-    epsEstimate: cal.epsE, epsActual: cal.epsA,
-    revenueEstimate: 0, revenueActual: null,
-    guidanceStatus: cal.guide, priceReaction: cal.react,
-    tags: [], owned: false, impliedMove: cal.implied,
-  };
-}
-
-// ── Deterministic data helpers ───────────────────────────────────────────────
-
-function parseMcNum(mc: string): number {
-  const m = mc.replace(/[$,\s]/g, "");
-  if (m.endsWith("T")) return parseFloat(m) * 1000;
-  if (m.endsWith("B")) return parseFloat(m);
-  if (m.endsWith("M")) return parseFloat(m) / 1000;
-  return parseFloat(m) || 60;
-}
-
-function earnIncome(s: string, mcStr: string): IncRow[] {
-  const si    = stockInfo[s];
-  const mc    = parseMcNum(mcStr);
-  const price = si?.price ?? 100;
-  const rev0  = Math.max(2, mc * 0.02);
-  const sh    = Math.max(0.3, mc / price);
-  const cols  = ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"];
-  return cols.map((c, i) => {
-    const rev  = rev0 * (1 - i * 0.05);
-    const cogs = rev * 0.55;
-    const gp   = rev - cogs;
-    const opex = rev * 0.22;
-    const oi   = gp - opex;
-    const ni   = oi * 0.82;
-    const eps  = ni / sh;
-    return { c, rev, cogs, gp, opex, oi, ni, eps };
-  });
-}
-
-// Generate month calendar — map is keyed by day-of-month → tickers reporting
-function monthCalData(off: number): { Y: number; M: number; first: number; days: number; map: Record<number, string[]> } {
-  const base   = new Date(2026, 5 + off, 1);
-  const Y = base.getFullYear(), M = base.getMonth();
-  const month1 = M + 1;
-  const first  = new Date(Y, M, 1).getDay();
-  const days   = new Date(Y, M + 1, 0).getDate();
-  const map: Record<number, string[]> = {};
-  for (let d = 1; d <= days; d++) {
-    map[d] = EARN_CAL.filter(e => e.month === month1 && e.day === d).map(e => e.s);
-  }
-  return { Y, M, first, days, map };
-}
-
 // ── SVG Charts ───────────────────────────────────────────────────────────────
 
 function EpsChart({ hist }: { hist: EarnQ[] }) {
   const d = [...hist].reverse();
+  // Guarded in the component so every call site is covered at once. On an empty
+  // array `Math.max(...[])` is -Infinity and `iw / n` divides by zero, so the
+  // SVG would render with NaN coordinates — blank, and indistinguishable from a
+  // chart that legitimately has no bars.
+  if (d.length === 0) return <EarnEmpty what="EPS history" />;
   const W = 580, H = 210, PADL = 30, PADR = 18, PADT = 14, PADB = 30;
   const iw = W - PADL - PADR, ih = H - PADT - PADB;
   const allVals = d.flatMap(x => [x.e, x.a]);
@@ -207,6 +130,7 @@ function EpsChart({ hist }: { hist: EarnQ[] }) {
 
 function IncChart({ inc }: { inc: IncRow[] }) {
   const d = [...inc].reverse();
+  if (d.length === 0) return <EarnEmpty what="Income statement" />;
   const W = 580, H = 200, PADL = 8, PADR = 8, PADT = 14, PADB = 26;
   const iw = W - PADL - PADR, ih = H - PADT - PADB;
   const max = Math.max(...d.map(x => x.rev)) * 1.12 || 1;
@@ -245,24 +169,6 @@ function IncChart({ inc }: { inc: IncRow[] }) {
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: W, display: "block" }}>
       {bars}{labels}
     </svg>
-  );
-}
-
-// ── Company logo chip ─────────────────────────────────────────────────────────
-
-function EcChip({ sym, selected, onSelect }: { sym: string; selected: boolean; onSelect: (s: string) => void }) {
-  return (
-    <button className={`ec-chip${selected ? " on" : ""}`} onClick={() => onSelect(sym)}>
-      <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6" }}>
-        {sym[0]}
-        <img
-          src={`https://assets.parqet.com/logos/symbol/${sym}?format=png`}
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-          alt=""
-        />
-      </span>
-      {sym}
-    </button>
   );
 }
 
@@ -498,8 +404,14 @@ function CallDrawer({ call, onClose, playing, onTogglePlay, initialTab = "summar
         <div className="drawer-h">
           <StockLogo sym={call.sym} size={38} />
           <div style={{ flex: 1 }}>
+            {/* CALLS_DATA is 28 hand-authored calls — summaries, bullet points
+                and transcripts. No transcript vendor is wired (FMP transcripts
+                are paid, BENZINGA_API_KEY is blank), so unlike the panels above
+                there is nothing real to swap in. Badged rather than deleted so
+                the feature survives until a source is funded; remove the badge
+                the moment one is. */}
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
-              {call.sym} · {call.name}
+              {call.sym} · {call.name} <SampleBadge title="Call summaries and transcripts are illustrative — no transcript vendor is wired yet" />
             </div>
             <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
               ${fmt(call.price)}{" "}
@@ -659,58 +571,13 @@ function CallDrawer({ call, onClose, playing, onTogglePlay, initialTab = "summar
   );
 }
 
-// ── Company bios ─────────────────────────────────────────────────────────────
-
-const COMPANY_BIO: Record<string, string> = {
-  AAPL:  "Apple designs and sells iPhones, Macs, iPads, and wearables while growing its high-margin Services business including the App Store, iCloud, and Apple Pay. Services is now the most profitable segment and the key driver of multiple expansion.",
-  MSFT:  "Microsoft is a global technology leader with enterprise software (Office 365, Windows), Azure cloud computing, and AI services powered by its OpenAI partnership. Azure is the company's fastest-growing segment and the main earnings driver.",
-  NVDA:  "NVIDIA designs the world's leading data center GPUs for AI training and inference. Blackwell architecture demand is driving unprecedented revenue growth, with hyperscaler backlogs extending several quarters and data center revenue up 90%+ year-over-year.",
-  AMZN:  "Amazon is the world's largest e-commerce marketplace and cloud computing provider through AWS. The company also operates a fast-growing advertising business now crossing $60B in annualized revenue, with AWS margins expanding as AI workloads ramp.",
-  GOOG:  "Alphabet operates Google Search, YouTube, Google Cloud, and Waymo. Revenue is primarily advertising-driven with Cloud growing at 30%+ and AI Overviews monetizing better than feared, supporting the long-term ad revenue base.",
-  GOOGL: "Alphabet operates Google Search, YouTube, Google Cloud, and Waymo. Revenue is primarily advertising-driven with Cloud growing at 30%+ and AI Overviews monetizing better than feared, supporting the long-term ad revenue base.",
-  META:  "Meta Platforms owns Facebook, Instagram, and WhatsApp, reaching over 3 billion daily active users. AI-driven Advantage+ ad campaigns and Llama 4 integration are accelerating revenue growth and reducing infrastructure costs simultaneously.",
-  TSLA:  "Tesla designs and manufactures electric vehicles, battery storage, and solar products globally. Near-term earnings are pressured by automotive margin compression from price cuts, while energy storage and autonomous (FSD/Optimus) represent long-term optionality.",
-  AMD:   "Advanced Micro Devices designs high-performance CPUs and GPUs for data centers, gaming, and embedded applications. MI300X AI accelerators are gaining significant share against NVIDIA with data center GPU revenue tripling year-over-year.",
-  INTC:  "Intel is a legacy semiconductor manufacturer undergoing a multi-year turnaround, competing in CPUs, AI accelerators, and foundry services. The company is managing significant losses in its Intel Foundry segment while facing ongoing share losses to AMD.",
-  JPM:   "JPMorgan Chase is the largest US bank by assets, with leading positions in consumer banking, investment banking, and asset management. Net interest income remains a key earnings driver and the firm benefits from its scale in volatile markets.",
-  BAC:   "Bank of America is the second-largest US bank, heavily exposed to retail deposits and consumer credit. The company benefits disproportionately from higher-for-longer rates through its large fixed-rate bond portfolio repricing over time.",
-  CRM:   "Salesforce is the world's leading CRM platform, serving sales, service, marketing, and commerce teams. Its Agentforce AI product is accelerating upsell across the installed base and driving higher total contract values per customer.",
-  NFLX:  "Netflix is the world's largest streaming service with 270M+ subscribers globally. The advertising-supported tier is scaling rapidly with 94M monthly active users, and live events strategy — sports and WWE — is driving total viewing hour growth.",
-  V:     "Visa operates the world's largest payment network, processing trillions in volume annually across 200+ countries. Growth is driven by cross-border travel recovery, B2B payment digitization, and value-added services now at 22% of net revenue.",
-  JNJ:   "Johnson & Johnson is a global healthcare company with leading MedTech and pharmaceutical divisions. Key drugs Darzalex and TREMFYA are growing strongly while the MedTech segment benefits from robotic surgery procedure volume recovery.",
-  WMT:   "Walmart is the world's largest retailer by revenue operating 10,500+ stores globally with a fast-growing e-commerce platform. Higher-income shoppers trading down from premium grocers and advertising revenue growth are the two key earnings catalysts.",
-  DIS:   "The Walt Disney Company operates theme parks, studios, cruise lines, and streaming through Disney+, Hulu, and ESPN+. Streaming has reached profitability while Parks & Experiences faces near-term pressure from macroeconomic softness in domestic attendance.",
-  QCOM:  "Qualcomm is the world's leading mobile chipmaker, supplying Snapdragon processors for Android smartphones. The company is diversifying into automotive, IoT, and AI-on-device markets to reduce its handset concentration risk.",
-  UBER:  "Uber operates a global mobility and food delivery platform across 70+ countries with 150M+ active users. The business generates strong network effects and is generating consistent EBITDA profitability as Delivery and Freight segments mature.",
-  ARM:   "Arm Holdings licenses CPU and GPU architectures to semiconductor manufacturers worldwide. Virtually every smartphone chip uses Arm designs, and the company is expanding into AI inference, data center, and edge computing markets.",
-  CSCO:  "Cisco Systems is the dominant provider of enterprise networking equipment including routers, switches, and security appliances. The company is pivoting to software and subscription revenue through its networking, collaboration, and observability platforms.",
-  HD:    "Home Depot is the largest home improvement retailer in the US with 2,300+ stores serving DIY and professional customers. Pro contractor revenue is an increasingly large portion of sales and tends to be higher-ticket and more recurring.",
-  TGT:   "Target is a national mass-merchandise retailer offering groceries, apparel, home goods, and electronics. The company is working to recover discretionary spending share after aggressive inventory corrections and pricing pressure from competition.",
-  SNOW:  "Snowflake provides a cloud-native data platform enabling organizations to store, query, and share data across multiple cloud providers. Its consumption-based model makes revenue growth closely tied to enterprise AI data workload expansion.",
-  MDB:   "MongoDB provides a flexible document-oriented database platform used by developers worldwide. Its Atlas cloud database product is the fastest-growing segment, with AI vector search capabilities expanding the addressable market significantly.",
-  COST:  "Costco operates a membership-only warehouse club with over 130 million members globally. Its low-price model, strong Kirkland private label, and membership fee income create a deeply loyal customer base and predictable recurring earnings.",
-  ORCL:  "Oracle is a cloud applications and database company with a fast-growing Infrastructure Cloud (OCI) division. AI workload demand has filled its data centers and driven a multi-year backlog, with revenue guidance being raised materially.",
-  ADBE:  "Adobe provides creative software (Photoshop, Illustrator, Premiere), document management (Acrobat), and marketing analytics tools. AI-powered Firefly features are expanding its content creation addressable market and driving meaningful upsell activity.",
-  DAL:   "Delta Air Lines is one of the world's largest carriers, differentiated by its premium cabin mix and American Express co-brand credit card partnership generating $7B+ in annual revenue. Domestic and international travel demand remains resilient.",
-  KR:    "Kroger is the largest traditional US grocery chain with 2,700+ stores and a strong loyalty data platform. The company faces ongoing margin pressure from labor cost inflation and competitive pricing, with digital grocery a key investment area.",
-  FDX:   "FedEx is a global logistics and express delivery company operating in 220+ countries. The company is executing its multi-year DRIVE cost reduction program targeting $4B+ in savings, improving operating margin structurally as volumes normalize.",
-  NKE:   "Nike is the world's largest athletic footwear and apparel brand selling through wholesale, direct-to-consumer, and its own digital platform. The company is working to stabilize volumes in North America and China after an inventory reset.",
-  SMCI:  "Super Micro Computer manufactures high-performance server and storage solutions for AI and data center applications. The company is a key AI infrastructure supplier but has faced accounting restatement and Nasdaq compliance challenges.",
-  MU:    "Micron Technology manufactures DRAM and NAND memory chips for AI servers, PCs, smartphones, and automotive. Its HBM3E high-bandwidth memory for AI accelerators is a fast-growing, highly profitable product driving significant margin improvement.",
-  LEVI:  "Levi Strauss is a global denim apparel brand with the iconic Levi's, Dockers, and Beyond Yoga labels. The company is growing its direct-to-consumer channel to improve margins and reduce dependence on wholesale department store accounts.",
-  STZ:   "Constellation Brands is a leading beverage alcohol company with premium Mexican beer brands including Corona, Modelo, and Pacifico. Beer segment operating margins consistently exceed 37%, driven by strong premiumization trends in the US Hispanic market.",
-  LEN:   "Lennar is one of the largest US homebuilders operating across 20+ states. The company benefits from a significant structural housing supply shortage and has used mortgage rate buydowns effectively to maintain order pace despite elevated rates.",
-  ACN:   "Accenture is a global professional services firm providing strategy, consulting, digital transformation, and managed services to enterprises in 120+ countries. AI-related consulting engagements are growing rapidly and expanding total engagement size.",
-  WBA:   "Walgreens Boots Alliance operates one of the largest pharmacy retail chains in the US and Europe with 8,700+ locations. The company is undergoing a strategic transformation to expand healthcare services amid declining retail pharmacy foot traffic.",
-  PAYX:  "Paychex is a leading provider of payroll, HR, and benefits administration services to small and medium-sized businesses. The company generates highly recurring SaaS-like revenue from its 745,000+ client base with strong retention rates.",
-  CAG:   "Conagra Brands is a packaged food company with brands including Slim Jim, Birds Eye, Duncan Hines, and Hunt's. The company is navigating volume pressure from consumer trade-down while managing input cost inflation across its grocery portfolio.",
-};
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export function EarningsScreen() {
   const { openStockFull } = useIQActions();
   const { data: liveEarnings } = useCollection<LiveEarningsDoc>("earnings_events");
+  const { data: companies } = useCollection<CompanyDoc>("companies");
   // The calendar owns the date; this screen only tracks which company the user
   // picked, since the detail card below is driven by it.
   const [sel, setSel] = useState<string>("AAPL");
@@ -722,31 +589,71 @@ export function EarningsScreen() {
 
   // ── Detail section ────────────────────────────────────────────────────────
 
-  const baseEarning: Earning = earnings.find(e => e.ticker === sel)
-    ?? (() => { const cal = EARN_CAL.find(e => e.s === sel); return cal ? calToEarning(cal) : calToEarning(EARN_CAL[0]); })();
+  // Identity + bio — Polygon company profile. This replaces a lookup chain that
+  // ended in `calToEarning(EARN_CAL[0])`, i.e. AMD: any ticker outside the 8-row
+  // mock and the 33-row EARN_CAL rendered AMD's name, sector, guidance and
+  // reaction under the symbol the user had selected. The calendar above can
+  // select ANY synced ticker, so that was reachable for most of the universe.
+  const company = companies.find(c => (c.ticker ?? c.id) === sel);
 
-  const liveMatches = liveEarnings.filter(e => e.ticker === sel).sort((a, b) => b.date.localeCompare(a.date));
-  const liveMatch = liveMatches[0];
-  const isLiveEarning = !!liveMatch && (liveMatch.epsEstimate != null || liveMatch.epsActual != null);
-  const selEarning: Earning = isLiveEarning
-    ? { ...baseEarning, epsEstimate: liveMatch.epsEstimate ?? baseEarning.epsEstimate, epsActual: liveMatch.epsActual ?? baseEarning.epsActual }
-    : baseEarning;
+  // EPS estimate/actual — FMP, the only source for these. Newest print first.
+  const liveMatch = liveEarnings
+    .filter(e => e.ticker === sel)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  const epsEstimate = liveMatch?.epsEstimate ?? null;
+  const epsActual = liveMatch?.epsActual ?? null;
+  const hasLiveEps = epsEstimate != null || epsActual != null;
 
-  const _si   = stockInfo[sel];
-  const _base = Math.max(0.05, ((_si?.price ?? 100) / (_si?.peRatio ?? 25)) / 4);
-  const hist  = earnHistory(sel, _base);
-  const inc   = earnIncome(sel, selEarning?.marketCap ?? "$60B");
-  const beats = hist.filter(h => h.surp > 0).length;
-  const avgMv = (hist.reduce((a, h) => a + Math.abs(h.mv), 0) / hist.length).toFixed(1);
+  // 10-quarter history + income statement — Polygon, via the same doc.
+  const fin = useFinancials(sel);
+  const hist = fin.epsHistory;
+  const inc = fin.incomeRows;
+  // `surp > 0` counted a beat; a quarter with no vendor estimate has surp === 0
+  // and is genuinely UNKNOWN, so it must not land in either bucket. Only 6 of
+  // 226 financials docs carry an epsEstimate today (the Finnhub backfill in
+  // financials.job is rate-limited and its failure is swallowed), so `scored`
+  // is usually 0 and the badge correctly hides rather than claiming 10/10.
+  const scored = hist.filter(h => h.e !== h.a);
+  const beats = scored.filter(h => h.surp > 0).length;
 
   const fmtB = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
 
-  const aiRead = selEarning
-    ? `${sel} ${selEarning.epsActual != null
-        ? (selEarning.epsEstimate != null && selEarning.epsActual >= selEarning.epsEstimate ? "beat" : "missed") + " EPS estimates"
-        : "reports " + selEarning.session
-      }. Guidance ${selEarning.guidanceStatus === "Raised" ? "was raised — bullish" : selEarning.guidanceStatus === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${selEarning.priceReaction != null ? `Shares reacted ${sign(selEarning.priceReaction)} on the print.` : `Options imply a ±${selEarning.impliedMove}% move.`}`
-    : `${sel} reports next quarter.`;
+  // Built only from figures we actually hold. The previous version asserted
+  // "Guidance was maintained" for every company (the ternary's else-branch) and
+  // "Options imply a ±X% move" from a hardcoded EARN_CAL field — with no
+  // guidance feed and no options feed wired, both were assertions about a
+  // company's quarter that nothing backed. Each clause below is now conditional
+  // on its own data, so an unsourced sentence is absent rather than confident.
+  const aiRead = (() => {
+    const parts: string[] = [];
+    if (epsActual != null && epsEstimate != null) {
+      const beat = epsActual >= epsEstimate;
+      parts.push(`${sel} ${beat ? "beat" : "missed"} consensus at $${epsActual.toFixed(2)} vs. $${epsEstimate.toFixed(2)} estimated.`);
+    } else if (epsActual != null) {
+      parts.push(`${sel} reported $${epsActual.toFixed(2)} EPS.`);
+    } else if (epsEstimate != null) {
+      parts.push(`${sel} is expected to report $${epsEstimate.toFixed(2)} EPS${liveMatch?.date ? ` on ${liveMatch.date}` : ""}.`);
+    } else {
+      parts.push(`No synced earnings print for ${sel}.`);
+    }
+    if (scored.length > 0) {
+      parts.push(`Of the last ${scored.length} quarters with a published estimate, ${beats} beat.`);
+    }
+    // Year-over-year (4 quarters back), not sequential. Retail and hardware are
+    // strongly seasonal — comparing Apple's March quarter to its holiday quarter
+    // reports a 22.7% "fall" that is just the calendar. Falls back to sequential
+    // only when fewer than 5 quarters are synced, and says which it used.
+    const rows = fin.incomeRows;
+    if (rows.length > 1) {
+      const prior = rows.length > 4 ? rows[4] : rows[1];
+      const basis = rows.length > 4 ? "year-over-year" : "quarter-over-quarter";
+      if (prior.rev > 0) {
+        const g = ((rows[0].rev - prior.rev) / Math.abs(prior.rev)) * 100;
+        parts.push(`Revenue ${g >= 0 ? "grew" : "fell"} ${Math.abs(g).toFixed(1)}% ${basis} to ${fmtB(rows[0].rev)}.`);
+      }
+    }
+    return parts.join(" ");
+  })();
 
   return (
     <>
@@ -758,19 +665,25 @@ export function EarningsScreen() {
       <EarningsCalendar selected={sel} onSelect={setSel} />
 
       {/* ── Selected company inline detail (below calendar, no drawer) ── */}
-      {selEarning && (
+      {(
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <StockLogo sym={sel} size={36} />
               <div>
                 <span style={{ fontWeight: 700, color: "var(--text-hi)", fontSize: ".95rem" }}>{sel}</span>
-                <span style={{ color: "var(--text-dim-solid)", fontSize: ".78rem", marginLeft: 8 }}>{selEarning.name} · {selEarning.sector}</span>
+                {(company?.name || company?.sector) && (
+                  <span style={{ color: "var(--text-dim-solid)", fontSize: ".78rem", marginLeft: 8 }}>
+                    {[company?.name, company?.sector].filter(Boolean).join(" · ")}
+                  </span>
+                )}
               </div>
-              <span className={`pill ${selEarning.session.includes("pre") || selEarning.session.includes("Before") ? "bmo" : "amc"}`} style={{ marginLeft: 4 }}>
-                {selEarning.session}
-              </span>
-              {isLiveEarning && (
+              {/* The BMO/AMC pill is gone: FMP's earnings calendar has no session
+                  field, so it was always read off the static EARN_CAL row — and
+                  after the AMD fallback, often off the WRONG row. Finnhub's
+                  /calendar/earnings does return an `hour`, so this can come back
+                  as real data once earnings.job reads it. */}
+              {hasLiveEps && (
                 <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)" }}>live EPS · FMP</span>
               )}
               {/* Action buttons — inline, same row */}
@@ -809,33 +722,34 @@ export function EarningsScreen() {
             </div>{/* end outer flex */}
           </div>{/* end card-h */}
           <div className="card-b" style={{ paddingTop: 10 }}>
-            {(COMPANY_BIO[sel] ?? stockInfo[sel]?.aiThesis) && (
+            {/* The vendor's own business description, not a hand-written bio.
+                COMPANY_BIO covered 42 tickers; `companies.description` covers
+                241/241, so this is both real and broader. */}
+            {company?.description && (
               <p style={{ fontSize: ".82rem", color: "var(--text)", lineHeight: 1.6, marginBottom: 14, marginTop: 0 }}>
-                {COMPANY_BIO[sel] ?? stockInfo[sel]?.aiThesis}
+                {company.description}
               </p>
             )}
-            <div className="metric-grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 12 }}>
+            {/* Was four tiles; Guidance and Reaction/Implied-move are gone.
+                Neither had a vendor: guidance needs a transcript feed and the
+                implied move needs an options feed, so both rendered EARN_CAL
+                constants. A specific "Raised" or "±5.2%" reads as a filed fact,
+                which is exactly the kind of claim a "—" cannot walk back. The
+                two that remain are FMP, plus market cap from Polygon. */}
+            <div className="metric-grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 12 }}>
               <div className="m">
                 <div className="k">EPS estimate</div>
-                <div className="v">{selEarning.epsEstimate != null ? `$${selEarning.epsEstimate.toFixed(2)}` : "—"}</div>
+                <div className="v">{epsEstimate != null ? `$${epsEstimate.toFixed(2)}` : "—"}</div>
               </div>
               <div className="m">
                 <div className="k">EPS actual</div>
-                {selEarning.epsActual != null
-                  ? <div className={`v ${selEarning.epsEstimate != null && selEarning.epsActual >= selEarning.epsEstimate ? "up" : "down"}`}>${selEarning.epsActual.toFixed(2)}</div>
+                {epsActual != null
+                  ? <div className={`v ${epsEstimate != null && epsActual >= epsEstimate ? "up" : "down"}`}>${epsActual.toFixed(2)}</div>
                   : <div className="v" style={{ color: "var(--text-dim-solid)" }}>Pending</div>}
               </div>
               <div className="m">
-                <div className="k">Guidance</div>
-                <div className={`v ${selEarning.guidanceStatus === "Raised" ? "up" : selEarning.guidanceStatus === "Lowered" ? "down" : ""}`} style={{ fontSize: ".95rem" }}>
-                  {selEarning.guidanceStatus ?? "—"}
-                </div>
-              </div>
-              <div className="m">
-                <div className="k">{selEarning.priceReaction != null ? "Reaction" : "Implied move"}</div>
-                {selEarning.priceReaction != null
-                  ? <div className={`v ${cls(selEarning.priceReaction)}`}>{sign(selEarning.priceReaction)}</div>
-                  : <div className="v" style={{ color: "var(--warn)" }}>±{selEarning.impliedMove}%</div>}
+                <div className="k">Market cap</div>
+                <div className="v">{company?.marketCap != null ? fmtB(company.marketCap / 1e9) : "—"}</div>
               </div>
             </div>
             <p style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", margin: 0 }}>{aiRead}</p>
@@ -843,22 +757,34 @@ export function EarningsScreen() {
         </div>
       )}
 
+
       {/* ── Detail: EPS history + Income statement ─────────────────────── */}
       <div className="dash" style={{ marginTop: 16 }}>
         {/* col-6: 10-quarter EPS history */}
         <div className="col-6">
           <div className="card">
             <div className="card-h">
-              <h3>{sel} · 10-quarter earnings history</h3>
+              {/* Says how many quarters we actually hold, not a fixed 10. */}
+              <h3>{sel} · {hist.length ? `${hist.length}-quarter` : "Quarterly"} earnings history</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {selEarning?.priceReaction != null
-                  ? <span className={`pill ${selEarning.priceReaction >= 0 ? "up" : "dn"}`}>{sign(selEarning.priceReaction)} last reaction</span>
-                  : beats >= 7
-                    ? <span className="pill up">{beats}/10 beats</span>
-                    : beats < 5
-                    ? <span className="pill dn">{beats}/10 beats</span>
-                    : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats}/10 beats</span>}
-                <ExpandBtn title={`${sel} · 10-quarter earnings history`} node={<EpsChart hist={hist} />} />
+                {/* Only quarters with a real vendor estimate can be scored, so
+                    the denominator is `scored.length`. The old badge divided by
+                    a hardcoded 10 and, once the generator was removed, would
+                    have read "10/10 beats" for almost every ticker — because a
+                    quarter with no estimate has surprise 0, which `>= 0` counted
+                    as a beat. No estimates means no badge. */}
+                {scored.length > 0 && (
+                  <span
+                    className={`pill ${beats / scored.length >= 0.7 ? "up" : beats / scored.length < 0.5 ? "dn" : ""}`}
+                    style={beats / scored.length >= 0.5 && beats / scored.length < 0.7
+                      ? { background: "var(--surface-3)", color: "var(--text-dim-solid)" } : undefined}
+                  >
+                    {beats}/{scored.length} beats
+                  </span>
+                )}
+                {hist.length > 0 && (
+                  <ExpandBtn title={`${sel} · earnings history`} node={<EpsChart hist={hist} />} />
+                )}
               </div>
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
@@ -964,12 +890,16 @@ export function EarningsScreen() {
           <h3 className="ai-c">◆ AI earnings read · {sel}</h3>
         </div>
         <div className="card-b">
+          {/* The beats clause now lives inside `aiRead`, conditioned on quarters
+              that actually have a vendor estimate. The "average post-print move"
+              sentence is gone with `avgMv`: it averaged EarnQ.mv, which
+              useFinancials sets to a literal 0 because no synced field carries a
+              price reaction — so it always described a 0.0% average move as
+              though it were measured. Computing it for real needs a bar lookup
+              per quarter (close after the print vs. prior close) and belongs in
+              a backend field, not here. */}
           <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)" }}>
-            {aiRead}{" "}History shows{" "}
-            <b style={{ color: "var(--text-hi)" }}>{beats}/10 beats</b>{" "}
-            and an average post-print move of{" "}
-            <b style={{ color: "var(--text-hi)" }}>{avgMv}%</b>.{" "}
-            Watch revenue growth and forward guidance most.{" "}
+            {aiRead}{" "}
             <button className="btn" style={{ marginLeft: 8, padding: "4px 10px" }}
               onClick={() => openStockFull(sel)}>
               Open full stock page →
@@ -1008,8 +938,10 @@ export function EarningsScreen() {
                 padding: "14px 16px", borderBottom: "1px solid var(--border-soft)",
               }}>
                 <span style={{ color: "var(--ai)", fontSize: "1rem", lineHeight: 1 }}>◆</span>
+                {/* Same CALLS_DATA as the drawer — authored, not generated by a
+                    model. ANTHROPIC_API_KEY is provisioned but nothing calls it. */}
                 <span style={{ fontWeight: 700, fontSize: ".95rem", color: "var(--text-hi)", flex: 1 }}>
-                  AI Analysis · {aiModalSym}
+                  AI Analysis · {aiModalSym} <SampleBadge title="Authored analysis — no model is called for this yet" />
                 </span>
                 <button className="closebtn" onClick={() => setAiModalSym(null)}>✕</button>
               </div>
