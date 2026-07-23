@@ -2,7 +2,14 @@
 // STOCKWISE — MOCK DATA (TypeScript)
 // ============================================================
 
-export interface PulseItem { label: string; value: number; change: number; open: number; prevClose: number; }
+export interface PulseItem {
+  label: string; value: number; change: number; open: number; prevClose: number;
+  // Optional real fields carried through from the live tape / market_indices, so
+  // the index drawer can show a real day range and label ETF proxies honestly
+  // instead of fabricating (× multipliers) or mislabeling.
+  dayHigh?: number | null; dayLow?: number | null;
+  proxyTicker?: string | null; isProxy?: boolean; note?: string | null;
+}
 export interface WMNItem { headline: string; body: string; tag: 'macro' | 'earn' | 'sector'; }
 export interface Earning {
   ticker: string; name: string; session: string; marketCap: string; sector: string;

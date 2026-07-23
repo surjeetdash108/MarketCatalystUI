@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { collection, doc, onSnapshot } from "firebase/firestore";
 import { firebaseAuth, firebaseDb } from "../../firebase";
-import { useIQActions, ExpandBtn } from "../shell";
+import { useIQActions, ExpandBtn, useLivePulse } from "../shell";
 import { pulse as mockPulse, wmn, movers as mockMovers, earnings as mockEarnings, folio, analyst, watch, sectorList, screenerStocks, type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol } from "../utils";
 import { useCollection } from "../hooks/useCollection";
@@ -358,7 +358,11 @@ export function DashboardScreen() {
   const fgLabel = fearGreed?.label ?? "Greed";
   const { data: consensusLive } = useCollection<AnalystConsensusDoc>("analyst_actions");
 
-  const pulse = mergePulse(mockPulse, liveIndices);
+  // Prefer the shell's shared LIVE pulse (SSE tape applied) so the Market Pulse
+  // boxes agree with the ticker tape and the index drawer. Falls back to the
+  // once-a-day mergePulse only if the shell hasn't provided it yet.
+  const sharedLivePulse = useLivePulse();
+  const pulse = sharedLivePulse.length ? sharedLivePulse : mergePulse(mockPulse, liveIndices);
   // Tickers with a real recent Polygon article, from the count news.job
   // denormalises onto companies — the same honest signal the Movers screen uses.
   const newsTickers = new Set(companies.filter(c => (c.newsCount ?? 0) > 0).map(c => c.ticker ?? c.id));
@@ -490,7 +494,12 @@ export function DashboardScreen() {
           <div className="pulse">
             {pulse.slice(0, 6).map((x, i) => (
               <div key={x.label} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(i)}>
-                <div className="lbl">{x.label}</div>
+                <div className="lbl">
+                  {x.label}
+                  {x.isProxy && x.proxyTicker && (
+                    <span style={{ marginLeft: 5, fontSize: ".82em", color: "var(--text-dim-solid)", fontWeight: 500 }}>· {x.proxyTicker}</span>
+                  )}
+                </div>
                 <div className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</div>
                 <div className={`chg ${cls(x.change)}`}>{arr(x.change)} {sign(x.change)}</div>
                 <Spark seed={i + 1} up={x.change >= 0} />
@@ -902,22 +911,31 @@ export function DashboardScreen() {
               <span className="pill up">Calm</span>
             </div>
             <div className="card-b">
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                <span className="big">{liveIndices.find(i => i.id === "VIX")?.value?.toFixed(2) ?? "—"}</span>
-                <span className="mono down" style={{ fontWeight: 600 }}>
-                  {liveIndices.find(i => i.id === "VIX") ? sign(liveIndices.find(i => i.id === "VIX")!.pctChange) : "▼ -2.51%"}
-                </span>
-              </div>
-              <div className="pctl" style={{ marginTop: 12 }}><i style={{ width: "22%" }} /></div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
-                <span>12-mo pct: 22nd</span>
-                <span>Trend: falling</span>
-              </div>
-              <div className="note">
-                {liveIndices.find(i => i.id === "VIX")
-                  ? `Shown via ${liveIndices.find(i => i.id === "VIX")!.proxyTicker} (ETF proxy) — ${liveIndices.find(i => i.id === "VIX")!.note}`
-                  : "VIX at 14 is low — a calm, risk-on tape."}
-              </div>
+              {/* Live VIX from the same shared pulse the tape/boxes use. */}
+              {(() => {
+                const vix = pulse.find(p => p.label === "VIX");
+                return (
+                  <>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                      <span className="big">{vix?.value != null ? vix.value.toFixed(2) : "—"}</span>
+                      {vix != null && (
+                        <span className={`mono ${vix.change >= 0 ? "up" : "down"}`} style={{ fontWeight: 600 }}>
+                          {sign(vix.change)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="pctl" style={{ marginTop: 12 }}><i style={{ width: "22%" }} /></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 10 }}>
+                      <span>Trend: {vix != null ? (vix.change >= 0 ? "rising" : "falling") : "—"}</span>
+                    </div>
+                    <div className="note">
+                      {vix?.proxyTicker
+                        ? `Shown via ${vix.proxyTicker} (ETF proxy)${vix.note ? ` — ${vix.note}` : ""}`
+                        : "Volatility proxy — a calm reading is a risk-on tape."}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

@@ -92,6 +92,16 @@ export const IQActionsContext = createContext<IQActions>({
 });
 export function useIQActions() { return useContext(IQActionsContext); }
 
+/**
+ * The single live-merged index pulse (nine tiles), computed once in the shell
+ * from the SSE tape + market_indices and shared to every screen. The Dashboard's
+ * Market Pulse boxes read this so they agree with the ticker tape and the index
+ * drawer — all three now show the same live value instead of the boxes showing
+ * yesterday's close.
+ */
+export const LivePulseContext = createContext<PulseItem[]>([]);
+export function useLivePulse() { return useContext(LivePulseContext); }
+
 export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
   const { openChart } = useIQActions();
   return (
@@ -559,17 +569,24 @@ function FundDrawer({ idx, onClose }: { idx: number; onClose: () => void }) {
 
 // ---- Index drawer (openIndex) ----
 function IndexDrawer({ idx, pulse: livePulse, onClose }: { idx: number; pulse: PulseItem[]; onClose: () => void }) {
+  // Real leading/lagging sectors from the live `sectors` collection — the
+  // drawer used to sort a static mock (sectorList), so "Semiconductors +3.10%"
+  // was the same hardcoded row for every index on every day.
+  const { data: sectorsLive } = useCollection<{ id: string; sector: string; pctChange: number }>("sectors");
   const x = livePulse[idx];
   if (!x) return null;
   const dec = x.value > 1000 ? 0 : 2;
   const dollar = x.value - x.prevClose;
   const c = x.change >= 0 ? "up" : "down";
-  const dayLow = Math.min(x.open, x.prevClose, x.value) * 0.997;
-  const dayHigh = Math.max(x.open, x.prevClose, x.value) * 1.003;
-  const y52lo = x.value * 0.82, y52hi = x.value * 1.06;
+  // Real session low/high from the snapshot, when the tape supplied them. No
+  // fabricated × 0.997 multipliers, and NO 52-week range at all — the tape
+  // carries no 52-week data, so a fabricated one was pure invention.
+  const hasDayRange = x.dayLow != null && x.dayHigh != null;
+  const proxyNote = x.isProxy && x.proxyTicker ? `via ${x.proxyTicker} (ETF proxy)` : null;
   const eq = ["S&P 500", "Nasdaq", "Dow", "Russell 2K"].includes(x.label);
-  const lead = [...sectorList].sort((a, b) => b.pctChange - a.pctChange).slice(0, 3);
-  const lag = [...sectorList].sort((a, b) => b.pctChange - a.pctChange).slice(-3).reverse();
+  const sortedSectors = [...sectorsLive].sort((a, b) => b.pctChange - a.pctChange);
+  const lead = sortedSectors.slice(0, 3);
+  const lag = sortedSectors.slice(-3).reverse();
   const note = x.label === "VIX" ? "Volatility is low and falling — a calm, risk-on tape with cheap hedging."
     : x.label.includes("Yield") ? "Yields easing — supportive for long-duration growth and rate-sensitive sectors."
     : x.label === "WTI Crude" ? "Crude softer — pressures energy names, eases input-cost worries elsewhere."
@@ -583,7 +600,7 @@ function IndexDrawer({ idx, pulse: livePulse, onClose }: { idx: number; pulse: P
       <div className="side-drawer">
         <div className="drawer-h">
           <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f4d6b,#0e2233)", color: "#7fd0ff" }}>{x.label[0]}</div>
-          <div><div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{x.label}</div><div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{sub} · delayed ≤15s</div></div>
+          <div><div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{x.label}</div><div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{sub}{proxyNote ? ` · ${proxyNote}` : ""} · delayed ~15m</div></div>
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-b">
@@ -594,26 +611,25 @@ function IndexDrawer({ idx, pulse: livePulse, onClose }: { idx: number; pulse: P
           <div className="metric-grid">
             <div className="m"><div className="k">Open</div><div className="v">{fmt(x.open, dec)}</div></div>
             <div className="m"><div className="k">Prev close</div><div className="v">{fmt(x.prevClose, dec)}</div></div>
-            <div className="m"><div className="k">Day range</div><div className="v" style={{ fontSize: ".92rem" }}>{fmt(dayLow, dec)} – {fmt(dayHigh, dec)}</div></div>
-            <div className="m"><div className="k">52-wk range</div><div className="v" style={{ fontSize: ".92rem" }}>{fmt(y52lo, dec)} – {fmt(y52hi, dec)}</div></div>
+            <div className="m"><div className="k">Day range</div><div className="v" style={{ fontSize: ".92rem" }}>{hasDayRange ? `${fmt(x.dayLow as number, dec)} – ${fmt(x.dayHigh as number, dec)}` : "—"}</div></div>
           </div>
           <div className="note" style={{ marginTop: 14 }}><b style={{ color: "var(--text-hi)" }}>AI read:</b> {note}</div>
-          {eq && (
+          {eq && sortedSectors.length > 0 && (
             <>
               <div className="ai-sec" style={{ marginTop: 16 }}><div className="h">Leading sectors today</div></div>
               {lead.map(g => (
-                <div key={g.name} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
-                  <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{g.name}</span>
+                <div key={g.sector} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
+                  <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{g.sector}</span>
                   <span className="mid" />
-                  <span className="r up">{sign(g.pctChange)}</span>
+                  <span className={`r ${cls(g.pctChange)}`}>{sign(g.pctChange)}</span>
                 </div>
               ))}
               <div className="ai-sec" style={{ marginTop: 12 }}><div className="h">Lagging sectors today</div></div>
               {lag.map(g => (
-                <div key={g.name} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
-                  <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{g.name}</span>
+                <div key={g.sector} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
+                  <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{g.sector}</span>
                   <span className="mid" />
-                  <span className="r down">{sign(g.pctChange)}</span>
+                  <span className={`r ${cls(g.pctChange)}`}>{sign(g.pctChange)}</span>
                 </div>
               ))}
             </>
@@ -1308,7 +1324,7 @@ function IQShellInner({ children }: { children: React.ReactNode }) {
 
             {/* Main content */}
             <main className="main">
-              {children}
+              <LivePulseContext.Provider value={livePulse}>{children}</LivePulseContext.Provider>
               <footer className="disclaimer-bar">
                 MarketCatalyst LLC is not a registered investment advisor and does not manage client assets. Information and tools on this platform are for informational and educational purposes only and do not constitute investment advice. MarketCatalyst is a data provider, not a stock-picks or alert service. Trading stocks and options carries risk — consult your own financial advisor.
               </footer>

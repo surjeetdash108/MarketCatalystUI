@@ -44,6 +44,9 @@ export function mergePulse(mock: PulseItem[], live: IndexDoc[]): PulseItem[] {
       change: isRate ? (l.change ?? p.change) : l.pctChange,
       open: l.open ?? p.open,
       prevClose: l.prevClose ?? p.prevClose,
+      proxyTicker: l.proxyTicker ?? p.proxyTicker,
+      isProxy: l.isProxy ?? p.isProxy,
+      note: l.note ?? p.note,
     };
   });
 }
@@ -79,6 +82,13 @@ export function applyTape(rows: PulseItem[], tape: TapeItem[]): PulseItem[] {
       change: t.change ?? p.change,
       open: t.open ?? p.open,
       prevClose: t.prevClose ?? p.prevClose,
+      // Real session high/low from the same snapshot — lets the index drawer
+      // show a real day range instead of value × 0.997/1.003.
+      dayHigh: t.dayHigh ?? p.dayHigh,
+      dayLow: t.dayLow ?? p.dayLow,
+      proxyTicker: t.proxyTicker ?? p.proxyTicker,
+      isProxy: t.isProxy ?? p.isProxy,
+      note: t.note ?? p.note,
     };
   });
 }
