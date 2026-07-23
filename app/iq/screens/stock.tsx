@@ -7,7 +7,6 @@ import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, EarnQ, 
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { useCollection } from "../hooks/useCollection";
-import { LiveCompare } from "../live-compare";
 import { useChartBars } from "../hooks/useChartBars";
 import { useCompany } from "../hooks/useCompany";
 import { useDividendHistory, quarterLabel, shortDate, daysUntil } from "../hooks/useDividendHistory";
@@ -461,7 +460,7 @@ function StockChartExpanded({
   );
 }
 
-export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean; showLiveCompare?: boolean } = {}) {
+export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean } = {}) {
   const { openStock, openSector } = useIQActions();
   const { data: companies } = useCollection<CompanyDoc>("companies");
   const [sym, setSym] = useState(() => {
@@ -947,16 +946,6 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
       )}
 
       <div className="sd-grid" style={hideHeader ? { paddingTop: 0 } : undefined}>
-
-        {/* Live-price evaluation: our SSE pipeline beside the TradingView
-            widget, for comparing the two approaches. Search page only — the
-            embedded copies of this screen (movers drawer, watchlist, portfolio)
-            must not each open their own stream. */}
-        {showLiveCompare && (
-          <div style={{ gridColumn: "1 / -1" }}>
-            <LiveCompare ticker={sym} exchange={liveCompany?.exchange ?? null} />
-          </div>
-        )}
 
         {/* Full-width chart */}
         {!hideChart && <div style={{ gridColumn: "1 / -1" }}>
