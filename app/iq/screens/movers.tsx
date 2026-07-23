@@ -79,7 +79,9 @@ function mergeMovers(
 
   const merged = mock.map(m => {
     const l = liveByTicker.get(m.ticker);
-    if (!l) return { ...m, rvolRatio: rv(m.ticker, m.rvolRatio) };
+    // Unmatched mock row: still strip the fabricated catalyst label to the
+    // honest news-presence signal, so no row ever asserts an invented catalyst.
+    if (!l) return { ...m, rvolRatio: rv(m.ticker, m.rvolRatio), catalystLabel: tickersInNews.has(m.ticker) ? "Recent news" : "No known catalyst" };
     liveByTicker.delete(m.ticker);
     liveCount++;
     const t = companyTech.get(m.ticker);
@@ -95,7 +97,11 @@ function mergeMovers(
       maPosture: maPostureFrom(t, m.maPosture),
       weekPct: t?.week5ChangePct ?? m.weekPct,
       techContext: techContextFrom(t, l.asOfDate),
-      catalystLabel: tickersInNews.has(m.ticker) ? "Recent news" : m.catalystLabel,
+      // Honest signal only: "Recent news" means a real recent Polygon article
+      // exists for this ticker. The old fallback to m.catalystLabel showed the
+      // hardcoded MOCK label ("Earnings beat", "Guidance raise") for a LIVE
+      // mover — fabricated attribution presented as fact. Dropped.
+      catalystLabel: tickersInNews.has(m.ticker) ? "Recent news" : "No known catalyst",
       relativeStrength: t?.rsRating ?? m.relativeStrength,
     };
   });

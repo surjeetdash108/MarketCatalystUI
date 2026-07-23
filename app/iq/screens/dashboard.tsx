@@ -112,6 +112,8 @@ interface LiveEarningsDoc {
 }
 interface CompanyDoc {
   id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null; marketCap: number | null;
+  /** Recent-article count, denormalised by news.job — drives the honest catalyst signal. */
+  newsCount?: number | null;
 }
 interface SectorApiDoc { id: string; sector: string; pctChange: number; }
 interface InsiderTxDoc {
@@ -126,18 +128,22 @@ interface HoldingDoc {
 }
 
 
-function mergeMoversData(mock: Mover[], live: LiveMoverDoc[]): Mover[] {
+function mergeMoversData(mock: Mover[], live: LiveMoverDoc[], newsTickers: Set<string>): Mover[] {
+  // Honest catalyst only: "Recent news" iff a real recent Polygon article exists
+  // for the ticker (companies.newsCount > 0). Never the hardcoded mock label,
+  // which invented a specific catalyst ("Earnings beat") for live movers.
+  const cat = (t: string) => (newsTickers.has(t) ? "Recent news" : "No known catalyst");
   const liveByTicker = new Map(live.map(l => [l.ticker, l]));
   const merged = mock.map(m => {
     const l = liveByTicker.get(m.ticker);
-    if (!l) return m;
+    if (!l) return { ...m, catalystLabel: cat(m.ticker) };
     liveByTicker.delete(m.ticker);
-    return { ...m, price: l.price, pctChange: l.pctChange, name: l.name ?? m.name, sector: l.sector ?? m.sector, cap: (l.cap as Mover["cap"]) ?? m.cap };
+    return { ...m, price: l.price, pctChange: l.pctChange, name: l.name ?? m.name, sector: l.sector ?? m.sector, cap: (l.cap as Mover["cap"]) ?? m.cap, catalystLabel: cat(m.ticker) };
   });
   for (const l of liveByTicker.values()) {
     merged.push({
       ticker: l.ticker, name: l.name ?? l.ticker, price: l.price, pctChange: l.pctChange,
-      rvolRatio: 1, relativeStrength: 50, catalystLabel: "No known catalyst",
+      rvolRatio: 1, relativeStrength: 50, catalystLabel: cat(l.ticker),
       maPosture: l.pctChange >= 0 ? "Above 50/200" : "Below 50/200", owned: false,
       sector: l.sector ?? "Unclassified", cap: (l.cap as Mover["cap"]) ?? "Mid", weekPct: l.pctChange,
       techContext: `Live EOD data as of ${l.asOfDate}.`, newsContext: "Live market data.",
@@ -346,7 +352,10 @@ export function DashboardScreen() {
   const { data: consensusLive } = useCollection<AnalystConsensusDoc>("analyst_actions");
 
   const pulse = mergePulse(mockPulse, liveIndices);
-  const movers = mergeMoversData(mockMovers, liveMovers);
+  // Tickers with a real recent Polygon article, from the count news.job
+  // denormalises onto companies — the same honest signal the Movers screen uses.
+  const newsTickers = new Set(companies.filter(c => (c.newsCount ?? 0) > 0).map(c => c.ticker ?? c.id));
+  const movers = mergeMoversData(mockMovers, liveMovers, newsTickers);
   const earnings = mergeEarningsData(mockEarnings, liveEarnings);
   const mergedSectorList = mergeSectorListData(sectorList, companies, sectorsLive);
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));

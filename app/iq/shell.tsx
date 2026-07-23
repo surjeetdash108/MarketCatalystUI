@@ -147,7 +147,13 @@ function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
   const rvol   = mv?.rvolRatio ?? scr?.rvolRatio ?? 1;
   const rs     = mv?.relativeStrength  ?? scr?.relativeStrength  ?? 50;
   const wk     = mv?.weekPct  ?? 0;
-  const cat    = mv?.catalystLabel ?? "";
+  // This quick-preview drawer reads the mock movers list, whose catalystLabel is
+  // a hardcoded fabrication ("Earnings beat"). We have no live catalyst source
+  // here, so we don't assert one: leaving cat empty makes the "why it moved"
+  // narrative use its honest sector-based fallback and hides the catalyst pill.
+  // Typed `string` (not the literal "") so the honest-fallback conditionals below
+  // don't narrow their dead branch to `never`.
+  const cat: string = "";
   const ma     = mv?.maPosture  ?? "";
   const tech   = mv?.techContext ?? "";
   const news   = mv?.newsContext ?? "";
