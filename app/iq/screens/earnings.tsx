@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useIQActions, ExpandBtn } from "../shell";
+import { useIQActions } from "../shell";
 import { fmt, cls, sign, EarnQ, StockLogo, SampleBadge } from "../utils";
 import { useCollection } from "../hooks/useCollection";
 import { useFinancials, type EarningsPeriodRow } from "../hooks/useFinancials";
@@ -80,6 +80,81 @@ function EpsSalesHistory({ sym, quarterly, annual }: { sym: string; quarterly: E
         <div style={{ marginTop: 8, fontSize: ".68rem", color: "var(--text-dim-solid)" }}>
           Actuals from Polygon <code>/vX/reference/financials</code> · %CHG is year-over-year
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Income statement — Quarterly / Yearly tabs (actuals only, Polygon). Table only,
+ * matching the EPS & Sales history style; the old bar chart + dropdown are gone.
+ */
+function IncomeStatement({ sym, quarterly, annual }: { sym: string; quarterly: IncRow[]; annual: IncRow[] }) {
+  const [tab, setTab] = useState<"q" | "y">("q");
+  const tabs = [
+    { key: "q" as const, label: "Quarterly", rows: quarterly },
+    { key: "y" as const, label: "Yearly", rows: annual },
+  ];
+  const inc = (tabs.find((t) => t.key === tab) ?? tabs[0]).rows;
+  const fmtB = (v: number) => (v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`);
+  const ROWS: [string, keyof IncRow, boolean][] = [
+    ["Revenue", "rev", true],
+    ["Cost of revenue", "cogs", false],
+    ["Gross profit", "gp", true],
+    ["Operating expenses", "opex", false],
+    ["Operating income", "oi", true],
+    ["Net income", "ni", true],
+    ["Diluted EPS", "eps", false],
+  ];
+  return (
+    <div className="card">
+      <div className="card-h">
+        <h3>{sym} · Income statement</h3>
+        <div className="trseg2" role="tablist" aria-label="Period">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              className={`tab${tab === t.key ? " active" : ""}`}
+              onClick={() => setTab(t.key)}
+              disabled={t.rows.length === 0}
+              title={t.rows.length === 0 ? "No data synced yet" : undefined}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="card-b" style={{ paddingTop: 8 }}>
+        {inc.length === 0 ? (
+          <div style={{ padding: "18px 4px", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
+            No {tab === "y" ? "yearly" : "quarterly"} income statement synced for {sym} yet.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  {inc.map((c) => <th key={c.c} className="num">{c.c}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {ROWS.map(([lbl, key, bold]) => (
+                  <tr key={lbl}>
+                    <td style={bold ? { fontWeight: 700, color: "var(--text-hi)" } : undefined}>{lbl}</td>
+                    {inc.map((c) => (
+                      <td key={c.c} className="num" style={bold ? { fontWeight: 700, color: "var(--text-hi)" } : undefined}>
+                        {key === "eps" ? `$${(c[key] as number).toFixed(2)}` : fmtB(c[key] as number)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -685,7 +760,6 @@ export function EarningsScreen() {
   // 10-quarter history + income statement — Polygon, via the same doc.
   const fin = useFinancials(sel);
   const hist = fin.epsHistory;
-  const inc = fin.incomeRows;
   // `surp > 0` counted a beat; a quarter with no vendor estimate has surp === 0
   // and is genuinely UNKNOWN, so it must not land in either bucket. Only 6 of
   // 226 financials docs carry an epsEstimate today (the Finnhub backfill in
@@ -843,61 +917,9 @@ export function EarningsScreen() {
           <EpsSalesHistory sym={sel} quarterly={fin.quarterlyHistory} annual={fin.annualHistory} />
         </div>
 
-        {/* col-6: Income statement */}
+        {/* col-6: Income statement — Quarterly / Yearly tabs */}
         <div className="col-6">
-          <div className="card">
-            <div className="card-h">
-              <h3>{sel} · Income statement</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Quarterly</span>
-                <ExpandBtn title={`${sel} · Income statement`} node={<IncChart inc={inc} />} />
-              </div>
-            </div>
-            <div className="card-b" style={{ paddingTop: 8 }}>
-              <div className="ec-legend">
-                <span><i style={{ background: "var(--brand)" }} /> Revenue</span>
-                <span><i style={{ background: "var(--ai)" }} /> Gross profit</span>
-                <span><i style={{ background: "var(--up)" }} /> Net income</span>
-              </div>
-              <IncChart inc={inc} />
-              <details className="ec-det">
-                <summary>Show statement table</summary>
-                <div style={{ overflowX: "auto", marginTop: 8 }}>
-                  <table className="tbl">
-                    <thead>
-                      <tr>
-                        <th>Item</th>
-                        {inc.map(c => <th key={c.c} className="num">{c.c}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(
-                        [
-                          ["Revenue",            "rev",  true ],
-                          ["Cost of revenue",    "cogs", false],
-                          ["Gross profit",       "gp",   true ],
-                          ["Operating expenses", "opex", false],
-                          ["Operating income",   "oi",   true ],
-                          ["Net income",         "ni",   true ],
-                          ["Diluted EPS",        "eps",  false],
-                        ] as [string, keyof IncRow, boolean][]
-                      ).map(([lbl, key, bold]) => (
-                        <tr key={lbl}>
-                          <td style={bold ? { fontWeight: 700, color: "var(--text-hi)" } : undefined}>{lbl}</td>
-                          {inc.map(c => (
-                            <td key={c.c} className="num"
-                              style={bold ? { fontWeight: 700, color: "var(--text-hi)" } : undefined}>
-                              {key === "eps" ? `$${(c[key] as number).toFixed(2)}` : fmtB(c[key] as number)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            </div>
-          </div>
+          <IncomeStatement sym={sel} quarterly={fin.incomeRows} annual={fin.annualIncomeRows} />
         </div>
       </div>
 

@@ -76,6 +76,8 @@ export interface AnnualFinancials {
   fiscalYear: string | null;
   endDate: string | null;
   revenue: number | null;
+  grossProfit: number | null;
+  operatingIncome: number | null;
   epsActual: number | null;
   netIncome: number | null;
 }
@@ -231,11 +233,34 @@ export function useFinancials(sym: string) {
       };
     });
 
+    // Annual income-statement rows (same IncRow shape as quarterly), so the
+    // Income statement card can offer a Yearly tab. cost-of-revenue and opex are
+    // derived (rev − gp, gp − oi) exactly like the quarterly path.
+    const annualIncomeRows: IncRow[] = annual
+      .filter((a) => a.revenue != null)
+      .map((a) => {
+        const rev = (a.revenue ?? 0) / 1e9;
+        const gp = (a.grossProfit ?? 0) / 1e9;
+        const oi = (a.operatingIncome ?? 0) / 1e9;
+        const ni = (a.netIncome ?? 0) / 1e9;
+        return {
+          c: a.fiscalYear ? `FY ${a.fiscalYear}` : "FY",
+          rev,
+          cogs: rev - gp,
+          gp,
+          opex: gp - oi,
+          oi,
+          ni,
+          eps: a.epsActual ?? 0,
+        };
+      });
+
     return {
       hasData,
       quarters,
       epsHistory,
       incomeRows,
+      annualIncomeRows,
       balanceRows,
       quarterlyHistory,
       annualHistory,
