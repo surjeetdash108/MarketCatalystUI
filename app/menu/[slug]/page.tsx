@@ -36,7 +36,7 @@ const SCREENS: Record<string, React.ReactNode> = {
   ipos:        <IPOsScreen />,
   portfolio:   <PortfolioScreen />,
   watchlist:   <WatchlistScreen />,
-  stock:       <StockScreen showLiveCompare />,
+  stock:       <StockScreen />,
   options:     <OptionsScreen />,
   insider:     <InsiderScreen />,
   commentary:  <CommentaryScreen />,
