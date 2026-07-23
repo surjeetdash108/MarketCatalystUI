@@ -37,6 +37,13 @@ function usd(v: number) {
   return v >= 1000 ? `$${(v / 1000).toFixed(1)}K` : `$${v.toFixed(2)}`;
 }
 
+// Headline total — two decimals, and M/K abbreviation for large portfolios.
+function usd2(v: number) {
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(2)}K`;
+  return `$${v.toFixed(2)}`;
+}
+
 export function PortfolioScreen() {
   const uid = firebaseAuth.currentUser?.uid ?? null;
   const { data: companies } = useCollection<CompanyDoc>("companies");
@@ -268,7 +275,7 @@ export function PortfolioScreen() {
               title="Holdings"
               headerRight={
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".8rem", fontWeight: 700, color: "var(--text-hi)" }}>{usd(totalVal)}</span>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: "1.35rem", fontWeight: 700, color: "var(--text-hi)", lineHeight: 1.1 }}>{usd2(totalVal)}</span>
                   <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{merged.length} names</span>
                 </div>
               }
