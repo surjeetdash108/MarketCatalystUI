@@ -5,6 +5,30 @@ import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { recap, sectorList, earnings } from "../data";
 import { cls, arr, sign, StockLogo, heatCol, SampleBadge } from "../utils";
+import { useCollection } from "../hooks/useCollection";
+
+// ── Live EOD recap (R28) — `recaps/{date}`, written by the Recaps EOD data job ──
+// It composes indices / movers / sectors / breadth (all Polygon-derived) into one
+// frozen snapshot. The prose lead + news briefing stay AI (R36, Anthropic).
+type RecapMover = { ticker: string; name?: string; pctChange: number | null; sector?: string | null };
+type RecapIndex = { id: string; label?: string; pctChange: number | null };
+type RecapInternals = {
+  advancers?: number | null; decliners?: number | null; netAdvancers?: number | null;
+  breadthPct?: number | null; trin?: number | null; upVolume?: number | null; downVolume?: number | null;
+} | null;
+interface RecapDoc {
+  id: string;
+  date?: string;
+  indices?: RecapIndex[];
+  topGainers?: RecapMover[];
+  topLosers?: RecapMover[];
+  internals?: RecapInternals;
+}
+
+function fmtNum(n: number | null | undefined): string {
+  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+  return n.toLocaleString("en-US");
+}
 
 const SEC_PAGE = 10;
 const SEC_PAGES = Math.ceil(sectorList.length / SEC_PAGE);
@@ -227,6 +251,62 @@ export function RecapScreen() {
   const [recapPage, setRecapPage] = useState(0);
   const [drawer, setDrawer] = useState<"earn-movers" | "internals" | null>(null);
 
+  // ── Live EOD recap: newest `recaps` doc by date (id === date). ──
+  const { data: recapDocs } = useCollection<RecapDoc>("recaps");
+  const liveRecap = [...recapDocs].sort((a, b) => (b.id ?? "").localeCompare(a.id ?? ""))[0];
+  const recapDate = liveRecap?.date ?? recap.date;
+
+  // Hero index tiles → real % moves when available (fall back to the static set).
+  const heroIndices = liveRecap?.indices?.length
+    ? liveRecap.indices
+        .filter((i) => typeof i.pctChange === "number")
+        .map((i) => ({ label: i.label ?? i.id, value: i.pctChange as number }))
+    : recap.indices;
+
+  // Biggest movers → top gainers + top losers by % (real market movers).
+  const liveMovers = liveRecap
+    ? [...(liveRecap.topGainers ?? []), ...(liveRecap.topLosers ?? [])]
+        .filter((m) => typeof m.pctChange === "number")
+        .map((m) => ({ ticker: m.ticker, reason: m.sector ?? m.name ?? "", pctChange: m.pctChange as number }))
+    : [];
+  const moverRows = liveMovers.length ? liveMovers : recap.movers;
+
+  // Market internals → real breadth/volume when available.
+  const iv = liveRecap?.internals ?? null;
+  const internalRows = iv
+    ? [
+        { label: "Advancers", value: fmtNum(iv.advancers), direction: 1 },
+        { label: "Decliners", value: fmtNum(iv.decliners), direction: -1 },
+        {
+          label: "Net advancers",
+          value: fmtNum(iv.netAdvancers),
+          direction: (iv.netAdvancers ?? 0) >= 0 ? 1 : -1,
+        },
+        {
+          label: "Breadth",
+          value: typeof iv.breadthPct === "number" ? `${(iv.breadthPct * 100).toFixed(0)}%` : "—",
+          direction: (iv.breadthPct ?? 0.5) >= 0.5 ? 1 : -1,
+        },
+        {
+          label: "TRIN (Arms)",
+          value: typeof iv.trin === "number" ? iv.trin.toFixed(2) : "—",
+          direction: (iv.trin ?? 1) <= 1 ? 1 : -1,
+        },
+        {
+          label: "Up/Down volume",
+          value:
+            typeof iv.upVolume === "number" && typeof iv.downVolume === "number" && iv.downVolume > 0
+              ? (iv.upVolume / iv.downVolume).toFixed(2)
+              : "—",
+          direction: (iv.upVolume ?? 0) >= (iv.downVolume ?? 0) ? 1 : -1,
+        },
+      ]
+    : recap.internals;
+  const advDec =
+    iv && typeof iv.advancers === "number" && typeof iv.decliners === "number"
+      ? { adv: iv.advancers, dec: iv.decliners }
+      : null;
+
   const pageStart = recapPage * SEC_PAGE;
   const pageSectors = sectorList.slice(pageStart, pageStart + SEC_PAGE);
 
@@ -281,11 +361,11 @@ export function RecapScreen() {
       <div className="col-6">
         <div className="card">
           <div className="card-h">
-            <h3>Biggest earnings movers</h3>
-            <button className="link" onClick={() => router.push("/menu/earnings")}>View all →</button>
+            <h3>Biggest movers</h3>
+            <button className="link" onClick={() => router.push("/menu/movers")}>View all →</button>
           </div>
           <div className="card-b" style={{ paddingTop: 6 }}>
-            {recap.movers.map(m => (
+            {moverRows.map(m => (
               <div key={m.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(m.ticker)}>
                 <StockLogo sym={m.ticker} size={20} />
                 <span className="tkr">{m.ticker}</span>
@@ -303,7 +383,7 @@ export function RecapScreen() {
             <button className="link" onClick={() => router.push("/menu/movers")}>View all →</button>
           </div>
           <div className="card-b" style={{ paddingTop: 6 }}>
-            {recap.internals.map(r => (
+            {internalRows.map(r => (
               <div key={r.label} className="minirow">
                 <span className="mid">{r.label}</span>
                 <span className={`r ${r.direction > 0 ? "up" : r.direction < 0 ? "down" : ""}`}>{r.value}</span>
@@ -320,7 +400,12 @@ export function RecapScreen() {
       {/* ── Page head ── */}
       <div className="page-head">
         <div>
-          <h1 className="page-title">{activeTab === 1 ? "Weekly Recap" : "End-of-Day Recap"} <SampleBadge title="Recap content is illustrative until the Recaps EOD data job (R28) is live" /></h1>
+          <h1 className="page-title">{activeTab === 1 ? "Weekly Recap" : "End-of-Day Recap"}{" "}
+            {activeTab === 1 || !liveRecap ? (
+              <SampleBadge title="Weekly recap is illustrative — weekly aggregation and the AI narrative (R36) are not yet live" />
+            ) : (
+              <SampleBadge title="Market data (indices, movers, internals) is live from the Recaps EOD job. The prose lead and news briefing are AI narrative (R36, pending)." />
+            )}</h1>
         </div>
         <div className="tabs">
           {TABS.map((t, i) => (
@@ -344,7 +429,7 @@ export function RecapScreen() {
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14, alignItems: "center" }}>
-              {recap.indices.map(idx => {
+              {heroIndices.map(idx => {
                 const { bg, fg } = heatCol(idx.value);
                 return (
                   <div key={idx.label} style={{
@@ -403,7 +488,7 @@ export function RecapScreen() {
           </div>
  <NewsBriefing
             mode="today"
-            dateLabel={recap.date}
+            dateLabel={recapDate}
             onDownload={() => downloadRecap("today")}
             />
           {SectorHeatCard(true, false)}
@@ -602,41 +687,28 @@ export function RecapScreen() {
               )}
               {drawer === "internals" && (
                 <>
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".8rem", marginBottom: 6 }}>
-                      <span className="up mono" style={{ fontWeight: 700 }}>▲ 2,810 advancing</span>
-                      <span className="down mono" style={{ fontWeight: 700 }}>▼ 1,140 declining</span>
-                    </div>
-                    <div style={{ height: 8, borderRadius: 4, background: "var(--surface-3)", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: "71%", background: "var(--up)", borderRadius: 4 }} />
-                    </div>
-                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
-                      A/D Ratio: 2.47 · NYSE + NASDAQ composite
-                    </div>
-                  </div>
-                  {recap.internals.map(r => (
-                    <div key={r.label} style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "10px 14px", marginBottom: 6,
-                      background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10,
-                    }}>
-                      <span style={{ fontSize: ".82rem", color: "var(--text)" }}>{r.label}</span>
-                      <span className={`mono ${r.direction > 0 ? "up" : r.direction < 0 ? "down" : ""}`}
-                        style={{ fontWeight: 700, fontSize: ".9rem" }}>{r.value}</span>
-                    </div>
-                  ))}
-                  <div style={{ height: 1, background: "var(--border)", margin: "12px 0 10px" }} />
-                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
-                    Extended breadth data
-                  </div>
-                  {[
-                    { label: "NYSE TICK",      value: "+420",  direction:  1 },
-                    { label: "TRIN (Arms)",    value: "0.74",  direction:  1 },
-                    { label: "McClellan Osc",  value: "+38.5", direction:  1 },
-                    { label: "Put/Call Ratio", value: "0.82",  direction:  0 },
-                    { label: "New 52W Highs",  value: "184",   direction:  1 },
-                    { label: "New 52W Lows",   value: "39",    direction: -1 },
-                  ].map(r => (
+                  {(() => {
+                    const adv = advDec?.adv ?? 2810;
+                    const dec = advDec?.dec ?? 1140;
+                    const total = adv + dec || 1;
+                    const pct = Math.round((adv / total) * 100);
+                    const ratio = dec > 0 ? (adv / dec).toFixed(2) : "—";
+                    return (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".8rem", marginBottom: 6 }}>
+                          <span className="up mono" style={{ fontWeight: 700 }}>▲ {fmtNum(adv)} advancing</span>
+                          <span className="down mono" style={{ fontWeight: 700 }}>▼ {fmtNum(dec)} declining</span>
+                        </div>
+                        <div style={{ height: 8, borderRadius: 4, background: "var(--surface-3)", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: "var(--up)", borderRadius: 4 }} />
+                        </div>
+                        <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
+                          A/D Ratio: {ratio} · {advDec ? "Polygon grouped-daily universe" : "NYSE + NASDAQ composite"}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {internalRows.map(r => (
                     <div key={r.label} style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
                       padding: "10px 14px", marginBottom: 6,

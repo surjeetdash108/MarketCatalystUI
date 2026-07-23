@@ -417,6 +417,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Historical 4-component Fear & Greed composite (fear-greed.job →
+    // market_sentiment_history/{date}) — drives the real F&G sparkline, replacing
+    // the breadth-only proxy the Dashboard used to plot.
+    match /market_sentiment_history/{docId} {
+      allow read:  if isAuthenticated();
+      allow write: if false;
+    }
+
 
     // ═════════════════════════════════════════════════════════════════════════
     // USER COLLECTIONS — scoped strictly to owning uid

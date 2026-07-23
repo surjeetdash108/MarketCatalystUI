@@ -329,6 +329,9 @@ export function DashboardScreen() {
   // back to the illustrative 62/"Greed" until the job has run.
   const { data: marketSentiment } = useCollection<{ id: string; value?: number; label?: string }>("market_sentiment");
   const { data: breadth } = useCollection<BreadthDoc>("market_breadth");
+  // Real 4-component composite HISTORY (fear-greed.job → market_sentiment_history);
+  // the F&G sparkline used to plot the breadth-only proxy (breadthSentiment).
+  const { data: fgHistoryDocs } = useCollection<{ id: string; value?: number; label?: string; asOfDate?: string }>("market_sentiment_history");
   // Latest two breadth days drive Market Internals + the F&G history sparkline,
   // replacing the hardcoded MARKET_INTERNALS / FG_HISTORY arrays.
   const breadthSorted = [...breadth].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
@@ -343,7 +346,11 @@ export function DashboardScreen() {
     { k: "Down Volume", v: Math.round((latestBreadth.downVolume / Math.max(1, latestBreadth.upVolume + latestBreadth.downVolume)) * 100) + "%", note: "", up: false },
     { k: "TRIN (Arms)", v: latestBreadth.trin != null ? latestBreadth.trin.toFixed(2) : "—", note: "< 1 = bullish", up: latestBreadth.trin != null ? latestBreadth.trin < 1 : null },
   ] as typeof MARKET_INTERNALS : MARKET_INTERNALS;
-  const fgHistory = breadthSorted.length > 0
+  // Prefer the real composite history; fall back to the breadth proxy, then mock.
+  const fgHistSorted = [...fgHistoryDocs].sort((a, b) => (b.id ?? "").localeCompare(a.id ?? ""));
+  const fgHistory = fgHistSorted.length > 0
+    ? fgHistSorted.slice(0, 20).map(d => ({ date: (d.id ?? "").slice(5), val: d.value ?? 50, label: d.label ?? fgLabelFor(d.value ?? 50) }))
+    : breadthSorted.length > 0
     ? breadthSorted.slice(0, 20).map(b => ({ date: (b.date ?? "").slice(5), val: b.breadthSentiment ?? 50, label: fgLabelFor(b.breadthSentiment ?? 50) }))
     : FG_HISTORY;
   const fearGreed = marketSentiment.find(d => d.id === "fear_greed");

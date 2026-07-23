@@ -495,8 +495,41 @@ export function MacroScreen() {
   const macroLiveSorted = [...macroLive].sort((a, b) => IMPORTANCE_RANK[a.importance] - IMPORTANCE_RANK[b.importance]);
 
   const { data: liveDividends } = useCollection<DividendDoc>("dividends");
-  const { data: macroIndices } = useCollection<{ id: string; value?: number; pctChange?: number }>("market_indices");
+  const { data: macroIndices } = useCollection<{ id: string; value?: number; pctChange?: number; change?: number }>("market_indices");
   const vix = macroIndices.find(i => i.id === "VIX" || i.id === "VIXY");
+  const us10y = macroIndices.find(i => i.id === "US10Y");
+  const { data: breadthDocs } = useCollection<{ id: string; breadthPct?: number }>("market_breadth");
+
+  // Real market regime, computed from live signals instead of the old hardcoded
+  // "Risk-On Rally": VIX level + market breadth (adv/dec) + the 10Y yield's
+  // direction. Each casts a vote; the sum picks Risk-On / Neutral / Risk-Off.
+  const latestBreadth = [...breadthDocs].sort((a, b) => b.id.localeCompare(a.id))[0];
+  const regime = (() => {
+    const parts: string[] = [];
+    let score = 0;
+    const v = vix?.value;
+    if (v != null) {
+      if (v < 16) { score += 1; parts.push("volatility low"); }
+      else if (v > 24) { score -= 1; parts.push("volatility elevated"); }
+      else parts.push("volatility moderate");
+    }
+    const b = latestBreadth?.breadthPct;
+    if (b != null) {
+      if (b > 0.55) { score += 1; parts.push("breadth positive"); }
+      else if (b < 0.45) { score -= 1; parts.push("breadth negative"); }
+      else parts.push("breadth mixed");
+    }
+    // US10Y `change` is a basis-point move; easing (falling) yields are risk-on.
+    const yc = us10y?.change;
+    if (yc != null && yc !== 0) {
+      if (yc < 0) { score += 0.5; parts.push("yields easing"); }
+      else { score -= 0.5; parts.push("yields rising"); }
+    }
+    const label = score >= 1 ? "Risk-On" : score <= -1 ? "Risk-Off" : "Neutral / Mixed";
+    const tone = score >= 1 ? "up" : score <= -1 ? "down" : "";
+    const known = v != null || b != null;
+    return { label, tone, desc: parts.length ? `${parts.join(", ")}.` : "", known };
+  })();
   // One clock for the whole screen so tabs cannot disagree mid-render.
   const now = new Date();
 
@@ -719,11 +752,12 @@ export function MacroScreen() {
       <div className="dash" style={{ alignItems: "stretch" }}>
         <div className="col-4" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div className="card">
-            <div className="card-h"><h3>Market regime</h3></div>
+            <div className="card-h"><h3>Market regime {!regime.known && <SampleBadge title="No live VIX/breadth synced yet" />}</h3></div>
             <div className="card-b" style={{ textAlign: "center", padding: "22px 15px" }}>
-              <div className="gauge-lbl up" style={{ fontSize: "1.3rem" }}>Risk-On Rally</div>
+              <div className={`gauge-lbl ${regime.tone}`} style={{ fontSize: "1.3rem" }}>{regime.label}</div>
               <p style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", marginTop: 10, lineHeight: 1.5 }}>
-                Breadth strong, yields easing, cyclicals leading defensives. Updated daily from internals, yield behaviour and sector rotation.
+                {regime.desc ? `${regime.desc.charAt(0).toUpperCase()}${regime.desc.slice(1)} ` : ""}
+                Computed daily from the VIX level, market breadth (advancers/decliners) and the 10-year yield's direction.
               </p>
             </div>
           </div>
