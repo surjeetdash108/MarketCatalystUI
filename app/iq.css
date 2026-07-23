@@ -226,6 +226,14 @@
    topbar, dwarfing the controls beside it. */
 .cmd-wrap {
   position: relative; flex: 1; max-width: 30rem;   /* was 960px, halved; rem so it tracks the type scale */
+  /* Without this, the search input's intrinsic ~170px width becomes an
+     un-shrinkable floor for this flex:1 item (default min-width:auto), so on a
+     narrow viewport the topbar overflows and pushes the right-side controls —
+     including the avatar whose dropdown holds Logout — off the right edge. On a
+     375px screen the avatar landed 76px off-screen, and the mobile nav rail has
+     no Logout, so there was no way to sign out at all. min-width:0 lets the
+     search shrink instead. */
+  min-width: 0;
 }
 .cmd {
   display: flex; align-items: center; gap: 8px;
@@ -240,7 +248,7 @@
 }
 .cmd:hover, .cmd.cmd-active { border-color: var(--brand); background: var(--brand-dim); }
 .cmd-input {
-  flex: 1; background: none; border: none; outline: none;
+  flex: 1; min-width: 0; background: none; border: none; outline: none;
   font-size: 0.75rem; color: var(--text-hi); font-family: var(--f-body);
 }
 .cmd-input::placeholder { color: var(--text-dim-solid); }
