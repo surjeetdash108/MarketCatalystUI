@@ -16,7 +16,19 @@ interface CompanyDoc {
   revenueGrowthYoY: number | null; // decimal (0.064 = 6.4%)
   epsGrowthYoY: number | null;     // decimal
   grossMargin: number | null;      // decimal (0.469 = 46.9%)
+  sma50: number | null;
+  sma200: number | null;
+  rsi14: number | null;
 }
+
+/** Extra live fields the merged rows carry for the DMA / RSI / price filters. */
+type ScreenerRow = ScreenerStock & {
+  live: boolean;
+  price: number | null;
+  sma50: number | null;
+  sma200: number | null;
+  rsi14: number | null;
+};
 
 // Maps the numeric 1-99 tech rating onto the mock's string categories so the
 // existing rating filter (Strong Buy / Buy / Neutral / Sell / Strong Sell)
@@ -35,10 +47,10 @@ function ratingLabel(n: number): string {
 // jobs from real ohlcv_bars + Polygon financials. Each falls back to the mock
 // value until its job has run. Growth/margin are stored as decimals and scaled
 // to the mock's percentage units here; techRating is mapped to its label.
-function mergeScreenerStocks(mock: ScreenerStock[], byTicker: Map<string, CompanyDoc>): (ScreenerStock & { live: boolean })[] {
+function mergeScreenerStocks(mock: ScreenerStock[], byTicker: Map<string, CompanyDoc>): ScreenerRow[] {
   return mock.map(s => {
     const c = byTicker.get(s.ticker);
-    if (!c) return { ...s, live: false };
+    if (!c) return { ...s, live: false, price: null, sma50: null, sma200: null, rsi14: null };
     return {
       ...s,
       marketCap: c.marketCap != null ? c.marketCap / 1e9 : s.marketCap,
@@ -49,6 +61,11 @@ function mergeScreenerStocks(mock: ScreenerStock[], byTicker: Map<string, Compan
       salesGrowth: c.revenueGrowthYoY != null ? c.revenueGrowthYoY * 100 : s.salesGrowth,
       epsGrowth: c.epsGrowthYoY != null ? c.epsGrowthYoY * 100 : s.epsGrowth,
       grossMargin: c.grossMargin != null ? c.grossMargin * 100 : s.grossMargin,
+      // Carried for the DMA / RSI / price filters (Polygon technical-indicators).
+      price: c.price,
+      sma50: c.sma50,
+      sma200: c.sma200,
+      rsi14: c.rsi14,
       live:
         c.marketCap != null || c.peRatio != null || c.rsRating != null ||
         c.techRating != null || c.rvol != null || c.revenueGrowthYoY != null,
@@ -91,6 +108,9 @@ export function ScreenerScreen() {
   const [ratingBuy,  setRatingBuy]  = useState(false);
   const [mcGt10,     setMcGt10]     = useState(true);
   const [rvolGt15,   setRvolGt15]   = useState(false);
+  const [aboveDma,   setAboveDma]   = useState(false); // price > SMA50 && SMA200
+  const [rsi4070,    setRsi4070]    = useState(false); // RSI(14) in 40–70
+  const [priceGt5,   setPriceGt5]   = useState(false); // price > $5
 
   /* ── Save / restore the current screen (filter set) to localStorage ── */
   const [saved, setSaved] = useState(false);
@@ -103,10 +123,11 @@ export function ScreenerScreen() {
       setRs90(!!s.rs90); setRs7090(!!s.rs7090); setRsLt40(!!s.rsLt40);
       setSalesGt20(!!s.salesGt20); setEpsGt25(!!s.epsGt25); setMarginPos(!!s.marginPos);
       setRatingBuy(!!s.ratingBuy); setMcGt10(s.mcGt10 ?? true); setRvolGt15(!!s.rvolGt15);
+      setAboveDma(!!s.aboveDma); setRsi4070(!!s.rsi4070); setPriceGt5(!!s.priceGt5);
     } catch { /* ignore malformed saved filters */ }
   }, []);
   function saveScreen() {
-    const state = { activePresets: [...activePresets], rs90, rs7090, rsLt40, salesGt20, epsGt25, marginPos, ratingBuy, mcGt10, rvolGt15 };
+    const state = { activePresets: [...activePresets], rs90, rs7090, rsLt40, salesGt20, epsGt25, marginPos, ratingBuy, mcGt10, rvolGt15, aboveDma, rsi4070, priceGt5 };
     try { localStorage.setItem("iq-screener-filters", JSON.stringify(state)); } catch { /* storage full/blocked */ }
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
@@ -143,6 +164,7 @@ export function ScreenerScreen() {
     setRs90(false); setRs7090(false); setRsLt40(false);
     setSalesGt20(false); setEpsGt25(false); setMarginPos(false);
     setRatingBuy(false); setMcGt10(false); setRvolGt15(false);
+    setAboveDma(false); setRsi4070(false); setPriceGt5(false);
   }
 
   /* ── Filtered results ── */
@@ -171,6 +193,11 @@ export function ScreenerScreen() {
     if (ratingBuy && !["Strong Buy", "Buy"].includes(s.techRating))           return false;
     if (mcGt10    && s.marketCap < 10)                                        return false;
     if (rvolGt15  && s.rvolRatio < 1.5)                                       return false;
+    // Real Polygon technicals from `companies`. A row missing the data is
+    // excluded from these three filters rather than passing on a fabricated value.
+    if (aboveDma  && !(s.price != null && s.sma50 != null && s.sma200 != null && s.price > s.sma50 && s.price > s.sma200)) return false;
+    if (rsi4070   && !(s.rsi14 != null && s.rsi14 >= 40 && s.rsi14 <= 70))    return false;
+    if (priceGt5  && !(s.price != null && s.price > 5))                       return false;
     return true;
   });
 
@@ -299,14 +326,14 @@ export function ScreenerScreen() {
             <div className="fgroup" style={{ flex: 1, borderBottom: "none", borderRight: "1px solid var(--border-soft)" }}>
               <div className="fl">Technical rating</div>
               <CheckOpt label="Strong Buy / Buy"   on={ratingBuy} onToggle={() => setRatingBuy(o => !o)} />
-              <CheckOpt label="Above 50 & 200-DMA" on={false}     onToggle={() => {}} />
-              <CheckOpt label="RSI 40–70"          on={false}     onToggle={() => {}} />
+              <CheckOpt label="Above 50 & 200-DMA" on={aboveDma}  onToggle={() => setAboveDma(o => !o)} />
+              <CheckOpt label="RSI 40–70"          on={rsi4070}   onToggle={() => setRsi4070(o => !o)} />
             </div>
             <div className="fgroup" style={{ flex: 1, borderBottom: "none" }}>
               <div className="fl">Liquidity &amp; cap</div>
               <CheckOpt label="Market cap > $10B"  on={mcGt10}   onToggle={() => setMcGt10(o => !o)} />
               <CheckOpt label="RVOL > 1.5×"        on={rvolGt15} onToggle={() => setRvolGt15(o => !o)} />
-              <CheckOpt label="Price > $5"          on={false}    onToggle={() => {}} />
+              <CheckOpt label="Price > $5"          on={priceGt5} onToggle={() => setPriceGt5(o => !o)} />
             </div>
           </div>
 
