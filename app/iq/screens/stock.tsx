@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
 import { stockInfo, watch, movers as moversData, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail, StockInfo } from "../data";
-import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, earnHistory, EarnQ, EarningsGrowthChart } from "../utils";
+import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, SampleBadge } from "../utils";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { useCollection } from "../hooks/useCollection";
@@ -329,8 +329,13 @@ function EarnIncChart({ inc }: { inc: IncRow[] }) {
   );
 }
 
-function EarnPane({ sym, base }: { sym: string; base: number }) {
-  const hist = earnHistory(sym, Math.max(0.5, base)).slice(0, 8).reverse();
+function EarnPane({ hist }: { hist: EarnQ[] }) {
+  // Real EPS surprise history (from useFinancials → Polygon). Was seeded by
+  // earnHistory(). A quarter only carries a surprise where a vendor estimate
+  // exists (e.e !== e.a); otherwise its bar sits at zero — honest, not invented.
+  if (hist.length === 0) {
+    return <div style={{ padding: "10px 0", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>EPS history not synced for this ticker yet.</div>;
+  }
   const W = 720, H = 80, PADL = 40, PADR = 20, PADT = 10, PADB = 18;
   const iw = W - PADL - PADR;
   const ih = H - PADT - PADB;
@@ -399,6 +404,7 @@ function StockChartExpanded({
   const [showRsi, setShowRsi] = useState(initialShowRsi);
   const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
   const realBars = useChartBars(sym, tf);
+  const finX = useFinancials(sym);
   // Read directly rather than threading the parent's `liveCompany` through — this
   // component is rendered standalone inside the expand modal.
   const company = useCompany(sym);
@@ -442,7 +448,7 @@ function StockChartExpanded({
             <span>Earnings · EPS Surprise</span>
             <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>Next: {erDate}</span>
           </div>
-          <EarnPane sym={sym} base={eps} />
+          <EarnPane hist={[...finX.epsHistory].slice(-8)} />
         </div>
       )}
       <div style={{ marginTop: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
@@ -636,29 +642,63 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
   const mc = ss?.marketCap ?? 100;
   const gv = RATING_VAL[rating] ?? 0;
   const tone = gv > 0.6 ? "var(--up)" : gv > 0 ? "#7bdcae" : gv < -0.6 ? "var(--down)" : gv < 0 ? "#ff9aab" : "var(--text-dim-solid)";
-  // Real analyst consensus (Buy/Neutral/Sell counts) from analyst_actions when
-  // available; the proprietary "MarketSurge" rating (rc.m) stays illustrative.
+  // Ratings triptych — every sub-rating now computed from REAL data instead of
+  // the seeded ratingCounts() ladder (kept only as a last-resort when a ticker
+  // has no synced indicators at all).
   const rcBase = ratingCounts(rating);
-  const consensusDoc = liveConsensus.find(c => c.ticker === sym);
-  const rc = consensusDoc
+
+  // Moving Averages: vote the price against each real SMA/EMA (Polygon
+  // technical-indicators.job). Was a fabricated fixed triple.
+  const maVals = [liveCompany?.sma50, liveCompany?.sma200,
+    ...(liveCompany?.emaLadder ? Object.values(liveCompany.emaLadder) : []),
+  ].filter((v): v is number => typeof v === "number" && v > 0);
+  const maBuy = maVals.filter(m => p > m).length;
+  const maSell = maVals.filter(m => p < m).length;
+  const maReal = maVals.length > 0
     ? {
-        ...rcBase,
-        o: [
-          consensusDoc.sell + consensusDoc.strongSell,
-          consensusDoc.hold,
-          consensusDoc.strongBuy + consensusDoc.buy,
-        ] as [number, number, number],
-        ol: (() => {
-          const bull = consensusDoc.strongBuy + consensusDoc.buy;
-          const bear = consensusDoc.sell + consensusDoc.strongSell;
-          if (bull > bear && consensusDoc.strongBuy >= consensusDoc.buy) return "Strong Buy";
-          if (bull > bear) return "Buy";
-          if (bear > bull && consensusDoc.strongSell >= consensusDoc.sell) return "Strong Sell";
-          if (bear > bull) return "Sell";
-          return "Neutral";
-        })(),
+        m: [maSell, maVals.length - maBuy - maSell, maBuy] as [number, number, number],
+        ml: maBuy > maSell ? (maBuy >= Math.ceil(maVals.length * 0.75) ? "Strong Buy" : "Buy")
+          : maSell > maBuy ? (maSell >= Math.ceil(maVals.length * 0.75) ? "Strong Sell" : "Sell") : "Neutral",
       }
-    : rcBase;
+    : null;
+
+  // Oscillators: real RSI(14) + MACD-vs-signal.
+  const oscVotes: ("buy" | "sell" | "neut")[] = [];
+  if (liveCompany?.rsi14 != null) oscVotes.push(liveCompany.rsi14 > 70 ? "sell" : liveCompany.rsi14 < 30 ? "buy" : "neut");
+  if (liveCompany?.macd != null) oscVotes.push(liveCompany.macd >= (liveCompany.macdSignal ?? 0) ? "buy" : "sell");
+  const oscBuy = oscVotes.filter(v => v === "buy").length;
+  const oscSell = oscVotes.filter(v => v === "sell").length;
+  const oscReal = oscVotes.length > 0
+    ? { o: [oscSell, oscVotes.length - oscBuy - oscSell, oscBuy] as [number, number, number],
+        ol: oscBuy > oscSell ? "Buy" : oscSell > oscBuy ? "Sell" : "Neutral" }
+    : null;
+
+  // Analyst consensus (o/ol) from FMP `analyst_actions` when present — a
+  // consensus snapshot, NOT per-firm actions (true per-firm needs the Benzinga
+  // add-on → R41). Falls back to the real oscillator rating, never the seed.
+  const consensusDoc = liveConsensus.find(c => c.ticker === sym);
+  const rc = {
+    ...rcBase,
+    ...(maReal ? { m: maReal.m, ml: maReal.ml } : {}),
+    ...(consensusDoc
+      ? {
+          o: [
+            consensusDoc.sell + consensusDoc.strongSell,
+            consensusDoc.hold,
+            consensusDoc.strongBuy + consensusDoc.buy,
+          ] as [number, number, number],
+          ol: (() => {
+            const bull = consensusDoc.strongBuy + consensusDoc.buy;
+            const bear = consensusDoc.sell + consensusDoc.strongSell;
+            if (bull > bear && consensusDoc.strongBuy >= consensusDoc.buy) return "Strong Buy";
+            if (bull > bear) return "Buy";
+            if (bear > bull && consensusDoc.strongSell >= consensusDoc.sell) return "Strong Sell";
+            if (bear > bull) return "Sell";
+            return "Neutral";
+          })(),
+        }
+      : oscReal ? { o: oscReal.o, ol: oscReal.ol } : {}),
+  };
 
   const ex = EXCHANGE[sym] ?? "NASDAQ";
   const group = data.sector ?? ss?.sector ?? "Technology";
@@ -668,12 +708,18 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
   const erDate = erEntry?.session ?? data.aiMetrics?.find(m => m.label === "Next ER")?.value ?? "—";
   const fundsHolding = Object.values(fundDetail).filter(fd => fd.holdings.some(h => h[0] === sym)).length;
 
-  // Derived financials
+  // EPS is still derived from P/E for the mini-panels below. The revenue /
+  // net-income / FCF / debt derivations that used to live here were removed:
+  // they fed `finRows`, a fabricated at-a-glance panel that was never rendered,
+  // and the real figures live in the financials statement table (from
+  // useFinancials → Polygon /vX/reference/financials).
   const eps = p / (data.peRatio || 25);
-  const ni = mc / (data.peRatio || 25);
-  const rev = ni / ((mg / 100) || 0.2);
-  const fcf = ni * 0.9;
-  const debt = mc * 0.04;
+  // Real trailing-twelve-month revenue = sum of the last 4 real quarters
+  // (useFinancials → Polygon). Falls back to the old P/E-and-margin derivation
+  // only when fewer than 4 quarters have synced for this ticker.
+  const rev = fin.incomeRows.length >= 4
+    ? fin.incomeRows.slice(0, 4).reduce((s, q) => s + q.rev, 0)
+    : (mc / (data.peRatio || 25)) / ((mg / 100) || 0.2);
   // Real RSI(14)/MACD from technical-indicators.job when available; otherwise
   // the original seeded approximations so the panel never goes blank.
   const rsi = liveCompany?.rsi14 != null ? liveCompany.rsi14 : Math.round(38 + rs * 0.36);
@@ -739,26 +785,20 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
     ["SMA 200", liveCompany?.sma200 != null ? nf(liveCompany.sma200) : nf(p * 0.74), (liveCompany?.sma200 != null ? p >= liveCompany.sma200 : rs > 50) ? "Buy" : "Sell"],
   ];
 
-  const finRows: [string, number[], string, string][] = [
-    ["Revenue",       [rev * 0.55, rev * 0.7, rev * 0.86, rev], cap(rev),   "var(--up)"],
-    ["Net income",    [ni * 0.5,  ni * 0.6,  ni * 0.82,  ni],  cap(ni),    ni >= 0 ? "var(--up)" : "var(--down)"],
-    ["Net margin",    [mg * 0.8,  mg * 0.85, mg * 0.95,  mg],  mg + "%",   "var(--up)"],
-    ["Free cash flow",[fcf * 0.4, fcf * 0.55,fcf * 0.8,  fcf], cap(fcf),   "var(--up)"],
-    ["Total debt",    [debt*1.1,  debt*1.05, debt,        debt],cap(debt),  "var(--text-dim-solid)"],
-  ];
-
   const chips: number[] = [];
   for (let i = 0; i < 8; i++) {
     chips.push(st >= 0 ? (i < Math.min(st, 8) ? 1 : 0) : (i < Math.min(-st, 8) ? 0 : 1));
   }
-  const qeps = eps / 4, beatSign = st >= 0 ? 1 : -1;
-  const erRows: [string, number, number][] = [
-    ["Q1 25", qeps * 1.06, 12 * beatSign],
-    ["Q4 24", qeps * 0.99, 8  * beatSign],
-    ["Q3 24", qeps * 0.95, 6  * beatSign],
-    ["Q2 24", qeps * 0.9,  5  * beatSign],
-    ["Q1 24", qeps * 0.85, 4  * beatSign],
-  ];
+  // Real recent EPS from useFinancials (Polygon /vX/reference/financials),
+  // newest first. Was a hardcoded ladder ("Q1 25" = qeps*1.06 …). `surp` is a
+  // real surprise ONLY when a vendor estimate exists (h.e !== h.a); otherwise
+  // null so the row shows the actual without asserting a beat/miss.
+  const erRows: { q: string; a: number; surp: number | null }[] =
+    [...fin.epsHistory].reverse().slice(0, 5).map(h => ({
+      q: h.q,
+      a: h.a,
+      surp: h.e !== h.a ? Math.round(h.surp) : null,
+    }));
   // Real quarters only. This used to fall back to earnHistory(sym, qeps), a
   // generator seeded on the ticker STRING — so a ticker the financials job has
   // not reached yet rendered a full 10-quarter beat/miss table, a surprise
@@ -874,7 +914,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
               {sym[0]}
             </div>
             <div className="sd-name">
-              <h1>{sym}</h1>
+              <h1>{sym} {!isLiveStock && <SampleBadge title="This ticker is outside the synced universe — price, RSI/MACD, moving-average and 52-week figures fall back to estimates until it syncs" />}</h1>
               <div className="sub">
                 {data.name} · {ex} · {group}
                 {inSectorRank != null && inSectorTotal != null && (
@@ -989,7 +1029,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                     <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>{erDate}</span>
                   </span>
                 </div>
-                <div style={{ padding: "0 14px 8px" }}><EarnPane sym={sym} base={eps} /></div>
+                <div style={{ padding: "0 14px 8px" }}><EarnPane hist={[...fin.epsHistory].slice(-8)} /></div>
               </div>
             )}
             <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
@@ -1436,17 +1476,20 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                 </div>
               </div>
             </div>
-            {erRows.map(q => (
-              <div key={q[0]} className="minirow">
-                <span className="tkr" style={{ width: 60 }}>{q[0]}</span>
-                <span className="mid mono">${fmt(Math.abs(q[1]), 2)} EPS</span>
-                <span className={`r ${q[2] >= 0 ? "up" : "down"}`}>{q[2] >= 0 ? "beat" : "miss"} {Math.abs(q[2])}%</span>
+            {erRows.length === 0 ? (
+              <div className="minirow"><span className="mid" style={{ color: "var(--text-dim-solid)" }}>EPS history not synced for this ticker yet.</span></div>
+            ) : erRows.map(q => (
+              <div key={q.q} className="minirow">
+                <span className="tkr" style={{ width: 60 }}>{q.q}</span>
+                <span className="mid mono">${fmt(Math.abs(q.a), 2)} EPS</span>
+                {q.surp != null
+                  ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "beat" : "miss"} {Math.abs(q.surp)}%</span>
+                  : <span className="r" style={{ color: "var(--text-dim-solid)" }}>no est.</span>}
               </div>
             ))}
-            <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
-              <span className="mid">FY 25 EPS est.</span>
-              <span className="r" style={{ color: "var(--text-hi)" }}>${(qeps * 4 * 1.08).toFixed(2)}</span>
-            </div>
+            {/* Removed the fabricated "FY 25 EPS est." line (qeps*4*1.08) —
+                forward EPS estimates have no Polygon source; that's Benzinga/FMP
+                territory (R41/R42). */}
           </div>
         </div>
 
