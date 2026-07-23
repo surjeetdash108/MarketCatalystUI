@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { screenerStocks, screenerPresets, watch as watchData, movers as moversData, type ScreenerStock } from "../data";
 import { useCollection } from "../hooks/useCollection";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
+import { SampleBadge } from "../utils";
 
 interface CompanyDoc {
   id: string; ticker: string; marketCap: number | null; peRatio: number | null; price: number | null; pctChange: number | null;
@@ -191,6 +192,7 @@ export function ScreenerScreen() {
         <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
           {filtered.length} match{filtered.length !== 1 ? "es" : ""}
           {liveCount > 0 && <> · <span style={{ color: "var(--up)" }}>{liveCount} live cap/PE</span></>}
+          {liveCount < universe.length && <> · <SampleBadge text="partial sample" title="Rows outside the live synced universe show frozen sample fundamentals" /></>}
         </span>
         <button className="btn primary" onClick={saveScreen}>
           <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>

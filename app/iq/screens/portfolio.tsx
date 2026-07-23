@@ -6,7 +6,7 @@ import { doc, onSnapshot, setDoc, deleteDoc, collection, Timestamp } from "fireb
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { folio as folioData, type FolioItem } from "../data";
 import { useCollection } from "../hooks/useCollection";
-import { cls, arr, sign } from "../utils";
+import { cls, arr, sign, SampleBadge } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
 const DEFAULT_SHARES: Record<string, number> = {
@@ -160,6 +160,7 @@ export function PortfolioScreen() {
               {dayPL >= 0 ? "+" : ""}{usd(Math.abs(dayPL))} today
             </span>
             {liveCount > 0 && <> · <span style={{ color: "var(--up)" }}>{liveCount} live</span></>}
+            {liveCount < merged.length && <> · <SampleBadge text="partial sample" title="Holdings not in the live synced universe show frozen sample prices" /></>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

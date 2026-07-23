@@ -6,7 +6,7 @@ import { doc, onSnapshot, setDoc, arrayUnion, arrayRemove, Timestamp } from "fir
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { watch as watchData } from "../data";
 import { useCollection } from "../hooks/useCollection";
-import { arr, sign } from "../utils";
+import { arr, sign, SampleBadge } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { trackFeatureOpen } from "../feature-adoption";
 
@@ -123,9 +123,11 @@ export function WatchlistScreen() {
               style={{ marginBottom: 10, fontSize: ".88rem", lineHeight: 1.55 }} />
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <span className="src-chip">Up {up}/{list.length}</span>
-              <span className="src-chip">Nasdaq +1.02%</span>
-              <span className="src-chip">S&amp;P +0.73%</span>
+              {/* Removed hardcoded "Nasdaq +1.02%" / "S&P +0.73%" chips — they were
+                  fabricated static figures. The live index values live in the header
+                  ticker tape (market_indices), not invented here. */}
               {liveCount > 0 && <span className="src-chip">{liveCount}/{list.length} live</span>}
+              {liveCount < list.length && <SampleBadge text="partial sample" title="Watchlist tickers outside the live synced universe show frozen sample prices" />}
               {uid && <span className="src-chip">Synced to your account</span>}
             </div>
           </div>

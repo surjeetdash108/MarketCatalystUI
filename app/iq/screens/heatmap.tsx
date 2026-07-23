@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useIQActions } from "../shell";
 import { sectorList, type SectorRow } from "../data";
-import { sign, heatCol, fmt, cls, StockLogo } from "../utils";
+import { sign, heatCol, fmt, cls, StockLogo, SampleBadge } from "../utils";
 import { useCollection } from "../hooks/useCollection";
 
 const TABS = ["Day %", "Week %"];
@@ -154,6 +154,10 @@ export function HeatmapScreen() {
             <button key={t} className={`tab${i === tab ? " on" : ""}`} onClick={() => setTab(i)}>{t}</button>
           ))}
         </div>
+        {/* Sector %s come from the live `sectors` job; the curated sector/stock
+            structure is static. If no live sector data has synced, the tiles show
+            the static baseline — label it rather than pass it off as live. */}
+        {sectorsLive.length === 0 && <SampleBadge title="No live sector data synced yet — tiles show the static baseline" />}
       </div>
 
       <div className="fbar">

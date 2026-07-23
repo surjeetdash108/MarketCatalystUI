@@ -3,7 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { movers as mockMovers, analyst, earnings, watch, folio, type Mover } from "../data";
-import { fmt, sign, cls, arr, Spark, StockLogo } from "../utils";
+import { fmt, sign, cls, arr, Spark, StockLogo, SampleBadge } from "../utils";
 import { useCollection } from "../hooks/useCollection";
 
 const StockScreenEmbed = dynamic<{ initialSym?: string }>(
@@ -204,6 +204,9 @@ export function MoversScreen() {
           <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
             {liveCount} names backed by live EOD data
           </span>
+        )}
+        {liveCount < movers.length && (
+          <SampleBadge text="partial sample" title="Names beyond the live-EOD set show frozen sample rows" />
         )}
       </div>
 
