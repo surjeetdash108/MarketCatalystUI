@@ -106,6 +106,13 @@ export function useSnapshotQuotes(tickers: string[], intervalMs = 15_000): Map<s
       try {
         const res = await fetch(`${BACKEND}/live/snapshot?tickers=${encodeURIComponent(key)}`, {
           signal: controller.signal,
+          // Bypass the browser HTTP cache: the response carries
+          // `stale-while-revalidate=30`, which would otherwise hand this poll a
+          // cached body up to 30s old (the prices "freeze"). `no-store` forces a
+          // real request every interval; our own If-None-Match still gets a cheap
+          // 304 when nothing changed, and the server-side cache still collapses
+          // the upstream vendor call, so this costs no extra Polygon requests.
+          cache: "no-store",
           headers: etag.current ? { "If-None-Match": etag.current } : {},
         });
         if (cancelled || res.status === 304) return; // 304 → keep last map
@@ -159,8 +166,11 @@ export function useSnapshotQuote(ticker: string | null, intervalMs = 10_000) {
           `${BACKEND}/live/snapshot?tickers=${encodeURIComponent(ticker)}`,
           {
             signal: controller.signal,
-            // Conditional request: an unchanged interval costs a 304 with no
-            // body, which is what makes frequent polling cheap.
+            // Bypass the browser HTTP cache (the response's
+            // stale-while-revalidate=30 would otherwise serve a body up to 30s
+            // old and the price appears frozen). Conditional request still costs
+            // a cheap 304 with no body when the interval is unchanged.
+            cache: "no-store",
             headers: etag.current ? { "If-None-Match": etag.current } : {},
           },
         );

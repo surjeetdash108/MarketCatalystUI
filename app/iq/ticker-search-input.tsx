@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTickerSearch } from "./hooks/useTickerSearch";
+import { useSnapshotQuotes } from "./hooks/useSnapshotQuote";
 
 /**
  * Reusable ticker entry with a LIVE ticker + company-name typeahead
@@ -28,6 +29,13 @@ export function TickerSearchInput({
   const [focused, setFocused] = useState(false);
   const results = useTickerSearch(value);
   const show = focused && value.trim().length > 0 && results.length > 0;
+
+  // Live delayed prices for the (at most 8) visible suggestions. Keyed on the
+  // stable ticker SET inside the hook, so it only polls while the dropdown is
+  // open and re-polls only when the visible set changes — not on every keystroke
+  // character. The static `companies` EOD price is the fallback.
+  const visible = show ? results.slice(0, 8) : [];
+  const snaps = useSnapshotQuotes(visible.map((r) => r.ticker));
 
   return (
     <div style={{ position: "relative" }}>
@@ -62,7 +70,10 @@ export function TickerSearchInput({
           background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10,
           boxShadow: "0 8px 26px rgba(0,0,0,.4)", overflow: "hidden", maxHeight: 260, overflowY: "auto",
         }}>
-          {results.slice(0, 8).map((r) => (
+          {visible.map((r) => {
+            const q = snaps.get(r.ticker.toUpperCase());
+            const px = q?.price ?? r.price;
+            return (
             <div
               key={r.ticker}
               onMouseDown={(e) => { e.preventDefault(); onPick(r.ticker); }}
@@ -76,13 +87,14 @@ export function TickerSearchInput({
                   {r.name}
                 </span>
               )}
-              {r.price != null && (
-                <span style={{ marginLeft: "auto", fontFamily: "var(--f-mono)", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                  ${r.price.toFixed(2)}
+              {px != null && (
+                <span style={{ marginLeft: "auto", fontFamily: "var(--f-mono)", fontSize: ".72rem", color: q?.changePct != null ? (q.changePct >= 0 ? "var(--up)" : "var(--down)") : "var(--text-dim-solid)" }}>
+                  ${px.toFixed(2)}
                 </span>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
