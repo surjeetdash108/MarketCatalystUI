@@ -19,6 +19,7 @@ import {
 import {
   completeGoogleLogin,
   getAuthErrorMessage,
+  navigateAfterAuth,
   shouldUseGoogleRedirect,
   showError,
 } from "../auth-utils";
@@ -87,11 +88,16 @@ export function SignupForm() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      window.location.href = "/dashboard";
+      // Same persisted-session wait as the login path — a bare
+      // window.location.href races the IndexedDB write on mobile. Signup already
+      // awaits the setDoc above, but routing through the same helper keeps the
+      // two post-auth paths consistent and the button disabled until navigation.
+      await navigateAfterAuth("/dashboard");
     } catch (err) {
       const msg = getAuthErrorMessage(err);
       setError(msg); showError(msg);
-    } finally { setIsSubmitting(false); }
+      setIsSubmitting(false);
+    }
   }
 
   async function handleGoogle() {

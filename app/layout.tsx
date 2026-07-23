@@ -85,6 +85,34 @@ export default function RootLayout({
       className={`${geistSans.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${inter.variable} ${dmSans.variable} ${plusJakartaSans.variable} ${ibmPlexSans.variable} ${outfit.variable} ${manrope.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {/*
+          Canonicalise the host BEFORE any app code runs.
+
+          Firebase Hosting serves this site on both marketcatalyst.web.app and
+          marketcatalyst.firebaseapp.com. Only the .web.app handler URI is
+          registered on the OAuth client (verified in app/firebase.ts), so on
+          .firebaseapp.com resolveAuthDomain() falls back to a CROSS-ORIGIN
+          authDomain — and mobile Google sign-in breaks there under Safari ITP,
+          stranding the user on the login page.
+
+          Rather than register a second handler URI (a Console change), we send
+          .firebaseapp.com traffic to the known-good host. This is a RAW inline
+          script — first child of <body>, so it executes during HTML parse,
+          ahead of hydration and ahead of firebase.ts's module-load
+          `createAuth()`. (next/script's beforeInteractive JSON-escapes its
+          string body, turning the `"` into `\\"` — invalid JS that never runs;
+          dangerouslySetInnerHTML is inserted verbatim.) location.replace keeps
+          the dead host out of history; path + query + hash are preserved.
+
+          Scoped to the exact alternate host, so localhost, preview channels,
+          .web.app and any future custom domain are untouched.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '(function(){try{if(location.hostname==="marketcatalyst.firebaseapp.com"){location.replace("https://marketcatalyst.web.app"+location.pathname+location.search+location.hash);}}catch(e){}})();',
+          }}
+        />
         <FirebaseAnalytics />
         <SentryInit />
         <ReduxProvider>{children}</ReduxProvider>

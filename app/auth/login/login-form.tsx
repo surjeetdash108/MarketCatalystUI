@@ -14,6 +14,7 @@ import {
   completeGoogleLogin,
   destinationFor,
   getAuthErrorMessage,
+  navigateAfterAuth,
   shouldUseGoogleRedirect,
   showError,
 } from "../auth-utils";
@@ -83,11 +84,15 @@ export function LoginForm() {
     setError(""); setIsSubmitting(true);
     try {
       await signInWithEmailAndPassword(firebaseAuth, email, password);
-      window.location.href = destinationFor(email);
+      // Wait for the session to be persisted before the hard reload — see
+      // navigateAfterAuth. A bare `window.location.href` here stranded mobile
+      // users on this page because the reloaded dashboard restored no session.
+      await navigateAfterAuth(destinationFor(email));
     } catch (err) {
       const msg = getAuthErrorMessage(err);
       setError(msg); showError(msg);
-    } finally { setIsSubmitting(false); }
+      setIsSubmitting(false);
+    }
   }
 
   async function handleGoogle() {

@@ -1,5 +1,5 @@
 import { FirebaseError } from "firebase/app";
-import { UserCredential } from "firebase/auth";
+import { onAuthStateChanged, UserCredential } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { firebaseAuth, firebaseDb } from "../firebase";
 import { emptyInvestorProfile } from "../profile/profile-fields";
@@ -19,6 +19,50 @@ export const ADMIN_EMAIL = (
 
 export function destinationFor(email?: string | null): string {
   return (email ?? "").trim().toLowerCase() === ADMIN_EMAIL ? "/admin" : "/dashboard";
+}
+
+/**
+ * Resolves once the freshly-authenticated session is safe to survive a hard
+ * page reload, then hard-navigates to `dest`.
+ *
+ * WHY THIS EXISTS — email login was stranding mobile users on the login page.
+ * `signInWithEmailAndPassword` resolves as soon as the credential is validated,
+ * but the session is persisted to IndexedDB by a separate transaction that is
+ * still settling. A `window.location.href` in the SAME tick (as the login form
+ * did) tears the page down on mobile WebKit before that transaction commits, so
+ * the reloaded /dashboard restores NO user and its auth guard bounces straight
+ * back to /login — a dead end. Desktop happened to win the race; phones lost it.
+ *
+ * The signup and Google paths never showed this because each already awaits a
+ * Firestore round-trip (`setDoc` / `getDoc`) between auth and navigation, which
+ * incidentally gives the persistence write time to land. This gives the email
+ * login path the same settle point explicitly: it waits for the auth listener
+ * to report a persisted user, which is the SDK's own signal that the session is
+ * committed, before reloading.
+ *
+ * Bounded by a timeout so a wedged listener can never trap the user on the form:
+ * after `timeoutMs` we navigate regardless — no worse than the old behaviour.
+ */
+export async function navigateAfterAuth(dest: string, timeoutMs = 5000): Promise<void> {
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      // One macrotask so the IndexedDB commit that backs `currentUser` flushes
+      // before the navigation below tears the page down.
+      setTimeout(resolve, 0);
+    };
+    const timer = setTimeout(done, timeoutMs);
+    // Fires immediately with the current user when one already exists (it does,
+    // right after a successful sign-in), and on every subsequent state change.
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      if (user) done();
+    });
+  });
+  window.location.href = dest;
 }
 
 export function getAuthErrorMessage(error: unknown): string {
