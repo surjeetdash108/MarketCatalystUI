@@ -6,7 +6,7 @@ import { doc, onSnapshot, setDoc, arrayUnion, arrayRemove, Timestamp } from "fir
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { watch as watchData } from "../data";
 import { useCollection } from "../hooks/useCollection";
-import { useSnapshotQuotes } from "../hooks/useSnapshotQuote";
+import { useLivePrices } from "../live-prices";
 import { arr, sign, SampleBadge } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { trackFeatureOpen } from "../feature-adoption";
@@ -47,7 +47,7 @@ export function WatchlistScreen() {
   // Live delayed prices for the watchlist's tickers, refreshed intraday. Takes
   // precedence over the once-a-day EOD price on `companies`, which takes
   // precedence over the static mock — most-live wins.
-  const snaps = useSnapshotQuotes(items);
+  const snaps = useLivePrices(items);
   const list = items.map(sym => {
     const w = watchData.find(x => x.ticker === sym);
     const c = byTicker.get(sym);

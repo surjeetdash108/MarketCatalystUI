@@ -15,6 +15,7 @@ import { useSplits, splitRatio, splitsSince } from "../hooks/useSplits";
 import { trackFeatureOpen } from "../feature-adoption";
 import { useFinancials } from "../hooks/useFinancials";
 import { useTickerSearch } from "../hooks/useTickerSearch";
+import { useLivePrice } from "../live-prices";
 
 interface CompanyDoc {
   id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
@@ -494,6 +495,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
   const divHist = useDividendHistory(sym);
   const splits = useSplits(sym);
   const fin = useFinancials(sym);
+  // Live (delayed) price for the header + chart current-price line. Registered
+  // into the shared subscription, so viewing a stock also keeps it warm.
+  const liveQ = useLivePrice(sym);
   // Latest daily bar for REAL pivots (was fixed multiples of price).
   const lastBar = yearBars && yearBars.length > 0 ? yearBars[yearBars.length - 1] : null;
   const [emaStep, setEmaStep] = useState(0);
@@ -631,9 +635,14 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
     ...(week52 ? { week52High: week52.high, week52Low: week52.low } : {}),
     ...(symNews.length ? { news: symNews } : {}),
     ...(symInsider.length ? { insiderActivity: symInsider } : {}),
+    // Live delayed price wins over the once-a-day `companies` close.
+    ...(liveQ?.price != null
+      ? { price: liveQ.price, pctChange: liveQ.changePct ?? base.pctChange }
+      : {}),
   };
   const isUp = data.pctChange >= 0;
   const p = data.price;
+  const priceIsLive = liveQ?.price != null;
 
   const rating = ss?.techRating ?? data.aiRating ?? "Neutral";
   const rs = ss?.relativeStrength ?? 55;
@@ -924,7 +933,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart, showLiveCompare
                 )}
                 {isLiveStock && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginLeft: 6, fontSize: ".62rem" }}>
-                    live quote · {liveCompany?.source ? liveCompany.source[0].toUpperCase() + liveCompany.source.slice(1) : "Polygon"}
+                    {priceIsLive ? "live · ~15m delayed" : "EOD close"} · {liveCompany?.source ? liveCompany.source[0].toUpperCase() + liveCompany.source.slice(1) : "Polygon"}
                   </span>
                 )}
               </div>

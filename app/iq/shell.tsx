@@ -19,6 +19,7 @@ import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
 import { FeatureFlagProvider, useFlag, type FlagKey } from "./feature-flags";
 import { EntitlementProvider } from "./entitlements";
+import { LivePricesProvider, useLivePrices } from "./live-prices";
 
 /**
  * Hides a nav item when its release flag is off. A `null` flag is always shown.
@@ -45,7 +46,6 @@ import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { mergePulse, applyTape, buildTapeStrip, type IndexDoc } from "./live-market-indices";
 import { useMarketTape } from "./hooks/useMarketTape";
-import { useSnapshotQuotes } from "./hooks/useSnapshotQuote";
 import { getMarketStatus, fetchMarketStatus, type MarketStatus } from "./market-status";
 import { useSlugEntitled } from "./entitlement-gate";
 
@@ -806,6 +806,17 @@ const SEARCHABLE_STOCKS: Array<{ sym: string; name: string }> = [
 
 // ---- Main IQ Shell ----
 export function IQShell({ children }: { children: React.ReactNode }) {
+  // Mount the app-wide live-price subscription above the shell body so the
+  // search palette (in this component) and every screen share one poll of the
+  // signed-in user's portfolio + watchlist + viewed tickers.
+  return (
+    <LivePricesProvider>
+      <IQShellInner>{children}</IQShellInner>
+    </LivePricesProvider>
+  );
+}
+
+function IQShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAppSelector(state => state.auth);
@@ -908,7 +919,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     : SEARCHABLE_STOCKS.map(s => ({ sym: s.sym, name: s.name, price: null, pctChange: null }));
   // Live delayed prices for the search results, polled only while the palette is
   // open. Overlays the once-a-day EOD price the search index carries.
-  const searchSnaps = useSnapshotQuotes(searchOpen ? searchMatches.map(m => m.sym) : []);
+  const searchSnaps = useLivePrices(searchOpen ? searchMatches.map(m => m.sym) : []);
   const searchMatchesLive = searchMatches.map(m => {
     const q = searchSnaps.get(m.sym.toUpperCase());
     return q?.price != null ? { ...m, price: q.price, pctChange: q.changePct ?? m.pctChange } : m;

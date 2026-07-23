@@ -6,7 +6,7 @@ import { doc, onSnapshot, setDoc, deleteDoc, collection, Timestamp } from "fireb
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { folio as folioData, type FolioItem } from "../data";
 import { useCollection } from "../hooks/useCollection";
-import { useSnapshotQuotes } from "../hooks/useSnapshotQuote";
+import { useLivePrices } from "../live-prices";
 import { cls, arr, sign, SampleBadge } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
@@ -86,7 +86,7 @@ export function PortfolioScreen() {
   // precedence over the once-a-day EOD `companies` price. totalVal / dayPL below
   // recompute from whatever price wins here, so the portfolio total tracks the
   // live prices automatically.
-  const snaps = useSnapshotQuotes(holdings.map(h => h.ticker));
+  const snaps = useLivePrices(holdings.map(h => h.ticker));
   const merged = holdings.map(h => {
     const q = snaps.get(h.ticker.toUpperCase());
     const eod = byTicker.get(h.ticker);

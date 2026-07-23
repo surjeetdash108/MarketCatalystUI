@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTickerSearch } from "./hooks/useTickerSearch";
-import { useSnapshotQuotes } from "./hooks/useSnapshotQuote";
+import { useLivePrices } from "./live-prices";
 
 /**
  * Reusable ticker entry with a LIVE ticker + company-name typeahead
@@ -35,7 +35,7 @@ export function TickerSearchInput({
   // open and re-polls only when the visible set changes — not on every keystroke
   // character. The static `companies` EOD price is the fallback.
   const visible = show ? results.slice(0, 8) : [];
-  const snaps = useSnapshotQuotes(visible.map((r) => r.ticker));
+  const snaps = useLivePrices(visible.map((r) => r.ticker));
 
   return (
     <div style={{ position: "relative" }}>

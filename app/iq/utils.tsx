@@ -345,7 +345,19 @@ export function CandleChart({
   const svgRef = useRef<SVGSVGElement>(null);
 
   const data = useMemo(
-    () => (realBars && realBars.length > 1 ? realBars : genOHLC(sym, tf, px)),
+    () => {
+      if (!(realBars && realBars.length > 1)) return genOHLC(sym, tf, px);
+      // Reflect the live (delayed) current price on the last bar so the chart's
+      // right edge tracks the header quote instead of freezing at the last
+      // synced close. px comes from the shared live-price subscription; when it
+      // ticks (~every 15s) the closing candle moves with it.
+      if (px > 0 && Number.isFinite(px)) {
+        const last = realBars[realBars.length - 1];
+        const merged = { ...last, c: px, h: Math.max(last.h, px), l: Math.min(last.l, px) };
+        return [...realBars.slice(0, -1), merged];
+      }
+      return realBars;
+    },
     [sym, tf, px, realBars],
   );
   const n = data.length;
