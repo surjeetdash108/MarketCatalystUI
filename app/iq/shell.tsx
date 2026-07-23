@@ -40,7 +40,7 @@ function NavItemGate({
   return <>{children}</>;
 }
 import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail, type PulseItem } from "./data";
-import { fmt, sign, cls, arr, SemiGauge } from "./utils";
+import { fmt, sign, cls, arr, SemiGauge, SampleBadge } from "./utils";
 import { useCollection } from "./hooks/useCollection";
 import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
@@ -409,8 +409,50 @@ function EarningsDrawer({ sym, onClose }: { sym: string; onClose: () => void }) 
 
 function SectorDrawer({ name, onClose }: { name: string; onClose: () => void }) {
   const { openStock } = useIQActions();
+  // Live overlays: real per-constituent price/%change/market cap from
+  // `companies`, and the real sector %change + rank from `sectors`. The drawer
+  // used to render the STATIC `sectorByName` — its per-ticker % changes were a
+  // hash of the ticker name (fabricated), its rank/trend fixed, and its "Big
+  // news" three hardcoded sentences. That is the "data not correct" on click.
+  const { data: companies } = useCollection<{ ticker: string; pctChange: number | null; marketCap: number | null }>("companies");
+  const { data: sectorsLive } = useCollection<{ id: string; sector: string; pctChange: number }>("sectors");
   const sector: SectorRow | undefined = sectorByName[name];
-  const sorted = sector ? [...sector.items].sort((a, b) => b[1] - a[1]) : [];
+
+  const byTicker = new Map(companies.map(c => [c.ticker, c]));
+  const constituents = (sector?.items ?? [])
+    .map(([sym, mcap, chg]) => {
+      const c = byTicker.get(sym);
+      return {
+        sym,
+        mc: c?.marketCap != null ? c.marketCap / 1e9 : mcap, // $ → $B
+        pc: c?.pctChange ?? chg,
+        live: c != null && (c.pctChange != null || c.marketCap != null),
+      };
+    })
+    .sort((a, b) => b.mc - a.mc);
+  const liveCount = constituents.filter(c => c.live).length;
+
+  // Sector %change: the live `sectors` collection is 11 broad GICS groups, but
+  // heatmap tiles are granular ("Semiconductors"). So (1) exact broad-name match
+  // → the vendor sector %; else (2) a cap-weighted average of THIS group's real
+  // constituents; else (3) the static baseline. Only (3) is a "sample".
+  const liveSector = sectorsLive.find(s => s.sector === name);
+  const liveMembers = constituents.filter(c => c.live);
+  let sectorPct: number;
+  let pctIsReal: boolean;
+  if (liveSector) {
+    sectorPct = liveSector.pctChange; pctIsReal = true;
+  } else if (liveMembers.length) {
+    let w = 0, wc = 0;
+    for (const c of liveMembers) { w += c.mc; wc += c.mc * c.pc; }
+    sectorPct = w > 0 ? wc / w : (sector?.pctChange ?? 0); pctIsReal = true;
+  } else {
+    sectorPct = sector?.pctChange ?? 0; pctIsReal = false;
+  }
+  const rank = liveSector
+    ? [...sectorsLive].sort((a, b) => b.pctChange - a.pctChange).findIndex(s => s.sector === name) + 1
+    : null;
+  const trend = sectorPct > 0.5 ? "Improving" : sectorPct < -0.5 ? "Deteriorating" : "Flat";
 
   return (
     <>
@@ -423,33 +465,32 @@ function SectorDrawer({ name, onClose }: { name: string; onClose: () => void }) 
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{name}</div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-              {sector ? `Group rank #${sector.rank} · ` : ""}
-              <span className={cls(sector?.pctChange ?? 0)}>{sign(sector?.pctChange ?? 0)} today</span>
-              {sector && <> · <span className="pill" style={{ marginLeft: 2 }}>{sector.trend}</span></>}
+              {rank != null ? `Group rank #${rank} · ` : ""}
+              <span className={cls(sectorPct)}>{sign(sectorPct)} today</span>
+              {" "}· <span className="pill" style={{ marginLeft: 2 }}>{trend}</span>
+              {!pctIsReal && <> {" "}<SampleBadge title="No live data for this group yet — showing the static baseline" /></>}
             </div>
           </div>
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
 
         <div className="drawer-b">
-          <div className="ai-sec"><div className="h">Constituents · by market cap</div></div>
-          {sorted.map(([sym, mc, chg]) => (
+          <div className="ai-sec">
+            <div className="h">
+              Constituents · by market cap
+              {constituents.length > 0 && liveCount < constituents.length && (
+                <span style={{ marginLeft: 8, fontWeight: 400 }}><SampleBadge text="partial live" title="Constituents outside the synced universe show baseline market cap / % change" /></span>
+              )}
+            </div>
+          </div>
+          {constituents.length === 0 && (
+            <div style={{ padding: "10px 0", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>No constituents listed for this group.</div>
+          )}
+          {constituents.map(({ sym, mc, pc }) => (
             <div key={sym} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); openStock(sym); }}>
               <span className="mono" style={{ fontWeight: 700, color: "var(--text-hi)", minWidth: 52 }}>{sym}</span>
-              <span style={{ fontSize: ".75rem", color: "var(--text-dim-solid)", flex: 1, marginLeft: 8 }}>${mc}B</span>
-              <span className={`mono ${cls(chg)}`} style={{ fontSize: ".82rem" }}>{sign(chg)}</span>
-            </div>
-          ))}
-
-          <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">Big news across the sector</div></div>
-          {[
-            { t: `Rotation into ${name} continues as valuations stay supported`, dt: "Today" },
-            { t: `Sector sees notable inflows amid broad risk-on positioning`, dt: "Yesterday" },
-            { t: `Analyst consensus turns constructive — multiple PT upgrades`, dt: "2 days ago" },
-          ].map((item, i) => (
-            <div key={i} style={{ padding: "8px 0", borderBottom: i < 2 ? "1px solid var(--border-soft)" : "none" }}>
-              <div style={{ fontSize: ".82rem", color: "var(--text-hi)", lineHeight: 1.4 }}>{item.t}</div>
-              <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>{item.dt}</div>
+              <span style={{ fontSize: ".75rem", color: "var(--text-dim-solid)", flex: 1, marginLeft: 8 }}>${mc >= 1000 ? `${(mc / 1000).toFixed(2)}T` : `${Math.round(mc)}B`}</span>
+              <span className={`mono ${cls(pc)}`} style={{ fontSize: ".82rem" }}>{sign(pc)}</span>
             </div>
           ))}
 
