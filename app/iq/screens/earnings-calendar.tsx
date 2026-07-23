@@ -243,6 +243,93 @@ function Picker<T extends string | number>({
   );
 }
 
+/**
+ * Month-grid date picker for the header date. Clicking the date label opens it;
+ * picking a day applies that date to the calendar anchor and closes. All math is
+ * UTC on 'YYYY-MM-DD' strings, matching the rest of this screen.
+ */
+function MiniCalendar({
+  value, onPick, onClose,
+}: {
+  value: string;
+  onPick: (iso: string) => void;
+  onClose: () => void;
+}) {
+  const [month, setMonth] = useState<string>(() => value.slice(0, 7)); // 'YYYY-MM'
+  const first = new Date(`${month}-01T00:00:00Z`);
+  const y = first.getUTCFullYear();
+  const m = first.getUTCMonth();
+  const firstDow = first.getUTCDay(); // 0 = Sun
+  const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const monthLabel = first.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  const today = toISO(new Date());
+
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(`${month}-${String(d).padStart(2, "0")}`);
+
+  const stepMonth = (dir: 1 | -1) => {
+    const nm = new Date(Date.UTC(y, m + dir, 1));
+    setMonth(`${nm.getUTCFullYear()}-${String(nm.getUTCMonth() + 1).padStart(2, "0")}`);
+  };
+
+  const cell: React.CSSProperties = {
+    aspectRatio: "1 / 1", display: "flex", alignItems: "center", justifyContent: "center",
+    borderRadius: 6, fontSize: ".78rem", cursor: "pointer", border: "1px solid transparent",
+    fontFamily: "var(--f-mono)",
+  };
+
+  return (
+    <>
+      <div className="ecal-away" onClick={onClose} />
+      <div
+        style={{
+          position: "absolute", top: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+          zIndex: 41, width: 252, padding: 10,
+          background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10,
+          boxShadow: "0 10px 30px rgba(0,0,0,.4)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <button className="ecal-arrow" onClick={() => stepMonth(-1)} aria-label="Previous month">‹</button>
+          <div style={{ fontSize: ".82rem", fontWeight: 700, color: "var(--text-hi)" }}>{monthLabel}</div>
+          <button className="ecal-arrow" onClick={() => stepMonth(1)} aria-label="Next month">›</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
+          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => (
+            <div key={d} style={{ textAlign: "center", fontSize: ".62rem", color: "var(--text-dim-solid)", fontWeight: 600 }}>{d}</div>
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
+          {cells.map((iso, i) => {
+            if (!iso) return <div key={`b${i}`} />;
+            const isSel = iso === value;
+            const isToday = iso === today;
+            const day = Number(iso.slice(8));
+            return (
+              <div
+                key={iso}
+                onClick={() => { onPick(iso); onClose(); }}
+                style={{
+                  ...cell,
+                  background: isSel ? "var(--brand-2)" : "transparent",
+                  color: isSel ? "#0a0e14" : "var(--text-hi)",
+                  fontWeight: isSel ? 700 : 500,
+                  borderColor: !isSel && isToday ? "var(--brand-2)" : "transparent",
+                }}
+                onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "var(--surface-3)"; }}
+                onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
+              >
+                {day}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function EarningsCalendar({
   selected, onSelect,
 }: {
@@ -260,6 +347,7 @@ export function EarningsCalendar({
   const [sort, setSort] = useState<SortKey>("cap");
   const [view, setView] = useState<ViewKey>("eps");
   const [hasNews, setHasNews] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const capLabel = CAPS.find(([v]) => v === cap)?.[1] ?? "All";
   const sortLabel = SORTS.find(([k]) => k === sort)?.[1] ?? "Market Cap";
@@ -345,7 +433,23 @@ export function EarningsCalendar({
       <div className="ecal-top">
         <div className="ecal-nav">
           <button className="ecal-arrow" onClick={() => step(-1)} aria-label="Previous">‹</button>
-          <div className="ecal-date">{label}</div>
+          <div style={{ position: "relative" }}>
+            <div
+              className="ecal-date"
+              onClick={() => setPickerOpen(o => !o)}
+              style={{ cursor: "pointer", userSelect: "none" }}
+              title="Pick a date"
+            >
+              {label} <span aria-hidden style={{ fontSize: ".7em", opacity: 0.7 }}>▾</span>
+            </div>
+            {pickerOpen && (
+              <MiniCalendar
+                value={anchor}
+                onPick={iso => { setAnchor(iso); setMode("day"); }}
+                onClose={() => setPickerOpen(false)}
+              />
+            )}
+          </div>
           <button className="ecal-arrow" onClick={() => step(1)} aria-label="Next">›</button>
         </div>
         <div className="ecal-seg">
