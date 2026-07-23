@@ -42,6 +42,7 @@ function NavItemGate({
 import { pulse, sectorList, sectorByName, funds, fundDetail, folio, earnings as earningsData, movers, screenerStocks, type SectorRow, type Fund, type FundDetail, type PulseItem } from "./data";
 import { fmt, sign, cls, arr, SemiGauge, SampleBadge } from "./utils";
 import { useCollection } from "./hooks/useCollection";
+import { useCompany } from "./hooks/useCompany";
 import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { mergePulse, applyTape, buildTapeStrip, type IndexDoc } from "./live-market-indices";
@@ -148,42 +149,42 @@ function NavIcon({ slug }: { slug: string }) {
 // ---- Drawers ----
 function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
   const { openStockFull, openSector } = useIQActions();
+  // Real data first: this quick-preview drawer used to read ONLY the static mock
+  // `movers`/`screenerStocks`, so a ticker not in those lists (most heatmap
+  // cells) rendered price 0 / +0% while the tile that opened it showed a real
+  // move. Now it reads the live `companies/{ticker}` doc and falls back to the
+  // mock only for tickers outside the synced universe.
+  const company = useCompany(sym);
   const mv  = movers.find(x => x.ticker === sym);
   const scr = screenerStocks.find(x => x.ticker === sym);
+  const isLive = !!company && company.price != null;
 
-  const name   = mv?.name      ?? scr?.name   ?? sym;
-  const sector = mv?.sector ?? scr?.sector ?? "—";
-  const p      = mv?.price   ?? 0;
-  const c      = mv?.pctChange   ?? 0;
-  const rvol   = mv?.rvolRatio ?? scr?.rvolRatio ?? 1;
-  const rs     = mv?.relativeStrength  ?? scr?.relativeStrength  ?? 50;
-  const wk     = mv?.weekPct  ?? 0;
-  // This quick-preview drawer reads the mock movers list, whose catalystLabel is
-  // a hardcoded fabrication ("Earnings beat"). We have no live catalyst source
-  // here, so we don't assert one: leaving cat empty makes the "why it moved"
-  // narrative use its honest sector-based fallback and hides the catalyst pill.
-  // Typed `string` (not the literal "") so the honest-fallback conditionals below
-  // don't narrow their dead branch to `never`.
-  const cat: string = "";
-  const ma     = mv?.maPosture  ?? "";
-  const tech   = mv?.techContext ?? "";
-  const news   = mv?.newsContext ?? "";
-  const mc     = scr?.marketCap ?? 0;
-  const mcTxt  = mc >= 1000 ? `$${(mc / 1000).toFixed(2)}T` : mc > 0 ? `$${mc}B` : mv?.cap ?? "—";
+  const name   = company?.name ?? mv?.name ?? scr?.name ?? sym;
+  const sector = company?.sector ?? mv?.sector ?? scr?.sector ?? "—";
+  const p      = company?.price ?? mv?.price ?? null;
+  const c      = company?.pctChange ?? mv?.pctChange ?? null;
+  const rvol   = company?.rvol ?? mv?.rvolRatio ?? scr?.rvolRatio ?? null;
+  const rs     = company?.rsRating ?? mv?.relativeStrength ?? scr?.relativeStrength ?? null;
+  const wk     = company?.week5ChangePct ?? mv?.weekPct ?? null;
+  const mcB    = company?.marketCap != null ? company.marketCap / 1e9 : (scr?.marketCap ?? null);
+  const mcTxt  = mcB == null ? (mv?.cap ?? "—") : mcB >= 1000 ? `$${(mcB / 1000).toFixed(2)}T` : `$${Math.round(mcB)}B`;
+  // MA posture from real SMA flags (was the mock's maPosture string).
+  const maPosture = (company?.aboveSma50 != null || company?.aboveSma200 != null)
+    ? `${company?.aboveSma50 ? "Above" : "Below"} 50-DMA, ${company?.aboveSma200 ? "Above" : "Below"} 200-DMA`
+    : (mv?.maPosture ?? "");
 
-  // Build "why it moved" narrative (HTML string — data is internal, never user input)
-  let why = `<b>${name}</b> is trading <b class="${cls(c)}">${sign(c)}</b> today`;
-  why += cat && cat !== "No known catalyst"
-    ? ` on <b style="color:var(--text-hi)">${cat.toLowerCase()}</b>.`
-    : ` with no single company headline — it is moving with its sector and the broad tape.`;
-  why += ` Volume is running <b>${rvol.toFixed(1)}×</b> its normal pace`;
-  why += rvol >= 2 ? ` — well above average, which confirms real participation behind the move.` : `.`;
-  if (ma) why += ` Price is <b>${ma}</b> with a relative-strength rank of <b>${rs}/99</b>, so the underlying trend is ${c >= 0 ? "constructive" : "weak"}.`;
-  const sec = sectorByName[sector] ?? null;
-  if (sec) {
-    why += ` Its group, <b>${sector}</b>, is ${sec.pctChange >= 0 ? "up" : "down"} <b class="${cls(sec.pctChange)}">${sign(sec.pctChange)}</b> today (${(sec.trend || "Flat").toLowerCase()}) — `;
-    why += (sec.pctChange >= 0) === (c >= 0) ? "in line with sector strength." : "bucking its sector today.";
+  // Build "why it moved" narrative only from figures we actually hold.
+  let why = "";
+  if (c != null) {
+    why = `<b>${name}</b> is trading <b class="${cls(c)}">${sign(c)}</b> today`;
+    why += ` with no single company headline here — it is moving with its sector and the broad tape.`;
+    if (rvol != null) {
+      why += ` Volume is running <b>${rvol.toFixed(1)}×</b> its normal pace`;
+      why += rvol >= 2 ? ` — well above average, which confirms real participation behind the move.` : `.`;
+    }
+    if (maPosture && rs != null) why += ` Price is <b>${maPosture}</b> with a relative-strength rank of <b>${rs}/99</b>, so the underlying trend is ${c >= 0 ? "constructive" : "weak"}.`;
   }
+  const sec = sectorByName[sector] ?? null;
 
   return (
     <>
@@ -206,17 +207,14 @@ function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
 
         <div className="drawer-b">
           {/* Pills */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-            <span className={`pill ${c >= 0 ? "up" : "dn"}`}>{arr(c)} {sign(c)} today</span>
-            {cat && cat !== "No known catalyst"
-              ? <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{cat}</span>
-              : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No known catalyst</span>
-            }
-            {rvol >= 2 && <span className="pill amc">{rvol.toFixed(1)}× volume</span>}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "center" }}>
+            {c != null && <span className={`pill ${c >= 0 ? "up" : "dn"}`}>{arr(c)} {sign(c)} today</span>}
+            {rvol != null && rvol >= 2 && <span className="pill amc">{rvol.toFixed(1)}× volume</span>}
+            {!isLive && <SampleBadge title="This ticker is outside the synced universe — figures fall back to the static sample until it syncs" />}
           </div>
 
           {/* Why it moved */}
-          {mv && (
+          {why && (
             <div className="ai-block" style={{ marginBottom: 14 }}>
               <div className="card-h">
                 <h3 className="ai-c">◆ Why it moved</h3>
@@ -230,31 +228,26 @@ function StockDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
 
           {/* Grid 1: Today · Rel. volume · 5-day */}
           <div className="metric-grid" style={{ marginBottom: 12 }}>
-            <div className="m"><div className="k">Today</div><div className={`v ${cls(c)}`}>{sign(c)}</div></div>
-            <div className="m"><div className="k">Rel. volume</div><div className="v">{rvol.toFixed(1)}×</div></div>
-            <div className="m"><div className="k">5-day</div><div className={`v ${cls(wk)}`}>{sign(wk)}</div></div>
+            <div className="m"><div className="k">Today</div><div className={`v ${c != null ? cls(c) : ""}`}>{c != null ? sign(c) : "—"}</div></div>
+            <div className="m"><div className="k">Rel. volume</div><div className="v">{rvol != null ? `${rvol.toFixed(1)}×` : "—"}</div></div>
+            <div className="m"><div className="k">5-day</div><div className={`v ${wk != null ? cls(wk) : ""}`}>{wk != null ? sign(wk) : "—"}</div></div>
           </div>
 
           {/* Grid 2: Last price · RS rank · Market cap */}
           <div className="metric-grid" style={{ marginBottom: 14 }}>
-            <div className="m"><div className="k">Last price</div><div className="v">${fmt(p)}</div></div>
-            <div className="m"><div className="k">RS rank</div><div className="v">{rs}</div></div>
+            <div className="m"><div className="k">Last price</div><div className="v">{p != null ? `$${fmt(p)}` : "—"}</div></div>
+            <div className="m"><div className="k">RS rank</div><div className="v">{rs != null ? rs : "—"}</div></div>
             <div className="m"><div className="k">Market cap</div><div className="v" style={{ fontSize: ".92rem" }}>{mcTxt}</div></div>
           </div>
 
-          {/* Technical posture */}
-          {tech && (
+          {/* Technical posture — real MA/RSI, not the mock string */}
+          {(maPosture || company?.rsi14 != null) && (
             <div className="ai-sec">
               <div className="h">Technical posture</div>
-              <p>{tech}</p>
-            </div>
-          )}
-
-          {/* News & catalyst */}
-          {news && (
-            <div className="ai-sec" style={{ marginTop: 10 }}>
-              <div className="h">News &amp; catalyst</div>
-              <p>{news}</p>
+              <p>
+                {maPosture}
+                {company?.rsi14 != null ? `${maPosture ? " · " : ""}RSI(14) ${Math.round(company.rsi14)}` : ""}
+              </p>
             </div>
           )}
 
