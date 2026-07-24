@@ -6,7 +6,7 @@ import { collection, doc, onSnapshot } from "firebase/firestore";
 import { firebaseAuth, firebaseDb } from "../../firebase";
 import { useIQActions, ExpandBtn, useLivePulse } from "../shell";
 import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem } from "../data";
-import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, isEmptyState } from "../utils";
+import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, isEmptyState, CenterSpinner } from "../utils";
 import { useCollection } from "../hooks/useCollection";
 import { mergePulse, type IndexDoc } from "../live-market-indices";
 
@@ -266,11 +266,11 @@ function MoverPopup({ m }: { m: Mover }) {
 export function DashboardScreen() {
   const { openStock, openMoverModal, openEarnings, openSector, openIndex } = useIQActions();
 
-  const { data: liveIndices } = useCollection<IndexDoc>("market_indices");
-  const { data: liveMovers } = useCollection<LiveMoverDoc>("market_movers");
-  const { data: liveEarnings } = useCollection<LiveEarningsDoc>("earnings_events");
-  const { data: companies } = useCollection<CompanyDoc>("companies");
-  const { data: sectorsLive } = useCollection<SectorApiDoc>("sectors");
+  const { data: liveIndices, loading: loadingIndices } = useCollection<IndexDoc>("market_indices");
+  const { data: liveMovers, loading: loadingMovers } = useCollection<LiveMoverDoc>("market_movers");
+  const { data: liveEarnings, loading: loadingEarnings } = useCollection<LiveEarningsDoc>("earnings_events");
+  const { data: companies, loading: loadingCompanies } = useCollection<CompanyDoc>("companies");
+  const { data: sectorsLive, loading: loadingSectors } = useCollection<SectorApiDoc>("sectors");
   const { data: liveInsiderTx } = useCollection<InsiderTxDoc>("insider_transactions");
   // Live Fear & Greed (fear-greed.job → market_sentiment/fear_greed); falls
   // back to the illustrative 62/"Greed" until the job has run.
@@ -428,6 +428,20 @@ export function DashboardScreen() {
     onMouseEnter: (e: React.MouseEvent<HTMLElement>) => showPop(e, sym, block),
     onMouseLeave: hidePop,
   });
+
+  // One spinner for the whole dashboard on first load — while any of the core
+  // collections is still fetching its first snapshot. Once they've all resolved
+  // (data present, or an honest empty state), the grid renders. Prevents the
+  // blank-screen flash where every widget mounted empty. `loading` is only true
+  // on the initial fetch, so this never re-shows on tab revisits.
+  const initialLoading = loadingIndices || loadingMovers || loadingEarnings || loadingCompanies || loadingSectors;
+  if (initialLoading) {
+    return (
+      <div className="dash-pg">
+        <CenterSpinner label="Loading dashboard…" minHeight="72vh" />
+      </div>
+    );
+  }
 
   return (
     <div className="dash-pg">

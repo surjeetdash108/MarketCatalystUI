@@ -642,7 +642,12 @@ export function DataState({
   }
   if (loading) {
     return (
-      <div style={{ ...wrap, opacity: 0.85 }}>
+      <div style={{ ...wrap, opacity: 0.85, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        <span style={{
+          width: 14, height: 14, borderRadius: "50%",
+          border: "2px solid var(--border)", borderTopColor: "var(--ai)",
+          animation: "spin .7s linear infinite", display: "inline-block", flexShrink: 0,
+        }} />
         Loading {label}…
       </div>
     );
@@ -661,5 +666,27 @@ export function DataState({
 /** True when a collection/feed has resolved with nothing to show (not loading, no error). */
 export function isEmptyState(loading: boolean | undefined, error: unknown, count: number): boolean {
   return !loading && !error && count === 0;
+}
+
+/**
+ * One centered spinner for a whole screen while its first data load is in
+ * flight — used in place of rendering empty widgets (which flash as a blank
+ * screen). Removed automatically once the caller's loading flag clears.
+ * Uses the existing `spin` keyframe from iq.css.
+ */
+export function CenterSpinner({ label = "Loading…", minHeight = "60vh" }: { label?: string; minHeight?: string }) {
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      gap: 12, width: "100%", minHeight, color: "var(--text-dim-solid)",
+    }}>
+      <span style={{
+        width: 34, height: 34, borderRadius: "50%",
+        border: "3px solid var(--border)", borderTopColor: "var(--ai)",
+        animation: "spin .7s linear infinite", display: "inline-block",
+      }} />
+      <span style={{ fontSize: ".82rem" }}>{label}</span>
+    </div>
+  );
 }
 
