@@ -27,7 +27,7 @@ function EpsSalesHistory({ sym, quarterly, annual }: { sym: string; quarterly: E
   const active = tabs.find(t => t.key === tab) ?? tabs[0];
 
   return (
-    <div className="card">
+    <div className="card" style={{ height: "100%" }}>
       <div className="card-h">
         <h3>{sym} · EPS &amp; Sales history</h3>
         <div className="trseg2" role="tablist" aria-label="Period">
@@ -107,7 +107,7 @@ function IncomeStatement({ sym, quarterly, annual }: { sym: string; quarterly: I
     ["Diluted EPS", "eps", false],
   ];
   return (
-    <div className="card">
+    <div className="card" style={{ height: "100%" }}>
       <div className="card-h">
         <h3>{sym} · Income statement</h3>
         <div className="trseg2" role="tablist" aria-label="Period">
