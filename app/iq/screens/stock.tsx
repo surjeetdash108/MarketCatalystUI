@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
-import { stockInfo, watch, movers as moversData, folio, earnings as earningsData, sectorByName, sectorList, screenerStocks, fundDetail, StockInfo } from "../data";
-import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, SampleBadge } from "../utils";
+import { type StockInfo } from "../data";
+import { fmt, cls, arr, sign, CandleChart, RsiPane, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart } from "../utils";
 import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
 import { useCollection } from "../hooks/useCollection";
@@ -25,6 +25,7 @@ interface CompanyDoc {
   // Sector rank from tech-rating.job; source records which vendor served the profile.
   sectorRank: number | null; sectorRankTotal: number | null; source: string | null;
   sma50?: number | null; sma200?: number | null; rvol?: number | null; rsRating?: number | null;
+  techRating?: number | null; grossMargin?: number | null;
   // Fields below replace values this screen used to derive from price multiples
   // or a seeded PRNG. All computed by technical-indicators.job from the same
   // ohlcv_bars the chart plots; peers/dividends come from the companies job.
@@ -132,41 +133,8 @@ const EXCHANGE: Record<string, string> = {
   DELL: "NYSE", ZIM: "NYSE", AMD: "NASDAQ", MU: "NASDAQ", SMCI: "NASDAQ",
 };
 
-const STOCK_DESC: Record<string, string> = {
-  NVDA: "Designs and sells GPUs, networking chips, and AI computing platforms. Its CUDA software stack has become the default infrastructure for AI model training and inference at hyperscale.",
-  TSLA: "Manufactures electric vehicles and develops autonomous driving software (FSD). Also sells energy storage systems and solar products; a growing robotics initiative (Optimus) is in early development.",
-  AAPL: "Designs and markets consumer electronics, software, and services. The iPhone-anchored hardware business is complemented by a fast-growing, high-margin services segment including the App Store, iCloud, and Apple TV+.",
-  MSFT: "Develops cloud computing (Azure), enterprise software (Microsoft 365), and professional social networking (LinkedIn). An OpenAI partnership has embedded Copilot AI across its entire product suite.",
-  GOOGL: "Operates the world's dominant search engine and YouTube. Generates revenue almost entirely from digital advertising, with Google Cloud as a rapidly growing second business and DeepMind driving AI research.",
-  META: "Runs the world's largest social platforms — Facebook, Instagram, and WhatsApp. Revenue is nearly all digital advertising; heavy investment in AI infrastructure and Reality Labs (VR/AR) headsets.",
-  AMZN: "The world's largest e-commerce marketplace and the leading cloud-computing provider through AWS. Also operates a high-margin digital advertising business, Prime Video, and a growing healthcare segment.",
-  JPM:  "The largest U.S. bank by assets, with businesses spanning consumer banking, investment banking, commercial lending, and asset management. A key beneficiary of the higher-for-longer interest-rate environment.",
-  V:    "Operates a global payments network connecting cardholders, merchants, and financial institutions. Earns fees on transaction volume rather than extending credit, insulating it from consumer-credit risk.",
-  UNH:  "A diversified healthcare conglomerate: UnitedHealthcare provides health insurance plans while Optum delivers pharmacy benefits, data analytics, and care delivery services.",
-  AVGO: "Designs semiconductors and infrastructure software for networking, storage, and broadband. Major AI revenue driver through custom accelerators for hyperscalers; software business adds recurring revenue via VMware.",
-  CRM:  "Provides cloud-based customer-relationship-management (CRM) software. Its platform spans sales, service, marketing, and analytics; the Einstein AI layer is being woven through every product.",
-  PLTR: "Builds data-analytics and AI platforms for government intelligence agencies (Gotham) and commercial enterprises (Foundry, AIP). Known for deep integrations into mission-critical workflows.",
-  INTC: "Designs and manufactures CPUs for PCs, servers, and embedded systems. Executing a multi-year foundry turnaround (Intel Foundry Services) to regain process-node leadership lost to TSMC and Samsung.",
-  WBA:  "Operates one of the largest U.S. pharmacy chains and provides pharmacy-benefit and healthcare services. Navigating store closures and margin compression amid structural pharmacy-reimbursement headwinds.",
-  DELL: "Designs and sells PCs, servers, networking gear, and storage systems. Its Infrastructure Solutions Group is a direct beneficiary of AI-driven server demand, particularly for NVIDIA-GPU-based configurations.",
-  ZIM:  "An Israel-based container shipping company that carries cargo across global trade lanes. Earnings are highly cyclical, tracking global container freight rates and supply-chain volumes.",
-  AMD:  "Designs high-performance CPUs (EPYC) and GPUs (Instinct), competing directly with Intel in data-center compute and NVIDIA in AI accelerators. Gained meaningful AI-chip market share with MI300X.",
-  MU:   "Manufactures DRAM and NAND flash memory — the primary storage building blocks inside smartphones, PCs, and data centers. Pricing is cyclical; the AI memory supercycle (HBM) is a key near-term catalyst.",
-  SMCI: "Designs and assembles high-density server and storage systems, specialising in AI-optimised racks built around NVIDIA GPUs. Competes on speed-to-market and customisation for hyperscaler and enterprise buyers.",
-};
-
-const BEAT_STREAK: Record<string, number> = {
-  AAPL: 4, NVDA: 7, MSFT: 5, GOOGL: 3, META: 4, AMZN: 3, TSLA: -1, JPM: 5, V: 4, UNH: 3,
-  AVGO: 5, CRM: 6, PLTR: 6, INTC: -2, WBA: -3, DELL: -1, ZIM: 1, AMD: 3, MU: 3, SMCI: 5,
-};
-const INST_OWN: Record<string, number> = {
-  AAPL: 61, NVDA: 66, MSFT: 72, GOOGL: 68, META: 63, AMZN: 59, TSLA: 44, JPM: 72, V: 81, UNH: 82,
-  AVGO: 78, CRM: 82, PLTR: 48, INTC: 64, WBA: 60, DELL: 45, ZIM: 22, AMD: 68, MU: 79, SMCI: 55,
-};
-const SHORT_INT: Record<string, number> = {
-  AAPL: 0.7, NVDA: 1.1, MSFT: 0.6, GOOGL: 0.8, META: 1.3, AMZN: 1.0, TSLA: 3.2, JPM: 0.4, V: 0.5, UNH: 0.6,
-  AVGO: 1.4, CRM: 1.6, PLTR: 4.2, INTC: 2.6, WBA: 9.4, DELL: 2.8, ZIM: 18.0, AMD: 2.3, MU: 2.0, SMCI: 12.0,
-};
+// (curated per-ticker company descriptions removed — the live companies
+// collection carries the real description; see useCompany.)
 
 function ratingCounts(rt: string) {
   const MAP: Record<string, { ol: string; ml: string; o: [number,number,number]; m: [number,number,number] }> = {
@@ -181,30 +149,10 @@ function ratingCounts(rt: string) {
 
 const ac = (a: string) => a === "Buy" ? "var(--up)" : a === "Sell" ? "var(--down)" : "var(--text-dim-solid)";
 
-const SYMBOLS = [...Object.keys(stockInfo), ...watch.map(w => w.ticker), ...folio.map(f => f.ticker)]
-  .filter((v, i, a) => a.indexOf(v) === i);
+// The search suggestion list is live (useTickerSearch); no static ticker seed.
+const SYMBOLS: string[] = [];
 
 type IncRow = { c: string; rev: number; cogs: number; gp: number; opex: number; oi: number; ni: number; eps: number };
-
-function earnIncome(mc: number, mg: number, px: number, period: "Q" | "A"): IncRow[] {
-  const rev0 = Math.max(2, mc * 0.02);
-  const sh   = Math.max(0.3, mc / Math.max(1, px));
-  const cols = period === "Q"
-    ? ["Q2 25","Q1 25","Q4 24","Q3 24","Q2 24","Q1 24","Q4 23","Q3 23","Q2 23","Q1 23"]
-    : ["FY 25e","FY 2024","FY 2023","FY 2022","FY 2021","FY 2020","FY 2019","FY 2018","FY 2017","FY 2016"];
-  const scale = period === "A" ? 4 : 1;
-  const step  = period === "A" ? 0.07 : 0.025;
-  return cols.map((c, i) => {
-    const rev  = rev0 * scale * (1 - i * step);
-    const cogs = rev * (1 - Math.min(0.95, mg / 100));
-    const gp   = rev - cogs;
-    const opex = rev * 0.22;
-    const oi   = gp - opex;
-    const ni   = Math.max(0.01, oi * 0.82);
-    const eps  = ni / sh;
-    return { c, rev, cogs, gp, opex, oi, ni, eps };
-  });
-}
 
 /**
  * Shown wherever real quarterly EPS has not been synced for this ticker.
@@ -388,13 +336,13 @@ function EarnPane({ hist }: { hist: EarnQ[] }) {
 
 function StockChartExpanded({
   sym, px, initialTf, initialChartType, initialMaStep, initialEmaStep,
-  initialShowVol, initialShowRsi, initialShowEarnings, eps, rs, rsi, erDate,
+  initialShowVol, initialShowRsi, initialShowEarnings, rsi, erDate,
 }: {
   sym: string; px: number; initialTf: string;
   initialChartType: "Candles" | "Hollow" | "Bars" | "Line" | "Area";
   initialMaStep: number; initialEmaStep: number;
   initialShowVol: boolean; initialShowRsi: boolean; initialShowEarnings: boolean;
-  eps: number; rs: number; rsi: number; erDate: string;
+  rsi: number | null; erDate: string;
 }) {
   const [tf, setTf] = useState(initialTf);
   const [chartType, setChartType] = useState(initialChartType);
@@ -436,10 +384,10 @@ function StockChartExpanded({
           <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
             <span>RSI (14)</span>
             <span className="mono" style={{ color: "var(--warn)" }}>
-              {Math.round(rsi)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
+              {rsi != null ? `${Math.round(rsi)} · ${rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}` : "not synced"}
             </span>
           </div>
-          <RsiPane sym={sym} tf={tf} series={company?.rsi14Series ?? undefined} />
+          {company?.rsi14Series ? <RsiPane sym={sym} tf={tf} series={company.rsi14Series} /> : null}
         </div>
       )}
       {showEarnings && (
@@ -461,7 +409,7 @@ function StockChartExpanded({
 }
 
 export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean } = {}) {
-  const { openStock, openSector } = useIQActions();
+  const { openStock } = useIQActions();
   const { data: companies } = useCollection<CompanyDoc>("companies");
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
@@ -520,10 +468,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
 
   const [watchedSet, setWatchedSet] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set(watch.map(w => w.ticker));
+    if (typeof window === "undefined") return new Set();
     const saved = localStorage.getItem("iq-watchlist");
     if (saved) { try { return new Set(JSON.parse(saved) as string[]); } catch { /* ignore */ } }
-    return new Set(watch.map(w => w.ticker));
+    return new Set();
   });
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -567,33 +515,30 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             .map(s => ({ ticker: s, name: null }))
         : []);
 
-  const info = stockInfo[sym];
-  const ss = screenerStocks.find(x => x.ticker ===sym);
-  const erEntry = earningsData.find(e => e.ticker ===sym);
-  const moverEntry = moversData.find(m => m.ticker ===sym);
-  const watchEntry = watch.find(w => w.ticker ===sym);
+  const liveCompany = companies.find(c => c.ticker === sym);
+  const isLiveStock = !!liveCompany && liveCompany.price != null;
 
-  const _baseP   = moverEntry?.price   ?? watchEntry?.price ?? 162;
-  const _baseC   = moverEntry?.pctChange   ?? watchEntry?.pctChange  ?? 2.4;
-  const _baseName = moverEntry?.name  ?? watchEntry?.name  ?? sym;
-  const _baseSec  = ss?.sector ?? moverEntry?.sector ?? "Technology";
-  const _basePe   = ss?.peRatio ?? 46;
-  const _baseMc   = ss?.marketCap ?? 100;
-  const _baseMkt  = _baseMc >= 1000 ? `$${(_baseMc/1000).toFixed(2)}T` : _baseMc >= 10 ? `$${Math.round(_baseMc)}B` : `$${_baseMc.toFixed(1)}B`;
-
+  // Base is built from the live `companies/{ticker}` doc only — no mock. A
+  // ticker outside the synced universe has 0/"—" placeholders and the render
+  // shows an honest "not in the synced universe" state rather than fabricated
+  // figures.
   const fallbackData: StockInfo = {
-    name: _baseName, price: _baseP, pctChange: _baseC, marketCap: _baseMkt,
-    peRatio: _basePe, eps: _baseP / _basePe,
-    week52High: _baseP * 1.35, week52Low: _baseP * 0.65,
-    dividendYield: 0, beta: 1.45, sector: _baseSec,
-    aiRating: ss?.techRating ?? "Neutral", aiThesis: "", aiRisk: "",
+    name: liveCompany?.name ?? sym,
+    price: liveCompany?.price ?? 0,
+    pctChange: liveCompany?.pctChange ?? 0,
+    marketCap: liveCompany?.marketCap != null ? fmtMarketCapB(liveCompany.marketCap / 1e9) : "—",
+    peRatio: liveCompany?.peRatio ?? 0,
+    eps: 0,
+    week52High: 0, week52Low: 0,
+    dividendYield: liveCompany?.dividendYield ?? 0,
+    beta: liveCompany?.beta ?? 0,
+    sector: liveCompany?.sector ?? "—",
+    aiRating: "Neutral", aiThesis: "", aiRisk: "",
     aiMetrics: [],
     financials: [],
     news: [],
     insiderActivity: [],
   };
-  const liveCompany = companies.find(c => c.ticker === sym);
-  const isLiveStock = !!liveCompany && liveCompany.price != null;
 
   // Real 52-week high/low from a year of daily bars (fallback: mock range).
   const yr = yearBars ?? [];
@@ -616,21 +561,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
       date: (x.transactionDate ?? "").slice(0, 10),
     }));
 
-  const base = info ?? fallbackData;
+  const base = fallbackData;
   const data: StockInfo = {
     ...base,
-    ...(isLiveStock
-      ? {
-          name: liveCompany.name ?? base.name,
-          price: liveCompany.price ?? base.price,
-          pctChange: liveCompany.pctChange ?? base.pctChange,
-          marketCap: liveCompany.marketCap != null ? fmtMarketCapB(liveCompany.marketCap / 1e9) : base.marketCap,
-          peRatio: liveCompany.peRatio ?? base.peRatio,
-          dividendYield: liveCompany.dividendYield ?? base.dividendYield,
-          beta: liveCompany.beta ?? base.beta,
-          sector: liveCompany.sector ?? base.sector,
-        }
-      : {}),
     ...(week52 ? { week52High: week52.high, week52Low: week52.low } : {}),
     ...(symNews.length ? { news: symNews } : {}),
     ...(symInsider.length ? { insiderActivity: symInsider } : {}),
@@ -643,11 +576,13 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const p = data.price;
   const priceIsLive = liveQ?.price != null;
 
-  const rating = ss?.techRating ?? data.aiRating ?? "Neutral";
-  const rs = ss?.relativeStrength ?? 55;
-  const mg = ss?.grossMargin ?? 20;
-  const rv = ss?.rvolRatio ?? 1.2;
-  const mc = ss?.marketCap ?? 100;
+  // Real technical rating label from the numeric composite, else "Neutral"
+  // (a "no opinion" default for the gauge, not a fabricated per-ticker figure).
+  const ratingLabel = (n: number) => n >= 90 ? "Strong Buy" : n >= 70 ? "Buy" : n >= 40 ? "Neutral" : n >= 20 ? "Sell" : "Strong Sell";
+  const rating = liveCompany?.techRating != null ? ratingLabel(liveCompany.techRating) : "Neutral";
+  const rs: number | null = liveCompany?.rsRating ?? null;   // relative strength (1-99)
+  const rv: number | null = liveCompany?.rvol ?? null;       // relative volume
+  const mc: number | null = liveCompany?.marketCap != null ? liveCompany.marketCap / 1e9 : null; // $B
   const gv = RATING_VAL[rating] ?? 0;
   const tone = gv > 0.6 ? "var(--up)" : gv > 0 ? "#7bdcae" : gv < -0.6 ? "var(--down)" : gv < 0 ? "#ff9aab" : "var(--text-dim-solid)";
   // Ratings triptych — every sub-rating now computed from REAL data instead of
@@ -708,95 +643,89 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
       : oscReal ? { o: oscReal.o, ol: oscReal.ol } : {}),
   };
 
-  const ex = EXCHANGE[sym] ?? "NASDAQ";
-  const group = data.sector ?? ss?.sector ?? "Technology";
-  const st = BEAT_STREAK[sym] ?? 2;
-  const si = SHORT_INT[sym] ?? 2.0;
-  const io = INST_OWN[sym] ?? 60;
-  const erDate = erEntry?.session ?? data.aiMetrics?.find(m => m.label === "Next ER")?.value ?? "—";
-  const fundsHolding = Object.values(fundDetail).filter(fd => fd.holdings.some(h => h[0] === sym)).length;
+  const ex = EXCHANGE[sym] ?? "—";
+  const group = data.sector && data.sector !== "—" ? data.sector : null;
+  // No redistributable source on the current plan for short interest, a
+  // next-earnings session, beat streaks, institutional ownership % or 13F
+  // holder counts — shown as "—" / omitted rather than fabricated.
+  const si: number | null = null;
+  const erDate = "—";
 
   // EPS is still derived from P/E for the mini-panels below. The revenue /
   // net-income / FCF / debt derivations that used to live here were removed:
   // they fed `finRows`, a fabricated at-a-glance panel that was never rendered,
   // and the real figures live in the financials statement table (from
   // useFinancials → Polygon /vX/reference/financials).
-  const eps = p / (data.peRatio || 25);
+  // EPS derived from real price / P/E only; null when P/E hasn't synced.
+  const eps: number | null = data.peRatio > 0 ? p / data.peRatio : null;
   // Real trailing-twelve-month revenue = sum of the last 4 real quarters
-  // (useFinancials → Polygon). Falls back to the old P/E-and-margin derivation
-  // only when fewer than 4 quarters have synced for this ticker.
-  const rev = fin.incomeRows.length >= 4
+  // (useFinancials → Polygon). Null until 4 quarters have synced — never the old
+  // P/E-and-margin guess.
+  const rev: number | null = fin.incomeRows.length >= 4
     ? fin.incomeRows.slice(0, 4).reduce((s, q) => s + q.rev, 0)
-    : (mc / (data.peRatio || 25)) / ((mg / 100) || 0.2);
-  // Real RSI(14)/MACD from technical-indicators.job when available; otherwise
-  // the original seeded approximations so the panel never goes blank.
-  const rsi = liveCompany?.rsi14 != null ? liveCompany.rsi14 : Math.round(38 + rs * 0.36);
-  const macd = liveCompany?.macd != null ? liveCompany.macd : data.pctChange * 2.6;
-  const macdBuy = liveCompany?.macd != null ? macd >= (liveCompany.macdSignal ?? 0) : isUp;
+    : null;
+  // Real RSI(14)/MACD from technical-indicators.job — null when not synced.
+  const rsi: number | null = liveCompany?.rsi14 ?? null;
+  const macd: number | null = liveCompany?.macd ?? null;
+  const macdBuy = macd != null && macd >= (liveCompany?.macdSignal ?? 0);
   const dollar = Math.abs(data.pctChange / 100 * p);
-  // Real 20-session average volume, in millions. The fallback below is the old
-  // formula — market cap over price times a constant — which is a function of
-  // company size, not of how much stock actually trades.
-  const avgVol = liveCompany?.avgVolume20 != null
+  // Real 20-session average volume, in millions; null when not synced.
+  const avgVol: number | null = liveCompany?.avgVolume20 != null
     ? Math.max(0.1, Math.round((liveCompany.avgVolume20 / 1e6) * 10) / 10)
-    : Math.max(1, Math.round(mc * 1000 / p * 0.012));
+    : null;
   // Session VWAP straight off the last daily bar.
   const vwap = liveCompany?.vwap ?? null;
 
   const cap = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(2)}T` : v >= 10 ? `$${Math.round(v)}B` : `$${v.toFixed(1)}B`;
   const nf = (x: number) => Math.round(x).toLocaleString("en-US");
-  // True rolling-52-week range from a year of daily highs/lows. These were
-  // `p * 0.58` and `p * 1.02` — fixed multiples of the CURRENT price, which
-  // means the "52W High" was always ~2% above spot and the range moved with the
-  // last tick instead of with the year.
-  const lo = liveCompany?.low52 ?? p * (rs > 60 ? 0.58 : 0.78);
-  const hi = liveCompany?.high52 ?? p * 1.02;
-  const has52w = liveCompany?.high52 != null && liveCompany?.low52 != null;
+  /** Format a nullable number, or "—" when the real value hasn't synced. */
+  const orDash = (v: number | null | undefined, f: (n: number) => string) => v == null ? "—" : f(v);
+  // True rolling-52-week range from real data (company doc or a year of daily
+  // bars); null when neither has synced — never a multiple of the current price.
+  const lo: number | null = liveCompany?.low52 ?? week52?.low ?? null;
+  const hi: number | null = liveCompany?.high52 ?? week52?.high ?? null;
+  const has52w = lo != null && hi != null;
 
-  /** One Moving-Averages drawer row from the real ladder, or the legacy multiple. */
+  /** One Moving-Averages drawer row from the real ladder, or "—" when unsynced. */
   const maRow = (
     label: string,
     kind: "sma" | "ema",
     period: number,
-    fallbackMultiple: number,
   ): [string, string, string] => {
     const ladder = kind === "sma" ? liveCompany?.smaLadder : liveCompany?.emaLadder;
     const value = ladder?.[String(period)] ?? null;
-    if (value == null) {
-      return [label, nf(p * fallbackMultiple), (period >= 200 ? rs > 50 : isUp) ? "Buy" : "Sell"];
-    }
+    if (value == null) return [label, "—", "—"];
     return [label, nf(value), p >= value ? "Buy" : "Sell"];
   };
-  // Classic pivots from the last real daily bar (H/L/C); fall back to the old
-  // price-multiple estimate only when bars haven't loaded.
-  const _pv = lastBar ? (lastBar.h + lastBar.l + lastBar.c) / 3 : p;
-  const S1 = lastBar ? 2 * _pv - lastBar.h : p * 0.965;
-  const S2 = lastBar ? _pv - (lastBar.h - lastBar.l) : p * 0.93;
-  const R1 = lastBar ? 2 * _pv - lastBar.l : p * 1.03;
-  const R2 = lastBar ? _pv + (lastBar.h - lastBar.l) : p * 1.06;
+  // Classic pivots from the last real daily bar (H/L/C); null when bars haven't loaded.
+  const _pv = lastBar ? (lastBar.h + lastBar.l + lastBar.c) / 3 : null;
+  const S1 = lastBar && _pv != null ? 2 * _pv - lastBar.h : null;
+  const S2 = lastBar && _pv != null ? _pv - (lastBar.h - lastBar.l) : null;
+  const R1 = lastBar && _pv != null ? 2 * _pv - lastBar.l : null;
+  const R2 = lastBar && _pv != null ? _pv + (lastBar.h - lastBar.l) : null;
 
-  const trendTxt = isUp && rs >= 70
+  // Trend/MA narrative only when a real RS rank exists — no rs-derived guess.
+  const trendTxt = rs == null
+    ? "Trend read not available — relative-strength rank hasn’t synced for this ticker."
+    : rs >= 70
     ? "<b>Strong uptrend.</b> Higher highs and higher lows; momentum confirmed by recent strength."
     : rs < 40
     ? "<b>Downtrend.</b> Lower highs and lower lows; price is below key moving averages."
     : "<b>Range / consolidation.</b> Choppy two-way action with no decisive trend yet.";
-  const maTxt = rs >= 60 ? "Above the 20, 50 and 200-day — bullish alignment."
+  const maTxt = rs == null
+    ? "Moving-average posture not available yet."
+    : rs >= 60 ? "Above the 20, 50 and 200-day — bullish alignment."
     : rs < 40 ? "Below the 50 and 200-day — bearish alignment."
     : "Mixed: hugging the 50-day with a flat 200-day.";
 
+  // Only indicators with a real synced value. Stoch/ADX had no source and were
+  // arithmetic on the day % change — dropped rather than fabricated.
   const indRows: [string, string, string][] = [
-    ["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
-    ["MACD (12,26)", macd.toFixed(1), macdBuy ? "Buy" : "Sell"],
-    ["Stoch %K", (50 + data.pctChange * 4).toFixed(1), (50 + data.pctChange * 4) > 80 ? "Sell" : "Buy"],
-    ["ADX (14)", (20 + Math.abs(data.pctChange) * 2).toFixed(1), isUp ? "Buy" : "Sell"],
-    ["SMA 50", liveCompany?.sma50 != null ? nf(liveCompany.sma50) : nf(p * 0.94), (liveCompany?.sma50 != null ? p >= liveCompany.sma50 : isUp) ? "Buy" : "Sell"],
-    ["SMA 200", liveCompany?.sma200 != null ? nf(liveCompany.sma200) : nf(p * 0.74), (liveCompany?.sma200 != null ? p >= liveCompany.sma200 : rs > 50) ? "Buy" : "Sell"],
+    ...(rsi != null ? [["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"] as [string, string, string]] : []),
+    ...(macd != null ? [["MACD (12,26)", macd.toFixed(1), macdBuy ? "Buy" : "Sell"] as [string, string, string]] : []),
+    ...(liveCompany?.sma50 != null ? [["SMA 50", nf(liveCompany.sma50), p >= liveCompany.sma50 ? "Buy" : "Sell"] as [string, string, string]] : []),
+    ...(liveCompany?.sma200 != null ? [["SMA 200", nf(liveCompany.sma200), p >= liveCompany.sma200 ? "Buy" : "Sell"] as [string, string, string]] : []),
   ];
-
-  const chips: number[] = [];
-  for (let i = 0; i < 8; i++) {
-    chips.push(st >= 0 ? (i < Math.min(st, 8) ? 1 : 0) : (i < Math.min(-st, 8) ? 0 : 1));
-  }
   // Real recent EPS from useFinancials (Polygon /vX/reference/financials),
   // newest first. Was a hardcoded ladder ("Q1 25" = qeps*1.06 …). `surp` is a
   // real surprise ONLY when a vendor estimate exists (h.e !== h.a); otherwise
@@ -818,32 +747,20 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // ticker refreshes about every 6 days and a brand-new one is briefly blank.
   const hist10 = fin.epsHistory;
 
-  const sectorInfo = sectorByName[group];
-  const sectorTrend = sectorInfo?.trend ?? "Flat";
-  const trendPill = sectorTrend === "Improving" ? "up" : sectorTrend === "Deteriorating" ? "dn" : "hold";
-  const grank = sectorInfo?.rank ?? 0;
-  // Stock's rank WITHIN its sector (distinct from grank, the sector-vs-sectors
-  // rank above) — from tech-rating.job; shown as a small badge when available.
+  // Sector trend/rank had only the fabricated static baseline — dropped. The
+  // stock's real rank WITHIN its sector (tech-rating.job) is shown when present.
   const inSectorRank = liveCompany?.sectorRank ?? null;
   const inSectorTotal = liveCompany?.sectorRankTotal ?? null;
-  const topSectors = sectorList.slice(0, 5);
 
   // Real peers from Polygon /v1/related-companies (synced onto the company doc),
-  // with each peer's real day change looked up from `companies`. Previously this
-  // took whatever shared the sector in the static screener list and invented the
-  // "change" as `(relativeStrength - 50) / 10` — a rescaled RS rank wearing a
-  // percentage sign. Falls back to the old sector filter for tickers the peers
-  // job hasn't reached, so the card never empties.
+  // each peer's real day change from `companies`. Empty when the peers job
+  // hasn't reached this ticker — never the old screener-sector guess with a
+  // `(relativeStrength - 50) / 10` fabricated change.
   const livePeerTickers = liveCompany?.peers?.filter(t => t !== sym) ?? [];
-  const peers = livePeerTickers.length > 0
-    ? livePeerTickers.slice(0, 5).map(t => {
-        const c = companies.find(x => x.ticker === t);
-        return { t, c: c?.pctChange ?? 0, real: c?.pctChange != null };
-      })
-    : screenerStocks
-        .filter(x => x.sector === group && x.ticker !== sym)
-        .slice(0, 5)
-        .map(x => ({ t: x.ticker, c: (x.relativeStrength - 50) / 10, real: false }));
+  const peers = livePeerTickers.slice(0, 5).map(t => {
+    const c = companies.find(x => x.ticker === t);
+    return { t, c: c?.pctChange ?? 0, real: c?.pctChange != null };
+  });
   const pcs = peers.map(x => x.c);
   const pmx = pcs.length ? Math.max(...pcs) : 0;
   const pmn = pcs.length ? Math.min(...pcs) : 0;
@@ -909,9 +826,6 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               </div>
             )}
           </div>
-          {Object.keys(stockInfo).map(s => (
-            <button key={s} className={`chip${sym === s ? " active" : ""}`} onClick={() => selectSym(s)}>{s}</button>
-          ))}
         </div>
       )}
 
@@ -922,9 +836,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               {sym[0]}
             </div>
             <div className="sd-name">
-              <h1>{sym} {!isLiveStock && <SampleBadge title="This ticker is outside the synced universe — price, RSI/MACD, moving-average and 52-week figures fall back to estimates until it syncs" />}</h1>
+              <h1>{sym} {!isLiveStock && <span style={{ fontSize: ".62rem", fontWeight: 600, color: "var(--text-dim-solid)", verticalAlign: "middle" }}>· not in synced universe</span>}</h1>
               <div className="sub">
-                {data.name} · {ex} · {group}
+                {data.name} · {ex} · {group ?? "—"}
                 {inSectorRank != null && inSectorTotal != null && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", marginLeft: 6, fontSize: ".62rem" }}>
                     #{inSectorRank} of {inSectorTotal} in sector
@@ -996,7 +910,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                     initialMaStep={maStep} initialEmaStep={emaStep}
                     initialShowVol={showVol} initialShowRsi={showRsi}
                     initialShowEarnings={showEarnings}
-                    eps={eps} rs={rs} rsi={rsi} erDate={erDate}
+                    rsi={rsi} erDate={erDate}
                   />
                 }
               />
@@ -1012,10 +926,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 <div style={{ padding: "6px 14px 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
                   <span>RSI (14)</span>
                   <span className="mono" style={{ color: "var(--warn)" }}>
-                    {Math.round(rsi)} · {rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}
+                    {rsi != null ? `${Math.round(rsi)} · ${rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}` : "not synced"}
                   </span>
                 </div>
-                <div style={{ padding: "0 14px 4px" }}><RsiPane sym={sym} tf={tfActive} series={liveCompany?.rsi14Series ?? undefined} /></div>
+                {liveCompany?.rsi14Series ? <div style={{ padding: "0 14px 4px" }}><RsiPane sym={sym} tf={tfActive} series={liveCompany.rsi14Series} /></div> : null}
               </div>
             )}
             {showEarnings && (
@@ -1074,14 +988,14 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
           <div className="card">
             <div className="keystats">
               {([
-                ["Mkt Cap",        cap(mc)],
-                ["P/E",            data.peRatio.toFixed(1)],
-                ["Revenue (TTM)",  cap(rev)],
-                ["EPS (TTM)",      "$" + eps.toFixed(2)],
-                ["Short Int.",     si + "%"],
+                ["Mkt Cap",        orDash(mc, cap)],
+                ["P/E",            data.peRatio > 0 ? data.peRatio.toFixed(1) : "—"],
+                ["Revenue (TTM)",  orDash(rev, cap)],
+                ["EPS (TTM)",      orDash(eps, v => "$" + v.toFixed(2))],
+                ["Short Int.",     orDash(si, v => v + "%")],
                 ["Next ER",        erDate],
-                ["52W Range",      "$" + nf(lo) + " – $" + nf(hi)],
-                ["Avg Vol",        avgVol + "M"],
+                ["52W Range",      has52w ? "$" + nf(lo!) + " – $" + nf(hi!) : "—"],
+                ["Avg Vol",        orDash(avgVol, v => v + "M")],
               ] as [string, string][]).map(k => (
                 <div key={k[0]} className="kstat">
                   <div className="k">{k[0]}</div>
@@ -1124,11 +1038,16 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             <div className="card-b">
               {([
                 ["Trend",            trendTxt],
-                ["Support / Resist.",`Support near <b>$${nf(S1)}</b> and <b>$${nf(S2)}</b>; resistance at <b>$${nf(R1)}</b> then the 52-week high <b>$${nf(hi)}</b>.`],
+                ["Support / Resist.", (S1 != null && S2 != null && R1 != null)
+                  ? `Support near <b>$${nf(S1)}</b> and <b>$${nf(S2)}</b>; resistance at <b>$${nf(R1)}</b>${has52w ? ` then the 52-week high <b>$${nf(hi!)}</b>` : ""}.`
+                  : "Pivot levels not available — daily bars haven’t loaded for this ticker."],
                 ["MA posture",       maTxt],
-                ["Rel. strength",    `Relative-strength rank <b class="${rs >= 70 ? "up" : rs < 40 ? "down" : ""}">${rs}/99</b> vs the market — ${rs >= 70 ? "group leader." : rs < 40 ? "lagging the tape." : "roughly in line."}`],
-                ["Volume",           `Relative volume <b>${rv.toFixed(1)}×</b> — ${rv > 2 ? "well above average (event-driven)." : "near normal."}`],
-                ["Event risk",       `Next earnings ${erDate}. Macro: a hawkish Fed surprise pressures high-multiple names first.`],
+                ["Rel. strength",    rs == null
+                  ? "Relative-strength rank hasn’t synced for this ticker."
+                  : `Relative-strength rank <b class="${rs >= 70 ? "up" : rs < 40 ? "down" : ""}">${Math.round(rs)}/99</b> vs the market — ${rs >= 70 ? "group leader." : rs < 40 ? "lagging the tape." : "roughly in line."}`],
+                ["Volume",           rv == null
+                  ? "Relative volume not synced yet."
+                  : `Relative volume <b>${rv.toFixed(1)}×</b> — ${rv > 2 ? "well above average (event-driven)." : "near normal."}`],
               ] as [string, string][]).map(l => (
                 <div key={l[0]} className="ai-line">
                   <span className="k">{l[0]}</span>
@@ -1143,7 +1062,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
 
           {/* Financials — grouped bar chart */}
           {(() => {
-            const inc     = fin.hasData && fin.incomeRows.length > 0 ? fin.incomeRows : earnIncome(mc, mg, p, finPeriod);
+            const inc     = fin.hasData ? fin.incomeRows : [];
             const histEps = finPeriod === "Q" ? hist10.slice(0, 10) : earnHistAnnual(hist10);
             const beatsOf = histEps.filter(h => h.surp >= 0).length;
             const latestA = histEps[0]?.a ?? 0;
@@ -1290,14 +1209,14 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
           {/* Peers */}
           <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             <div className="card-h">
-              <h3>Peers · who's leading</h3>
+              <h3>Peers · who&apos;s leading</h3>
               <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>
             </div>
             <div className="card-b" style={{ paddingTop: 6, flex: 1, overflowY: "auto", minHeight: 0 }}>
               {peers.length ? peers.map(peer => {
                 const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
                 return (
-                  <div key={peer.t} className={`minirow${folio.some(f => f.ticker ===peer.t) ? " owned" : ""}`}
+                  <div key={peer.t} className="minirow"
                     style={{ cursor: "pointer" }} onClick={() => openStock(peer.t)}>
                     <span className="tkr">{peer.t}</span>
                     <span className="mid">{tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`}>{tag}</span>}</span>
@@ -1308,27 +1227,23 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             </div>
           </div>
 
-          {/* Industry Group rank */}
+          {/* Sector rank — the stock's real rank within its sector (tech-rating.job) */}
           <div className="card">
             <div className="card-h">
-              <h3>Industry Group rank</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className={`pill ${trendPill}`}>{sectorTrend}</span>
-                <span className="link" onClick={() => setInnerDrawer("industry")}>View all →</span>
-              </div>
+              <h3>Sector rank</h3>
             </div>
             <div className="card-b">
-              {topSectors.map(g => (
-                <div key={g.name} className="grouprow">
-                  <span className="rk">{g.rank}</span>
-                  <span className="gn">{g.name}</span>
-                  <div className="bar"><i style={{ width: Math.max(8, 100 - g.rank * 1.6) + "%" }} /></div>
-                  <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.pctChange)}</span>
+              {inSectorRank != null && inSectorTotal != null ? (
+                <div style={{ fontSize: ".82rem", color: "var(--text)" }}>
+                  {sym} ranks{" "}
+                  <b style={{ color: inSectorRank <= Math.max(1, Math.round(inSectorTotal * 0.1)) ? "var(--up)" : "var(--text-hi)" }}>
+                    #{inSectorRank} of {inSectorTotal}
+                  </b>{" "}
+                  in {group ?? "its sector"} by relative strength.
                 </div>
-              ))}
-              <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                {group} ranks <b style={{ color: grank <= 10 ? "var(--up)" : "var(--text-hi)" }}>#{grank || "—"} of {sectorList.length}</b> groups by relative strength.
-              </div>
+              ) : (
+                <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Sector rank not synced for this ticker yet.</div>
+              )}
             </div>
           </div>
 
@@ -1455,25 +1370,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
           <div className="card-h">
             <h3>Earnings history</h3>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span className={`pill ${st >= 0 ? "up" : "dn"}`}>{Math.abs(st)}-qtr {st >= 0 ? "beat" : "miss"} streak</span>
               <span className="link" onClick={() => setInnerDrawer("earnings")}>View all →</span>
             </div>
           </div>
           <div className="card-b" style={{ paddingTop: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              <div className="cd">
-                <span className="num">—</span>
-                <span className="u">days to<br />next ER</span>
-              </div>
-              <div>
-                <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>Beat / miss streak</div>
-                <div className="streak">
-                  {chips.map((b, i) => (
-                    <b key={i} style={{ background: b ? "var(--up)" : "var(--down)" }}>{b ? "B" : "M"}</b>
-                  ))}
-                </div>
-              </div>
-            </div>
             {erRows.length === 0 ? (
               <div className="minirow"><span className="mid" style={{ color: "var(--text-dim-solid)" }}>EPS history not synced for this ticker yet.</span></div>
             ) : erRows.map(q => (
@@ -1504,16 +1404,13 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               {data.insiderActivity.length > 0 ? (
                 data.insiderActivity.map((n, idx) => {
                   const isSell = /sale|sold|exercis/i.test(n.action);
-                  const valEst = (Math.abs(data.pctChange) * 0.0015 * mc + 0.5).toFixed(1);
                   return (
                     <div key={idx} className="minirow" style={{ cursor: "pointer", alignItems: "flex-start", gap: 10 }}>
                       <span className="tkr" style={{ flex: "none" }}>{sym}</span>
                       <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
                         {n.name} {n.action} <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
                       </span>
-                      <span className={`r ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
-                        {isSell ? "−" : "+"}${valEst}M
-                      </span>
+                      <span className={`r ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>{isSell ? "Sell" : "Buy"}</span>
                     </div>
                   );
                 })
@@ -1522,21 +1419,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   No recent Form 4 activity.
                 </div>
               )}
-              <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
-              <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
-                Institutional
-              </div>
-              {([
-                ["Inst. ownership",   io + "%",                 "up"],
-                ["Short interest",    si + "%",                 si > 10 ? "down" : "dim"],
-                ["13F funds holding", fundsHolding + " tracked","dim"],
-              ] as [string, string, string][]).map(x => (
-                <div key={x[0]} className="minirow">
-                  <span className="mid">{x[0]}</span>
-                  <span className={`r ${x[2] === "dim" ? "" : x[2]}`}
-                    style={x[2] === "dim" ? { color: "var(--text-hi)" } : {}}>{x[1]}</span>
-                </div>
-              ))}
+              {/* Institutional-ownership %, short interest and 13F-holder counts
+                  have no redistributable source on the current plan — omitted
+                  rather than shown as fabricated per-ticker figures. */}
             </div>
           </div>
 
@@ -1550,12 +1435,16 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
                 Weekly pivots
               </div>
-              {([["R2", R2, "down"], ["R1", R1, "down"], ["Pivot", p, "dim"], ["S1", S1, "up"], ["S2", S2, "up"]] as [string, number, string][]).map(x => (
+              {(S1 == null || R1 == null) ? (
+                <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Pivot levels not available — daily bars haven’t loaded.</div>
+              ) : ([["R2", R2, "down"], ["R1", R1, "down"], ["Pivot", p, "dim"], ["S1", S1, "up"], ["S2", S2, "up"]] as [string, number | null, string][])
+                .filter(x => x[1] != null)
+                .map(x => (
                 <div key={x[0]} className="minirow">
                   <span className="tkr" style={{ width: 50 }}>{x[0]}</span>
                   <span className="mid" />
                   <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
-                    ${nf(x[1])}
+                    ${nf(x[1]!)}
                   </span>
                 </div>
               ))}
@@ -1564,16 +1453,18 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 Moving averages &amp; range
               </div>
               {([
-                ["52W High",  hi,         isUp ? "up"   : "dim"],
-                ["EMA 50",    p * 0.94,   isUp ? "up"   : "down"],
-                ["SMA 200",   p * 0.74,   rs > 50 ? "up" : "down"],
-                ["52W Low",   lo,         isUp ? "dim"  : "down"],
-              ] as [string, number, string][]).map(x => (
+                ["52W High",  hi,                    "dim"],
+                ["SMA 50",    liveCompany?.sma50 ?? null,  liveCompany?.sma50 != null && p >= liveCompany.sma50 ? "up" : "down"],
+                ["SMA 200",   liveCompany?.sma200 ?? null, liveCompany?.sma200 != null && p >= liveCompany.sma200 ? "up" : "down"],
+                ["52W Low",   lo,                    "dim"],
+              ] as [string, number | null, string][])
+                .filter(x => x[1] != null)
+                .map(x => (
                 <div key={x[0]} className="minirow">
                   <span className="tkr" style={{ width: 70 }}>{x[0]}</span>
                   <span className="mid" />
                   <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
-                    ${nf(x[1])}
+                    ${nf(x[1]!)}
                   </span>
                 </div>
               ))}
@@ -1628,46 +1519,30 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 <table className="ind-tbl">
                   <tbody>
                     {([
-                      ["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
-                      ["Stoch %K", (50 + data.pctChange * 4).toFixed(1), (50 + data.pctChange * 4) > 80 ? "Sell" : "Buy"],
-                      ["CCI (14)", (data.pctChange * 15).toFixed(1), isUp ? "Buy" : "Sell"],
-                      ["MACD (12,26)", macd.toFixed(1), macdBuy ? "Buy" : "Sell"],
-                      ["Williams %R", String(-(100 - rsi).toFixed(0)), rsi > 70 ? "Overbought" : "Neutral"],
-                      ["Bull/Bear Power", (data.pctChange * 3.2).toFixed(1), isUp ? "Buy" : "Sell"],
-                      ["ADX (14)", (20 + Math.abs(data.pctChange) * 2).toFixed(1), Math.abs(data.pctChange) > 2 ? "Strong" : "Weak"],
-                      ["Ultimate Osc.", (45 + data.pctChange * 3).toFixed(1), isUp ? "Buy" : "Sell"],
-                      ["ROC", (data.pctChange * 1.8).toFixed(2), isUp ? "Buy" : "Sell"],
-                      ["Stoch RSI", (0.5 + data.pctChange * 0.05).toFixed(2), isUp ? "Overbought" : "Oversold"],
-                      ["ATR (14)", (p * 0.018).toFixed(2), "Neutral"],
-                    ] as [string, string, string][]).map(r => (
+                      ...(rsi != null ? [["RSI (14)", rsi.toFixed(2), rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"] as [string, string, string]] : []),
+                      ...(macd != null ? [["MACD (12,26)", macd.toFixed(1), macdBuy ? "Buy" : "Sell"] as [string, string, string]] : []),
+                    ]).map(r => (
                       <tr key={r[0]}>
                         <td>{r[0]}</td><td className="v">{r[1]}</td>
                         <td className="a" style={{ color: ac(r[2]) }}>{r[2]}</td>
                       </tr>
                     ))}
+                    {rsi == null && macd == null && (
+                      <tr><td colSpan={3} style={{ color: "var(--text-dim-solid)", fontSize: ".76rem" }}>Oscillators not synced for this ticker yet.</td></tr>
+                    )}
                   </tbody>
                 </table>
                 <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">Moving Averages</div></div>
                 <table className="ind-tbl">
                   <tbody>
                     {([
-                      // Every SMA/EMA row below was a fixed multiple of the current
-                      // price (SMA 50 = p * 0.906), which makes the "moving
-                      // average" move with the last tick and always sit the same
-                      // distance below spot. maRow reads the real ladder computed
-                      // from daily closes, and the Buy/Sell verdict becomes the
-                      // actual price-vs-MA comparison rather than the sign of the
-                      // day's move. Fallbacks keep the old multiples for tickers
-                      // the indicators job hasn't covered.
-                      ...MA_LADDER_ROWS.map(([label, kind, period, fallback]) =>
-                        maRow(label, kind as "sma" | "ema", period as number, fallback as number)),
-                      ["Ichimoku Base", nf(p * 0.970), isUp ? "Buy" : "Sell"],
-                      // Real session VWAP off the last daily bar.
-                      ["VWAP",
-                        vwap != null ? nf(vwap) : nf(p * 0.994),
-                        (vwap != null ? p >= vwap : isUp) ? "Above" : "Below"],
-                      ["Hull MA (9)", nf(p * 0.991), isUp ? "Buy" : "Sell"],
-                    ] as [string, string, string][]).map(r => (
+                      // Real ladder from technical-indicators.job (daily closes);
+                      // rows with no synced value read "—". Ichimoku/Hull/other
+                      // fabricated price-multiple rows were dropped.
+                      ...MA_LADDER_ROWS.map(([label, kind, period]) =>
+                        maRow(label, kind as "sma" | "ema", period as number)),
+                      ...(vwap != null ? [["VWAP", nf(vwap), p >= vwap ? "Above" : "Below"] as [string, string, string]] : []),
+                    ]).map(r => (
                       <tr key={r[0]}>
                         <td>{r[0]}</td><td className="v">{r[1]}</td>
                         <td className="a" style={{ color: ac(r[2]) }}>{r[2]}</td>
@@ -1676,7 +1551,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   </tbody>
                 </table>
                 <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                  Computed from 11 oscillators + 15 moving averages. Not investment advice.
+                  Real RSI/MACD + moving averages from daily OHLCV. Not investment advice.
                 </div>
               </div>
             </div>
@@ -1693,49 +1568,17 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
-                {screenerStocks
-                  .filter(x => x.sector === group)
-                  .sort((a, b) => b.relativeStrength - a.relativeStrength)
-                  .map(x => {
-                    const chg = (x.relativeStrength - 50) / 10;
-                    return (
-                      <div key={x.ticker} className="minirow" style={{ cursor: "pointer" }}
-                        onClick={() => { setInnerDrawer(null); openStock(x.ticker); }}>
-                        <span className="mono" style={{
-                          fontWeight: 700, minWidth: 52,
-                          color: x.ticker === sym ? "var(--brand-2)" : "var(--text-hi)",
-                        }}>{x.ticker}</span>
-                        <span className="mid" style={{ fontSize: ".76rem" }}>{x.name}</span>
-                        <span className="pill" style={{ fontSize: ".66rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>RS {x.relativeStrength}</span>
-                        <span className={`mono ${cls(chg)}`} style={{ fontSize: ".82rem" }}>{sign(chg)}</span>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-
-          {/* Industry Group rank */}
-          {innerDrawer === "industry" && (
-            <div className="side-drawer" style={{ zIndex: 52 }}>
-              <div className="drawer-h">
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Industry Group Rank</div>
-                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>All groups by relative strength</div>
-                </div>
-                <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
-              </div>
-              <div className="drawer-b">
-                {sectorList.map(g => (
-                  <div key={g.name} className="grouprow" style={{ cursor: "pointer" }}
-                    onClick={() => { setInnerDrawer(null); openSector(g.name); }}>
-                    <span className="rk">{g.rank}</span>
-                    <span className="gn" style={{
-                      color: g.name === group ? "var(--brand-2)" : undefined,
-                      fontWeight: g.name === group ? 700 : undefined,
-                    }}>{g.name}</span>
-                    <div className="bar"><i style={{ width: Math.max(8, 100 - g.rank * 1.6) + "%" }} /></div>
-                    <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(g.pctChange)}</span>
+                {peers.length === 0 ? (
+                  <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>No related companies synced for {sym} yet.</div>
+                ) : peers.map(peer => (
+                  <div key={peer.t} className="minirow" style={{ cursor: "pointer" }}
+                    onClick={() => { setInnerDrawer(null); openStock(peer.t); }}>
+                    <span className="mono" style={{
+                      fontWeight: 700, minWidth: 52,
+                      color: peer.t === sym ? "var(--brand-2)" : "var(--text-hi)",
+                    }}>{peer.t}</span>
+                    <span className="mid" />
+                    <span className={`mono ${peer.real ? cls(peer.c) : ""}`} style={{ fontSize: ".82rem" }}>{peer.real ? sign(peer.c) : "—"}</span>
                   </div>
                 ))}
               </div>
@@ -1753,15 +1596,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
-                <div className="metric-grid" style={{ marginBottom: 14 }}>
-                  <div className="m"><div className="k">Inst. ownership</div><div className="v up">{io}%</div></div>
-                  <div className="m"><div className="k">Short interest</div><div className={`v ${si > 10 ? "down" : ""}`}>{si}%</div></div>
-                  <div className="m"><div className="k">13F funds</div><div className="v">{fundsHolding} tracked</div></div>
-                </div>
                 <div className="ai-sec"><div className="h">Recent insider transactions (Form 4)</div></div>
                 {data.insiderActivity.length > 0 ? data.insiderActivity.map((n, i) => {
                   const isSell = /sale|sold|exercis/i.test(n.action);
-                  const valEst = (Math.abs(data.pctChange) * 0.0015 * mc + 0.5).toFixed(1);
                   return (
                     <div key={i} className="minirow" style={{ alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-soft)" }}>
                       <span className={`pill ${isSell ? "dn" : "up"}`} style={{ flex: "none", fontSize: ".66rem" }}>{isSell ? "SELL" : "BUY"}</span>
@@ -1769,9 +1606,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                         <b style={{ color: "var(--text-hi)" }}>{n.name}</b> {n.action}{" "}
                         <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
                       </span>
-                      <span className={`r mono ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
-                        {isSell ? "−" : "+"}${valEst}M
-                      </span>
+                      <span className={`r mono ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>{isSell ? "Sell" : "Buy"}</span>
                     </div>
                   );
                 }) : (
@@ -1779,25 +1614,6 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                     No recent Form 4 activity found.
                   </div>
                 )}
-                {(() => {
-                  const holdingFunds = Object.entries(fundDetail)
-                    .filter(([, fd]) => fd.holdings.some(h => h[0] === sym))
-                    .slice(0, 8);
-                  return holdingFunds.length > 0 ? (
-                    <>
-                      <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">Top institutional holders (13F)</div></div>
-                      {holdingFunds.map(([nm, fd]) => {
-                        const h = fd.holdings.find(x => x[0] === sym);
-                        return (
-                          <div key={nm} className="minirow">
-                            <span className="mid">{nm}</span>
-                            <span className="r" style={{ color: "var(--text-hi)" }}>{h ? h[1] + "%" : "—"}</span>
-                          </div>
-                        );
-                      })}
-                    </>
-                  ) : null;
-                })()}
               </div>
             </div>
           )}
@@ -1814,14 +1630,14 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               </div>
               <div className="drawer-b">
                 <div className="ai-sec"><div className="h">Classic pivot (daily)</div></div>
-                {([
-                  ["R3", p * 1.09, "Resistance 3", "down"],
+                {(S1 == null || S2 == null || R1 == null || R2 == null) ? (
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Pivot levels not available — daily bars haven’t loaded for this ticker.</div>
+                ) : ([
                   ["R2", R2,       "Resistance 2", "down"],
                   ["R1", R1,       "Resistance 1", "down"],
                   ["Pivot", p,     "Pivot point",  "dim"],
                   ["S1", S1,       "Support 1",    "up"],
                   ["S2", S2,       "Support 2",    "up"],
-                  ["S3", p * 0.91, "Support 3",    "up"],
                 ] as [string, number, string, string][]).map(x => (
                   <div key={x[0]} className="minirow">
                     <span className="tkr" style={{ width: 50 }}>{x[0]}</span>
@@ -1832,15 +1648,16 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   </div>
                 ))}
                 <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">52-week levels</div></div>
-                <div className="metric-grid">
-                  <div className="m"><div className="k">52W High</div><div className="v up">${nf(hi)}</div></div>
-                  <div className="m"><div className="k">52W Low</div><div className="v down">${nf(lo)}</div></div>
-                  <div className="m"><div className="k">From High</div><div className={`v ${cls((p - hi) / hi * 100)}`}>{sign((p - hi) / hi * 100)}</div></div>
-                  <div className="m"><div className="k">From Low</div><div className={`v ${cls((p - lo) / lo * 100)}`}>{sign((p - lo) / lo * 100)}</div></div>
-                </div>
-                <div className="note" style={{ marginTop: 14 }}>
-                  <b style={{ color: "var(--text-hi)" }}>AI read:</b> {sym} is ${nf(Math.abs(p - S1))} above S1 (${nf(S1)}) and ${nf(Math.abs(R1 - p))} below R1 (${nf(R1)}). Risk/reward {((R1 - p) / (p - S1)).toFixed(1)}×.
-                </div>
+                {has52w ? (
+                  <div className="metric-grid">
+                    <div className="m"><div className="k">52W High</div><div className="v up">${nf(hi!)}</div></div>
+                    <div className="m"><div className="k">52W Low</div><div className="v down">${nf(lo!)}</div></div>
+                    <div className="m"><div className="k">From High</div><div className={`v ${cls((p - hi!) / hi! * 100)}`}>{sign((p - hi!) / hi! * 100)}</div></div>
+                    <div className="m"><div className="k">From Low</div><div className={`v ${cls((p - lo!) / lo! * 100)}`}>{sign((p - lo!) / lo! * 100)}</div></div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>52-week range not synced for this ticker yet.</div>
+                )}
                 <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
                   Pivot levels derived from recent OHLC data. Not investment advice.
                 </div>
@@ -1862,14 +1679,6 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                  <div className="streak">
-                    {chips.map((b, i) => (
-                      <b key={i} style={{ background: b ? "var(--up)" : "var(--down)" }}>{b ? "B" : "M"}</b>
-                    ))}
-                  </div>
-                  <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{Math.abs(st)}-qtr {st >= 0 ? "beat" : "miss"} streak</span>
-                </div>
                 <div className="ec-legend">
                   <span><i style={{ background: "var(--surface-3)" }} />EPS estimate</span>
                   <span><i style={{ background: "var(--up)" }} />Beat</span>
@@ -1920,7 +1729,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
 
           {/* Financials */}
           {innerDrawer === "financials" && (() => {
-            const inc = fin.hasData && fin.incomeRows.length > 0 ? fin.incomeRows : earnIncome(mc, mg, p, finPeriod);
+            const inc = fin.hasData ? fin.incomeRows : [];
             const fb = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
             const beats10 = hist10.filter(h => h.surp >= 0).length;
             // Empty history divides by zero -> "NaN%" rendered in the AI read
@@ -1928,10 +1737,11 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             const avgMv = hist10.length
               ? (hist10.reduce((a, h) => a + Math.abs(h.mv), 0) / hist10.length).toFixed(1)
               : null;
-            const erEnt = earningsData.find(e => e.ticker === sym);
-            const aiRead = erEnt
-              ? `${sym} ${erEnt.epsActual != null ? (erEnt.epsEstimate != null && erEnt.epsActual >= erEnt.epsEstimate ? "beat" : "missed") + " EPS estimates" : "reports " + erEnt.session}. Guidance ${erEnt.guidanceStatus === "Raised" ? "was raised — bullish" : erEnt.guidanceStatus === "Lowered" ? "was lowered — watch downside" : "was maintained"}. ${erEnt.priceReaction != null ? "Shares reacted " + (erEnt.priceReaction >= 0 ? "+" : "") + erEnt.priceReaction + "% on the print." : `Options imply a ±${erEnt.impliedMove}% move.`}`
-              : `${data.name} reports around ${erDate !== "—" ? erDate : "next quarter"}.`;
+            // Summary derived from the REAL EPS history (useFinancials), not a
+            // mock earnings row with fabricated guidance/reaction fields.
+            const aiRead = hist10.length > 0
+              ? `${data.name} beat estimates in ${beats10} of the last ${hist10.length} reported quarters.${avgMv != null ? ` Average absolute post-report move: ±${avgMv}%.` : ""}`
+              : `No synced earnings history for ${sym} yet.`;
             return (
               <div className="side-drawer" style={{ zIndex: 52 }}>
                 <div className="drawer-h">
@@ -1950,9 +1760,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                     <div className="card-h">
                       <h3>{sym} · 10-quarter earnings history</h3>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {erEnt?.priceReaction != null
-                          ? <span className={`pill ${erEnt.priceReaction >= 0 ? "up" : "dn"}`}>{erEnt.priceReaction >= 0 ? "+" : ""}{erEnt.priceReaction}% last reaction</span>
-                          : hist10.length > 0
+                        {hist10.length > 0
                           ? <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{beats10}/{hist10.length} beats</span>
                           : null
                         }

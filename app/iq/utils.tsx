@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, type CSSProperties } from "react";
 
 // ---- Number formatting ----
 export function fmt(n: number, d = 2): string {
@@ -587,5 +587,79 @@ export function SampleBadge({ text = "Sample data", title }: { text?: string; ti
       ⚠ {text}
     </span>
   );
+}
+
+/**
+ * Honest loading / empty / error state — the replacement for mock fallbacks.
+ *
+ * Instead of rendering fabricated rows when a Firestore collection or live feed
+ * is empty or errored, screens render this. It wires directly to the
+ * `{ loading, error }` that `useCollection` already returns (previously unused).
+ *
+ * Precedence: error > loading > empty. Renders null when none apply, so it can
+ * be dropped in as `<DataState .../>` above the real content and self-hides once
+ * data arrives.
+ */
+export function DataState({
+  loading,
+  error,
+  empty,
+  label = "data",
+  emptyMsg,
+  subMsg,
+  compact,
+}: {
+  loading?: boolean;
+  error?: unknown;
+  empty?: boolean;
+  /** what this section shows, e.g. "movers", "your watchlist" */
+  label?: string;
+  /** override the default empty-state headline */
+  emptyMsg?: string;
+  /** small secondary line under the headline */
+  subMsg?: string;
+  /** tighter padding for inline/table use */
+  compact?: boolean;
+}) {
+  const wrap: CSSProperties = {
+    padding: compact ? "10px 12px" : "18px 14px",
+    textAlign: "center",
+    fontSize: ".76rem",
+    color: "var(--text-dim-solid)",
+    border: "1px dashed var(--border)",
+    borderRadius: 8,
+    margin: compact ? "4px 0" : "8px 0",
+  };
+  const sub: CSSProperties = { fontSize: ".68rem", marginTop: 4, opacity: 0.8 };
+
+  if (error) {
+    return (
+      <div style={{ ...wrap, borderColor: "var(--down, #e5484d)", color: "var(--down, #e5484d)" }}>
+        Couldn’t load {label}.
+        <div style={sub}>The service may be briefly unavailable — it retries automatically.</div>
+      </div>
+    );
+  }
+  if (loading) {
+    return (
+      <div style={{ ...wrap, opacity: 0.85 }}>
+        Loading {label}…
+      </div>
+    );
+  }
+  if (empty) {
+    return (
+      <div style={wrap}>
+        {emptyMsg ?? `No live ${label} yet.`}
+        {subMsg ? <div style={sub}>{subMsg}</div> : null}
+      </div>
+    );
+  }
+  return null;
+}
+
+/** True when a collection/feed has resolved with nothing to show (not loading, no error). */
+export function isEmptyState(loading: boolean | undefined, error: unknown, count: number): boolean {
+  return !loading && !error && count === 0;
 }
 

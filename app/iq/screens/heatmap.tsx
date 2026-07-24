@@ -2,9 +2,15 @@
 
 import { useRef, useState } from "react";
 import { useIQActions } from "../shell";
-import { sectorList, type SectorRow } from "../data";
-import { sign, heatCol, fmt, cls, StockLogo, SampleBadge } from "../utils";
+import { sign, heatCol, fmt, cls, StockLogo, DataState, isEmptyState } from "../utils";
 import { useCollection } from "../hooks/useCollection";
+
+/** Treemap sector grouping — built live from the `companies` collection. */
+interface SectorRow {
+  name: string;
+  pctChange: number;
+  items: [string, number, number][]; // [ticker, marketCap($B), change%]
+}
 
 const TABS = ["Day %", "Week %"];
 const HEADER_H = 24;
@@ -50,6 +56,7 @@ interface HoverStock {
 
 interface CompanyDoc {
   id: string; ticker: string; price: number | null; pctChange: number | null; marketCap: number | null;
+  sector?: string | null;
   // Live technicals (technical-indicators.job / rs-rating.job) — power the
   // hover tooltip and the Day/Week heat toggle, replacing static data.ts reads.
   rvol?: number | null; rsRating?: number | null;
@@ -73,55 +80,59 @@ function maStatusFrom(c: CompanyDoc | undefined): string | null {
 }
 
 /**
- * Merges live company price/%change/marketCap and live sector %change into
- * the original curated sectorList — never drops a sector or stock, only
- * overrides values where real data exists.
+ * Builds the treemap entirely from LIVE data: groups the `companies` collection
+ * by each company's real `sector` (derived from its SIC code by companies.job),
+ * sizes tiles by real `marketCap`, and colours by the real day / 5-day change.
+ *
+ * No curated/static structure — a company with no sector or no market cap is
+ * simply omitted. When nothing has synced, the caller renders an empty state
+ * instead of fabricated tiles.
  */
-function mergeSectorList(
-  base: SectorRow[],
+function buildSectorList(
   companies: CompanyDoc[],
   sectorsLive: SectorApiDoc[],
   mode: HeatMode,
 ): SectorRow[] {
-  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
   const sectorPctByName = new Map(sectorsLive.map(s => [s.sector, s.pctChange]));
 
-  return base.map(row => {
-    const liveSectorPct = sectorPctByName.get(row.name);
-    const items: [string, number, number][] = row.items.map(([sym, mcap, chg]) => {
-      const c = companyByTicker.get(sym);
-      if (!c) return [sym, mcap, chg];
-      const liveMcap = c.marketCap != null ? c.marketCap / 1e9 : mcap; // $ → $B
-      // Day = live day %change; Week = real 5-session change, falling back to
-      // the day move when a ticker has no week data yet.
-      const liveChg = mode === "week"
-        ? (c.week5ChangePct ?? c.pctChange ?? chg)
-        : (c.pctChange ?? chg);
-      return [sym, liveMcap, liveChg];
-    });
+  const bySector = new Map<string, [string, number, number][]>();
+  for (const c of companies) {
+    const sec = c.sector;
+    if (!sec || c.marketCap == null) continue; // skip unclassified / uncapitalised
+    const mcap = c.marketCap / 1e9;             // $ → $B
+    const chg = mode === "week"
+      ? (c.week5ChangePct ?? c.pctChange ?? 0)
+      : (c.pctChange ?? 0);
+    const arr = bySector.get(sec) ?? [];
+    arr.push([c.ticker, mcap, chg]);
+    bySector.set(sec, arr);
+  }
 
-    // Day mode uses the vendor sector %; Week has no vendor equivalent, so
-    // derive a cap-weighted average of member week changes.
-    let sectorPct: number;
-    if (mode === "week") {
-      let wSum = 0, wcSum = 0;
-      for (const [, m, ch] of items) { wSum += m; wcSum += m * ch; }
-      sectorPct = wSum > 0 ? wcSum / wSum : row.pctChange;
-    } else {
-      sectorPct = liveSectorPct ?? row.pctChange;
-    }
-    return { ...row, pctChange: sectorPct, items };
-  });
+  const capWeighted = (items: [string, number, number][]): number => {
+    let wSum = 0, wcSum = 0;
+    for (const [, m, ch] of items) { wSum += m; wcSum += m * ch; }
+    return wSum > 0 ? wcSum / wSum : 0;
+  };
+
+  const rows: SectorRow[] = [];
+  for (const [name, items] of bySector) {
+    // Day: the vendor sector %change when the group matches a live sector doc,
+    // else a cap-weighted average of members. Week: cap-weighted only (no
+    // vendor 5-day sector series exists).
+    const live = mode === "day" ? sectorPctByName.get(name) : undefined;
+    rows.push({ name, pctChange: live ?? capWeighted(items), items });
+  }
+  return rows;
 }
 
 export function HeatmapScreen() {
   const { openSector, openStockFull } = useIQActions();
-  const { data: companies } = useCollection<CompanyDoc>("companies");
+  const { data: companies, loading, error } = useCollection<CompanyDoc>("companies");
   const { data: sectorsLive } = useCollection<SectorApiDoc>("sectors");
 
   const [tab, setTab]     = useState(0);
   const heatMode: HeatMode = tab === 1 ? "week" : "day";
-  const mergedSectorList = mergeSectorList(sectorList, companies, sectorsLive, heatMode);
+  const mergedSectorList = buildSectorList(companies, sectorsLive, heatMode);
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
   const [hover, setHover] = useState<HoverStock | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -154,10 +165,6 @@ export function HeatmapScreen() {
             <button key={t} className={`tab${i === tab ? " on" : ""}`} onClick={() => setTab(i)}>{t}</button>
           ))}
         </div>
-        {/* Sector %s come from the live `sectors` job; the curated sector/stock
-            structure is static. If no live sector data has synced, the tiles show
-            the static baseline — label it rather than pass it off as live. */}
-        {sectorsLive.length === 0 && <SampleBadge title="No live sector data synced yet — tiles show the static baseline" />}
       </div>
 
       <div className="fbar">
@@ -173,6 +180,16 @@ export function HeatmapScreen() {
       </div>
 
       {/* ── Treemap ── */}
+      {mergedSectorList.length === 0 ? (
+        <DataState
+          loading={loading}
+          error={error}
+          empty={isEmptyState(loading, error, mergedSectorList.length)}
+          label="sector heatmap data"
+          emptyMsg="No live company data has synced yet."
+          subMsg="Company profiles refresh on a rolling nightly schedule — the heatmap fills in as they arrive."
+        />
+      ) : (
       <div style={{
         position: "relative", width: "100%",
         height: "calc(100vh - 220px)", minHeight: 520,
@@ -275,6 +292,7 @@ export function HeatmapScreen() {
           );
         })}
       </div>
+      )}
 
       {/* ── Hover tooltip ── */}
       {hover && (() => {

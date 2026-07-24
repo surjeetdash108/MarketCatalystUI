@@ -2,8 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
-import { CandleChart, RsiPane, earnHistory, Spark } from "./utils";
-import { stockInfo, watch as watchData, screenerStocks } from "./data";
+import { CandleChart, RsiPane, Spark } from "./utils";
 import { ExpandBtn } from "./shell";
 import { useChartBars } from "./hooks/useChartBars";
 import { useCompany } from "./hooks/useCompany";
@@ -27,44 +26,12 @@ function TrashIcon() {
   );
 }
 
-/* ── EPS surprise bars (mirrored from stock.tsx) ── */
-function EarnPane({ sym, base }: { sym: string; base: number }) {
-  const hist = earnHistory(sym, Math.max(0.5, base)).slice(0, 8).reverse();
-  const W = 720, H = 80, PADL = 40, PADR = 20, PADT = 10, PADB = 18;
-  const iw = W - PADL - PADR;
-  const ih = H - PADT - PADB;
-  const mid = PADT + ih / 2;
-  const gw = iw / hist.length;
-  const bw = Math.min(gw * 0.45, 26);
-  const maxS = Math.max(8, ...hist.map(x => Math.abs(x.surp)));
+/* ── Honest earnings note — real EPS/sales history lives on the stock page ── */
+function EarnPaneNote() {
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
-      <line x1={PADL} y1={mid} x2={W - PADR} y2={mid}
-        stroke="var(--border)" strokeDasharray="3 3" strokeWidth="1" />
-      {hist.map((q, i) => {
-        const beat = q.surp >= 0;
-        const cx = PADL + gw * i + gw / 2;
-        const barH = Math.max(4, (Math.abs(q.surp) / maxS) * (ih / 2 - 4));
-        const rx = (cx - bw / 2).toFixed(1);
-        const ry = beat ? (mid - barH).toFixed(1) : mid.toFixed(1);
-        const color = beat ? "var(--up)" : "var(--down)";
-        const labelY = beat ? (mid - barH - 4).toFixed(1) : (mid + barH + 9).toFixed(1);
-        return (
-          <g key={q.q}>
-            <rect x={rx} y={ry} width={bw.toFixed(1)} height={barH.toFixed(1)} rx="2" fill={color} opacity="0.88" />
-            <text x={cx.toFixed(1)} y={labelY} textAnchor="middle" fill={color} fontSize="7.5" fontFamily="JetBrains Mono,monospace">
-              {beat ? "+" : ""}{q.surp.toFixed(1)}%
-            </text>
-            <text x={cx.toFixed(1)} y={(H - 3).toFixed(1)} textAnchor="middle"
-              fill="#69748680" fontSize="7.5" fontFamily="JetBrains Mono,monospace">
-              {q.q.replace(" ", "'")}
-            </text>
-          </g>
-        );
-      })}
-      <text x={PADL - 4} y={(mid - 2).toFixed(1)} textAnchor="end" fill="#69748680" fontSize="7" fontFamily="JetBrains Mono,monospace">BEAT</text>
-      <text x={PADL - 4} y={(mid + 10).toFixed(1)} textAnchor="end" fill="#69748680" fontSize="7" fontFamily="JetBrains Mono,monospace">MISS</text>
-    </svg>
+    <div style={{ padding: "10px 2px", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+      EPS &amp; sales history (real Polygon actuals) is on the stock page.
+    </div>
   );
 }
 
@@ -144,13 +111,12 @@ export function StockListCard({
 /* ── Expanded chart rendered inside the modal opened by ExpandBtn ── */
 function ChartCardExpanded({
   sym, px, initialTf, initialChartType, initialMaStep, initialEmaStep,
-  initialShowVol, initialShowRsi, initialShowEarnings, eps, rs, erDate,
+  initialShowVol, initialShowRsi, initialShowEarnings,
 }: {
   sym: string; px: number; initialTf: string;
   initialChartType: "Candles" | "Hollow" | "Bars" | "Line" | "Area";
   initialMaStep: number; initialEmaStep: number;
   initialShowVol: boolean; initialShowRsi: boolean; initialShowEarnings: boolean;
-  eps: number; rs: number; erDate: string;
 }) {
   const [tf, setTf] = useState(initialTf);
   const [chartType, setChartType] = useState(initialChartType);
@@ -161,9 +127,8 @@ function ChartCardExpanded({
   const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
   const realBars = useChartBars(sym, tf);
   const company = useCompany(sym);
-  // Real RSI(14) when the indicators job has run for this ticker; the old
-  // `38 + rs * 0.36` was a linear restatement of the RS rank, not an RSI.
-  const rsiVal = company?.rsi14 != null ? Math.round(company.rsi14) : Math.round(38 + rs * 0.36);
+  // Real RSI(14) only — null when the indicators job hasn't reached this ticker.
+  const rsiVal = company?.rsi14 != null ? Math.round(company.rsi14) : null;
   return (
     <div>
       <div className="chart-toolbar" style={{ flexWrap: "wrap", gap: "4px 0", paddingBottom: 8 }}>
@@ -190,18 +155,17 @@ function ChartCardExpanded({
         <div style={{ marginTop: 4 }}>
           <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
             <span>RSI (14)</span>
-            <span className="mono" style={{ color: "var(--warn)" }}>{rsiVal} · {rsiVal > 70 ? "overbought" : rsiVal < 40 ? "weak" : "neutral-to-strong"}</span>
+            <span className="mono" style={{ color: "var(--warn)" }}>{rsiVal != null ? `${rsiVal} · ${rsiVal > 70 ? "overbought" : rsiVal < 40 ? "weak" : "neutral-to-strong"}` : "not synced"}</span>
           </div>
-          <RsiPane sym={sym} tf={tf} series={company?.rsi14Series ?? undefined} />
+          {company?.rsi14Series ? <RsiPane sym={sym} tf={tf} series={company.rsi14Series} /> : null}
         </div>
       )}
       {showEarnings && (
         <div style={{ borderTop: "1px solid var(--border)", marginTop: 4 }}>
-          <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Earnings · EPS Surprise</span>
-            <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>Next: {erDate}</span>
+          <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
+            <span>Earnings</span>
           </div>
-          <EarnPane sym={sym} base={eps} />
+          <EarnPaneNote />
         </div>
       )}
     </div>
@@ -232,11 +196,8 @@ export function ChartCard({
   // over in Stock Detail. Wiring this prop is the whole fix.
   const realBars = useChartBars(sym, tf);
   const company = useCompany(sym);
-
-  const erDate = watchData.find(w => w.ticker === sym)?.nextEarningsDate ?? "—";
-  const eps = stockInfo[sym]?.eps ?? 1;
-  const rs = screenerStocks.find(s => s.ticker === sym)?.relativeStrength ?? 50;
-  const rsiVal = company?.rsi14 != null ? Math.round(company.rsi14) : Math.round(38 + rs * 0.36);
+  // Real RSI(14) only — null when the indicators job hasn't reached this ticker.
+  const rsiVal = company?.rsi14 != null ? Math.round(company.rsi14) : null;
 
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -278,7 +239,6 @@ export function ChartCard({
                   initialMaStep={maStep} initialEmaStep={emaStep}
                   initialShowVol={showVol} initialShowRsi={showRsi}
                   initialShowEarnings={showEarnings}
-                  eps={eps} rs={rs} erDate={erDate}
                 />
               }
             />
@@ -291,19 +251,18 @@ export function ChartCard({
               <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
                 <span>RSI (14)</span>
                 <span className="mono" style={{ color: "var(--warn)" }}>
-                  {rsiVal} · {rsiVal > 70 ? "overbought" : rsiVal < 40 ? "weak" : "neutral-to-strong"}
+                  {rsiVal != null ? `${rsiVal} · ${rsiVal > 70 ? "overbought" : rsiVal < 40 ? "weak" : "neutral-to-strong"}` : "not synced"}
                 </span>
               </div>
-              <RsiPane sym={sym} tf={tf} series={company?.rsi14Series ?? undefined} />
+              {company?.rsi14Series ? <RsiPane sym={sym} tf={tf} series={company.rsi14Series} /> : null}
             </div>
           )}
           {showEarnings && (
             <div style={{ borderTop: "1px solid var(--border)", padding: "0 14px 8px" }}>
-              <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>Earnings · EPS Surprise</span>
-                <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>Next: {erDate}</span>
+              <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
+                <span>Earnings</span>
               </div>
-              <EarnPane sym={sym} base={eps} />
+              <EarnPaneNote />
             </div>
           )}
         </div>

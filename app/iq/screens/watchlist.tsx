@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 import { TickerSearchInput } from "../ticker-search-input";
 import { doc, onSnapshot, setDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
-import { watch as watchData } from "../data";
 import { useCollection } from "../hooks/useCollection";
 import { useLivePrices } from "../live-prices";
-import { arr, sign, SampleBadge } from "../utils";
+import { arr, sign } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { trackFeatureOpen } from "../feature-adoption";
 
@@ -24,14 +23,14 @@ export function WatchlistScreen() {
   const { data: companies } = useCollection<CompanyDoc>("companies");
   const byTicker = new Map(companies.map(c => [c.ticker, c]));
 
-  const [items, setItems]                 = useState<string[]>(() => watchData.map(w => w.ticker));
-  const [sel, setSel]                     = useState<string | null>(() => watchData[0]?.ticker ?? null);
+  const [items, setItems]                 = useState<string[]>([]);
+  const [sel, setSel]                     = useState<string | null>(null);
   const [addOpen, setAddOpen]             = useState(false);
   const [newSym, setNewSym]               = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  // Firestore persistence layered on top of the demo watchlist: once signed in,
-  // a saved list (if any) takes over; an empty/missing doc keeps the demo names.
+  // The watchlist is the user's own — it starts empty and is populated from the
+  // saved Firestore doc once signed in. No demo/sample tickers are ever shown.
   useEffect(() => {
     if (!uid) return;
     const unsub = onSnapshot(watchlistRef(uid), (snap) => {
@@ -45,29 +44,32 @@ export function WatchlistScreen() {
   }, [uid]);
 
   // Live delayed prices for the watchlist's tickers, refreshed intraday. Takes
-  // precedence over the once-a-day EOD price on `companies`, which takes
-  // precedence over the static mock — most-live wins.
+  // precedence over the once-a-day EOD price on `companies`. A ticker with no
+  // synced price reads as "—" rather than a fabricated number.
   const snaps = useLivePrices(items);
   const list = items.map(sym => {
-    const w = watchData.find(x => x.ticker === sym);
     const c = byTicker.get(sym);
     const q = snaps.get(sym.toUpperCase());
-    const price = q?.price ?? c?.price ?? w?.price ?? 0;
-    const pctChange = q?.changePct ?? c?.pctChange ?? w?.pctChange ?? 0;
+    const price: number | null = q?.price ?? c?.price ?? null;
+    const pctChange: number | null = q?.changePct ?? c?.pctChange ?? null;
     const live = q?.price != null || c?.price != null;
-    return { ticker: sym, name: c?.name ?? w?.name ?? sym, price, pctChange, live };
+    return { ticker: sym, name: c?.name ?? sym, price, pctChange, live };
   });
   const liveCount = list.filter(w => w.live).length;
-  const up   = list.filter(w => w.pctChange > 0).length;
-  const dn   = list.filter(w => w.pctChange < 0).length;
-  const best  = [...list].sort((a, b) => b.pctChange - a.pctChange)[0];
-  const worst = [...list].sort((a, b) => a.pctChange - b.pctChange)[0];
+  const rated = list.filter(w => w.pctChange != null) as { ticker: string; pctChange: number }[];
+  const up   = rated.filter(w => w.pctChange > 0).length;
+  const dn   = rated.filter(w => w.pctChange < 0).length;
+  const best  = [...rated].sort((a, b) => b.pctChange - a.pctChange)[0];
+  const worst = [...rated].sort((a, b) => a.pctChange - b.pctChange)[0];
 
-  const sumTxt =
-    `Your ${list.length} watched names finished <b class="up">${up} up</b> / <b class="down">${dn} down</b> today.` +
-    (best  ? ` <b>${best.ticker}</b> led (${sign(best.pctChange)})` : "") +
-    (worst && worst.ticker !== best?.ticker ? `, <b>${worst.ticker}</b> lagged (${sign(worst.pctChange)})` : "") +
-    `. Broad market: Nasdaq <b class="up">+1.02%</b>, S&P 500 <b class="up">+0.73%</b>.`;
+  // Derived entirely from the real per-ticker changes above — no fabricated
+  // broad-market figures (the live index values live in the header tape).
+  const sumTxt = list.length === 0
+    ? `Add tickers to your watchlist to see a live leaders / laggards summary here.`
+    : `Your ${list.length} watched names finished <b class="up">${up} up</b> / <b class="down">${dn} down</b> today.` +
+      (best  ? ` <b>${best.ticker}</b> led (${sign(best.pctChange)})` : "") +
+      (worst && worst.ticker !== best?.ticker ? `, <b>${worst.ticker}</b> lagged (${sign(worst.pctChange)})` : "") +
+      `.`;
 
   async function addStock() {
     const s = newSym.trim().toUpperCase();
@@ -124,12 +126,8 @@ export function WatchlistScreen() {
             <p dangerouslySetInnerHTML={{ __html: sumTxt }}
               style={{ marginBottom: 10, fontSize: ".88rem", lineHeight: 1.55 }} />
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <span className="src-chip">Up {up}/{list.length}</span>
-              {/* Removed hardcoded "Nasdaq +1.02%" / "S&P +0.73%" chips — they were
-                  fabricated static figures. The live index values live in the header
-                  ticker tape (market_indices), not invented here. */}
+              {list.length > 0 && <span className="src-chip">Up {up}/{list.length}</span>}
               {liveCount > 0 && <span className="src-chip">{liveCount}/{list.length} live</span>}
-              {liveCount < list.length && <SampleBadge text="partial sample" title="Watchlist tickers outside the live synced universe show frozen sample prices" />}
               {uid && <span className="src-chip">Synced to your account</span>}
             </div>
           </div>
@@ -153,13 +151,13 @@ export function WatchlistScreen() {
                   sym={w.ticker}
                   name={w.name}
                   seed={i + 3}
-                  sparkUp={w.pctChange >= 0}
+                  sparkUp={(w.pctChange ?? 0) >= 0}
                   isSelected={sel === w.ticker}
                   onClick={() => setSel(w.ticker)}
                   onDelete={() => setConfirmDelete(w.ticker)}
-                  valueTop={w.price >= 1000 ? `$${(w.price / 1000).toFixed(2)}K` : `$${w.price.toFixed(2)}`}
-                  valueBottom={`${arr(w.pctChange)} ${sign(w.pctChange)}`}
-                  valueBottomClass={w.pctChange >= 0 ? "up" : "down"}
+                  valueTop={w.price == null ? "—" : w.price >= 1000 ? `$${(w.price / 1000).toFixed(2)}K` : `$${w.price.toFixed(2)}`}
+                  valueBottom={w.pctChange == null ? "—" : `${arr(w.pctChange)} ${sign(w.pctChange)}`}
+                  valueBottomClass={w.pctChange == null ? "" : w.pctChange >= 0 ? "up" : "down"}
                 />
               ))}
             </StockListCard>

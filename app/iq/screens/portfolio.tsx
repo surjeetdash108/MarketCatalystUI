@@ -4,16 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { TickerSearchInput } from "../ticker-search-input";
 import { doc, onSnapshot, setDoc, deleteDoc, collection, Timestamp } from "firebase/firestore";
 import { firebaseDb, firebaseAuth } from "../../firebase";
-import { folio as folioData, type FolioItem } from "../data";
 import { useCollection } from "../hooks/useCollection";
 import { useLivePrices } from "../live-prices";
-import { cls, arr, sign, SampleBadge } from "../utils";
+import { cls, arr, sign } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 
-const DEFAULT_SHARES: Record<string, number> = {
-  NVDA: 15, AAPL: 120, TSLA: 40, META: 30,
-  HD: 15, MSFT: 60, AMZN: 80, PLTR: 1000,
-};
+/** A user holding — the raw record; price/%change are joined live at render. */
+interface Holding {
+  ticker: string;
+  name: string;
+  positionSize: "Small" | "Medium" | "Large";
+  conviction: "High" | "Medium" | "Low";
+}
 
 interface CompanyDoc {
   id: string; ticker: string; name: string | null; price: number | null; pctChange: number | null;
@@ -49,37 +51,31 @@ export function PortfolioScreen() {
   const { data: companies } = useCollection<CompanyDoc>("companies");
   const byTicker = new Map(companies.map(c => [c.ticker, c]));
 
-  const [holdings, setHoldings] = useState<FolioItem[]>(() => [...folioData]);
-  const [pfSel, setPfSel]       = useState(folioData[0]?.ticker ?? "");
-  const [shares, setShares]     = useState<Record<string, number>>(() => {
-    const base = { ...DEFAULT_SHARES };
-    folioData.forEach(f => { if (!(f.ticker in base)) base[f.ticker] = 10; });
-    return base;
-  });
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [pfSel, setPfSel]       = useState("");
+  const [shares, setShares]     = useState<Record<string, number>>({});
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [addOpen, setAddOpen]       = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importing, setImporting]   = useState(false);
-  const [importDone, setImportDone] = useState(false);
   const [newSym, setNewSym]         = useState("");
   const [newShares, setNewShares]   = useState<number>(10);
   const [newSize, setNewSize]       = useState<"Small"|"Medium"|"Large">("Small");
   const [newConv, setNewConv]       = useState<"High"|"Medium"|"Low">("Medium");
 
-  // Firestore persistence layered on top of the demo portfolio: once signed in,
-  // saved holdings (if any) take over; an empty/missing subcollection keeps the demo names.
+  // The portfolio is the user's own — it starts empty and is populated from the
+  // saved Firestore holdings once signed in. No demo/sample holdings are shown;
+  // the company name comes from the live `companies` collection.
   useEffect(() => {
     if (!uid) return;
     const unsub = onSnapshot(holdingsCol(uid), (snap) => {
-      if (snap.empty) return;
       const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }) as HoldingDoc);
       const nextShares: Record<string, number> = {};
-      const nextHoldings: FolioItem[] = rows.map(r => {
+      const nextHoldings: Holding[] = rows.map(r => {
         nextShares[r.ticker] = r.shares;
-        const mock = folioData.find(f => f.ticker === r.ticker);
-        return mock ?? {
-          ticker: r.ticker, name: r.ticker, price: 100, pctChange: 0, gainLossPct: 0,
-          positionSize: r.positionSize, conviction: r.conviction, eventNote: "—",
+        return {
+          ticker: r.ticker,
+          name: byTicker.get(r.ticker)?.name ?? r.ticker,
+          positionSize: r.positionSize,
+          conviction: r.conviction,
         };
       });
       setHoldings(nextHoldings);
@@ -87,6 +83,7 @@ export function PortfolioScreen() {
       setPfSel(prev => prev || nextHoldings[0]?.ticker || "");
     });
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
 
   // Live delayed prices for every holding, refreshed intraday — takes
@@ -97,22 +94,27 @@ export function PortfolioScreen() {
   const merged = holdings.map(h => {
     const q = snaps.get(h.ticker.toUpperCase());
     const eod = byTicker.get(h.ticker);
-    const price = q?.price ?? eod?.price ?? null;
-    if (price == null) return { ...h, live: false as const };
-    return { ...h, price, pctChange: q?.changePct ?? eod?.pctChange ?? h.pctChange, live: true as const };
+    const price: number | null = q?.price ?? eod?.price ?? null;
+    const pctChange: number | null = q?.changePct ?? eod?.pctChange ?? null;
+    return { ...h, price, pctChange, live: price != null };
   });
   const liveCount = merged.filter(h => h.live).length;
+  const qty = (t: string) => shares[t] ?? 0;
 
   const sel      = merged.find(h => h.ticker === pfSel);
-  const totalVal = merged.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price, 0);
-  const dayPL    = merged.reduce((s, h) => s + (shares[h.ticker] ?? 10) * h.price * h.pctChange / 100, 0);
-  const dayPLPct = totalVal > 0 ? (dayPL / (totalVal - dayPL)) * 100 : 0;
-  const green    = merged.filter(h => h.pctChange > 0).length;
-  const driver   = [...merged].sort((a, b) => (shares[b.ticker] ?? 10) * b.price - (shares[a.ticker] ?? 10) * a.price)[0];
-  const leader   = [...merged].sort((a, b) => b.pctChange - a.pctChange)[0];
-  const laggard  = [...merged].sort((a, b) => a.pctChange - b.pctChange)[0];
+  // Aggregates count only holdings with a real price — a holding whose price
+  // hasn't synced contributes nothing rather than a fabricated value.
+  const priced   = merged.filter(h => h.price != null) as { ticker: string; name: string; price: number; pctChange: number | null }[];
+  const totalVal = priced.reduce((s, h) => s + qty(h.ticker) * h.price, 0);
+  const dayPL    = priced.reduce((s, h) => s + qty(h.ticker) * h.price * (h.pctChange ?? 0) / 100, 0);
+  const dayPLPct = totalVal > 0 && totalVal !== dayPL ? (dayPL / (totalVal - dayPL)) * 100 : 0;
+  const green    = merged.filter(h => (h.pctChange ?? 0) > 0).length;
+  const driver   = [...priced].sort((a, b) => qty(b.ticker) * b.price - qty(a.ticker) * a.price)[0];
+  const ranked   = priced.filter(h => h.pctChange != null) as { ticker: string; pctChange: number }[];
+  const leader   = [...ranked].sort((a, b) => b.pctChange - a.pctChange)[0];
+  const laggard  = [...ranked].sort((a, b) => a.pctChange - b.pctChange)[0];
   const driverWt = driver && totalVal > 0
-    ? ((shares[driver.ticker] ?? 10) * driver.price / totalVal * 100).toFixed(0) : "0";
+    ? (qty(driver.ticker) * driver.price / totalVal * 100).toFixed(0) : "0";
 
   // Materialize the computed summary into Firestore (debounced) so anything
   // outside this browser tab — notifications, a future backend job, historical
@@ -140,14 +142,15 @@ export function PortfolioScreen() {
   async function addHolding() {
     if (!newSym.trim()) return;
     const s = newSym.trim().toUpperCase();
-    const qty = Number.isFinite(newShares) && newShares > 0 ? newShares : 10;
     if (holdings.find(h => h.ticker === s)) { setAddOpen(false); return; }
-    setHoldings(prev => [...prev, { ticker: s, name: s, price: 100, pctChange: 0, gainLossPct: 0, positionSize: newSize, conviction: newConv, eventNote: "—" }]);
-    setShares(prev => ({ ...prev, [s]: qty }));
+    const q = Number.isFinite(newShares) && newShares > 0 ? newShares : 10;
+    setHoldings(prev => [...prev, { ticker: s, name: byTicker.get(s)?.name ?? s, positionSize: newSize, conviction: newConv }]);
+    setShares(prev => ({ ...prev, [s]: q }));
+    setPfSel(prev => prev || s);
     setNewSym(""); setNewShares(10); setAddOpen(false);
     if (uid) {
       await setDoc(portfolioRef(uid), { name: "My Portfolio", createdAt: Timestamp.now() }, { merge: true });
-      await setDoc(doc(holdingsCol(uid), s), { ticker: s, shares: qty, positionSize: newSize, conviction: newConv, addedAt: Timestamp.now() });
+      await setDoc(doc(holdingsCol(uid), s), { ticker: s, shares: q, positionSize: newSize, conviction: newConv, addedAt: Timestamp.now() });
     }
   }
 
@@ -168,13 +171,6 @@ export function PortfolioScreen() {
     if (uid) await deleteDoc(doc(holdingsCol(uid), sym));
   }
 
-  function startImport() {
-    setImporting(true);
-    setTimeout(() => { setImporting(false); setImportDone(true); }, 1400);
-  }
-
-  const PARSED = [{ s: "NVDA", sh: 15 }, { s: "AAPL", sh: 120 }, { s: "MSFT", sh: 60 }];
-
   return (
     <>
       <div className="page-head">
@@ -185,18 +181,9 @@ export function PortfolioScreen() {
               {dayPL >= 0 ? "+" : ""}{usd(Math.abs(dayPL))} today
             </span>
             {liveCount > 0 && <> · <span style={{ color: "var(--up)" }}>{liveCount} live</span></>}
-            {liveCount < merged.length && <> · <SampleBadge text="partial sample" title="Holdings not in the live synced universe show frozen sample prices" /></>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn" onClick={() => setImportOpen(true)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
-              <rect x="3" y="4" width="18" height="16" rx="2" />
-              <path d="M4 16l5-5 4 4 3-3 4 4" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-            </svg>
-            Import from photo
-          </button>
           <button className="btn primary" onClick={() => setAddOpen(true)}>
             <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
               <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -259,8 +246,12 @@ export function PortfolioScreen() {
               style={{ width: 90, padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-0)", color: "var(--text-hi)", fontSize: ".85rem", fontFamily: "var(--f-mono)" }}
             />
             <span style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
-              × <span className="mono">${sel.price.toFixed(2)}</span>{sel.live ? "" : " (EOD)"} =
-              {" "}<b className="mono" style={{ color: "var(--text-hi)" }}>{usd((shares[sel.ticker] ?? 10) * sel.price)}</b>
+              {sel.price == null ? (
+                <span>× <span className="mono">—</span> · price not synced yet</span>
+              ) : (
+                <>× <span className="mono">${sel.price.toFixed(2)}</span>{sel.live ? "" : " (EOD)"} =
+                {" "}<b className="mono" style={{ color: "var(--text-hi)" }}>{usd(qty(sel.ticker) * sel.price)}</b></>
+              )}
             </span>
           </div>
         )}
@@ -288,13 +279,13 @@ export function PortfolioScreen() {
                   sym={f.ticker}
                   name={f.name}
                   seed={i + 3}
-                  sparkUp={f.pctChange >= 0}
+                  sparkUp={(f.pctChange ?? 0) >= 0}
                   isSelected={pfSel === f.ticker}
                   onClick={() => setPfSel(f.ticker)}
                   onDelete={() => setConfirmDel(f.ticker)}
-                  valueTop={f.price >= 1000 ? `$${(f.price / 1000).toFixed(2)}K` : `$${f.price.toFixed(2)}`}
-                  valueBottom={`${arr(f.pctChange)} ${sign(f.pctChange)}`}
-                  valueBottomClass={f.pctChange >= 0 ? "up" : "down"}
+                  valueTop={f.price == null ? "—" : f.price >= 1000 ? `$${(f.price / 1000).toFixed(2)}K` : `$${f.price.toFixed(2)}`}
+                  valueBottom={f.pctChange == null ? "—" : `${arr(f.pctChange)} ${sign(f.pctChange)}`}
+                  valueBottomClass={f.pctChange == null ? "" : f.pctChange >= 0 ? "up" : "down"}
                 />
               ))}
             </StockListCard>
@@ -350,56 +341,6 @@ export function PortfolioScreen() {
                 </div>
               </div>
               <button className="btn primary" style={{ width: "100%" }} onClick={addHolding}>Add to portfolio</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ── Import from photo modal ── */}
-      {importOpen && (
-        <>
-          <div className="scrim" onClick={() => { setImportOpen(false); setImportDone(false); setImporting(false); }} />
-          <div className="drawer" style={{ maxHeight: "min(480px,88vh)" }}>
-            <div className="drawer-h">
-              <div style={{ flex: 1, fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Import from photo</div>
-              <button className="closebtn" onClick={() => { setImportOpen(false); setImportDone(false); setImporting(false); }}>✕</button>
-            </div>
-            <div className="drawer-b" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {!importing && !importDone && (
-                <div className="imp-drop" onClick={startImport}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ width: 30, height: 30, color: "var(--brand-2)", flexShrink: 0 }}>
-                    <rect x="3" y="4" width="18" height="16" rx="2" />
-                    <path d="M4 16l5-5 4 4 3-3 4 4" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                  </svg>
-                  <div>
-                    <div style={{ fontWeight: 600, color: "var(--text-hi)" }}>Upload a screenshot</div>
-                    <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Tap to pick a photo of your brokerage holdings</div>
-                  </div>
-                </div>
-              )}
-              {importing && (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0", color: "var(--text-dim-solid)" }}>
-                  <span className="imp-spin" />
-                  <span>Scanning image with AI…</span>
-                </div>
-              )}
-              {importDone && (
-                <>
-                  <div style={{ fontSize: ".82rem", color: "var(--up)", fontWeight: 600 }}>✓ Found {PARSED.length} holdings</div>
-                  {PARSED.map(row => (
-                    <div key={row.s} className="imp-row">
-                      <span className="s" style={{ flex: 1, fontWeight: 700 }}>{row.s}</span>
-                      <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Shares:</span>
-                      <input className="sh-edit" type="number" defaultValue={row.sh} />
-                    </div>
-                  ))}
-                  <button className="btn primary" style={{ width: "100%" }}
-                    onClick={() => { setImportOpen(false); setImportDone(false); }}>
-                    Add to portfolio
-                  </button>
-                </>
-              )}
             </div>
           </div>
         </>
