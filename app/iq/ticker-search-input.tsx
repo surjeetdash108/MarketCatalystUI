@@ -47,7 +47,7 @@ export function TickerSearchInput({
         }}
         placeholder={placeholder}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => { onChange(e.target.value); setFocused(true); }}
         onFocus={() => setFocused(true)}
         // Delay blur so an onMouseDown pick registers before the list unmounts.
         onBlur={() => setTimeout(() => setFocused(false), 150)}
@@ -58,6 +58,7 @@ export function TickerSearchInput({
             const top = results[0];
             if (top && top.ticker.toUpperCase() !== value.trim().toUpperCase()) {
               onPick(top.ticker);
+              setFocused(false);
             } else {
               onEnter?.();
             }
@@ -76,7 +77,11 @@ export function TickerSearchInput({
             return (
             <div
               key={r.ticker}
-              onMouseDown={(e) => { e.preventDefault(); onPick(r.ticker); }}
+              // Pick the ticker AND close the dropdown, so it stops covering the
+              // "Add" button directly below the input (the dropdown is absolutely
+              // positioned over it). Without this, the next click lands on the
+              // still-open list and re-picks instead of submitting.
+              onMouseDown={(e) => { e.preventDefault(); onPick(r.ticker); setFocused(false); }}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", cursor: "pointer" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-3)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "")}

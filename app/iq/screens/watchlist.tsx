@@ -71,8 +71,10 @@ export function WatchlistScreen() {
       (worst && worst.ticker !== best?.ticker ? `, <b>${worst.ticker}</b> lagged (${sign(worst.pctChange)})` : "") +
       `.`;
 
-  async function addStock() {
-    const s = newSym.trim().toUpperCase();
+  // `explicit` lets a dropdown pick add the ticker directly (the ticker isn't in
+  // `newSym` yet on the same tick). Without it, add reads the input value.
+  async function addStock(explicit?: string) {
+    const s = (explicit ?? newSym).trim().toUpperCase();
     setNewSym("");
     setAddOpen(false);
     if (!s || items.includes(s)) return;
@@ -183,11 +185,11 @@ export function WatchlistScreen() {
                   placeholder="Ticker or company name — e.g. Apple"
                   value={newSym}
                   onChange={v => setNewSym(v.toUpperCase())}
-                  onPick={t => { setNewSym(t); }}
-                  onEnter={addStock}
+                  onPick={t => addStock(t)}
+                  onEnter={() => addStock()}
                 />
               </div>
-              <button className="btn primary" style={{ width: "100%" }} onClick={addStock}>
+              <button className="btn primary" style={{ width: "100%" }} onClick={() => addStock()}>
                 Add to watchlist
               </button>
             </div>
