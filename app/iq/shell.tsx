@@ -14,6 +14,7 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 import { signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { firebaseAuth, firebaseDb } from "../firebase";
+import { usePresence, recordLogout } from "./presence";
 import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
@@ -679,6 +680,10 @@ function IQShellInner({ children }: { children: React.ReactNode }) {
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
 
+  // Records login snapshot (IP / device / provider / …) + online presence and
+  // heartbeats while this tab is visible. Logout is recorded in handleSignOut.
+  usePresence();
+
   // Three sources, most-live wins: the streamed SSE tape (intraday) over the
   // Firestore `market_indices` docs (written once a day at 18:05 ET) over the
   // static mock. Each layer is a fallback for the one above it, so losing the
@@ -909,6 +914,10 @@ function IQShellInner({ children }: { children: React.ReactNode }) {
     (profile.preferredAssetClasses?.length ?? 0) === 0;
 
   async function handleSignOut() {
+    // Mark offline + close the session doc WHILE still authenticated — after
+    // signOut the client can no longer write to its own user doc.
+    const uid = firebaseAuth.currentUser?.uid;
+    if (uid) await recordLogout(uid).catch(() => {});
     await signOut(firebaseAuth);
     window.location.href = "/";
   }

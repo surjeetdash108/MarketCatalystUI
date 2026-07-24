@@ -493,6 +493,18 @@ service cloud.firestore {
         allow delete: if isOwner(uid);
       }
 
+      // ── Sessions (login / presence history) ─────────────────────────────────
+      // One doc per browser session, written by the client presence tracker
+      // (app/iq/presence.ts). Owner writes; owner + admin read (admin analytics).
+      // No server-only fields, so no field constraint — but uid scoping via the
+      // parent match already restricts a user to their own sessions.
+      match /sessions/{sessionId} {
+        allow read:   if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+        allow update: if isOwner(uid);
+        allow delete: if isOwner(uid);
+      }
+
       // ── Alert Rules ────────────────────────────────────────────────────────
       // 12 alert types available; which types are active depends on tier
       // (enforced at API layer, not here).
