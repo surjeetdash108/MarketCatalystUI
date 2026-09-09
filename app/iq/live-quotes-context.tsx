@@ -34,6 +34,14 @@ export interface LiveQuote {
    */
   earlyPct: number | null;
   /**
+   * The move made inside REGULAR hours. Zero when no regular session has run
+   * since the last close, which is what separates a real day move from an
+   * extended-hours one — see `extendedSession`.
+   */
+  regularPct: number | null;
+  /** Vendor session state, verbatim. */
+  marketStatus: string | null;
+  /**
    * The vendor's `late_trading_change_percent`, shown as the after-hours move.
    *
    * CARRIED WITH A KNOWN CAVEAT. Measured 2026-09-01 with the market open, this
@@ -109,6 +117,46 @@ export function pairedQuote(
   return { price: null, pctChange: null };
 }
 
+/**
+ * Is this quote's change an EXTENDED-HOURS move rather than a day move?
+ *
+ * A quote outside regular hours reports the latest print and the change from
+ * the last close — and nothing in those two numbers says the move happened
+ * after the bell. Rendered plainly it contradicts the chart, whose last
+ * completed candle is the regular session that actually closed.
+ *
+ * MDB on 2026-09-08 is the case this was written for: the header read
+ * +$13.77 (+3.73%) in green beside a red final candle. The vendor snapshot
+ * settles it — `regular_trading_change_percent` was 0 and
+ * `late_trading_change_percent` was 3.734, the whole of the headline change.
+ * Both numbers were right; only the missing label made them look contradictory.
+ *
+ * Returns the label to qualify the change with, or null when the move really is
+ * a regular-session one and needs no qualifier.
+ */
+export function extendedSession(
+  q: { pctChange?: number | null; regularPct?: number | null; earlyPct?: number | null; latePct?: number | null; marketStatus?: string | null } | null | undefined,
+): "pre-market" | "after hours" | "extended hours" | null {
+  if (!q) return null;
+  const status = q.marketStatus ?? null;
+  if (status === "open") return null;
+  const pct = q.pctChange;
+  if (pct == null || pct === 0) return null;
+  // A regular session HAS run and moved the price: the headline is a day move,
+  // whatever the clock says.
+  if (q.regularPct != null && q.regularPct !== 0) return null;
+
+  if (status === "early_trading") return "pre-market";
+  if (status === "late_trading") return "after hours";
+  // status "closed" (weekend, holiday, or between sessions): attribute the move
+  // to whichever extended window actually accounts for it.
+  const near = (v: number | null | undefined) =>
+    v != null && Math.abs(v - pct) < 0.01;
+  if (near(q.latePct)) return "after hours";
+  if (near(q.earlyPct)) return "pre-market";
+  return "extended hours";
+}
+
 interface SnapshotRow {
   ticker: string;
   price: number | null;
@@ -117,6 +165,10 @@ interface SnapshotRow {
   /** Pre/post-market moves; absent from /live/quotes, which serves a narrower shape. */
   earlyTradingChangePct?: number | null;
   lateTradingChangePct?: number | null;
+  /** Move made during REGULAR hours only. Zero outside the session. */
+  regularTradingChangePct?: number | null;
+  /** Vendor session state: "open" | "closed" | "early_trading" | "late_trading". */
+  marketStatus?: string | null;
 }
 interface SnapshotResponse {
   quotes?: SnapshotRow[];
@@ -206,6 +258,8 @@ export function LiveQuotesProvider({ children }: { children: ReactNode }) {
               pctChange: q.changePct,
               earlyPct: q.earlyTradingChangePct ?? null,
               latePct: q.lateTradingChangePct ?? null,
+              regularPct: q.regularTradingChangePct ?? null,
+              marketStatus: q.marketStatus ?? null,
             });
           }
         }

@@ -535,7 +535,11 @@ export function DashboardScreen() {
               {searchedDeduped.length === 0 ? (
                 <DataState loading={mostSearchedLoading} label="No searches recorded yet." />
               ) : (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                // A fixed-track grid instead of a wrapping flex row: every tile
+                // gets the same width on every row, so the last row no longer
+                // stretches to odd sizes and nothing has to be clamped with a
+                // max-width. auto-fill + minmax picks the column count.
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(216px, 1fr))", gap: 8 }}>
                   {searchedDeduped.map(({ ticker, count }) => {
                     const c = companyByTicker.get(ticker);
                     // Prefer the live quote; fall back to the base companies doc.
@@ -545,8 +549,11 @@ export function DashboardScreen() {
                       <div key={ticker}
                         onClick={() => openStockDetail(ticker, searchedDeduped.map(x => x.ticker))}
                         style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          flex: "1 1 190px", minWidth: 190, maxWidth: 240,
+                          display: "flex", alignItems: "center", gap: 9,
+                          // minWidth:0 lets the tile shrink inside its grid
+                          // track; without it the intrinsic width of the row
+                          // wins and the price/count spill past the border.
+                          minWidth: 0, overflow: "hidden",
                           border: "1.5px solid transparent", borderRadius: 10,
                           // Gradient border: the direction colour glows across the
                           // TOP edge and fades to the neutral border down the sides.
@@ -555,8 +562,14 @@ export function DashboardScreen() {
                         }}
                       >
                         <StockLogo sym={ticker} size={28} />
-                        <span className="tkr">{ticker}<small>{c?.name ?? "—"}</small></span>
-                        <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                        {/* The only flexible column, and the only one allowed to
+                            shrink — the logo, price and count keep their natural
+                            width, so a long company name truncates instead of
+                            pushing anything outside the tile. */}
+                        <span className="tkr" style={{ width: "auto", flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {ticker}<small>{c?.name ?? "—"}</small>
+                        </span>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
                           {price != null ? (
                             <>
                               <div className="mono" style={{ fontSize: ".8rem", color: "var(--text-hi)" }}>{fmt(price)}</div>

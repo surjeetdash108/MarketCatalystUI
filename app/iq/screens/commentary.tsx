@@ -179,6 +179,24 @@ function catLabel(c: string | null): string {
   return "Macro";
 }
 
+/**
+ * The story-type chip's own filter key.
+ *
+ * A card carries TWO chips and they are not the same thing: `tag` is the
+ * subject of the story (Earnings, Product & Launches, …) and drives the
+ * Category filter; `category` is the KIND of story (Company, Macro, Earnings,
+ * M&A) and is what the pill under the logo shows. Only the first was
+ * filterable, so the pill was a label you could read and not act on.
+ *
+ * Normalised the same way catLabel resolves it — anything that is not one of
+ * the three known values is "macro" — so the filter and the chip can never
+ * disagree about which bucket a story is in.
+ */
+const CAT_KEYS = ["earnings", "merger", "company", "macro"] as const;
+function catKey(c: string | null): string {
+  return c === "earnings" || c === "merger" || c === "company" ? c : "macro";
+}
+
 function etHour(iso: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York", hour: "numeric", minute: "numeric", hour12: false,
@@ -198,9 +216,17 @@ function etTimeLabel(iso: string): string {
 }
 
 /* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total, onTicker, onAnalysis, marketCap, livePct }: {
+function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTag, activeCat, marketCap, livePct }: {
   item: NewsArticleDoc; i: number; total: number; onTicker: (ticker: string) => void;
   onAnalysis: (ticker: string) => void;
+  /* Both chips on the card are controls, not labels: clicking one filters the
+     feed to it, clicking it again clears that filter. The dropdowns above hold
+     the same state, so the two stay in step. */
+  onTag: (tag: string) => void;
+  onCat: (cat: string) => void;
+  /** The filter currently in force, so the chip can show it is the active one. */
+  activeTag: string;
+  activeCat: string;
   /** Raw USD market cap from the ticker's companies doc; null when unsynced. */
   marketCap?: number | null;
   /** Live %change for the ticker, from the app-wide shared quote poll. */
@@ -221,7 +247,14 @@ function FeedItem({ item, i, total, onTicker, onAnalysis, marketCap, livePct }: 
         >
           <StockLogo sym={item.ticker} size={28} />
         </button>
-        <span className="pill" style={{ background: "var(--surface-3)", color: catCol(item.category) }}>{catLabel(item.category)}</span>
+        <button
+          className={`pill lf-chip${activeCat === catKey(item.category) ? " on" : ""}`}
+          style={{ background: "var(--surface-3)", color: catCol(item.category) }}
+          onClick={() => onCat(catKey(item.category))}
+          title={activeCat === catKey(item.category)
+            ? "Showing this type only — click to clear"
+            : `Show only ${catLabel(item.category)} stories`}
+        >{catLabel(item.category)}</button>
         <div className="mono" style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{etTimeLabel(item.publishedAt)}</div>
         {/* Market cap + LIVE %change for the story's ticker, under the time.
             Both are omitted rather than shown as "—" when unavailable, so the
@@ -247,7 +280,22 @@ function FeedItem({ item, i, total, onTicker, onAnalysis, marketCap, livePct }: 
               this" before the reader parses the headline. Colour comes from the
               same --chip token the old filter chips used, so a category reads
               identically wherever it appears. */}
-          <span className="row-tag" data-tag={item.tag ?? "other"}>
+          <span
+            className={`row-tag lf-chip${activeTag === (item.tag ?? "other") ? " on" : ""}`}
+            data-tag={item.tag ?? "other"}
+            role="button"
+            tabIndex={0}
+            /* Inside the <a> that opens the source article, so the navigation
+               has to be suppressed — the same treatment the ticker below gets. */
+            onClick={e => { e.preventDefault(); e.stopPropagation(); onTag(item.tag ?? "other"); }}
+            onKeyDown={e => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              e.preventDefault(); e.stopPropagation(); onTag(item.tag ?? "other");
+            }}
+            title={activeTag === (item.tag ?? "other")
+              ? "Showing this category only — click to clear"
+              : `Show only ${NEWS_TAGS.find(t => t.key === (item.tag ?? "other"))?.label ?? "Other"} stories`}
+          >
             {NEWS_TAGS.find(t => t.key === (item.tag ?? "other"))?.label ?? "Other"}
           </span>
           <b
@@ -641,6 +689,8 @@ export function CommentaryScreen() {
   const [secFilter,     setSecFilter]     = useState("All");
   const [capFilter,     setCapFilter]     = useState("All");
   const [tagFilter,     setTagFilter]     = useState<string>("all");
+  /* The story-type pill (Company / Macro / Earnings / M&A). See catKey. */
+  const [catFilter,     setCatFilter]     = useState<string>("all");
   /* Default ON: ~26% of the feed is auto-generated 13F notes and listicles,
      mostly from defenseworld.net and Motley Fool syndication. */
   // The "Hide filler" toggle is gone: it defaulted ON and silently dropped
@@ -702,6 +752,7 @@ export function CommentaryScreen() {
         (n.headline ?? "").toLowerCase().includes(q) ||
         (n.summary ?? "").toLowerCase().includes(q))) return false;
     if (tagFilter !== "all" && (n.tag ?? "other") !== tagFilter) return false;
+    if (catFilter !== "all" && catKey(n.category) !== catFilter) return false;
     if (effSec !== "All" || capFilter !== "All") {
       const c = companyByTicker.get(n.ticker);
       if (effSec !== "All" && !matchesSector(effSec, n.ticker, c?.sector)) return false;
@@ -710,10 +761,14 @@ export function CommentaryScreen() {
     return true;
   });
 
-  /* Chip counts come from the feed BEFORE the tag filter is applied, so the
+  /* Chip counts come from the feed BEFORE either chip filter is applied, so the
      numbers stay put when you select a chip — a count that collapsed to its
-     own bucket the moment you clicked it would be useless for comparison. */
-  const tagCounts = (() => {
+     own bucket the moment you clicked it would be useless for comparison.
+
+     Both chip families are counted off the SAME base, so "Earnings (12)" under
+     Category and "Company (80)" under Type are directly comparable rather than
+     each being measured against a differently-filtered feed. */
+  const [tagCounts, catCounts] = (() => {
     const base = tabFeed.filter(n => {
       if (q &&
         !((n.ticker ?? "").toLowerCase().includes(q) ||
@@ -726,12 +781,15 @@ export function CommentaryScreen() {
       }
       return true;
     });
-    const counts: Record<string, number> = { all: base.length };
+    const tags: Record<string, number> = { all: base.length };
+    const cats: Record<string, number> = { all: base.length };
     for (const n of base) {
       const t = n.tag ?? "other";
-      counts[t] = (counts[t] ?? 0) + 1;
+      tags[t] = (tags[t] ?? 0) + 1;
+      const c = catKey(n.category);
+      cats[c] = (cats[c] ?? 0) + 1;
     }
-    return counts;
+    return [tags, cats] as const;
   })();
 
   /* Collapse multi-ticker duplicates. Polygon tags one article to EVERY ticker
@@ -788,20 +846,16 @@ export function CommentaryScreen() {
       </div>
 
       {mainTab === 0 && (<>
-      {/* Sub-tabs (Live/Premarket/…) + all filters on ONE line. flexWrap is a
-          graceful fallback for narrow viewports. Non-sticky so it doesn't stack
-          under the sticky primary-tab header above. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, rowGap: 8, padding: "12px 18px", borderBottom: "1px solid var(--border-soft)", position: "relative" }}>
-        {/* Search + sector + market-cap, same line as the tabs. Each label and
-            its select are one inline-flex unit: as loose siblings in a wrapping
-            row they could break apart, leaving "Market cap" stranded on one row
-            with its dropdown on the next. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
-          {/* nowrap keeps Search / Sector / Market cap on ONE line. The search
-              box is the only element allowed to give: basis 190 shrinking to
-              110 absorbs the squeeze, so the two dropdowns never drop to a
-              second row. */}
-          <div style={{ position: "relative", flex: "1 1 190px", minWidth: 110, maxWidth: 320 }}>
+      {/* The filter bar.
+          Inline styles were doing the layout here, which meant it could not
+          carry a media query — below roughly a laptop the six controls simply
+          wrapped into a ragged pile, and on a phone the selects overflowed the
+          screen. It is CSS now (.lf-* in iq.css): one row on a desktop, the
+          search on its own line on a laptop, a two-column grid on a tablet and
+          a single stacked column with aligned labels on a phone. */}
+      <div className="lf-filters">
+        <div className="lf-filters-in">
+          <div className="lf-search">
             <input
               ref={searchRef}
               className="mv-sel"
@@ -809,43 +863,70 @@ export function CommentaryScreen() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               autoComplete="off"
-              style={{ width: "100%" }}
             />
           </div>
-          {search.trim() && (
-            <button className="chip ghost" onClick={() => setSearch("")} title="Clear search">Clear</button>
-          )}
           {/* View (was the Live / Premarket / After Hours tab row) and Category
               (was the chip row) are dropdowns now, so every filter on this
-              screen reads the same way and sits on one line. Counts stay on the
-              category options — the number is the reason to pick one. */}
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>View</span>
+              screen reads the same way. Counts stay on the chip options — the
+              number is the reason to pick one. */}
+          <label className="lf-f">
+            <span>View</span>
             <select className="mv-sel" value={activeTab} onChange={e => setActiveTab(Number(e.target.value))}>
               {TABS.map((t, i) => <option key={t} value={i}>{t}</option>)}
             </select>
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Category</span>
+          </label>
+          {/* The card's headline chip — Earnings, Product & Launches, … */}
+          <label className="lf-f">
+            <span>Category</span>
             <select className="mv-sel" value={tagFilter} onChange={e => setTagFilter(e.target.value)}>
               <option value="all">All ({tagCounts.all ?? 0})</option>
               {NEWS_TAGS.filter(t => (tagCounts[t.key] ?? 0) > 0).map(t => (
                 <option key={t.key} value={t.key}>{t.label} ({tagCounts[t.key] ?? 0})</option>
               ))}
             </select>
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Sector</span>
+          </label>
+          {/* The pill under the logo — Company, Macro, Earnings, M&A. Same
+              options the chips themselves set when clicked. */}
+          <label className="lf-f">
+            <span>Type</span>
+            <select className="mv-sel" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+              <option value="all">All ({catCounts.all ?? 0})</option>
+              {CAT_KEYS.filter(k => (catCounts[k] ?? 0) > 0).map(k => (
+                <option key={k} value={k}>{catLabel(k === "macro" ? null : k)} ({catCounts[k] ?? 0})</option>
+              ))}
+            </select>
+          </label>
+          <label className="lf-f">
+            <span>Sector</span>
             <select className="mv-sel" value={effSec} onChange={e => setSecFilter(e.target.value)}>
               {feedSectors.map(s => <option key={s} value={s}>{titleCaseLabel(s)}</option>)}
             </select>
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Market cap</span>
+          </label>
+          <label className="lf-f">
+            <span>Market cap</span>
             <select className="mv-sel" value={capFilter} onChange={e => setCapFilter(e.target.value)}>
               {CAP_TIERS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-          </span>
+          </label>
+          {/* One reset for everything, shown only when something is actually
+              filtered — with six controls (and two of them now settable by
+              clicking a chip on a card) it is easy to lose track of why the
+              feed looks empty. */}
+          {(search.trim() || tagFilter !== "all" || catFilter !== "all" || effSec !== "All" || capFilter !== "All") && (
+            <button
+              className="chip lf-clear"
+              onClick={() => { setSearch(""); setTagFilter("all"); setCatFilter("all"); setSecFilter("All"); setCapFilter("All"); }}
+              title="Clear every filter"
+            >
+              Clear
+              {/* An inline SVG, not a "✕" character: the glyph renders at a
+                  different weight and baseline in every font the theme picker
+                  can swap in, and it sat visibly low next to the label. */}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+                <path d="M5 5l14 14M19 5L5 19" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
@@ -899,6 +980,13 @@ export function CommentaryScreen() {
                     total={feed.length}
                     onTicker={sym => setSearch(sym)}
                     onAnalysis={setAnalysisTicker}
+                    /* Clicking the chip that is already filtering clears it, so
+                       the chip is a toggle rather than a one-way trip that only
+                       the dropdown can undo. */
+                    onTag={t => setTagFilter(cur => (cur === t ? "all" : t))}
+                    onCat={c => setCatFilter(cur => (cur === c ? "all" : c))}
+                    activeTag={tagFilter}
+                    activeCat={catFilter}
                     marketCap={companyByTicker.get(item.ticker)?.marketCap ?? null}
                     livePct={feedQuotes.get(item.ticker)?.pctChange ?? companyByTicker.get(item.ticker)?.pctChange ?? null}
                   />

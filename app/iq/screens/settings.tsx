@@ -22,6 +22,18 @@ const FONTS: { key: FontKey; rank: number; label: string; desc: string; stack: s
   // "+ Inter headings" in the description, so the difference is visible in the
   // list rather than a surprise after selecting it.
   { key: "inter-source", rank: 9,     label: "Inter + Source Sans", desc: "Paired · Inter headings, Source Sans body", stack: "var(--font-source-sans-3,'Source Sans 3',sans-serif)" },
+  // ---- Second batch. Same contract as the entries above: each `key` needs a
+  // matching `.iq-root[data-font="…"]` rule in iq.css and a next/font loader in
+  // app/layout.tsx that defines the CSS variable named in `stack`. ----
+  { key: "figtree", rank: 10,         label: "Figtree",          desc: "Warm geometric · Crisp at small sizes",    stack: "var(--font-figtree,'Figtree',sans-serif)" },
+  { key: "public-sans", rank: 11,     label: "Public Sans",      desc: "Neutral & institutional · Data-dense fit", stack: "var(--font-public-sans,'Public Sans',sans-serif)" },
+  { key: "sora", rank: 12,            label: "Sora",             desc: "Technical geometric · Terminal energy",    stack: "var(--font-sora,'Sora',sans-serif)" },
+  { key: "lexend", rank: 13,          label: "Lexend",           desc: "Tuned for reading speed · Low fatigue",    stack: "var(--font-lexend,'Lexend',sans-serif)" },
+  { key: "urbanist", rank: 14,        label: "Urbanist",         desc: "Low-contrast geometric · Clean & modern",  stack: "var(--font-urbanist,'Urbanist',sans-serif)" },
+  { key: "work-sans", rank: 15,       label: "Work Sans",        desc: "Screen-optimised grotesque · Versatile",   stack: "var(--font-work-sans,'Work Sans',sans-serif)" },
+  { key: "archivo", rank: 16,         label: "Archivo",          desc: "Compact grotesque · Great for tables",     stack: "var(--font-archivo,'Archivo',sans-serif)" },
+  { key: "rubik", rank: 17,           label: "Rubik",            desc: "Softened geometric · Approachable",        stack: "var(--font-rubik,'Rubik',sans-serif)" },
+  { key: "nunito-sans", rank: 18,     label: "Nunito Sans",      desc: "Rounded humanist · Easy on long reads",    stack: "var(--font-nunito-sans,'Nunito Sans',sans-serif)" },
 ];
 
 function ConfirmModal({
@@ -381,49 +393,56 @@ export function SettingsScreen() {
           <div className="card-h">
             <h3>Font</h3>
           </div>
-          <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="card-b" style={{
+            display: "grid",
+            gridTemplateRows: "1fr 1fr",
+            gridAutoFlow: "column",
+            gridAutoColumns: "240px",
+            overflowX: "auto",
+            gap: 12,
+            paddingBottom: 12,
+            scrollbarWidth: "thin",
+            scrollbarColor: "var(--border-strong) transparent"
+          }}>
             {[...FONTS].sort((a, b) => a.rank - b.rank).map(f => (
               <label
                 key={f.key}
                 onClick={() => void applyFont(f.key)}
                 style={{
-                  display: "flex", alignItems: "center", gap: 14,
+                  fontFamily: f.stack,
+                  display: "flex", flexDirection: "column", gap: 8,
                   padding: "14px 16px", borderRadius: "var(--r)",
                   border: `1px solid ${font === f.key ? "var(--brand)" : "var(--border)"}`,
                   background: font === f.key ? "color-mix(in srgb, var(--brand) 8%, var(--surface-1))" : "var(--surface-2)",
                   cursor: "pointer", transition: "border-color .15s, background .15s",
                 }}
               >
-                {/* Radio indicator */}
-                <div style={{
-                  width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
-                  border: `2px solid ${font === f.key ? "var(--brand)" : "var(--border-strong)"}`,
-                  background: font === f.key ? "var(--brand)" : "transparent",
-                  display: "grid", placeItems: "center",
-                }}>
-                  {font === f.key && (
-                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff" }} />
-                  )}
-                </div>
-
-                {/* Label + description */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
                   <div style={{
-                    fontSize: "0.9062rem", fontWeight: 700,
+                    fontSize: "1rem", fontWeight: 700,
                     color: font === f.key ? "var(--brand-2)" : "var(--text-hi)",
-                    fontFamily: f.stack,
-                    marginBottom: 2,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
                     <span style={{ opacity: 0.55, fontWeight: 600 }}>{f.rank}. </span>{f.label}
                   </div>
-                  <div style={{ fontSize: "0.7188rem", color: "var(--text-dim-solid)" }}>{f.desc}</div>
+                  {/* Radio indicator */}
+                  <div style={{
+                    width: 18, height: 18, borderRadius: "50%", flexShrink: 0, marginTop: 2,
+                    border: `2px solid ${font === f.key ? "var(--brand)" : "var(--border-strong)"}`,
+                    background: font === f.key ? "var(--brand)" : "transparent",
+                    display: "grid", placeItems: "center",
+                  }}>
+                    {font === f.key && (
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff" }} />
+                    )}
+                  </div>
                 </div>
-
-                {/* Live preview */}
+                
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim-solid)", lineHeight: 1.45, flex: 1 }}>{f.desc}</div>
                 <div style={{
-                  fontSize: "0.8125rem", color: "var(--text)",
-                  fontFamily: f.stack, whiteSpace: "nowrap",
+                  marginTop: 4, fontSize: "0.85rem", color: "var(--text)",
                   opacity: 0.72,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
                   Aa 0123 · Markets
                 </div>

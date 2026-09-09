@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Space_Grotesk, JetBrains_Mono, Inter, DM_Sans, Plus_Jakarta_Sans, IBM_Plex_Sans, Outfit, Manrope, Source_Sans_3 } from "next/font/google";
+import {
+  Geist, Space_Grotesk, JetBrains_Mono, Inter, DM_Sans, Plus_Jakarta_Sans,
+  IBM_Plex_Sans, Outfit, Manrope, Source_Sans_3,
+  // Second batch of body-font choices offered in Settings → Font.
+  Figtree, Public_Sans, Sora, Lexend, Urbanist, Work_Sans, Archivo, Rubik, Nunito_Sans,
+} from "next/font/google";
 import { FirebaseAnalytics } from "./firebase-analytics";
 import { SentryInit } from "./sentry-init";
 import { ReduxProvider } from "./store/redux-provider";
@@ -61,6 +66,55 @@ const manrope = Manrope({
   subsets: ["latin"],
 });
 
+// ---- Additional body fonts (Settings → Font) ----
+// All nine are variable Google faces, so no explicit `weight` list is needed —
+// next/font self-hosts one variable file each and the CSS variable below is
+// what `.iq-root[data-font="…"]` in iq.css switches --f-body to.
+const figtree = Figtree({
+  variable: "--font-figtree",
+  subsets: ["latin"],
+});
+
+const publicSans = Public_Sans({
+  variable: "--font-public-sans",
+  subsets: ["latin"],
+});
+
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+});
+
+const lexend = Lexend({
+  variable: "--font-lexend",
+  subsets: ["latin"],
+});
+
+const urbanist = Urbanist({
+  variable: "--font-urbanist",
+  subsets: ["latin"],
+});
+
+const workSans = Work_Sans({
+  variable: "--font-work-sans",
+  subsets: ["latin"],
+});
+
+const archivo = Archivo({
+  variable: "--font-archivo",
+  subsets: ["latin"],
+});
+
+const rubik = Rubik({
+  variable: "--font-rubik",
+  subsets: ["latin"],
+});
+
+const nunitoSans = Nunito_Sans({
+  variable: "--font-nunito-sans",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://marketcatalyst.ai"),
   title: "MarketCatalyst — Market Intelligence Terminal",
@@ -90,7 +144,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${inter.variable} ${dmSans.variable} ${plusJakartaSans.variable} ${ibmPlexSans.variable} ${outfit.variable} ${manrope.variable} ${sourceSans3.variable} h-full antialiased`}
+      className={[
+        geistSans.variable, spaceGrotesk.variable, jetbrainsMono.variable,
+        inter.variable, dmSans.variable, plusJakartaSans.variable,
+        ibmPlexSans.variable, outfit.variable, manrope.variable, sourceSans3.variable,
+        figtree.variable, publicSans.variable, sora.variable, lexend.variable,
+        urbanist.variable, workSans.variable, archivo.variable, rubik.variable,
+        nunitoSans.variable,
+        "h-full antialiased",
+      ].join(" ")}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">

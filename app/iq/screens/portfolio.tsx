@@ -313,7 +313,11 @@ export function PortfolioScreen() {
             position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
             background: "var(--surface-1)", border: "1px solid var(--border)",
             borderRadius: "var(--r-lg)", padding: 24, zIndex: 61,
-            minWidth: 320, boxShadow: "0 16px 48px rgba(0,0,0,.5)",
+            // maxWidth never binds above a 352px viewport, so the desktop
+            // dialog is unchanged; it stops the 320px floor (plus 24px padding
+            // each side) overflowing a small phone.
+            minWidth: 320, maxWidth: "calc(100vw - 32px)",
+            boxShadow: "0 16px 48px rgba(0,0,0,.5)",
           }}>
             <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)", marginBottom: 8 }}>Remove holding</div>
             <div style={{ fontSize: ".88rem", color: "var(--text)", marginBottom: 20 }}>

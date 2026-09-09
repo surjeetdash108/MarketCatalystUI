@@ -98,6 +98,15 @@
 .iq-root[data-font="ibm-plex-sans"]    { --f-body: var(--font-ibm-plex-sans, 'IBM Plex Sans', sans-serif); }
 .iq-root[data-font="outfit"]           { --f-body: var(--font-outfit, 'Outfit', sans-serif); }
 .iq-root[data-font="manrope"]          { --f-body: var(--font-manrope, 'Manrope', sans-serif); }
+.iq-root[data-font="figtree"]          { --f-body: var(--font-figtree, 'Figtree', sans-serif); }
+.iq-root[data-font="public-sans"]      { --f-body: var(--font-public-sans, 'Public Sans', sans-serif); }
+.iq-root[data-font="sora"]             { --f-body: var(--font-sora, 'Sora', sans-serif); }
+.iq-root[data-font="lexend"]           { --f-body: var(--font-lexend, 'Lexend', sans-serif); }
+.iq-root[data-font="urbanist"]         { --f-body: var(--font-urbanist, 'Urbanist', sans-serif); }
+.iq-root[data-font="work-sans"]        { --f-body: var(--font-work-sans, 'Work Sans', sans-serif); }
+.iq-root[data-font="archivo"]          { --f-body: var(--font-archivo, 'Archivo', sans-serif); }
+.iq-root[data-font="rubik"]            { --f-body: var(--font-rubik, 'Rubik', sans-serif); }
+.iq-root[data-font="nunito-sans"]      { --f-body: var(--font-nunito-sans, 'Nunito Sans', sans-serif); }
 /* The one PAIRED option: it overrides --f-display too, so headings change with
    the body. Every rule above leaves --f-display on Outfit. */
 .iq-root[data-font="inter-source"] {
@@ -1925,12 +1934,33 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .ec-sess { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; align-content: start; margin-bottom: 9px; }
 .ec-sess .ec-chip { width: 100%; margin: 0; min-width: 0; overflow: hidden; }
 .ec-lbl { font-size: .58rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim-solid); margin-bottom: 5px; font-weight: 700; }
-.ec-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-3); border: 1px solid transparent; border-radius: 8px; padding: 3px 9px 3px 3px; margin: 0 5px 5px 0; font-size: .74rem; font-weight: 600; color: var(--text-hi); cursor: pointer; font-family: inherit; }
+/* The hairline is the CHIP's, not the logo's.
+
+   The chips used to read as separate cards only because each logo tile carried
+   a dark ring — which was really the tile colour bleeding through its own
+   antialiased rounded clip, not a border anyone drew (see EcChip in
+   screens/earnings.tsx). With that artifact gone the grid lost its grid: two
+   columns of chips whose --surface-3 ground sits close enough to the day
+   column's --surface-1 that the gaps between them stopped reading, in the
+   light theme especially.
+
+   So the separation is drawn where it belongs — one thin --border line around
+   each chip, the same token and weight the day column around them already
+   uses. --border, not --border-soft: in the light theme the chips sit on
+   --surface-3 (#ece7dd) and --border-soft (#e6e0d5) is LIGHTER than that, so
+   it would have drawn nothing. It follows the chip's own 8px radius rather
+   than the logo's 11px one, and it leaves the logo tile clean. */
+.ec-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-3); border: 1px solid var(--border); border-radius: 8px; padding: 3px 9px 3px 3px; margin: 0 5px 5px 0; font-size: .74rem; font-weight: 600; color: var(--text-hi); cursor: pointer; font-family: inherit; }
 .ec-chip:hover { border-color: var(--brand-2); }
-.ec-chip.on { border-color: transparent; background: rgba(124,108,245,.16); }
+/* Was `transparent`, which was fine while no chip had a visible edge — now it
+   would single out the SELECTED chip as the only one missing its outline. */
+.ec-chip.on { border-color: var(--brand); background: rgba(124,108,245,.16); }
 .ec-chip /* 1.5x the original 19px, matching TICKER_LOGO_SCALE in utils.tsx. */
 .ec-logo { width: 43px; height: 43px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: 800; flex-shrink: 0; position: relative; overflow: hidden; }
-.ec-chip .ec-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* Kept in step with LOGO_IMG_STYLE in iq/utils.tsx, which the element also
+   carries inline — 1px oversized on every edge so the antialiased rounded clip
+   never has the tile colour to blend with. See useTickerLogo for the why. */
+.ec-chip .ec-logo img { position: absolute; top: -1px; left: -1px; width: calc(100% + 2px); height: calc(100% + 2px); object-fit: cover; }
 .ec-none { font-size: .72rem; color: var(--text-dim-solid); }
 /* The overflow control under a day column's chips, centred rather than left in
    the first grid cell — it counts the whole column, not one chip. */
@@ -2111,6 +2141,50 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 /* "At a glance" is a toggle — make its on/off state an obvious colour change:
    solid brand fill + white text/icon when ON, plain/dim when OFF. */
 .ecal-glancebtn.on { background: var(--brand); color: #fff; border-color: var(--brand) !important; box-shadow: 0 4px 14px -6px var(--brand); }
+
+/* The two actions in the Earnings Hub stock-detail header — "Earnings call"
+   and "Analysis".
+
+   They were --surface-2 fills behind --border-soft hairlines, sitting on a
+   --surface-1 card: the two closest surface tokens in the palette against the
+   faintest border token, which on the light theme is a ~2% difference. Two real
+   actions were reading as part of the card.
+
+   Each takes the colour of what it OPENS rather than a generic accent, so the
+   pair is distinguishable at a glance and not just visible: brand purple for
+   the transcript, --ai cyan for the AI read — the same cyan .feed-analysis-btn
+   uses for the identical action on the Live Feed, so "Analysis" means one
+   colour everywhere. Tinted, not filled: these sit beside the ticker and price,
+   which stay the loudest thing in the header. */
+.ew-actbtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 8px; padding: 5px 10px; cursor: pointer;
+  font-size: .75rem; font-weight: 600; white-space: nowrap;
+  border: 1px solid transparent;
+  transition: background .13s, border-color .13s, box-shadow .13s;
+}
+.ew-actbtn svg { flex: none; }
+.ew-actbtn.call {
+  color: var(--brand-2);
+  background: var(--brand-dim);
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+}
+.ew-actbtn.call:hover {
+  background: color-mix(in srgb, var(--brand) 20%, transparent);
+  border-color: var(--brand);
+  box-shadow: 0 4px 14px -8px var(--brand);
+}
+.ew-actbtn.ai {
+  color: var(--ai);
+  background: var(--ai-dim);
+  border-color: color-mix(in srgb, var(--ai) 45%, transparent);
+}
+.ew-actbtn.ai:hover {
+  background: color-mix(in srgb, var(--ai) 20%, transparent);
+  border-color: var(--ai);
+  box-shadow: 0 4px 14px -8px var(--ai);
+}
+.ew-actbtn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* Filter bar */
 .ecal-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -3213,4 +3287,233 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
   .iq-root .card{ animation:none; transition:none; }
   .iq-root .card:hover{ transform:none; }
   .iq-root .chip:hover,.iq-root .btn.ai:hover{ transform:none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE PASS — Ownership (13F / insider), Portfolio, Search (stock)
+
+   Every rule in this block is inside a media query, so the desktop layout is
+   unchanged. Each one is a measured overflow, not a precaution.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Tablet and below. Once .sd-grid collapses to a single column (the sd
+   container query at 1100px), the key-stat strip is the full content width but
+   still four fixed tracks — about 85px a cell on a phone. "52W Range" alone is
+   "$123.45 – $678.90", and Sector/Industry carry values like "Electronic
+   Technology"; at that width they wrapped into unreadable slivers. Two columns
+   give each value room to stay on one line. */
+@media (max-width: 900px) {
+  .keystats { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 767px) {
+  /* Card headers put a title and a right-hand pill on ONE non-wrapping flex
+     row, inside .card{overflow:hidden}. On a phone that pill was CLIPPED at the
+     card's right edge rather than wrapping — it hit every card on all three
+     screens ("13F · most recent quarter", "tap a ticker for its stock page",
+     "by user searches", the sort hints). Wrapping puts it on its own line
+     instead of cutting it off. min-width:0 lets a long title wrap rather than
+     forcing the row wider than the card. */
+  .card-h { flex-wrap: wrap; row-gap: 6px; }
+  .card-h > * { min-width: 0; }
+
+  /* Portfolio's AI summary sets `columns: 2` inline — two text columns on a
+     375px screen are ~150px each, which breaks mid-sentence on almost every
+     line. !important is required to beat the inline style; it is scoped to
+     phones, so the desktop two-column list is untouched. */
+  .wmn-body { columns: 1 !important; }
+
+  /* Paginators and other space-between control rows (the insider feed's
+     "1–50 of 2,000" beside Prev / Page n / Next) add up to ~330px, which
+     overflows a 320px viewport and is then clipped by the card. */
+  .card-b > div[style*="space-between"] { flex-wrap: wrap; row-gap: 8px; }
+}
+
+/* ── Live Feed filter bar ─────────────────────────────────────────────────────
+   Seven controls — Search, View, Category, Type, Sector, Market cap, Clear.
+
+   This was laid out with inline styles, which cannot carry a media query, so
+   its only response to a narrow viewport was flex-wrap: below a wide laptop the
+   controls fell into a ragged pile and on a phone the selects ran off the
+   screen. The layout is here now, and it changes SHAPE rather than just
+   wrapping:
+
+     ≥1101   ONE row, guaranteed — see the nowrap note below
+     ≤1100   search on its own line, the rest WRAP and share each row
+      ≤560   same wrapping, label above its dropdown so pairs still fit
+
+   Breakpoints are set well above the widths the content actually needs because
+   this bar lives INSIDE the app shell: the nav rail takes ~11.5rem off the
+   viewport, so a 1366px laptop only offers this row about 1110px. Sizing to the
+   viewport alone is what let "Clear filters" fall to its own line on a screen
+   that looked plenty wide.
+
+   Every breakpoint keeps all seven controls: none is hidden behind a "more"
+   affordance, because a filter you cannot see is a filter you will not use. */
+.lf-filters {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-soft);
+  position: relative;
+}
+.lf-filters-in {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
+}
+.lf-search { flex: 1 1 200px; min-width: 120px; max-width: 340px; }
+.lf-search input { width: 100%; }
+
+/* Label + select as ONE unit. As loose siblings in a wrapping row they broke
+   apart, stranding "Market cap" on one line with its dropdown on the next. */
+.lf-f {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  min-width: 0;
+  cursor: pointer;
+}
+.lf-f > span {
+  font-size: .72rem;
+  color: var(--text-dim-solid);
+  flex: none;
+}
+.lf-f select { min-width: 0; max-width: 100%; }
+/* Red, because this is the one control on the bar that DISCARDS state — every
+   other one narrows the feed, this one throws away everything you set. --down
+   is the theme's own red, so it tracks light/dark and stays at the contrast
+   ratio the palette was tuned for rather than being a hard-coded #f00.
+   Tinted rather than filled: a solid red button would out-shout the six filters
+   it sits beside, when it is only ever a way back. */
+.lf-clear {
+  flex: none;
+  white-space: nowrap;
+  gap: 5px;
+  color: var(--down);
+  border-color: color-mix(in srgb, var(--down) 45%, transparent);
+  background: var(--down-dim);
+  font-weight: 600;
+}
+.lf-clear:hover {
+  color: var(--down);
+  border-color: var(--down);
+  background: color-mix(in srgb, var(--down) 18%, transparent);
+}
+.lf-clear svg { flex: none; }
+
+@media (min-width: 1101px) {
+  /* nowrap, not wrap-and-hope.
+
+     A <select> is as wide as its LONGEST option, so Sector — which carries
+     "Consumer Discretionary" and the theme baskets — was claiming ~250px and
+     pushing the total past the row. Flexbox wraps on flex-basis BEFORE it
+     shrinks anything, so the row broke and Clear went over on its own even
+     though there was slack to reclaim.
+
+     nowrap removes wrapping as an option, so the same slack is taken by
+     shrinking instead: the selects are capped, every item may shrink to a floor
+     that is still readable, and the search absorbs whatever is left. At the
+     floors below the whole row needs ~780px, comfortably inside the ~845px this
+     breakpoint guarantees. */
+  .lf-filters-in { flex-wrap: nowrap; }
+  .lf-search { flex: 1 1 150px; min-width: 84px; max-width: 300px; }
+  .lf-f { flex: 0 1 auto; }
+  .lf-f select { flex: 0 1 auto; min-width: 58px; max-width: 178px; }
+}
+
+@media (max-width: 1100px) {
+  /* Below the one-row tier the bar WRAPS rather than dropping into fixed
+     columns. A two-column grid gave "View" the same width as "Sector", so a
+     short control sat next to a lot of dead space while the long one still had
+     to truncate. Flowing them instead lets each control take the width it
+     actually needs and lets as many fit per row as the screen allows — three on
+     a landscape tablet, two on a portrait one, without a breakpoint for each.
+
+     The basis is what does the packing: 200px is wide enough that a label and
+     its dropdown are never squeezed, and `flex: 1 1` then shares the leftover
+     evenly so a part-filled last row lines up with the rows above it instead of
+     leaving a ragged gap. */
+  .lf-filters-in {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+  }
+  /* The search stays on its own line — it is the widest control and the one
+     people go to first. */
+  .lf-search { flex: 1 1 100%; max-width: none; }
+  .lf-f {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 200px;
+    min-width: 172px;
+    white-space: nowrap;
+  }
+  .lf-f select { flex: 1 1 auto; width: auto; min-width: 0; max-width: none; }
+  /* Trails the last control on whatever row it lands on, rather than claiming a
+     column of its own. */
+  .lf-clear { flex: 0 0 auto; margin-left: auto; }
+}
+
+@media (max-width: 560px) {
+  .lf-filters { padding: 10px 12px; }
+  /* Same wrapping, tighter units: the label moves above its dropdown so a pair
+     still fits across a 360px phone (2 x 148 + 8 gap = 304) instead of dropping
+     to one per row and pushing the feed a screen further down. */
+  .lf-filters-in { gap: 8px; }
+  .lf-f {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    flex: 1 1 148px;
+    min-width: 130px;
+    white-space: normal;
+  }
+  .lf-f > span { font-size: .68rem; }
+  .lf-f select { width: 100%; font-size: .74rem; }
+  .lf-clear { flex: 1 1 100%; margin-left: 0; justify-content: center; }
+}
+
+/* ── Card chips as filters ────────────────────────────────────────────────────
+   Both chips on a feed card set the filter they belong to (.row-tag → Category,
+   .pill → Type) and clear it when clicked again. They were static labels; the
+   affordance has to say so. `.on` is the chip whose filter is currently in
+   force — the ring, not a colour change, so the chip keeps the category colour
+   that identifies it. */
+.lf-chip {
+  cursor: pointer;
+  transition: filter .14s, box-shadow .14s, opacity .14s;
+}
+.lf-chip:hover { filter: brightness(1.18); }
+.lf-chip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.lf-chip.on { box-shadow: 0 0 0 2px var(--brand); }
+/* The pill is a <button> now — strip the UA chrome so it draws exactly as the
+   <span> it replaced. Everything else (padding, 5px radius, size, weight)
+   still comes from .pill itself, so the two cannot drift apart. */
+button.pill.lf-chip {
+  border: 0;
+  font-family: inherit;
+  line-height: 1.45;
+  text-align: inherit;
+}
+
+/* Session marker beside a Movers %change — "PM" / "AH" / "EXT".
+   Small and muted on purpose: it qualifies the number without competing with
+   it, and it must not read as another figure in a numeric column. */
+.mv-sess {
+  margin-left: 5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: .56rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  vertical-align: middle;
+  color: var(--text-dim-solid);
+  background: var(--surface-3);
+  border: 1px solid var(--border-soft);
+  cursor: help;
 }

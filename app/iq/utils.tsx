@@ -164,37 +164,94 @@ export const CHART_SCALE = 0.85;
  *  about in integers. */
 const cs = (n: number) => Math.round(n * CHART_SCALE);
 
+/**
+ * The one place the app decides whether a ticker's branding image has painted.
+ *
+ * Shared by StockLogo (month grid, drawers, every ticker row) and EcChip (the
+ * day/week earnings columns) so the two cannot drift apart again — they were
+ * separate copies, and only one of them had the fix.
+ *
+ * Two things have to be true or a coloured placeholder tile ends up sitting
+ * UNDER a painted logo, bleeding through the tile's antialiased rounded clip as
+ * the hairline ring that reads as a "border round the icon":
+ *
+ *  1. onLoad is not enough. A CACHED image is often already `complete` by the
+ *     time React attaches the handler, so the load event has come and gone and
+ *     `loaded` would stay false forever. This is why the ring kept coming BACK
+ *     after a hard refresh cleared the cache and a second visit re-filled it.
+ *     The ref asks the element directly on mount instead of waiting for an
+ *     event that has already happened.
+ *  2. naturalWidth distinguishes a painted image from a finished-but-empty one:
+ *     the backend answers 204 (No Content) for a ticker Polygon has no branding
+ *     for, which completes successfully with nothing to draw.
+ */
+export function useTickerLogo(sym: string) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // Reset when the component is reused for a different ticker (lists re-order).
+  // Adjusted DURING render off a remembered prop rather than in an effect: an
+  // effect resets after the browser has already painted, so the row would flash
+  // the previous ticker's logo for a frame on every re-sort.
+  const [prevSym, setPrevSym] = useState(sym);
+  if (prevSym !== sym) { setPrevSym(sym); setLoaded(false); setFailed(false); }
+  const ref = useCallback((el: HTMLImageElement | null) => {
+    if (!el || !el.complete) return;
+    if (el.naturalWidth > 0) setLoaded(true); else setFailed(true);
+  }, []);
+  return {
+    loaded,
+    failed,
+    /* Spread onto the <img>. `key` remounts on ticker change so the ref above
+       re-runs against the new element. */
+    imgProps: {
+      key: sym,
+      ref,
+      // Logos come from Polygon's ticker `branding`, proxied by the backend
+      // (`/live/logo`) so the API key stays server-side — no third-party CDN.
+      src: backendUrl(`/live/logo?ticker=${encodeURIComponent(sym)}`),
+      alt: "",
+      onLoad: () => setLoaded(true),
+      onError: () => setFailed(true),
+    } as const,
+  };
+}
+
+/**
+ * Geometry for the branding image inside a rounded, overflow-hidden tile.
+ *
+ * Deliberately 1px OVERSIZED on every edge. The tile is rounded with
+ * border-radius + overflow:hidden and that clip is antialiased — its edge
+ * pixels are part image, part whatever is behind it — so an image sized exactly
+ * to the box lets the tile colour show through as a hairline at the corners.
+ * Overhanging the clip by a pixel means the only thing at the boundary is the
+ * logo itself, whatever the load state, so the ring cannot reappear even if the
+ * flags above are ever wrong. A pixel off a logo that is mostly white margin is
+ * not visible; cover (not contain) still avoids letterboxing a non-square one.
+ */
+export const LOGO_IMG_STYLE: React.CSSProperties = {
+  position: "absolute",
+  top: -1, left: -1,
+  width: "calc(100% + 2px)", height: "calc(100% + 2px)",
+  objectFit: "cover",
+};
+
 export function StockLogo({ sym, size = 22 }: { sym: string; size?: number }) {
   const idx = sym.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % _LP.length;
   const px = Math.round(size * TICKER_LOGO_SCALE);
+  const { loaded, failed, imgProps } = useTickerLogo(sym);
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       width: px, height: px, borderRadius: Math.round(px * 0.3),
-      background: _LP[idx], color: '#fff',
+      // Transparent once the logo has painted: nothing behind it means nothing
+      // can bleed at the clip edge. The colour is only ever a placeholder.
+      background: loaded ? 'transparent' : _LP[idx], color: '#fff',
       fontSize: Math.round(px * 0.44), fontWeight: 800,
       fontFamily: 'var(--f-display)', flexShrink: 0, lineHeight: 1,
       position: 'relative', overflow: 'hidden',
     }}>
-      {sym[0]}
-      <img
-        // Logos come from Polygon's ticker `branding`, proxied by the backend
-        // (`/live/logo`) so the API key stays server-side — no third-party CDN.
-        // A 404 (Polygon has no branding for this ticker) hides the img and the
-        // coloured letter tile behind it shows through.
-        src={backendUrl(`/live/logo?ticker=${encodeURIComponent(sym)}`)}
-        alt=""
-        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        style={{
-          // Branding logos are opaque, near-square tiles, so they cover the
-          // square edge-to-edge. No white backdrop or own radius — both left a
-          // 1px white ring at the parent's rounded corners; the parent's
-          // overflow:hidden does the rounding. cover avoids any letterbox on a
-          // rare non-square logo.
-          position: 'absolute', inset: 0, width: '100%', height: '100%',
-          objectFit: 'cover',
-        }}
-      />
+      {!loaded && sym[0]}
+      {!failed && <img {...imgProps} style={LOGO_IMG_STYLE} />}
     </span>
   );
 }

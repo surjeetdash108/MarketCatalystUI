@@ -2,12 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
-import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
+import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
 import { ChartCard } from "../stock-panel";
 import { EpsSalesWidget } from "../eps-sales-widget";
 import { EarningsPlaybook } from "./EarningsPlaybook";
-import { backendUrl } from "../backend";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
@@ -294,17 +293,16 @@ function MiniCalendar({ value, onPick, onClose }: { value: string; onPick: (iso:
 // ── Company logo chip ─────────────────────────────────────────────────────────
 
 function EcChip({ sym, selected, onSelect }: { sym: string; selected: boolean; onSelect: (s: string) => void }) {
+  // Same hook StockLogo uses, so the day/week chips and the month grid can no
+  // longer disagree about whether a logo has painted. See useTickerLogo for why
+  // onLoad alone let the placeholder tile bleed a hairline ring at the chip's
+  // rounded corners — most visible in the light theme, under a white logo.
+  const { loaded, failed, imgProps } = useTickerLogo(sym);
   return (
     <button className={`ec-chip${selected ? " on" : ""}`} onClick={() => onSelect(sym)}>
-      <span className="ec-logo" style={{ background: "#27314a", color: "#cdd6e6" }}>
-        {sym[0]}
-        <img
-          // Polygon branding logo via the backend proxy (no third-party CDN);
-          // a 404 hides the img and the letter behind it shows through.
-          src={backendUrl(`/live/logo?ticker=${encodeURIComponent(sym)}`)}
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-          alt=""
-        />
+      <span className="ec-logo" style={{ background: loaded ? "transparent" : "#27314a", color: "#cdd6e6" }}>
+        {!loaded && sym[0]}
+        {!failed && <img {...imgProps} style={LOGO_IMG_STYLE} />}
       </span>
       {sym}
     </button>
@@ -1391,28 +1389,23 @@ export function EarningsScreen() {
                     </span>
                   )}
                   <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    {/* Both were --surface-2 on a --surface-1 card behind a
+                        --border-soft hairline: two of the closest tokens in the
+                        palette against the faintest border, so a pair of real
+                        actions read as part of the card. They carry their own
+                        colour now — see .ew-actbtn in iq.css. */}
                     <button
+                      className="ew-actbtn call"
                       title="Earnings-call transcript (Read aloud)"
                       onClick={() => setSelectedCall(sel)}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        background: "var(--surface-2)", border: "1px solid var(--border-soft)",
-                        borderRadius: 8, padding: "5px 10px", cursor: "pointer",
-                        color: "var(--text)", fontSize: ".75rem", fontWeight: 600,
-                      }}
                     >
                       <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>
                       Earnings call
                     </button>
                     <button
+                      className="ew-actbtn ai"
                       title="Analyst & earnings analysis (FMP)"
                       onClick={() => setAiModalSym(sel)}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        background: "var(--surface-2)", border: "1px solid var(--border-soft)",
-                        borderRadius: 8, padding: "5px 10px", cursor: "pointer",
-                        color: "var(--text)", fontSize: ".75rem", fontWeight: 600,
-                      }}
                     >
                       <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19V5m0 14h16M8 15l3-4 3 3 4-6"/></svg>
                       Analysis

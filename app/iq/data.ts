@@ -15,7 +15,14 @@ export interface Earning {
 export interface Mover {
   ticker: string; name: string; price: number; pctChange: number; rvolRatio: number; relativeStrength: number;
   maPosture: string; owned: boolean;
-  sector: string; cap: 'Mega' | 'Large' | 'Mid' | 'Small';
+  sector: string;
+  /** Market-cap bucket, derived from `marketCap` — see capFromMarketCap.
+      'Micro' was missing from this union even though the board has always shown
+      it, so every assignment was written `as Mover["cap"]` and the cast hid the
+      gap from the compiler. '—' is the honest value for a ticker whose cap has
+      not synced; the Market cap filter offers only the five real buckets, so an
+      unknown row is never claimed by one. */
+  cap: 'Mega' | 'Large' | 'Mid' | 'Small' | 'Micro' | '—';
   /** Raw USD market cap for the Movers table's "Mkt Cap" column; null when the
    *  ticker isn't in the tracked `companies` universe (many daily micro-caps). */
   marketCap: number | null;

@@ -959,7 +959,7 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
     <ol class="sop">
       <li>Choose <b>HTML</b>, then download <b>Preset 1 &middot; Article</b> from the Design row below.</li>
       <li>Replace its text and images with yours. Keep the layout and class names as they are.</li>
-      <li>Bring it back with <b>Load .html file</b>, then fill <b>Title</b>, <b>Summary</b> and <b>Hero image</b> &mdash; all three are required.</li>
+      <li>Bring it back with <b>Load .html file</b>, then fill <b>Title</b> and <b>Summary</b> &mdash; both are required. <b>Hero image</b> is optional.</li>
       <li><b>Preview</b> at each device width. Fix whatever it flags, then <b>Publish</b>; it goes live at once.</li>
     </ol>
 
@@ -1041,7 +1041,7 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
     <!-- Authored posts only: a document post's own first page is its hero. -->
     <div id="bHeroRow" style="display:none">
       <div class="fl-row">
-        <label class="fl">Hero image <span class="cc">required · also the board thumbnail</span></label>
+        <label class="fl">Hero image <span class="cc">optional · also the board thumbnail</span></label>
         <button class="btn" style="flex:none;margin-left:auto;padding:5px 11px;font-size:11.5px" onclick="openGallery()">Gallery</button>
         <button class="btn" style="flex:none;padding:5px 11px;font-size:11.5px" onclick="pickHeroFile()">Upload</button>
       </div>
@@ -3283,16 +3283,16 @@ function savePublish(){
      job fills it automatically, a manual upload usually leaves it blank — so
      there is no required-field check on it. */
   const d={zone:bEl('bZone').value||'edu',kick:bEl('bKick').value||'MarketCatalyst',title:bEl('bTitle').value.trim(),dek:bEl('bDek').value.trim(),author:bEl('bAuthor').value||'Desk',read:bEl('bRead').value||'3 min',html:bodyHtml()};
-  /* A written post needs all three: the summary is the standfirst under the
-     headline AND the board card's excerpt, and the hero is the article image
-     AND the card thumbnail. Missing either publishes a visibly broken card, so
-     it is caught here as well as on the server. Documents are exempt — they
-     are their own cover and their own opening line. */
+  /* A written post needs both: the summary is the standfirst under the
+     headline AND the board card's excerpt. Missing either publishes a visibly
+     broken card, so it is caught here as well as on the server. The hero image
+     is optional — a post without one renders a text-only card and a heroless
+     article. Documents are exempt — they are their own cover and their own
+     opening line. */
   if(_format==='html'||_format==='text'){
     const missing=[];
     if(!d.title) missing.push('a title');
     if(!d.dek) missing.push('a summary');
-    if(!heroValue()) missing.push('a hero image');
     if(missing.length){
       showResult(false,'This post still needs '+
         (missing.length>1?missing.slice(0,-1).join(', ')+' and '+missing[missing.length-1]:missing[0])+'.');

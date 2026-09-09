@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { cls, sign, StockLogo, DataState, VendorTag, titleCaseLabel} from "../utils";
 
 // Same embedded stock detail the Movers drawer uses.
@@ -324,9 +325,17 @@ export function IPOsScreen() {
                   <td><span className="pill amc">{p.form}</span></td>
                   <td>{p.dateFiled}</td>
                   <td>
-                    <a href={p.url} target="_blank" rel="noopener noreferrer" className="link" style={{ fontSize: ".72rem" }}>
+                    {/* Not p.url — that is EDGAR's COMPLETE SUBMISSION text
+                        file (every document in the filing concatenated as raw
+                        SGML), which a browser shows as a wall of plain text.
+                        /filing resolves the readable document out of it and
+                        renders it inside the app. */}
+                    <Link
+                      href={`/filing?cik=${encodeURIComponent(p.cik)}&accession=${encodeURIComponent(p.accessionNumber)}&company=${encodeURIComponent(p.companyName)}&form=${encodeURIComponent(p.form)}`}
+                      className="link" style={{ fontSize: ".72rem" }}
+                    >
                       SEC filing →
-                    </a>
+                    </Link>
                   </td>
                 </tr>
               ))}

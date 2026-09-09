@@ -4,11 +4,11 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { fmtDate } from "../calendar-range";
 import dynamic from "next/dynamic";
 import { type Mover, maPostureLabel, isLeveragedProduct } from "../data";
-import { fmt, sign, arr, Spark, StockLogo, DataState, VendorTag, titleCaseLabel} from "../utils";
+import { fmt, sign, arr, StockLogo, DataState, VendorTag, titleCaseLabel} from "../utils";
 import { apiGet } from "../backend";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
-import { useLiveQuotes, QUOTE_DELAY_LABEL, pairedQuote } from "../live-quotes-context";
+import { useLiveQuotes, QUOTE_DELAY_LABEL, pairedQuote, extendedSession } from "../live-quotes-context";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import type { LiveMoverDoc, CompanyDoc, NewsArticleDoc, AnalystConsensusDoc, AnalystRatingChange } from "../types";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
@@ -34,8 +34,11 @@ const isWeekTab = (t: TabKey) => t === "weekwin" || t === "weeklose";
  * Needed because the weekly tabs are built from `companies` (which carry
  * marketCap) rather than the movers feed (which carries a pre-bucketed `cap`).
  */
-function capFromMarketCap(mc: number | null | undefined): string {
-  if (mc == null) return "Mid";
+/* "—" for an unknown cap, not "Mid": a ticker whose market cap has not synced
+   is not a mid-cap, and returning one put it in the Market cap filter's Mid
+   bucket where a user filtering for mid-caps would be handed micro-caps. */
+function capFromMarketCap(mc: number | null | undefined): Mover["cap"] {
+  if (mc == null || mc <= 0) return "—";
   if (mc >= 200e9) return "Mega";
   if (mc >= 10e9) return "Large";
   if (mc >= 2e9) return "Mid";
@@ -90,6 +93,7 @@ function mergeMovers(
 ): Mover[] {
   return live.filter(l => !isLeveragedProduct(l.name)).map(l => {
     const c = companyByTicker.get(l.ticker);
+    const mcap = l.marketCap ?? c?.marketCap ?? null;
     return {
       ticker: l.ticker,
       name: l.name ?? l.ticker,
@@ -100,10 +104,18 @@ function mergeMovers(
       maPosture: maPostureLabel(c?.aboveSma50, c?.aboveSma200),
       owned: false,
       sector: l.sector ?? "—",
-      cap: (l.cap as Mover["cap"]) ?? "Mid",
       // Prefer the mover doc's own market cap (covers micro-caps outside the
       // tracked universe); fall back to the companies doc for tracked names.
-      marketCap: l.marketCap ?? c?.marketCap ?? null,
+      marketCap: mcap,
+      /* Bucketed from the SAME figure the Mkt Cap column prints.
+         It used to read the mover doc's pre-bucketed `l.cap` while the number
+         beside it could come from the companies doc — two sources for one fact,
+         so a row could show "$33M" labelled "Mid". Worse, the fallback was a
+         literal `?? "Mid"`: a ticker with no bucket was ASSERTED to be mid-cap
+         rather than left unknown, and the Market cap filter then matched it.
+         Derived from the printed number, the two cannot disagree; `l.cap` is
+         still the fallback for a row whose cap figure is missing entirely. */
+      cap: mcap != null ? capFromMarketCap(mcap) : ((l.cap as Mover["cap"] | null) ?? "—"),
       // Real 5-session change from technical-indicators.job; null → "—".
       weekPct: c?.week5ChangePct ?? null,
       weekBase: c?.week5BaseClose ?? null,
@@ -133,7 +145,7 @@ export function MoversScreen() {
     maPosture: maPostureLabel(c.aboveSma50, c.aboveSma200),
     owned: false,
     sector: c.sector ?? "—",
-    cap: capFromMarketCap(c.marketCap) as Mover["cap"],
+    cap: capFromMarketCap(c.marketCap),
     marketCap: c.marketCap ?? null,
     weekPct: c.week5ChangePct ?? null,
     weekBase: c.week5BaseClose ?? null,
@@ -404,9 +416,33 @@ export function MoversScreen() {
    * displays and what decides it belongs cannot come apart.
    */
   const shownValues = useCallback((m: Mover): { price: number | null; change: number | null } => {
+    const q = quoteByTicker.get(m.ticker);
+
+    /* Outside regular hours the board keeps the COMPLETED SESSION's pair.
+     *
+     * This is a session leaderboard: rows are ranked on the stored session
+     * move, and the caption says so. The live overlay was replacing that with
+     * an extended-hours print measured from the previous close — a different
+     * quantity, arriving about a second after first paint. BNC rendered $5.25
+     * (the 16:00 close) and then silently became $5.20 (a pre-market trade),
+     * which is the flip that made the board disagree with every consumer site.
+     *
+     * Two things were wrong with overlaying it, beyond the flicker. The number
+     * shown stopped being the number the row was ranked by — which the `visible`
+     * guard below then papers over by HIDING names whose extended-hours move
+     * contradicts their tab, so a genuine top gainer vanishes from Top Gainers.
+     * And the price and the percentage described different sessions.
+     *
+     * So: when extendedSession says no regular session has run since the last
+     * close, the stored EOD pair stands and the live print is reported in the
+     * PM/AH marker instead of replacing it. During regular hours — and the
+     * moment a regular session has moved the price — the live overlay is exactly
+     * as before, which is what keeps this table matching the stock drawer. */
+    const extOnly = extendedSession(q) !== null;
+
     // Price and Change come from ONE source — see pairedQuote. Read per-field,
     // a live price could land beside the stored percentage.
-    const pq = pairedQuote(quoteByTicker.get(m.ticker), m);
+    const pq = extOnly ? { price: m.price, pctChange: m.pctChange } : pairedQuote(q, m);
     // On the weekly tabs the Change column shows the 5-DAY move, so the live
     // quote (which is today's %) must NOT overwrite it — otherwise a "Weekly
     // Gainers" row could render today's negative number.
@@ -423,6 +459,32 @@ export function MoversScreen() {
       : pq.pctChange;
     return { price: pq.price, change };
   }, [quoteByTicker, tab]);
+
+  /**
+   * The marker that qualifies a Change value with the session it happened in —
+   * "PM" pre-market, "AH" after hours, "EXT" when the vendor's session state
+   * cannot say which. null during regular hours, where the figure is a plain
+   * day move and needs nothing.
+   */
+  const sessionTag = useCallback((m: Mover) => {
+    const q = quoteByTicker.get(m.ticker);
+    const ext = extendedSession(q);
+    if (!ext) return null;
+    const short = ext === "pre-market" ? "PM" : ext === "after hours" ? "AH" : "EXT";
+    /* The cell shows the completed session (see shownValues); this reports the
+       extended-hours print that is trading now, so the live number is still
+       available without displacing the one the row is ranked by. */
+    const live = q?.price != null ? `$${q.price.toFixed(2)}` : null;
+    return (
+      <span
+        className="mv-sess"
+        title={
+          `Price and change are the last completed session's.` +
+          (live ? ` Trading ${ext} now at ${live}.` : ` There is ${ext} trading in this name.`)
+        }
+      >{short}</span>
+    );
+  }, [quoteByTicker]);
 
   /**
    * A row whose LIVE number contradicts the tab it is sitting in.
@@ -491,9 +553,19 @@ export function MoversScreen() {
             <button key={k} className={`tab${k === tab ? " on" : ""}`} onClick={() => setTab(k as TabKey)}>{l}</button>
           ))}
         </div>
+        {/* The caption has to describe the tab you are ON.
+            It was hard-coded to the daily movers feed — "top 100 gainers + 100
+            losers · ranked by session move" — and shown on every tab, including
+            Unusual Volume and the two weekly ones, which draw from the tracked
+            universe and rank by RVOL or by the 5-day move. It was stating the
+            wrong source AND the wrong ranking on three tabs out of five. */}
         {liveCount > 0 && (
           <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-            {liveCount} names · top 100 gainers + 100 losers · ranked by session move · {QUOTE_DELAY_LABEL}
+            {liveCount} names · {
+              isWeekTab(tab) ? "tracked universe · ranked by 5-day move"
+              : tab === "vol" ? "tracked universe · ranked by relative volume"
+              : "top 100 gainers + 100 losers · ranked by session move"
+            } · {QUOTE_DELAY_LABEL}
           </span>
         )}
       </div>
@@ -530,13 +602,12 @@ export function MoversScreen() {
               {sortTh("rvol",    "RVOL",   true)}
               {sortTh("mcap",    "Mkt Cap", true)}
               {sortTh("cap",     "Cap · Sector")}
-              <th className="num">Intraday</th>
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ padding: 0 }}>
+                <td colSpan={6} style={{ padding: 0 }}>
                   {moversLoading && movers.length === 0
                     ? <DataState loading label="Loading movers…" />
                     : <div style={{ padding: 16, color: "var(--text-dim-solid)" }}>No stocks match these filters.</div>}
@@ -567,7 +638,19 @@ export function MoversScreen() {
                     </div>
                   </td>
                   <td className="num">{price == null ? "—" : `$${fmt(price)}`}</td>
-                  <td className="num" style={{ color: v == null ? undefined : v >= 0 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>{v == null ? "—" : <>{arr(v)} {sign(v)}</>}</td>
+                  {/* WHEN the move happened, not just how big it was.
+                      A % with no session behind it is what made this board
+                      disagree with every consumer finance site: outside regular
+                      hours the figure is measured from the last close and can be
+                      carrying a whole extended-hours session that the site's
+                      headline number does not. extendedSession already decides
+                      this for the stock drawer; the board was the one live
+                      surface printing the number bare. Suppressed on the weekly
+                      tabs, where the column is a 5-day move and the session of
+                      the last print says nothing about it. */}
+                  <td className="num" style={{ color: v == null ? undefined : v >= 0 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
+                    {v == null ? "—" : <>{arr(v)} {sign(v)}{!isWeekTab(tab) && sessionTag(m)}</>}
+                  </td>
                   <td className="num">
                     {m.rvolRatio > 0
                       ? <b style={{ color: m.rvolRatio > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvolRatio.toFixed(1)}×</b>
@@ -585,9 +668,7 @@ export function MoversScreen() {
                       <span style={{ color: "var(--text-dim-solid)" }}>{m.sector}</span>
                     </span>
                   </td>
-                  <td className="num">
-                    <Spark seed={m.ticker.charCodeAt(0)} up={(v ?? 0) >= 0} />
-                  </td>
+
                 </tr>
               );
             })}

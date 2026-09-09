@@ -13,7 +13,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
 import { useBackendBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
-import { useLiveQuotes } from "../live-quotes-context";
+import { useLiveQuotes, extendedSession } from "../live-quotes-context";
 import { EarningsPlaybook } from "./EarningsPlaybook";
 import type {
   CompanyDoc, AnalystConsensusDoc, InsiderTxDoc,
@@ -925,6 +925,19 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
       : null;
   const dispDollar =
     sharedDollar ?? (live.change != null ? Math.abs(live.change) : dollar);
+  // Outside regular hours the headline change is an extended-hours move, and
+  // printing it bare contradicts the chart — whose last completed candle is the
+  // regular session that closed. MDB read +3.73% green beside a red final
+  // candle: the vendor had regular_trading_change_percent 0 and
+  // late_trading_change_percent 3.734, so the whole move was after the bell.
+  // Both numbers were right; the label was missing. See extendedSession.
+  const extLabel = extendedSession(sharedQuote);
+  // The regular session's closing price, which the extended move is measured
+  // from — the number the chart's last candle actually ends at.
+  const atClose =
+    dispPrice != null && dispPct != null && dispPct !== -100
+      ? dispPrice / (1 + dispPct / 100)
+      : null;
   // Freshness stamp for the price-chart bars (backend createdAt), surfaced by the
   // chart toolbar in the same muted style as the header's delayed-quote marker
   // (BUG-DATA-008).
@@ -1206,6 +1219,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   {dispPct != null && (
                     <span className={`c ${cls(dispPct)}`}>{arr(dispPct)} {dispPct >= 0 ? "+" : ""}${fmt(dispDollar ?? 0, 2)} ({sign(dispPct)})</span>
                   )}
+
                 </div>
               </div>
               {/* Second line, under the price: market cap, exchange/sector and
@@ -1230,6 +1244,20 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 {inSectorRank != null && inSectorTotal != null && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".62rem" }}>
                     #{inSectorRank} of {inSectorTotal} in sector
+                  </span>
+                )}
+                {/* Deliberately on the META row, not beside the price. The
+                    .sd-head min-width floor in iq.css is measured to fit
+                    exactly h1 + price + change on one line; a pill up there
+                    overflows that budget and wraps the change under a clipped
+                    price. This row already wraps by design. */}
+                {extLabel && (
+                  <span
+                    className="pill"
+                    title={`This move happened outside regular trading hours. The last regular session closed at $${fmt(atClose ?? 0, 2)} — that close is what the chart's final candle shows.`}
+                    style={{ background: "var(--surface-3)", color: "var(--warn)", fontSize: ".62rem", whiteSpace: "nowrap" }}
+                  >
+                    {extLabel}{atClose != null ? ` · at close $${fmt(atClose, 2)}` : ""}
                   </span>
                 )}
                 {isLiveStock && (
@@ -2455,9 +2483,8 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             return (
               <div className="side-drawer" style={{ zIndex: 52 }}>
                 <div className="drawer-h">
-                  <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)", flexShrink: 0 }}>
-                    {sym[0]}
-                  </div>
+                  {/* The company logo, as every ticker row draws it. */}
+                  <StockLogo sym={sym} size={31} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>{sym}</div>
                     <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Financials · income statement</div>

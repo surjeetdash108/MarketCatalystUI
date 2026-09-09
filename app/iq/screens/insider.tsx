@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useIQActions } from "../shell";
 import { StockLogo, DataState, NotAvailable, VendorTag } from "../utils";
-import { apiGet } from "../backend";
+import { apiGet, BackendApiError } from "../backend";
 import { useApiList } from "../hooks/useApiList";
 import type { InsiderTxDoc } from "../types";
 
@@ -12,7 +12,7 @@ type InsFilter   = "All" | "Buys" | "Sells";
 type InsSort     = "value" | "date";
 type InstFilter  = "All" | "Net buying" | "Net selling";
 type InstSort    = "owners" | "move";
-type DrawerState = { kind: "insider"; sym: string } | { kind: "fund"; fund: FundHoldingDoc } | null;
+type DrawerState = { kind: "insider"; sym: string } | { kind: "fund"; fund: FundHoldingDoc } | { kind: "inst"; sym: string } | null;
 
 interface Tx {
   s: string; role: string; det: string; dir: "buy" | "sell";
@@ -43,6 +43,32 @@ interface InstOwnDoc {
     investorsHolding: number | null; ownershipPercent: number | null;
   }> | null;
 }
+
+// ---- SEC EDGAR Schedule 13D/G beneficial ownership (see backend/src/live/
+// ondemand.service.ts getOwnership13DG, GET /live/ownership-13dg). ----
+interface Sec13Holder {
+  filerName: string; form: string; filingDate: string; eventDate: string | null;
+  accessionNumber: string; shares: number | null; percentOfClass: number | null;
+  soleVoting: number | null; sharedVoting: number | null;
+  soleDispositive: number | null; sharedDispositive: number | null;
+  personType: string | null; filingUrl: string;
+}
+interface Sec13Doc {
+  ticker: string; cik: string | null; cusip: string | null; securitiesClass: string | null;
+  holders: Sec13Holder[];
+  trackedFunds: Array<{ fundName: string; filingDate: string | null; shares: number | null; value: number | null; pctOfPortfolio: number | null }>;
+  legacyFilings: Array<{ form: string; filingDate: string; accessionNumber: string; url: string }>;
+  totalFilings: number;
+}
+
+/** SEC cover-page person-type codes, spelled out. Anything unlisted renders as
+ *  the raw code rather than being dropped or guessed at. */
+const PERSON_TYPE: Record<string, string> = {
+  IA: "Investment adviser", BK: "Bank", IC: "Investment company",
+  IN: "Individual", CO: "Corporation", HC: "Parent holding company",
+  PN: "Partnership", EP: "Employee benefit plan", SA: "Savings association",
+  FI: "Insurance company", CP: "Church plan", OO: "Other",
+};
 
 /** "Q2 '26" — compact enough for eight columns side by side. */
 function qLabel(year: number, quarter: number): string {
@@ -118,7 +144,11 @@ function InsiderDrawer({ sym, liveTxns, loading, onClose, onOpenFull }: {
       <div className="scrim" onClick={onClose} />
       <div className="side-drawer">
         <div className="drawer-h">
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3" }}>{sym[0]}</div>
+          {/* The company's own logo, exactly as the row that opened this drawer
+              draws it. A letter tile here made the header look like a different
+              company from the one clicked. StockLogo falls back to a letter tile
+              itself when the ticker has no branding. */}
+          <StockLogo sym={sym} size={31} />
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{sym}</div>
@@ -226,6 +256,206 @@ function FundDrawer({ fund, onClose }: { fund: FundHoldingDoc; onClose: () => vo
   );
 }
 
+// ---- 13F ticker detail drawer ----
+//
+// Sourced from SEC EDGAR Schedules 13D/G rather than from the FMP rollup the
+// table itself is built on. The two answer different questions, and repeating
+// the table's own row inside the drawer that opens from it told the reader
+// nothing new: the table gives the anonymous aggregate ("1,847 filers hold
+// 62%"), while 13D/G names every institution above 5% with its exact stake,
+// its percent of the class, and how much of that it can actually VOTE. The
+// voting-versus-dispositive split is the part no aggregate can express — an
+// index manager routinely holds a billion shares while voting a fraction of
+// them.
+function InstTickerDrawer({ sym, onClose, onOpenFull }: {
+  sym: string; onClose: () => void; onOpenFull: (s: string) => void;
+}) {
+  const [sec, setSec] = useState<Sec13Doc | null>(null);
+  // The REASON, not just a boolean. A flat "could not reach SEC EDGAR" is the
+  // same message whether the backend is missing the route, the session is
+  // unauthenticated, or EDGAR itself is down — which makes the one failure a
+  // reader can actually act on indistinguishable from the two they cannot.
+  const [failed, setFailed] = useState<string | null>(null);
+
+  // No state reset here: the drawer is keyed on `sym`, so a different ticker
+  // remounts it with fresh initial state rather than clearing it mid-effect.
+  useEffect(() => {
+    let active = true;
+    apiGet<Sec13Doc>(`/live/ownership-13dg?ticker=${encodeURIComponent(sym)}`)
+      .then(d => { if (active) setSec(d); })
+      .catch((err: unknown) => {
+        if (!active) return;
+        const status = err instanceof BackendApiError ? err.status : 0;
+        setFailed(
+          status === 404
+            ? "Ownership endpoint not found on the backend — it may need a restart to pick up the route."
+            : status === 401 || status === 403
+              ? "Session expired — sign in again to load ownership filings."
+              : status >= 500
+                ? `SEC EDGAR lookup failed on the server (${status}).`
+                : `Could not load ownership filings for ${sym}.`,
+        );
+      });
+    return () => { active = false; };
+  }, [sym]);
+
+  // A 13G/A reporting a zero stake is an EXIT — the filer telling the SEC it
+  // has dropped below 5%. Listing it beside live holders reads as a holder
+  // owning nothing, so the two are separated.
+  const holders = (sec?.holders ?? []).filter(h => (h.shares ?? 0) > 0);
+  const exited  = (sec?.holders ?? []).filter(h => (h.shares ?? 0) <= 0);
+  const topPct  = holders.reduce<number | null>((m, h) => h.percentOfClass != null && (m == null || h.percentOfClass > m) ? h.percentOfClass : m, null);
+
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="side-drawer">
+        <div className="drawer-h">
+          {/* Same company logo the 13F row carries — see the Form 4 drawer above. */}
+          <StockLogo sym={sym} size={31} />
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{sym}</div>
+              <VendorTag v="sec" />
+            </div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Beneficial ownership · Schedules 13D/G</div>
+          </div>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+        <div className="drawer-b">
+          {failed ? (
+            <DataState label={failed} />
+          ) : !sec ? (
+            <DataState loading label="" />
+          ) : sec.cik === null ? (
+            <DataState label={`SEC does not list ${sym} — no EDGAR filer for this symbol.`} />
+          ) : (
+            <>
+              <div className="metric-grid" style={{ marginBottom: 14 }}>
+                <div className="m">
+                  <div className="k">Holders &gt; 5%</div>
+                  <div className="v">{holders.length}</div>
+                </div>
+                <div className="m">
+                  <div className="k">Largest stake</div>
+                  <div className="v">{topPct != null ? `${topPct.toFixed(2)}%` : <NotAvailable />}</div>
+                </div>
+              </div>
+              <div className="metric-grid" style={{ marginBottom: 14 }}>
+                <div className="m">
+                  <div className="k">CUSIP</div>
+                  <div className="v mono" style={{ fontSize: ".82rem" }}>{sec.cusip ?? <NotAvailable />}</div>
+                </div>
+                <div className="m">
+                  <div className="k">Class</div>
+                  <div className="v" style={{ fontSize: ".82rem" }}>{sec.securitiesClass ?? <NotAvailable />}</div>
+                </div>
+              </div>
+
+              <div className="ai-sec"><div className="h">Beneficial owners above 5%</div></div>
+              {holders.length === 0 ? (
+                <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", padding: "8px 0" }}>
+                  No structured 13D/G cover page names a current &gt;5% holder.
+                  {sec.legacyFilings.length > 0 && " EDGAR lists older filings below, but they predate the SEC's machine-readable cover page."}
+                </div>
+              ) : holders.map(h => {
+                // What the filer may VOTE, against what it merely holds. Both
+                // powers can be sole or shared, so each is a sum of two fields.
+                const vote = (h.soleVoting ?? 0) + (h.sharedVoting ?? 0);
+                const disp = (h.soleDispositive ?? 0) + (h.sharedDispositive ?? 0);
+                return (
+                  <a key={h.accessionNumber + h.filerName} href={h.filingUrl} target="_blank" rel="noopener noreferrer"
+                     className="minirow" style={{ display: "flex", alignItems: "flex-start", gap: 10, textDecoration: "none" }}>
+                    <span className="mid" style={{ minWidth: 0 }}>
+                      <b style={{ color: "var(--text-hi)" }}>{h.filerName}</b>
+                      <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                        {h.form} · filed {h.filingDate}
+                        {h.eventDate ? ` · as of ${h.eventDate}` : ""}
+                        {h.personType ? ` · ${PERSON_TYPE[h.personType] ?? h.personType}` : ""}
+                      </div>
+                      {disp > 0 && (
+                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 1 }}>
+                          Votes {fmtCompact(vote)} of {fmtCompact(disp)} sh
+                          {` (${Math.round((vote / disp) * 100)}%)`}
+                        </div>
+                      )}
+                    </span>
+                    <span className="r" style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ color: "var(--text-hi)", fontWeight: 700 }}>
+                        {h.percentOfClass != null ? `${h.percentOfClass.toFixed(2)}%` : <NotAvailable />}
+                      </div>
+                      <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", fontFamily: "var(--f-mono)" }}>
+                        {fmtCompact(h.shares)} sh
+                      </div>
+                    </span>
+                  </a>
+                );
+              })}
+
+              {exited.length > 0 && (
+                <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 8, lineHeight: 1.5 }}>
+                  Reported dropping below 5%: {exited.map(h => h.filerName).join(", ")}.
+                </div>
+              )}
+
+              <div className="ai-sec" style={{ marginTop: 16 }}><div className="h">Tracked 13F funds holding {sym}</div></div>
+              {(sec.trackedFunds ?? []).length === 0 ? (
+                <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", padding: "8px 0" }}>
+                  {sec.cusip
+                    ? "None of the tracked 13F funds report this position."
+                    : "No CUSIP on the EDGAR cover pages, so 13F positions cannot be matched."}
+                </div>
+              ) : (
+                // Matched on the CUSIP read off the 13D/G cover page. 13F
+                // positions are filed under CUSIP and never carry a ticker, so
+                // this is an exact join, not a name-similarity guess.
+                sec.trackedFunds.map(f => (
+                  <div key={f.fundName} className="minirow">
+                    <span className="mid">
+                      <b style={{ color: "var(--text-hi)" }}>{f.fundName}</b>
+                      <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>
+                        {f.shares != null ? `${f.shares.toLocaleString()} sh` : "—"}
+                        {f.pctOfPortfolio != null ? ` · ${f.pctOfPortfolio.toFixed(2)}% of portfolio` : ""}
+                        {f.filingDate ? ` · 13F ${f.filingDate}` : ""}
+                      </div>
+                    </span>
+                    <span className="r">{f.value != null ? fmtValue(f.value) : <NotAvailable />}</span>
+                  </div>
+                ))
+              )}
+
+              {sec.legacyFilings.length > 0 && (
+                <>
+                  <div className="ai-sec" style={{ marginTop: 16 }}><div className="h">Earlier 13D/G filings on EDGAR</div></div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {sec.legacyFilings.map(f => (
+                      <a key={f.accessionNumber} href={f.url} target="_blank" rel="noopener noreferrer"
+                         className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)" }}>
+                        {f.form} · {f.filingDate}
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div style={{ marginTop: 14, fontSize: ".68rem", color: "var(--text-dim-solid)", lineHeight: 1.5 }}>
+                Schedules 13D and 13G are filed by anyone crossing 5% beneficial
+                ownership, and are the only per-company ownership record SEC
+                publishes — 13F is filed by the holder and keyed on CUSIP, so it
+                cannot be looked up by ticker. Figures are as stated on each
+                filing&rsquo;s cover page on the date shown, not live positions.
+              </div>
+            </>
+          )}
+          <button className="btn primary" style={{ width: "100%", marginTop: 14 }} onClick={() => { onClose(); onOpenFull(sym); }}>
+            Open full stock page &rarr;
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ============================================================
 export function InsiderScreen() {
   const { openStockFull } = useIQActions();
@@ -275,6 +505,7 @@ export function InsiderScreen() {
   }, [view, liveFunds, liveOverlap]);
 
   const openIns  = (sym: string) => setDrawer({ kind: "insider", sym });
+  const openInst = (sym: string) => setDrawer({ kind: "inst", sym });
 
   // "Recent activity" window — a late/amended Form 4 can report a decade-old
   // transaction (e.g. a 2010 date) that otherwise headlines the value-sorted feed.
@@ -509,7 +740,7 @@ export function InsiderScreen() {
               ) : (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {instActive.map(o => (
-                    <button key={o.ticker} className="tr-pill" onClick={() => openStockFull(o.ticker)}>
+                    <button key={o.ticker} className="tr-pill" onClick={() => openInst(o.ticker)}>
                       <StockLogo sym={o.ticker} size={18} />
                       <span className="tr-tk">{o.ticker}</span>
                       <span className="tr-mt">
@@ -563,7 +794,7 @@ export function InsiderScreen() {
                   </thead>
                   <tbody>
                     {instSorted.map(d => (
-                      <tr key={d.ticker} data-sym={d.ticker} onClick={() => openStockFull(d.ticker)} style={{ cursor: "pointer" }}>
+                      <tr key={d.ticker} data-sym={d.ticker} onClick={() => openInst(d.ticker)} style={{ cursor: "pointer" }}>
                         <td>
                           <div className="co"><span className="s"><StockLogo sym={d.ticker} size={20} />{d.ticker}</span></div>
                         </td>
@@ -674,7 +905,7 @@ export function InsiderScreen() {
                     {mostBought.length === 0 ? (
                       <DataState loading={instOwnLoading} label="No net-buying data synced yet." />
                     ) : mostBought.map(d => (
-                      <div key={d.ticker} className="minirow" onClick={() => openStockFull(d.ticker)} style={{ cursor: "pointer" }}>
+                      <div key={d.ticker} className="minirow" onClick={() => openInst(d.ticker)} style={{ cursor: "pointer" }}>
                         <span className="mid"><b style={{ color: "var(--text-hi)" }}>{d.ticker}</b></span>
                         <span className="r up">{fmtCountDelta(d.investorsHoldingChange)} filers</span>
                       </div>
@@ -688,7 +919,7 @@ export function InsiderScreen() {
                     {mostSold.length === 0 ? (
                       <DataState loading={instOwnLoading} label="No net-selling data synced yet." />
                     ) : mostSold.map(d => (
-                      <div key={d.ticker} className="minirow" onClick={() => openStockFull(d.ticker)} style={{ cursor: "pointer" }}>
+                      <div key={d.ticker} className="minirow" onClick={() => openInst(d.ticker)} style={{ cursor: "pointer" }}>
                         <span className="mid"><b style={{ color: "var(--text-hi)" }}>{d.ticker}</b></span>
                         <span className="r down">{fmtCountDelta(d.investorsHoldingChange)} filers</span>
                       </div>
@@ -724,6 +955,14 @@ export function InsiderScreen() {
       )}
       {drawer?.kind === "fund" && (
         <FundDrawer key={drawer.fund.id} fund={drawer.fund} onClose={() => setDrawer(null)} />
+      )}
+      {drawer?.kind === "inst" && (
+        <InstTickerDrawer
+          key={drawer.sym}
+          sym={drawer.sym}
+          onClose={() => setDrawer(null)}
+          onOpenFull={openStockFull}
+        />
       )}
     </>
   );

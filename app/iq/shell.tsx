@@ -18,7 +18,7 @@ import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
 import { menuItems } from "../dashboard/menu-items";
 import { type PulseItem } from "./data";
-import { fmt, sign, cls, arr, SemiGauge, DataState, NotAvailable, VendorTag, titleCaseLabel} from "./utils";
+import { fmt, sign, cls, arr, SemiGauge, DataState, NotAvailable, VendorTag, titleCaseLabel, StockLogo} from "./utils";
 import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { useTapeStream } from "./hooks/useTapeStream";
@@ -47,7 +47,11 @@ function logSearchedTicker(sym: string) {
 // ---- Font type ----
 /** "inter-source" is a PAIRING, not a single face: it sets the heading font as
  *  well as the body font. Every other key changes --f-body only. */
-export type FontKey = "geist" | "inter" | "dm-sans" | "space-grotesk" | "plus-jakarta-sans" | "ibm-plex-sans" | "outfit" | "manrope" | "inter-source";
+export type FontKey =
+  | "geist" | "inter" | "dm-sans" | "space-grotesk" | "plus-jakarta-sans"
+  | "ibm-plex-sans" | "outfit" | "manrope" | "inter-source"
+  | "figtree" | "public-sans" | "sora" | "lexend" | "urbanist"
+  | "work-sans" | "archivo" | "rubik" | "nunito-sans";
 
 // ---- IQ Actions context ----
 interface IQActions {
@@ -184,9 +188,8 @@ function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
       <div className="scrim" onClick={onClose} />
       <div className="drawer open">
         <div className="drawer-h">
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)" }}>
-            {sym[0]}
-          </div>
+          {/* The company logo, as every ticker row draws it. */}
+          <StockLogo sym={sym} size={31} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
               {sym}
@@ -269,9 +272,8 @@ function EarningsDrawer({ sym, liveEarnings, loading, onClose }: { sym: string; 
       <div className="scrim" onClick={onClose} />
       <div className="drawer open">
         <div className="drawer-h">
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1f6b4d,#0e3a2a)", color: "#5ff0b3" }}>
-            {sym[0]}
-          </div>
+          {/* The company logo, as every ticker row draws it. */}
+          <StockLogo sym={sym} size={31} />
           <div style={{ flex: 1 }}>
             <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)" }}>{sym}</div>
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{e ? e.date : "—"}</div>
@@ -348,14 +350,87 @@ function SectorDrawer({ name, companies, sectorsLive, loading, onClose }: {
   );
 }
 
+/**
+ * Says, once and app-wide, what every percentage on screen currently means.
+ *
+ * Outside regular hours the vendor rebases each quote on the LAST close, so the
+ * "change" on every tile, row and table is the extended-hours move — not the
+ * session move. MDB read +3.73% while its last regular session actually closed
+ * DOWN 4.09%, and the tiny ±0.0x% figures across the dashboard were after-hours
+ * drift rather than real day moves.
+ *
+ * One banner rather than a badge per row: the condition is a property of the
+ * market clock, not of any ticker, so it is identical for every number on the
+ * page. The stock header still carries its own precise tag, where the exact
+ * regular close is worth naming.
+ *
+ * NOT shown on Movers. That board is a leaderboard for a COMPLETED session, so
+ * outside regular hours it deliberately keeps that session's close and move
+ * rather than the extended-hours print (see shownValues in screens/movers.tsx)
+ * and marks the affected rows PM/AH itself. This banner would state the exact
+ * opposite of what those rows are showing — and it was already untrue there for
+ * the two weekly tabs, whose column is a 5-day move and not a move against the
+ * last close.
+ */
+const NO_SESSION_NOTICE = ["/menu/movers"];
+
+function SessionNotice({ phase, pathname }: { phase: "open" | "pre" | "after" | "closed" | "unknown"; pathname: string }) {
+  if (phase === "open" || phase === "unknown") return null;
+  if (NO_SESSION_NOTICE.includes(pathname)) return null;
+  const label =
+    phase === "pre" ? "Pre-market" : phase === "after" ? "After hours" : "Market closed";
+  return (
+    <div
+      role="note"
+      style={{
+        display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+        margin: "0 0 12px", padding: "7px 12px",
+        background: "var(--surface-2)", border: "1px solid var(--border-soft)",
+        borderRadius: "var(--r-sm)", fontSize: ".72rem", color: "var(--text-dim-solid)",
+        lineHeight: 1.5,
+      }}
+    >
+      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--warn)", fontSize: ".62rem" }}>
+        {label}
+      </span>
+      <span>
+        Percentage changes shown are moves against the last close, so they
+        reflect {phase === "pre" ? "pre-market" : phase === "after" ? "after-hours" : "extended-hours"} trading
+        rather than the last full session.
+      </span>
+    </div>
+  );
+}
+
 // ---- Index drawer (openIndex) ----
-function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, onClose }: {
-  idx: number; pulse: PulseItem[]; sectorsLive: SectorApiDoc[]; loading: boolean; onClose: () => void;
+function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClose }: {
+  idx: number; pulse: PulseItem[]; sectorsLive: SectorApiDoc[]; loading: boolean;
+  phase: "open" | "pre" | "after" | "closed" | "unknown"; onClose: () => void;
 }) {
   const x = livePulse[idx];
   if (!x) return null;
   const dec = x.value > 1000 ? 0 : 2;
   const dollar = x.value - x.prevClose;
+  /**
+   * Whether the open / high / low below describe the SAME session as the price
+   * above them.
+   *
+   * The vendor's OHLC block is the last COMPLETED regular session, while the
+   * price keeps updating through pre- and post-market. Outside regular hours
+   * the two therefore describe different sessions, and the drawer was labelling
+   * the older one "Day high" / "Day low" next to a newer price — MDB showed a
+   * price of 382.51 above a day high of 381.25, a range that excluded the very
+   * number printed above it.
+   *
+   * Two independent signals, because either alone can miss:
+   *  - the market phase says a regular session is not running;
+   *  - the price sits outside the quoted range, which is proof on its own that
+   *    the two cannot be the same session, whatever the clock says.
+   */
+  const outsideRange =
+    x.dayHigh != null && x.dayLow != null &&
+    (x.value > x.dayHigh || x.value < x.dayLow);
+  const priorSession = phase !== "open" && phase !== "unknown" ? true : outsideRange;
   const c = x.change >= 0 ? "up" : "down";
   const eq = ["S&P 500", "Nasdaq", "Dow", "Russell 2000"].includes(x.label);
   const sortedSectors = [...sectorsLive].sort((a, b) => b.pctChange - a.pctChange);
@@ -376,12 +451,21 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, onClose }: {
             <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>{fmt(x.value, dec)}</div>
             <div className={c} style={{ fontWeight: 600 }}>{arr(x.change)} {x.change >= 0 ? "+" : ""}{fmt(Math.abs(dollar), dec)} ({sign(x.change)})</div>
           </div>
+          {/* "Last session" rather than "Day" whenever these do not describe the
+              same session as the price above — see priorSession. */}
           <div className="metric-grid">
-            <div className="m"><div className="k">Open</div><div className="v">{fmt(x.open, dec)}</div></div>
+            <div className="m"><div className="k">{priorSession ? "Session open" : "Open"}</div><div className="v">{fmt(x.open, dec)}</div></div>
             <div className="m"><div className="k">Prev close</div><div className="v">{fmt(x.prevClose, dec)}</div></div>
-            <div className="m"><div className="k">Day high</div><div className="v">{x.dayHigh != null ? fmt(x.dayHigh, dec) : <NotAvailable />}</div></div>
-            <div className="m"><div className="k">Day low</div><div className="v">{x.dayLow != null ? fmt(x.dayLow, dec) : <NotAvailable />}</div></div>
+            <div className="m"><div className="k">{priorSession ? "Session high" : "Day high"}</div><div className="v">{x.dayHigh != null ? fmt(x.dayHigh, dec) : <NotAvailable />}</div></div>
+            <div className="m"><div className="k">{priorSession ? "Session low" : "Day low"}</div><div className="v">{x.dayLow != null ? fmt(x.dayLow, dec) : <NotAvailable />}</div></div>
           </div>
+          {priorSession && (
+            <div style={{ marginTop: 8, fontSize: ".68rem", color: "var(--text-dim-solid)", lineHeight: 1.5 }}>
+              Open, high and low are the last completed regular session. The
+              price above is the latest {phase === "pre" ? "pre-market" : phase === "after" ? "after-hours" : "extended-hours"} print,
+              so it can sit outside that range.
+            </div>
+          )}
           {eq && (
             <>
               {sortedSectors.length === 0 ? (
@@ -424,9 +508,8 @@ function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
       <div className="scrim" onClick={onClose} />
       <div className="stock-side-drawer">
         <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1a2640,#0d1520)", color: "var(--brand-2)", fontSize: ".9rem" }}>
-            {sym[0]}
-          </div>
+          {/* The company logo, as every ticker row draws it. */}
+          <StockLogo sym={sym} size={31} />
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
               {sym} · Stock Details
@@ -474,9 +557,8 @@ function StockDetailPopover({ sym, list, onNavigate, onClose }: {
       <div className="scrim" onClick={onClose} />
       <div className="drawer open wide">
         <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)", fontSize: ".9rem" }}>
-            {sym[0]}
-          </div>
+          {/* The company logo, as every ticker row draws it. */}
+          <StockLogo sym={sym} size={31} />
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
               {sym} · Stock Details
@@ -1154,6 +1236,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
             {/* Main content */}
             <main className="main">
+              <SessionNotice phase={tapeFrame?.marketPhase ?? "unknown"} pathname={pathname} />
               {children}
               <footer className="disclaimer-bar">
                 <span className="disclaimer-text">
@@ -1190,7 +1273,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <SectorDrawer name={drawer.name} companies={shellCompanies} sectorsLive={shellSectors} loading={shellCompaniesLoading} onClose={() => setDrawer(null)} />
           )}
           {drawer?.type === "index" && (
-            <IndexDrawer idx={drawer.idx} pulse={livePulse} sectorsLive={shellSectors} loading={shellSectorsLoading} onClose={() => setDrawer(null)} />
+            <IndexDrawer idx={drawer.idx} pulse={livePulse} sectorsLive={shellSectors} loading={shellSectorsLoading} phase={tapeFrame?.marketPhase ?? "unknown"} onClose={() => setDrawer(null)} />
           )}
           {drawer?.type === "feargreed" && (
             <FearGreedDrawer onClose={() => setDrawer(null)} />
