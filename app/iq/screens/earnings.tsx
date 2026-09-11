@@ -297,12 +297,12 @@ function EcChip({ sym, selected, onSelect }: { sym: string; selected: boolean; o
   // longer disagree about whether a logo has painted. See useTickerLogo for why
   // onLoad alone let the placeholder tile bleed a hairline ring at the chip's
   // rounded corners — most visible in the light theme, under a white logo.
-  const { loaded, failed, imgProps } = useTickerLogo(sym);
+  const { loaded, failed, sym: logoSym, imgProps } = useTickerLogo(sym);
   return (
     <button className={`ec-chip${selected ? " on" : ""}`} onClick={() => onSelect(sym)}>
       <span className="ec-logo" style={{ background: loaded ? "transparent" : "#27314a", color: "#cdd6e6" }}>
         {!loaded && sym[0]}
-        {!failed && <img {...imgProps} style={LOGO_IMG_STYLE} />}
+        {!failed && <img key={logoSym} {...imgProps} style={LOGO_IMG_STYLE} />}
       </span>
       {sym}
     </button>
@@ -455,7 +455,7 @@ function CallDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
 
 // Max ticker logos/rows shown before an overflow "+N" — shared by the day
 // tables, the week columns, and the month cells so all three views cap alike.
-const MAX_CAL_LOGOS = 24;
+const MAX_CAL_LOGOS = 10;
 // The at-a-glance snapshot shows this many rows per session (per side) before
 // its "+N more" toggle.
 const GLANCE_MAX = 25;
@@ -849,8 +849,16 @@ export function EarningsScreen() {
   const liveEarningsData = liveEarnings;
 
   const [mode, setMode]     = useState<"day" | "week" | "month">("day");
-  // Day view caps at MAX_CAL_LOGOS like every other view; this opens it out.
-  const [dayExpanded, setDayExpanded] = useState(false);
+  // Per-day expanded state for Day and Week views so +N expands inline.
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const toggleDayExpanded = (iso: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(iso)) next.delete(iso);
+      else next.add(iso);
+      return next;
+    });
+  };
   const [anchor, setAnchor] = useState<string>(() => isoDay(new Date()));
   // At-a-glance snapshot: a Nasdaq-style results table (actual vs consensus,
   // surprise, revenue, year-ago) for the selected day/week/month, toggled from
@@ -889,7 +897,7 @@ export function EarningsScreen() {
 
   // Stepping to another day starts collapsed again — an expansion belongs to
   // the day it was opened on, not to the view.
-  useEffect(() => { setDayExpanded(false); }, [anchor, mode]);
+  useEffect(() => { setExpandedDays(new Set()); }, [anchor, mode]);
 
   const weekMon   = mondayOf(new Date(`${anchor}T00:00:00Z`));
   const weekDays5 = [0, 1, 2, 3, 4].map(i => isoDay(addDays(weekMon, i)));
@@ -1041,11 +1049,10 @@ export function EarningsScreen() {
 
   if (mode === "day") {
     // One column, built exactly like a day in the week view — same card, same
-    // two-up chips, same +N. Spreading the whole list across the full width
-    // made a day look like a different product from the week it belongs to,
-    // and with no cap a heavy reporting day ran to hundreds of tiles.
-    const shown  = dayExpanded ? visibleRows : visibleRows.slice(0, MAX_CAL_LOGOS);
-    const extra  = visibleRows.length - shown.length;
+    // two-up chips, same +N. Show 10 logos initially; +N expands inline.
+    const isExpanded = expandedDays.has(anchor);
+    const shown  = isExpanded ? visibleRows : visibleRows.slice(0, MAX_CAL_LOGOS);
+    const extra  = visibleRows.length - MAX_CAL_LOGOS;
     const isToday = anchor === isoDay(new Date());
     calNode = visibleRows.length > 0 ? (
       <div className="ec-grid">
@@ -1058,16 +1065,13 @@ export function EarningsScreen() {
               <EcChip key={r.s} sym={r.s} selected={sel === r.s} onSelect={s => openStockDetail(s, anchor)} />
             ))}
           </div>
-          {/* In the week and month views +N opens the day; here it IS the day,
-              so it expands in place — and offers the way back. */}
-          {extra > 0 && (
-            <div className="ec-more-row">
-              <button className="emc-more" title={`Show ${extra} more`} onClick={() => setDayExpanded(true)}>+{extra}</button>
-            </div>
-          )}
-          {dayExpanded && visibleRows.length > MAX_CAL_LOGOS && (
-            <div className="ec-more-row">
-              <button className="emc-more" onClick={() => setDayExpanded(false)}>Show less</button>
+          {visibleRows.length > MAX_CAL_LOGOS && (
+            <div className="ec-more-row" style={{ marginTop: 8, display: "flex", justifyContent: "center" }}>
+              {!isExpanded ? (
+                <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} title={`Show ${extra} more`} onClick={() => toggleDayExpanded(anchor)}>+{extra}</button>
+              ) : (
+                <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} onClick={() => toggleDayExpanded(anchor)}>Show less</button>
+              )}
             </div>
           )}
         </div>
@@ -1085,6 +1089,9 @@ export function EarningsScreen() {
           const items = filterSortRows(rowsForDate(iso, liveEarningsData).map(toCalRow), { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: iso, usual: annUsualSession });
           const dn = ["Mon", "Tue", "Wed", "Thu", "Fri"][di];
           const isToday = iso === isoDay(new Date());
+          const isExpanded = expandedDays.has(iso);
+          const shown = isExpanded ? items : items.slice(0, MAX_CAL_LOGOS);
+          const extra = items.length - MAX_CAL_LOGOS;
           return (
             <div key={iso} className={`ec-day${isToday ? " is-today" : ""}${iso === anchor && !isToday ? " is-sel" : ""}`}>
               <div className="ec-dh" style={{ cursor: "pointer" }} onClick={() => { goToDate(iso); setMode("day"); }}>
@@ -1093,9 +1100,15 @@ export function EarningsScreen() {
               <div className="ec-sess">
                 {items.length ? (
                   <>
-                    {items.slice(0, MAX_CAL_LOGOS).map(r => <EcChip key={r.s} sym={r.s} selected={sel === r.s} onSelect={s => openStockDetail(s, iso)} />)}
+                    {shown.map(r => <EcChip key={r.s} sym={r.s} selected={sel === r.s} onSelect={s => openStockDetail(s, iso)} />)}
                     {items.length > MAX_CAL_LOGOS && (
-                      <button className="emc-more" title={`${items.length - MAX_CAL_LOGOS} more — open day view`} onClick={() => { goToDate(iso); setMode("day"); }}>+{items.length - MAX_CAL_LOGOS}</button>
+                      <div style={{ gridColumn: "1 / -1", marginTop: 4, display: "flex", justifyContent: "center" }}>
+                        {!isExpanded ? (
+                          <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} title={`Show ${extra} more`} onClick={(e) => { e.stopPropagation(); toggleDayExpanded(iso); }}>+{extra}</button>
+                        ) : (
+                          <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); toggleDayExpanded(iso); }}>Show less</button>
+                        )}
+                      </div>
                     )}
                   </>
                 ) : <span className="ec-none">—</span>}

@@ -71,6 +71,13 @@ export class BackendApiError extends Error {
 
 /** Attaches the current Firebase ID token, if any. Anonymous/public GETs get no header at all. */
 async function authHeaders(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined" && firebaseAuth?.authStateReady) {
+    try {
+      await firebaseAuth.authStateReady();
+    } catch {
+      // Ignore if authStateReady fails or isn't supported
+    }
+  }
   const user = firebaseAuth.currentUser;
   if (!user) return {};
   const token = await user.getIdToken();
@@ -86,7 +93,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   // the fetch pending indefinitely. Callers that await it — e.g. the auth
   // listener's profile fetch — would then never settle.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => {
+    try {
+      controller.abort("Request timed out");
+    } catch {
+      controller.abort();
+    }
+  }, REQUEST_TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, {

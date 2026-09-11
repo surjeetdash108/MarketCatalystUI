@@ -47,7 +47,9 @@ export function useApiResource<T>(path: string | null, refetchMs?: number) {
         }
       } catch (err) {
         if (!cancelled) {
-          console.error(`Backend fetch failed for "${path}":`, err);
+          if ((err as Error)?.name !== "AbortError") {
+            console.error(`Backend fetch failed for "${path}":`, err);
+          }
           setError(err instanceof Error ? err.message : String(err));
           setLoading(false);
         }

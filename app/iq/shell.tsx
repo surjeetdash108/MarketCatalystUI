@@ -374,6 +374,7 @@ function SectorDrawer({ name, companies, sectorsLive, loading, onClose }: {
  */
 const NO_SESSION_NOTICE = ["/menu/movers"];
 
+/*
 function SessionNotice({ phase, pathname }: { phase: "open" | "pre" | "after" | "closed" | "unknown"; pathname: string }) {
   if (phase === "open" || phase === "unknown") return null;
   if (NO_SESSION_NOTICE.includes(pathname)) return null;
@@ -401,6 +402,7 @@ function SessionNotice({ phase, pathname }: { phase: "open" | "pre" | "after" | 
     </div>
   );
 }
+*/
 
 // ---- Index drawer (openIndex) ----
 function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClose }: {
@@ -1236,7 +1238,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
             {/* Main content */}
             <main className="main">
-              <SessionNotice phase={tapeFrame?.marketPhase ?? "unknown"} pathname={pathname} />
+              {/* <SessionNotice phase={tapeFrame?.marketPhase ?? "unknown"} pathname={pathname} /> */}
               {children}
               <footer className="disclaimer-bar">
                 <span className="disclaimer-text">

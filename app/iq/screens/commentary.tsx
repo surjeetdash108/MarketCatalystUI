@@ -930,72 +930,69 @@ export function CommentaryScreen() {
         </div>
       </div>
 
-      <div style={{ padding: "0 18px 18px" }}>
-
-
-        <div className="dash">
-
-          {/* Full width: the right rail that used to sit beside this (Before
-              the Bell, After the Close, Filings wire, Market regime) is gone,
-              so the feed takes all 12 columns instead of 8. Still a flex column
-              so the feed card grows to fill the row. */}
-          <div className="col-12" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {/* Quick lookup — tap a ticker to add it to the feed filter. Sits
-                at the TOP of the column; the feed card below flex-fills. */}
-            <div className="card" style={{ flexShrink: 0 }}>
-              <div className="card-h">
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{activeTab === 3 ? "Tracked names" : "Quick filter"}</h3><VendorTag v="polygon" /></div>
-              </div>
-              <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {(activeTab === 3 ? [...mySymbols] : topSymbols).length === 0 ? (
-                  <DataState loading={activeTab === 3 ? false : companiesLoading} label={activeTab === 3 ? "No tracked names yet." : "No live companies synced yet."} />
-                ) : (activeTab === 3 ? [...mySymbols] : topSymbols).map(sym => (
-                  <button
-                    key={sym}
-                    className={`chip${search.trim().toUpperCase() === sym.toUpperCase() ? " on" : ""}`}
-                    onClick={() => setSearch(search.trim().toUpperCase() === sym.toUpperCase() ? "" : sym)}
-                  >{sym}</button>
-                ))}
-              </div>
+      <div className="dash" style={{ paddingTop: 14 }}>
+        {/* Full width: the right rail that used to sit beside this (Before
+            the Bell, After the Close, Filings wire, Market regime) is gone,
+            so the feed takes all 12 columns instead of 8. Still a flex column
+            so the feed card grows to fill the row. */}
+        <div className="col-12" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Quick lookup — tap a ticker to add it to the feed filter. Sits
+              at the TOP of the column; the feed card below flex-fills. */}
+          {/* Quick filter commented out for now
+          <div className="card" style={{ flexShrink: 0 }}>
+            <div className="card-h">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{activeTab === 3 ? "Tracked names" : "Quick filter"}</h3><VendorTag v="polygon" /></div>
             </div>
-
-            <div className="card" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><h3>{feedLabel.title}{q ? ` · “${search.trim()}”` : ""}</h3><VendorTag v={["polygon", "fmp"]} /></div>
-                {feedLabel.badge}
-              </div>
-              <div className="card-b" style={{ paddingTop: 2, flex: 1, minHeight: 0, overflowY: "auto" }}>
-                {feed.length === 0 ? (
-                  <DataState loading={liveNewsLoading} label={
-                    q
-                      ? `No matches for “${search.trim()}” in this tab.`
-                      : activeTab === 3
-                        ? (uid ? "No live news matches your portfolio or watchlist names right now." : "Sign in and add names to your watchlist or portfolio to see this feed.")
-                        : "No live news items in this category right now."} />
-                ) : feed.map((item, i) => (
-                  <FeedItem
-                    key={item.id}
-                    item={item}
-                    i={i}
-                    total={feed.length}
-                    onTicker={sym => setSearch(sym)}
-                    onAnalysis={setAnalysisTicker}
-                    /* Clicking the chip that is already filtering clears it, so
-                       the chip is a toggle rather than a one-way trip that only
-                       the dropdown can undo. */
-                    onTag={t => setTagFilter(cur => (cur === t ? "all" : t))}
-                    onCat={c => setCatFilter(cur => (cur === c ? "all" : c))}
-                    activeTag={tagFilter}
-                    activeCat={catFilter}
-                    marketCap={companyByTicker.get(item.ticker)?.marketCap ?? null}
-                    livePct={feedQuotes.get(item.ticker)?.pctChange ?? companyByTicker.get(item.ticker)?.pctChange ?? null}
-                  />
-                ))}
-              </div>
+            <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {(activeTab === 3 ? [...mySymbols] : topSymbols).length === 0 ? (
+                <DataState loading={activeTab === 3 ? false : companiesLoading} label={activeTab === 3 ? "No tracked names yet." : "No live companies synced yet."} />
+              ) : (activeTab === 3 ? [...mySymbols] : topSymbols).map(sym => (
+                <button
+                  key={sym}
+                  className={`chip${search.trim().toUpperCase() === sym.toUpperCase() ? " on" : ""}`}
+                  onClick={() => setSearch(search.trim().toUpperCase() === sym.toUpperCase() ? "" : sym)}
+                >{sym}</button>
+              ))}
             </div>
           </div>
+          */}
 
+          <div className="card" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div className="card-h">
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><h3>{feedLabel.title}{q ? ` · “${search.trim()}”` : ""}</h3><VendorTag v={["polygon", "fmp"]} /></div>
+              {feedLabel.badge}
+            </div>
+            <div className="card-b" style={{ paddingTop: 2, flex: 1, minHeight: 0, overflowY: "auto" }}>
+              {feed.length === 0 ? (
+                <DataState loading={liveNewsLoading} label={
+                  q
+                    ? `No matches for “${search.trim()}” in this tab.`
+                    : activeTab === 3
+                      ? (uid ? "No live news matches your portfolio or watchlist names right now." : "Sign in and add names to your watchlist or portfolio to see this feed.")
+                      : "No live news items in this category right now."} />
+              ) : feed.map((item, i) => (
+                <FeedItem
+                  key={item.id}
+                  item={item}
+                  i={i}
+                  total={feed.length}
+                  onTicker={sym => setSearch(sym)}
+                  onAnalysis={setAnalysisTicker}
+                  /* Clicking the chip that is already filtering clears it, so
+                     the chip is a toggle rather than a one-way trip that only
+                     the dropdown can undo. */
+                  onTag={t => setTagFilter(cur => (cur === t ? "all" : t))}
+                  onCat={c => setCatFilter(cur => (cur === c ? "all" : c))}
+                  activeTag={tagFilter}
+                  activeCat={catFilter}
+                  marketCap={companyByTicker.get(item.ticker)?.marketCap ?? null}
+                  livePct={feedQuotes.get(item.ticker)?.pctChange ?? companyByTicker.get(item.ticker)?.pctChange ?? null}
+                />
+              ))}
+            </div>
+          </div>
         </div>
+
       </div>
       </>)}
 

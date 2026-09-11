@@ -279,7 +279,7 @@ function toConsoleBlog(b: BackendBlog): ConsoleBlogRow {
     // so this is only defensive against an older deploy answering.
     format: b.format ?? (b.pdfUrl ? "pdf" : "text"),
     css: Array.isArray(b.css) ? b.css : [],
-    heroImageUrl: b.heroImageUrl ?? null,
+    heroImageUrl: typeof b.heroImageUrl === "string" && b.heroImageUrl.trim() ? b.heroImageUrl.trim() : null,
   };
 }
 

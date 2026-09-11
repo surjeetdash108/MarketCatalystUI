@@ -16,3 +16,18 @@ export interface LiveMoverDoc {
   direction: "gainer" | "loser";
   asOfDate: string;
 }
+
+export interface MoverCatalystDoc {
+  ticker: string;
+  direction?: string | null;
+  pctChange?: number | null;
+  catalyst: string;
+  headline: string | null;
+  summary: string | null;
+  source: "benzinga_wiim" | "ai_synthesis" | "sec_filing" | "news_headline";
+  vendor: "benzinga" | "polygon" | "fmp" | "sec" | "llm";
+  newsUrl: string | null;
+  publishedAt: string | null;
+  updatedAt: string;
+}
+

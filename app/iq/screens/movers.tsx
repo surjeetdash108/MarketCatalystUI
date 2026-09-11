@@ -12,6 +12,7 @@ import { useLiveQuotes, QUOTE_DELAY_LABEL, pairedQuote, extendedSession } from "
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import type { LiveMoverDoc, CompanyDoc, NewsArticleDoc, AnalystConsensusDoc, AnalystRatingChange } from "../types";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
+import { MoverNewsModal } from "../mover-news-modal";
 
 const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   () => import("./stock").then(m => ({ default: m.StockScreen })),
@@ -126,8 +127,8 @@ function mergeMovers(
 }
 
 export function MoversScreen() {
-  const { data: liveMovers, loading: moversLoading } = useApiList<LiveMoverDoc>("/market-data/movers");
-  const { data: rvolCompanies } = useApiList<CompanyDoc>("/market-data/companies");
+  const { data: liveMovers, loading: moversLoading, error: moversError } = useApiList<LiveMoverDoc>("/market-data/movers");
+  const { data: rvolCompanies, loading: companiesLoading, error: companiesError } = useApiList<CompanyDoc>("/market-data/companies");
   const companyByTicker = new Map(rvolCompanies.map(c => [c.ticker, c]));
   const movers = mergeMovers(liveMovers, companyByTicker);
 
@@ -147,7 +148,7 @@ export function MoversScreen() {
     sector: c.sector ?? "—",
     cap: capFromMarketCap(c.marketCap),
     marketCap: c.marketCap ?? null,
-    weekPct: c.week5ChangePct ?? null,
+    weekPct: c.week5ChangePct ?? c.pctChange ?? null,
     weekBase: c.week5BaseClose ?? null,
     techContext: "",
     newsContext: "",
@@ -167,7 +168,7 @@ export function MoversScreen() {
    * `week5ChangePct` at all, which made the weekly board look broken.
    */
   const weeklyRows: Mover[] = universeRows
-    .filter(c => typeof c.week5ChangePct === "number")
+    .filter(c => typeof c.week5ChangePct === "number" || typeof c.pctChange === "number")
     .map(companyRow);
 
   /**
@@ -199,7 +200,7 @@ export function MoversScreen() {
    * browser. Falls back to the tracked-universe ranking (~900 names) until the
    * volume-leaders job has run, so the tab is never empty.
    */
-  const { data: volumeLeaders } = useApiResource<{ leaders: VolumeLeaderDoc[] }>(
+  const { data: volumeLeaders, loading: volumeLoading } = useApiResource<{ leaders: VolumeLeaderDoc[] }>(
     "/market-data/volume-leaders",
   );
   const volumeRows: Mover[] = useMemo(() => {
@@ -226,52 +227,6 @@ export function MoversScreen() {
   }, [volumeLeaders, rvolCompanies]);
 
 
-  // Per-ticker news → the "why it moved" headline shown on row hover. Keep the
-  // most recent article per ticker.
-  const { data: moverNews } = useApiList<NewsArticleDoc>("/market-data/news");
-  const newsByTicker = (() => {
-    const m = new Map<string, NewsArticleDoc>();
-    for (const n of [...moverNews].sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))) {
-      if (n.ticker && !m.has(n.ticker)) m.set(n.ticker, n);
-    }
-    return m;
-  })();
-  const [newsHover, setNewsHover] = useState<{ sym: string; x: number; y: number } | null>(null);
-
-  // Fallback "why it moved" when there's no article: a RECENT analyst rating
-  // change (upgrade/downgrade). Only the last few days count — an old grade
-  // isn't why the stock moved today.
-  const { data: moverAnalyst } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
-  const recentGradeByTicker = (() => {
-    const cutoff = new Date(Date.now() - 4 * 86_400_000).toISOString().slice(0, 10);
-    const m = new Map<string, AnalystRatingChange>();
-    for (const c of moverAnalyst) {
-      const latest = [...(c.recentGrades ?? [])].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0];
-      if (latest?.date && latest.date.slice(0, 10) >= cutoff && c.ticker) m.set(c.ticker, latest);
-    }
-    return m;
-  })();
-  // The bulk `news` collection only covers a handful of large caps, so for an
-  // arbitrary mover we fetch its news on demand (/live/news works for ANY
-  // ticker) and cache the latest article: NewsArticleDoc, or null when none.
-  const [newsCache, setNewsCache] = useState<Record<string, NewsArticleDoc | null>>({});
-  useEffect(() => {
-    const sym = newsHover?.sym;
-    if (!sym || newsByTicker.has(sym) || sym in newsCache) return;
-    // Debounce so sweeping the cursor across rows doesn't fire a burst of calls.
-    const id = setTimeout(() => {
-      apiGet<NewsArticleDoc[]>(`/live/news?ticker=${encodeURIComponent(sym)}`)
-        .then(articles => {
-          const latest = [...(articles ?? [])].sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))[0] ?? null;
-          setNewsCache(c => ({ ...c, [sym]: latest }));
-        })
-        .catch(() => setNewsCache(c => ({ ...c, [sym]: null })));
-    }, 200);
-    return () => clearTimeout(id);
-    // Only refetch when the hovered ticker changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newsHover?.sym]);
-
   const [tab,          setTab]          = useState<TabKey>("win");
   /** The row set the active tab draws from — declared AFTER `tab` so it can
    *  read it (a `const` referenced above its declaration is a TDZ crash). */
@@ -283,6 +238,13 @@ export function MoversScreen() {
   const [sortKey,      setSortKey]      = useState<MoverSortKey | null>(null);
   const [sortDir,      setSortDir]      = useState<"asc" | "desc">("desc");
   const [selectedSym,  setSelectedSym]  = useState<string | null>(null);
+  const [newsModalSym, setNewsModalSym] = useState<{
+    ticker: string;
+    name?: string;
+    price?: number | null;
+    pctChange?: number | null;
+    direction?: string;
+  } | null>(null);
   const sourceRows =
     isWeekTab(tab) ? weeklyRows
     : tab === "vol" ? volumeRows
@@ -602,138 +564,113 @@ export function MoversScreen() {
               {sortTh("rvol",    "RVOL",   true)}
               {sortTh("mcap",    "Mkt Cap", true)}
               {sortTh("cap",     "Cap · Sector")}
+              <th style={{ whiteSpace: "nowrap" }}>Why It Moved</th>
             </tr>
           </thead>
           <tbody>
-            {visible.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ padding: 0 }}>
-                  {moversLoading && movers.length === 0
-                    ? <DataState loading label="Loading movers…" />
-                    : <div style={{ padding: 16, color: "var(--text-dim-solid)" }}>No stocks match these filters.</div>}
-                </td>
-              </tr>
-            ) : visible.map(m => {
-              // Same values the tab guard used — see shownValues.
-              const { price, change: v } = shownValues(m);
-              return (
-                <tr
-                  key={m.ticker}
-                  className={m.owned ? "owned" : ""}
-                  onClick={() => setSelectedSym(m.ticker)}
-                  onMouseEnter={e => setNewsHover({ sym: m.ticker, x: e.clientX, y: e.clientY })}
-                  onMouseLeave={() => setNewsHover(h => (h?.sym === m.ticker ? null : h))}
-                  style={{ cursor: "pointer" }}
-                >
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <StockLogo sym={m.ticker} size={26} />
-                      <div className="co">
-                        <span className="s">
-                          {m.owned && <span className="own-dot" />}
-                          {m.ticker}
-                        </span>
-                        <span className="n">{m.name}</span>
+            {(() => {
+              const isBoardLoading = moversLoading || companiesLoading || (tab === "vol" && volumeLoading);
+              if (visible.length === 0) {
+                return (
+                  <tr>
+                    <td colSpan={7} style={{ padding: 0 }}>
+                      {isBoardLoading ? (
+                        <DataState loading label="Loading movers…" />
+                      ) : (
+                        <div style={{ padding: 16, color: "var(--text-dim-solid)" }}>
+                          {moversError || companiesError
+                            ? "Unable to connect to backend server. Please ensure MarketCatalystBackend is running."
+                            : "No stocks match these filters."}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              }
+              return visible.map((m) => {
+                // Same values the tab guard used — see shownValues.
+                const { price, change: v } = shownValues(m);
+                return (
+                  <tr
+                    key={m.ticker}
+                    className={m.owned ? "owned" : ""}
+                    onClick={() => setSelectedSym(m.ticker)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <StockLogo sym={m.ticker} size={26} />
+                        <div className="co">
+                          <span className="s">
+                            {m.owned && <span className="own-dot" />}
+                            {m.ticker}
+                          </span>
+                          <span className="n">{m.name}</span>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="num">{price == null ? "—" : `$${fmt(price)}`}</td>
-                  {/* WHEN the move happened, not just how big it was.
-                      A % with no session behind it is what made this board
-                      disagree with every consumer finance site: outside regular
-                      hours the figure is measured from the last close and can be
-                      carrying a whole extended-hours session that the site's
-                      headline number does not. extendedSession already decides
-                      this for the stock drawer; the board was the one live
-                      surface printing the number bare. Suppressed on the weekly
-                      tabs, where the column is a 5-day move and the session of
-                      the last print says nothing about it. */}
-                  <td className="num" style={{ color: v == null ? undefined : v >= 0 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
-                    {v == null ? "—" : <>{arr(v)} {sign(v)}{!isWeekTab(tab) && sessionTag(m)}</>}
-                  </td>
-                  <td className="num">
-                    {m.rvolRatio > 0
-                      ? <b style={{ color: m.rvolRatio > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvolRatio.toFixed(1)}×</b>
-                      : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                  </td>
-                  <td className="num">
-                    {m.marketCap != null
-                      ? <span style={{ color: "var(--text-hi)" }}>{fmtMcap(m.marketCap)}</span>
-                      : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                  </td>
-                  <td>
-                    <span style={{ fontSize: ".74rem" }}>
-                      <b style={{ color: "var(--text-hi)" }}>{m.cap}</b>
-                      {" · "}
-                      <span style={{ color: "var(--text-dim-solid)" }}>{m.sector}</span>
-                    </span>
-                  </td>
-
-                </tr>
-              );
-            })}
+                    </td>
+                    <td className="num">{price == null ? "—" : `$${fmt(price)}`}</td>
+                    <td className="num" style={{ color: v == null ? undefined : v >= 0 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
+                      {v == null ? "—" : <>{arr(v)} {sign(v)}{!isWeekTab(tab) && sessionTag(m)}</>}
+                    </td>
+                    <td className="num">
+                      {m.rvolRatio > 0
+                        ? <b style={{ color: m.rvolRatio > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvolRatio.toFixed(1)}×</b>
+                        : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
+                    </td>
+                    <td className="num">
+                      {m.marketCap != null
+                        ? <span style={{ color: "var(--text-hi)" }}>{fmtMcap(m.marketCap)}</span>
+                        : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
+                    </td>
+                    <td>
+                      <span style={{ fontSize: ".74rem" }}>
+                        <b style={{ color: "var(--text-hi)" }}>{m.cap}</b>
+                        {" · "}
+                        <span style={{ color: "var(--text-dim-solid)" }}>{m.sector}</span>
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewsModalSym({
+                            ticker: m.ticker,
+                            name: m.name,
+                            price,
+                            pctChange: v,
+                            direction: tab === "lose" || tab === "weeklose" ? "loser" : "gainer",
+                          });
+                        }}
+                        title="View news catalyst for why this stock moved"
+                        style={{
+                          background: "rgba(99, 102, 241, 0.12)",
+                          color: "var(--brand, #6366f1)",
+                          border: "1px solid rgba(99, 102, 241, 0.3)",
+                          borderRadius: 6,
+                          padding: "3px 8px",
+                          fontSize: ".72rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        📰 News
+                      </button>
+                    </td>
+                  </tr>
+                );
+              });
+            })()}
           </tbody>
         </table>
         </div>
       </div>
 
-      {/* Why-it-moved hover: latest headline for the row under the cursor. Bulk
-          news first (instant), else the on-demand fetch result, else loading. */}
-      {newsHover && (() => {
-        const bulk = newsByTicker.get(newsHover.sym);
-        const resolved = bulk != null || newsHover.sym in newsCache;
-        const n = bulk ?? newsCache[newsHover.sym] ?? null;
-        const left = typeof window !== "undefined" ? Math.min(newsHover.x + 16, window.innerWidth - 336) : newsHover.x + 16;
-        return (
-          <div style={{
-            position: "fixed", left, top: newsHover.y + 16, zIndex: 60, width: 320,
-            background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10,
-            padding: "10px 12px", boxShadow: "0 10px 34px rgba(0,0,0,.45)", pointerEvents: "none",
-          }}>
-            <div style={{ fontSize: ".66rem", textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)", marginBottom: 5 }}>
-              {newsHover.sym} · why it moved
-            </div>
-            {n ? (
-              <>
-                <div style={{ fontSize: ".82rem", color: "var(--text-hi)", lineHeight: 1.4 }}>{n.headline}</div>
-                <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 5 }}>
-                  {n.source}{n.publishedAt ? ` · ${new Date(n.publishedAt).toLocaleDateString()}` : ""}
-                </div>
-              </>
-            ) : !resolved ? (
-              <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)" }}>Loading news…</div>
-            ) : (() => {
-              // No article → fall back to a recent analyst rating change, else honest empty.
-              const g = recentGradeByTicker.get(newsHover.sym);
-              return g ? (
-                <>
-                  <div style={{ fontSize: ".82rem", color: "var(--text-hi)", lineHeight: 1.4 }}>
-                    {g.firm ?? "Analyst"}: {g.previousGrade ?? "—"} → <b>{g.newGrade ?? "—"}</b>
-                    {g.action ? <span style={{ color: /down/i.test(g.action) ? "var(--down)" : /up/i.test(g.action) ? "var(--up)" : "var(--text-dim-solid)", textTransform: "capitalize" }}> · {g.action}</span> : null}
-                  </div>
-                  <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 5 }}>Analyst rating change{g.date ? ` · ${fmtDate(g.date, { month: "short", day: "numeric", year: "numeric" })}` : ""}</div>
-                </>
-              ) : (() => {
-                // No news and no analyst change → surface the volume signal so the
-                // hover is still informative (these are usually momentum/low-float
-                // moves with no catalyst). Fall back to plain empty when RVOL is
-                // unavailable/normal.
-                const rvol = movers.find(x => x.ticker === newsHover.sym)?.rvolRatio ?? 0;
-                return rvol > 1.5 ? (
-                  <>
-                    <div style={{ fontSize: ".82rem", color: "var(--text-hi)", lineHeight: 1.4 }}>No news catalyst found.</div>
-                    <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 5 }}>
-                      <b style={{ color: rvol > 3 ? "var(--warn)" : "var(--text)" }}>{rvol.toFixed(1)}×</b> relative volume — likely a momentum / low-float move.
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)" }}>News not available.</div>
-                );
-              })();
-            })()}
-          </div>
-        );
-      })()}
+
 
       {/* Sliding stock detail drawer */}
       {selectedSym && (
@@ -753,22 +690,47 @@ export function MoversScreen() {
               {(() => {
                 const sym = selectedSym!;
                 const inList = watchedSet.has(sym);
+                const moverItem = movers.find(m => m.ticker === sym);
                 return (
-                  <button
-                    onClick={() => addToWatchlist(sym)}
-                    title={inList ? "Already in your watchlist" : "Add this stock to your watchlist"}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
-                      background: inList ? "var(--brand-dim)" : "var(--surface-2)",
-                      border: `1px solid ${inList ? "var(--brand)" : "var(--border-soft)"}`,
-                      color: inList ? "var(--brand)" : "var(--text-hi)",
-                      borderRadius: 8, padding: "7px 13px", cursor: "pointer",
-                      fontSize: ".8rem", fontWeight: 600, fontFamily: "var(--f-body)",
-                    }}
-                  >
-                    <span style={{ fontSize: ".95rem", lineHeight: 1 }}>{inList ? "★" : "☆"}</span>
-                    {inList ? "In watchlist" : "Add to watchlist"}
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      onClick={() =>
+                        setNewsModalSym({
+                          ticker: sym,
+                          name: moverItem?.name,
+                          price: moverItem?.price,
+                          pctChange: moverItem?.pctChange,
+                          direction: (moverItem?.pctChange ?? 0) >= 0 ? "gainer" : "loser",
+                        })
+                      }
+                      title="View News & Catalyst why this stock moved"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+                        background: "rgba(99, 102, 241, 0.15)",
+                        border: "1px solid var(--brand, #6366f1)",
+                        color: "var(--text-hi, #ffffff)",
+                        borderRadius: 8, padding: "7px 13px", cursor: "pointer",
+                        fontSize: ".8rem", fontWeight: 600, fontFamily: "var(--f-body)",
+                      }}
+                    >
+                      <span>📰</span> Why It Moved (News)
+                    </button>
+                    <button
+                      onClick={() => addToWatchlist(sym)}
+                      title={inList ? "Already in your watchlist" : "Add this stock to your watchlist"}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+                        background: inList ? "var(--brand-dim)" : "var(--surface-2)",
+                        border: `1px solid ${inList ? "var(--brand)" : "var(--border-soft)"}`,
+                        color: inList ? "var(--brand)" : "var(--text-hi)",
+                        borderRadius: 8, padding: "7px 13px", cursor: "pointer",
+                        fontSize: ".8rem", fontWeight: 600, fontFamily: "var(--f-body)",
+                      }}
+                    >
+                      <span style={{ fontSize: ".95rem", lineHeight: 1 }}>{inList ? "★" : "☆"}</span>
+                      {inList ? "In watchlist" : "Add to watchlist"}
+                    </button>
+                  </div>
                 );
               })()}
               <button className="closebtn" onClick={() => setSelectedSym(null)}>✕</button>
@@ -798,6 +760,18 @@ export function MoversScreen() {
           <span style={{ color: "var(--brand)", fontSize: "1rem" }}>★</span>
           {toast}
         </div>
+      )}
+
+      {/* Dedicated News & Catalyst Modal */}
+      {newsModalSym && (
+        <MoverNewsModal
+          ticker={newsModalSym.ticker}
+          name={newsModalSym.name}
+          price={newsModalSym.price}
+          pctChange={newsModalSym.pctChange}
+          direction={newsModalSym.direction}
+          onClose={() => setNewsModalSym(null)}
+        />
       )}
     </>
   );

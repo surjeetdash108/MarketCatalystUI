@@ -201,10 +201,8 @@ export function useTickerLogo(sym: string) {
   return {
     loaded,
     failed,
-    /* Spread onto the <img>. `key` remounts on ticker change so the ref above
-       re-runs against the new element. */
+    sym,
     imgProps: {
-      key: sym,
       ref,
       // Logos come from Polygon's ticker `branding`, proxied by the backend
       // (`/live/logo`) so the API key stays server-side — no third-party CDN.
@@ -238,7 +236,7 @@ export const LOGO_IMG_STYLE: React.CSSProperties = {
 export function StockLogo({ sym, size = 22 }: { sym: string; size?: number }) {
   const idx = sym.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % _LP.length;
   const px = Math.round(size * TICKER_LOGO_SCALE);
-  const { loaded, failed, imgProps } = useTickerLogo(sym);
+  const { loaded, failed, sym: logoSym, imgProps } = useTickerLogo(sym);
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -251,7 +249,7 @@ export function StockLogo({ sym, size = 22 }: { sym: string; size?: number }) {
       position: 'relative', overflow: 'hidden',
     }}>
       {!loaded && sym[0]}
-      {!failed && <img {...imgProps} style={LOGO_IMG_STYLE} />}
+      {!failed && <img key={logoSym} {...imgProps} style={LOGO_IMG_STYLE} />}
     </span>
   );
 }

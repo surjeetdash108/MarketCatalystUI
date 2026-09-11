@@ -319,6 +319,7 @@ export function DashboardScreen() {
   // empty rather than showing stale rows. (`earnings` above stays the full list
   // for popover name/EPS lookups.)
   const earningsToday = mergeEarningsData(liveEarnings.filter(e => e.date === isoDay(new Date())));
+  const earningsLive = useLiveQuotes(earningsToday.map(e => e.ticker));
   const mergedSectorList = buildSectorList(companies, sectorsLive);
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
 
@@ -577,7 +578,7 @@ export function DashboardScreen() {
                             </>
                           ) : <NotAvailable />}
                         </div>
-                        <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", flexShrink: 0 }}>{count}×</span>
+                        {/* <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", flexShrink: 0 }}>{count}×</span> */}
                       </div>
                     );
                   })}
@@ -597,23 +598,73 @@ export function DashboardScreen() {
             <div className="card-b" style={{ paddingTop: 4, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
               {earningsToday.length === 0
                 ? <DataState label="No earnings reported today." height={100} />
-                : earningsToday.slice(0, 10).map(e => (
-                <div key={e.ticker} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openEarnings(e.ticker)}
-                  {...mr(e.ticker, "earnings")}
-                >
-                  <StockLogo sym={e.ticker} size={26} />
-                  <span className="tkr">{e.ticker}<small>{e.name}</small></span>
-                  <span className="mid">
-                    {e.epsActual != null
-                      ? <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)" }}>EPS ${e.epsActual.toFixed(2)}</span>
-                      : <span style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>—</span>}
-                  </span>
-                  <span className="r" style={{ color: "var(--text-dim-solid)", fontSize: ".72rem", fontFamily: "var(--f-mono)" }}>
-                    {e.revenueActual != null ? `$${(e.revenueActual / 1e9).toFixed(1)}B` : ""}
-                  </span>
-                </div>
-              ))}
+                : earningsToday.slice(0, 10).map(e => {
+                    const c = companyByTicker.get(e.ticker);
+                    const q = earningsLive.get(e.ticker);
+                    const { price, pctChange: pct } = pairedQuote(q, c);
+                    const ann = earningsAnnouncements.find(a => a.ticker === e.ticker);
+                    const rawSession = e.session || ann?.session || (liveEarnings.find(l => l.ticker === e.ticker)?.session) || null;
+
+                    return (
+                      <div key={e.ticker} className="minirow" style={{ cursor: "pointer" }}
+                        onClick={() => openEarnings(e.ticker)}
+                        {...mr(e.ticker, "earnings")}
+                      >
+                        <StockLogo sym={e.ticker} size={26} />
+                        <span className="tkr" style={{ width: "auto", flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {e.ticker}<small title={e.name ?? c?.name ?? ""}>{e.name ?? c?.name ?? "—"}</small>
+                        </span>
+                        <span className="mid" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {e.epsActual != null ? (
+                            <span className="pill" style={{
+                              background: e.epsEstimate != null
+                                ? (e.epsActual >= e.epsEstimate ? "var(--up-dim)" : "var(--down-dim)")
+                                : "var(--surface-3)",
+                              color: e.epsEstimate != null
+                                ? (e.epsActual >= e.epsEstimate ? "var(--up)" : "var(--down)")
+                                : "var(--text-hi)",
+                            }}>
+                              EPS ${e.epsActual.toFixed(2)}
+                            </span>
+                          ) : e.epsEstimate != null ? (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                              Est ${e.epsEstimate.toFixed(2)}
+                            </span>
+                          ) : rawSession ? (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)" }}>
+                              {rawSession}
+                            </span>
+                          ) : c?.marketCap != null ? (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                              {fmt(c.marketCap)} Cap
+                            </span>
+                          ) : (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                              Today
+                            </span>
+                          )}
+                        </span>
+                        <div className="r" style={{ textAlign: "right", flexShrink: 0 }}>
+                          {e.revenueActual != null ? (
+                            <span style={{ color: "var(--text-hi)", fontFamily: "var(--f-mono)", fontSize: ".8rem" }}>
+                              ${e.revenueActual >= 1e9 ? (e.revenueActual / 1e9).toFixed(1) + "B" : (e.revenueActual / 1e6).toFixed(0) + "M"}
+                            </span>
+                          ) : price != null ? (
+                            <>
+                              <div className="mono" style={{ fontSize: ".8rem", color: "var(--text-hi)" }}>{fmt(price)}</div>
+                              {pct != null && <div className={`mono ${cls(pct)}`} style={{ fontSize: ".68rem" }}>{sign(pct)}</div>}
+                            </>
+                          ) : c?.marketCap != null ? (
+                            <span style={{ color: "var(--text-dim-solid)", fontSize: ".76rem", fontFamily: "var(--f-mono)" }}>
+                              ${fmt(c.marketCap)}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>—</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
             </div>
           </div>
         </div>

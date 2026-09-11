@@ -155,7 +155,7 @@ export default function RootLayout({
       ].join(" ")}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <FirebaseAnalytics />
         <SentryInit />
         <ReduxProvider>{children}</ReduxProvider>
