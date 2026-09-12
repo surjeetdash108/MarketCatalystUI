@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { signOut, updatePassword } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
-import { apiGet, apiPatch, apiDelete, apiUpload } from "../iq/backend";
+import { apiGet, apiPost, apiPatch, apiDelete, apiUpload } from "../iq/backend";
 import { buildAdminDataset, fetchAdminBlogs, ADMIN_DATA_KEY, ADMIN_EMAIL } from "./admin-data";
 import type { ConsoleBlogRow } from "./admin-data";
 
@@ -205,6 +205,37 @@ export function AdminConsole() {
         } catch (err) {
           reply({ ok: false, error: (err as Error).message });
         }
+      }
+      /* ── MCP server keys ────────────────────────────────────────────────
+         Same delegation as blogs/media: the console iframe holds no backend
+         token, so it asks here. Every write re-fetches the list afterward
+         (mirroring blogWrite above) so the table reconciles to the true
+         backend state rather than trusting an optimistic local edit. */
+      if (d.type === "admin:mcpKeyList" || d.type === "admin:mcpKeyCreate" || d.type === "admin:mcpKeyRevoke") {
+        const reply = (m: Record<string, unknown>) =>
+          iframeRef.current?.contentWindow?.postMessage({ type: `${d.type}Result`, ...m }, "*");
+        let ok = true;
+        let error: string | undefined;
+        let rawKey: string | undefined;
+        try {
+          if (d.type === "admin:mcpKeyCreate") {
+            const created = await apiPost<{ rawKey: string }>("/api/admin/mcp-keys", { label: d.label });
+            rawKey = created.rawKey;
+          } else if (d.type === "admin:mcpKeyRevoke") {
+            await apiPost(`/api/admin/mcp-keys/${encodeURIComponent(String(d.id))}/revoke`);
+          }
+        } catch (err) {
+          ok = false;
+          error = (err as Error).message;
+        }
+        let keys: unknown[] | null = null;
+        try {
+          const list = await apiGet<{ keys: unknown[] }>("/api/admin/mcp-keys");
+          keys = list.keys ?? [];
+        } catch {
+          keys = null;
+        }
+        reply({ ok, ...(error ? { error } : {}), ...(rawKey ? { rawKey } : {}), ...(keys ? { keys } : {}) });
       }
       if (d.type === "admin:blogDelete") {
         await blogWrite("admin:blogDeleteResult", async () => {
