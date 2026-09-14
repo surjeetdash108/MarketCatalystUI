@@ -101,7 +101,7 @@ export function AdminConsole() {
       // ── Blog board writes ──────────────────────────────────────────────
       // The console iframe has no backend token, so every blog mutation is
       // delegated here (same bridge as admin:setPlanFlag). We hit the
-      // AdminGuard-protected /admin/blogs REST surface, then ALWAYS re-fetch
+      // AdminGuard-protected /admin/posts REST surface, then ALWAYS re-fetch
       // the full list and post it back — even on failure — so the board
       // reconciles to the true backend state and any optimistic edit that
       // didn't persist is reverted.
@@ -171,12 +171,12 @@ export function AdminConsole() {
           );
         await blogWrite("admin:blogSaveResult", async () => {
           if (d.id) {
-            await apiUpload(`/api/admin/blogs/${encodeURIComponent(String(d.id))}`, body, {
+            await apiUpload(`/api/admin/posts/${encodeURIComponent(String(d.id))}`, body, {
               method: "PATCH",
               onProgress,
             });
           } else {
-            await apiUpload("/api/admin/blogs", body, { onProgress });
+            await apiUpload("/api/admin/posts", body, { onProgress });
           }
         });
       }
@@ -239,12 +239,12 @@ export function AdminConsole() {
       }
       if (d.type === "admin:blogDelete") {
         await blogWrite("admin:blogDeleteResult", async () => {
-          await apiDelete(`/api/admin/blogs/${encodeURIComponent(String(d.id))}`);
+          await apiDelete(`/api/admin/posts/${encodeURIComponent(String(d.id))}`);
         });
       }
       if (d.type === "admin:blogPublish") {
         await blogWrite("admin:blogPublishResult", async () => {
-          await apiPatch(`/api/admin/blogs/${encodeURIComponent(String(d.id))}`, {
+          await apiPatch(`/api/admin/posts/${encodeURIComponent(String(d.id))}`, {
             status: d.status,
           });
         });
@@ -263,7 +263,7 @@ export function AdminConsole() {
               const patch: Record<string, unknown> = { rank: Number(o.rank) };
               // A cross-zone move carries the new zone; a plain reorder omits it.
               if (typeof o.zone === "string") patch.zone = o.zone;
-              return apiPatch(`/api/admin/blogs/${encodeURIComponent(String(o.id))}`, patch);
+              return apiPatch(`/api/admin/posts/${encodeURIComponent(String(o.id))}`, patch);
             }),
           );
         });
