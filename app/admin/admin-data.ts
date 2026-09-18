@@ -87,7 +87,7 @@ export interface ConsolePlanRow {
 }
 
 /** A blog article for the console's newspaper-layout board. Mirrors the backend
- *  `/admin/blogs` row shape; the console reads/writes these through the
+ *  `/admin/posts` row shape; the console reads/writes these through the
  *  postMessage bridge (it has no backend token of its own). */
 export interface ConsoleBlogRow {
   id: string;
@@ -285,15 +285,15 @@ function toConsoleBlog(b: BackendBlog): ConsoleBlogRow {
 
 /**
  * Fetches the blog board's articles from the AdminGuard-protected backend
- * (`GET /admin/blogs`). Used both for the initial staged dataset and to re-fetch
+ * (`GET /admin/posts`). Used both for the initial staged dataset and to re-fetch
  * after a write so the board can reconcile to the true backend state. Returns []
- * (never throws) when the endpoint is unavailable, so a missing blogs surface
+ * (never throws) when the endpoint is unavailable, so a missing posts surface
  * degrades to an empty board rather than blanking the whole console.
  */
 export async function fetchAdminBlogs(): Promise<ConsoleBlogRow[]> {
   try {
-    const res = await apiGet<{ blogs: BackendBlog[] }>("/api/admin/blogs");
-    return (res.blogs ?? []).map(toConsoleBlog);
+    const res = await apiGet<{ posts: BackendBlog[] }>("/api/admin/posts");
+    return (res.posts ?? []).map(toConsoleBlog);
   } catch {
     return [];
   }

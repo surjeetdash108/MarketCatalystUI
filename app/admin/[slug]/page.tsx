@@ -13,7 +13,7 @@ import { AdminConsole } from "../admin-console";
  * the URL named. Overview lives at `/admin` and so is not one of them, the way
  * the dashboard is left out of menu/[slug].
  */
-const TABS = ["users", "subs", "revenue", "usage", "monitor", "studio", "blogs"] as const;
+const TABS = ["users", "subs", "revenue", "usage", "monitor", "studio", "blogs", "mcpkeys"] as const;
 
 export function generateStaticParams() {
   return TABS.map(slug => ({ slug }));

@@ -704,6 +704,7 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
     <div class="nav-sec" data-sec="Grow">
     <button type="button" class="navlbl" data-sec="Grow" aria-expanded="false"><span class="sec-name">Grow</span><span class="sec-dot" aria-hidden="true"></span><svg class="sec-caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="nav" data-view="blogs"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h13a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z" stroke="currentColor" stroke-width="2"/><path d="M8 9h7M8 13h7M8 17h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Blogs</div>
+    <div class="nav" data-view="mcpkeys"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 0-4 4h.5L9 13.5V16H6.5V18.5H4V22h5v-2.5l4.5-4.5H14a4 4 0 0 0 1-7.9Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="16" cy="7" r="1.3" fill="currentColor"/></svg>MCP Keys</div>
     <div class="nav" data-view="studio"><svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"/><circle cx="17.2" cy="6.8" r="1.3" fill="currentColor"/></svg>Social Studio<span class="badge-ig">IG</span></div>
     </div>
     <div class="side-foot">
@@ -913,6 +914,21 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
         <input type="file" id="galFile" accept="image/*" multiple hidden>
       </section>
 
+      <!-- MCP KEYS -->
+      <section class="view" id="mcpkeys">
+        <div class="toolbar">
+          <span class="count" id="mcpKeysCount"></span>
+          <button class="btn-add" style="margin-left:auto" onclick="openNewMcpKey()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Generate key</button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="card-h" style="padding:14px 16px">
+            <h3>MCP server keys</h3>
+            <span class="sub">each key lets a Claude Code / Claude Desktop connection author &amp; manage blog posts through the MCP server — treat one like a password</span>
+          </div>
+          <table><thead><tr><th>Label</th><th>Key</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody id="mcpKeysBody"></tbody></table>
+        </div>
+      </section>
+
       <!-- SETTINGS -->
     </div>
   </main>
@@ -1013,6 +1029,37 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
   <div class="mb">
     <div id="galGrid" class="gal-grid"><div class="gal-empty">Loading…</div></div>
   </div>
+</div>
+
+<!-- MCP KEY: label prompt -->
+<div class="scrim" id="mcpNewScrim" onclick="closeNewMcpKey()"></div>
+<div class="modal" id="mcpNewModal" style="max-width:380px">
+  <div class="mh"><h3>Generate MCP key</h3><button class="x" onclick="closeNewMcpKey()"><svg viewBox="0 0 24 24" width="16" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div class="mb">
+    <label class="fl" style="margin-top:0">Label — who or what this key is for</label>
+    <input id="mcpNewLabel" class="inp" placeholder="e.g. Jane's Claude Code" maxlength="120">
+  </div>
+  <div class="mf"><button class="btn" style="flex:none" onclick="closeNewMcpKey()">Cancel</button><button class="btn-pub" style="flex:none;padding:11px 20px" onclick="submitNewMcpKey()">Generate</button></div>
+</div>
+
+<!-- MCP KEY: created (shown once) -->
+<div class="scrim" id="mcpCreatedScrim"></div>
+<div class="modal" id="mcpCreatedModal" style="width:min(640px,94vw)">
+  <div class="mh"><h3>Key created</h3><button class="x" onclick="closeMcpCreated()"><svg viewBox="0 0 24 24" width="16" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div class="mb">
+    <p style="color:var(--dim);font-size:12.5px;margin:0 0 14px">This key is shown <b>once</b> — copy it now. It won't be shown again; revoke it from the list if it's ever lost or leaked.</p>
+    <label class="fl" style="margin-top:0">MCP key</label>
+    <div style="display:flex;gap:8px">
+      <input id="mcpCreatedKey" class="inp" readonly style="font-family:var(--f-mono);font-size:12.5px" onclick="this.select()">
+      <button class="btn" style="flex:none" onclick="copyMcpText('mcpCreatedKey')">Copy</button>
+    </div>
+    <label class="fl">Ready to run — adds this as an MCP server in Claude Code</label>
+    <div style="display:flex;gap:8px">
+      <input id="mcpCreatedCmd" class="inp" readonly style="font-family:var(--f-mono);font-size:11.5px" onclick="this.select()">
+      <button class="btn" style="flex:none" onclick="copyMcpText('mcpCreatedCmd')">Copy</button>
+    </div>
+  </div>
+  <div class="mf"><button class="btn-pub" style="flex:none;padding:11px 20px" onclick="closeMcpCreated()">Done</button></div>
 </div>
 
 <!-- ARTICLE PREVIEW -->
@@ -1166,7 +1213,7 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 
 <!-- Blog articles are read/written through the postMessage bridge to the React
      parent (app/admin/page.tsx), which owns the admin token and calls the
-     backend's /admin/blogs surface. This iframe holds no Firebase SDK. -->
+     backend's /admin/posts surface. This iframe holds no Firebase SDK. -->
 
 <script>
 /* ---------------- mock data ---------------- */
@@ -3550,7 +3597,7 @@ function initBlogs(){
 initBlogs();
 
 /* ---------- nav ---------- */
-const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>',blogs:'Blogs <span>· publish articles to your site</span>'};
+const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>',blogs:'Blogs <span>· publish articles to your site</span>',mcpkeys:'MCP Keys <span>· connect Claude to your blog</span>'};
 /* The Monitor tab lists the backend's API surface (GET /admin/api-health,
    staged in REAL.apiHealth) and health-checks the safely-probeable endpoints.
    The iframe has no Firebase token, so a live Re-check is delegated to the
@@ -3787,11 +3834,135 @@ window.addEventListener('message', function(e){
   if (!d.ok) document.getElementById('monitorSrc').textContent = 'Re-check failed: ' + (d.error || 'error');
 });
 
+/* ── MCP server keys ────────────────────────────────────────────────────────
+   Same shape as the Monitor panel above: the iframe holds no backend token,
+   so every read/write is delegated to the parent (admin:mcpKeyList /
+   admin:mcpKeyCreate / admin:mcpKeyRevoke), which hits the AdminGuard-
+   protected /admin/mcp-keys REST surface and posts the result back. */
+let MCP_KEYS = null, MCP_KEYS_LOADING = false, MCP_KEYS_ERR = null;
+
+function fmtWhen(iso){
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
+
+function paintMcpKeys(){
+  const body = document.getElementById('mcpKeysBody');
+  const count = document.getElementById('mcpKeysCount');
+  if (!body) return;
+  if (MCP_KEYS_LOADING && !MCP_KEYS){
+    body.innerHTML = '<tr><td colspan="6" style="color:var(--dim);padding:16px">Loading…</td></tr>';
+    if (count) count.textContent = '';
+    return;
+  }
+  if (!MCP_KEYS){
+    body.innerHTML = '<tr><td colspan="6" style="color:var(--dim);padding:16px">'+xesc(MCP_KEYS_ERR||'Sign in as the admin to load keys.')+'</td></tr>';
+    if (count) count.textContent = '';
+    return;
+  }
+  if (count) count.textContent = MCP_KEYS.length + (MCP_KEYS.length===1?' key':' keys');
+  if (!MCP_KEYS.length){
+    body.innerHTML = '<tr><td colspan="6" style="color:var(--dim);padding:16px">No keys yet — generate one to connect Claude to this blog.</td></tr>';
+    return;
+  }
+  body.innerHTML = MCP_KEYS.map(function(k){
+    const revoked = !!k.revokedAt;
+    return '<tr'+(revoked?' style="opacity:.5"':'')+'>'
+      + '<td>'+xesc(k.label)+'</td>'
+      + '<td style="font-family:var(--f-mono)">'+xesc(k.prefix)+'…</td>'
+      + '<td>'+fmtWhen(k.createdAt)+'</td>'
+      + '<td>'+fmtWhen(k.lastUsedAt)+'</td>'
+      + '<td>'+(revoked?'Revoked':'Active')+'</td>'
+      + '<td>'+(revoked?'':'<button class="btn btn-danger" style="flex:none;padding:6px 12px" onclick="revokeMcpKey(\''+xesc(k.id)+'\')">Revoke</button>')+'</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function requestMcpKeys(){
+  MCP_KEYS_LOADING = true;
+  parent.postMessage({ type:'admin:mcpKeyList' }, '*');
+}
+
+function renderMcpKeys(){
+  paintMcpKeys();
+  if (!MCP_KEYS && !MCP_KEYS_LOADING) requestMcpKeys();
+}
+
+window.addEventListener('message', function(e){
+  const d = e.data || {};
+  if (d.type !== 'admin:mcpKeyListResult') return;
+  MCP_KEYS_LOADING = false;
+  if (d.ok && d.keys){ MCP_KEYS = d.keys; MCP_KEYS_ERR = null; }
+  else { MCP_KEYS_ERR = d.error || 'error'; }
+  paintMcpKeys();
+});
+
+function openNewMcpKey(){
+  document.getElementById('mcpNewLabel').value = '';
+  document.getElementById('mcpNewScrim').classList.add('on');
+  document.getElementById('mcpNewModal').classList.add('on');
+  setTimeout(function(){ document.getElementById('mcpNewLabel').focus(); }, 30);
+}
+function closeNewMcpKey(){
+  document.getElementById('mcpNewScrim').classList.remove('on');
+  document.getElementById('mcpNewModal').classList.remove('on');
+}
+function submitNewMcpKey(){
+  const label = document.getElementById('mcpNewLabel').value.trim();
+  if (!label){ toast('Give this key a label'); return; }
+  closeNewMcpKey();
+  showBusy('Generating key…');
+  parent.postMessage({ type:'admin:mcpKeyCreate', label:label }, '*');
+}
+
+window.addEventListener('message', function(e){
+  const d = e.data || {};
+  if (d.type !== 'admin:mcpKeyCreateResult') return;
+  hideBusy();
+  if (!d.ok){ showResult(false, d.error || 'Could not generate key'); return; }
+  if (d.keys) MCP_KEYS = d.keys;
+  paintMcpKeys();
+  const base = (REAL && REAL.backendUrl) || location.origin;
+  document.getElementById('mcpCreatedKey').value = d.rawKey || '';
+  document.getElementById('mcpCreatedCmd').value =
+    'claude mcp add --transport http marketcatalyst-blogs ' + base + '/mcp --header "Authorization: Bearer ' + (d.rawKey||'') + '"';
+  document.getElementById('mcpCreatedScrim').classList.add('on');
+  document.getElementById('mcpCreatedModal').classList.add('on');
+});
+function closeMcpCreated(){
+  document.getElementById('mcpCreatedScrim').classList.remove('on');
+  document.getElementById('mcpCreatedModal').classList.remove('on');
+  document.getElementById('mcpCreatedKey').value = '';
+  document.getElementById('mcpCreatedCmd').value = '';
+}
+function copyMcpText(id){
+  const el = document.getElementById(id);
+  const done = function(){ toast('Copied'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(el.value).then(done).catch(function(){ fallbackCopy(el.value, done); });
+  else fallbackCopy(el.value, done);
+}
+function revokeMcpKey(id){
+  const k = (MCP_KEYS||[]).find(function(x){ return x.id===id; });
+  if (!confirm('Revoke '+((k&&k.label)||'this key')+'? Any Claude connection using it will stop working immediately.')) return;
+  showBusy('Revoking…');
+  parent.postMessage({ type:'admin:mcpKeyRevoke', id:id }, '*');
+}
+window.addEventListener('message', function(e){
+  const d = e.data || {};
+  if (d.type !== 'admin:mcpKeyRevokeResult') return;
+  hideBusy();
+  if (d.ok && d.keys) MCP_KEYS = d.keys;
+  paintMcpKeys();
+  if (!d.ok) toast('Revoke failed: ' + (d.error||'error'));
+});
+
 /* Known views ↔ URL segments map 1:1 by name (overview → the bare /admin). The
    console is a same-origin iframe, so it drives the PARENT's URL/history so each
    screen deep-links (/admin/users, /admin/subs, …). All parent access is wrapped
    in try/catch — standalone review of console.html has no parent. */
-const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','studio','blogs'];
+const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','studio','blogs','mcpkeys'];
 
 function viewFromParentPath(){
   try{
@@ -3816,6 +3987,7 @@ function switchView(name, opts){
 })();
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id===name));
   if (name === 'monitor') renderMonitor();
+  if (name === 'mcpkeys') renderMcpKeys();
   document.getElementById('pageTitle').innerHTML=TITLES[name]||name;
   document.querySelector('.main').scrollTo({top:0});
   // Reflect the active screen in the parent URL — but never when the switch was

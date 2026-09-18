@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { signOut, updatePassword } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
-import { apiGet, apiPatch, apiDelete, apiUpload } from "../iq/backend";
+import { apiGet, apiPost, apiPatch, apiDelete, apiUpload } from "../iq/backend";
 import { buildAdminDataset, fetchAdminBlogs, ADMIN_DATA_KEY, ADMIN_EMAIL } from "./admin-data";
 import type { ConsoleBlogRow } from "./admin-data";
 
@@ -101,7 +101,7 @@ export function AdminConsole() {
       // ── Blog board writes ──────────────────────────────────────────────
       // The console iframe has no backend token, so every blog mutation is
       // delegated here (same bridge as admin:setPlanFlag). We hit the
-      // AdminGuard-protected /admin/blogs REST surface, then ALWAYS re-fetch
+      // AdminGuard-protected /admin/posts REST surface, then ALWAYS re-fetch
       // the full list and post it back — even on failure — so the board
       // reconciles to the true backend state and any optimistic edit that
       // didn't persist is reverted.
@@ -171,12 +171,12 @@ export function AdminConsole() {
           );
         await blogWrite("admin:blogSaveResult", async () => {
           if (d.id) {
-            await apiUpload(`/api/admin/blogs/${encodeURIComponent(String(d.id))}`, body, {
+            await apiUpload(`/api/admin/posts/${encodeURIComponent(String(d.id))}`, body, {
               method: "PATCH",
               onProgress,
             });
           } else {
-            await apiUpload("/api/admin/blogs", body, { onProgress });
+            await apiUpload("/api/admin/posts", body, { onProgress });
           }
         });
       }
@@ -206,14 +206,45 @@ export function AdminConsole() {
           reply({ ok: false, error: (err as Error).message });
         }
       }
+      /* ── MCP server keys ────────────────────────────────────────────────
+         Same delegation as blogs/media: the console iframe holds no backend
+         token, so it asks here. Every write re-fetches the list afterward
+         (mirroring blogWrite above) so the table reconciles to the true
+         backend state rather than trusting an optimistic local edit. */
+      if (d.type === "admin:mcpKeyList" || d.type === "admin:mcpKeyCreate" || d.type === "admin:mcpKeyRevoke") {
+        const reply = (m: Record<string, unknown>) =>
+          iframeRef.current?.contentWindow?.postMessage({ type: `${d.type}Result`, ...m }, "*");
+        let ok = true;
+        let error: string | undefined;
+        let rawKey: string | undefined;
+        try {
+          if (d.type === "admin:mcpKeyCreate") {
+            const created = await apiPost<{ rawKey: string }>("/api/admin/mcp-keys", { label: d.label });
+            rawKey = created.rawKey;
+          } else if (d.type === "admin:mcpKeyRevoke") {
+            await apiPost(`/api/admin/mcp-keys/${encodeURIComponent(String(d.id))}/revoke`);
+          }
+        } catch (err) {
+          ok = false;
+          error = (err as Error).message;
+        }
+        let keys: unknown[] | null = null;
+        try {
+          const list = await apiGet<{ keys: unknown[] }>("/api/admin/mcp-keys");
+          keys = list.keys ?? [];
+        } catch {
+          keys = null;
+        }
+        reply({ ok, ...(error ? { error } : {}), ...(rawKey ? { rawKey } : {}), ...(keys ? { keys } : {}) });
+      }
       if (d.type === "admin:blogDelete") {
         await blogWrite("admin:blogDeleteResult", async () => {
-          await apiDelete(`/api/admin/blogs/${encodeURIComponent(String(d.id))}`);
+          await apiDelete(`/api/admin/posts/${encodeURIComponent(String(d.id))}`);
         });
       }
       if (d.type === "admin:blogPublish") {
         await blogWrite("admin:blogPublishResult", async () => {
-          await apiPatch(`/api/admin/blogs/${encodeURIComponent(String(d.id))}`, {
+          await apiPatch(`/api/admin/posts/${encodeURIComponent(String(d.id))}`, {
             status: d.status,
           });
         });
@@ -232,7 +263,7 @@ export function AdminConsole() {
               const patch: Record<string, unknown> = { rank: Number(o.rank) };
               // A cross-zone move carries the new zone; a plain reorder omits it.
               if (typeof o.zone === "string") patch.zone = o.zone;
-              return apiPatch(`/api/admin/blogs/${encodeURIComponent(String(o.id))}`, patch);
+              return apiPatch(`/api/admin/posts/${encodeURIComponent(String(o.id))}`, patch);
             }),
           );
         });
