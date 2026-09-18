@@ -104,7 +104,7 @@ export function ForgotForm() {
           type="submit" disabled={isSubmitting}
           style={{
             height: 42, width: "100%", borderRadius: "var(--r)",
-            background: isSubmitting ? "var(--surface-3)" : "linear-gradient(135deg, var(--brand), #6354d6)",
+            background: isSubmitting ? "var(--surface-3)" : "linear-gradient(135deg, var(--brand), #2A5B3D)",
             border: "none", color: "#fff", fontSize: ".88rem", fontWeight: 600,
             cursor: isSubmitting ? "not-allowed" : "pointer",
             opacity: isSubmitting ? .7 : 1, fontFamily: "var(--f-body)",

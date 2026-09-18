@@ -151,7 +151,7 @@ export function ScreenerScreen() {
       <style>
         *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;margin:26px;font-size:12px}
         h1{font-size:20px;margin:0} .name{color:#333;font-size:13px;margin:1px 0 2px} .sub{color:#666;font-size:11px;margin-bottom:16px}
-        table{border-collapse:collapse;width:100%;max-width:520px} td{padding:6px 8px;border-bottom:1px solid #e8ebf1}
+        table{border-collapse:collapse;width:100%;max-width:520px} td{padding:6px 8px;border-bottom:1px solid #E4E9E6}
         td.k{color:#555} td.v{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
         .desc{margin-top:16px;max-width:640px;font-size:11.5px;line-height:1.55;color:#333}
         .foot{margin-top:20px;font-size:9.5px;color:#999}

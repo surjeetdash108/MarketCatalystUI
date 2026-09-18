@@ -105,7 +105,7 @@ function ConfirmModal({
             disabled={saving}
             style={{
               height: 38, padding: "0 22px", borderRadius: "var(--r)",
-              background: "linear-gradient(135deg, var(--brand), #6354d6)",
+              background: "linear-gradient(135deg, var(--brand), #2A5B3D)",
               border: "none", color: "#fff", fontSize: ".84rem", fontWeight: 600,
               cursor: saving ? "not-allowed" : "pointer", opacity: saving ? .7 : 1,
             }}

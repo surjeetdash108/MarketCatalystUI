@@ -269,7 +269,7 @@ function MiniCalendar({ value, onPick, onClose }: { value: string; onPick: (iso:
                 style={{
                   ...cell,
                   background: isSel ? "var(--brand-2)" : "transparent",
-                  color: isSel ? "#0a0e14" : "var(--text-hi)",
+                  color: isSel ? "#090A0C" : "var(--text-hi)",
                   fontWeight: isSel ? 700 : 500,
                   borderColor: !isSel && isToday ? "var(--brand-2)" : "transparent",
                 }}
@@ -300,7 +300,7 @@ function EcChip({ sym, selected, onSelect }: { sym: string; selected: boolean; o
   const { loaded, failed, sym: logoSym, imgProps } = useTickerLogo(sym);
   return (
     <button className={`ec-chip${selected ? " on" : ""}`} onClick={() => onSelect(sym)}>
-      <span className="ec-logo" style={{ background: loaded ? "transparent" : "#27314a", color: "#cdd6e6" }}>
+      <span className="ec-logo" style={{ background: loaded ? "transparent" : "#1C2127", color: "#C6CDC9" }}>
         {!loaded && sym[0]}
         {!failed && <img key={logoSym} {...imgProps} style={LOGO_IMG_STYLE} />}
       </span>

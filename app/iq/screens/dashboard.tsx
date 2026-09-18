@@ -479,19 +479,21 @@ export function DashboardScreen() {
                     <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
                   </svg>
                 </div>
-                <div>
-                  <h2>What Matters Now</h2>
-                  <div className="meta">
-                    {wmn?.summary ? "AI read of the last few hours · updated hourly" : "Latest market-moving headlines"}
-                  </div>
-                </div>
+                <h2>What Matters Now</h2>
               </div>
-              <svg className="wmn-chev" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <span style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
+                {/* Replaces the old subtitle line — same signal, no second row,
+                    so the orb centres against the title. */}
+                {wmn?.summary && (
+                  <span className="wmn-live"><span className="dot" />Live</span>
+                )}
+                <svg className="wmn-chev" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
             </button>
             <div className="wmn-collapse">
-              <div className="wmn-collapse-inner" style={{ padding: "2px 18px 16px" }}>
+              <div className="wmn-collapse-inner">
                 {/* The card's whole content: the AI read, scrolling inside a
                     fixed height so a long digest cannot push the rest of the
                     dashboard down the page. */}

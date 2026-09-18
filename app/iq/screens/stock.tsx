@@ -138,15 +138,15 @@ async function deleteNote(id: string): Promise<void> {
 }
 
 const LOGO_BG: Record<string, [string, string]> = {
-  AAPL: ["#1c4c73", "#cce8ff"], NVDA: ["#1f6b4d", "#c8f5e0"], MSFT: ["#003f8c", "#d0e8ff"],
-  GOOGL: ["#4a0e0e", "#ffd0d0"], META: ["#0d3b7a", "#d0e4ff"], AMZN: ["#6b3a00", "#ffe8cc"],
-  TSLA: ["#6b0000", "#ffd0d0"], JPM: ["#003a6b", "#cce0ff"], V: ["#0d3b6b", "#cce0ff"],
-  UNH: ["#006b4d", "#c8f5e0"],
+  AAPL: ["#155F58", "#FFE8CC"], NVDA: ["#1F7A46", "#C8F5E0"], MSFT: ["#155F58", "#FFE8CC"],
+  GOOGL: ["#8A2E15", "#EE9090"], META: ["#8A5A15", "#FFE8CC"], AMZN: ["#8A5A15", "#FFE8CC"],
+  TSLA: ["#8A2E15", "#EE9090"], JPM: ["#155F58", "#FFE8CC"], V: ["#8A5A15", "#FFE8CC"],
+  UNH: ["#1F7A46", "#C8F5E0"],
 };
 const _PAL: [string, string][] = [
-  ["#1f6b4d","#5ff0b3"],["#3a2f6b","#b6a6ff"],["#1f4d6b","#7fd0ff"],["#6b1f2f","#ff9ab0"],
-  ["#1f5a6b","#7fe0f0"],["#6b4a1f","#ffce8f"],["#2f2f6b","#aab0ff"],["#1f6b5a","#6ff0d0"],
-  ["#444a52","#cfd6e0"],["#5a1f6b","#e0a6ff"],
+  ["#3C6000","#76B900"],["#1B5680","#2E8FD6"],["#8A5A15","#F0A33C"],["#1E4FA8","#4285F4"],
+  ["#003C9E","#0866FF"],["#8A2E15","#F0663C"],["#7A5F10","#C9A227"],["#8A3E15","#F07B3C"],
+  ["#155F58","#2FB6A8"],["#2A5B3D","#4ADE80"],
 ];
 function hashPal(s: string): [string, string] {
   let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -2820,7 +2820,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
       {/* ── No-data popup — the searched ticker has no market data ── */}
       {showNoDataPopup && (
         <div onClick={() => setDismissedNoData(sym)}
-          style={{ position: "fixed", inset: 0, zIndex: 9500, background: "rgba(4,7,14,.62)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          style={{ position: "fixed", inset: 0, zIndex: 9500, background: "rgba(7,8,10,.62)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={e => e.stopPropagation()}
             style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 14, width: "min(400px,100%)", padding: "26px 24px", textAlign: "center", boxShadow: "0 24px 64px rgba(0,0,0,.5)" }}>
             <div style={{ fontSize: "1.9rem", marginBottom: 8 }}>🔍</div>

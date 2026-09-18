@@ -28,8 +28,8 @@ export default function Error({
         alignItems: "center",
         justifyContent: "center",
         padding: 24,
-        background: "var(--bg, #080B11)",
-        color: "var(--text-hi, #EAEFF6)",
+        background: "var(--bg, #07080A)",
+        color: "var(--text-hi, #F4F6F5)",
         fontFamily: "var(--f-body, system-ui, sans-serif)",
       }}
     >
@@ -40,7 +40,7 @@ export default function Error({
             fontWeight: 700,
             letterSpacing: ".1em",
             textTransform: "uppercase",
-            color: "var(--down, #FF5470)",
+            color: "var(--down, #F87171)",
             marginBottom: 10,
           }}
         >
@@ -52,7 +52,7 @@ export default function Error({
         <p
           style={{
             fontSize: ".9rem",
-            color: "var(--text-dim-solid, #697486)",
+            color: "var(--text-dim-solid, #6C747C)",
             marginBottom: 20,
             lineHeight: 1.5,
           }}
@@ -68,7 +68,7 @@ export default function Error({
               padding: "0 20px",
               borderRadius: "var(--r, 10px)",
               border: "none",
-              background: "linear-gradient(135deg, var(--brand, #7C6CF5), #6354d6)",
+              background: "linear-gradient(135deg, var(--brand, #4ADE80), #2A5B3D)",
               color: "#fff",
               fontSize: ".88rem",
               fontWeight: 600,
@@ -85,8 +85,8 @@ export default function Error({
               alignItems: "center",
               padding: "0 20px",
               borderRadius: "var(--r, 10px)",
-              border: "1px solid var(--border, #2A3444)",
-              color: "var(--text, #C4CCD6)",
+              border: "1px solid var(--border, #1C2127)",
+              color: "var(--text, #C6CDC9)",
               fontSize: ".88rem",
               fontWeight: 600,
               textDecoration: "none",

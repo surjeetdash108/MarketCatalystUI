@@ -32,7 +32,7 @@ export const ENTITLEMENT_CATALOG = ENTITLEMENTS.map(e => ({
 }));
 
 const AVATAR_COLORS = [
-  "#7c6cf5", "#38d6e6", "#2fe6a6", "#ffb547", "#ff5d7a", "#9d8dff", "#5bd0ff", "#ff8a5b",
+  "#4ADE80", "#F5B544", "#4ADE80", "#F5B544", "#F87171", "#A7F3C0", "#F0A33C", "#F0663C",
 ];
 
 // ADMIN_EMAIL lives in ./admin-email (a tiny module the login flow can import

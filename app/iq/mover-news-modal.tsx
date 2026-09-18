@@ -64,9 +64,9 @@ export function MoverNewsModal({
       return (
         <span
           style={{
-            background: "linear-gradient(135deg, rgba(255,140,0,0.2), rgba(255,69,0,0.25))",
-            color: "#ff9f43",
-            border: "1px solid rgba(255,159,67,0.4)",
+            background: "rgba(74,222,128,0.14)",
+            color: "var(--brand)",
+            border: "1px solid rgba(74,222,128,0.4)",
             padding: "3px 9px",
             borderRadius: 6,
             fontSize: ".7rem",
@@ -87,9 +87,9 @@ export function MoverNewsModal({
       return (
         <span
           style={{
-            background: "linear-gradient(135deg, rgba(168,85,247,0.2), rgba(126,34,206,0.25))",
-            color: "#c084fc",
-            border: "1px solid rgba(192,132,252,0.4)",
+            background: "linear-gradient(135deg, rgba(74,222,128,0.2), rgba(74,222,128,0.25))",
+            color: "#A7F3C0",
+            border: "1px solid rgba(167,243,192,0.4)",
             padding: "3px 9px",
             borderRadius: 6,
             fontSize: ".7rem",
@@ -124,7 +124,7 @@ export function MoverNewsModal({
           zIndex: 101,
           width: "min(680px, 94vw)",
           maxHeight: "88vh",
-          background: "var(--surface-1, #12161f)",
+          background: "var(--surface-1, #0B0D10)",
           border: "1px solid var(--border-soft, rgba(255,255,255,0.12))",
           borderRadius: 16,
           boxShadow: "0 24px 60px -10px rgba(0,0,0,0.75)",
@@ -132,7 +132,7 @@ export function MoverNewsModal({
           flexDirection: "column",
           overflow: "hidden",
           fontFamily: "var(--f-body, sans-serif)",
-          color: "var(--text-hi, #f1f5f9)",
+          color: "var(--text-hi, #F4F6F5)",
         }}
       >
         {/* Modal Header */}
@@ -162,8 +162,8 @@ export function MoverNewsModal({
                 {pctChange != null && (
                   <span
                     style={{
-                      background: isUp ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)",
-                      color: isUp ? "var(--up, #22c55e)" : "var(--down, #ef4444)",
+                      background: isUp ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)",
+                      color: isUp ? "var(--up, #4ADE80)" : "var(--down, #F87171)",
                       padding: "2px 8px",
                       borderRadius: 6,
                       fontSize: ".8rem",
@@ -176,7 +176,7 @@ export function MoverNewsModal({
                 )}
               </div>
               {name && (
-                <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid, #94a3b8)", marginTop: 2 }}>
+                <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid, #A6AEB5)", marginTop: 2 }}>
                   {name} {price != null ? `· $${fmt(price)}` : ""}
                 </div>
               )}
@@ -189,7 +189,7 @@ export function MoverNewsModal({
             style={{
               background: "transparent",
               border: "none",
-              color: "var(--text-dim-solid, #94a3b8)",
+              color: "var(--text-dim-solid, #A6AEB5)",
               fontSize: "1.2rem",
               cursor: "pointer",
               padding: "4px 8px",
@@ -207,14 +207,14 @@ export function MoverNewsModal({
             gap: 12,
             padding: "10px 20px",
             borderBottom: "1px solid var(--border-soft, rgba(255,255,255,0.06))",
-            background: "var(--surface-1, #12161f)",
+            background: "var(--surface-1, #0B0D10)",
           }}
         >
           <button
             onClick={() => setActiveTab("catalyst")}
             style={{
-              background: activeTab === "catalyst" ? "var(--brand, #6366f1)" : "transparent",
-              color: activeTab === "catalyst" ? "#ffffff" : "var(--text-dim-solid, #94a3b8)",
+              background: activeTab === "catalyst" ? "var(--brand, #4ADE80)" : "transparent",
+              color: activeTab === "catalyst" ? "#ffffff" : "var(--text-dim-solid, #A6AEB5)",
               border: "none",
               borderRadius: 8,
               padding: "6px 14px",
@@ -229,8 +229,8 @@ export function MoverNewsModal({
           <button
             onClick={() => setActiveTab("news")}
             style={{
-              background: activeTab === "news" ? "var(--brand, #6366f1)" : "transparent",
-              color: activeTab === "news" ? "#ffffff" : "var(--text-dim-solid, #94a3b8)",
+              background: activeTab === "news" ? "var(--brand, #4ADE80)" : "transparent",
+              color: activeTab === "news" ? "#ffffff" : "var(--text-dim-solid, #A6AEB5)",
               border: "none",
               borderRadius: 8,
               padding: "6px 14px",
@@ -247,7 +247,7 @@ export function MoverNewsModal({
         {/* Modal Body Scroll Area */}
         <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>
           {loading ? (
-            <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-dim-solid, #94a3b8)" }}>
+            <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-dim-solid, #A6AEB5)" }}>
               <div style={{ fontSize: "1.1rem", marginBottom: 8 }}>Fetching latest news & catalyst data…</div>
               <div style={{ fontSize: ".8rem" }}>Checking Benzinga WIIM, Polygon & AI synthesis</div>
             </div>
@@ -256,8 +256,8 @@ export function MoverNewsModal({
               {/* Hero Catalyst Explanation Card */}
               <div
                 style={{
-                  background: "linear-gradient(145deg, var(--surface-2, rgba(255,255,255,0.04)), rgba(99,102,241,0.06))",
-                  border: "1px solid var(--brand-dim, rgba(99,102,241,0.3))",
+                  background: "linear-gradient(145deg, var(--surface-2, rgba(255,255,255,0.04)), rgba(74,222,128,0.06))",
+                  border: "1px solid var(--brand-dim, rgba(74,222,128,0.3))",
                   borderRadius: 12,
                   padding: 18,
                   marginBottom: 20,
@@ -278,7 +278,7 @@ export function MoverNewsModal({
                       fontWeight: 700,
                       letterSpacing: ".06em",
                       textTransform: "uppercase",
-                      color: "var(--text-dim-solid, #94a3b8)",
+                      color: "var(--text-dim-solid, #A6AEB5)",
                     }}
                   >
                     Primary Movement Driver
@@ -291,7 +291,7 @@ export function MoverNewsModal({
                     fontSize: "1.05rem",
                     fontWeight: 600,
                     lineHeight: 1.5,
-                    color: "var(--text-hi, #f8fafc)",
+                    color: "var(--text-hi, #F4F6F5)",
                     marginBottom: 12,
                   }}
                 >
@@ -302,7 +302,7 @@ export function MoverNewsModal({
                   <div
                     style={{
                       fontSize: ".82rem",
-                      color: "var(--text-dim-solid, #94a3b8)",
+                      color: "var(--text-dim-solid, #A6AEB5)",
                       borderTop: "1px solid rgba(255,255,255,0.06)",
                       paddingTop: 10,
                       marginTop: 10,
@@ -318,7 +318,7 @@ export function MoverNewsModal({
                     alignItems: "center",
                     justifyContent: "space-between",
                     fontSize: ".72rem",
-                    color: "var(--text-dim-solid, #94a3b8)",
+                    color: "var(--text-dim-solid, #A6AEB5)",
                     marginTop: 12,
                   }}
                 >
@@ -332,7 +332,7 @@ export function MoverNewsModal({
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
-                        color: "var(--brand, #6366f1)",
+                        color: "var(--brand, #4ADE80)",
                         textDecoration: "none",
                         fontWeight: 600,
                         display: "inline-flex",
@@ -355,7 +355,7 @@ export function MoverNewsModal({
                       fontWeight: 700,
                       textTransform: "uppercase",
                       letterSpacing: ".05em",
-                      color: "var(--text-dim-solid, #94a3b8)",
+                      color: "var(--text-dim-solid, #A6AEB5)",
                       marginBottom: 12,
                     }}
                   >
@@ -384,7 +384,7 @@ export function MoverNewsModal({
                           style={{
                             fontSize: ".88rem",
                             fontWeight: 600,
-                            color: "var(--text-hi, #f8fafc)",
+                            color: "var(--text-hi, #F4F6F5)",
                             marginBottom: 4,
                           }}
                         >
@@ -394,7 +394,7 @@ export function MoverNewsModal({
                           <div
                             style={{
                               fontSize: ".78rem",
-                              color: "var(--text-dim-solid, #94a3b8)",
+                              color: "var(--text-dim-solid, #A6AEB5)",
                               lineHeight: 1.4,
                               marginBottom: 6,
                             }}
@@ -405,7 +405,7 @@ export function MoverNewsModal({
                         <div
                           style={{
                             fontSize: ".7rem",
-                            color: "var(--text-dim-solid, #94a3b8)",
+                            color: "var(--text-dim-solid, #A6AEB5)",
                             display: "flex",
                             alignItems: "center",
                             gap: 8,
@@ -425,7 +425,7 @@ export function MoverNewsModal({
             /* Full News Articles List Tab */
             <div>
               {newsList.length === 0 ? (
-                <div style={{ padding: "30px 0", textAlign: "center", color: "var(--text-dim-solid, #94a3b8)" }}>
+                <div style={{ padding: "30px 0", textAlign: "center", color: "var(--text-dim-solid, #A6AEB5)" }}>
                   No recent news articles found for {ticker}.
                 </div>
               ) : (
@@ -454,10 +454,10 @@ export function MoverNewsModal({
                           marginBottom: 6,
                         }}
                       >
-                        <div style={{ fontSize: ".72rem", color: "var(--brand, #6366f1)", fontWeight: 600 }}>
+                        <div style={{ fontSize: ".72rem", color: "var(--brand, #4ADE80)", fontWeight: 600 }}>
                           {item.source}
                         </div>
-                        <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid, #94a3b8)" }}>
+                        <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid, #A6AEB5)" }}>
                           {item.publishedAt ? new Date(item.publishedAt).toLocaleString() : ""}
                         </div>
                       </div>
@@ -466,7 +466,7 @@ export function MoverNewsModal({
                         style={{
                           fontSize: ".9rem",
                           fontWeight: 600,
-                          color: "var(--text-hi, #f8fafc)",
+                          color: "var(--text-hi, #F4F6F5)",
                           marginBottom: 6,
                         }}
                       >
@@ -477,7 +477,7 @@ export function MoverNewsModal({
                         <div
                           style={{
                             fontSize: ".8rem",
-                            color: "var(--text-dim-solid, #94a3b8)",
+                            color: "var(--text-dim-solid, #A6AEB5)",
                             lineHeight: 1.45,
                           }}
                         >

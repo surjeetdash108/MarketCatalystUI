@@ -1,0 +1,56 @@
+/* ============================================================
+   MARKETCATALYST — ADMIN THEME TOKENS
+   ------------------------------------------------------------
+   The admin console renders inside an IFRAME (public/admin/console.html),
+   which is a separate document from the Next app and therefore cannot see
+   app/iq.css. This file is the admin's single source of truth for colour —
+   the isolated twin of the user-app tokens in app/iq.css.
+
+   Both files carry the SAME palette, lifted verbatim from the marketing
+   landing page. Only the token NAMES differ, because the two codebases were
+   written independently:
+
+       app/iq.css            public/admin/admin-theme.css
+       ------------------    ---------------------------
+       --bg                  --bg
+       --surface-0           --bg2
+       --surface-1           --surface
+       --surface-2           --surface2
+       --border              --border
+       --border-strong       --border2
+       --text-hi             --hi
+       --text                --text
+       --text-dim            --dim / --dim2
+       --brand / --brand-2   --brand / --brand2
+       --ai                  --info
+       --up / --down / --warn  (same)
+
+   If you change a colour, change it in BOTH files.
+   ============================================================ */
+
+:root{
+  /* neutrals */
+  --bg:#07080A; --bg2:#090A0C; --surface:#0B0D10; --surface2:#0E1013;
+  --border:#1C2127; --border2:#2A3037;
+  --text:#E4E9E6; --hi:#F4F6F5; --dim:#8B939C; --dim2:#6C747C;
+  /* accents */
+  --brand:#4ADE80; --brand2:#A7F3C0; --on-brand:#07080A;
+  --up:#4ADE80; --down:#F87171; --warn:#F5B544; --info:#2FB6A8;
+  /* type + radius (unchanged) */
+  --f-disp:'Space Grotesk',system-ui,sans-serif;
+  --f-body:'Inter',system-ui,sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,monospace;
+  --r:12px;
+}
+
+/* Light theme. The console has no toggle today; set data-theme="light" on
+   <html> (or postMessage it from the parent) to activate. Accents use the
+   landing's DARK variants — neon #4ADE80 / #F87171 fall under the 4.5:1 AA
+   floor on off-white. */
+:root[data-theme="light"]{
+  --bg:#F4F6F5; --bg2:#E4E9E6; --surface:#FFFFFF; --surface2:#F4F6F5;
+  --border:#C6CDC9; --border2:#A6AEB5;
+  --text:#16191C; --hi:#07080A; --dim:#6C747C; --dim2:#8B939C;
+  --brand:#1F7A46; --brand2:#2A5B3D; --on-brand:#F4F6F5;
+  --up:#1F7A46; --down:#8A2E15; --warn:#7A5F10; --info:#155F58;
+}

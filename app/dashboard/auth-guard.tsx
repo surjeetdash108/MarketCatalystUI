@@ -27,15 +27,15 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
         `}</style>
         <div style={{
           width: 36, height: 36, borderRadius: "50%",
-          border: "2px solid #1B2433",
-          borderTopColor: "#7C6CF5",
+          border: "2px solid #14181B",
+          borderTopColor: "#4ADE80",
           animation: "iq-spin 0.75s linear infinite",
         }} />
         <div style={{
           fontFamily: "'Inter', sans-serif",
           fontSize: "0.6875rem", letterSpacing: "0.14em",
           textTransform: "uppercase", fontWeight: 600,
-          color: "#697486",
+          color: "#6C747C",
           animation: "iq-fade 1.6s ease-in-out infinite",
         }}>
           MarketCatalyst

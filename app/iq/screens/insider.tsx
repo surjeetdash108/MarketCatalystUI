@@ -221,7 +221,7 @@ function FundDrawer({ fund, onClose }: { fund: FundHoldingDoc; onClose: () => vo
       <div className="scrim" onClick={onClose} />
       <div className="side-drawer">
         <div className="drawer-h">
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#3a2f6b,#241c44)", color: "var(--brand-2)" }}>{fund.fundName[0]}</div>
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#1F7A46,#2A5B3D)", color: "var(--brand-2)" }}>{fund.fundName[0]}</div>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{fund.fundName}</div>

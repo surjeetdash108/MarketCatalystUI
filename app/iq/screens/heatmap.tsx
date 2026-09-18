@@ -145,7 +145,7 @@ export function HeatmapScreen() {
         <VendorTag v="polygon" />
         <div className="legend" style={{ gap: 4 }}>
           <span style={{ fontSize: ".66rem", color: "var(--down)" }}>−3%</span>
-          {(["rgba(208,52,76,.85)", "rgba(208,52,76,.4)", "#3a4658", "rgba(28,170,112,.4)", "rgba(28,170,112,.85)"] as const).map((bg, i) => (
+          {(["rgba(138,46,21,.85)", "rgba(138,46,21,.4)", "#2A3037", "rgba(31,122,70,.4)", "rgba(31,122,70,.85)"] as const).map((bg, i) => (
             <i key={i} style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: bg }} />
           ))}
           <span style={{ fontSize: ".66rem", color: "var(--up)" }}>+3%</span>

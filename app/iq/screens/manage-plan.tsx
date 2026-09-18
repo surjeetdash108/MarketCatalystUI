@@ -128,7 +128,7 @@ export function ManagePlanScreen() {
                 {isCurrent && (
                   <div style={{
                     position: "absolute", top: -10, right: 16,
-                    background: "var(--brand)", color: "#fff",
+                    background: "var(--brand)", color: "var(--on-brand)",
                     fontSize: "0.625rem", fontWeight: 700, padding: "2px 10px", borderRadius: 99,
                     letterSpacing: ".06em",
                   }}>YOUR PLAN</div>

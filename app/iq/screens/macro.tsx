@@ -567,7 +567,7 @@ export function MacroScreen() {
         const tier = d.importance === "high" ? "High" : d.importance === "medium" ? "Medium" : "Low";
         const tierColor = d.importance === "high" ? "var(--down)" : d.importance === "medium" ? "var(--warn)" : "var(--text-dim-solid)";
         return (
-          <div onClick={() => setEcoSel(null)} style={{ position: "fixed", inset: 0, zIndex: 9000, background: "rgba(4,7,14,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={() => setEcoSel(null)} style={{ position: "fixed", inset: 0, zIndex: 9000, background: "rgba(7,8,10,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 14, width: "min(460px, 100%)", boxShadow: "0 20px 60px rgba(0,0,0,.5)" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "16px 18px", borderBottom: "1px solid var(--border-soft)" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>

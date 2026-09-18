@@ -16,27 +16,44 @@ interface AuthLayoutProps {
   children: ReactNode;
 }
 
+/**
+ * The shell both auth screens sit in: marketing on the left, form card on the
+ * right.
+ *
+ * The signup form is long — a full investor profile, eleven fields plus asset
+ * classes — so the card is the thing that scrolls, not the page. Letting the
+ * document scroll instead dragged the marketing column off the top and left a
+ * screen and a half of empty space beside the form. Keeping the scroll inside
+ * the card holds the composition together however tall the form gets, and the
+ * login card, which is short, never scrolls at all: `max-height` only bites
+ * when there is something to bite on.
+ *
+ * Below 900px the columns stack and the inner scroll is switched off — a
+ * scrolling region inside a scrolling page is a trap on touch, where the
+ * browser has to guess which one your finger meant.
+ *
+ * Every colour here is a token from iq.css. These screens sit outside
+ * `.iq-root`, so they always render the dark palette from `:root` — but they
+ * read it from the same variables as everything else, which is what keeps them
+ * from drifting out of step with the product.
+ */
 export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
   return (
     <>
     <div className="sp-grid" />
-    <div className="lp-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
+    <div className="lp-root lp-auth-root">
 
-      <div className="lp-auth-cols" style={{
-        display: "flex", gap: "46px", alignItems: "center",
-        justifyContent: "center", maxWidth: "1060px", width: "100%",
-        position: "relative", zIndex: 1,
-      }}>
+      <div className="lp-auth-cols">
 
         {/* ── LEFT: marketing panel ── */}
-        <div className="lp-auth-left" style={{ flex: "1 1 0", maxWidth: "560px", textAlign: "center" }}>
+        <div className="lp-auth-left">
 
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "24px" }}>
             <span className="hw-logo" style={{ width: 46, height: 46, borderRadius: 13, boxShadow: "0 0 28px -6px var(--brand)" }}>
               <svg viewBox="0 0 24 24" width={22} height={22} fill="none">
-                <path d="M3 17l5-6 4 4 6-9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="20" cy="5.5" r="2.4" fill="#fff" />
+                <path d="M3 17l5-6 4 4 6-9" stroke="var(--on-brand)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="20" cy="5.5" r="2.4" fill="var(--on-brand)" />
               </svg>
             </span>
           </div>
@@ -44,7 +61,7 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
           {/* Word mark */}
           <div style={{
             fontFamily: "var(--f-display)", fontSize: "2.7rem", fontWeight: 700,
-            color: "#fff", letterSpacing: "-.02em",
+            color: "var(--text-hi)", letterSpacing: "-.02em",
             animation: "spUp .7s ease .5s both", opacity: 0,
           }}>
             MarketCatalyst
@@ -54,7 +71,7 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
           <div style={{
             fontFamily: "var(--f-display)", fontSize: "1.05rem", fontWeight: 600,
             marginTop: 6,
-            background: "linear-gradient(90deg,#b3a8ff,var(--ai),var(--brand-2),var(--ai),#b3a8ff)",
+            background: "linear-gradient(90deg,var(--brand-2),var(--ai),var(--brand-2),var(--ai),var(--brand-2))",
             backgroundSize: "220% auto",
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             animation: "spUp .7s ease .8s both, tagShimmer 8s linear 1.2s infinite",
@@ -65,7 +82,7 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
 
           {/* Description */}
           <div style={{
-            color: "#9aa6b8", fontSize: ".9rem", lineHeight: 1.65,
+            color: "var(--text)", fontSize: ".9rem", lineHeight: 1.65,
             margin: "18px auto 0", maxWidth: 420,
             animation: "spUp .7s ease 1.05s both", opacity: 0,
           }}>
@@ -78,8 +95,8 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
               <div
                 key={p.label}
                 style={{
-                  fontSize: ".72rem", fontWeight: 600, color: "#cdd6e6",
-                  background: "rgba(124,108,245,.12)", border: "1px solid rgba(124,108,245,.3)",
+                  fontSize: ".72rem", fontWeight: 600, color: "var(--text)",
+                  background: "var(--brand-dim)", border: "1px solid var(--brand-line)",
                   padding: "6px 11px", borderRadius: "999px",
                   display: "inline-flex", alignItems: "center", gap: "7px",
                   opacity: 0, transform: "translateY(12px)",
@@ -95,30 +112,22 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         </div>
 
         {/* ── RIGHT: form card ── */}
-        <div className="lp-auth-form" style={{ flex: "0 0 380px", maxWidth: "94vw" }}>
-          <div style={{
-            background: "rgba(12,18,32,.82)",
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            border: "1px solid rgba(124,108,245,.28)",
-            borderRadius: "18px",
-            padding: "26px 26px 22px",
-            boxShadow: "0 26px 64px rgba(0,0,0,.6), 0 0 0 1px rgba(124,108,245,.08) inset",
-            animation: "spRightIn .7s cubic-bezier(.2,.8,.3,1) .3s both",
-            opacity: 0,
-          }}>
-            <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, textDecoration: "none" }}>
+        <div className="lp-auth-form">
+          <div className="lp-auth-card">
+            {/* Stays put while the form scrolls under it. */}
+            <Link href="/" className="lp-auth-brand">
               <span className="hw-logo" style={{ width: 26, height: 26, borderRadius: 7 }}>
                 <svg viewBox="0 0 24 24" width={14} height={14} fill="none">
-                  <path d="M3 17l5-6 4 4 6-9" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="20" cy="5.5" r="2.4" fill="#fff" />
+                  <path d="M3 17l5-6 4 4 6-9" stroke="var(--on-brand)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="20" cy="5.5" r="2.4" fill="var(--on-brand)" />
                 </svg>
               </span>
-              <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: ".95rem", color: "#fff" }}>
+              <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: ".95rem", color: "var(--text-hi)" }}>
                 MarketCatalyst
               </span>
             </Link>
-            {children}
+
+            <div className="lp-auth-scroll">{children}</div>
           </div>
         </div>
 
@@ -130,18 +139,95 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         @keyframes spRightIn { from{opacity:0;transform:translateX(34px)} to{opacity:1;transform:none} }
         @keyframes tagShimmer { to{background-position:220% center} }
 
-        /* Tablet: stack columns vertically */
+        .lp-auth-root {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 40px 24px;
+        }
+        .lp-auth-cols {
+          display: flex;
+          gap: 46px;
+          align-items: center;
+          justify-content: center;
+          max-width: 1060px;
+          width: 100%;
+          position: relative;
+          z-index: 1;
+        }
+        .lp-auth-left { flex: 1 1 0; max-width: 560px; text-align: center; }
+        .lp-auth-form { flex: 0 0 380px; max-width: 94vw; }
+
+        .lp-auth-card {
+          display: flex;
+          flex-direction: column;
+          /* The viewport, less this screen's own padding. Anything taller
+             scrolls inside the card rather than moving the page. */
+          max-height: calc(100vh - 80px);
+          background: var(--surface-glass);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid var(--brand-line);
+          border-radius: 18px;
+          /* Clips the scroll region to the rounded corners, so the scrollbar
+             stops short of them instead of cutting across. */
+          overflow: hidden;
+          box-shadow: 0 26px 64px rgba(0,0,0,.6), 0 0 0 1px var(--brand-dim) inset;
+          animation: spRightIn .7s cubic-bezier(.2,.8,.3,1) .3s both;
+          opacity: 0;
+        }
+        .lp-auth-brand {
+          flex: none;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 22px 26px 16px;
+          border-bottom: 1px solid var(--border-soft);
+          text-decoration: none;
+        }
+        .lp-auth-scroll {
+          /* min-height:0 or the flex item refuses to shrink below its content
+             and the max-height above never takes effect. */
+          min-height: 0;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding: 22px 26px 22px;
+          scrollbar-width: thin;
+          scrollbar-color: var(--border-strong) transparent;
+        }
+        .lp-auth-scroll::-webkit-scrollbar { width: 9px; }
+        .lp-auth-scroll::-webkit-scrollbar-track { background: transparent; }
+        .lp-auth-scroll::-webkit-scrollbar-thumb {
+          background: var(--border-strong);
+          border-radius: 999px;
+          border: 3px solid transparent;
+          background-clip: content-box;
+        }
+        .lp-auth-scroll::-webkit-scrollbar-thumb:hover { background: var(--brand-line); background-clip: content-box; }
+
+        /* Tablet: stack columns vertically, and let the page scroll instead of
+           the card — a scroll region inside a scrolling page is a trap on
+           touch. */
         @media(max-width:900px){
-          .lp-auth-cols { flex-direction:column !important; gap:28px !important; align-items:center !important; }
-          .lp-auth-left { max-width:520px !important; }
+          .lp-auth-root { align-items: flex-start; }
+          .lp-auth-cols { flex-direction:column; gap:28px; align-items:center; }
+          .lp-auth-left { max-width:520px; }
+          .lp-auth-card { max-height:none; }
+          .lp-auth-scroll { overflow:visible; }
         }
 
         /* Mobile: hide marketing panel, center form, reduce padding */
         @media(max-width:600px){
-          .lp-auth-left { display:none !important; }
-          .lp-auth-cols { padding:0 !important; }
-          .lp-auth-form { flex:none !important; width:100% !important; max-width:100% !important; }
-          .lp-root { padding:20px 16px !important; align-items:flex-start !important; padding-top:40px !important; }
+          .lp-auth-left { display:none; }
+          .lp-auth-cols { padding:0; }
+          .lp-auth-form { flex:none; width:100%; max-width:100%; }
+          .lp-auth-root { padding:40px 16px 20px; }
+          .lp-auth-brand { padding:18px 20px 14px; }
+          .lp-auth-scroll { padding:18px 20px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .lp-auth-card, .lp-auth-left * { animation: none !important; opacity: 1 !important; transform: none !important; }
         }
       `}</style>
     </div>

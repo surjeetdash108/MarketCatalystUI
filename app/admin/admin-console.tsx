@@ -284,7 +284,7 @@ export function AdminConsole() {
 
   if (state !== "ok") {
     return (
-      <div style={{ height: "100vh", display: "grid", placeItems: "center", background: "#090d16", color: "#8b97af", fontFamily: "system-ui" }}>
+      <div style={{ height: "100vh", display: "grid", placeItems: "center", background: "#090A0C", color: "#8B939C", fontFamily: "system-ui" }}>
         {state === "checking" ? "Checking admin access…" : "Redirecting…"}
       </div>
     );
@@ -295,8 +295,8 @@ export function AdminConsole() {
     {dataError && (
       <div style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 10000,
-        padding: "7px 14px", background: "rgba(255,93,122,.16)", color: "#ff5d7a",
-        borderBottom: "1px solid rgba(255,93,122,.4)",
+        padding: "7px 14px", background: "rgba(248,113,113,.16)", color: "#F87171",
+        borderBottom: "1px solid rgba(248,113,113,.4)",
         font: "600 12px/1.4 system-ui, sans-serif", textAlign: "center",
       }}>
         ⚠ Could not load live admin data — showing sample data. {dataError}

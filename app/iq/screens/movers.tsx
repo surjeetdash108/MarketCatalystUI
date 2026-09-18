@@ -644,9 +644,9 @@ export function MoversScreen() {
                         }}
                         title="View news catalyst for why this stock moved"
                         style={{
-                          background: "rgba(99, 102, 241, 0.12)",
-                          color: "var(--brand, #6366f1)",
-                          border: "1px solid rgba(99, 102, 241, 0.3)",
+                          background: "rgba(74,222,128, 0.12)",
+                          color: "var(--brand, #4ADE80)",
+                          border: "1px solid rgba(74,222,128, 0.3)",
                           borderRadius: 6,
                           padding: "3px 8px",
                           fontSize: ".72rem",
@@ -706,8 +706,8 @@ export function MoversScreen() {
                       title="View News & Catalyst why this stock moved"
                       style={{
                         display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
-                        background: "rgba(99, 102, 241, 0.15)",
-                        border: "1px solid var(--brand, #6366f1)",
+                        background: "rgba(74,222,128, 0.15)",
+                        border: "1px solid var(--brand, #4ADE80)",
                         color: "var(--text-hi, #ffffff)",
                         borderRadius: 8, padding: "7px 13px", cursor: "pointer",
                         fontSize: ".8rem", fontWeight: 600, fontFamily: "var(--f-body)",

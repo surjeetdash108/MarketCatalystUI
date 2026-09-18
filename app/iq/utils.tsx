@@ -18,12 +18,12 @@ import { useBackendBars } from "./hooks/useBackendBars";
 export type VendorKey = "polygon" | "fmp" | "fred" | "sec" | "firebase";
 
 const VENDOR_META: Record<VendorKey, { label: string; bg: string; fg: string }> = {
-  polygon: { label: "POLYGON", bg: "#1e3a8a", fg: "#dbeafe" }, // blue
-  fmp: { label: "FMP", bg: "#5b21b6", fg: "#ede9fe" }, // violet
-  fred: { label: "FRED", bg: "#065f46", fg: "#d1fae5" }, // green
-  sec: { label: "SEC EDGAR", bg: "#9a3412", fg: "#ffedd5" }, // amber
+  polygon: { label: "POLYGON", bg: "#8A5A15", fg: "#FFEDD5" }, // blue
+  fmp: { label: "FMP", bg: "#2A5B3D", fg: "#C8F5E0" }, // violet
+  fred: { label: "FRED", bg: "#1F7A46", fg: "#C8F5E0" }, // green
+  sec: { label: "SEC EDGAR", bg: "#8A5A15", fg: "#FFEDD5" }, // amber
   // Not a market-data vendor — the app's own Firestore data (e.g. search counts).
-  firebase: { label: "FIREBASE", bg: "#475569", fg: "#e2e8f0" }, // slate
+  firebase: { label: "FIREBASE", bg: "#2A3037", fg: "#E4E9E6" }, // slate
 };
 
 /**
@@ -140,7 +140,7 @@ export function Spark(_props: { seed: number; up: boolean; w?: number; h?: numbe
 }
 
 // ---- Stock logo — real logo via Parqet CDN, letter avatar fallback ----
-const _LP = ['#6366f1','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f59e0b','#ef4444','#22c55e','#0ea5e9','#f97316'];
+const _LP = ['#4ADE80','#F5B544','#4ADE80','#4ADE80','#2FB6A8','#F5B544','#F87171','#4ADE80','#F5B544','#F0663C'];
 /**
  * Global multiplier for every ticker logo in the app.
  *
@@ -268,9 +268,9 @@ export function SemiGauge({ val, label, id = "sg" }: { val: number; label: strin
     <svg viewBox="0 0 140 90" width={cs(150)} style={{ display: "block" }}>
       <defs>
         <linearGradient id={gradId} x1="0" x2="1">
-          <stop offset="0" stopColor="#FF5470" />
-          <stop offset=".5" stopColor="#FFB547" />
-          <stop offset="1" stopColor="#2FE6A6" />
+          <stop offset="0" stopColor="#F87171" />
+          <stop offset=".5" stopColor="#F5B544" />
+          <stop offset="1" stopColor="#4ADE80" />
         </linearGradient>
       </defs>
       <path d="M16 66 A54 54 0 0 1 124 66" fill="none" stroke="var(--surface-3)" strokeWidth="11" strokeLinecap="round" />
@@ -287,8 +287,8 @@ export function SemiGauge({ val, label, id = "sg" }: { val: number; label: strin
 
 // ---- Technical rating gauge (TradingView-style segmented semicircle) ----
 const TR_TONE: Record<string, string> = {
-  "Strong Buy": "var(--up)", "Buy": "#7bdcae", "Neutral": "var(--text-dim-solid)",
-  "Sell": "#ff9aab", "Strong Sell": "var(--down)",
+  "Strong Buy": "var(--up)", "Buy": "#A7F3C0", "Neutral": "var(--text-dim-solid)",
+  "Sell": "#EC8585", "Strong Sell": "var(--down)",
 };
 export const RATING_VAL: Record<string, number> = {
   "Strong Buy": 0.9, "Buy": 0.55, "Neutral": 0, "Sell": -0.55, "Strong Sell": -0.9,
@@ -310,11 +310,11 @@ export function TrGauge({ val, label }: { val: number; label: string }) {
     // preflight sets `svg { display: block }`, so a text-align on .trgroup has
     // nothing inline to centre and the gauge sat against the left edge.
     <svg viewBox="0 0 180 104" width={cs(190)} className="tr-gauge">
-      <path d={arc(0, .2)} fill="none" stroke="#FF5470" strokeWidth="13" strokeLinecap="butt" />
-      <path d={arc(.2, .4)} fill="none" stroke="#ff9aab" strokeWidth="13" strokeLinecap="butt" />
-      <path d={arc(.4, .6)} fill="none" stroke="#697486" strokeWidth="13" strokeLinecap="butt" />
-      <path d={arc(.6, .8)} fill="none" stroke="#7bdcae" strokeWidth="13" strokeLinecap="butt" />
-      <path d={arc(.8, 1)} fill="none" stroke="#2FE6A6" strokeWidth="13" strokeLinecap="butt" />
+      <path d={arc(0, .2)} fill="none" stroke="#F87171" strokeWidth="13" strokeLinecap="butt" />
+      <path d={arc(.2, .4)} fill="none" stroke="#EC8585" strokeWidth="13" strokeLinecap="butt" />
+      <path d={arc(.4, .6)} fill="none" stroke="#6C747C" strokeWidth="13" strokeLinecap="butt" />
+      <path d={arc(.6, .8)} fill="none" stroke="#A7F3C0" strokeWidth="13" strokeLinecap="butt" />
+      <path d={arc(.8, 1)} fill="none" stroke="#4ADE80" strokeWidth="13" strokeLinecap="butt" />
       <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--text-hi)" strokeWidth="3" strokeLinecap="round" />
       <circle cx={cx} cy={cy} r="6" fill="var(--text-hi)" />
       <text x={cx} y="100" textAnchor="middle" fill={tone} fontFamily="Space Grotesk" fontWeight="700" fontSize="15">{label}</text>
@@ -329,7 +329,7 @@ export function heatCol(p: number): { bg: string; fg: string } {
   let r: number, g: number, b: number;
   if (p >= 0) { r = L(206, 8); g = L(240, 120); b = L(220, 62); }
   else         { r = L(250, 168); g = L(214, 12); b = L(222, 32); }
-  return { bg: `rgb(${r},${g},${b})`, fg: a > 0.42 ? "#ffffff" : "#0c1a13" };
+  return { bg: `rgb(${r},${g},${b})`, fg: a > 0.42 ? "#ffffff" : "#0E1013" };
 }
 
 // ---- Shared deterministic hash (used for seeded chart/earnings/news data) ----
@@ -540,8 +540,8 @@ const MA_WARMUP_TF: Record<string, string> = {
 };
 
 const MA_PERS = [9, 21, 50, 200];
-const MA_COLS = ['#f5b14c', '#34E2F0', '#7C6CF5', '#ff79c6'];
-const EMA_COLS = ['#5ff0b3', '#22b8d6', '#a78bfa', '#ff9aab'];
+const MA_COLS = ['#F5B544', '#F5B544', '#4ADE80', '#4ADE80'];
+const EMA_COLS = ['#A7F3C0', '#2FB6A8', '#A7F3C0', '#EC8585'];
 
 type CandleChartProps = {
   sym: string; tf: string; px: number;
@@ -937,11 +937,11 @@ export function RsiPane({ rsi14, loading }: { rsi14: number | null; loading?: bo
   }
   const Yp = (p: number) => 8 + (h - 16) * (1 - p / 100);
   const v = Math.max(0, Math.min(100, rsi14));
-  const zoneColor = v > 70 ? "#FF5470" : v < 30 ? "#2FE6A6" : "#FFB547";
+  const zoneColor = v > 70 ? "#F87171" : v < 30 ? "#4ADE80" : "#F5B544";
   return (
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", display: "block" }}>
-      <line x1="40" x2={w - 20} y1={Yp(70)} y2={Yp(70)} stroke="#FF547055" strokeWidth="1" strokeDasharray="3 3" />
-      <line x1="40" x2={w - 20} y1={Yp(30)} y2={Yp(30)} stroke="#2FE6A655" strokeWidth="1" strokeDasharray="3 3" />
+      <line x1="40" x2={w - 20} y1={Yp(70)} y2={Yp(70)} stroke="#F8717155" strokeWidth="1" strokeDasharray="3 3" />
+      <line x1="40" x2={w - 20} y1={Yp(30)} y2={Yp(30)} stroke="#4ADE8055" strokeWidth="1" strokeDasharray="3 3" />
       <text x={w - 16} y={Yp(70) + 3} fill="var(--text-dim-solid)" fontSize="8" fontFamily="JetBrains Mono">70</text>
       <text x={w - 16} y={Yp(30) + 3} fill="var(--text-dim-solid)" fontSize="8" fontFamily="JetBrains Mono">30</text>
       <line x1="40" x2={w - 20} y1={Yp(v)} y2={Yp(v)} stroke={zoneColor} strokeWidth="2" />

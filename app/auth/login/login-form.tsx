@@ -231,8 +231,12 @@ export function LoginForm() {
           type="submit" disabled={isSubmitting}
           style={{
             height: 42, width: "100%", borderRadius: "var(--r)",
-            background: isSubmitting ? "var(--surface-3)" : "linear-gradient(135deg, var(--brand), #6354d6)",
-            border: "none", color: "#fff", fontSize: ".88rem", fontWeight: 600,
+            // Flat brand green with the palette's own on-brand ink, matching
+            // the solid CTA the marketing site uses. The old gradient ran into
+            // a hardcoded #2A5B3D and put white on green, which is the one
+            // pairing this palette does not carry enough contrast for.
+            background: isSubmitting ? "var(--surface-3)" : "var(--brand)",
+            border: "none", color: "var(--on-brand)", fontSize: ".88rem", fontWeight: 600,
             cursor: isSubmitting ? "not-allowed" : "pointer",
             opacity: isSubmitting ? .7 : 1,
             transition: "filter .14s", fontFamily: "var(--f-body)",

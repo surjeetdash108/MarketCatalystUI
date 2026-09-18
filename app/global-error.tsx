@@ -29,8 +29,8 @@ export default function GlobalError({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#080B11",
-          color: "#EAEFF6",
+          background: "#07080A",
+          color: "#F4F6F5",
           fontFamily: "system-ui, -apple-system, sans-serif",
           padding: 24,
         }}
@@ -42,7 +42,7 @@ export default function GlobalError({
               fontWeight: 700,
               letterSpacing: ".1em",
               textTransform: "uppercase",
-              color: "#FF5470",
+              color: "#F87171",
               marginBottom: 10,
             }}
           >
@@ -51,7 +51,7 @@ export default function GlobalError({
           <h2 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: 8 }}>
             The app hit an unexpected error
           </h2>
-          <p style={{ fontSize: ".9rem", color: "#697486", marginBottom: 20, lineHeight: 1.5 }}>
+          <p style={{ fontSize: ".9rem", color: "#6C747C", marginBottom: 20, lineHeight: 1.5 }}>
             Reloading usually fixes it.{error?.digest ? ` (ref: ${error.digest})` : ""}
           </p>
           <button
@@ -61,7 +61,7 @@ export default function GlobalError({
               padding: "0 22px",
               borderRadius: 10,
               border: "none",
-              background: "linear-gradient(135deg, #7C6CF5, #6354d6)",
+              background: "linear-gradient(135deg, #4ADE80, #2A5B3D)",
               color: "#fff",
               fontSize: ".9rem",
               fontWeight: 600,

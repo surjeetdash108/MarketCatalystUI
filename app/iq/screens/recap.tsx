@@ -32,8 +32,8 @@ function fmtVol(n: number | null | undefined): string {
 
 function heatColor(v: number): string {
   const a = Math.min(Math.abs(v) / 2.2, 1);
-  if (v >= 0) return `rgba(47,230,166,${(0.15 + a * 0.6).toFixed(2)})`;
-  return `rgba(255,84,112,${(0.15 + a * 0.6).toFixed(2)})`;
+  if (v >= 0) return `rgba(74,222,128,${(0.15 + a * 0.6).toFixed(2)})`;
+  return `rgba(248,113,113,${(0.15 + a * 0.6).toFixed(2)})`;
 }
 
 const STAR_SVG = (
@@ -389,7 +389,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
                 </div>
                 {internals?.breadthPct != null ? (
                   <>
-                    <div style={{ height: 8, borderRadius: 4, overflow: "hidden", background: "var(--down-dim, rgba(255,84,112,.25))", display: "flex" }}>
+                    <div style={{ height: 8, borderRadius: 4, overflow: "hidden", background: "var(--down-dim, rgba(248,113,113,.25))", display: "flex" }}>
                       <div style={{ width: `${(internals.breadthPct * 100).toFixed(0)}%`, background: "var(--up)" }} />
                     </div>
                     <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
