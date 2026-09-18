@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthBackdrop } from "./auth-backdrop";
 import { ReactNode } from "react";
 
 const PILLS = [
@@ -39,9 +40,11 @@ interface AuthLayoutProps {
  */
 export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
   return (
-    <>
-    <div className="sp-grid" />
     <div className="lp-root lp-auth-root">
+      {/* Inside .lp-root, not beside it: that element paints an opaque
+          gradient, so a sibling backdrop (the old .sp-grid) sat underneath it
+          and never showed. */}
+      <AuthBackdrop />
 
       <div className="lp-auth-cols">
 
@@ -139,6 +142,51 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         @keyframes spRightIn { from{opacity:0;transform:translateX(34px)} to{opacity:1;transform:none} }
         @keyframes tagShimmer { to{background-position:220% center} }
 
+        /* ---- Market backdrop ---- */
+        .au-bg {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          overflow: hidden;
+          pointer-events: none;
+          /* Low enough that the form card and the marketing copy stay the
+             subject; the card's own blur softens whatever falls behind it. */
+          opacity: .42;
+        }
+        .au-bg svg { width: 100%; height: 100%; display: block; }
+        .au-bg-grid { stroke: var(--border); stroke-width: 1; opacity: .7; }
+        .au-bg-area { fill: url(#auArea); }
+        .au-bg-stop-a { stop-color: var(--brand); stop-opacity: .3; }
+        .au-bg-stop-b { stop-color: var(--brand); stop-opacity: 0; }
+        .au-bg-line { fill: none; stroke: var(--brand); stroke-width: 2; opacity: .5; }
+        .au-bg-wick { stroke-width: 1.4; }
+        .au-bg-body { opacity: .55; }
+        .au-bg-up .au-bg-wick { stroke: var(--brand); }
+        .au-bg-up .au-bg-body, .au-bg-up .au-bg-vol { fill: var(--brand); }
+        .au-bg-dn .au-bg-wick { stroke: var(--down); }
+        .au-bg-dn .au-bg-body, .au-bg-dn .au-bg-vol { fill: var(--down); }
+        .au-bg-vol { opacity: .26; }
+        .au-scrim {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          background:
+            radial-gradient(ellipse 44% 40% at 32% 50%, rgba(7,8,10,.94), rgba(7,8,10,.6) 55%, transparent 78%),
+            linear-gradient(to bottom, rgba(7,8,10,.75), transparent 28%);
+        }
+        @media(max-width:600px){
+          /* The card fills the screen here, so the scrim only needs to cover
+             the top strip the brand mark sits on. */
+          .au-scrim { background: linear-gradient(to bottom, rgba(7,8,10,.8), transparent 30%); }
+        }
+
+        /* The card is the subject on a phone, where it fills the screen —
+           pull the chart back so it does not compete through the blur. */
+        @media(max-width:600px){
+          .au-bg { opacity: .3; }
+        }
+
         .lp-auth-root {
           display: flex;
           align-items: center;
@@ -231,6 +279,5 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         }
       `}</style>
     </div>
-    </>
   );
 }
