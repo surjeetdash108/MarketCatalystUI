@@ -333,13 +333,29 @@ export function DashboardScreen() {
   // key = the Firestore doc id, not ticker+dir: a single ticker can have
   // dozens of insider filings in the same direction (CRWD has 42 disposals),
   // so ticker+dir alone collides on real data.
-  const INSIDER_MINI = liveInsiderTx.slice(0, 5).map(x => ({
-    key: x.id,
-    s: x.ticker,
-    role: x.officerTitle ?? x.ownerName ?? "Filer",
-    dir: (x.acquiredOrDisposed === "A" ? "buy" : "sell") as "buy" | "sell",
-    val: x.pricePerShare ? (x.shares * x.pricePerShare / 1e6).toFixed(2) + "M" : "0",
-  }));
+  //
+  // Most-recent-per-ticker, not a raw slice: the API has no guaranteed sort,
+  // and a single sync run can write a burst of same-day Form 4 filings for
+  // one ticker (e.g. several officers filing together) — an unsorted
+  // `.slice(0, 5)` then shows that one ticker five times instead of a
+  // cross-market sample.
+  const INSIDER_MINI = (() => {
+    const byTicker = new Map<string, InsiderTxDoc>();
+    for (const x of liveInsiderTx) {
+      const cur = byTicker.get(x.ticker);
+      if (!cur || (x.transactionDate ?? "") > (cur.transactionDate ?? "")) byTicker.set(x.ticker, x);
+    }
+    return [...byTicker.values()]
+      .sort((a, b) => (b.transactionDate ?? "").localeCompare(a.transactionDate ?? ""))
+      .slice(0, 5)
+      .map(x => ({
+        key: x.id,
+        s: x.ticker,
+        role: x.officerTitle ?? x.ownerName ?? "Filer",
+        dir: (x.acquiredOrDisposed === "A" ? "buy" : "sell") as "buy" | "sell",
+        val: x.pricePerShare ? (x.shares * x.pricePerShare / 1e6).toFixed(2) + "M" : "0",
+      }));
+  })();
 
   // Real watchlist/portfolio (signed-in user). No demo fallback: an empty
   // list renders DataState instead of a fabricated $128,430 showcase.
@@ -479,7 +495,7 @@ export function DashboardScreen() {
         <div className="col-12">
           <div className="pulse" style={{ position: "relative" }}>
             <span style={{ position: "absolute", top: 4, right: 6, zIndex: 2, pointerEvents: "none" }}><VendorTag v="polygon" /></span>
-            {pulse.slice(0, 9).map((x, i) => (
+            {pulse.map((x, i) => (
               <div key={x.label} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(i)}>
                 <div className="lbl">{x.label}</div>
                 <div className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</div>

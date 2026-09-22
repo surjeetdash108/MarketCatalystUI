@@ -101,7 +101,7 @@ export function MoverNewsModal({
             gap: 5,
           }}
         >
-          ✨ AI Catalyst Synthesis
+          ✨ Market<span style={{ color: "var(--brand)" }}>Catalyst</span> Synthesis
         </span>
       );
     }
