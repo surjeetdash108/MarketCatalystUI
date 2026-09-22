@@ -6,7 +6,7 @@ import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
 import { useIQActions, ExpandBtn } from "../shell";
 import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem, maPostureLabel, isLeveragedProduct } from "../data";
-import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag } from "../utils";
+import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, cleanCatalystText } from "../utils";
 import { isoDay, fmtDate } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
@@ -187,7 +187,7 @@ function DashPopContent({
           the latest headline, else an honest empty state. */}
       <div className="dp-note">
         {catalyst?.catalyst
-          ? <><b style={{ color: "var(--text-hi)" }}>{isAi ? "✨ AI catalyst:" : "News catalyst:"}</b> {catalyst.catalyst}</>
+          ? <><b style={{ color: "var(--text-hi)" }}>{isAi ? <>Market<span style={{ color: "var(--brand)" }}>Catalyst</span>:</> : "News catalyst:"}</b> {cleanCatalystText(catalyst.catalyst)}</>
           : latestNews
           ? <><b style={{ color: "var(--text-hi)" }}>Latest:</b> {latestNews.headline}{latestNews.source ? <span style={{ color: "var(--text-dim-solid)" }}> · {latestNews.source}</span> : null}</>
           : !catalystResolved || !newsResolved ? "Loading news…" : "News not available."}

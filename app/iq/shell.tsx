@@ -129,20 +129,27 @@ export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
 
 // ---- Nav icon SVG ----
 /**
- * MarketCatalyst brand mark — inline SVG (ascending bar-chart + trend line +
- * node) and the wordmark "Market" (light) + "Catalyst" (blue→purple gradient).
- * Replaces the missing /logo-marketcatalyst.png; crisp at any size, theme-aware.
+ * MarketCatalyst brand mark — inline SVG (gradient ascending bar-chart +
+ * trend line ending in an arrowhead) and the wordmark "Market" (light) +
+ * "Catalyst" (brand green). Crisp at any size, theme-aware (the gradient's
+ * bright stop tracks var(--brand) per theme).
  */
 function BrandLogo({ height = 28 }: { height?: number }) {
   return (
     <span className="brand-logo" style={{ gap: Math.round(height * 0.3), lineHeight: 1 }}>
       <svg viewBox="0 0 44 44" width={height} height={height} aria-hidden="true" style={{ flexShrink: 0 }}>
-        <rect x="5" y="27" width="6" height="12" rx="2" fill="var(--brand)" />
-        <rect x="14" y="21" width="6" height="18" rx="2" fill="var(--brand)" />
-        <rect x="23" y="15" width="6" height="24" rx="2" fill="var(--brand)" />
-        <rect x="32" y="9" width="6" height="30" rx="2" fill="var(--brand)" />
-        <path d="M7 30 L16 23 L25 17 L35 8" fill="none" stroke="var(--brand)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="35" cy="8" r="3.6" fill="var(--bg)" stroke="var(--brand)" strokeWidth="2.4" />
+        <defs>
+          <linearGradient id="mcBrandGrad" x1="4" y1="40" x2="40" y2="4" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#0D3B2E" />
+            <stop offset="1" style={{ stopColor: "var(--brand)" }} />
+          </linearGradient>
+        </defs>
+        <rect x="5" y="27" width="6" height="12" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="14" y="21" width="6" height="18" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="23" y="15" width="6" height="24" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="32" y="9" width="6" height="30" rx="2" fill="url(#mcBrandGrad)" />
+        <path d="M7 30 L16 23 L25 17 L36 8" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M28 8 L36 8 L36 16" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <span style={{
         fontFamily: "var(--f-display), system-ui, sans-serif",
