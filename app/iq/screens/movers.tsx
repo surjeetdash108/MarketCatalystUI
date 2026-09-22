@@ -501,10 +501,10 @@ export function MoversScreen() {
   };
   /** Sortable header cell. A plain render helper (not a nested component) so
    *  React doesn't remount the header on every parent render. */
-  const sortTh = (k: MoverSortKey, label: string, num = false) => (
+  const sortTh = (k: MoverSortKey, label: string, align?: boolean | "center") => (
     <th
       key={k}
-      className={num ? "num" : undefined}
+      className={align === "center" ? "center" : align ? "num" : undefined}
       onClick={() => toggleSort(k)}
       title={`Sort by ${label}`}
       style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
@@ -585,7 +585,7 @@ export function MoversScreen() {
               {sortTh("change",  isWeekTab(tab) ? "5-day" : "Change", true)}
               {sortTh("rvol",    "RVOL",   true)}
               {sortTh("mcap",    "Mkt Cap", true)}
-              {sortTh("cap",     "Cap · Sector")}
+              {sortTh("cap",     "Cap · Sector", "center")}
               <th style={{ whiteSpace: "nowrap" }}>Why It Moved</th>
             </tr>
           </thead>
@@ -645,7 +645,7 @@ export function MoversScreen() {
                         ? <span style={{ color: "var(--text-hi)" }}>{fmtMcap(m.marketCap)}</span>
                         : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
                     </td>
-                    <td>
+                    <td className="center">
                       <span style={{ fontSize: ".74rem" }}>
                         <b style={{ color: "var(--text-hi)" }}>{m.cap}</b>
                         {" · "}

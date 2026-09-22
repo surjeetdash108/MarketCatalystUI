@@ -16,9 +16,9 @@ type Tab = typeof TABS[number];
 
 // Top-level views (the 3 tabs at the top of the screen).
 const VIEWS = [
+  { key: "analysts", label: "Analysts" },
   { key: "consensus", label: "Consensus & price targets" },
   { key: "perfirm", label: "Per-firm analyst actions" },
-  { key: "analysts", label: "Analysts" },
 ] as const;
 type View = typeof VIEWS[number]["key"];
 

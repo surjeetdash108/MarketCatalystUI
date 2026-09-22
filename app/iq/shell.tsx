@@ -173,6 +173,8 @@ function NavIcon({ slug }: { slug: string }) {
     recap:       "M4 3h16a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H4V3Zm0 0v18M8 8h8M8 12h8M8 16h5",
     macro:       "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18ZM3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18",
     options:     "M12 3l8 4.5-8 4.5-8-4.5L12 3zM4 12l8 4.5 8-4.5M4 16.5L12 21l8-4.5",
+    "etf-corner":        "M8 10a4 4 0 0 1 8 0M3 10h18l-2 9H5L3 10ZM9 14v3M15 14v3",
+    "ai-infrastructure": "M7 7h10v10H7ZM10 10h4v4h-4ZM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4",
   };
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"

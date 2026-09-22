@@ -16,6 +16,7 @@ import { RecapScreen } from "../../iq/screens/recap";
 import { MacroScreen } from "../../iq/screens/macro";
 import { OptionsScreen } from "../../iq/screens/options";
 import { ThemesScreen } from "../../iq/screens/themes";
+import { ComingSoonScreen } from "../../iq/screens/coming-soon";
 
 export function generateStaticParams() {
   return menuItems
@@ -40,6 +41,8 @@ const SCREENS: Record<string, React.ReactNode> = {
   recap:         <RecapScreen mode="daily" />,
   "weekly-recap": <RecapScreen mode="weekly" />,
   macro:       <MacroScreen />,
+  "etf-corner":        <ComingSoonScreen title="ETF Corner" />,
+  "ai-infrastructure": <ComingSoonScreen title="AI Infrastructure" />,
 };
 
 export default async function MenuPage({
