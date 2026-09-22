@@ -470,11 +470,33 @@ export function MoversScreen() {
     return true;
   });
 
-  /** Click a column: first click applies that column's natural direction, further
-   *  clicks toggle, and a third state returns to the tab's own ranking. */
+  /**
+   * Direction that would exactly reproduce the ACTIVE tab's own default
+   * ranking for this column — Top Gainers/Weekly Gainers already sort by
+   * Change descending, Unusual Volume already sorts by RVOL descending.
+   * Starting a first click in that same direction produced a sort identical
+   * to what was already on screen, so the click looked like it did nothing.
+   */
+  const tabDefaultDir = (k: MoverSortKey): "asc" | "desc" | null => {
+    if (k === "change") {
+      if (tab === "win" || tab === "weekwin") return "desc";
+      if (tab === "lose" || tab === "weeklose") return "asc";
+    }
+    if (k === "rvol" && tab === "vol") return "desc";
+    return null;
+  };
+
+  /** Click a column: first click applies that column's natural direction (or
+   *  its opposite, when the natural direction would just reproduce the tab's
+   *  own default ranking), further clicks toggle, and a third state returns
+   *  to the tab's own ranking. `firstDir` is recomputed from the ACTIVE tab
+   *  on every call (not just the first) so the 3-click cycle keeps anchoring
+   *  on the same direction it actually started from. */
   const toggleSort = (k: MoverSortKey) => {
-    if (sortKey !== k) { setSortKey(k); setSortDir(SORT_FIRST_DIR[k]); return; }
-    if (sortDir === SORT_FIRST_DIR[k]) { setSortDir(sortDir === "asc" ? "desc" : "asc"); return; }
+    const natural = SORT_FIRST_DIR[k];
+    const firstDir = natural === tabDefaultDir(k) ? (natural === "asc" ? "desc" : "asc") : natural;
+    if (sortKey !== k) { setSortKey(k); setSortDir(firstDir); return; }
+    if (sortDir === firstDir) { setSortDir(sortDir === "asc" ? "desc" : "asc"); return; }
     setSortKey(null); // back to the default ranking
   };
   /** Sortable header cell. A plain render helper (not a nested component) so

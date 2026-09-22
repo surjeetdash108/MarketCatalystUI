@@ -16,7 +16,7 @@ import { pulseFromLive, buildSectorList, tapeItemsToIndexDocs } from "../live-ma
 import type {
   LiveMoverDoc, LiveEarningsDoc, CompanyDoc, SectorApiDoc,
   InsiderTxDoc, AnalystConsensusDoc, MarketSentimentDoc, MarketSentimentHistoryDoc, EarningsAnnouncementDoc,
-  HoldingDoc, NewsArticleDoc, RecapDoc,
+  HoldingDoc, NewsArticleDoc, RecapDoc, MoverCatalystDoc,
 } from "../types";
 
 // Insider mini-list, market internals and F&G history all had hardcoded mock
@@ -132,11 +132,12 @@ function pctBorderColor(pct: number | null | undefined): string {
 }
 
 function DashPopContent({
-  sym, block, movers, earnings, watchlist, portfolio, companies, consensus, insiderMini, announcements, news, onDemandNews,
+  sym, block, movers, earnings, watchlist, portfolio, companies, consensus, insiderMini, announcements, news, onDemandNews, catalystCache,
 }: {
   sym: string; block: PopBlock; movers: Mover[]; earnings: Earning[]; watchlist: WatchItem[]; portfolio: FolioItem[];
   companies: CompanyDoc[]; consensus: AnalystConsensusDoc[]; insiderMini: { key: string; s: string; role: string; dir: "buy" | "sell"; val: string }[];
   announcements: EarningsAnnouncementDoc[]; news: NewsArticleDoc[]; onDemandNews: Record<string, NewsArticleDoc | null>;
+  catalystCache: Record<string, MoverCatalystDoc | null>;
 }) {
   // Latest headline: bulk news first (instant), else the on-demand fetch result
   // (which covers ANY ticker), else still loading.
@@ -175,15 +176,21 @@ function DashPopContent({
     }
   } else if (block === "movers" && mv) {
     const c = companies.find(x => x.ticker === sym);
+    const catalyst = catalystCache[sym];
+    const catalystResolved = sym in catalystCache;
+    const isAi = catalyst?.source === "ai_synthesis" || catalyst?.vendor === "llm";
     body = <>
       <DpRow label="Today"><span className={cls(mv.pctChange)}>{sign(mv.pctChange)}</span></DpRow>
       <DpRow label="Rel. volume">{c?.rvol != null ? `${c.rvol.toFixed(1)}×` : <NotAvailable />}</DpRow>
       <DpRow label="RS rank">{c?.rsRating != null ? `${c.rsRating}/99` : <NotAvailable />}</DpRow>
-      {/* Why it moved: the latest headline, or an honest empty state. */}
+      {/* Why it moved: the AI catalyst summary when the backend has one, else
+          the latest headline, else an honest empty state. */}
       <div className="dp-note">
-        {latestNews
+        {catalyst?.catalyst
+          ? <><b style={{ color: "var(--text-hi)" }}>{isAi ? "✨ AI catalyst:" : "News catalyst:"}</b> {catalyst.catalyst}</>
+          : latestNews
           ? <><b style={{ color: "var(--text-hi)" }}>Latest:</b> {latestNews.headline}{latestNews.source ? <span style={{ color: "var(--text-dim-solid)" }}> · {latestNews.source}</span> : null}</>
-          : newsResolved ? "News not available." : "Loading news…"}
+          : !catalystResolved || !newsResolved ? "Loading news…" : "News not available."}
       </div>
     </>;
   } else if (block === "analyst" && an) {
@@ -410,6 +417,25 @@ export function DashboardScreen() {
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pop?.sym]);
+
+  // AI "why it moved" catalyst for the hovered mover (same endpoint the click-through
+  // modal uses). Only fetched for the movers popup block, cached per ticker.
+  const [popCatalystCache, setPopCatalystCache] = useState<Record<string, MoverCatalystDoc | null>>({});
+  useEffect(() => {
+    if (pop?.block !== "movers") return;
+    const sym = pop.sym;
+    if (sym in popCatalystCache) return;
+    const mv = movers.find(m => m.ticker === sym);
+    const dirParam = mv?.pctChange != null ? (mv.pctChange >= 0 ? "gainer" : "loser") : "";
+    const changeParam = mv?.pctChange != null ? `&pctChange=${mv.pctChange}` : "";
+    const id = setTimeout(() => {
+      apiGet<MoverCatalystDoc>(`/market-data/mover-catalyst/${encodeURIComponent(sym)}?direction=${dirParam}${changeParam}`)
+        .then(doc => setPopCatalystCache(c => ({ ...c, [sym]: doc })))
+        .catch(() => setPopCatalystCache(c => ({ ...c, [sym]: null })));
+    }, 200);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pop?.sym, pop?.block]);
 
   // ---- Heatmap hover popup ----
   type HeatPop = { sd: SectorRow; x: number; y: number };
@@ -1247,7 +1273,7 @@ export function DashboardScreen() {
             else openStock(pop.sym);
           }}
         >
-          <DashPopContent sym={pop.sym} block={pop.block} movers={movers} earnings={earnings} watchlist={watchMini} portfolio={folioMini} companies={companies} consensus={consensusLive} insiderMini={INSIDER_MINI} announcements={earningsAnnouncements} news={dashNews} onDemandNews={popNewsCache} />
+          <DashPopContent sym={pop.sym} block={pop.block} movers={movers} earnings={earnings} watchlist={watchMini} portfolio={folioMini} companies={companies} consensus={consensusLive} insiderMini={INSIDER_MINI} announcements={earningsAnnouncements} news={dashNews} onDemandNews={popNewsCache} catalystCache={popCatalystCache} />
         </div>
       )}
     </div>
