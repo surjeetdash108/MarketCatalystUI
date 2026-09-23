@@ -132,6 +132,26 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const liveIndices = tapeFrame
     ? pulseFromLive(tapeItemsToIndexDocs(tapeFrame.items)).map(p => ({ label: p.label, pctChange: p.change }))
     : [];
+  // The weekly rollup comes from the backend's *_history collections as a flat
+  // { label, pctChange } list with no id and no guaranteed order (see
+  // RecapWeeklyIndex) — unlike liveIndices, which pulseFromLive always emits in
+  // its fixed SPX→NDX→DJI→RUT→VIX→US10Y→WTI→GOLD→BTC→ETH→DXY order. Re-rank the
+  // weekly list against that same order (matched by label) so daily and weekly
+  // show indices in identical sequence rather than whatever order the backend
+  // happened to write the history docs in. Any label that doesn't match
+  // (liveIndices not loaded yet, or a name mismatch) keeps its relative
+  // position at the end.
+  const weeklyIndexOrder = liveIndices.map(p => p.label);
+  const weeklyIndices = weekly?.indices
+    ? [...weekly.indices].sort((a, b) => {
+        const ai = weeklyIndexOrder.indexOf(a.label);
+        const bi = weeklyIndexOrder.indexOf(b.label);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      })
+    : [];
 
   const sortedSectors = [...sectorsLive].sort((a, b) => a.sector.localeCompare(b.sector));
   const SEC_PAGES = Math.max(1, Math.ceil(sortedSectors.length / SEC_PAGE));
@@ -443,7 +463,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const RecapBody = (period: "daily" | "weekly") => {
     const isWeek = period === "weekly";
     const heroTitle = isWeek ? `Week ending ${dateLabel}` : dateLabel;
-    const indicesList = isWeek ? (weekly?.indices ?? []) : liveIndices;
+    const indicesList = isWeek ? weeklyIndices : liveIndices;
     const indicesEmpty = isWeek
       ? "Weekly index performance needs at least two synced sessions this week — check back after the next daily run."
       : "No live index snapshot available right now.";

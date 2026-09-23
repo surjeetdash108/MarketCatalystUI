@@ -215,7 +215,7 @@
 .app.nav-collapsed .sec-lbl,
 .app.nav-collapsed .nav-label,
 .app.nav-collapsed .nav-tag { display: none; }
-.app.nav-collapsed .brandcell { align-items: center; padding: 0 8px; }
+.app.nav-collapsed .brandcell { align-items: center; justify-content: center; padding: 0 8px; }
 .app.nav-collapsed .brand-top { justify-content: center; width: 100%; }
 /* Collapsed the rail is ~54px of usable width — not enough for the logo and the
    toggle side by side. The toggle wins: it is the only way back out, whereas the
@@ -253,8 +253,13 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
-  padding: 0 16px;
+  /* Top-align instead of centering: this cell spans both the topbar row (54px)
+     and the ticker row (34px) = 88px total, but the logo should line up with
+     the search box, which is centered within just the 54px topbar row. 13px
+     ≈ (54px topbar row - 28px logo height) / 2, matching the topbar's own
+     centering instead of the full 88px cell. */
+  justify-content: flex-start;
+  padding: 13px 16px 0;
   border-right: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);
   gap: 8px;
@@ -576,7 +581,7 @@
   right: 0;
   padding: 7px 18px;
   background: var(--surface-0);
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--border);
   font-size: .65rem;
   color: var(--text-dim-solid);
   line-height: 1.5;
@@ -1307,9 +1312,14 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
      and an unbounded card would shove the rest of the dashboard down on a
      heavy news day. */
   max-height: 330px; overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 8px;
+  /* Firefox equivalent of the widened webkit thumb/track below — keeps the
+     scrollbar legible there too instead of falling back to the OS default. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) var(--surface-2);
 }
-.wmn-ai::-webkit-scrollbar { width: 2px; }
+.wmn-ai::-webkit-scrollbar { width: 6px; }
+.wmn-ai::-webkit-scrollbar-track { background: var(--surface-2); border-radius: 99px; }
 .wmn-ai::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
 /* Lead paragraph — the answer to "what happened". */
 .wmn-ai-sum {
@@ -1803,6 +1813,8 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 /* ---- Earnings table extras ---- */
 .tbl td.num { text-align: right; font-family: var(--f-mono); }
 .tbl th.num { text-align: right; }
+.tbl td.center { text-align: center; }
+.tbl th.center { text-align: center; }
 /* %change / %surprise cells: green when positive, red when negative. Needs to
    out-specify `table.tbl td { color: var(--text) }`, which otherwise wins. */
 .tbl td.num.up { color: var(--up); }

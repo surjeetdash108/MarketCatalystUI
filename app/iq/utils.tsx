@@ -983,3 +983,23 @@ export function titleCaseLabel(s: string | null | undefined): string {
       ACRONYMS.has(w.toUpperCase()) ? w.toUpperCase() : w,
     );
 }
+
+/**
+ * The AI-synthesis job (mover-catalyst.job.ts) sometimes writes the LLM's raw
+ * `{ "reasoning": "..." }` completion straight into `catalyst` instead of just
+ * the prose — the dashboard hover popup and mover news modal both render that
+ * field verbatim, so an unparsed run shows the literal JSON braces and key to
+ * the reader. Unwrap it here so both call sites show clean prose either way.
+ */
+export function cleanCatalystText(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{")) return trimmed;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed.reasoning === "string") return parsed.reasoning.trim();
+  } catch {
+    // Not valid JSON after all — fall through to the raw string.
+  }
+  return trimmed;
+}

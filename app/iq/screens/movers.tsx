@@ -294,7 +294,10 @@ export function MoversScreen() {
     return true;
   });
 
-  const filtered = tabCapRows
+  // Sector + free-text filtering, left unsorted — the ranking pass below
+  // needs live quotes for exactly this set of tickers, so the quote poll and
+  // `shownValues` are wired up against this list before sorting happens.
+  const searched = tabCapRows
     .filter(m => matchesSector(sector, m.ticker, m.sector))
     .filter(m => {
       if (!q) return true;
@@ -316,57 +319,13 @@ export function MoversScreen() {
         m.weekPct != null ? String(m.weekPct) : "",
       ].join(" | ").toUpperCase();
       return hay.includes(q);
-    })
-    .sort((a, b) => {
-      // Explicit column sort wins over the tab's default ranking.
-      if (sortKey) {
-        const dir = sortDir === "asc" ? 1 : -1;
-        switch (sortKey) {
-          case "company":
-            return a.ticker.localeCompare(b.ticker) * dir;
-          case "price":
-            return ((a.price ?? 0) - (b.price ?? 0)) * dir;
-          case "change":
-            // The Change column renders the weekly move on the weekly tabs, so
-            // clicking its header must sort on the number actually displayed.
-            return isWeekTab(tab)
-              ? ((a.weekPct ?? 0) - (b.weekPct ?? 0)) * dir
-              : (a.pctChange - b.pctChange) * dir;
-          case "rvol":
-            return ((a.rvolRatio ?? 0) - (b.rvolRatio ?? 0)) * dir;
-          case "mcap": {
-            // Unknown caps (null) always sort LAST, in either direction — like
-            // the `cap` column — so the "—" rows never lead an ascending sort.
-            if (a.marketCap == null && b.marketCap == null) return 0;
-            if (a.marketCap == null) return 1;
-            if (b.marketCap == null) return -1;
-            return (a.marketCap - b.marketCap) * dir;
-          }
-          case "cap": {
-            // Unknown tiers sort last in either direction rather than jumping
-            // to the top as index -1.
-            const rank = (c: string | null) => {
-              const i = CAP_ORDER.indexOf(c ?? "");
-              return i === -1 ? CAP_ORDER.length : i;
-            };
-            const d = rank(a.cap) - rank(b.cap);
-            return (d !== 0 ? d : (a.sector ?? "").localeCompare(b.sector ?? "")) * dir;
-          }
-        }
-      }
-      if (tab === "win")  return b.pctChange    - a.pctChange;
-      if (tab === "lose") return a.pctChange    - b.pctChange;
-      if (tab === "weekwin")  return (b.weekPct ?? 0) - (a.weekPct ?? 0);
-      if (tab === "weeklose") return (a.weekPct ?? 0) - (b.weekPct ?? 0);
-      return b.rvolRatio - a.rvolRatio; // "vol"
     });
 
   // Live price/%-overlay so the table matches the stock drawer (same
   // universal-snapshot quote). Fetched for ALL shown rows — the list is small
   // (top gainers/losers/unusual-volume) and useLiveQuotes is a shared union poll
-  // that chunks at 250, so no pagination cap is needed. Ranking stays EOD-based
-  // (sort above); only the shown price/change go live. Polls every 30s.
-  const shownTickers = filtered.map(m => m.ticker);
+  // that chunks at 250, so no pagination cap is needed. Polls every 30s.
+  const shownTickers = searched.map(m => m.ticker);
   // Shared app-wide poll: one timer + one request for every live surface, so a
   // ticker here always matches the same ticker on the heatmap/drawer exactly.
   const quoteByTicker = useLiveQuotes(shownTickers);
@@ -448,6 +407,58 @@ export function MoversScreen() {
     );
   }, [quoteByTicker]);
 
+  const filtered = [...searched].sort((a, b) => {
+    // Explicit column sort wins over the tab's default ranking.
+    if (sortKey) {
+      const dir = sortDir === "asc" ? 1 : -1;
+      switch (sortKey) {
+        case "company":
+          return a.ticker.localeCompare(b.ticker) * dir;
+        case "price": {
+          // Sort on the number actually displayed — the live-quote overlay
+          // from shownValues, not the stale stored close — so clicking the
+          // header visibly reorders the rows on screen.
+          const pa = shownValues(a).price ?? a.price ?? 0;
+          const pb = shownValues(b).price ?? b.price ?? 0;
+          return (pa - pb) * dir;
+        }
+        case "change": {
+          // Same reasoning as "price": shownValues already picks the right
+          // number for the active tab (live %, or the live-remeasured 5-day
+          // move on weekly tabs), so sort on that instead of the stored field.
+          const ca = shownValues(a).change ?? (isWeekTab(tab) ? (a.weekPct ?? 0) : a.pctChange);
+          const cb = shownValues(b).change ?? (isWeekTab(tab) ? (b.weekPct ?? 0) : b.pctChange);
+          return (ca - cb) * dir;
+        }
+        case "rvol":
+          return ((a.rvolRatio ?? 0) - (b.rvolRatio ?? 0)) * dir;
+        case "mcap": {
+          // Unknown caps (null) always sort LAST, in either direction — like
+          // the `cap` column — so the "—" rows never lead an ascending sort.
+          if (a.marketCap == null && b.marketCap == null) return 0;
+          if (a.marketCap == null) return 1;
+          if (b.marketCap == null) return -1;
+          return (a.marketCap - b.marketCap) * dir;
+        }
+        case "cap": {
+          // Unknown tiers sort last in either direction rather than jumping
+          // to the top as index -1.
+          const rank = (c: string | null) => {
+            const i = CAP_ORDER.indexOf(c ?? "");
+            return i === -1 ? CAP_ORDER.length : i;
+          };
+          const d = rank(a.cap) - rank(b.cap);
+          return (d !== 0 ? d : (a.sector ?? "").localeCompare(b.sector ?? "")) * dir;
+        }
+      }
+    }
+    if (tab === "win")  return b.pctChange    - a.pctChange;
+    if (tab === "lose") return a.pctChange    - b.pctChange;
+    if (tab === "weekwin")  return (b.weekPct ?? 0) - (a.weekPct ?? 0);
+    if (tab === "weeklose") return (a.weekPct ?? 0) - (b.weekPct ?? 0);
+    return b.rvolRatio - a.rvolRatio; // "vol"
+  });
+
   /**
    * A row whose LIVE number contradicts the tab it is sitting in.
    *
@@ -457,7 +468,7 @@ export function MoversScreen() {
    * green +24.25% — the tab and the figure disagreeing about the same stock.
    *
    * Applied here rather than in the tab filter on purpose. `shownTickers` is
-   * derived from `filtered`, so a row dropped here KEEPS its subscription and
+   * derived from `searched`, so a row dropped here KEEPS its subscription and
    * its quote keeps updating; it reappears the moment it turns negative again.
    * Folding this into `filtered` would unsubscribe the row, strand it on its
    * stored value, and flip it straight back into the list.
@@ -470,22 +481,48 @@ export function MoversScreen() {
     return true;
   });
 
-  /** Click a column: first click applies that column's natural direction, further
-   *  clicks toggle, and a third state returns to the tab's own ranking. */
+  /**
+   * Direction that would exactly reproduce the ACTIVE tab's own default
+   * ranking for this column — Top Gainers/Weekly Gainers already sort by
+   * Change descending, Unusual Volume already sorts by RVOL descending.
+   * Starting a first click in that same direction produced a sort identical
+   * to what was already on screen, so the click looked like it did nothing.
+   */
+  const tabDefaultDir = (k: MoverSortKey): "asc" | "desc" | null => {
+    if (k === "change") {
+      if (tab === "win" || tab === "weekwin") return "desc";
+      if (tab === "lose" || tab === "weeklose") return "asc";
+    }
+    if (k === "rvol" && tab === "vol") return "desc";
+    return null;
+  };
+
+  /** Click a column: first click applies that column's natural direction (or
+   *  its opposite, when the natural direction would just reproduce the tab's
+   *  own default ranking), further clicks toggle, and a third state returns
+   *  to the tab's own ranking. `firstDir` is recomputed from the ACTIVE tab
+   *  on every call (not just the first) so the 3-click cycle keeps anchoring
+   *  on the same direction it actually started from. */
   const toggleSort = (k: MoverSortKey) => {
-    if (sortKey !== k) { setSortKey(k); setSortDir(SORT_FIRST_DIR[k]); return; }
-    if (sortDir === SORT_FIRST_DIR[k]) { setSortDir(sortDir === "asc" ? "desc" : "asc"); return; }
+    const natural = SORT_FIRST_DIR[k];
+    const firstDir = natural === tabDefaultDir(k) ? (natural === "asc" ? "desc" : "asc") : natural;
+    if (sortKey !== k) { setSortKey(k); setSortDir(firstDir); return; }
+    if (sortDir === firstDir) { setSortDir(sortDir === "asc" ? "desc" : "asc"); return; }
     setSortKey(null); // back to the default ranking
   };
   /** Sortable header cell. A plain render helper (not a nested component) so
-   *  React doesn't remount the header on every parent render. */
-  const sortTh = (k: MoverSortKey, label: string, num = false) => (
+   *  React doesn't remount the header on every parent render. `align` keeps
+   *  the "num" class for its monospace font, but the header and its data
+   *  cell are both centered via inline style — overriding the shared
+   *  `.tbl th/td.num` right-align rather than changing that class, since
+   *  insider.tsx and recap.tsx also use it and stay right-aligned. */
+  const sortTh = (k: MoverSortKey, label: string, align?: boolean | "center") => (
     <th
       key={k}
-      className={num ? "num" : undefined}
+      className={align === "center" ? "center" : align ? "num" : undefined}
       onClick={() => toggleSort(k)}
       title={`Sort by ${label}`}
-      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", textAlign: align === true ? "center" : undefined }}
     >
       {label}
       {/* Matches the sortable header in insider.tsx: always a FILLED glyph in
@@ -559,11 +596,11 @@ export function MoversScreen() {
           <thead>
             <tr>
               {sortTh("company", "Company")}
+              {sortTh("mcap",    "Mkt Cap", true)}
               {sortTh("price",   "Price",  true)}
               {sortTh("change",  isWeekTab(tab) ? "5-day" : "Change", true)}
               {sortTh("rvol",    "RVOL",   true)}
-              {sortTh("mcap",    "Mkt Cap", true)}
-              {sortTh("cap",     "Cap · Sector")}
+              {sortTh("cap",     "Cap · Sector", "center")}
               <th style={{ whiteSpace: "nowrap" }}>Why It Moved</th>
             </tr>
           </thead>
@@ -609,21 +646,21 @@ export function MoversScreen() {
                         </div>
                       </div>
                     </td>
-                    <td className="num">{price == null ? "—" : `$${fmt(price)}`}</td>
-                    <td className="num" style={{ color: v == null ? undefined : v >= 0 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
-                      {v == null ? "—" : <>{arr(v)} {sign(v)}{!isWeekTab(tab) && sessionTag(m)}</>}
-                    </td>
-                    <td className="num">
-                      {m.rvolRatio > 0
-                        ? <b style={{ color: m.rvolRatio > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvolRatio.toFixed(1)}×</b>
-                        : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                    </td>
-                    <td className="num">
+                    <td className="num" style={{ textAlign: "center" }}>
                       {m.marketCap != null
                         ? <span style={{ color: "var(--text-hi)" }}>{fmtMcap(m.marketCap)}</span>
                         : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
                     </td>
-                    <td>
+                    <td className="num" style={{ textAlign: "center" }}>{price == null ? "—" : `$${fmt(price)}`}</td>
+                    <td className="num" style={{ textAlign: "center", color: v == null ? undefined : v >= 0 ? "var(--up)" : "var(--down)", fontWeight: 600 }}>
+                      {v == null ? "—" : <>{arr(v)} {sign(v)}{!isWeekTab(tab) && sessionTag(m)}</>}
+                    </td>
+                    <td className="num" style={{ textAlign: "center" }}>
+                      {m.rvolRatio > 0
+                        ? <b style={{ color: m.rvolRatio > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvolRatio.toFixed(1)}×</b>
+                        : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
+                    </td>
+                    <td className="center">
                       <span style={{ fontSize: ".74rem" }}>
                         <b style={{ color: "var(--text-hi)" }}>{m.cap}</b>
                         {" · "}

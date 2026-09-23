@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { apiGet } from "./backend";
-import { StockLogo, fmt, sign, VendorTag } from "./utils";
+import { StockLogo, fmt, sign, VendorTag, cleanCatalystText } from "./utils";
 import type { MoverCatalystDoc, NewsArticleDoc } from "./types";
 
 interface MoverNewsModalProps {
@@ -101,7 +101,7 @@ export function MoverNewsModal({
             gap: 5,
           }}
         >
-          ✨ AI Catalyst Synthesis
+          Market<span style={{ color: "var(--brand)" }}>Catalyst</span> Synthesis
         </span>
       );
     }
@@ -295,7 +295,7 @@ export function MoverNewsModal({
                     marginBottom: 12,
                   }}
                 >
-                  {catalystDoc?.catalyst || "No specific catalyst identified for this move yet."}
+                  {catalystDoc?.catalyst ? cleanCatalystText(catalystDoc.catalyst) : "No specific catalyst identified for this move yet."}
                 </div>
 
                 {catalystDoc?.headline && catalystDoc.headline !== catalystDoc.catalyst && (

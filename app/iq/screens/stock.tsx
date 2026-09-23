@@ -16,7 +16,7 @@ import { useLiveTick } from "../hooks/useLiveTick";
 import { useLiveQuotes, extendedSession } from "../live-quotes-context";
 import { EarningsPlaybook } from "./EarningsPlaybook";
 import type {
-  CompanyDoc, AnalystConsensusDoc, InsiderTxDoc,
+  CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc,
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps } from "../types";
@@ -622,6 +622,35 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // (replacing the direct companies Firestore listener this screen used to
   // hold open). Re-fetches whenever `sym` changes since it's part of the path.
   const { data: liveCompany, loading: liveCompanyLoading } = useApiResource<CompanyDoc>(`/live/company?ticker=${encodeURIComponent(sym)}`);
+  // Fast key-stats-only read, fired alongside /live/company ONLY for a ticker
+  // that isn't going to get a fast answer from /live/company anyway. Merely
+  // being IN the `companies` list isn't enough to predict that: the backend's
+  // own fast-path (ondemand.service.getCompany) also requires description /
+  // instOwnershipPct / epsTtm to already be on the doc — fields the bulk cron
+  // sync (companies.job) never writes, only an on-demand build does — plus a
+  // 15-minute freshness window measured from the doc's ORIGINAL createdAt
+  // (never bumped on later writes), which most long-tracked tickers blow past
+  // regardless of how current their price/sector data is. A ticker that's
+  // been in the bulk sync for months but never individually opened before
+  // (no description/13F/epsTtm yet) is EXACTLY the case this summary exists
+  // for — checking mere list-membership skipped it and left the card sitting
+  // on N/A same as before this endpoint existed.
+  const knownTicker = companies.some(c =>
+    c.ticker === sym
+    && c.price != null
+    && c.description != null
+    && c.instOwnershipPct != null
+    && c.epsTtm != null,
+  );
+  const { data: companySummary } = useApiResource<CompanySummary>(
+    !companiesLoading && !knownTicker ? `/live/company/summary?ticker=${encodeURIComponent(sym)}` : null,
+  );
+  // The full doc always wins, even if the summary happens to resolve after
+  // it — liveCompany is null until /live/company itself settles, so this
+  // naturally ignores a late summary once the real thing has landed. A
+  // non-partial summary (the server already had the full doc in memory)
+  // reads identically to a full CompanyDoc for every field below.
+  const keyStats: CompanyDoc | CompanySummary | null = liveCompany ?? companySummary;
   // Which symbol's "no data" popup the user has dismissed (so it doesn't reopen).
   const [dismissedNoData, setDismissedNoData] = useState("");
   const { data: dividendHistory, loading: dividendLoading } = useApiResource<DividendHistoryDoc>(`/live/dividend-history?ticker=${encodeURIComponent(sym)}`);
@@ -797,9 +826,12 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const week52 = yr.length > 1
     ? { high: Math.max(...yr.map(b => b.h)), low: Math.min(...yr.map(b => b.l)) }
     : null;
+  // Falls back to the company doc's own avgVolume20 (technical-indicators.job,
+  // or the summary's identical computation) until the year of bars this
+  // normally derives from has loaded — same reasoning as keyStats below.
   const avgVol20 = yr.length > 0
     ? yr.slice(-20).reduce((s, b) => s + b.v, 0) / Math.min(20, yr.length)
-    : null;
+    : (keyStats?.avgVolume20 ?? null);
   const ema50 = ema(yr, 50);
   const sma200 = sma(yr, 200);
 
@@ -824,14 +856,17 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     // loading dash instead of a fabricated $0.00 / +0.00% (BUG-DATA-007).
     price: liveCompany?.price ?? null,
     pctChange: liveCompany?.pctChange ?? null,
-    peRatio: liveCompany?.peRatio ?? null,
-    dividendYield: liveCompany?.dividendYield ?? null,
+    // Key Stats fields read off keyStats (full doc, falling back to the fast
+    // summary) so the card fills in ~1-3s for a brand-new ticker instead of
+    // sitting on N/A until the full doc finishes building.
+    peRatio: keyStats?.peRatio ?? null,
+    dividendYield: keyStats?.dividendYield ?? null,
     beta: liveCompany?.beta ?? null,
-    sector: liveCompany?.sector ?? null,
-    industry: liveCompany?.industry ?? null,
+    sector: keyStats?.sector ?? null,
+    industry: keyStats?.industry ?? null,
     insiderActivity: symInsider,
-    week52High: week52?.high ?? null,
-    week52Low: week52?.low ?? null,
+    week52High: week52?.high ?? keyStats?.high52 ?? null,
+    week52Low: week52?.low ?? keyStats?.low52 ?? null,
   };
   const isUp = (data.pctChange ?? 0) >= 0;
   // `p` keeps a 0 fallback purely as the numeric baseline for the derived
@@ -849,7 +884,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const rating = ratingLabel(liveCompany?.techRating ?? null);
   const rs = liveCompany?.rsRating ?? null;
   const rv = liveCompany?.rvol ?? null;
-  const mc = liveCompany?.marketCap != null ? liveCompany.marketCap / 1e9 : null;
+  const mc = keyStats?.marketCap != null ? keyStats.marketCap / 1e9 : null;
   const gv = RATING_VAL[rating] ?? 0;
   // (The technical `tone` that used to live here is gone: TrGauge already
   // colours its own label from `rating`, and its only other consumer was the
@@ -869,6 +904,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const todayStr = new Date().toISOString().slice(0, 10);
   const erDate = symEvents.find(e => e.date >= todayStr)?.date
     ?? symEvents[symEvents.length - 1]?.date
+    // The synced earnings feed is authoritative once it has this ticker; the
+    // summary's freshly-fetched nextEarningsDate only fills the gap for a
+    // ticker that feed hasn't picked up yet (brand-new / on-demand).
+    ?? keyStats?.nextEarningsDate
     ?? "—";
   // Earnings dots for both charts on this screen. Shared derivation (see
   // chart-earnings.ts) so the panel charts on watchlist / portfolio / screener /
@@ -882,7 +921,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // itself derived from EPS, so live-price ÷ stale-P/E drifts). N/A when unstored
   // (BUG-DATA-006). `epsTtm`/`eps` are written by the /live/company backend
   // (ondemand.service) and are now declared on the shared CompanyDoc mirror.
-  const eps = liveCompany?.epsTtm ?? liveCompany?.eps ?? null;
+  const eps = keyStats?.epsTtm ?? keyStats?.eps ?? null;
   // Real RSI(14)/MACD from technical-indicators.job — "not available" (never
   // a seeded formula) until that job has run for this ticker.
   const rsi = liveCompany?.rsi14 ?? null;
@@ -893,10 +932,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // technical-indicators.job also writes these; they were being rendered as
   // "N/A" in the Technical Rating drawer even though the values were present.
   const vwapV = liveCompany?.vwap ?? null;
-  const offHigh52 = liveCompany?.pctFromHigh52 ?? null;
-  const offLow52 = liveCompany?.pctFromLow52 ?? null;
+  const offHigh52 = keyStats?.pctFromHigh52 ?? null;
+  const offLow52 = keyStats?.pctFromLow52 ?? null;
   const rsiSeries = liveCompany?.rsi14Series ?? null;
-  const divPerShare = liveCompany?.dividendPerShare ?? null;
+  const divPerShare = keyStats?.dividendPerShare ?? null;
   const dollar = data.pctChange != null ? Math.abs((data.pctChange / 100) * p) : null;
 
   // Live overlay values for the header. Kept separate from `p`/`dollar` so the

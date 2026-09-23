@@ -129,20 +129,27 @@ export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
 
 // ---- Nav icon SVG ----
 /**
- * MarketCatalyst brand mark — inline SVG (ascending bar-chart + trend line +
- * node) and the wordmark "Market" (light) + "Catalyst" (blue→purple gradient).
- * Replaces the missing /logo-marketcatalyst.png; crisp at any size, theme-aware.
+ * MarketCatalyst brand mark — inline SVG (gradient ascending bar-chart +
+ * trend line ending in an arrowhead) and the wordmark "Market" (light) +
+ * "Catalyst" (brand green). Crisp at any size, theme-aware (the gradient's
+ * bright stop tracks var(--brand) per theme).
  */
 function BrandLogo({ height = 28 }: { height?: number }) {
   return (
     <span className="brand-logo" style={{ gap: Math.round(height * 0.3), lineHeight: 1 }}>
       <svg viewBox="0 0 44 44" width={height} height={height} aria-hidden="true" style={{ flexShrink: 0 }}>
-        <rect x="5" y="27" width="6" height="12" rx="2" fill="var(--brand)" />
-        <rect x="14" y="21" width="6" height="18" rx="2" fill="var(--brand)" />
-        <rect x="23" y="15" width="6" height="24" rx="2" fill="var(--brand)" />
-        <rect x="32" y="9" width="6" height="30" rx="2" fill="var(--brand)" />
-        <path d="M7 30 L16 23 L25 17 L35 8" fill="none" stroke="var(--brand)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="35" cy="8" r="3.6" fill="var(--bg)" stroke="var(--brand)" strokeWidth="2.4" />
+        <defs>
+          <linearGradient id="mcBrandGrad" x1="4" y1="40" x2="40" y2="4" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#0D3B2E" />
+            <stop offset="1" style={{ stopColor: "var(--brand)" }} />
+          </linearGradient>
+        </defs>
+        <rect x="5" y="27" width="6" height="12" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="14" y="21" width="6" height="18" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="23" y="15" width="6" height="24" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="32" y="9" width="6" height="30" rx="2" fill="url(#mcBrandGrad)" />
+        <path d="M7 30 L16 23 L25 17 L36 8" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M28 8 L36 8 L36 16" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <span style={{
         fontFamily: "var(--f-display), system-ui, sans-serif",
@@ -173,6 +180,8 @@ function NavIcon({ slug }: { slug: string }) {
     recap:       "M4 3h16a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H4V3Zm0 0v18M8 8h8M8 12h8M8 16h5",
     macro:       "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18ZM3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18",
     options:     "M12 3l8 4.5-8 4.5-8-4.5L12 3zM4 12l8 4.5 8-4.5M4 16.5L12 21l8-4.5",
+    "etf-corner":        "M8 10a4 4 0 0 1 8 0M3 10h18l-2 9H5L3 10ZM9 14v3M15 14v3",
+    "ai-infrastructure": "M7 7h10v10H7ZM10 10h4v4h-4ZM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4",
   };
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"

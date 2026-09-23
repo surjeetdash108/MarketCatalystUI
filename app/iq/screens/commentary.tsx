@@ -239,7 +239,13 @@ function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTa
         borderBottom: i < total - 1 ? "1px solid var(--border-soft)" : "none",
       }}
     >
-      <div style={{ flexShrink: 0, width: 90, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5 }}>
+      {/* Its own leading column, separate from the logo/category rail, so
+          the published time lines up in a fixed-width strip down the whole
+          feed instead of being buried mid-stack under the logo and pill. */}
+      <div style={{ flexShrink: 0, width: 40 }}>
+        <div className="mono" style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{etTimeLabel(item.publishedAt)}</div>
+      </div>
+      <div style={{ flexShrink: 0, width: 54, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5 }}>
         <button
           onClick={() => onTicker(item.ticker)}
           title={`Filter the feed by ${item.ticker}`}
@@ -255,8 +261,7 @@ function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTa
             ? "Showing this type only — click to clear"
             : `Show only ${catLabel(item.category)} stories`}
         >{catLabel(item.category)}</button>
-        <div className="mono" style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{etTimeLabel(item.publishedAt)}</div>
-        {/* Market cap + LIVE %change for the story's ticker, under the time.
+        {/* Market cap + LIVE %change for the story's ticker, under the pill.
             Both are omitted rather than shown as "—" when unavailable, so the
             column stays compact for tickers the universe hasn't synced. */}
         {marketCap != null && (
