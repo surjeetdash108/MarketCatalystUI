@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 
 // Dynamic import breaks the circular dep: stock.tsx → shell.tsx → stock.tsx
-const StockScreenEmbed = dynamic<{ initialSym?: string }>(
+export const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
@@ -1048,7 +1048,18 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     openMoverModal: useCallback((sym) => setDrawer({ type: "mover-modal", sym }), []),
     openStockDetail: useCallback((sym, list) => setDrawer({ type: "stock-detail", sym, list }), []),
     openStockFull: useCallback((sym) => {
-      if (typeof window !== "undefined") localStorage.setItem("iq-stock", sym);
+      const s = sym.trim().toUpperCase();
+      if (!s) return;
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("iq-stock", s);
+        window.dispatchEvent(
+          new CustomEvent("iq-stock-change", {
+            detail: s,
+          }),
+        );
+      }
+
       router.push("/menu/stock");
     }, [router]),
     openEarnings: useCallback((sym) => setDrawer({ type: "earnings", sym }), []),
@@ -1315,6 +1326,11 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                           key={item.slug}
                           href={href}
                           className={`navitem${isActive ? " active" : ""}`}
+                          onClick={() => {
+                            if (item.slug === "ai-infrastructure") {
+                              window.dispatchEvent(new Event("ai-corner-home"));
+                            }
+                          }}
                           onMouseEnter={e => {
                             if (!navCollapsed) return;
                             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useIQActions } from "../shell";
+import { useEffect, useState } from "react";
+import { StockScreenEmbed } from "../shell";
+// import { useIQActions, StockScreenEmbed } from "../shell";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { DataState, NotAvailable, VendorTag, StockLogo, hashStr, fmt, sign, cls } from "../utils";
-import type { AiInfraTheme, AiInfraThemeDetail, AiInfraCompany, AiInfraCapBucket, CompanyDoc } from "../types";
+// import type { AiInfraTheme, AiInfraThemeDetail, AiInfraCompany, AiInfraCapBucket, CompanyDoc } from "../types";
+import type { AiInfraTheme, AiInfraThemeDetail, AiInfraCompany, AiInfraCapBucket } from "../types";
 
 // Backend icon tokens (ai-infrastructure-themes.ts) have no opinion on the
 // actual glyph — mapped here to the same lightweight emoji icons the rest of
@@ -76,160 +78,302 @@ function CapPill({ cap }: { cap: AiInfraCapBucket | null }) {
   return <span className="pill" style={{ background: s.bg, color: s.fg }}>{cap.toUpperCase()}</span>;
 }
 
-const CAP_FILTERS: Array<"All" | AiInfraCapBucket> = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
+// const CAP_FILTERS: Array<"All" | AiInfraCapBucket> = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
 
 /** Company detail modal — mirrors mover-news-modal.tsx's centered-modal shell.
  *  `fullDescription` is the on-demand /live/company profile (richer than the
  *  theme endpoint's one-sentence blurb) when it has loaded; falls back to the
  *  blurb, then an honest empty state — never fabricated prose. */
-function CompanyModal({ row, theme, fullDescription, onClose, onOpenFull }: {
-  row: AiInfraCompany; theme: AiInfraThemeDetail; fullDescription: string | null;
-  onClose: () => void; onOpenFull: () => void;
-}) {
-  return (
-    <>
-      <div className="scrim" onClick={onClose} style={{ zIndex: 100 }} />
-      <div
-        style={{
-          position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-          zIndex: 101, width: "min(640px, 94vw)", maxHeight: "86vh", overflowY: "auto",
-          background: "var(--surface-1)", border: "1px solid var(--border-soft)", borderRadius: 16,
-          boxShadow: "0 24px 60px -10px rgba(0,0,0,.75)", padding: 22,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <StockLogo sym={row.ticker} size={30} />
-              <div style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: "1.4rem", color: "var(--brand-2)" }}>{row.ticker}</div>
-            </div>
-            <div style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginTop: 2 }}>{row.name ?? row.ticker}</div>
-            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)" }}>{theme.title}</span>
-              <CapPill cap={row.capBucket} />
-            </div>
-          </div>
-          <button className="closebtn" onClick={onClose}>✕</button>
-        </div>
+// function CompanyModal({ row, theme, fullDescription, onClose, onOpenFull }: {
+//   row: AiInfraCompany; theme: AiInfraThemeDetail; fullDescription: string | null;
+//   onClose: () => void; onOpenFull: () => void;
+// }) {
+//   return (
+//     <>
+//       <div className="scrim" onClick={onClose} style={{ zIndex: 100 }} />
+//       <div
+//         style={{
+//           position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+//           zIndex: 101, width: "min(640px, 94vw)", maxHeight: "86vh", overflowY: "auto",
+//           background: "var(--surface-1)", border: "1px solid var(--border-soft)", borderRadius: 16,
+//           boxShadow: "0 24px 60px -10px rgba(0,0,0,.75)", padding: 22,
+//         }}
+//       >
+//         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+//           <div style={{ minWidth: 0 }}>
+//             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+//               <StockLogo sym={row.ticker} size={30} />
+//               <div style={{ fontFamily: "var(--f-display)", fontWeight: 800, fontSize: "1.4rem", color: "var(--brand-2)" }}>{row.ticker}</div>
+//             </div>
+//             <div style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginTop: 2 }}>{row.name ?? row.ticker}</div>
+//             <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+//               <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)" }}>{theme.title}</span>
+//               <CapPill cap={row.capBucket} />
+//             </div>
+//           </div>
+//           <button className="closebtn" onClick={onClose}>✕</button>
+//         </div>
 
-        <div className="metric-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginTop: 16 }}>
-          <div className="m"><div className="k">Price</div><div className="v">{row.price != null ? `$${fmt(row.price)}` : <NotAvailable />}</div></div>
-          <div className="m"><div className="k">Change</div><div className="v" style={row.pctChange != null ? { color: `var(--${cls(row.pctChange)})` } : undefined}>{row.pctChange != null ? sign(row.pctChange) : <NotAvailable />}</div></div>
-          <div className="m"><div className="k">Market cap</div><div className="v">{fmtMcap(row.marketCap)}</div></div>
-        </div>
+//         <div className="metric-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginTop: 16 }}>
+//           <div className="m"><div className="k">Price</div><div className="v">{row.price != null ? `$${fmt(row.price)}` : <NotAvailable />}</div></div>
+//           <div className="m"><div className="k">Change</div><div className="v" style={row.pctChange != null ? { color: `var(--${cls(row.pctChange)})` } : undefined}>{row.pctChange != null ? sign(row.pctChange) : <NotAvailable />}</div></div>
+//           <div className="m"><div className="k">Market cap</div><div className="v">{fmtMcap(row.marketCap)}</div></div>
+//         </div>
 
-        <div className="ai-sec" style={{ marginTop: 4 }}><div className="h">What they do</div></div>
-        <div style={{ borderLeft: "3px solid var(--brand)", background: "var(--surface-2)", padding: "10px 14px", borderRadius: 6, fontSize: ".86rem", color: "var(--text-hi)", lineHeight: 1.5 }}>
-          {row.blurb ?? <NotAvailable />}
-        </div>
+//         <div className="ai-sec" style={{ marginTop: 4 }}><div className="h">What they do</div></div>
+//         <div style={{ borderLeft: "3px solid var(--brand)", background: "var(--surface-2)", padding: "10px 14px", borderRadius: 6, fontSize: ".86rem", color: "var(--text-hi)", lineHeight: 1.5 }}>
+//           {row.blurb ?? <NotAvailable />}
+//         </div>
 
-        <div className="ai-sec" style={{ marginTop: 18 }}><div className="h">Sector relevance</div></div>
-        <p style={{ fontSize: ".84rem", lineHeight: 1.65, color: "var(--text-dim-solid)", margin: 0 }}>
-          {fullDescription ?? row.blurb ?? "No fuller company description synced yet."}
-        </p>
+//         <div className="ai-sec" style={{ marginTop: 18 }}><div className="h">Sector relevance</div></div>
+//         <p style={{ fontSize: ".84rem", lineHeight: 1.65, color: "var(--text-dim-solid)", margin: 0 }}>
+//           {fullDescription ?? row.blurb ?? "No fuller company description synced yet."}
+//         </p>
 
-        <div className="ai-sec" style={{ marginTop: 18, marginBottom: 8 }}><div className="h">Research links</div></div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <a className="btn" href={`https://finance.yahoo.com/quote/${row.ticker}`} target="_blank" rel="noopener noreferrer">📈 Yahoo Finance</a>
-          <a className="btn" href={`https://finviz.com/quote.ashx?t=${row.ticker}`} target="_blank" rel="noopener noreferrer">📊 Finviz</a>
-          <a className="btn" href={`https://www.tradingview.com/symbols/${row.ticker}/`} target="_blank" rel="noopener noreferrer">📉 TradingView</a>
-        </div>
+//         <div className="ai-sec" style={{ marginTop: 18, marginBottom: 8 }}><div className="h">Research links</div></div>
+//         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+//           <a className="btn" href={`https://finance.yahoo.com/quote/${row.ticker}`} target="_blank" rel="noopener noreferrer">📈 Yahoo Finance</a>
+//           <a className="btn" href={`https://finviz.com/quote.ashx?t=${row.ticker}`} target="_blank" rel="noopener noreferrer">📊 Finviz</a>
+//           <a className="btn" href={`https://www.tradingview.com/symbols/${row.ticker}/`} target="_blank" rel="noopener noreferrer">📉 TradingView</a>
+//         </div>
 
-        <button className="btn primary" style={{ width: "100%", marginTop: 18 }} onClick={onOpenFull}>
-          Open full stock page →
-        </button>
-      </div>
-    </>
-  );
-}
+//         <button className="btn primary" style={{ width: "100%", marginTop: 18 }} onClick={onOpenFull}>
+//           Open full stock page →
+//         </button>
+//       </div>
+//     </>
+//   );
+// }
 
 /** Sector detail — the companies classified into one AI-infrastructure theme. */
-function ThemeDetail({ themeKey, onBack, onOpenFull }: {
-  themeKey: string; onBack: () => void; onOpenFull: (sym: string) => void;
+function ThemeDetail({
+  themeKey,
+  onBack,
+}: {
+  themeKey: string;
+  onBack: () => void;
 }) {
-  const [capFilter, setCapFilter] = useState<"All" | AiInfraCapBucket>("All");
-  const [modalTicker, setModalTicker] = useState<string | null>(null);
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
 
-  const { data: detail, loading, error } = useApiResource<AiInfraThemeDetail>(`/market-data/ai-infrastructure/${encodeURIComponent(themeKey)}`);
-  // Richer per-company text than the theme endpoint's one-sentence blurb —
-  // same on-demand /live/company fetch screener.tsx/earnings.tsx use for a
-  // selected row, so the modal never fabricates prose the backend doesn't have.
-  const { data: modalCompany } = useApiResource<CompanyDoc>(modalTicker ? `/live/company?ticker=${encodeURIComponent(modalTicker)}` : null);
+  const {
+    data: detail,
+    loading,
+    error,
+  } = useApiResource<AiInfraThemeDetail>(
+    `/market-data/ai-infrastructure/${encodeURIComponent(themeKey)}`
+  );
 
   const companies = detail?.companies ?? [];
-  const rows = capFilter === "All" ? companies : companies.filter(c => c.capBucket === capFilter);
-  const modalRow = modalTicker ? companies.find(c => c.ticker === modalTicker) ?? null : null;
+
+  // Select the first company automatically when the theme loads.
+  // If the current selection disappears, fall back to the first available company.
+  useEffect(() => {
+    if (companies.length === 0) {
+      setSelectedTicker(null);
+      return;
+    }
+
+    setSelectedTicker(current => {
+      if (current && companies.some(c => c.ticker === current)) {
+        return current;
+      }
+
+      return companies[0].ticker;
+    });
+  }, [companies]);
+
+  const selectedCompany =
+    companies.find(c => c.ticker === selectedTicker) ?? companies[0] ?? null;
 
   return (
     <>
       <div className="page-head">
-        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <ThemeIcon icon={ICONS[detail?.icon ?? ""] ?? "📊"} accent={accentFor(themeKey)} size={44} />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            minWidth: 0,
+          }}
+        >
+          <ThemeIcon
+            icon={ICONS[detail?.icon ?? ""] ?? "📊"}
+            accent={accentFor(themeKey)}
+            size={44}
+          />
+
           <div style={{ minWidth: 0 }}>
-            <div className="page-title">{detail?.title ?? "AI Corner"}</div>
-            {detail?.blurb && <div className="page-sub" style={{ maxWidth: 640 }}>{detail.blurb}</div>}
+            <div className="page-title">
+              {detail?.title ?? "AI Corner"}
+            </div>
+
+            {detail?.blurb && (
+              <div
+                className="page-sub"
+                style={{ maxWidth: 640 }}
+              >
+                {detail.blurb}
+              </div>
+            )}
           </div>
         </div>
-        <button className="btn" onClick={onBack}>← Back</button>
-      </div>
 
-      <div className="fbar" style={{ margin: "14px 18px 0" }}>
-        <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center" }}>Cap</span>
-        {CAP_FILTERS.map(c => (
-          <button key={c} className={`chip${capFilter === c ? " on" : ""}`} onClick={() => setCapFilter(c)}>{c}</button>
-        ))}
+        <button className="btn" onClick={onBack}>
+          ← Back
+        </button>
       </div>
 
       <div className="dash">
         <div className="col-12">
-          <div className="card">
-            <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{rows.length} compan{rows.length === 1 ? "y" : "ies"}</h3><VendorTag v="polygon" /></div>
-            </div>
-            <div className="card-b" style={{ paddingTop: 2, overflowX: "auto" }}>
-              {rows.length === 0 ? (
-                <DataState
-                  loading={loading}
-                  label={error ? `Could not load this sector (${error}).` : "No companies classified into this sector yet."}
-                />
-              ) : (
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th>Ticker</th><th>Company</th><th>What they do</th><th className="center">Cap</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map(c => (
-                      <tr key={c.ticker} onClick={() => setModalTicker(c.ticker)} style={{ cursor: "pointer" }}>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <StockLogo sym={c.ticker} size={20} />
-                            <b style={{ color: "var(--brand-2)" }}>{c.ticker}</b>
+          {companies.length === 0 ? (
+            <DataState
+              loading={loading}
+              label={
+                error
+                  ? `Could not load this sector (${error}).`
+                  : "No companies classified into this sector yet."
+              }
+            />
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "minmax(250px, 0.32fr) minmax(0, 1fr)",
+                gap: 14,
+                alignItems: "start",
+              }}
+            >
+              {/* LEFT — companies */}
+              <div
+                className="card"
+                style={{
+                  overflow: "hidden",
+                }}
+              >
+                <div className="card-h">
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <h3>
+                      {companies.length} compan
+                      {companies.length === 1 ? "y" : "ies"}
+                    </h3>
+
+                    <VendorTag v="polygon" />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: 8,
+                  }}
+                >
+                  {companies.map(c => {
+                    const active = c.ticker === selectedTicker;
+
+                    return (
+                      <button
+                        key={c.ticker}
+                        type="button"
+                        onClick={() => setSelectedTicker(c.ticker)}
+                        style={{
+                          width: "100%",
+                          display: "grid",
+                          gridTemplateColumns: "34px minmax(0, 1fr) auto",
+                          alignItems: "center",
+                          gap: 20,
+                          padding: "10px 9px",
+                          marginBottom: 4,
+                          borderRadius: 8,
+                          border: active
+                            ? "1px solid var(--brand)"
+                            : "1px solid transparent",
+                          background: active
+                            ? "rgba(74,222,128,.08)"
+                            : "transparent",
+                          color: "inherit",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <StockLogo
+                          sym={c.ticker}
+                          size={30}
+                        />
+
+                        <div
+                          style={{
+                            minWidth: 0,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 7,
+                            }}
+                          >
+                            <b
+                              style={{
+                                color: active
+                                  ? "var(--brand-2)"
+                                  : "var(--text-hi)",
+                                fontSize: ".82rem",
+                              }}
+                            >
+                              {c.ticker}
+                            </b>
                           </div>
-                        </td>
-                        <td style={{ whiteSpace: "normal" }}>{c.name ?? c.ticker}</td>
-                        <td style={{ whiteSpace: "normal", color: "var(--text-dim-solid)" }}>{c.blurb ?? <NotAvailable />}</td>
-                        <td className="center"><CapPill cap={c.capBucket} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+
+                          <div
+                            style={{
+                              marginTop: 2,
+                              fontSize: ".68rem",
+                              color: "var(--text-dim-solid)",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {c.name ?? c.ticker}
+                          </div>
+                        </div>
+
+                        <CapPill cap={c.capBucket} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* RIGHT — full stock detail/chart */}
+              <div
+                className="card"
+                style={{
+                  minWidth: 0,
+                  overflow: "hidden",
+                }}
+              >
+                {selectedCompany ? (
+                  <StockScreenEmbed
+                    initialSym={selectedCompany.ticker}
+                  />
+                ) : (
+                  <DataState
+                    loading={false}
+                    label="Select a company."
+                  />
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
-
-      {modalRow && detail && (
-        <CompanyModal
-          row={modalRow}
-          theme={detail}
-          fullDescription={modalCompany?.description ?? null}
-          onClose={() => setModalTicker(null)}
-          onOpenFull={() => { setModalTicker(null); onOpenFull(modalRow.ticker); }}
-        />
-      )}
     </>
   );
 }
@@ -239,14 +383,31 @@ function ThemeDetail({ themeKey, onBack, onOpenFull }: {
  *  (backend `companies` classified per-request against ai-infrastructure-themes.ts —
  *  no hardcoded ticker list, no mock data). */
 export function AiInfrastructureScreen() {
-  const { openStockFull } = useIQActions();
+  // const { openStockFull } = useIQActions();
   const [themeKey, setThemeKey] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    const handleAiCornerHome = () => {
+      setThemeKey(null);
+    };
+
+    window.addEventListener("ai-corner-home", handleAiCornerHome);
+
+    return () => {
+      window.removeEventListener("ai-corner-home", handleAiCornerHome);
+    };
+  }, []);
 
   const { data: themes, loading, error } = useApiList<AiInfraTheme>("/market-data/ai-infrastructure");
 
   if (themeKey) {
-    return <ThemeDetail themeKey={themeKey} onBack={() => setThemeKey(null)} onOpenFull={openStockFull} />;
+    return (
+      <ThemeDetail
+        themeKey={themeKey}
+        onBack={() => setThemeKey(null)}
+      />
+    );
   }
 
   // Sector count is exact; the company total sums each tile's own count, so a
@@ -287,12 +448,12 @@ export function AiInfrastructureScreen() {
       </div>
 
       <div className="dash">
-        <div className="col-12">
+        {/* <div className="col-12">
           <div className="metric-grid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 4 }}>
             <div className="m"><div className="k">Companies</div><div className="v">{loading ? "—" : companyCount.toLocaleString()}</div></div>
             <div className="m"><div className="k">Sectors</div><div className="v">{loading ? "—" : sectorCount}</div></div>
           </div>
-        </div>
+        </div> */}
 
         <div className="col-12">
           {themes.length === 0 ? (
@@ -304,35 +465,124 @@ export function AiInfrastructureScreen() {
           ) : filteredThemes.length === 0 ? (
             <DataState loading={false} label={`No sectors match “${query}”.`} height={200} />
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
-              {filteredThemes.map(t => (
-                <div
-                  key={t.key}
-                  className="card"
-                  style={{ cursor: "pointer", borderTop: `3px solid ${accentFor(t.key)}` }}
-                  onClick={() => setThemeKey(t.key)}
-                >
-                  <div className="card-b">
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                      <ThemeIcon icon={ICONS[t.icon] ?? "📊"} accent={accentFor(t.key)} />
-                      <h3 style={{ margin: 0, fontSize: ".92rem", color: "var(--text-hi)" }}>{t.title}</h3>
-                    </div>
-                    <p style={{ margin: 0, fontSize: ".76rem", lineHeight: 1.5, color: "var(--text-dim-solid)", minHeight: "3.2em" }}>
-                      {t.blurb}
-                    </p>
-                    <div style={{ marginTop: 10, fontSize: ".72rem", color: "var(--brand-2)", fontWeight: 600 }}>
-                      {t.companyCount} compan{t.companyCount === 1 ? "y" : "ies"}
-                    </div>
-                    {t.sampleTickers.length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                        {t.sampleTickers.map(tk => (
-                          <span key={tk} className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)" }}>{tk}</span>
-                        ))}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                gap: 14,
+              }}
+            >
+              {filteredThemes.map(t => {
+                const accent = accentFor(t.key);
+
+                return (
+                  <div
+                    key={t.key}
+                    onClick={() => setThemeKey(t.key)}
+                    style={{
+                      cursor: "pointer",
+                      minHeight: 190,
+                      background: "#090d0f",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: 14,
+                        minHeight: 190,
+                        boxSizing: "border-box",
+                        display: "flex",
+                        flexDirection: "column",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <ThemeIcon
+                          icon={ICONS[t.icon] ?? "📊"}
+                          accent={accent}
+                          size={36}
+                        />
+
+                        <div style={{ minWidth: 0 }}>
+                          <h3
+                            style={{
+                              margin: 0,
+                              fontSize: ".9rem",
+                              lineHeight: 1.25,
+                              color: "var(--text-hi)",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {t.title}
+                          </h3>
+
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontFamily: "var(--f-mono)",
+                              fontSize: ".67rem",
+                              color: "var(--brand-2)",
+                            }}
+                          >
+                            {t.companyCount} compan{t.companyCount === 1 ? "y" : "ies"}
+                          </div>
+                        </div>
                       </div>
-                    )}
+
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: ".74rem",
+                          lineHeight: 1.55,
+                          color: "var(--text-muted-solid)",
+                          minHeight: "3.7em",
+                        }}
+                      >
+                        {t.blurb}
+                      </p>
+
+                      {t.sampleTickers.length > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 5,
+                            marginTop: "auto",
+                            paddingTop: 18,
+                          }}
+                        >
+                          {t.sampleTickers.map(tk => (
+                            <span
+                              key={tk}
+                              style={{
+                                padding: "4px 7px",
+                                borderRadius: 4,
+                                background: "#11171a",
+                                border: "1px solid rgba(255,255,255,0.08)",
+                                color: "var(--brand-2)",
+                                fontFamily: "var(--f-mono)",
+                                fontSize: ".62rem",
+                                lineHeight: 1,
+                              }}
+                            >
+                              {tk}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

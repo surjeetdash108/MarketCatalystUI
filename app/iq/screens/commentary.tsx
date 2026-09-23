@@ -216,144 +216,226 @@ function etTimeLabel(iso: string): string {
 }
 
 /* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTag, activeCat, marketCap, livePct }: {
-  item: NewsArticleDoc; i: number; total: number; onTicker: (ticker: string) => void;
+function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
+  item: NewsArticleDoc; i: number;total: number;onTicker: (ticker: string) => void;
   onAnalysis: (ticker: string) => void;
-  /* Both chips on the card are controls, not labels: clicking one filters the
-     feed to it, clicking it again clears that filter. The dropdowns above hold
-     the same state, so the two stay in step. */
-  onTag: (tag: string) => void;
-  onCat: (cat: string) => void;
-  /** The filter currently in force, so the chip can show it is the active one. */
-  activeTag: string;
-  activeCat: string;
-  /** Raw USD market cap from the ticker's companies doc; null when unsynced. */
   marketCap?: number | null;
-  /** Live %change for the ticker, from the app-wide shared quote poll. */
   livePct?: number | null;
 }) {
   return (
-    <div
+    <article
       style={{
-        display: "flex", gap: 12, padding: "12px 0",
-        borderBottom: i < total - 1 ? "1px solid var(--border-soft)" : "none",
+        display: "grid",
+        gridTemplateColumns: "16px 74px minmax(0, 1fr)",
+        columnGap: 12,
+        alignItems: "stretch",
+        padding: "26px 22px 27px",
+        borderBottom:
+          i < total - 1
+            ? "1px solid var(--border-soft)"
+            : "none",
+        // background: "var(--surface-1)",
+        cursor: item.url ? "pointer" : "default",
       }}
     >
-      {/* Its own leading column, separate from the logo/category rail, so
-          the published time lines up in a fixed-width strip down the whole
-          feed instead of being buried mid-stack under the logo and pill. */}
-      <div style={{ flexShrink: 0, width: 40 }}>
-        <div className="mono" style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{etTimeLabel(item.publishedAt)}</div>
+      {/* COLUMN 1 — TIME */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          fontSize: 10,
+          color: "var(--text-dim-solid)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {etTimeLabel(item.publishedAt)}
       </div>
-      <div style={{ flexShrink: 0, width: 54, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5 }}>
+
+      {/* COLUMN 2 — LOGO */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <button
           onClick={() => onTicker(item.ticker)}
           title={`Filter the feed by ${item.ticker}`}
-          style={{ all: "unset", cursor: "pointer", borderRadius: 6 }}
+          style={{
+            all: "unset",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
-          <StockLogo sym={item.ticker} size={28} />
+          <StockLogo sym={item.ticker} size={38} />
         </button>
-        <button
-          className={`pill lf-chip${activeCat === catKey(item.category) ? " on" : ""}`}
-          style={{ background: "var(--surface-3)", color: catCol(item.category) }}
-          onClick={() => onCat(catKey(item.category))}
-          title={activeCat === catKey(item.category)
-            ? "Showing this type only — click to clear"
-            : `Show only ${catLabel(item.category)} stories`}
-        >{catLabel(item.category)}</button>
-        {/* Market cap + LIVE %change for the story's ticker, under the pill.
-            Both are omitted rather than shown as "—" when unavailable, so the
-            column stays compact for tickers the universe hasn't synced. */}
-        {marketCap != null && (
-          <div className="mono" style={{ fontSize: ".64rem", color: "var(--text-dim-solid)" }}>
-            {fmtMcap(marketCap)}
-          </div>
-        )}
-        {livePct != null && (
-          <div className={`mono ${cls(livePct)}`} style={{ fontSize: ".66rem", fontWeight: 700 }}>
-            {sign(livePct)}
-          </div>
-        )}
       </div>
-      <a
-        href={item.url} target="_blank" rel="noreferrer"
-        style={{ flex: 1, minWidth: 0, textDecoration: "none", color: "inherit", borderRadius: 8, display: "flex", gap: 10 }}
+
+      {/* COLUMN 3 — ALL OTHER CONTENT */}
+      <div
+        onClick={() => {
+          if (item.url) {
+            window.open(item.url, "_blank", "noopener,noreferrer");
+          }
+        }}
+        style={{
+          minWidth: 0,
+          width: "100%",
+          cursor: item.url ? "pointer" : "default",
+        }}
       >
-        <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: ".88rem", color: "var(--text)" }}>
-          {/* Category ahead of the ticker: it answers "what kind of story is
-              this" before the reader parses the headline. Colour comes from the
-              same --chip token the old filter chips used, so a category reads
-              identically wherever it appears. */}
+        {/* Live tag */}
+        {/* <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "5px 10px",
+            border: "1px solid rgba(56, 212, 123, 0.42)",
+            borderRadius: 999,
+            background: "rgba(56, 212, 123, 0.06)",
+            color: "var(--up)",
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: ".16em",
+            lineHeight: 1,
+            textTransform: "uppercase",
+          }}
+        >
+          Live
+        </span> */}
+
+        {/* Headline */}
+        <div
+          style={{
+            marginTop: 13,
+            // color: "var(--text)",
+            color:"white",
+            fontSize: "clamp(17px, 1.5vw, 22px)",
+            lineHeight: 1.18,
+            letterSpacing: "-.025em",
+            fontWeight: 600,
+            // maxWidth: "42ch",
+          }}
+        >
           <span
-            className={`row-tag lf-chip${activeTag === (item.tag ?? "other") ? " on" : ""}`}
-            data-tag={item.tag ?? "other"}
-            role="button"
-            tabIndex={0}
-            /* Inside the <a> that opens the source article, so the navigation
-               has to be suppressed — the same treatment the ticker below gets. */
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onTag(item.tag ?? "other"); }}
-            onKeyDown={e => {
-              if (e.key !== "Enter" && e.key !== " ") return;
-              e.preventDefault(); e.stopPropagation(); onTag(item.tag ?? "other");
+            onClick={(e) => {
+              e.stopPropagation();
+              onTicker(item.ticker);
             }}
-            title={activeTag === (item.tag ?? "other")
-              ? "Showing this category only — click to clear"
-              : `Show only ${NEWS_TAGS.find(t => t.key === (item.tag ?? "other"))?.label ?? "Other"} stories`}
-          >
-            {NEWS_TAGS.find(t => t.key === (item.tag ?? "other"))?.label ?? "Other"}
-          </span>
-          <b
-            onClick={e => { e.preventDefault(); onTicker(item.ticker); }}
-            style={{ cursor: "pointer" }}
+            style={{
+              cursor: "pointer",
+              // color: "var(--text)",
+            }}
             title={`Filter the feed by ${item.ticker}`}
-          >{item.ticker}</b> {item.headline}
+          >
+            {item.ticker}
+          </span>
+          {": "}
+          {item.headline}
         </div>
+
+        {/* Summary */}
         {item.summary && (
-          <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", borderLeft: `2px solid ${catCol(item.category)}55`, paddingLeft: 9, marginTop: 5 }}>
+          <div
+            style={{
+              marginTop: 11,
+              // color: "var(--text-dim-solid)",
+              color: "var(--text)",
+              fontSize: 14,
+              lineHeight: 1.58,
+              // maxWidth: "76ch",
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: 2,
+              overflow: "hidden",
+            }}
+          >
             {item.summary}
           </div>
         )}
-        <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-          <span style={{ fontSize: ".68rem", color: "var(--brand-2)", fontWeight: 600 }}>
-            {item.source ? `Read at ${item.source}` : "Read source"} →
+
+        {/* Bottom metadata */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 9,
+            flexWrap: "wrap",
+            marginTop: 17,
+            color: "var(--text-dim-solid)",
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontSize: 10,
+          }}
+        >
+          <span
+            style={{
+              color: "var(--text-dim-solid)",
+              fontSize: 10,
+              fontWeight: 500,
+            }}
+          >
+            {item.source ?? item.vendor ?? "QQuartr"}
           </span>
-          {item.vendor && (
-            <span className="pill" style={{ fontSize: ".56rem", background: "var(--surface-3)", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".03em" }}>
-              via {item.vendor}
-            </span>
+
+          <span style={{ color: "var(--border-soft)" }}>·</span>
+
+          <span>
+            {new Date(item.publishedAt).toLocaleString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+              timeZone: "America/New_York",
+            })}
+            {" ET"}
+          </span>
+
+          {marketCap != null && (
+            <>
+              <span style={{ color: "var(--border-soft)" }}>·</span>
+              <span>{fmtMcap(marketCap)}</span>
+            </>
           )}
-          {item.sentiment && (
-            <span className="pill" style={{ fontSize: ".56rem", textTransform: "capitalize", background: "var(--surface-3)", color: item.sentiment === "positive" ? "var(--up)" : item.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>
-              {item.sentiment}
-            </span>
+
+          {livePct != null && (
+            <>
+              <span style={{ color: "var(--border-soft)" }}>·</span>
+              <span
+                className={cls(livePct)}
+                style={{ fontWeight: 700 }}
+              >
+                {sign(livePct)}
+              </span>
+            </>
           )}
-          {/* The row is wrapped in an <a> to the article, so this must stop the
-              click reaching it — otherwise opening the analysis also navigates
-              away to the publisher. */}
+
           <button
             className="feed-analysis-btn"
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onAnalysis(item.ticker); }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onAnalysis(item.ticker);
+            }}
             title={`AI analysis for ${item.ticker}`}
           >
             ◆ Analysis
           </button>
         </div>
-        </div>
-        {item.imageUrl && (
-          <img
-            src={item.imageUrl}
-            alt=""
-            loading="lazy"
-            style={{ flexShrink: 0, width: 84, height: 84, objectFit: "cover", borderRadius: 8, background: "var(--surface-3)" }}
-            onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-          />
-        )}
-      </a>
-    </div>
+      </div>
+    </article>
   );
 }
-
 /* ── Main commentary / Live Feed screen ── */
 // ── SCANX market scans (Most Active / Biggest %) ────────────────────────────
 interface ScanItem { ticker: string; name: string | null; pctChange: number | null; price?: number | null; volume?: number | null; rvol?: number | null; }
@@ -963,14 +1045,33 @@ export function CommentaryScreen() {
           */}
 
           <div className="card" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><h3>{feedLabel.title}{q ? ` · “${search.trim()}”` : ""}</h3><VendorTag v={["polygon", "fmp"]} /></div>
+            <div
+              className="card-h"
+              style={{
+                padding: "16px 18px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  flexWrap: "wrap",
+                }}
+              >
+                <h3>
+                  {feedLabel.title}
+                  {q ? ` · “${search.trim()}”` : ""}
+                </h3>
+                <VendorTag v={["polygon", "fmp"]} />
+              </div>
+
               {feedLabel.badge}
             </div>
             <div className="card-b" style={{ paddingTop: 2, flex: 1, minHeight: 0, overflowY: "auto" }}>
               {feed.length === 0 ? (
                 <DataState loading={liveNewsLoading} label={
-                  q
+                  q 
                     ? `No matches for “${search.trim()}” in this tab.`
                     : activeTab === 3
                       ? (uid ? "No live news matches your portfolio or watchlist names right now." : "Sign in and add names to your watchlist or portfolio to see this feed.")
@@ -983,15 +1084,12 @@ export function CommentaryScreen() {
                   total={feed.length}
                   onTicker={sym => setSearch(sym)}
                   onAnalysis={setAnalysisTicker}
-                  /* Clicking the chip that is already filtering clears it, so
-                     the chip is a toggle rather than a one-way trip that only
-                     the dropdown can undo. */
-                  onTag={t => setTagFilter(cur => (cur === t ? "all" : t))}
-                  onCat={c => setCatFilter(cur => (cur === c ? "all" : c))}
-                  activeTag={tagFilter}
-                  activeCat={catFilter}
                   marketCap={companyByTicker.get(item.ticker)?.marketCap ?? null}
-                  livePct={feedQuotes.get(item.ticker)?.pctChange ?? companyByTicker.get(item.ticker)?.pctChange ?? null}
+                  livePct={
+                    feedQuotes.get(item.ticker)?.pctChange ??
+                    companyByTicker.get(item.ticker)?.pctChange ??
+                    null
+                  }
                 />
               ))}
             </div>
