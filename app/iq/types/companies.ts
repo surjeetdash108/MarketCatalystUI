@@ -86,8 +86,18 @@ export interface CompanyDoc {
   pctFromHigh52?: number | null;
   /** Distance above the 52-week low, positive. */
   pctFromLow52?: number | null;
+  /** 20-session average volume from technical-indicators.job's computeIndicators
+   *  (same helper /live/company/summary uses) — the stock-detail Key Stats card
+   *  reads this as a fallback before its own year-of-bars computation is ready. */
+  avgVolume20?: number | null;
   /** Forward-annualized dividend per share (pairs with dividendYield). */
   dividendPerShare?: number | null;
+  /** Only ever set by /live/company/summary — the full doc has no earnings-date
+   *  field of its own (Next ER comes from the separate /market-data/earnings
+   *  feed instead). Declared here, always undefined on a real full doc, so
+   *  `CompanyDoc | CompanySummary` key-stats code can read it off either
+   *  without a type guard. */
+  nextEarningsDate?: string | null;
   /** Trailing RSI(14) history, oldest→newest — powers the RSI sparkline. */
   rsi14Series?: number[] | null;
   // FMP 13F institutional-ownership rollup (stock-detail Institutional card).
@@ -109,5 +119,43 @@ export interface CompanyDoc {
   // Real related companies from Polygon /v1/related-companies (AAPL → MSFT,
   // AMZN, GOOGL, NVDA…) — algorithmic peers, not just same-sector.
   peers: string[] | null;
+  source: string | null;
+}
+
+/**
+ * GET /live/company/summary?ticker=X — a fast (~1-3s) key-stats-only read for
+ * a ticker whose company doc isn't in Firestore yet, served alongside the
+ * ~30-45s /live/company full-doc build so the stock-detail Key Stats card
+ * doesn't have to wait on peers/institutional-ownership/technicals it doesn't
+ * need. Field names match CompanyDoc wherever both carry the field, so the
+ * card can read either without knowing which one it got.
+ *
+ * `partial` is true for a genuine summary; the endpoint can instead hand back
+ * the full doc (no `partial` field) when this server instance already had it
+ * in memory — callers should treat that the same as a full CompanyDoc.
+ */
+export interface CompanySummary {
+  ticker: string;
+  name: string | null;
+  price: number | null;
+  pctChange: number | null;
+  prevClose: number | null;
+  volume: number | null;
+  marketCap: number | null;
+  exchange: string | null;
+  sector: string | null;
+  industry: string | null;
+  peRatio: number | null;
+  eps: number | null;
+  epsTtm: number | null;
+  nextEarningsDate: string | null;
+  dividendYield: number | null;
+  dividendPerShare: number | null;
+  high52: number | null;
+  low52: number | null;
+  pctFromHigh52: number | null;
+  pctFromLow52: number | null;
+  avgVolume20: number | null;
+  partial?: boolean;
   source: string | null;
 }

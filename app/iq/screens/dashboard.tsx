@@ -493,8 +493,15 @@ export function DashboardScreen() {
 
         {/* ── 1. Pulse strip ── */}
         <div className="col-12">
-          <div className="pulse" style={{ position: "relative" }}>
-            <span style={{ position: "absolute", top: 4, right: 6, zIndex: 2, pointerEvents: "none" }}><VendorTag v="polygon" /></span>
+          {/* A vendor tag absolutely positioned over the grid's top-right corner
+              lands squarely on top of whatever box the responsive grid happens
+              to wrap into that corner (e.g. Bitcoin), obscuring its label — a
+              plain row above the grid can't overlap anything regardless of how
+              many boxes there are or how they wrap. */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+            <VendorTag v="polygon" />
+          </div>
+          <div className="pulse">
             {pulse.map((x, i) => (
               <div key={x.label} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(i)}>
                 <div className="lbl">{x.label}</div>
