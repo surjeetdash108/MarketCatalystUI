@@ -317,7 +317,7 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
           style={{
             marginTop: 13,
             // color: "var(--text)",
-            color:"white",
+            color:"var(--text-hi)",
             fontSize: "clamp(17px, 1.5vw, 22px)",
             lineHeight: 1.18,
             letterSpacing: "-.025em",

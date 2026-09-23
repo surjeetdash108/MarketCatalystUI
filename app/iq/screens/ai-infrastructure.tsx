@@ -482,8 +482,8 @@ export function AiInfrastructureScreen() {
                     style={{
                       cursor: "pointer",
                       minHeight: 190,
-                      background: "#090d0f",
-                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "var(--surface-1)",
+                      border: "1px solid var(--border-soft)",
                       borderRadius: 12,
                       overflow: "hidden",
                       boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
@@ -566,8 +566,8 @@ export function AiInfrastructureScreen() {
                               style={{
                                 padding: "4px 7px",
                                 borderRadius: 4,
-                                background: "#11171a",
-                                border: "1px solid rgba(255,255,255,0.08)",
+                                background: "var(--surface-3)",
+                                border: "1px solid var(--border-soft)",
                                 color: "var(--brand-2)",
                                 fontFamily: "var(--f-mono)",
                                 fontSize: ".62rem",
