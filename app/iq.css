@@ -938,6 +938,18 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
    they only need permission to wrap. */
 .sd-rowflex { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; }
 .sd-rowflex > .card { flex: 1 1 330px; }
+
+/* ── stock detail tab bar (full view only — Overview / Analysis / Earnings /
+   Financials / Holdings / News) — grid-spans both .sd-grid tracks and sits
+   between the chart and the per-tab cards. */
+.sd-tabbar { display: flex; gap: 2px; padding: 0 4px; margin-bottom: -1px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.sd-tabbar::-webkit-scrollbar { display: none; }
+.sd-tabbtn { position: relative; padding: 10px 13px 9px; font-size: .8rem; font-weight: 500; color: var(--text-dim-solid); white-space: nowrap; transition: color .15s ease; }
+.sd-tabbtn:hover { color: var(--text); }
+.sd-tabbtn[aria-selected="true"] { color: var(--text-hi); font-weight: 600; }
+.sd-tabbtn[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--brand-2); border-radius: 2px; }
+.sd-tabbtn .count { font-family: var(--f-mono); font-size: .62rem; color: var(--text-dim-solid); background: var(--surface-3); padding: 1px 6px; border-radius: 20px; margin-left: 6px; }
+.sd-tabbtn[aria-selected="true"] .count { color: var(--brand-2); background: var(--surface-2); }
 /* EPS and Sales sit side by side only while both stay readable. Ten bars with
    rotated date labels need real width; below this they stack and each gets the
    whole card. */

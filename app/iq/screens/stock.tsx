@@ -534,6 +534,7 @@ function StockChartExpanded({
         <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
       </div>
       <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars}
+        exchange={EXCHANGE[sym] ?? "NASDAQ"}
         live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low } : null}
         earnings={showEarnings ? earnings : []} />
       {showRsi && (
@@ -672,6 +673,12 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // Peers list sort by session % change; default desc (best performers first).
   const [peerSort, setPeerSort] = useState<"desc" | "asc">("desc");
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
+
+  // Tab shown below the persistent header + chart, in the full (non-embedded)
+  // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
+  // its original single stacked-card layout, so this state is unused there.
+  type StockTab = "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news";
+  const [activeTab, setActiveTab] = useState<StockTab>("overview");
 
   // Watchlists are backend-synced (multiple named lists). The star is "filled"
   // when the ticker is in ANY list; clicking it opens the which-list picker.
@@ -1166,6 +1173,22 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // tags still key off pmx/pmn, so they stay correct regardless of sort.
   const sortedPeers = [...peersAll].sort((a, b) => (peerSort === "asc" ? a.c - b.c : b.c - a.c));
 
+  // Tab bar config — mirrors the mockup's Overview/Analysis/Earnings/
+  // Financials/Holdings/News split. Counts are real data (quarters on file /
+  // articles fetched), not decorative.
+  const TABS: { id: StockTab; label: string; count?: number }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "analysis", label: "Analysis" },
+    { id: "earnings", label: "Earnings", count: hist10.length || undefined },
+    { id: "financials", label: "Financials" },
+    { id: "holdings", label: "Holdings" },
+    { id: "news", label: "News", count: tickerNews?.length || undefined },
+  ];
+  // Every rail card lives on exactly one tab (Analysis) — no card is
+  // duplicated across tabs. The rest show a full-width main column instead of
+  // an empty second track.
+  const showRail = !hideHeader && activeTab === "analysis";
+
   function selectSym(s: string) {
     setSym(s);
     setSearch("");
@@ -1338,7 +1361,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
         </div>
       )}
 
-      <div className="sd-grid" style={hideHeader ? { paddingTop: 0 } : undefined}>
+      <div
+        className="sd-grid"
+        style={hideHeader ? { paddingTop: 0 } : (showRail ? undefined : { gridTemplateColumns: "1fr" })}
+      >
 
         {/* Full-width chart */}
         {!hideChart && <div style={{ gridColumn: "1 / -1" }}>
@@ -1379,7 +1405,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   as of {barsAsOfLabel}
                 </span>
               )}
-              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>drag-free · hover for OHLC</span>
+              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>scroll to zoom · drag to pan · double-click to reset</span>
               <ExpandBtn
                 title={`${sym} · Price Chart`}
                 node={
@@ -1400,6 +1426,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               <CandleChart sym={sym} tf={tfActive} px={p}
                 maStep={maStep} emaStep={emaStep}
                 showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars}
+                exchange={ex}
                 live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low } : null}
                 earnings={showEarnings ? chartEarnings : []} />
             </div>
@@ -1412,18 +1439,6 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   </span>
                 </div>
                 <div style={{ padding: "0 14px 4px" }}><RsiPane rsi14={rsi} loading={liveCompanyLoading} /></div>
-              </div>
-            )}
-            {showEarnings && (
-              <div id="earnHost" style={{ borderTop: "1px solid var(--border)" }}>
-                <div style={{ padding: "6px 14px 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>Earnings · EPS Surprise</span>
-                  <span>
-                    <span className="mono" style={{ color: "var(--text-dim-solid)" }}>Next: </span>
-                    <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>{erDate}</span>
-                  </span>
-                </div>
-                <div style={{ padding: "0 14px 8px" }}><EarnPane hist10={hist10} /></div>
               </div>
             )}
             <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
@@ -1463,6 +1478,28 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
           </div>
         </div>}
 
+        {/* ── Tab bar — Overview / Analysis / Earnings / Financials / Holdings /
+             News. Full-view only; the compact embed (hideHeader, used inline in
+             StockPanelLayout) keeps its original single stacked-card layout,
+             rendered unchanged in the `hideHeader &&` branch below. */}
+        {!hideHeader && (
+          <nav className="sd-tabbar" style={{ gridColumn: "1 / -1" }} role="tablist" aria-label="Stock detail sections">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                className="sd-tabbtn"
+                role="tab"
+                aria-selected={activeTab === t.id}
+                onClick={() => setActiveTab(t.id)}
+              >
+                {t.label}
+                {t.count ? <span className="count">{t.count}</span> : null}
+              </button>
+            ))}
+          </nav>
+        )}
+
+      {hideHeader && (<>
         {/* LEFT COLUMN — natural height (no stretch) so leftColRef measures the
             true content bottom (Financials); the right column is pinned to it. */}
         <div ref={leftColRef} style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "start" }}>
@@ -2182,6 +2219,722 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             )}
           </div>
         </div>
+      </>)}
+
+      {/* ══════════════ TABBED FULL VIEW ══════════════
+          Overview / Analysis / Earnings / Financials / Holdings / News. Each
+          card below is the same markup as its flat-mode counterpart above
+          (same data, same "View all" drawers) — just regrouped per the
+          reorganized layout, with a couple of cards split into two (Technical
+          Rating vs. Indicators vs. Recent analyst actions; Financials vs.
+          Earnings Growth/Playbook; Dividend history vs. Stock splits) to match
+          how the tabs divide the data. */}
+      {!hideHeader && (<>
+        <div ref={leftColRef} style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "start", gridColumn: showRail ? undefined : "1 / -1" }}>
+
+          {activeTab === "overview" && (
+            <div className="card">
+              <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 12px 0" }}><VendorTag v="polygon" /></div>
+              <div className="keystats">
+                {([
+                  ["Mkt Cap",        mc != null ? cap(mc) : null],
+                  ["P/E",            data.peRatio != null ? data.peRatio.toFixed(1) : null],
+                  ["EPS (TTM)",      eps != null ? "$" + eps.toFixed(2) : null],
+                  ["Next ER",        erDate],
+                  ["52W Range",      hi != null && lo != null ? "$" + nf(lo) + " – $" + nf(hi) : null],
+                  ["Off 52W High",   offHigh52 != null ? offHigh52.toFixed(1) + "%" : null],
+                  ["Off 52W Low",    offLow52 != null ? "+" + offLow52.toFixed(1) + "%" : null],
+                  ["Avg Vol (20d)",  avgVol20 != null ? nf(avgVol20 / 1e6) + "M" : null],
+                  ["Sector",         titleCaseLabel(data.sector)],
+                  ["Industry",       titleCaseLabel(data.industry)],
+                  ["Div Yield",      data.dividendYield != null ? data.dividendYield.toFixed(2) + "% (fwd)" : null],
+                  ["Div / Share",    divPerShare != null ? "$" + divPerShare.toFixed(2) + " (fwd)" : null],
+                ] as [string, string | null][]).map(k => (
+                  <div key={k[0]} className="kstat">
+                    <div className="k">{k[0]}</div>
+                    <div className="v">{k[1] ?? <NotAvailable />}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "analysis" && (<>
+            <div className="ai-block">
+              <div className="card-h">
+                <h3 className="ai-c">◆ AI Technical Analysis</h3>
+                <VendorTag v="polygon" />
+              </div>
+              <div className="card-b" style={{ maxHeight: "none" }}>
+                {([
+                  ["Trend",            trendTxt],
+                  ["Support / Resist.", hi != null
+                    ? (<>52-week high <b>${nf(hi)}</b>{lo != null ? <>; 52-week low <b>${nf(lo)}</b></> : null}.</>)
+                    : "Support/resistance levels not available."],
+                  ["MA posture",       maTxt],
+                  ["Rel. strength",    rs != null
+                    ? (<>Relative-strength rank <b className={rs >= 70 ? "up" : rs < 40 ? "down" : ""}>{rs}/99</b> vs the market — {rs >= 70 ? "group leader." : rs < 40 ? "lagging the tape." : "roughly in line."}</>)
+                    : "Not ranked yet — this ticker isn't in the synced RS universe."],
+                  ["Volume",           rv != null ? (<>Relative volume <b>{rv.toFixed(1)}×</b> — {rv > 2 ? "well above average (event-driven)." : "near normal."}</>) : "Relative volume not available."],
+                  ["Event risk",       erDate !== "—" ? `Next earnings ${erDate}.` : "No upcoming earnings date on record."],
+                ] as [string, ReactNode][]).map(l => (
+                  <div key={l[0]} className="ai-line">
+                    <span className="k">{l[0]}</span>
+                    <span className="v">{l[1]}</span>
+                  </div>
+                ))}
+                <div style={{ marginTop: 10, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                  Source: rs-rating.job, technical-indicators.job, a year of daily bars · informational purposes only, not investment advice.
+                </div>
+
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
+                  <div style={{ fontSize: ".66rem", fontWeight: 700, color: "var(--ai)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span>◆ AI read · {sym}</span>
+                    {aiAnalysis?.ok && (
+                      <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", color: "var(--text-dim-solid)", textTransform: "none", letterSpacing: 0 }}>
+                        {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}
+                      </span>
+                    )}
+                  </div>
+                  {aiLoading && <DataState loading label="Generating AI analysis…" />}
+                  {!aiLoading && (!!aiError || aiAnalysis?.ok === false) && (
+                    <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid)", padding: "2px 0" }}>AI analysis unavailable right now.</div>
+                  )}
+                  {!aiLoading && aiAnalysis?.ok && aiAnalysis.analysis && (() => {
+                    const a = aiAnalysis.analysis!;
+                    return (
+                      <>
+                        {a.headline && <div style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--text-hi)", marginBottom: 8 }}>{a.headline}</div>}
+                        {a.volatility && (
+                          <div className="ai-line"><span className="k">Volatility</span><span className="v"><b style={{ color: "var(--text-hi)", textTransform: "capitalize" }}>{a.volatility.flag}</b> — {a.volatility.note}</span></div>
+                        )}
+                        {a.momentum && (
+                          <div className="ai-line"><span className="k">Momentum</span><span className="v"><b style={{ color: "var(--text-hi)", textTransform: "capitalize" }}>{a.momentum.state}</b> — {a.momentum.note}</span></div>
+                        )}
+                        {a.newsSummary && (
+                          <div className="ai-line"><span className="k">News</span><span className="v">{a.newsSummary}</span></div>
+                        )}
+                        {a.technicalSummary && (
+                          <div className="ai-line"><span className="k">Setup</span><span className="v">{a.technicalSummary}</span></div>
+                        )}
+                        <div style={{ marginTop: 8, fontSize: ".64rem", color: "var(--text-dim-solid)" }}>
+                          AI-generated · informational only, not investment advice.
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+              <div className="card-h">
+                <h3>Industry Group rank</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <VendorTag v="polygon" />
+                  <span className="link" onClick={() => setInnerDrawer("industry")}>View all →</span>
+                </div>
+              </div>
+              <div className="card-b" style={{ flex: 1 }}>
+                {topSectors.length === 0 ? (
+                  <DataState loading={sectorsLoading} label="No live sector performance data yet." />
+                ) : (
+                  <>
+                    {topSectors.map((s, i) => (
+                      <div key={s.sector} className="grouprow" style={s.sector === group ? { color: "var(--brand-2)" } : undefined}>
+                        <span className="rk">{i + 1}</span>
+                        <span className="gn">{s.sector}</span>
+                        <div className="bar"><i style={{ width: Math.max(8, (s.pctChange - pmnSector) / (pmxSector - pmnSector || 1) * 100) + "%" }} /></div>
+                        <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(s.pctChange)}</span>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                      {group ? <>{group} ranks <b style={{ color: grank <= 10 ? "var(--up)" : "var(--text-hi)" }}>#{grank || "—"} of {rankedSectors.length}</b> sectors by today&apos;s performance.</>
+                        : "This ticker has no sector on record."}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </>)}
+
+          {activeTab === "earnings" && (<>
+            <div className="card">
+              <div className="card-h">
+                <h3>Earnings · EPS Surprise</h3>
+                <span className="mono" style={{ fontSize: ".7rem" }}>
+                  <span style={{ color: "var(--text-dim-solid)" }}>Next: </span>
+                  <span style={{ color: "var(--warn)", fontWeight: 600 }}>{erDate}</span>
+                </span>
+              </div>
+              <div className="card-b">
+                {hist10.length === 0
+                  ? <DataState loading={earningsLoading} label={`No live earnings history synced for ${sym} yet.`} />
+                  : <EarnPane hist10={hist10} />}
+              </div>
+            </div>
+
+            {(() => {
+              const histEps = hist10.slice(0, 10);
+              const beatsOf = histEps.filter(h => h.surp >= 0).length;
+              const latestA = histEps[0]?.a ?? 0;
+              const prevA   = histEps[4]?.a;
+              const yoyRaw  = prevA != null && Math.abs(prevA) >= 0.05 ? ((latestA - prevA) / Math.abs(prevA)) * 100 : null;
+              const yoy     = yoyRaw != null && Math.abs(yoyRaw) <= 1000 ? yoyRaw : null;
+              return (
+                <div className="card">
+                  <div className="card-h">
+                    <h3>Earnings Growth (EPS)</h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <VendorTag v="polygon" />
+                      {histEps.length > 0 && (
+                        <span className="ec-legend" style={{ margin: 0 }}>
+                          <span><i style={{ background: "var(--up)" }} />Beat</span>
+                          <span><i style={{ background: "var(--down)" }} />Miss</span>
+                          <span><i className="ln" style={{ background: "var(--brand-2)" }} />Trend</span>
+                        </span>
+                      )}
+                      {histEps.length > 0 && <ExpandBtn title={`${sym} · Earnings Growth (EPS)`} node={<EarningsGrowthChart hist={histEps} />} />}
+                    </div>
+                  </div>
+                  <div className="card-b" style={{ paddingTop: 8 }}>
+                    {histEps.length === 0 ? (
+                      <DataState loading={earningsLoading} label={`No live earnings history synced for ${sym} yet.`} />
+                    ) : (
+                      <>
+                        <EarningsGrowthChart hist={histEps} />
+                        <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
+                          <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                            <b style={{ color: "var(--text-hi)" }}>{beatsOf}/{histEps.length}</b> beats
+                          </div>
+                          <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                            Latest qtr EPS <b style={{ color: "var(--text-hi)" }}>${latestA.toFixed(2)}</b>
+                          </div>
+                          {yoy !== null && (
+                            <div style={{ fontSize: ".7rem" }}>
+                              YoY <b style={{ color: yoy >= 0 ? "var(--up)" : "var(--down)" }}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</b>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="card">
+              <div className="card-h">
+                <h3>Earnings Playbook</h3>
+                <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>how {sym} trades when it reports</span>
+              </div>
+              <div className="card-b">
+                <EarningsPlaybook
+                  sym={sym}
+                  reports={(financialsDoc?.quarters ?? [])
+                    .filter((q) => q.filingDate)
+                    .map((q) => ({ date: q.filingDate as string, epsActual: q.epsActual, epsEstimate: q.epsEstimate, epsReported: q.epsActualReported ?? null, epsEstimateReported: q.epsEstimateReported ?? null }))}
+                />
+              </div>
+            </div>
+
+            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+              <div className="card-h">
+                <h3>Earnings history</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <VendorTag v={["polygon", "fmp"]} />
+                  {hist10.length > 0 && (
+                    <span className={`pill ${beatStreak >= 0 ? "up" : "dn"}`}>{Math.abs(beatStreak)}-qtr {beatStreak >= 0 ? "beat" : "miss"} streak</span>
+                  )}
+                  <span className="link" onClick={() => setInnerDrawer("earnings")}>View all →</span>
+                </div>
+              </div>
+              <div className="card-b" style={{ paddingTop: 6, flex: 1, display: "flex", flexDirection: "column" }}>
+                {hist10.length === 0 ? (
+                  <DataState loading={earningsLoading} label={`No live earnings-estimate history synced for ${sym} yet.`} height="100%" />
+                ) : (
+                  <>
+                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 8 }}>Next report: {erDate}</div>
+                    {hist10.slice(0, 5).map(q => (
+                      <div key={q.q} className="minirow">
+                        <span className="tkr" style={{ width: 60 }}>{q.q}</span>
+                        <span className="mid mono">
+                          {q.e !== 0 && <span style={{ color: "var(--text-dim-solid)" }}>est ${fmt(q.e, 2)} → </span>}
+                          ${fmt(q.a, 2)} act
+                        </span>
+                        {q.e !== 0
+                          ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "beat" : "miss"} {Math.abs(q.surp)}%</span>
+                          : <span className="r" style={{ color: "var(--text-dim-solid)" }}>—</span>}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          </>)}
+
+          {activeTab === "financials" && (<>
+            {(() => {
+              const inc = incRowsFromFinancials(finPeriod, financialsDoc, () => []);
+              const epsSales = epsSalesSeries(finPeriod, financialsDoc);
+              return (
+                <div className="card">
+                  <div className="card-h">
+                    <h3>Financials</h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <VendorTag v="polygon" />
+                      {financialsDoc && (
+                        <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>
+                      )}
+                      <div className="tf-pills">
+                        <button className={`rng${finPeriod === "Q" ? " on" : ""}`} onClick={() => setFinPeriod("Q")}>Quarterly</button>
+                        <button className={`rng${finPeriod === "A" ? " on" : ""}`} onClick={() => setFinPeriod("A")}>Annual</button>
+                      </div>
+                      <span className="link" onClick={() => setInnerDrawer("financials")}>View all →</span>
+                      <ExpandBtn title={`${sym} · Financials (${finPeriod === "Q" ? "Quarterly" : "Annual"})`} node={<EarnIncChart inc={inc} />} />
+                    </div>
+                  </div>
+                  <div className="card-b" style={{ paddingTop: 8 }}>
+                    {epsSales.length > 0 && (
+                      <div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: "1px solid var(--border-soft)" }}>
+                        <EpsSalesBars data={epsSales} />
+                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                          {finPeriod === "Q" ? "Reported quarters" : "Reported fiscal years"} · actuals only
+                        </div>
+                      </div>
+                    )}
+                    {inc.length === 0 ? (
+                      <DataState loading={financialsLoading} label={
+                        financialsDoc && (financialsDoc.epsHistory?.length ?? 0) > 0
+                          ? `No ${finPeriod === "Q" ? "quarterly" : "annual"} income statement is published for ${sym} — reported EPS is shown above where available.`
+                          : `No ${finPeriod === "Q" ? "quarterly" : "annual"} financials on file for ${sym}.`
+                      } />
+                    ) : (
+                      <>
+                        <div className="ec-legend">
+                          <span><i style={{ background: "var(--brand)" }} />Revenue</span>
+                          <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
+                          <span><i style={{ background: "var(--up)" }} />Net income</span>
+                        </div>
+                        <EarnIncChart inc={inc} />
+                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
+                          {finPeriod === "Q"
+                            ? "Last 10 quarters · revenue, gross profit & net income"
+                            : "Last 10 fiscal years · revenue, gross profit & net income"}
+                          {" · tap "}&#8220;View all&#8221; for the full statement.
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {(() => {
+              const dh = dividendHistory;
+              const hasReal = !!dh && dh.isPayer;
+              const yieldPct = hasReal ? dh!.yieldPct : null;
+              const annualDiv = hasReal ? (dh!.ttmTotal ?? 0) : 0;
+              const payoutRatio = eps != null && eps > 0 && yieldPct != null && yieldPct > 0
+                ? Math.min(99, Math.round((annualDiv / eps) * 100)) : null;
+              const growthLabel = hasReal && dh!.cagr5yPct != null
+                ? `${dh!.cagr5yPct >= 0 ? "+" : ""}${dh!.cagr5yPct.toFixed(1)}% / yr`
+                : null;
+              const streakLabel = hasReal && dh!.increaseStreakYears > 0 ? ` · ${dh!.increaseStreakYears}-yr streak` : "";
+              const divRows = hasReal
+                ? dh!.history.slice(0, 5).map(h => ({
+                    label: h.exDividendDate ?? "—",
+                    perShare: h.amount,
+                    note: h.exDividendDate ? `ex ${h.exDividendDate.slice(5)}` : "",
+                  }))
+                : [];
+              return (
+                <div className="card">
+                  <div className="card-h">
+                    <h3>Dividend history</h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <VendorTag v="polygon" />
+                      {dh && (yieldPct != null
+                        ? <span className="pill up">{yieldPct.toFixed(2)}% yield</span>
+                        : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>)}
+                      {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>}
+                      <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
+                    </div>
+                  </div>
+                  <div className="card-b" style={{ paddingTop: 6 }}>
+                    {!dh ? (
+                      <DataState loading={dividendLoading} label={`Dividend data not synced for ${sym} yet.`} />
+                    ) : !hasReal ? (
+                      <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "8px 0" }}>{sym} does not currently pay a dividend.</div>
+                    ) : (
+                      <>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                          <div>
+                            <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>5-yr dividend growth</div>
+                            <div style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>
+                              {growthLabel ?? "—"}{payoutRatio != null ? ` · payout ${payoutRatio}%` : ""}{streakLabel}
+                            </div>
+                          </div>
+                        </div>
+                        {divRows.map(q => (
+                          <div key={q.label} className="minirow">
+                            <span className="tkr" style={{ width: 82, flexShrink: 0, whiteSpace: "nowrap" }}>{q.label}</span>
+                            <span className="mid mono">{q.perShare != null ? `$${q.perShare.toFixed(4)}/sh` : "—"}</span>
+                            <span className="r" style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>{q.note}</span>
+                          </div>
+                        ))}
+                        <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
+                          <span className="mid">Annual ({dh!.ttmPayments} payments)</span>
+                          <span className="r" style={{ color: "var(--text-hi)" }}>${annualDiv.toFixed(2)}/sh</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </>)}
+
+          {activeTab === "holdings" && (<>
+            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+              <div className="card-h">
+                <h3>Insider &amp; institutional</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <VendorTag v="sec" />
+                  <span className="link" onClick={() => setInnerDrawer("insider")}>View all →</span>
+                </div>
+              </div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                  Recent insider transactions
+                </div>
+                {data.insiderActivity.length > 0 ? (
+                  data.insiderActivity.map((n, idx) => {
+                    const isSell = /sale|sold|exercis/i.test(n.action);
+                    return (
+                      <div key={idx} className="minirow" style={{ cursor: "pointer", alignItems: "flex-start", gap: 10 }}>
+                        <span className="tkr" style={{ flex: "none" }}>{sym}</span>
+                        <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
+                          {n.name} {n.action} <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
+                        </span>
+                        <span className={`r ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
+                          {n.valueUsd != null ? `${isSell ? "−" : "+"}$${(n.valueUsd / 1e6).toFixed(1)}M` : <NotAvailable />}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "4px 0 8px" }}>
+                    No recent Form 4 activity.
+                  </div>
+                )}
+                <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                  <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>
+                    Institutional
+                  </span>
+                  <VendorTag v="fmp" />
+                </div>
+                {(() => {
+                  const io = liveCompany?.instOwnershipPct;
+                  const holders = liveCompany?.inst13FHolders;
+                  const chg = liveCompany?.inst13FHoldersChange;
+                  const rows: [string, ReactNode][] = [
+                    ["Inst. ownership", io != null ? `${io.toFixed(1)}%` : null],
+                    ["Short interest", null],
+                    ["13F filers holding", holders != null ? (
+                      <>
+                        {holders.toLocaleString()}
+                        {chg != null && chg !== 0 && (
+                          <span className={chg > 0 ? "up" : "down"} style={{ marginLeft: 6, fontSize: ".7rem" }}>
+                            {chg > 0 ? "+" : ""}{chg} QoQ
+                          </span>
+                        )}
+                      </>
+                    ) : null],
+                  ];
+                  return rows.map(([label, val]) => (
+                    <div key={label} className="minirow">
+                      <span className="mid">{label}</span>
+                      <span className="r">{val ?? <NotAvailable />}</span>
+                    </div>
+                  ));
+                })()}
+                {liveCompany?.instAsOf && (
+                  <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
+                    13F rollup · {liveCompany.instAsOf}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-h"><h3>Stock splits</h3><VendorTag v="polygon" /></div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 3).map(s => (
+                  <div key={s.executionDate} className="minirow">
+                    <span className="mid">{s.executionDate}</span>
+                    <span className="r" style={{ color: "var(--text-hi)" }}>{s.splitFrom}:{s.splitTo}</span>
+                  </div>
+                )) : (
+                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>No splits on record.</div>
+                )}
+              </div>
+            </div>
+          </>)}
+
+          {activeTab === "news" && (
+            <div className="card">
+              <div className="card-h">
+                <h3>News</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <VendorTag v={["polygon", "fmp"]} />
+                  {tickerNews && tickerNews.length > 0 && (
+                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live</span>
+                  )}
+                </div>
+              </div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                {tickerNews && tickerNews.length > 0 ? (
+                  tickerNews.slice(0, 6).map(n => (
+                    <a key={n.id} href={n.url} target="_blank" rel="noreferrer"
+                      className="minirow" style={{ alignItems: "flex-start", gap: 10, textDecoration: "none", cursor: "pointer" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: ".8rem", color: "var(--text)" }}>{n.headline}</div>
+                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 3, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <span>{n.source} · {new Date(n.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                          {n.vendor && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
+                          {n.sentiment && <span className="pill" style={{ fontSize: ".54rem", textTransform: "capitalize", background: "var(--surface-3)", color: n.sentiment === "positive" ? "var(--up)" : n.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>{n.sentiment}</span>}
+                        </div>
+                      </div>
+                    </a>
+                  ))
+                ) : (
+                  <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "4px 0" }}>
+                    No recent news synced for {sym} yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {showRail && (
+          <div className="sd-rail" style={{ height: rightColH, minHeight: 0, overflow: rightColH ? "hidden" : undefined }}>
+
+            {activeTab === "analysis" && (
+              <div className="card sd-rail-full">
+                <div className="card-h">
+                  <h3>Technical Rating</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <VendorTag v={["polygon", "fmp"]} />
+                    <span className="link" onClick={() => setInnerDrawer("techrating")}>View all →</span>
+                  </div>
+                </div>
+                <div className="card-b">
+                  <div className="trgroup" style={{ borderColor: "var(--ai-dim)", marginBottom: 10 }}>
+                    <div className="gl ai-c">Summary</div>
+                    <TrGauge val={gv} label={rating} />
+                  </div>
+                  {consensusDoc && (
+                    <div className="trgroup">
+                      <div className="gl">Analyst Consensus</div>
+                      <div className="rate" style={{ color: consensusTone(consensusDoc.consensus) }}>{consensusDoc.consensus}</div>
+                      <div className="counts">
+                        <span style={{ color: "var(--down)" }}>Sell<b>{consensusDoc.sell + consensusDoc.strongSell}</b></span>
+                        <span style={{ color: "var(--text-dim-solid)" }}>Hold<b>{consensusDoc.hold}</b></span>
+                        <span style={{ color: "var(--up)" }}>Buy<b>{consensusDoc.strongBuy + consensusDoc.buy}</b></span>
+                      </div>
+                      {consensusDoc.priceTargetConsensus != null && (
+                        <div className="counts" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 8 }}>
+                          <span style={{ color: "var(--text-dim-solid)" }}>Target<b style={{ color: "var(--text-hi)" }}>${consensusDoc.priceTargetConsensus.toFixed(0)}</b></span>
+                          {dispPrice != null && dispPrice > 0 && (
+                            <span style={{ color: consensusDoc.priceTargetConsensus >= dispPrice ? "var(--up)" : "var(--down)" }}>
+                              Upside<b>{consensusDoc.priceTargetConsensus >= dispPrice ? "+" : ""}{(((consensusDoc.priceTargetConsensus - dispPrice) / dispPrice) * 100).toFixed(1)}%</b>
+                            </span>
+                          )}
+                          {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetHigh != null && (
+                            <span style={{ color: "var(--text-dim-solid)" }}>Range<b>${consensusDoc.priceTargetLow.toFixed(0)}–${consensusDoc.priceTargetHigh.toFixed(0)}</b></span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "analysis" && (
+              <div className="card">
+                <div className="card-h">
+                  <h3>Indicators</h3>
+                  <VendorTag v="polygon" />
+                </div>
+                <div className="card-b">
+                  <table className="ind-tbl">
+                    <tbody>
+                      {indRows.map(r => (
+                        <tr key={r[0]}>
+                          <td>
+                            {r[0]}
+                            {r[0] === "RSI (14)" && rsiSeries && rsiSeries.length > 1 && (() => {
+                              const pts = rsiSeries.slice(-40);
+                              const W = 62, H = 16;
+                              const d = pts
+                                .map((v, i) => `${(i / (pts.length - 1)) * W},${H - (Math.min(100, Math.max(0, v)) / 100) * H}`)
+                                .join(" ");
+                              return (
+                                <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginLeft: 8, verticalAlign: "middle", overflow: "visible" }} aria-hidden="true">
+                                  <line x1="0" y1={H - 0.7 * H} x2={W} y2={H - 0.7 * H} stroke="var(--border-soft)" strokeWidth="1" />
+                                  <line x1="0" y1={H - 0.3 * H} x2={W} y2={H - 0.3 * H} stroke="var(--border-soft)" strokeWidth="1" />
+                                  <polyline points={d} fill="none" stroke="var(--ai)" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
+                                </svg>
+                              );
+                            })()}
+                          </td>
+                          <td className="v">{r[1] ?? <NotAvailable />}</td>
+                          <td className="a" style={{ color: ac(r[2]) }}>{r[2]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                    RSI/MACD/Stoch %K/ADX from technical-indicators.job · RSI sparkline is the last 40 sessions on a 0-100 scale with the 30/70 bands marked · EMA/SMA computed from a year of daily bars. Indicators only — not investment advice.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "analysis" && consensusDoc?.recentGrades && consensusDoc.recentGrades.length > 0 && (
+              <div className="card">
+                <div className="card-h"><h3>Recent analyst actions</h3></div>
+                <div className="card-b">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    {consensusDoc.recentGrades.slice(0, 6).map((g, i) => {
+                      const a = (g.action ?? "").toLowerCase();
+                      const col = a.includes("upgrade") ? "var(--up)" : a.includes("downgrade") ? "var(--down)" : "var(--text-dim-solid)";
+                      return (
+                        <div key={i} style={{ display: "grid", gridTemplateColumns: "60px minmax(0, 1fr) minmax(0, 1.15fr) 46px", alignItems: "center", gap: 8, fontSize: ".72rem", textAlign: "left" }}>
+                          <span style={{ color: col, fontWeight: 700, textTransform: "capitalize" }}>{g.action ?? "—"}</span>
+                          <span style={{ color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.firm ?? "—"}</span>
+                          <span style={{ color: "var(--text-dim-solid)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {(g.previousGrade || g.newGrade) ? `${g.previousGrade ?? "—"} → ${g.newGrade ?? "—"}` : ""}
+                          </span>
+                          <span
+                            title={g.priceTarget != null ? `${g.firm ?? "This firm"}'s price target` : "No price target posted with this action"}
+                            style={{ color: g.priceTarget != null ? "var(--text-hi)" : "var(--text-dim-solid)", fontFamily: "var(--f-mono)", fontWeight: 600, textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                          >
+                            {g.priceTarget != null ? `$${Math.round(g.priceTarget)}` : "—"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "analysis" && (
+              <div className="card">
+                <div className="card-h">
+                  <h3>Key levels (pivots)</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <VendorTag v="polygon" />
+                    <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
+                  </div>
+                </div>
+                <div className="card-b" style={{ paddingTop: 6 }}>
+                  <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                    Weekly pivots
+                  </div>
+                  {(["R2", "R1", "Pivot", "S1", "S2"] as const).map(label => {
+                    const wk = klWeekly;
+                    const v = wk ? ({ R2: wk.r2, R1: wk.r1, Pivot: wk.pivot, S1: wk.s1, S2: wk.s2 } as Record<string, number | null>)[label] : null;
+                    const tone = label.startsWith("R") ? "var(--down)" : label.startsWith("S") ? "var(--up)" : "var(--text-hi)";
+                    return (
+                      <div key={label} className="minirow">
+                        <span className="tkr" style={{ width: 50, color: tone }}>{label}</span>
+                        <span className="mid" />
+                        <span className="r mono">{v != null ? `$${v.toFixed(2)}` : <NotAvailable />}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
+                  <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                    Moving averages &amp; range
+                  </div>
+                  {hi == null && lo == null && ema50 == null && sma200 == null ? (
+                    <DataState loading={liveCompanyLoading || yearBarsLoading} label="No historical price data synced for this ticker yet." />
+                  ) : (
+                    ([
+                      ["52W High", hi,     isUp ? "up"   : "dim"],
+                      ["EMA 50",   ema50,  isUp ? "up"   : "down"],
+                      ["SMA 200",  sma200, sma200 != null && p > sma200 ? "up" : "down"],
+                      ["52W Low",  lo,     isUp ? "dim"  : "down"],
+                    ] as [string, number | null, string][]).map(x => (
+                      <div key={x[0]} className="minirow">
+                        <span className="tkr" style={{ width: 70 }}>{x[0]}</span>
+                        <span className="mid" />
+                        <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
+                          {x[1] != null ? `$${nf(x[1])}` : <NotAvailable />}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "analysis" && (
+              <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+                <div className="card-h">
+                  <h3>Peers</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {peersTotal > 1 && (
+                      <button
+                        onClick={() => setPeerSort(s => (s === "desc" ? "asc" : "desc"))}
+                        title={`Sort by % change — ${peerSort === "desc" ? "highest first" : "lowest first"}`}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 4,
+                          fontSize: ".62rem", fontWeight: 700, letterSpacing: ".02em",
+                          color: "var(--text-dim-solid)", background: "var(--surface-3)",
+                          border: "1px solid var(--border-soft)", borderRadius: 6,
+                          padding: "3px 7px", cursor: "pointer",
+                        }}
+                      >
+                        % <span style={{ color: "var(--brand-2)" }}>{peerSort === "desc" ? "▼" : "▲"}</span>
+                      </button>
+                    )}
+                    <VendorTag v="polygon" />
+                    {peersTotal > peers.length && <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>}
+                  </div>
+                </div>
+                <div className="card-b" style={{ paddingTop: 6, flex: 1, minHeight: 0, overflowY: "auto" }}>
+                  {sortedPeers.length ? sortedPeers.map(peer => {
+                    const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
+                    return (
+                      <div key={peer.t} className="minirow"
+                        style={{ cursor: "pointer" }} onClick={() => openStock(peer.t)}>
+                        <StockLogo sym={peer.t} size={22} />
+                        <span className="tkr">{peer.t}</span>
+                        <span className="mid">
+                          {tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`}>{tag}</span>}
+                          {peer.rsRating != null && (
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 4, fontSize: ".62rem" }}>RS {peer.rsRating}</span>
+                          )}
+                        </span>
+                        <span className={`r ${cls(peer.c)}`}>{sign(peer.c)}</span>
+                      </div>
+                    );
+                  }) : <DataState loading={companiesLoading} label="No live peers found in this sector yet." />}
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+      </>)}
 
       </div>
 
