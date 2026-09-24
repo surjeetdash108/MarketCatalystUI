@@ -477,40 +477,17 @@
   padding: 10px 8px 8px;
   position: relative; z-index: 7;
 }
-/* Collapsible nav section. .sec-lbl is now a <button> (the whole header is the
-   hit target, not just the caret — a 13px arrow is a miserable thing to aim at),
-   so the element defaults have to be reset. */
-/* Specificity note: `.iq-root button { font: inherit; color: inherit }` is a
-   (0,1,1) reset that outranks a lone class, so a bare `.sec-lbl` lost its
-   font-size, font-weight AND colour to it. Qualifying with the element name
-   lifts this to (0,2,1). Same trap as .scan-chip below. */
-.iq-root button.sec-lbl {
+/* Nav section header. Sections always render expanded (no accordion). */
+.iq-root .sec-lbl {
   display: flex; align-items: center; gap: 6px; width: 100%;
-  appearance: none; background: none; border: 0; text-align: left;
   font-family: inherit;
   /* 0.75rem/.1em ellipsed the longer labels ("Market Recaps", "My Workspace")
      inside the 11.5rem rail. Smaller type and tighter tracking fit them whole. */
   font-size: 0.64rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--text-dim-solid); padding: 10px 7px 4px; margin-top: 4px;
-  cursor: pointer; border-radius: var(--r-sm);
-  transition: color .12s;
 }
 .nav-sec:first-child .sec-lbl { margin-top: 0; padding-top: 4px; }
-.sec-lbl:hover { color: var(--text-hi); }
-.sec-lbl:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .sec-lbl .sec-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Caret points right when closed, down when open. */
-.sec-lbl .sec-caret {
-  margin-left: auto; flex-shrink: 0;
-  transition: transform .16s ease;
-}
-.nav-sec.open .sec-lbl .sec-caret { transform: rotate(90deg); }
-/* A closed section holding the current page gets a brand dot, so the active
-   location is never invisible just because its section is shut. */
-.sec-lbl .sec-dot {
-  width: 5px; height: 5px; border-radius: 99px; background: var(--brand); flex-shrink: 0;
-}
-.sec-lbl.has-active { color: var(--text); }
 .navitem {
   display: flex; align-items: center; gap: 9px;
   padding: 7px 9px; border-radius: var(--r-sm);
