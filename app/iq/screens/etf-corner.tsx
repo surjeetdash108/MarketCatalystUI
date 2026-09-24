@@ -2,23 +2,92 @@
 
 import { useState } from "react";
 import { hashStr } from "../utils";
+import { THEMES } from "../sector-filter";
 
 /**
  * ETF Corner — visual placeholder only, no backend wiring (unlike AI Corner's
  * ai-infrastructure.tsx, there is no matching ETF endpoint yet). Categories
- * below are static, hand-authored labels for layout purposes — the same kind
- * of hand-curated constant themes.tsx already uses for its 8 sector themes —
- * not live data, so no company counts or tickers are shown on the tiles.
+ * mirror the app-wide Sector filter (sector-filter.ts): the SIC-derived economic
+ * sectors plus the curated theme baskets, so these tiles use the same category
+ * names as the Sector dropdown elsewhere — not live data, so no fund counts or
+ * tickers are shown on the tiles.
  */
+const SECTOR_NAMES = [
+  "Commercial Services", "Communications", "Consumer Durables", "Consumer Non-Durables",
+  "Consumer Services", "Distribution Services", "Electronic Technology", "Energy Minerals",
+  "Finance", "Health Services", "Health Technology", "Industrial Services",
+  "Non-Energy Minerals", "Process Industries", "Producer Manufacturing", "Retail Trade",
+  "Technology Services", "Transportation", "Utilities",
+];
+
+const SECTOR_ICONS: Record<string, string> = {
+  "Commercial Services": "🧾",
+  "Communications": "📡",
+  "Consumer Durables": "🛋️",
+  "Consumer Non-Durables": "🧴",
+  "Consumer Services": "🛎️",
+  "Distribution Services": "📦",
+  "Electronic Technology": "💻",
+  "Energy Minerals": "🛢️",
+  "Finance": "🏦",
+  "Health Services": "🏥",
+  "Health Technology": "💊",
+  "Industrial Services": "🏗️",
+  "Non-Energy Minerals": "⛏️",
+  "Process Industries": "🧪",
+  "Producer Manufacturing": "🏭",
+  "Retail Trade": "🛒",
+  "Technology Services": "🖥️",
+  "Transportation": "🚚",
+  "Utilities": "💡",
+};
+
+const SECTOR_BLURBS: Record<string, string> = {
+  "Commercial Services": "Business services, staffing and outsourcing funds.",
+  "Communications": "Telecom carriers, satellite and communications-equipment funds.",
+  "Consumer Durables": "Home goods, appliances and durable consumer-product makers.",
+  "Consumer Non-Durables": "Food, beverage, household and personal-care staples.",
+  "Consumer Services": "Restaurants, leisure, hospitality and consumer-facing services.",
+  "Distribution Services": "Wholesalers, logistics and distribution-network operators.",
+  "Electronic Technology": "Computing, networking and electronic-component manufacturers.",
+  "Energy Minerals": "Oil, gas and coal exploration and production funds.",
+  "Finance": "Banks, insurers, asset managers and diversified financials.",
+  "Health Services": "Hospitals, providers and healthcare-delivery networks.",
+  "Health Technology": "Pharma, biotech and medical-device innovators.",
+  "Industrial Services": "Engineering, construction and industrial-support providers.",
+  "Non-Energy Minerals": "Metals, mining and materials-extraction companies.",
+  "Process Industries": "Chemicals, paper and industrial-process manufacturers.",
+  "Producer Manufacturing": "Machinery, equipment and industrial-goods producers.",
+  "Retail Trade": "Department stores, e-commerce and specialty retailers.",
+  "Technology Services": "Software, IT services and enterprise-technology providers.",
+  "Transportation": "Airlines, rail, shipping and freight-transport funds.",
+  "Utilities": "Electric, gas and water utility income funds.",
+};
+
+const THEME_ICONS: Record<string, string> = {
+  mag7: "🚀",
+  ai: "🤖",
+  software: "☁️",
+  internet: "🌐",
+  consumer: "🛍️",
+  fintech: "💳",
+  hardware: "⚙️",
+  value: "💎",
+};
+
 const ETF_CATEGORIES = [
-  { key: "broad-market", icon: "🌐", title: "Broad Market", blurb: "Total-market and broad index funds tracking the S&P 500, Nasdaq, and beyond." },
-  { key: "sector", icon: "🏭", title: "Sector ETFs", blurb: "Funds concentrated in a single sector — tech, healthcare, financials, energy, and more." },
-  { key: "fixed-income", icon: "💵", title: "Fixed Income", blurb: "Bond and treasury funds spanning the yield curve, from short-term to long-duration." },
-  { key: "commodities", icon: "🛢️", title: "Commodities", blurb: "Gold, oil, agriculture and broad commodity-basket exposure." },
-  { key: "international", icon: "🌍", title: "International & Emerging Markets", blurb: "Developed and emerging-market equity funds outside the US." },
-  { key: "dividend-income", icon: "💰", title: "Dividend & Income", blurb: "High-yield and dividend-growth strategies built for income." },
-  { key: "thematic-growth", icon: "🚀", title: "Thematic & Growth", blurb: "Innovation, clean energy, robotics and other thematic growth baskets." },
-  { key: "leveraged-inverse", icon: "⚡", title: "Leveraged & Inverse", blurb: "Geared and inverse funds for short-term tactical positioning." },
+  ...SECTOR_NAMES.map(name => ({
+    key: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    icon: SECTOR_ICONS[name],
+    title: name,
+    blurb: SECTOR_BLURBS[name],
+  })),
+  ...THEMES.map(t => ({
+    key: t.id,
+    icon: THEME_ICONS[t.id] ?? "⭐",
+    title: t.name,
+    blurb: t.desc,
+  })),
 ];
 
 const ACCENTS = ["#38BDF8", "#A78BFA", "#34D399", "#FBBF24", "#F472B6", "#FB923C", "#2DD4BF", "#818CF8", "#F87171", "#4ADE80"];
