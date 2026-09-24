@@ -579,7 +579,7 @@ function ScanSection({ title, color, groups, render, onSelect }: {
                   </div>
 
                   {/* Green / red sector bar */}
-                  <div
+                  {/* <div
                     style={{
                       height: 3,
                       display: "flex",
@@ -595,7 +595,7 @@ function ScanSection({ title, color, groups, render, onSelect }: {
                         background: "var(--up)",
                       }}
                     />
-                  </div>
+                  </div> */}
                 </div>
 
                 {/* Stocks */}

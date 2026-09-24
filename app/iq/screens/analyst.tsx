@@ -16,9 +16,9 @@ type Tab = typeof TABS[number];
 
 // Top-level views (the 3 tabs at the top of the screen).
 const VIEWS = [
-  { key: "analysts", label: "Analysts" },
-  { key: "consensus", label: "Consensus & price targets" },
-  { key: "perfirm", label: "Per-firm analyst actions" },
+  { key: "perfirm", label: "Analyst Actions" },
+  { key: "analysts", label: "Top Firms" },
+  { key: "consensus", label: "Price Targets" },
 ] as const;
 type View = typeof VIEWS[number]["key"];
 
@@ -51,12 +51,12 @@ export function AnalystScreen() {
   const { openStock } = useIQActions();
   const { data: liveConsensus, loading: consensusLoading } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const { data: companies } = useApiList<CompanyDoc>("/market-data/companies");
-  const [view, setView] = useState<View>("consensus"); // top-level tab
+  const [view, setView] = useState<View>("perfirm");// top-level tab
   const [tab, setTab] = useState<Tab>("All"); // action-type filter (per-firm + analysts)
   const [clustersOnly, setClustersOnly] = useState(false);
-  const [consQuery, setConsQuery] = useState(""); // search within Consensus & price targets
-  const [actQuery, setActQuery] = useState(""); // search within Per-firm analyst actions
-  const [analystQuery, setAnalystQuery] = useState(""); // search within Analysts
+  const [consQuery, setConsQuery] = useState(""); // search within Price Targets
+  const [actQuery, setActQuery] = useState(""); // search within Analyst Actions
+  const [analystQuery, setAnalystQuery] = useState("");// search within Top Firms
   const [selAnalyst, setSelAnalyst] = useState<string | null>(null); // firm clicked → drawer of its tickers
   const [shown, setShown] = useState(40); // paginate the feed 40 rows at a time
   const [showAllClusters, setShowAllClusters] = useState(false);
@@ -163,7 +163,7 @@ export function AnalystScreen() {
   // powers the slide drawer (allActions is already newest-first).
   const selAnalystActions = selAnalyst ? allActions.filter(a => a.firm === selAnalyst) : [];
 
-  // Reusable action-type filter chips (used by Per-firm + Analysts views).
+  // Reusable action-type filter chips (used by Analyst Actions + Top Firms views).
   const actionFilterBar = (withClusters: boolean) => (
     <div className="fbar" style={{ marginBottom: 12 }}>
       {TABS.map(t => (
@@ -242,7 +242,7 @@ export function AnalystScreen() {
         <div className="card-h">
           {/* Search sits on the LEFT, next to the title (left-aligned). */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h3>Consensus &amp; price targets <VendorTag v={["fmp", "polygon"]} /></h3>
+            <h3>Price Targets <VendorTag v={["fmp", "polygon"]} /></h3>
             <input
               value={consQuery}
               onChange={e => setConsQuery(e.target.value.toUpperCase())}
@@ -297,7 +297,7 @@ export function AnalystScreen() {
         <div className="card-h">
           {/* Search sits on the LEFT, next to the title — filters THIS table's rows by ticker. */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h3>Per-firm analyst actions <VendorTag v={["fmp", "polygon"]} /></h3>
+            <h3>Analyst Actions <VendorTag v={["fmp", "polygon"]} /></h3>
             <input
               value={actQuery}
               onChange={e => { setActQuery(e.target.value.toUpperCase()); setShown(40); }}
@@ -359,14 +359,14 @@ export function AnalystScreen() {
           <input
             value={analystQuery}
             onChange={e => setAnalystQuery(e.target.value)}
-            placeholder="Search analyst…"
+            placeholder="Search firm…"
             style={{ width: 260, boxSizing: "border-box", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "6px 10px", fontSize: ".78rem", color: "var(--text-hi)", outline: "none" }}
           />
         </div>
         {actionFilterBar(false)}
         <div className="card">
           <div className="card-h">
-            <h3>Analysts <VendorTag v={["fmp", "polygon"]} /></h3>
+            <h3>Top Firms <VendorTag v={["fmp", "polygon"]} /></h3>
             {analystFiltered.length > 0 && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>{analystFiltered.length} firms</span>}
           </div>
           <div className="card-b" style={{ paddingTop: 2, overflowX: "auto" }}>
@@ -381,7 +381,7 @@ export function AnalystScreen() {
                 {analystFiltered.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ padding: 0 }}>
-                      <DataState loading={consensusLoading} label={analystQ ? `No analysts match “${analystQuery}”.` : "No analyst activity in the recent feed."} />
+                      <DataState loading={consensusLoading} label={analystQ ? `No firms match “${analystQuery}”.` : "No firm activity in the recent feed."} />
                     </td>
                   </tr>
                 ) : analystFiltered.map(a => (
@@ -442,7 +442,7 @@ export function AnalystScreen() {
             </div>
             <div className="drawer-b">
               {selAnalystActions.length === 0 ? (
-                <DataState loading={consensusLoading} label="No recent rating changes for this analyst." />
+                <DataState loading={consensusLoading} label="No recent rating changes for this firm." />
               ) : (
                 <div style={{ overflowX: "auto" }}>
                 <table className="tbl">
