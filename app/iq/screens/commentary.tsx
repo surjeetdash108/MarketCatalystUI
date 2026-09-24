@@ -318,7 +318,7 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
             marginTop: 13,
             // color: "var(--text)",
             color:"var(--text-hi)",
-            fontSize: "clamp(17px, 1.5vw, 22px)",
+            fontSize: "clamp(15px, 1.5vw, 22px)",
             lineHeight: 1.18,
             letterSpacing: "-.025em",
             fontWeight: 600,
@@ -839,9 +839,10 @@ function MostActiveTab() {
   return (
     <div
       style={{
+        width: "100%",
         padding: "14px 18px 24px",
-        maxWidth: 1400,
-        margin: "0 auto",
+        margin: 0,
+        boxSizing: "border-box",
       }}
     >
       {/* ───────────── TITLE ───────────── */}
