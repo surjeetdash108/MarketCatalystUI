@@ -478,62 +478,919 @@ function ScanTray({ sym, onClose }: { sym: string; onClose: () => void }) {
 }
 
 function ScanSection({ title, color, groups, render, onSelect }: {
-  title: string; color: string; groups: SectorGroup[]; render: (it: ScanItem) => string;
+  title: string;
+  color: string;
+  groups: SectorGroup[];
+  render: (it: ScanItem) => string;
   onSelect: (sym: string) => void;
 }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontWeight: 700, fontSize: ".8rem", color, marginBottom: 6 }}>{title}</div>
+    <div style={{ marginBottom: 18 }}>
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: ".8rem",
+          color,
+          marginBottom: 8,
+        }}
+      >
+        {title}
+      </div>
+
       {(!groups || groups.length === 0) ? (
-        <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>No data.</div>
-      ) : groups.map((g) => (
-        <div key={g.sector} style={{ fontSize: ".8rem", lineHeight: 2.1, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 4px" }}>
-          <span style={{ color: "var(--text-dim-solid)", marginRight: 2 }}>{titleCaseLabel(g.sector)}:</span>
-          {/* Each ticker is a real button with its logo — these used to be inert
-              bold text, so a name you spotted in the scan could not be opened
-              without going to another screen and searching for it. */}
-          {g.items.map((it) => (
-            <button
-              key={it.ticker}
-              type="button"
-              className="scan-chip"
-              onClick={() => onSelect(it.ticker)}
-              title={`Open ${it.ticker} details`}
-            >
-              <StockLogo sym={it.ticker} size={15} />
-              <b>{it.ticker}</b>
-              <span className={cls(it.pctChange ?? 0)}>({render(it)})</span>
-            </button>
-          ))}
+        <div
+          style={{
+            fontSize: ".78rem",
+            color: "var(--text-dim-solid)",
+          }}
+        >
+          No data.
         </div>
-      ))}
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 10,
+          }}
+        >
+          {groups.map((g) => {
+            const up = g.items.filter(
+              it => (it.pctChange ?? 0) >= 0
+            ).length;
+
+            const down = g.items.length - up;
+
+            const maxAbs = Math.max(
+              ...g.items.map(it => Math.abs(it.pctChange ?? 0)),
+              1
+            );
+
+            return (
+              <div
+                key={g.sector}
+                style={{
+                  background: "var(--surface-1)",
+                  border: "1px solid var(--border-soft)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Sector header */}
+                <div
+                  style={{
+                    padding: "10px 12px 8px",
+                    borderBottom: "1px solid var(--border-soft)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: ".78rem",
+                        fontWeight: 700,
+                        color: "var(--text-hi)",
+                      }}
+                    >
+                      {titleCaseLabel(g.sector)}
+                    </span>
+
+                    <span
+                      style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".62rem",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <span style={{ color: "var(--up)" }}>
+                        ▲ {up}
+                      </span>
+                      {" "}
+                      <span style={{ color: "var(--down)" }}>
+                        ▼ {down}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Green / red sector bar */}
+                  <div
+                    style={{
+                      height: 3,
+                      display: "flex",
+                      marginTop: 7,
+                      borderRadius: 3,
+                      overflow: "hidden",
+                      background: "var(--down)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${g.items.length ? (up / g.items.length) * 100 : 0}%`,
+                        background: "var(--up)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Stocks */}
+                <div>
+                  {g.items.map((it) => {
+                    const pct = it.pctChange ?? 0;
+                    const width = Math.min(
+                      100,
+                      Math.max(4, (Math.abs(pct) / maxAbs) * 100)
+                    );
+
+                    return (
+                      <button
+                        key={it.ticker}
+                        type="button"
+                        onClick={() => onSelect(it.ticker)}
+                        style={{
+                          width: "100%",
+                          display: "grid",
+                          gridTemplateColumns:
+                            "minmax(52px, auto) minmax(42px, auto) 1fr auto",
+                          alignItems: "center",
+                          gap: 7,
+                          padding: "8px 11px",
+                          border: 0,
+                          borderBottom:
+                            "1px solid var(--border-soft)",
+                          background: "transparent",
+                          color: "inherit",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            minWidth: 0,
+                          }}
+                        >
+                          <b
+                            style={{
+                              fontFamily: "var(--f-mono)",
+                              fontSize: ".68rem",
+                              color: "var(--text-hi)",
+                            }}
+                          >
+                            {it.ticker}
+                          </b>
+                        </span>
+
+                        {/* Volume / relative volume */}
+                        <span
+                          style={{
+                            justifySelf: "start",
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".58rem",
+                            fontWeight: 700,
+                            padding: "3px 5px",
+                            borderRadius: 4,
+                            background:
+                              it.rvol != null
+                                ? "rgba(245,181,68,.14)"
+                                : "var(--surface-3)",
+                            color:
+                              it.rvol != null
+                                ? "var(--warn)"
+                                : "var(--text-dim-solid)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {it.rvol != null
+                            ? `${it.rvol.toFixed(1)}x`
+                            : it.volume != null
+                              ? `${(it.volume / 1e6).toFixed(1)}M`
+                              : "—"}
+                        </span>
+
+                        {/* Relative movement bar */}
+                        <div
+                          style={{
+                            height: 6,
+                            display: "flex",
+                            justifyContent:
+                              pct >= 0 ? "flex-start" : "flex-end",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${width}%`,
+                              maxWidth: "100%",
+                              height: 6,
+                              borderRadius: 2,
+                              background:
+                                pct >= 0
+                                  ? "var(--up)"
+                                  : "var(--down)",
+                              opacity: 0.9,
+                            }}
+                          />
+                        </div>
+
+                        {/* Percentage */}
+                        <span
+                          className={cls(pct)}
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".62rem",
+                            fontWeight: 700,
+                            padding: "4px 6px",
+                            borderRadius: 4,
+                            background:
+                              pct >= 0
+                                ? "var(--up-dim)"
+                                : "var(--down-dim)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {sign(pct)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
+
+function mergeMostActiveSectors(data: MostActiveScan): SectorGroup[] {
+  const map = new Map<string, Map<string, ScanItem>>();
+
+  const addGroups = (groups: SectorGroup[]) => {
+    for (const group of groups) {
+      if (!map.has(group.sector)) {
+        map.set(group.sector, new Map());
+      }
+
+      const sectorMap = map.get(group.sector)!;
+
+      for (const item of group.items) {
+        const existing = sectorMap.get(item.ticker);
+
+        if (!existing) {
+          sectorMap.set(item.ticker, {
+            ...item,
+          });
+        } else {
+          sectorMap.set(item.ticker, {
+            ...existing,
+            ...item,
+            volume: item.volume ?? existing.volume,
+            rvol: item.rvol ?? existing.rvol,
+          });
+        }
+      }
+    }
+  };
+
+  addGroups(data.byVolume);
+  addGroups(data.byRelVolume);
+
+  return Array.from(map.entries())
+    .map(([sector, items]) => ({
+      sector,
+      items: Array.from(items.values()),
+    }))
+    .sort((a, b) => b.items.length - a.items.length);
+}
+
+
 /** Most Active tab — top volume + top relative volume, by sector. */
 function MostActiveTab() {
-  const { data, loading } = useApiResource<MostActiveScan>("/live/scan/most-active");
+  const { data, loading } =
+    useApiResource<MostActiveScan>("/live/scan/most-active");
+
   const [sel, setSel] = useState<string | null>(null);
+
+  if (!data) {
+    return (
+      <div style={{ padding: "14px 18px 18px" }}>
+        <DataState
+          loading={loading}
+          label="Generating scan…"
+        />
+      </div>
+    );
+  }
+
+  const sectors = mergeMostActiveSectors(data);
+
+  const allItems = sectors.flatMap(s => s.items);
+
+  const gainers = allItems
+    .filter(it => (it.pctChange ?? 0) > 0)
+    .sort((a, b) => (b.pctChange ?? 0) - (a.pctChange ?? 0));
+
+  const losers = allItems
+    .filter(it => (it.pctChange ?? 0) < 0)
+    .sort((a, b) => (a.pctChange ?? 0) - (b.pctChange ?? 0));
+
+  const heaviestVolume = [...allItems]
+    .filter(it => it.volume != null)
+    .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))[0];
+
+  const totalVolume = allItems.reduce(
+    (sum, it) => sum + (it.volume ?? 0),
+    0
+  );
+
+  const rvolItems = allItems.filter(it => it.rvol != null);
+
+  const avgRvol =
+    rvolItems.length > 0
+      ? rvolItems.reduce(
+          (sum, it) => sum + (it.rvol ?? 0),
+          0
+        ) / rvolItems.length
+      : 0;
+
+  const upCount = allItems.filter(
+    it => (it.pctChange ?? 0) > 0
+  ).length;
+
+  const downCount = allItems.filter(
+    it => (it.pctChange ?? 0) < 0
+  ).length;
+
+  const maxPctChange = Math.max(
+    ...allItems.map(it => Math.abs(it.pctChange ?? 0)),
+    1
+  );
+
   return (
-    <div style={{ padding: "14px 18px 18px" }}>
-      <div className="card">
-        <div className="card-h">
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Today&apos;s most active stocks</h3><VendorTag v="polygon" /></div>
-          {data?.generatedAt && <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>as of {scanTime(data.generatedAt)}</span>}
+    <div
+      style={{
+        padding: "14px 18px 24px",
+        maxWidth: 1400,
+        margin: "0 auto",
+      }}
+    >
+      {/* ───────────── TITLE ───────────── */}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 20,
+          marginBottom: 4,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "1.25rem",
+                fontWeight: 800,
+                color: "var(--text-hi)",
+              }}
+            >
+              Most active by sector
+            </h2>
+
+            <VendorTag v="polygon" />
+          </div>
+
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: ".72rem",
+              color: "var(--text-dim-solid)",
+            }}
+          >
+            Today&apos;s top 20 by volume and top 20 by relative volume,
+            merged into one view. Gainers on top, losers below, in every sector.
+          </div>
         </div>
-        <div className="card-b" style={{ maxHeight: "none" }}>
-          {!data ? <DataState loading={loading} label="Generating scan…" /> : (
-            <>
-              <ScanSection title="Today's top 20 volume" color="var(--text-hi)" groups={data.byVolume} onSelect={setSel}
-                render={(it) => `${it.volume != null ? (it.volume / 1e6).toFixed(2) + " mln" : "—"} ${sign(it.pctChange ?? 0)}`} />
-              <ScanSection title="Today's top 20 relative volume (current vs 1-month avg daily volume)" color="var(--text-hi)" groups={data.byRelVolume} onSelect={setSel}
-                render={(it) => `${it.rvol != null ? it.rvol.toFixed(2) + "x" : "—"} ${sign(it.pctChange ?? 0)}`} />
-            </>
-          )}
+
+        <div
+          style={{
+            fontFamily: "var(--f-mono)",
+            fontSize: ".65rem",
+            color: "var(--text-dim-solid)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {scanTime(data.generatedAt)}
         </div>
       </div>
-      {sel && <ScanTray sym={sel} onClose={() => setSel(null)} />}
+
+      {/* ───────────── SUMMARY CARDS ───────────── */}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(4, minmax(0, 1fr))",
+          gap: 10,
+          marginTop: 14,
+          marginBottom: 14,
+        }}
+      >
+        {/* UP / DOWN */}
+        <div className="card" style={{ padding: 14 }}>
+          <div
+            style={{
+              fontSize: ".6rem",
+              fontWeight: 700,
+              color: "var(--text-dim-solid)",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Up / Down
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 8,
+              fontFamily: "var(--f-mono)",
+              fontSize: "1rem",
+              fontWeight: 700,
+            }}
+          >
+            <span style={{ color: "var(--up)" }}>
+              ▲ {upCount}
+            </span>
+
+            <span style={{ color: "var(--down)" }}>
+              ▼ {downCount}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              height: 5,
+              marginTop: 8,
+              borderRadius: 4,
+              overflow: "hidden",
+              background: "var(--down)",
+            }}
+          >
+            <div
+              style={{
+                width: `${
+                  allItems.length
+                    ? (upCount / allItems.length) * 100
+                    : 0
+                }%`,
+                background: "var(--up)",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* BIGGEST GAINER */}
+        <div className="card" style={{ padding: 14 }}>
+          <div
+            style={{
+              fontSize: ".6rem",
+              fontWeight: 700,
+              color: "var(--text-dim-solid)",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Biggest Gainer
+          </div>
+
+          <div
+            style={{
+              marginTop: 7,
+              display: "flex",
+              alignItems: "baseline",
+              gap: 6,
+            }}
+          >
+            <b
+              style={{
+                fontFamily: "var(--f-mono)",
+                fontSize: "1rem",
+                color: "var(--text-hi)",
+              }}
+            >
+              {gainers[0]?.ticker ?? "—"}
+            </b>
+
+            {gainers[0] && (
+              <span
+                className="up"
+                style={{
+                  fontFamily: "var(--f-mono)",
+                  fontWeight: 700,
+                }}
+              >
+                {sign(gainers[0].pctChange ?? 0)}
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 5,
+              fontSize: ".68rem",
+              color: "var(--text-dim-solid)",
+            }}
+          >
+            {sectors.find(s =>
+              s.items.some(i => i.ticker === gainers[0]?.ticker)
+            )?.sector
+              ? titleCaseLabel(
+                  sectors.find(s =>
+                    s.items.some(i => i.ticker === gainers[0]?.ticker)
+                  )!.sector
+                )
+              : "—"}
+          </div>
+        </div>
+
+        {/* BIGGEST LOSER */}
+        <div className="card" style={{ padding: 14 }}>
+          <div
+            style={{
+              fontSize: ".6rem",
+              fontWeight: 700,
+              color: "var(--text-dim-solid)",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Biggest Loser
+          </div>
+
+          <div
+            style={{
+              marginTop: 7,
+              display: "flex",
+              alignItems: "baseline",
+              gap: 6,
+            }}
+          >
+            <b
+              style={{
+                fontFamily: "var(--f-mono)",
+                fontSize: "1rem",
+                color: "var(--text-hi)",
+              }}
+            >
+              {losers[0]?.ticker ?? "—"}
+            </b>
+
+            {losers[0] && (
+              <span
+                className="down"
+                style={{
+                  fontFamily: "var(--f-mono)",
+                  fontWeight: 700,
+                }}
+              >
+                {sign(losers[0].pctChange ?? 0)}
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 5,
+              fontSize: ".68rem",
+              color: "var(--text-dim-solid)",
+            }}
+          >
+            {sectors.find(s =>
+              s.items.some(i => i.ticker === losers[0]?.ticker)
+            )?.sector
+              ? titleCaseLabel(
+                  sectors.find(s =>
+                    s.items.some(i => i.ticker === losers[0]?.ticker)
+                  )!.sector
+                )
+              : "—"}
+          </div>
+        </div>
+
+        {/* HEAVIEST VOLUME */}
+        <div className="card" style={{ padding: 14 }}>
+          <div
+            style={{
+              fontSize: ".6rem",
+              fontWeight: 700,
+              color: "var(--text-dim-solid)",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Heaviest Volume
+          </div>
+
+          <div
+            style={{
+              marginTop: 7,
+              display: "flex",
+              alignItems: "baseline",
+              gap: 7,
+            }}
+          >
+            <b
+              style={{
+                fontFamily: "var(--f-mono)",
+                fontSize: "1rem",
+                color: "var(--text-hi)",
+              }}
+            >
+              {heaviestVolume?.ticker ?? "—"}
+            </b>
+
+            {heaviestVolume?.volume != null && (
+              <span
+                style={{
+                  fontFamily: "var(--f-mono)",
+                  fontWeight: 700,
+                  fontSize: ".78rem",
+                }}
+              >
+                {(heaviestVolume.volume / 1e6).toFixed(1)}M
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 5,
+              fontSize: ".68rem",
+              color: "var(--text-dim-solid)",
+            }}
+          >
+            shares traded ·{" "}
+            {heaviestVolume
+              ? sign(heaviestVolume.pctChange ?? 0)
+              : "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* ───────────── MARKET SUMMARY ───────────── */}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 12,
+          fontSize: ".65rem",
+          color: "var(--text-dim-solid)",
+        }}
+      >
+        <div>
+          <span
+            style={{
+              display: "inline-block",
+              padding: "3px 6px",
+              marginRight: 5,
+              borderRadius: 4,
+              background: "var(--surface-3)",
+              color: "var(--text-hi)",
+              fontFamily: "var(--f-mono)",
+              fontWeight: 700,
+            }}
+          >
+            {(totalVolume / 1e6).toFixed(1)}M
+          </span>
+
+          shares traded
+
+          <span style={{ margin: "0 7px" }}>·</span>
+
+          <span
+            style={{
+              display: "inline-block",
+              padding: "3px 6px",
+              borderRadius: 4,
+              background: "rgba(245,181,68,.14)",
+              color: "var(--warn)",
+              fontFamily: "var(--f-mono)",
+              fontWeight: 700,
+            }}
+          >
+            {avgRvol ? `${avgRvol.toFixed(1)}x` : "—"}
+          </span>
+
+          <span style={{ marginLeft: 5 }}>
+            vs 1-month avg volume
+          </span>
+        </div>
+
+        <span>
+          Sectors ordered by number of active names
+        </span>
+      </div>
+
+      {/* ───────────── SECTOR BOARD ───────────── */}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(3, minmax(0, 1fr))",
+          gap: 10,
+        }}
+      >
+        {sectors.map((sector) => (
+          <div
+            key={sector.sector}
+            style={{
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                background: "var(--surface-1)",
+                border: "1px solid var(--border-soft)",
+                borderRadius: 10,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  padding: "10px 12px 8px",
+                  borderBottom: "1px solid var(--border-soft)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: ".78rem",
+                      fontWeight: 700,
+                      color: "var(--text-hi)",
+                    }}
+                  >
+                    {titleCaseLabel(sector.sector)}
+                  </span>
+                </div>
+              </div>
+
+              {sector.items.map((it) => {
+                const pct = it.pctChange ?? 0;
+                const width = Math.min(
+                  100,
+                  Math.max(
+                    4,
+                    (Math.abs(pct) / maxPctChange) * 100
+                  )
+                );
+
+                return (
+                  <button
+                    key={it.ticker}
+                    type="button"
+                    onClick={() => setSel(it.ticker)}
+                    style={{
+                      width: "100%",
+                      display: "grid",
+                      gridTemplateColumns:
+                        "60px 46px 1fr auto",
+                      alignItems: "center",
+                      gap: 7,
+                      padding: "8px 11px",
+                      border: 0,
+                      borderBottom:
+                        "1px solid var(--border-soft)",
+                      background: "transparent",
+                      color: "inherit",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <b
+                      style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".67rem",
+                        color: "var(--text-hi)",
+                      }}
+                    >
+                      {it.ticker}
+                    </b>
+
+                    <span
+                      style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".56rem",
+                        fontWeight: 700,
+                        padding: "3px 5px",
+                        borderRadius: 4,
+                        background:
+                          it.rvol != null
+                            ? "rgba(245,181,68,.14)"
+                            : "var(--surface-3)",
+                        color:
+                          it.rvol != null
+                            ? "var(--warn)"
+                            : "var(--text-dim-solid)",
+                      }}
+                    >
+                      {it.rvol != null
+                        ? `${it.rvol.toFixed(1)}x`
+                        : it.volume != null
+                          ? `${(it.volume / 1e6).toFixed(1)}M`
+                          : "—"}
+                    </span>
+
+                    <div
+                      style={{
+                        height: 5,
+                        display: "flex",
+                        justifyContent:
+                          pct >= 0
+                            ? "flex-start"
+                            : "flex-end",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(
+                              5,
+                              Math.abs(pct) * 4
+                            )
+                          )}%`,
+                          height: 5,
+                          borderRadius: 2,
+                          background:
+                            pct >= 0
+                              ? "var(--up)"
+                              : "var(--down)",
+                        }}
+                      />
+                    </div>
+
+                    <span
+                      className={cls(pct)}
+                      style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".58rem",
+                        fontWeight: 700,
+                        padding: "4px 6px",
+                        borderRadius: 4,
+                        background:
+                          pct >= 0
+                            ? "var(--up-dim)"
+                            : "var(--down-dim)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {sign(pct)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {sel && (
+        <ScanTray
+          sym={sel}
+          onClose={() => setSel(null)}
+        />
+      )}
     </div>
   );
 }
