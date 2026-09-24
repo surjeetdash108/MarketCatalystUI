@@ -241,7 +241,9 @@ function ThemeDetail({
                 gridTemplateColumns:
                   "minmax(250px, 0.32fr) minmax(0, 1fr)",
                 gap: 14,
-                alignItems: "start",
+                alignItems: "stretch",
+                height: "calc(100vh - 110px)",
+                minHeight: 0,
               }}
             >
               {/* LEFT — companies */}
@@ -249,6 +251,9 @@ function ThemeDetail({
                 className="card"
                 style={{
                   overflow: "hidden",
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
                 }}
               >
                 <div className="card-h">
@@ -271,8 +276,12 @@ function ThemeDetail({
                 <div
                   style={{
                     padding: 8,
+                    overflowY: "auto",
+                    minHeight: 0,
+                    flex: 1,
                   }}
                 >
+
                   {companies.map(c => {
                     const active = c.ticker === selectedTicker;
 
@@ -356,7 +365,8 @@ function ThemeDetail({
                 className="card"
                 style={{
                   minWidth: 0,
-                  overflow: "hidden",
+                  minHeight: 0,
+                  overflowY: "auto",
                 }}
               >
                 {selectedCompany ? (
@@ -478,15 +488,12 @@ export function AiInfrastructureScreen() {
                 return (
                   <div
                     key={t.key}
+                    className="card ai-theme-card"
                     onClick={() => setThemeKey(t.key)}
                     style={{
                       cursor: "pointer",
                       minHeight: 190,
-                      background: "var(--surface-1)",
-                      border: "1px solid var(--border-soft)",
-                      borderRadius: 12,
                       overflow: "hidden",
-                      boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
                     }}
                   >
                     <div

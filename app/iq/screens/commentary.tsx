@@ -226,10 +226,10 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
     <article
       style={{
         display: "grid",
-        gridTemplateColumns: "16px 74px minmax(0, 1fr)",
-        columnGap: 12,
+        gridTemplateColumns: "44px 66px minmax(0, 1fr)",
+        columnGap: 20,
         alignItems: "stretch",
-        padding: "26px 22px 27px",
+        padding: "2px 20px 10px",
         borderBottom:
           i < total - 1
             ? "1px solid var(--border-soft)"
@@ -246,7 +246,7 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
           justifyContent: "center",
           fontFamily:
             "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-          fontSize: 10,
+          fontSize: 14,
           color: "var(--text-dim-solid)",
           whiteSpace: "nowrap",
         }}
@@ -346,7 +346,7 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
         {item.summary && (
           <div
             style={{
-              marginTop: 11,
+              marginTop: 6,
               // color: "var(--text-dim-solid)",
               color: "var(--text)",
               fontSize: 14,
@@ -369,7 +369,7 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
             alignItems: "center",
             gap: 9,
             flexWrap: "wrap",
-            marginTop: 17,
+            marginTop: 8,
             color: "var(--text-dim-solid)",
             fontFamily:
               "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
