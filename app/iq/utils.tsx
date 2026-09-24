@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { mapEarningsToBars, type ChartEarnings } from "./chart-earnings";
 export type { ChartEarnings };
 import { useState, useRef, useCallback, useMemo, useId, useEffect } from "react";
@@ -539,14 +538,44 @@ const MA_WARMUP_TF: Record<string, string> = {
   "3M": "5Y", "6M": "5Y", "1Y": "5Y",
 };
 
+// Timeframes backed by real DAILY bars (same split as MA_WARMUP_TF above) all
+// draw from the SAME longest-available daily series (5Y) — so scroll-to-zoom
+// can keep revealing real history instead of hard-stopping at whatever the
+// selected button alone would have fetched (e.g. 3M's own ~64 bars). Intraday
+// timeframes (1D/1W/1M) stay bounded by what they fetch: there's no coarser
+// real series to expand into without fabricating one.
+const DAILY_TF = new Set(["3M", "6M", "1Y", "5Y"]);
+const POOL_TF = "5Y";
+// Initial visible window (in bars), so switching 3M/6M/1Y/5Y changes how much
+// of the pool starts zoomed in, not what's fetched — 5Y itself opens fully
+// zoomed out to the whole pool.
+const DAILY_INITIAL_LEN: Record<string, number> = { "3M": 64, "6M": 128, "1Y": 252 };
+
 const MA_PERS = [9, 21, 50, 200];
 const MA_COLS = ['#F5B544', '#F5B544', '#4ADE80', '#4ADE80'];
 const EMA_COLS = ['#A7F3C0', '#2FB6A8', '#A7F3C0', '#EC8585'];
+
+const TF_LABELS: Record<string, string> = {
+  "1D": "1 day", "1W": "1 week", "1M": "1 month", "3M": "3 months", "6M": "6 months", "1Y": "1 year", "5Y": "5 years",
+};
+
+/** Small open/closed eye glyph for the HUD legend's per-row visibility toggle. */
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z" />
+      <circle cx="8" cy="8" r="2" />
+      {off && <line x1="1.5" y1="1.5" x2="14.5" y2="14.5" />}
+    </svg>
+  );
+}
 
 type CandleChartProps = {
   sym: string; tf: string; px: number;
   maStep?: number; emaStep?: number;
   showVol?: boolean; chartType?: string;
+  /** Exchange shown in the HUD legend's header row (e.g. "NASDAQ"). Omitted if not passed. */
+  exchange?: string;
   /** Real OHLCV bars for this ticker/timeframe, oldest-first. */
   realBars?: OHLCBar[];
   /** Latest live (delayed) price, folded onto the most recent real bar so the chart updates in place. */
@@ -571,10 +600,39 @@ export function CandleChart(props: CandleChartProps) {
 }
 
 function CandleChartInner({
-  sym, tf, px, maStep = 0, emaStep = 0, showVol = true, chartType = "candles", realBars, live,
+  sym, tf, px, maStep = 0, emaStep = 0, showVol = true, chartType = "candles", exchange, realBars, live,
   earnings = [],
 }: CandleChartProps) {
-  const [tip, setTip] = useState<{ node: ReactNode; left: number } | null>(null);
+  /** Bar index under the pointer — drives the crosshair guides, the right-axis
+   *  price readout, and the HUD's OHLC row (falls back to the last bar). */
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  /** Which HUD legend rows are dimmed (eye toggle) or removed (× button) —
+   *  keyed by a stable id ("vol", "ma50", "ema200", …) so state survives a
+   *  maStep/emaStep change that shifts array indices. Local to this chart
+   *  instance: it only hides the line here, it doesn't reach back into the
+   *  parent's MA/EMA step count. */
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  // Reset when the chart is reused for a different ticker. Adjusted DURING
+  // render off a remembered prop (same pattern as useTickerLogo's prevSym
+  // above), not in an effect, so a symbol change never flashes the previous
+  // ticker's hidden/removed legend rows for a frame.
+  const [prevHudSym, setPrevHudSym] = useState(sym);
+  if (prevHudSym !== sym) {
+    setPrevHudSym(sym);
+    setHiddenIds(new Set());
+    setRemovedIds(new Set());
+  }
+  const toggleHiddenId = useCallback((id: string) => {
+    setHiddenIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const removeId = useCallback((id: string) => {
+    setRemovedIds(prev => new Set(prev).add(id));
+  }, []);
   /** Which earnings dot is open. Index into `erMarks`, or null. */
   const [erOpen, setErOpen] = useState<number | null>(null);
   /** Held open by a click, so it survives the pointer leaving the dot. */
@@ -601,10 +659,18 @@ function CandleChartInner({
   // A timer outliving the chart would setState on an unmounted component.
   useEffect(() => cancelErClose, [cancelErClose]);
 
+  const isDailyTf = DAILY_TF.has(tf);
+  // Daily timeframes all read from the SAME longest daily series (5Y) instead
+  // of only what the selected button itself fetched — see DAILY_TF above.
+  // Skipped entirely (enabled=false) for intraday timeframes and when the
+  // button already IS 5Y, so this never fires a redundant second request.
+  const { bars: poolBars } = useBackendBars(sym, POOL_TF, isDailyTf && tf !== POOL_TF);
+  const baseBars = isDailyTf ? (tf === POOL_TF ? realBars : (poolBars ?? realBars)) : realBars;
+
   const data = useMemo(() => {
     // Guaranteed non-empty (>= 2 bars) by the CandleChart wrapper above; the
     // empty fallback is a type-safe no-op that can never fabricate data.
-    const base = realBars && realBars.length > 1 ? realBars : [];
+    const base = baseBars && baseBars.length > 1 ? baseBars : [];
     if (!(live && live.price > 0 && base.length > 1)) return base;
 
     // Overlay the live price onto the last bar ONLY when that bar is the
@@ -630,11 +696,14 @@ function CandleChartInner({
     const h = Math.max(last.h, live.high ?? c, c);
     const l = Math.min(last.l, live.low ?? c, c);
     return [...base.slice(0, -1), { ...last, c, h, l }];
-  }, [sym, tf, px, realBars, live]);
+  }, [sym, tf, px, baseBars, live]);
 
   // Longer same-granularity series, fetched ONLY while an MA/EMA overlay is on,
-  // purely to seed those averages (see MA_WARMUP_TF). Nothing from it is drawn.
-  const warmupTf = (maStep > 0 || emaStep > 0) ? MA_WARMUP_TF[tf] : undefined;
+  // purely to seed those averages (see MA_WARMUP_TF). Nothing from it is
+  // drawn. Skipped for every daily timeframe (3M/6M/1Y/5Y): `data` there is
+  // already the 5Y pool, so a separate warm-up fetch would just re-request
+  // the same series `poolBars` already holds.
+  const warmupTf = (maStep > 0 || emaStep > 0) && !isDailyTf ? MA_WARMUP_TF[tf] : undefined;
   const { bars: warmupSource } = useBackendBars(sym, warmupTf ?? "5Y", warmupTf != null);
   const warmupBars = useMemo(() => {
     if (!warmupTf || !warmupSource || data.length === 0) return [] as OHLCBar[];
@@ -647,14 +716,65 @@ function CandleChartInner({
   }, [warmupTf, warmupSource, data]);
 
   const n = data.length;
+
+  // Moving averages, computed over [warm-up bars ..., all of `data`] — see the
+  // note further down (by maPaths) for why full history matters, not just the
+  // visible window. VALUES only, computed here (before the price axis below)
+  // so a slow overlay like SMA200 can widen that axis to fit it instead of
+  // being silently clipped at the plot's top/bottom edge. The actual drawn
+  // PATHS are sliced to the zoom window once that's known, further below.
+  const seedCount = warmupBars.length;
+  const maSeries = seedCount ? [...warmupBars, ...data] : data;
+  const maArrs = MA_PERS.slice(0, maStep).map(p => _sma(maSeries, p));
+  const emaArrs = MA_PERS.slice(0, emaStep).map(p => _ema(maSeries, p));
+
+  // ── Zoom / pan ────────────────────────────────────────────────────────
+  // viewStart/viewLen describe a bar-index window into `data`; X()/Y() and
+  // every series drawn below read `visible` (that window), not `data` — the
+  // full series only matters for warm-up depth and the window's own bounds.
+  const minVisible = Math.min(12, n);
+  const [viewStart, setViewStart] = useState(0);
+  const [viewLen, setViewLen] = useState(n);
+  // Reset whenever the underlying series changes identity (ticker, timeframe,
+  // or its bar count) — adjusted DURING render (same remembered-prop pattern
+  // as prevHudSym above), so switching timeframe never leaves a stale,
+  // out-of-range window from the previous series. A daily timeframe opens
+  // zoomed to roughly what that button has always meant (the last 3mo/6mo/
+  // 1yr) even though `data` now holds up to 5 years to scroll into — 5Y and
+  // every intraday timeframe open fully zoomed out, as before.
+  const viewKey = `${sym}|${tf}|${n}`;
+  const [prevViewKey, setPrevViewKey] = useState(viewKey);
+  if (prevViewKey !== viewKey) {
+    setPrevViewKey(viewKey);
+    const initialLen = isDailyTf ? Math.min(n, DAILY_INITIAL_LEN[tf] ?? n) : n;
+    setViewStart(Math.max(0, n - initialLen));
+    setViewLen(initialLen);
+  }
+  const clampedLen = Math.max(minVisible, Math.min(viewLen, n));
+  const clampedStart = Math.max(0, Math.min(viewStart, n - clampedLen));
+  const viewEnd = clampedStart + clampedLen;
+  const visible = data.slice(clampedStart, viewEnd);
+  const vn = visible.length;
+  // The highlighted "current price" box only means something while the window
+  // actually reaches today's bar — panned away from it, there's no "current"
+  // price to highlight on this slice.
+  const atLatest = viewEnd === n;
+
   const W = 720, PH = cs(224), VH = showVol ? cs(54) : 0, GAP = showVol ? 10 : 0, PADT = 12, PADB = cs(26), axisW = 46;
   const H = PADT + PH + GAP + VH + PADB;
   const plotW = W - axisW - 8;
-  const cw = plotW / n;
+  const cw = plotW / vn;
   const X = (i: number) => 6 + i * cw + cw / 2;
-  const mn = Math.min(...data.map(x => x.l)), mx2 = Math.max(...data.map(x => x.h)), rng = (mx2 - mn) || 1;
+  // Moving-average VALUES actually inside the visible window — sliced here so
+  // the price axis widens to fit a slow overlay (e.g. SMA200) that sits above
+  // or below the visible candles, instead of clipping it at the plot's top/
+  // bottom edge, which read as a stray line floating above the bars.
+  const maVisVals = maArrs.map(arr => arr.slice(seedCount + clampedStart, seedCount + viewEnd));
+  const emaVisVals = emaArrs.map(arr => arr.slice(seedCount + clampedStart, seedCount + viewEnd));
+  const overlayVals = [...maVisVals, ...emaVisVals].flat().filter((v): v is number => v != null);
+  const mn = Math.min(...visible.map(x => x.l), ...overlayVals), mx2 = Math.max(...visible.map(x => x.h), ...overlayVals), rng = (mx2 - mn) || 1;
   const Y = (v: number) => PADT + PH * (1 - (v - mn) / rng);
-  const vmax = Math.max(...data.map(x => x.v)) || 1;
+  const vmax = Math.max(...visible.map(x => x.v)) || 1;
   const VY0 = PADT + PH + GAP, VYb = VY0 + VH;
 
   const buildPath = (vals: (number | null)[]): string => {
@@ -674,15 +794,17 @@ function CandleChartInner({
   });
 
   // X-axis date/time ticks — a handful of evenly spaced bars, deduped so two
-  // ticks never land on the same index when n is small.
-  const xTickCount = Math.min(6, n);
+  // ticks never land on the same index when the visible window is small.
+  const xTickCount = Math.min(6, vn);
   const xTickIdx = xTickCount <= 1
     ? [0]
-    : [...new Set(Array.from({ length: xTickCount }, (_, i) => Math.round(i * (n - 1) / (xTickCount - 1))))];
+    : [...new Set(Array.from({ length: xTickCount }, (_, i) => Math.round(i * (vn - 1) / (xTickCount - 1))))];
   const xAxisY = PADT + PH + GAP + VH + 15;
 
-  // Earnings dots, placed by date — see chart-earnings.ts for the rules.
-  const erMarks = mapEarningsToBars(data, earnings);
+  // Earnings dots, placed by date within the VISIBLE window — see
+  // chart-earnings.ts for the rules. `i` comes back relative to `visible`,
+  // which is exactly what X()/visible[i] below expect.
+  const erMarks = mapEarningsToBars(visible, earnings);
 
   const ct = chartType.toLowerCase();
   /**
@@ -694,56 +816,170 @@ function CandleChartInner({
    * colour". The gauge above already generates its id this way.
    */
   const areaGradId = `${useId()}-carea`;
-  const trendUp = data[n - 1].c >= data[0].c;
+  const trendUp = visible[vn - 1].c >= visible[0].c;
   const lineColor = trendUp ? 'var(--up)' : 'var(--down)';
-  const linePts = data.map((d, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(d.c).toFixed(1)}`).join(' ');
-  const areaFill = linePts + ` L${X(n - 1).toFixed(1)} ${(PADT + PH).toFixed(1)} L${X(0).toFixed(1)} ${(PADT + PH).toFixed(1)} Z`;
+  const linePts = visible.map((d, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(d.c).toFixed(1)}`).join(' ');
+  const areaFill = linePts + ` L${X(vn - 1).toFixed(1)} ${(PADT + PH).toFixed(1)} L${X(0).toFixed(1)} ${(PADT + PH).toFixed(1)} Z`;
 
-  // Moving averages are computed over [warm-up bars ..., visible bars] and then
-  // sliced back to the visible range.
-  //
-  // Computing them over the visible window alone was wrong twice over: _sma and
-  // _ema return null for the first `period - 1` bars, so on a 3M chart (64 daily
-  // bars) MA50/EMA50 only began ~78% of the way across and MA200/EMA200 never
-  // drew at all — the "lines start in the middle" — and where a line DID draw,
-  // an EMA seeded from the first bar of a 64-bar window is not the EMA any
-  // charting package reports, because a real one carries years of prior closes.
-  // Seeding from actual earlier bars fixes the values and the span together.
-  const seedCount = warmupBars.length;
-  const maSeries = seedCount ? [...warmupBars, ...data] : data;
-  const maPaths = MA_PERS.slice(0, maStep).map(p => buildPath(_sma(maSeries, p).slice(seedCount)));
-  const emaPaths = MA_PERS.slice(0, emaStep).map(p => buildPath(_ema(maSeries, p).slice(seedCount)));
+  // Moving averages are computed over [warm-up bars ..., all of `data`], not
+  // just the visible window (maArrs/emaArrs, up above) — over the visible
+  // window alone, _sma/_ema return null for the first `period - 1` bars, so
+  // on a 3M chart (64 daily bars) MA50/EMA50 only began ~78% of the way
+  // across and MA200/EMA200 never drew at all, and where a line DID draw, an
+  // EMA seeded from the first visible bar is not the EMA any charting package
+  // reports, because a real one carries years of prior closes. The VALUE
+  // (maVals/emaVals) always reads the true last entry, so the legend shows
+  // today's reading regardless of what the chart is currently scrolled to;
+  // the PATH uses maVisVals/emaVisVals (computed up by the price axis, which
+  // they also widen to fit).
+  const maPaths = maVisVals.map(vals => buildPath(vals));
+  const maVals = maArrs.map(arr => arr[arr.length - 1]);
+  const emaPaths = emaVisVals.map(vals => buildPath(vals));
+  const emaVals = emaArrs.map(arr => arr[arr.length - 1]);
+
+  // Drag-to-pan: a ref (not state) so mid-drag mousemoves don't each trigger
+  // their own re-render just to remember where the drag started — only the
+  // resulting viewStart change needs to.
+  const dragRef = useRef<{ startClientX: number; startView: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<SVGRectElement>) => {
+    dragRef.current = { startClientX: e.clientX, startView: clampedStart };
+    setIsDragging(true);
+  }, [clampedStart]);
+
+  const endDrag = useCallback(() => {
+    dragRef.current = null;
+    setIsDragging(false);
+  }, []);
 
   const handleMove = useCallback((e: React.MouseEvent<SVGRectElement>) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     const sx = W / rect.width;
+    if (dragRef.current) {
+      // Content follows the pointer: dragging right pans back to earlier
+      // bars, dragging left pans forward — the window moves opposite to
+      // viewStart's own direction, hence the minus.
+      const dxSvg = (e.clientX - dragRef.current.startClientX) * sx;
+      const next = Math.round(dragRef.current.startView - dxSvg / cw);
+      setViewStart(Math.max(0, Math.min(next, n - clampedLen)));
+      return;
+    }
     const mx = (e.clientX - rect.left) * sx;
     let i = Math.round((mx - 6) / cw - 0.5);
-    i = Math.max(0, Math.min(n - 1, i));
-    const d = data[i];
-    const chg = ((d.c - d.o) / d.o * 100);
-    const col = chg >= 0 ? "var(--up)" : "var(--down)";
-    const hostW = rect.width;
-    const px2 = (X(i) / W) * hostW;
-    setTip({
-      node: (
-        <>
-          O <b>${d.o.toFixed(2)}</b>{"  "}H <b>${d.h.toFixed(2)}</b>{"  "}
-          L <b>${d.l.toFixed(2)}</b>{"  "}C <b>${d.c.toFixed(2)}</b>{" "}
-          <span style={{ color: col }}>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}%</span>
-        </>
-      ),
-      left: Math.min(hostW - 200, Math.max(4, px2 + 10)),
-    });
-  }, [data, cw, n, W]);
+    i = Math.max(0, Math.min(vn - 1, i));
+    setHoverIdx(i);
+  }, [cw, vn, W, n, clampedLen]);
+
+  // Double-click resets to what the selected timeframe button has always
+  // meant (e.g. 3M's last ~64 bars), not the full multi-year pool it now
+  // scrolls into — same initial window the tf-change reset above computes.
+  const resetView = useCallback(() => {
+    const initialLen = isDailyTf ? Math.min(n, DAILY_INITIAL_LEN[tf] ?? n) : n;
+    setViewStart(Math.max(0, n - initialLen));
+    setViewLen(initialLen);
+  }, [n, isDailyTf, tf]);
+
+  // Scroll-to-zoom, anchored on the bar under the cursor so that bar stays
+  // put as the window narrows/widens. Attached as a NATIVE listener (not
+  // React's onWheel) with { passive: false } — React's synthetic wheel
+  // handler is passive by default, which silently drops preventDefault() and
+  // lets the page itself scroll instead of zooming the chart.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const sx = W / rect.width;
+      const mx = (e.clientX - rect.left) * sx;
+      const anchorRel = Math.max(0, Math.min(vn - 1, Math.round((mx - 6) / cw - 0.5)));
+      const anchorAbs = clampedStart + anchorRel;
+      const factor = e.deltaY < 0 ? 0.85 : 1 / 0.85; // wheel up/forward = zoom in
+      const nextLen = Math.max(minVisible, Math.min(n, Math.round(clampedLen * factor)));
+      const frac = clampedLen > 0 ? anchorRel / clampedLen : 0.5;
+      const nextStart = Math.round(anchorAbs - frac * nextLen);
+      setViewLen(nextLen);
+      setViewStart(Math.max(0, Math.min(nextStart, n - nextLen)));
+    };
+    el.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => el.removeEventListener('wheel', onWheelNative);
+  }, [W, vn, cw, clampedStart, clampedLen, minVisible, n]);
+
+  const lastBar = data[n - 1];
+  // hoverIdx is a window-relative index set the last time the pointer moved —
+  // a wheel-zoom can shrink `vn` in between without any mousemove to re-clamp
+  // it, so it's read defensively here rather than trusted as still in range.
+  // Out of range counts as "not hovering": the crosshair/point disappears
+  // instead of pinning itself to whatever bar is now at the old index.
+  const hoverInRange = hoverIdx != null && hoverIdx < vn;
+  // The bar the HUD's OHLC row and the crosshair describe — the hovered bar,
+  // or the latest one in the current window when the pointer isn't over the
+  // chart (which, panned away from today, is that window's own last bar).
+  const dispBar = visible[hoverInRange ? (hoverIdx as number) : vn - 1];
+  const dispChg = (dispBar.c - dispBar.o) / dispBar.o * 100;
 
   return (
     <div style={{ position: "relative" }}>
-      {tip && (
-        <div className="chart-tip" style={{ opacity: 1, left: tip.left, top: 14 }}
-        >{tip.node}</div>
-      )}
+      {/* HUD legend — ticker/interval header, an OHLC+change readout that
+          tracks the crosshair (falls back to the latest bar), then one row
+          per active overlay with a live value, an eye (dim without removing)
+          and a × (drop it from this list) — matching a real chart legend
+          instead of bare SVG text floating over the candles. */}
+      <div className="chart-hud">
+        <div className="chart-hud-head">
+          <span className="chart-hud-sym">{sym}</span>
+          <span className="chart-hud-tf">· {TF_LABELS[tf] ?? tf}{exchange ? ` · ${exchange}` : ""}</span>
+        </div>
+        <div className="chart-hud-ohlc">
+          O<b>${dispBar.o.toFixed(2)}</b>H<b>${dispBar.h.toFixed(2)}</b>L<b>${dispBar.l.toFixed(2)}</b>C<b>${dispBar.c.toFixed(2)}</b>
+          <span style={{ color: dispChg >= 0 ? "var(--up)" : "var(--down)" }}>
+            {dispChg >= 0 ? "+" : ""}{dispChg.toFixed(2)}%
+          </span>
+        </div>
+        {showVol && !removedIds.has("vol") && (
+          <div className={`chart-hud-row${hiddenIds.has("vol") ? " dim" : ""}`}>
+            <i style={{ background: "var(--text-dim-solid)" }} />Volume <b>{fmt(lastBar.v)}</b>
+            <span className="chart-hud-acts">
+              <button type="button" onClick={() => toggleHiddenId("vol")} title={hiddenIds.has("vol") ? "Show" : "Hide"} aria-label="Toggle volume">
+                <EyeIcon off={hiddenIds.has("vol")} />
+              </button>
+              <button type="button" onClick={() => removeId("vol")} title="Remove" aria-label="Remove volume">✕</button>
+            </span>
+          </div>
+        )}
+        {maVals.map((v, idx) => {
+          const id = `ma${MA_PERS[idx]}`;
+          if (v == null || removedIds.has(id)) return null;
+          return (
+            <div key={id} className={`chart-hud-row${hiddenIds.has(id) ? " dim" : ""}`}>
+              <i style={{ background: MA_COLS[idx] }} />MA {MA_PERS[idx]} <b>${v.toFixed(2)}</b>
+              <span className="chart-hud-acts">
+                <button type="button" onClick={() => toggleHiddenId(id)} title={hiddenIds.has(id) ? "Show" : "Hide"} aria-label={`Toggle MA ${MA_PERS[idx]}`}>
+                  <EyeIcon off={hiddenIds.has(id)} />
+                </button>
+                <button type="button" onClick={() => removeId(id)} title="Remove" aria-label={`Remove MA ${MA_PERS[idx]}`}>✕</button>
+              </span>
+            </div>
+          );
+        })}
+        {emaVals.map((v, idx) => {
+          const id = `ema${MA_PERS[idx]}`;
+          if (v == null || removedIds.has(id)) return null;
+          return (
+            <div key={id} className={`chart-hud-row${hiddenIds.has(id) ? " dim" : ""}`}>
+              <i style={{ background: EMA_COLS[idx] }} />EMA {MA_PERS[idx]} <b>${v.toFixed(2)}</b>
+              <span className="chart-hud-acts">
+                <button type="button" onClick={() => toggleHiddenId(id)} title={hiddenIds.has(id) ? "Show" : "Hide"} aria-label={`Toggle EMA ${MA_PERS[idx]}`}>
+                  <EyeIcon off={hiddenIds.has(id)} />
+                </button>
+                <button type="button" onClick={() => removeId(id)} title="Remove" aria-label={`Remove EMA ${MA_PERS[idx]}`}>✕</button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
       {erOpen != null && erMarks[erOpen] && (() => {
         const { i, e } = erMarks[erOpen];
         const surp = e.epsActual != null && e.epsEstimate != null && e.epsEstimate !== 0
@@ -786,7 +1022,8 @@ function CandleChartInner({
           </div>
         );
       })()}
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", cursor: isDragging ? "grabbing" : "grab", touchAction: "none" }}
+        onDoubleClick={resetView}>
         {/* Grid */}
         {gridLines.map(({ yy, val }) => (
           <g key={yy}>
@@ -794,18 +1031,58 @@ function CandleChartInner({
             <text className="caxis" x={W - axisW + 4} y={yy + 3}>${val > 500 ? Math.round(val) : val.toFixed(2)}</text>
           </g>
         ))}
+        {/* Current-price marker — a highlighted box on the right axis at the
+            latest close, so the live price reads at a glance against the
+            plain gridline labels above/below it. Only while the window
+            actually reaches today's bar (panned away, there's no "current"
+            price on this slice) and swapped for the crosshair's own
+            (neutral-coloured) box while hovering, so the two never stack. */}
+        {!hoverInRange && atLatest && (() => {
+          const yLast = Y(lastBar.c);
+          const label = lastBar.c > 500 ? `$${Math.round(lastBar.c)}` : `$${lastBar.c.toFixed(2)}`;
+          return (
+            <g>
+              <line x1="6" x2={W - axisW} y1={yLast} y2={yLast} stroke="var(--brand)" strokeWidth="1" strokeDasharray="3 3" opacity={0.55} />
+              <rect x={W - axisW + 1} y={yLast - 7.5} width={axisW - 3} height={15} rx={3} fill="var(--brand)" />
+              <text x={W - axisW + (axisW - 3) / 2 + 1} y={yLast + 3.5} textAnchor="middle"
+                style={{ fill: "var(--on-brand)", fontFamily: "var(--f-mono)", fontSize: "0.5625rem", fontWeight: 700 }}>
+                {label}
+              </text>
+            </g>
+          );
+        })()}
+        {/* Crosshair — dashed guide lines through the hovered bar, with its
+            price echoed on the right axis (same box style as the current-price
+            marker, but neutral so it doesn't read as "the" price). */}
+        {hoverInRange && (() => {
+          const cx = X(hoverIdx as number), cy = Y(dispBar.c);
+          const label = dispBar.c > 500 ? `$${Math.round(dispBar.c)}` : `$${dispBar.c.toFixed(2)}`;
+          return (
+            <g style={{ pointerEvents: "none" }}>
+              <line x1={cx} x2={cx} y1={PADT} y2={PADT + PH + GAP + VH} stroke="var(--text-dim-solid)" strokeWidth="1" strokeDasharray="3 3" opacity={0.55} />
+              <line x1="6" x2={W - axisW} y1={cy} y2={cy} stroke="var(--text-dim-solid)" strokeWidth="1" strokeDasharray="3 3" opacity={0.55} />
+              <rect x={W - axisW + 1} y={cy - 7.5} width={axisW - 3} height={15} rx={3} fill="var(--surface-3)" stroke="var(--border-strong)" strokeWidth="1" />
+              <text x={W - axisW + (axisW - 3) / 2 + 1} y={cy + 3.5} textAnchor="middle"
+                style={{ fill: "var(--text-hi)", fontFamily: "var(--f-mono)", fontSize: "0.5625rem", fontWeight: 700 }}>
+                {label}
+              </text>
+            </g>
+          );
+        })()}
         {/* Volume bars */}
-        {showVol && data.map((d, i) => {
+        {showVol && !removedIds.has("vol") && !hiddenIds.has("vol") && visible.map((d, i) => {
           const bh = Math.max(1, (d.v / vmax) * (VH - 4));
           const bw2 = Math.max(1.2, cw * 0.62);
           return <rect key={`v${i}`} x={X(i) - bw2 / 2} y={VYb - bh} width={bw2} height={bh}
             fill={d.c >= d.o ? "var(--up)" : "var(--down)"} opacity={0.34} />;
         })}
-        {showVol && <text className="caxis" x="6" y={VY0 + 10}>Vol</text>}
+        {showVol && !removedIds.has("vol") && !hiddenIds.has("vol") && <text className="caxis" x="6" y={VY0 + 10}>Vol</text>}
         {/* Average-volume reference line — helps spot above-average (often
-            institutional) volume days at a glance. */}
-        {showVol && n > 0 && (() => {
-          const avgV = data.reduce((s, d) => s + d.v, 0) / n;
+            institutional) volume days at a glance. Averaged over the visible
+            window, so it re-centres as you zoom/pan instead of quoting a
+            fixed-range number against a scale that's now showing a slice. */}
+        {showVol && !removedIds.has("vol") && !hiddenIds.has("vol") && vn > 0 && (() => {
+          const avgV = visible.reduce((s, d) => s + d.v, 0) / vn;
           const ah = Math.max(1, (avgV / vmax) * (VH - 4));
           const ay = VYb - ah;
           return (
@@ -834,7 +1111,7 @@ function CandleChartInner({
           <path d={linePts} fill="none" stroke={lineColor} strokeWidth="1.8" />
         )}
         {/* OHLC Bars */}
-        {ct === 'bars' && data.map((d, i) => {
+        {ct === 'bars' && visible.map((d, i) => {
           const up2 = d.c >= d.o;
           const col = up2 ? 'var(--up)' : 'var(--down)';
           const tw = Math.max(2, cw * 0.3);
@@ -847,7 +1124,7 @@ function CandleChartInner({
           );
         })}
         {/* Candles + Hollow */}
-        {(ct === 'candles' || ct === 'hollow') && data.map((d, i) => {
+        {(ct === 'candles' || ct === 'hollow') && visible.map((d, i) => {
           const up2 = d.c >= d.o;
           const col = up2 ? 'var(--up)' : 'var(--down)';
           const bt = Y(Math.max(d.o, d.c)), bb = Y(Math.min(d.o, d.c));
@@ -861,47 +1138,46 @@ function CandleChartInner({
             </g>
           );
         })}
-        {/* Legend backing panel — keeps the MA/EMA labels legible instead of
-            overlapping (interfering with) the candles behind them. */}
-        {(maStep + emaStep) > 0 && (
-          <rect x={7} y={PADT + 2} width={62} height={(maStep + emaStep) * 12 + 4} rx={5}
-            fill="var(--surface-0)" opacity={0.72} />
-        )}
-        {/* MA overlays */}
-        {maPaths.map((d, idx) => d && (
-          <g key={`ma${idx}`}>
-            <path d={d} fill="none" stroke={MA_COLS[idx]} strokeWidth="1.4" opacity={0.95} />
-            <text className="caxis" x={10} y={PADT + 11 + idx * 12} fill={MA_COLS[idx]}>— MA{MA_PERS[idx]}</text>
-          </g>
-        ))}
+        {/* MA overlays — labels now live in the HTML .chart-hud legend above,
+            not as SVG text, so they read like a real chart legend instead of
+            annotations floating over the candles. Skipped when the legend's
+            eye/× has hidden or removed that period. */}
+        {maPaths.map((d, idx) => {
+          const id = `ma${MA_PERS[idx]}`;
+          if (!d || removedIds.has(id) || hiddenIds.has(id)) return null;
+          return <path key={id} d={d} fill="none" stroke={MA_COLS[idx]} strokeWidth="1.4" opacity={0.95} />;
+        })}
         {/* EMA overlays */}
-        {emaPaths.map((d, idx) => d && (
-          <g key={`ema${idx}`}>
-            <path d={d} fill="none" stroke={EMA_COLS[idx]} strokeWidth="1.4" strokeDasharray="4 3" opacity={0.95} />
-            <text className="caxis" x={10} y={PADT + 11 + (maStep + idx) * 12} fill={EMA_COLS[idx]}>·· EMA{MA_PERS[idx]}</text>
-          </g>
-        ))}
+        {emaPaths.map((d, idx) => {
+          const id = `ema${MA_PERS[idx]}`;
+          if (!d || removedIds.has(id) || hiddenIds.has(id)) return null;
+          return <path key={id} d={d} fill="none" stroke={EMA_COLS[idx]} strokeWidth="1.4" strokeDasharray="4 3" opacity={0.95} />;
+        })}
         {/* X-axis date/time ticks — edge ticks anchor inward so their text never clips off the plot */}
         {xTickIdx.map((i, k) => (
           <text key={`x${i}`} className="caxis" x={X(i)} y={xAxisY}
             textAnchor={k === 0 ? "start" : k === xTickIdx.length - 1 ? "end" : "middle"}>
-            {xAxisLabel(data[i].t, tf)}
+            {xAxisLabel(visible[i].t, tf)}
           </text>
         ))}
-        {/* Invisible hover rect */}
+        {/* Invisible hover/drag rect — mousedown starts a pan (handleMove then
+            reads dragRef instead of moving the crosshair); a plain move just
+            updates the crosshair. Scroll-to-zoom is a native listener on the
+            svg itself (see the effect above), not here. */}
         <rect x="6" y={PADT} width={plotW} height={PH + GAP + VH} fill="transparent"
-          onMouseMove={handleMove} onMouseLeave={() => setTip(null)} />
+          onMouseDown={handleMouseDown} onMouseMove={handleMove}
+          onMouseUp={endDrag} onMouseLeave={() => { endDrag(); setHoverIdx(null); }} />
         {/* Earnings dots — one per reported quarter, positioned by date.
             AFTER the hover rect on purpose. SVG hit-testing goes topmost-first
             and does not fall through, so while these were drawn earlier the
             rect above covered every dot and swallowed the pointer: the dots
             could not be hovered OR clicked, and nothing opened. */}
         {erMarks.map(({ i, e }, k) => {
-          const cy = Math.max(PADT + 6, Y(data[i].h) - 10);
+          const cy = Math.max(PADT + 6, Y(visible[i].h) - 10);
           const open = erOpen === k;
           return (
             <g key={`er${i}`} style={{ cursor: "pointer" }}
-              onMouseEnter={() => { cancelErClose(); if (!erPinned) { setErOpen(k); setTip(null); } }}
+              onMouseEnter={() => { cancelErClose(); if (!erPinned) { setErOpen(k); setHoverIdx(null); } }}
               onMouseLeave={() => { if (!erPinned) scheduleErClose(); }}
               onClick={ev => {
                 ev.stopPropagation();
@@ -909,7 +1185,7 @@ function CandleChartInner({
                 // Click pins the card open so it can be read without holding
                 // the pointer still; clicking the same dot again releases it.
                 if (erPinned && open) { setErPinned(false); setErOpen(null); }
-                else { setErOpen(k); setErPinned(true); setTip(null); }
+                else { setErOpen(k); setErPinned(true); setHoverIdx(null); }
               }}>
               {/* Invisible pad: a 4px dot is a hard target on a dense chart. */}
               <circle cx={X(i)} cy={cy} r="11" fill="transparent" />

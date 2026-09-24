@@ -2049,8 +2049,23 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .legend i { width: 18px; height: 10px; display: inline-block; border-radius: 2px; }
 .pulse .p .pmeta { font-family: var(--f-mono); font-size: .6rem; color: var(--text-dim-solid); margin-top: 4px; letter-spacing: .02em; }
 .fundcard.on { border-color: var(--ai); box-shadow: 0 0 0 2px var(--ai-dim); }
-.chart-tip { position: absolute; pointer-events: none; background: var(--surface-0); border: 1px solid var(--border-strong); border-radius: 8px; padding: 7px 9px; font-size: .7rem; font-family: var(--f-mono); color: var(--text); box-shadow: var(--shadow); opacity: 0; transition: opacity .07s; z-index: 6; white-space: nowrap; line-height: 1.5; }
-.chart-tip b { color: var(--text-hi); }
+/* Chart legend (HUD) — ticker/interval header, an OHLC+change readout that
+   tracks the crosshair, then one row per active overlay (Volume / MA / EMA)
+   with a live value and eye/× controls — a real legend instead of bare SVG
+   text floating over the candles. The container ignores the pointer so empty
+   space never blocks chart hover/zoom; rows and their buttons opt back in. */
+.chart-hud { position: absolute; top: 8px; left: 10px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; z-index: 4; max-width: calc(100% - 60px); }
+.chart-hud-head { display: flex; align-items: baseline; gap: 4px; font-family: var(--f-mono); font-size: .74rem; font-weight: 700; color: var(--text-hi); }
+.chart-hud-head .chart-hud-tf { font-weight: 500; color: var(--text-dim-solid); }
+.chart-hud-ohlc { display: flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: .64rem; color: var(--text-dim-solid); margin-bottom: 2px; flex-wrap: wrap; }
+.chart-hud-ohlc b { color: var(--text-hi); font-weight: 600; margin-right: 2px; }
+.chart-hud-row { display: flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: .66rem; color: var(--text-dim-solid); background: var(--surface-0); padding: 1px 4px 1px 4px; border-radius: 4px; opacity: .9; line-height: 1.6; pointer-events: auto; }
+.chart-hud-row.dim { opacity: .42; }
+.chart-hud-row i { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.chart-hud-row b { color: var(--text-hi); font-weight: 600; }
+.chart-hud-acts { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; }
+.chart-hud-acts button { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 3px; color: var(--text-dim-solid); font-size: .62rem; line-height: 1; padding: 0; }
+.chart-hud-acts button:hover { color: var(--text-hi); background: var(--surface-3); }
 .caxis { fill: var(--text-dim-solid); font-family: var(--f-mono); font-size: 0.5625rem; }
 .tbl thead th { position: sticky; top: 0; background: var(--surface-1); z-index: 2; }
 .ai-block .card-h { border-color: #14181B; }
