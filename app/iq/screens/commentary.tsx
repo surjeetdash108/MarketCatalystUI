@@ -215,8 +215,38 @@ function etTimeLabel(iso: string): string {
   return `${hour}:${minute}${dayPeriod}`;
 }
 
+/** Splits `text` on every case-insensitive occurrence of `q` and wraps the
+ *  matches in <mark>, so a search hit is visible even when it's buried in the
+ *  description rather than the headline. Returns the plain string when there's
+ *  no query or no match, so the common case stays a cheap no-op. */
+function highlightMatch(text: string, q: string) {
+  if (!q) return text;
+  const lower = text.toLowerCase();
+  if (!lower.includes(q)) return text;
+  const parts: (string | ReturnType<typeof mkMark>)[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const found = lower.indexOf(q, i);
+    if (found === -1) { parts.push(text.slice(i)); break; }
+    if (found > i) parts.push(text.slice(i, found));
+    parts.push(mkMark(text.slice(found, found + q.length), found));
+    i = found + q.length;
+  }
+  return parts;
+}
+function mkMark(s: string, key: number) {
+  return (
+    <mark
+      key={key}
+      style={{ background: "color-mix(in srgb, var(--brand) 38%, transparent)", color: "inherit", borderRadius: 3, padding: "0 1px" }}
+    >
+      {s}
+    </mark>
+  );
+}
+
 /* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTag, activeCat, marketCap, livePct }: {
+function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTag, activeCat, marketCap, livePct, highlight }: {
   item: NewsArticleDoc; i: number; total: number; onTicker: (ticker: string) => void;
   onAnalysis: (ticker: string) => void;
   /* Both chips on the card are controls, not labels: clicking one filters the
@@ -231,6 +261,9 @@ function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTa
   marketCap?: number | null;
   /** Live %change for the ticker, from the app-wide shared quote poll. */
   livePct?: number | null;
+  /** Trimmed, lowercased search query — matches get wrapped in <mark> in the
+   *  headline and description. Empty string when the search box is empty. */
+  highlight: string;
 }) {
   return (
     <div
@@ -307,11 +340,11 @@ function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTa
             onClick={e => { e.preventDefault(); onTicker(item.ticker); }}
             style={{ cursor: "pointer" }}
             title={`Filter the feed by ${item.ticker}`}
-          >{item.ticker}</b> {item.headline}
+          >{item.ticker}</b> {highlightMatch(item.headline, highlight)}
         </div>
         {item.summary && (
           <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", borderLeft: `2px solid ${catCol(item.category)}55`, paddingLeft: 9, marginTop: 5 }}>
-            {item.summary}
+            {highlightMatch(item.summary, highlight)}
           </div>
         )}
         <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
@@ -992,6 +1025,7 @@ export function CommentaryScreen() {
                   activeCat={catFilter}
                   marketCap={companyByTicker.get(item.ticker)?.marketCap ?? null}
                   livePct={feedQuotes.get(item.ticker)?.pctChange ?? companyByTicker.get(item.ticker)?.pctChange ?? null}
+                  highlight={q}
                 />
               ))}
             </div>
