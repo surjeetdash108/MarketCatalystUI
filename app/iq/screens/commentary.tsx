@@ -215,12 +215,45 @@ function etTimeLabel(iso: string): string {
   return `${hour}:${minute}${dayPeriod}`;
 }
 
+/** Splits `text` on every case-insensitive occurrence of `q` and wraps the
+ *  matches in <mark>, so a search hit is visible even when it's buried in the
+ *  description rather than the headline. Returns the plain string when there's
+ *  no query or no match, so the common case stays a cheap no-op. */
+function highlightMatch(text: string, q: string) {
+  if (!q) return text;
+  const lower = text.toLowerCase();
+  if (!lower.includes(q)) return text;
+  const parts: (string | ReturnType<typeof mkMark>)[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const found = lower.indexOf(q, i);
+    if (found === -1) { parts.push(text.slice(i)); break; }
+    if (found > i) parts.push(text.slice(i, found));
+    parts.push(mkMark(text.slice(found, found + q.length), found));
+    i = found + q.length;
+  }
+  return parts;
+}
+function mkMark(s: string, key: number) {
+  return (
+    <mark
+      key={key}
+      style={{ background: "color-mix(in srgb, var(--brand) 38%, transparent)", color: "inherit", borderRadius: 3, padding: "0 1px" }}
+    >
+      {s}
+    </mark>
+  );
+}
+
 /* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
+function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,highlight}: {
   item: NewsArticleDoc; i: number;total: number;onTicker: (ticker: string) => void;
   onAnalysis: (ticker: string) => void;
   marketCap?: number | null;
   livePct?: number | null;
+  /** Trimmed, lowercased search query — matches get wrapped in <mark> in the
+   *  headline and description. Empty string when the search box is empty. */
+  highlight: string;
 }) {
   return (
     <article
@@ -339,7 +372,7 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
             {item.ticker}
           </span>
           {": "}
-          {item.headline}
+          {highlightMatch(item.headline, highlight)}
         </div>
 
         {/* Summary */}
@@ -358,7 +391,7 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,}: {
               overflow: "hidden",
             }}
           >
-            {item.summary}
+            {highlightMatch(item.summary, highlight)}
           </div>
         )}
 
@@ -1948,6 +1981,7 @@ export function CommentaryScreen() {
                     companyByTicker.get(item.ticker)?.pctChange ??
                     null
                   }
+                  highlight={q}
                 />
               ))}
             </div>

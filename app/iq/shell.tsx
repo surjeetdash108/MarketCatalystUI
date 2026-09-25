@@ -40,7 +40,6 @@ const navItemsByGroup = Object.fromEntries(
   ]),
 ) as Record<NavGroup, { label: string; slug: string; group: string; icon: string; badge: string | null }[]>;
 
-const NAV_SECTIONS_KEY = "iq-nav-open-sections";
 import { type PulseItem } from "./data";
 import { fmt, sign, cls, arr, SemiGauge, DataState, NotAvailable, VendorTag, titleCaseLabel, StockLogo} from "./utils";
 import { NotificationBell } from "./notification-bell";
@@ -829,30 +828,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("iq-nav-collapsed") === "1";
   });
-  // Accordion state. On a first visit only "Home" is open — landing on a rail
-  // where nothing is expanded reads as broken, and Home holds the default
-  // route. Every other section is closed until the user opens it. The choice is
-  // persisted, so a refresh doesn't undo it.
-  const [openSections, setOpenSections] = useState<string[]>(() => {
-    if (typeof window === "undefined") return ["Home"];
-    try {
-      const raw = localStorage.getItem(NAV_SECTIONS_KEY);
-      return raw ? (JSON.parse(raw) as string[]) : ["Home"];
-    } catch {
-      return ["Home"];
-    }
-  });
-  const toggleSection = useCallback((group: string) => {
-    setOpenSections(prev => {
-      const next = prev.includes(group) ? prev.filter(g => g !== group) : [...prev, group];
-      try {
-        localStorage.setItem(NAV_SECTIONS_KEY, JSON.stringify(next));
-      } catch {
-        // Private-mode / quota failures must not break navigation.
-      }
-      return next;
-    });
-  }, []);
   const [searchQ, setSearchQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   // One shared watchlists instance for the whole app (provided via context
@@ -1294,31 +1269,17 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               </div>
               {NAV_GROUPS.map(group => {
                 const items = navItemsByGroup[group];
-                // When the rail is icon-only there is no room for a section
-                // header, so the accordion is bypassed entirely and every item
-                // renders — otherwise a collapsed rail with collapsed sections
-                // would show nothing and offer no way to open anything.
-                const open = navCollapsed || openSections.includes(group);
-                const hasActive = items.some(i => pathname === slugToHref(i.slug));
+                // Sections always render expanded — no accordion, nothing to toggle.
+                // When the rail is icon-only there is no room for a section header,
+                // so it's skipped and every item renders under the icon-only rail.
                 return (
-                  <div key={group} className={`nav-sec${open ? " open" : ""}`}>
+                  <div key={group} className="nav-sec open">
                     {!navCollapsed && (
-                      <button
-                        type="button"
-                        className={`sec-lbl${hasActive && !open ? " has-active" : ""}`}
-                        aria-expanded={open}
-                        onClick={() => toggleSection(group)}
-                      >
+                      <div className="sec-lbl">
                         <span className="sec-name">{group}</span>
-                        {/* Dot marks a closed section that holds the current page. */}
-                        {hasActive && !open && <span className="sec-dot" aria-hidden="true" />}
-                        <svg className="sec-caret" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                          <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8"
-                                strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
+                      </div>
                     )}
-                    {open && items.map(item => {
+                    {items.map(item => {
                     const href = slugToHref(item.slug);
                     const isActive = pathname === href;
                     return (
