@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StockLogo, DataState, VendorTag, cls, sign, fmt, titleCaseLabel} from "../utils";
+import { useIQActions } from "../shell";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
@@ -246,8 +247,12 @@ function mkMark(s: string, key: number) {
 }
 
 /* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,highlight}: {
-  item: NewsArticleDoc; i: number;total: number;onTicker: (ticker: string) => void;
+function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight}: {
+  item: NewsArticleDoc;
+  i: number;
+  total: number;
+  onTicker: (ticker: string) => void;
+  onStockOpen: (ticker: string) => void;
   onAnalysis: (ticker: string) => void;
   marketCap?: number | null;
   livePct?: number | null;
@@ -296,8 +301,12 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,highlig
         }}
       >
         <button
-          onClick={() => onTicker(item.ticker)}
-          title={`Filter the feed by ${item.ticker}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTicker(item.ticker);
+            onStockOpen(item.ticker);
+          }}
+          title={`Filter the feed by ${item.ticker} and open stock details`}
           style={{
             all: "unset",
             cursor: "pointer",
@@ -362,6 +371,7 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,highlig
             onClick={(e) => {
               e.stopPropagation();
               onTicker(item.ticker);
+              onStockOpen(item.ticker);
             }}
             style={{
               cursor: "pointer",
@@ -406,13 +416,13 @@ function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,highlig
             color: "var(--text-dim-solid)",
             fontFamily:
               "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-            fontSize: 10,
+            fontSize: 12,
           }}
         >
           <span
             style={{
               color: "var(--text-dim-solid)",
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 500,
             }}
           >
@@ -1653,6 +1663,7 @@ function GlanceTab({ period, heading }: { period: "weekly" | "monthly"; heading:
 
 export function CommentaryScreen() {
   const router = useRouter();
+  const { openStockDetail } = useIQActions();
   const uid = firebaseAuth.currentUser?.uid ?? null;
   const { data: liveNews, loading: liveNewsLoading } = useApiList<NewsArticleDoc>("/market-data/news");
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
@@ -1974,6 +1985,7 @@ export function CommentaryScreen() {
                   i={i}
                   total={feed.length}
                   onTicker={sym => setSearch(sym)}
+                  onStockOpen={sym => openStockDetail(sym, feed.map(x => x.ticker))}
                   onAnalysis={setAnalysisTicker}
                   marketCap={companyByTicker.get(item.ticker)?.marketCap ?? null}
                   livePct={
