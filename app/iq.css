@@ -196,10 +196,13 @@
 .app {
   display: grid;
   grid-template-columns: var(--rail-w) 1fr;
-  grid-template-rows: 54px 34px 1fr;
-  grid-template-areas: 'brand topbar' 'brand ticker' 'rail main';
+  grid-template-rows: 44px 34px 1fr;
+  grid-template-areas:
+    'brand topbar'
+    'rail ticker'
+    'rail main';
   height: 100vh;
-  height: 100dvh; /* same as 100vh on desktop; on mobile it tracks the visible viewport */
+  height: 100dvh;
   position: relative;
   z-index: 1;
 }
@@ -475,7 +478,7 @@
   display: flex; flex-direction: column;
   overflow-y: auto; overflow-x: hidden;
   padding: 10px 8px 8px;
-  position: relative; z-index: 7;
+  position: relative; z-index: 7; margin-top: -10px;
 }
 /* Nav section header. Sections always render expanded (no accordion). */
 .iq-root .sec-lbl {
