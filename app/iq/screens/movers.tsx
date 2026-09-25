@@ -60,6 +60,20 @@ function fmtMcap(mc: number | null | undefined): string {
 // otherwise sit there returning nothing; "Micro" (which the feed does produce)
 // was missing entirely before.
 const CAP_ORDER = ["Mega", "Large", "Mid", "Small", "Micro"];
+function uniqueByTicker<T extends { ticker: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+
+  return rows.filter(row => {
+    const ticker = row.ticker?.trim().toUpperCase();
+
+    if (!ticker || seen.has(ticker)) {
+      return false;
+    }
+
+    seen.add(ticker);
+    return true;
+  });
+}
 
 /** One row of GET /market-data/volume-leaders — pre-ranked on the server. */
 interface VolumeLeaderDoc {
@@ -92,7 +106,7 @@ function mergeMovers(
   live: LiveMoverDoc[],
   companyByTicker: Map<string, CompanyDoc>,
 ): Mover[] {
-  return live.filter(l => !isLeveragedProduct(l.name)).map(l => {
+  return uniqueByTicker(live.filter(l => !isLeveragedProduct(l.name))).map(l => {
     const c = companyByTicker.get(l.ticker);
     const mcap = l.marketCap ?? c?.marketCap ?? null;
     return {
@@ -157,8 +171,10 @@ export function MoversScreen() {
   // Leveraged/inverse products are excluded from every universe-built tab for
   // the same reason mergeMovers excludes them from the daily feed: a 2x ETF's
   // move is a multiple of something else's.
-  const universeRows = rvolCompanies.filter(
-    c => c.ticker && !isLeveragedProduct(c.name),
+  const universeRows = uniqueByTicker(
+    rvolCompanies.filter(
+      c => c.ticker && !isLeveragedProduct(c.name),
+    )
   );
 
   /**
@@ -206,9 +222,11 @@ export function MoversScreen() {
   const volumeRows: Mover[] = useMemo(() => {
     const served = volumeLeaders?.leaders ?? [];
     if (served.length > 0) {
-      return served
-        .filter(l => !isLeveragedProduct(companyByTicker.get(l.ticker)?.name))
-        .map(l => {
+      return uniqueByTicker(
+        served.filter(
+          l => !isLeveragedProduct(companyByTicker.get(l.ticker)?.name)
+        )
+      ).map(l => {
           const c = companyByTicker.get(l.ticker);
           return {
             ...companyRow(c ?? ({ ticker: l.ticker } as CompanyDoc)),
@@ -473,13 +491,18 @@ export function MoversScreen() {
    * Folding this into `filtered` would unsubscribe the row, strand it on its
    * stored value, and flip it straight back into the list.
    */
-  const visible = filtered.filter(m => {
-    const { change } = shownValues(m);
-    if (change == null) return true; // nothing live to contradict it
-    if (tab === "win" || tab === "weekwin") return change > 0;
-    if (tab === "lose" || tab === "weeklose") return change < 0;
-    return true;
-  });
+  const visible = uniqueByTicker(
+    filtered.filter(m => {
+      const { change } = shownValues(m);
+
+      if (change == null) return true;
+
+      if (tab === "win" || tab === "weekwin") return change > 0;
+      if (tab === "lose" || tab === "weeklose") return change < 0;
+
+      return true;
+    })
+  );
 
   /**
    * Direction that would exactly reproduce the ACTIVE tab's own default
