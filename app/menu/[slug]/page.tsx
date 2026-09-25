@@ -20,9 +20,12 @@ import { AiInfrastructureScreen } from "../../iq/screens/ai-infrastructure";
 import { ComingSoonEtfScreen } from "../../iq/screens/etf-corner";
 
 export function generateStaticParams() {
-  return menuItems
-    .filter(item => item.slug !== "dashboard")
-    .map(item => ({ slug: item.slug }));
+  return [
+    ...menuItems
+      .filter(item => item.slug !== "dashboard")
+      .map(item => ({ slug: item.slug })),
+    { slug: "stock" },
+  ];
 }
 
 const SCREENS: Record<string, React.ReactNode> = {

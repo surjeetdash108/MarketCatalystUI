@@ -13,9 +13,9 @@ export const menuItems = [
   { label: 'Themes', slug: 'themes', group: 'Research', icon: '◈', badge: null },
   { label: 'IPOs', slug: 'ipos', group: 'Research', icon: '🚀', badge: null },
   { label: 'Ownership', slug: 'insider', group: 'Research', icon: '📄', badge: null },
-  { label: 'Search', slug: 'stock', group: 'Research', icon: '📊', badge: null },
+  // { label: 'Search', slug: 'stock', group: 'Research', icon: '📊', badge: null },
   { label: 'ETF Corner', slug: 'etf-corner', group: 'Research', icon: '🧺', badge: null },
-  { label: 'AI Infrastructure', slug: 'ai-infrastructure', group: 'Research', icon: '🧠', badge: null },
+  { label: 'AI Corner', slug: 'ai-infrastructure', group: 'Research', icon: '🧠', badge: null },
   // ---- Market Recaps ----
   { label: 'Daily Recaps', slug: 'recap', group: 'Market Recaps', icon: '🔖', badge: null },
   { label: 'Weekly Recaps', slug: 'weekly-recap', group: 'Market Recaps', icon: '🗓️', badge: null },

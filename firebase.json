@@ -25,6 +25,10 @@
         "run": { "serviceId": "market-catalyst-live", "region": "us-central1" }
       },
       {
+        "source": "/mcp",
+        "run": { "serviceId": "market-catalyst-live", "region": "us-central1" }
+      },
+      {
         "source": "/admin/**",
         "destination": "/admin.html"
       },

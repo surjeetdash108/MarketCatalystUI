@@ -246,147 +246,229 @@ function mkMark(s: string, key: number) {
 }
 
 /* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total, onTicker, onAnalysis, onTag, onCat, activeTag, activeCat, marketCap, livePct, highlight }: {
-  item: NewsArticleDoc; i: number; total: number; onTicker: (ticker: string) => void;
+function FeedItem({ item, i, total,onTicker,onAnalysis,marketCap,livePct,highlight}: {
+  item: NewsArticleDoc; i: number;total: number;onTicker: (ticker: string) => void;
   onAnalysis: (ticker: string) => void;
-  /* Both chips on the card are controls, not labels: clicking one filters the
-     feed to it, clicking it again clears that filter. The dropdowns above hold
-     the same state, so the two stay in step. */
-  onTag: (tag: string) => void;
-  onCat: (cat: string) => void;
-  /** The filter currently in force, so the chip can show it is the active one. */
-  activeTag: string;
-  activeCat: string;
-  /** Raw USD market cap from the ticker's companies doc; null when unsynced. */
   marketCap?: number | null;
-  /** Live %change for the ticker, from the app-wide shared quote poll. */
   livePct?: number | null;
   /** Trimmed, lowercased search query — matches get wrapped in <mark> in the
    *  headline and description. Empty string when the search box is empty. */
   highlight: string;
 }) {
   return (
-    <div
+    <article
       style={{
-        display: "flex", gap: 12, padding: "12px 0",
-        borderBottom: i < total - 1 ? "1px solid var(--border-soft)" : "none",
+        display: "grid",
+        gridTemplateColumns: "44px 66px minmax(0, 1fr)",
+        columnGap: 20,
+        alignItems: "stretch",
+        padding: "2px 20px 10px",
+        borderBottom:
+          i < total - 1
+            ? "1px solid var(--border-soft)"
+            : "none",
+        // background: "var(--surface-1)",
+        cursor: item.url ? "pointer" : "default",
       }}
     >
-      {/* Its own leading column, separate from the logo/category rail, so
-          the published time lines up in a fixed-width strip down the whole
-          feed instead of being buried mid-stack under the logo and pill. */}
-      <div style={{ flexShrink: 0, width: 40 }}>
-        <div className="mono" style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>{etTimeLabel(item.publishedAt)}</div>
+      {/* COLUMN 1 — TIME */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          fontSize: 14,
+          color: "var(--text-dim-solid)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {etTimeLabel(item.publishedAt)}
       </div>
-      <div style={{ flexShrink: 0, width: 54, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5 }}>
+
+      {/* COLUMN 2 — LOGO */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <button
           onClick={() => onTicker(item.ticker)}
           title={`Filter the feed by ${item.ticker}`}
-          style={{ all: "unset", cursor: "pointer", borderRadius: 6 }}
+          style={{
+            all: "unset",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
-          <StockLogo sym={item.ticker} size={28} />
+          <StockLogo sym={item.ticker} size={38} />
         </button>
-        <button
-          className={`pill lf-chip${activeCat === catKey(item.category) ? " on" : ""}`}
-          style={{ background: "var(--surface-3)", color: catCol(item.category) }}
-          onClick={() => onCat(catKey(item.category))}
-          title={activeCat === catKey(item.category)
-            ? "Showing this type only — click to clear"
-            : `Show only ${catLabel(item.category)} stories`}
-        >{catLabel(item.category)}</button>
-        {/* Market cap + LIVE %change for the story's ticker, under the pill.
-            Both are omitted rather than shown as "—" when unavailable, so the
-            column stays compact for tickers the universe hasn't synced. */}
-        {marketCap != null && (
-          <div className="mono" style={{ fontSize: ".64rem", color: "var(--text-dim-solid)" }}>
-            {fmtMcap(marketCap)}
-          </div>
-        )}
-        {livePct != null && (
-          <div className={`mono ${cls(livePct)}`} style={{ fontSize: ".66rem", fontWeight: 700 }}>
-            {sign(livePct)}
-          </div>
-        )}
       </div>
-      <a
-        href={item.url} target="_blank" rel="noreferrer"
-        style={{ flex: 1, minWidth: 0, textDecoration: "none", color: "inherit", borderRadius: 8, display: "flex", gap: 10 }}
+
+      {/* COLUMN 3 — ALL OTHER CONTENT */}
+      <div
+        onClick={() => {
+          if (item.url) {
+            window.open(item.url, "_blank", "noopener,noreferrer");
+          }
+        }}
+        style={{
+          minWidth: 0,
+          width: "100%",
+          cursor: item.url ? "pointer" : "default",
+        }}
       >
-        <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: ".88rem", color: "var(--text)" }}>
-          {/* Category ahead of the ticker: it answers "what kind of story is
-              this" before the reader parses the headline. Colour comes from the
-              same --chip token the old filter chips used, so a category reads
-              identically wherever it appears. */}
+        {/* Live tag */}
+        {/* <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "5px 10px",
+            border: "1px solid rgba(56, 212, 123, 0.42)",
+            borderRadius: 999,
+            background: "rgba(56, 212, 123, 0.06)",
+            color: "var(--up)",
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: ".16em",
+            lineHeight: 1,
+            textTransform: "uppercase",
+          }}
+        >
+          Live
+        </span> */}
+
+        {/* Headline */}
+        <div
+          style={{
+            marginTop: 13,
+            // color: "var(--text)",
+            color:"var(--text-hi)",
+            fontSize: "clamp(15px, 1.5vw, 22px)",
+            lineHeight: 1.18,
+            letterSpacing: "-.025em",
+            fontWeight: 600,
+            // maxWidth: "42ch",
+          }}
+        >
           <span
-            className={`row-tag lf-chip${activeTag === (item.tag ?? "other") ? " on" : ""}`}
-            data-tag={item.tag ?? "other"}
-            role="button"
-            tabIndex={0}
-            /* Inside the <a> that opens the source article, so the navigation
-               has to be suppressed — the same treatment the ticker below gets. */
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onTag(item.tag ?? "other"); }}
-            onKeyDown={e => {
-              if (e.key !== "Enter" && e.key !== " ") return;
-              e.preventDefault(); e.stopPropagation(); onTag(item.tag ?? "other");
+            onClick={(e) => {
+              e.stopPropagation();
+              onTicker(item.ticker);
             }}
-            title={activeTag === (item.tag ?? "other")
-              ? "Showing this category only — click to clear"
-              : `Show only ${NEWS_TAGS.find(t => t.key === (item.tag ?? "other"))?.label ?? "Other"} stories`}
-          >
-            {NEWS_TAGS.find(t => t.key === (item.tag ?? "other"))?.label ?? "Other"}
-          </span>
-          <b
-            onClick={e => { e.preventDefault(); onTicker(item.ticker); }}
-            style={{ cursor: "pointer" }}
+            style={{
+              cursor: "pointer",
+              // color: "var(--text)",
+            }}
             title={`Filter the feed by ${item.ticker}`}
-          >{item.ticker}</b> {highlightMatch(item.headline, highlight)}
+          >
+            {item.ticker}
+          </span>
+          {": "}
+          {highlightMatch(item.headline, highlight)}
         </div>
+
+        {/* Summary */}
         {item.summary && (
-          <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", borderLeft: `2px solid ${catCol(item.category)}55`, paddingLeft: 9, marginTop: 5 }}>
+          <div
+            style={{
+              marginTop: 6,
+              // color: "var(--text-dim-solid)",
+              color: "var(--text)",
+              fontSize: 14,
+              lineHeight: 1.58,
+              // maxWidth: "76ch",
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: 2,
+              overflow: "hidden",
+            }}
+          >
             {highlightMatch(item.summary, highlight)}
           </div>
         )}
-        <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-          <span style={{ fontSize: ".68rem", color: "var(--brand-2)", fontWeight: 600 }}>
-            {item.source ? `Read at ${item.source}` : "Read source"} →
+
+        {/* Bottom metadata */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 9,
+            flexWrap: "wrap",
+            marginTop: 8,
+            color: "var(--text-dim-solid)",
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontSize: 10,
+          }}
+        >
+          <span
+            style={{
+              color: "var(--text-dim-solid)",
+              fontSize: 10,
+              fontWeight: 500,
+            }}
+          >
+            {item.source ?? item.vendor ?? "QQuartr"}
           </span>
-          {item.vendor && (
-            <span className="pill" style={{ fontSize: ".56rem", background: "var(--surface-3)", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".03em" }}>
-              via {item.vendor}
-            </span>
+
+          <span style={{ color: "var(--border-soft)" }}>·</span>
+
+          <span>
+            {new Date(item.publishedAt).toLocaleString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+              timeZone: "America/New_York",
+            })}
+            {" ET"}
+          </span>
+
+          {marketCap != null && (
+            <>
+              <span style={{ color: "var(--border-soft)" }}>·</span>
+              <span>{fmtMcap(marketCap)}</span>
+            </>
           )}
-          {item.sentiment && (
-            <span className="pill" style={{ fontSize: ".56rem", textTransform: "capitalize", background: "var(--surface-3)", color: item.sentiment === "positive" ? "var(--up)" : item.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>
-              {item.sentiment}
-            </span>
+
+          {livePct != null && (
+            <>
+              <span style={{ color: "var(--border-soft)" }}>·</span>
+              <span
+                className={cls(livePct)}
+                style={{ fontWeight: 700 }}
+              >
+                {sign(livePct)}
+              </span>
+            </>
           )}
-          {/* The row is wrapped in an <a> to the article, so this must stop the
-              click reaching it — otherwise opening the analysis also navigates
-              away to the publisher. */}
+
           <button
             className="feed-analysis-btn"
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onAnalysis(item.ticker); }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onAnalysis(item.ticker);
+            }}
             title={`AI analysis for ${item.ticker}`}
           >
             ◆ Analysis
           </button>
         </div>
-        </div>
-        {item.imageUrl && (
-          <img
-            src={item.imageUrl}
-            alt=""
-            loading="lazy"
-            style={{ flexShrink: 0, width: 84, height: 84, objectFit: "cover", borderRadius: 8, background: "var(--surface-3)" }}
-            onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-          />
-        )}
-      </a>
-    </div>
+      </div>
+    </article>
   );
 }
-
 /* ── Main commentary / Live Feed screen ── */
 // ── SCANX market scans (Most Active / Biggest %) ────────────────────────────
 interface ScanItem { ticker: string; name: string | null; pctChange: number | null; price?: number | null; volume?: number | null; rvol?: number | null; }
@@ -429,62 +511,920 @@ function ScanTray({ sym, onClose }: { sym: string; onClose: () => void }) {
 }
 
 function ScanSection({ title, color, groups, render, onSelect }: {
-  title: string; color: string; groups: SectorGroup[]; render: (it: ScanItem) => string;
+  title: string;
+  color: string;
+  groups: SectorGroup[];
+  render: (it: ScanItem) => string;
   onSelect: (sym: string) => void;
 }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontWeight: 700, fontSize: ".8rem", color, marginBottom: 6 }}>{title}</div>
+    <div style={{ marginBottom: 18 }}>
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: ".8rem",
+          color,
+          marginBottom: 8,
+        }}
+      >
+        {title}
+      </div>
+
       {(!groups || groups.length === 0) ? (
-        <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>No data.</div>
-      ) : groups.map((g) => (
-        <div key={g.sector} style={{ fontSize: ".8rem", lineHeight: 2.1, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 4px" }}>
-          <span style={{ color: "var(--text-dim-solid)", marginRight: 2 }}>{titleCaseLabel(g.sector)}:</span>
-          {/* Each ticker is a real button with its logo — these used to be inert
-              bold text, so a name you spotted in the scan could not be opened
-              without going to another screen and searching for it. */}
-          {g.items.map((it) => (
-            <button
-              key={it.ticker}
-              type="button"
-              className="scan-chip"
-              onClick={() => onSelect(it.ticker)}
-              title={`Open ${it.ticker} details`}
-            >
-              <StockLogo sym={it.ticker} size={15} />
-              <b>{it.ticker}</b>
-              <span className={cls(it.pctChange ?? 0)}>({render(it)})</span>
-            </button>
-          ))}
+        <div
+          style={{
+            fontSize: ".78rem",
+            color: "var(--text-dim-solid)",
+          }}
+        >
+          No data.
         </div>
-      ))}
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 10,
+          }}
+        >
+          {groups.map((g) => {
+            const up = g.items.filter(
+              it => (it.pctChange ?? 0) >= 0
+            ).length;
+
+            const down = g.items.length - up;
+
+            const maxAbs = Math.max(
+              ...g.items.map(it => Math.abs(it.pctChange ?? 0)),
+              1
+            );
+
+            return (
+              <div
+                key={g.sector}
+                style={{
+                  background: "var(--surface-1)",
+                  border: "1px solid var(--border-soft)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Sector header */}
+                <div
+                  style={{
+                    padding: "10px 12px 8px",
+                    borderBottom: "1px solid var(--border-soft)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: ".78rem",
+                        fontWeight: 700,
+                        color: "var(--text-hi)",
+                      }}
+                    >
+                      {titleCaseLabel(g.sector)}
+                    </span>
+
+                    <span
+                      style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".62rem",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <span style={{ color: "var(--up)" }}>
+                        ▲ {up}
+                      </span>
+                      {" "}
+                      <span style={{ color: "var(--down)" }}>
+                        ▼ {down}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Green / red sector bar */}
+                  {/* <div
+                    style={{
+                      height: 3,
+                      display: "flex",
+                      marginTop: 7,
+                      borderRadius: 3,
+                      overflow: "hidden",
+                      background: "var(--down)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${g.items.length ? (up / g.items.length) * 100 : 0}%`,
+                        background: "var(--up)",
+                      }}
+                    />
+                  </div> */}
+                </div>
+
+                {/* Stocks */}
+                <div>
+                  {g.items.map((it) => {
+                    const pct = it.pctChange ?? 0;
+                    const width = Math.min(
+                      100,
+                      Math.max(4, (Math.abs(pct) / maxAbs) * 100)
+                    );
+
+                    return (
+                      <button
+                        key={it.ticker}
+                        type="button"
+                        onClick={() => onSelect(it.ticker)}
+                        style={{
+                          width: "100%",
+                          display: "grid",
+                          gridTemplateColumns:
+                            "minmax(52px, auto) minmax(42px, auto) 1fr auto",
+                          alignItems: "center",
+                          gap: 7,
+                          padding: "8px 11px",
+                          border: 0,
+                          borderBottom:
+                            "1px solid var(--border-soft)",
+                          background: "transparent",
+                          color: "inherit",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            minWidth: 0,
+                          }}
+                        >
+                          <b
+                            style={{
+                              fontFamily: "var(--f-mono)",
+                              fontSize: ".68rem",
+                              color: "var(--text-hi)",
+                            }}
+                          >
+                            {it.ticker}
+                          </b>
+                        </span>
+
+                        {/* Volume / relative volume */}
+                        <span
+                          style={{
+                            justifySelf: "start",
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".58rem",
+                            fontWeight: 700,
+                            padding: "3px 5px",
+                            borderRadius: 4,
+                            background:
+                              it.rvol != null
+                                ? "rgba(245,181,68,.14)"
+                                : "var(--surface-3)",
+                            color:
+                              it.rvol != null
+                                ? "var(--warn)"
+                                : "var(--text-dim-solid)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {it.rvol != null
+                            ? `${it.rvol.toFixed(1)}x`
+                            : it.volume != null
+                              ? `${(it.volume / 1e6).toFixed(1)}M`
+                              : "—"}
+                        </span>
+
+                        {/* Relative movement bar */}
+                        <div
+                          style={{
+                            height: 6,
+                            display: "flex",
+                            justifyContent:
+                              pct >= 0 ? "flex-start" : "flex-end",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${width}%`,
+                              maxWidth: "100%",
+                              height: 6,
+                              borderRadius: 2,
+                              background:
+                                pct >= 0
+                                  ? "var(--up)"
+                                  : "var(--down)",
+                              opacity: 0.9,
+                            }}
+                          />
+                        </div>
+
+                        {/* Percentage */}
+                        <span
+                          className={cls(pct)}
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".62rem",
+                            fontWeight: 700,
+                            padding: "4px 6px",
+                            borderRadius: 4,
+                            background:
+                              pct >= 0
+                                ? "var(--up-dim)"
+                                : "var(--down-dim)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {sign(pct)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
+
+function mergeMostActiveSectors(data: MostActiveScan): SectorGroup[] {
+  const map = new Map<string, Map<string, ScanItem>>();
+
+  const addGroups = (groups: SectorGroup[]) => {
+    for (const group of groups) {
+      if (!map.has(group.sector)) {
+        map.set(group.sector, new Map());
+      }
+
+      const sectorMap = map.get(group.sector)!;
+
+      for (const item of group.items) {
+        const existing = sectorMap.get(item.ticker);
+
+        if (!existing) {
+          sectorMap.set(item.ticker, {
+            ...item,
+          });
+        } else {
+          sectorMap.set(item.ticker, {
+            ...existing,
+            ...item,
+            volume: item.volume ?? existing.volume,
+            rvol: item.rvol ?? existing.rvol,
+          });
+        }
+      }
+    }
+  };
+
+  addGroups(data.byVolume);
+  addGroups(data.byRelVolume);
+
+  return Array.from(map.entries())
+    .map(([sector, items]) => ({
+      sector,
+      items: Array.from(items.values()),
+    }))
+    .sort((a, b) => b.items.length - a.items.length);
+}
+
+
 /** Most Active tab — top volume + top relative volume, by sector. */
 function MostActiveTab() {
-  const { data, loading } = useApiResource<MostActiveScan>("/live/scan/most-active");
+  const { data, loading } =
+    useApiResource<MostActiveScan>("/live/scan/most-active");
+
   const [sel, setSel] = useState<string | null>(null);
+
+  if (!data) {
+    return (
+      <div style={{ padding: "14px 18px 18px" }}>
+        <DataState
+          loading={loading}
+          label="Generating scan…"
+        />
+      </div>
+    );
+  }
+
+  const sectors = mergeMostActiveSectors(data);
+
+  const allItems = sectors.flatMap(s => s.items);
+
+  const gainers = allItems
+    .filter(it => (it.pctChange ?? 0) > 0)
+    .sort((a, b) => (b.pctChange ?? 0) - (a.pctChange ?? 0));
+
+  const losers = allItems
+    .filter(it => (it.pctChange ?? 0) < 0)
+    .sort((a, b) => (a.pctChange ?? 0) - (b.pctChange ?? 0));
+
+  const heaviestVolume = [...allItems]
+    .filter(it => it.volume != null)
+    .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))[0];
+
+  const totalVolume = allItems.reduce(
+    (sum, it) => sum + (it.volume ?? 0),
+    0
+  );
+
+  const rvolItems = allItems.filter(it => it.rvol != null);
+
+  const avgRvol =
+    rvolItems.length > 0
+      ? rvolItems.reduce(
+          (sum, it) => sum + (it.rvol ?? 0),
+          0
+        ) / rvolItems.length
+      : 0;
+
+  const upCount = allItems.filter(
+    it => (it.pctChange ?? 0) > 0
+  ).length;
+
+  const downCount = allItems.filter(
+    it => (it.pctChange ?? 0) < 0
+  ).length;
+
+  const maxPctChange = Math.max(
+    ...allItems.map(it => Math.abs(it.pctChange ?? 0)),
+    1
+  );
+
   return (
-    <div style={{ padding: "14px 18px 18px" }}>
-      <div className="card">
-        <div className="card-h">
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Today&apos;s most active stocks</h3><VendorTag v="polygon" /></div>
-          {data?.generatedAt && <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>as of {scanTime(data.generatedAt)}</span>}
+    <div
+      style={{
+        width: "100%",
+        padding: "14px 18px 24px",
+        margin: 0,
+        boxSizing: "border-box",
+      }}
+    >
+      {/* ───────────── TITLE ───────────── */}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 20,
+          marginBottom: 4,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "1.25rem",
+                fontWeight: 800,
+                color: "var(--text-hi)",
+              }}
+            >
+              Most active by sector
+            </h2>
+
+            <VendorTag v="polygon" />
+          </div>
+
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: ".72rem",
+              color: "var(--text-dim-solid)",
+            }}
+          >
+            Today&apos;s top 20 by volume and top 20 by relative volume,
+            merged into one view. Gainers on top, losers below, in every sector.
+          </div>
         </div>
-        <div className="card-b" style={{ maxHeight: "none" }}>
-          {!data ? <DataState loading={loading} label="Generating scan…" /> : (
-            <>
-              <ScanSection title="Today's top 20 volume" color="var(--text-hi)" groups={data.byVolume} onSelect={setSel}
-                render={(it) => `${it.volume != null ? (it.volume / 1e6).toFixed(2) + " mln" : "—"} ${sign(it.pctChange ?? 0)}`} />
-              <ScanSection title="Today's top 20 relative volume (current vs 1-month avg daily volume)" color="var(--text-hi)" groups={data.byRelVolume} onSelect={setSel}
-                render={(it) => `${it.rvol != null ? it.rvol.toFixed(2) + "x" : "—"} ${sign(it.pctChange ?? 0)}`} />
-            </>
-          )}
+
+        <div
+          style={{
+            fontFamily: "var(--f-mono)",
+            fontSize: ".65rem",
+            color: "var(--text-dim-solid)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {scanTime(data.generatedAt)}
         </div>
       </div>
-      {sel && <ScanTray sym={sel} onClose={() => setSel(null)} />}
+
+      {/* ───────────── SUMMARY CARDS ───────────── */}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(4, minmax(0, 1fr))",
+          gap: 10,
+          marginTop: 14,
+          marginBottom: 14,
+        }}
+      >
+        {/* UP / DOWN */}
+        <div className="card" style={{ padding: 14 }}>
+          <div
+            style={{
+              fontSize: ".6rem",
+              fontWeight: 700,
+              color: "var(--text-dim-solid)",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Up / Down
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 8,
+              fontFamily: "var(--f-mono)",
+              fontSize: "1rem",
+              fontWeight: 700,
+            }}
+          >
+            <span style={{ color: "var(--up)" }}>
+              ▲ {upCount}
+            </span>
+
+            <span style={{ color: "var(--down)" }}>
+              ▼ {downCount}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              height: 5,
+              marginTop: 8,
+              borderRadius: 4,
+              overflow: "hidden",
+              background: "var(--down)",
+            }}
+          >
+            <div
+              style={{
+                width: `${
+                  allItems.length
+                    ? (upCount / allItems.length) * 100
+                    : 0
+                }%`,
+                background: "var(--up)",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* BIGGEST GAINER */}
+        <div className="card" style={{ padding: 14 }}>
+          <div
+            style={{
+              fontSize: ".6rem",
+              fontWeight: 700,
+              color: "var(--text-dim-solid)",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Biggest Gainer
+          </div>
+
+          <div
+            style={{
+              marginTop: 7,
+              display: "flex",
+              alignItems: "baseline",
+              gap: 6,
+            }}
+          >
+            <b
+              style={{
+                fontFamily: "var(--f-mono)",
+                fontSize: "1rem",
+                color: "var(--text-hi)",
+              }}
+            >
+              {gainers[0]?.ticker ?? "—"}
+            </b>
+
+            {gainers[0] && (
+              <span
+                className="up"
+                style={{
+                  fontFamily: "var(--f-mono)",
+                  fontWeight: 700,
+                }}
+              >
+                {sign(gainers[0].pctChange ?? 0)}
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 5,
+              fontSize: ".68rem",
+              color: "var(--text-dim-solid)",
+            }}
+          >
+            {sectors.find(s =>
+              s.items.some(i => i.ticker === gainers[0]?.ticker)
+            )?.sector
+              ? titleCaseLabel(
+                  sectors.find(s =>
+                    s.items.some(i => i.ticker === gainers[0]?.ticker)
+                  )!.sector
+                )
+              : "—"}
+          </div>
+        </div>
+
+        {/* BIGGEST LOSER */}
+        <div className="card" style={{ padding: 14 }}>
+          <div
+            style={{
+              fontSize: ".6rem",
+              fontWeight: 700,
+              color: "var(--text-dim-solid)",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Biggest Loser
+          </div>
+
+          <div
+            style={{
+              marginTop: 7,
+              display: "flex",
+              alignItems: "baseline",
+              gap: 6,
+            }}
+          >
+            <b
+              style={{
+                fontFamily: "var(--f-mono)",
+                fontSize: "1rem",
+                color: "var(--text-hi)",
+              }}
+            >
+              {losers[0]?.ticker ?? "—"}
+            </b>
+
+            {losers[0] && (
+              <span
+                className="down"
+                style={{
+                  fontFamily: "var(--f-mono)",
+                  fontWeight: 700,
+                }}
+              >
+                {sign(losers[0].pctChange ?? 0)}
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 5,
+              fontSize: ".68rem",
+              color: "var(--text-dim-solid)",
+            }}
+          >
+            {sectors.find(s =>
+              s.items.some(i => i.ticker === losers[0]?.ticker)
+            )?.sector
+              ? titleCaseLabel(
+                  sectors.find(s =>
+                    s.items.some(i => i.ticker === losers[0]?.ticker)
+                  )!.sector
+                )
+              : "—"}
+          </div>
+        </div>
+
+        {/* HEAVIEST VOLUME */}
+        <div className="card" style={{ padding: 14 }}>
+          <div
+            style={{
+              fontSize: ".6rem",
+              fontWeight: 700,
+              color: "var(--text-dim-solid)",
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Heaviest Volume
+          </div>
+
+          <div
+            style={{
+              marginTop: 7,
+              display: "flex",
+              alignItems: "baseline",
+              gap: 7,
+            }}
+          >
+            <b
+              style={{
+                fontFamily: "var(--f-mono)",
+                fontSize: "1rem",
+                color: "var(--text-hi)",
+              }}
+            >
+              {heaviestVolume?.ticker ?? "—"}
+            </b>
+
+            {heaviestVolume?.volume != null && (
+              <span
+                style={{
+                  fontFamily: "var(--f-mono)",
+                  fontWeight: 700,
+                  fontSize: ".78rem",
+                }}
+              >
+                {(heaviestVolume.volume / 1e6).toFixed(1)}M
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 5,
+              fontSize: ".68rem",
+              color: "var(--text-dim-solid)",
+            }}
+          >
+            shares traded ·{" "}
+            {heaviestVolume
+              ? sign(heaviestVolume.pctChange ?? 0)
+              : "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* ───────────── MARKET SUMMARY ───────────── */}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 12,
+          fontSize: ".65rem",
+          color: "var(--text-dim-solid)",
+        }}
+      >
+        <div>
+          <span
+            style={{
+              display: "inline-block",
+              padding: "3px 6px",
+              marginRight: 5,
+              borderRadius: 4,
+              background: "var(--surface-3)",
+              color: "var(--text-hi)",
+              fontFamily: "var(--f-mono)",
+              fontWeight: 700,
+            }}
+          >
+            {(totalVolume / 1e6).toFixed(1)}M
+          </span>
+
+          shares traded
+
+          <span style={{ margin: "0 7px" }}>·</span>
+
+          <span
+            style={{
+              display: "inline-block",
+              padding: "3px 6px",
+              borderRadius: 4,
+              background: "rgba(245,181,68,.14)",
+              color: "var(--warn)",
+              fontFamily: "var(--f-mono)",
+              fontWeight: 700,
+            }}
+          >
+            {avgRvol ? `${avgRvol.toFixed(1)}x` : "—"}
+          </span>
+
+          <span style={{ marginLeft: 5 }}>
+            vs 1-month avg volume
+          </span>
+        </div>
+
+        <span>
+          Sectors ordered by number of active names
+        </span>
+      </div>
+
+      {/* ───────────── SECTOR BOARD ───────────── */}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(3, minmax(0, 1fr))",
+          gap: 10,
+        }}
+      >
+        {sectors.map((sector) => (
+          <div
+            key={sector.sector}
+            style={{
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                background: "var(--surface-1)",
+                border: "1px solid var(--border-soft)",
+                borderRadius: 10,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  padding: "10px 12px 8px",
+                  borderBottom: "1px solid var(--border-soft)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: ".78rem",
+                      fontWeight: 700,
+                      color: "var(--text-hi)",
+                    }}
+                  >
+                    {titleCaseLabel(sector.sector)}
+                  </span>
+                </div>
+              </div>
+
+              {sector.items.map((it) => {
+                const pct = it.pctChange ?? 0;
+                const width = Math.min(
+                  100,
+                  Math.max(
+                    4,
+                    (Math.abs(pct) / maxPctChange) * 100
+                  )
+                );
+
+                return (
+                  <button
+                    key={it.ticker}
+                    type="button"
+                    onClick={() => setSel(it.ticker)}
+                    style={{
+                      width: "100%",
+                      display: "grid",
+                      gridTemplateColumns:
+                        "60px 46px 1fr auto",
+                      alignItems: "center",
+                      gap: 7,
+                      padding: "8px 11px",
+                      border: 0,
+                      borderBottom:
+                        "1px solid var(--border-soft)",
+                      background: "transparent",
+                      color: "inherit",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <b
+                      style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".67rem",
+                        color: "var(--text-hi)",
+                      }}
+                    >
+                      {it.ticker}
+                    </b>
+
+                    <span
+                      style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".56rem",
+                        fontWeight: 700,
+                        padding: "3px 5px",
+                        borderRadius: 4,
+                        background:
+                          it.rvol != null
+                            ? "rgba(245,181,68,.14)"
+                            : "var(--surface-3)",
+                        color:
+                          it.rvol != null
+                            ? "var(--warn)"
+                            : "var(--text-dim-solid)",
+                      }}
+                    >
+                      {it.rvol != null
+                        ? `${it.rvol.toFixed(1)}x`
+                        : it.volume != null
+                          ? `${(it.volume / 1e6).toFixed(1)}M`
+                          : "—"}
+                    </span>
+
+                    <div
+                      style={{
+                        height: 5,
+                        display: "flex",
+                        justifyContent:
+                          pct >= 0
+                            ? "flex-start"
+                            : "flex-end",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(
+                              5,
+                              Math.abs(pct) * 4
+                            )
+                          )}%`,
+                          height: 5,
+                          borderRadius: 2,
+                          background:
+                            pct >= 0
+                              ? "var(--up)"
+                              : "var(--down)",
+                        }}
+                      />
+                    </div>
+
+                    <span
+                      className={cls(pct)}
+                      style={{
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".58rem",
+                        fontWeight: 700,
+                        padding: "4px 6px",
+                        borderRadius: 4,
+                        background:
+                          pct >= 0
+                            ? "var(--up-dim)"
+                            : "var(--down-dim)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {sign(pct)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {sel && (
+        <ScanTray
+          sym={sel}
+          onClose={() => setSel(null)}
+        />
+      )}
     </div>
   );
 }
@@ -996,14 +1936,33 @@ export function CommentaryScreen() {
           */}
 
           <div className="card" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><h3>{feedLabel.title}{q ? ` · “${search.trim()}”` : ""}</h3><VendorTag v={["polygon", "fmp"]} /></div>
+            <div
+              className="card-h"
+              style={{
+                padding: "16px 18px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  flexWrap: "wrap",
+                }}
+              >
+                <h3>
+                  {feedLabel.title}
+                  {q ? ` · “${search.trim()}”` : ""}
+                </h3>
+                <VendorTag v={["polygon", "fmp"]} />
+              </div>
+
               {feedLabel.badge}
             </div>
             <div className="card-b" style={{ paddingTop: 2, flex: 1, minHeight: 0, overflowY: "auto" }}>
               {feed.length === 0 ? (
                 <DataState loading={liveNewsLoading} label={
-                  q
+                  q 
                     ? `No matches for “${search.trim()}” in this tab.`
                     : activeTab === 3
                       ? (uid ? "No live news matches your portfolio or watchlist names right now." : "Sign in and add names to your watchlist or portfolio to see this feed.")
@@ -1016,15 +1975,12 @@ export function CommentaryScreen() {
                   total={feed.length}
                   onTicker={sym => setSearch(sym)}
                   onAnalysis={setAnalysisTicker}
-                  /* Clicking the chip that is already filtering clears it, so
-                     the chip is a toggle rather than a one-way trip that only
-                     the dropdown can undo. */
-                  onTag={t => setTagFilter(cur => (cur === t ? "all" : t))}
-                  onCat={c => setCatFilter(cur => (cur === c ? "all" : c))}
-                  activeTag={tagFilter}
-                  activeCat={catFilter}
                   marketCap={companyByTicker.get(item.ticker)?.marketCap ?? null}
-                  livePct={feedQuotes.get(item.ticker)?.pctChange ?? companyByTicker.get(item.ticker)?.pctChange ?? null}
+                  livePct={
+                    feedQuotes.get(item.ticker)?.pctChange ??
+                    companyByTicker.get(item.ticker)?.pctChange ??
+                    null
+                  }
                   highlight={q}
                 />
               ))}
