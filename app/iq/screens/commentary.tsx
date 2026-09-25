@@ -1331,7 +1331,7 @@ function MostActiveTab() {
                         "60px 46px 1fr auto",
                       alignItems: "center",
                       gap: 7,
-                      padding: "8px 11px",
+                      padding: "11px 11px",
                       border: 0,
                       borderBottom:
                         "1px solid var(--border-soft)",
@@ -1344,7 +1344,7 @@ function MostActiveTab() {
                     <b
                       style={{
                         fontFamily: "var(--f-mono)",
-                        fontSize: ".67rem",
+                        fontSize: ".86rem",
                         color: "var(--text-hi)",
                       }}
                     >
@@ -1354,7 +1354,7 @@ function MostActiveTab() {
                     <span
                       style={{
                         fontFamily: "var(--f-mono)",
-                        fontSize: ".56rem",
+                        fontSize: ".66rem",
                         fontWeight: 700,
                         padding: "3px 5px",
                         borderRadius: 4,
@@ -1394,7 +1394,7 @@ function MostActiveTab() {
                               Math.abs(pct) * 4
                             )
                           )}%`,
-                          height: 5,
+                          height: 8,
                           borderRadius: 2,
                           background:
                             pct >= 0
@@ -1408,7 +1408,7 @@ function MostActiveTab() {
                       className={cls(pct)}
                       style={{
                         fontFamily: "var(--f-mono)",
-                        fontSize: ".58rem",
+                        fontSize: ".66rem",
                         fontWeight: 700,
                         padding: "4px 6px",
                         borderRadius: 4,
