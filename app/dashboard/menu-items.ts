@@ -22,6 +22,7 @@ export const menuItems = [
   // ---- My Workspace ----
   { label: 'Portfolio', slug: 'portfolio', group: 'My Workspace', icon: '💼', badge: null },
   { label: 'Watchlist', slug: 'watchlist', group: 'My Workspace', icon: '⭐', badge: null },
+  { label: 'Chart Notes', slug: 'notes', group: 'My Workspace', icon: '📝', badge: null },
   // ---- Hidden: route kept (static export), not shown in the nav. Options is
   //      hidden "for now". The 'Hidden' group is not in the shell's rendered
   //      group order, so it never appears in the menu. ----

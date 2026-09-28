@@ -1411,9 +1411,9 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .theme-secrow:hover { background: var(--surface-2); color: var(--text-hi); }
 .theme-secrow input { accent-color: var(--brand); cursor: pointer; }
 
-/* Earnings-dot popover on the price chart. Absolute like .chart-tip, so it
-   rides the same positioned chart host; `left` is set inline as a percentage
-   because the SVG scales with the card. */
+/* Earnings-dot popover on the price chart. Absolutely positioned against the
+   chart's own relative host; `left` is set inline as a percentage because the
+   SVG scales with the card. */
 .chart-erpop {
   position: absolute; top: 30px; z-index: 6;
   min-width: 186px; padding: 9px 11px;
@@ -2168,6 +2168,23 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .ew-tickrow-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ew-tickrow-surp { font-family: var(--f-mono); font-size: .62rem; font-weight: 700; letter-spacing: .01em; }
 .ew-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* AI Corner category detail — company list (left) + stock details (right).
+   Sized to .main's content box (not a 100vh calc, which ignored the page head
+   and overflowed .main by ~100px) so the page itself never scrolls; only the
+   list and the details card do. `minmax(0,1fr)` rows keep the tall stock
+   screen from growing the row past the viewport. */
+.aic-detail { height: 100%; display: flex; flex-direction: column; }
+.aic-detail > .page-head { flex: none; }
+.aic-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(250px, .32fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 14px; padding: 14px 18px; }
+/* Narrow: stack, and let .main scroll the page as usual — two nested
+   scrollers on a phone are unusable. The list is capped so the details
+   aren't pushed far below the fold. */
+@media (max-width: 900px) {
+  .aic-detail { height: auto; }
+  .aic-split { grid-template-columns: 1fr; grid-template-rows: auto; }
+  .aic-list { max-height: 40vh; }
+}
 .ew-toprow { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 /* "What this company does" + "AI summary" capped compact (scroll for the rest). */
 .ew-toprow .card-b { max-height: 100px; overflow-y: auto; }
