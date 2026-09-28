@@ -206,7 +206,7 @@ function ThemeDetail({
 
           <div style={{ minWidth: 0 }}>
             <div className="page-title">
-              {detail?.title ?? "AI Corner"}
+              {detail?.title ?? "AI Companies"}
             </div>
 
             {detail?.blurb && (
