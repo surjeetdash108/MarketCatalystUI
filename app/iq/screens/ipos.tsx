@@ -63,11 +63,14 @@ const ipoStatusLabel = (s: string): string =>
 export function IPOsScreen() {
   const [selectedSym, setSelectedSym] = useState<string | null>(null);
   const [sector, setSector] = useState("All");
+  const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"recent" | "pipeline" | "calendar">("recent");
-  const [dateSort, setDateSort] = useState<"desc" | "asc">("desc"); // Recent-IPO date order
+  const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
   const [page, setPage] = useState(0);
+
+  const q = query.trim().toUpperCase();
   // Back to page 1 whenever the visible set changes (tab, sector, date order).
-  useEffect(() => { setPage(0); }, [tab, sector, dateSort]);
+  useEffect(() => { setPage(0); }, [tab, sector, dateSort, query]);
   const { data: liveIpos } = useApiList<IpoEventDoc>("/market-data/ipos");
   const { data: pipeline } = useApiList<IpoPipelineDoc>("/market-data/ipo-pipeline");
   // IPO events carry no sector, so join the live companies collection for each
@@ -82,11 +85,23 @@ export function IPOsScreen() {
   const pipelineSorted = (() => {
     const sorted = [...pipeline].sort((a, b) => b.dateFiled.localeCompare(a.dateFiled));
     const seen = new Set<string>();
+
     return sorted.filter(p => {
       const k = (p.companyName || "").trim().toLowerCase();
       if (!k || seen.has(k)) return false;
       seen.add(k);
-      return true;
+
+      if (!q) return true;
+
+      const hay = [
+        p.companyName,
+        p.form,
+        p.dateFiled,
+        p.cik,
+        p.accessionNumber,
+      ].join(" | ").toUpperCase();
+
+      return hay.includes(q);
     });
   })();
   // Sort newest-first, then collapse duplicate listings of the same ticker (the
@@ -126,9 +141,40 @@ export function IPOsScreen() {
   }));
   const filtered = liveRows
     .filter(r => matchesSector(sector, r.s, r.sec))
-    .sort((a, b) => dateSort === "desc" ? (b.date ?? "").localeCompare(a.date ?? "") : (a.date ?? "").localeCompare(b.date ?? ""));
+    .filter(r => {
+      if (!q) return true;
+
+      const hay = [
+        r.s,
+        r.n,
+        r.sec,
+        r.date,
+        r.offer != null ? String(r.offer) : "",
+        r.cur != null ? String(r.cur) : "",
+      ].join(" | ").toUpperCase();
+
+      return hay.includes(q);
+    })
+    .sort((a, b) => dateSort === "desc"
+      ? (b.date ?? "").localeCompare(a.date ?? "")
+      : (a.date ?? "").localeCompare(b.date ?? ""));
   // Calendar tab shares the same sector filter (also ticker-based).
-  const filteredCalendar = liveIposSorted.filter(e => matchesSector(sector, e.symbol, secForIpo(e)));
+  const filteredCalendar = liveIposSorted
+    .filter(e => matchesSector(sector, e.symbol, secForIpo(e)))
+    .filter(e => {
+      if (!q) return true;
+
+      const hay = [
+        e.symbol,
+        e.name,
+        e.date,
+        e.exchange,
+        e.status,
+        secForIpo(e),
+      ].join(" | ").toUpperCase();
+
+      return hay.includes(q);
+    });
 
   // ── Pagination (shared across tabs; only one table renders at a time) ──
   const pageSlice = <T,>(arr: T[]): T[] => {
@@ -176,20 +222,64 @@ export function IPOsScreen() {
       {/* ── Sector filter — shared across all tabs (matches the listed ticker's
           sector; the pre-IPO pipeline has no ticker, so it isn't sector-filtered). ── */}
       <div className="fbar" style={{ marginBottom: 10, gap: 10 }}>
-        <span style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", fontWeight: 600, alignSelf: "center" }}>Sector</span>
+        <span style={{
+          fontSize: ".78rem",
+          color: "var(--text-dim-solid)",
+          fontWeight: 600,
+          alignSelf: "center"
+        }}>
+          Sector
+        </span>
+
         <select
           className="iq-select"
           value={sector}
           onChange={e => setSector(e.target.value)}
-          style={{ width: "auto", minWidth: 160, padding: "5px 10px", fontSize: ".82rem" }}
+          style={{
+            width: "auto",
+            minWidth: 160,
+            padding: "5px 10px",
+            fontSize: ".82rem"
+          }}
         >
-          {sectorOptions.map(s => <option key={s} value={s}>{titleCaseLabel(s)}</option>)}
+          {sectorOptions.map(s => (
+            <option key={s} value={s}>{titleCaseLabel(s)}</option>
+          ))}
         </select>
+
+        {/* IPO search */}
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value.toUpperCase())}
+          placeholder="Search IPOs…"
+          style={{
+            marginLeft: 10,
+            width: 230,
+            boxSizing: "border-box",
+            background: "var(--surface-3)",
+            border: "1px solid var(--border-soft)",
+            borderRadius: 8,
+            padding: "5px 9px",
+            fontSize: ".74rem",
+            color: "var(--text-hi)",
+            outline: "none",
+            fontFamily: "var(--f-mono)",
+            textAlign: "left",
+          }}
+        />
+
         <div className="spacer" />
-        <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center" }}>
-          {tab === "recent" ? `${filtered.length} of ${liveRows.length} match`
-            : tab === "calendar" ? `${filteredCalendar.length} of ${liveIposSorted.length} match`
-            : `${pipelineSorted.length} filings`}
+
+        <span style={{
+          fontSize: ".72rem",
+          color: "var(--text-dim-solid)",
+          alignSelf: "center"
+        }}>
+          {tab === "recent"
+            ? `${filtered.length} of ${liveRows.length} match`
+            : tab === "calendar"
+              ? `${filteredCalendar.length} of ${liveIposSorted.length} match`
+              : `${pipelineSorted.length} filings`}
         </span>
       </div>
 
