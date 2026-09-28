@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 
 // Dynamic import breaks the circular dep: stock.tsx → shell.tsx → stock.tsx
-export const StockScreenEmbed = dynamic<{ initialSym?: string }>(
+export const StockScreenEmbed = dynamic<{initialSym?: string;hideHeader?: boolean;}>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
@@ -540,29 +540,29 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
 }
 
 // ---- Mover Drawer — full stock page in a right-side sliding drawer ----
-function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
-  return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <div className="stock-side-drawer">
-        <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
-          {/* The company logo, as every ticker row draws it. */}
-          <StockLogo sym={sym} size={31} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
-              {sym} · Stock Details
-            </div>
-            <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Full analysis · chart · technicals · peers</div>
-          </div>
-          <button className="closebtn" onClick={onClose}>✕</button>
-        </div>
-        <div className="drawer-b">
-          <StockScreenEmbed initialSym={sym} />
-        </div>
-      </div>
-    </>
-  );
-}
+// function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
+//   return (
+//     <>
+//       <div className="scrim" onClick={onClose} />
+//       <div className="stock-side-drawer">
+//         <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
+//           {/* The company logo, as every ticker row draws it. */}
+//           <StockLogo sym={sym} size={31} />
+//           <div style={{ flex: 1 }}>
+//             <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+//               {sym} · Stock Details
+//             </div>
+//             <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Full analysis · chart · technicals · peers</div>
+//           </div>
+//           <button className="closebtn" onClick={onClose}>✕</button>
+//         </div>
+//         <div className="drawer-b">
+//           <StockScreenEmbed initialSym={sym} />
+//         </div>
+//       </div>
+//     </>
+//   );
+// }
 
 /**
  * The whole stock detail screen rendered INSIDE the centred popover, instead of
@@ -594,30 +594,73 @@ function StockDetailPopover({ sym, list, onNavigate, onClose }: {
     <>
       <div className="scrim" onClick={onClose} />
       <div className="drawer open wide">
-        <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
-          {/* The company logo, as every ticker row draws it. */}
-          <StockLogo sym={sym} size={31} />
+        {/* The company logo, as every ticker row draws it. */}
+          {/* <StockLogo sym={sym} size={31} />
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
               {sym} · Stock Details
             </div>
             <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Full analysis · chart · technicals · peers</div>
-          </div>
+          </div> */}
           {/* .closebtn carries margin-left:auto; the group takes that over. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+        <div
+          className="drawer-h"
+          style={{
+            paddingTop: 14,
+            paddingBottom: 14,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          {/* Empty space on the left */}
+          <div style={{ flex: 1 }} />
+
+          {/* Navigation + close buttons on the right */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
             {list && list.length > 1 && (
               <>
-                <button className="closebtn" style={{ marginLeft: 0 }} disabled={!prev}
+                <button
+                  className="closebtn"
+                  style={{ marginLeft: 0 }}
+                  disabled={!prev}
                   title={prev ? `Previous · ${prev}` : "Start of list"}
-                  aria-label={prev ? `Show previous ticker, ${prev}` : "Start of list"}
-                  onClick={() => prev && onNavigate(prev)}>◀</button>
-                <button className="closebtn" style={{ marginLeft: 0 }} disabled={!next}
+                  aria-label={
+                    prev ? `Show previous ticker, ${prev}` : "Start of list"
+                  }
+                  onClick={() => prev && onNavigate(prev)}
+                >
+                  ◀
+                </button>
+
+                <button
+                  className="closebtn"
+                  style={{ marginLeft: 0 }}
+                  disabled={!next}
                   title={next ? `Next · ${next}` : "End of list"}
-                  aria-label={next ? `Show next ticker, ${next}` : "End of list"}
-                  onClick={() => next && onNavigate(next)}>▶</button>
+                  aria-label={
+                    next ? `Show next ticker, ${next}` : "End of list"
+                  }
+                  onClick={() => next && onNavigate(next)}
+                >
+                  ▶
+                </button>
               </>
             )}
-            <button className="closebtn" style={{ marginLeft: 0 }} aria-label="Close" onClick={onClose}>✕</button>
+
+            <button
+              className="closebtn"
+              style={{ marginLeft: 0 }}
+              aria-label="Close"
+              onClick={onClose}
+            >
+              ✕
+            </button>
           </div>
         </div>
         <div className="drawer-b">
@@ -907,7 +950,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const railRef = useRef<HTMLElement>(null);
   const [drawer, setDrawer] = useState<
     | { type: "stock"; sym: string }
-    | { type: "mover-modal"; sym: string }
+    // | { type: "mover-modal"; sym: string }
     | { type: "stock-detail"; sym: string; list?: string[] }
     | { type: "earnings"; sym: string }
     | { type: "sector"; name: string }
@@ -1023,7 +1066,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // Action context
   const actions: IQActions = {
     openStock: useCallback((sym) => setDrawer({ type: "stock", sym }), []),
-    openMoverModal: useCallback((sym) => setDrawer({ type: "mover-modal", sym }), []),
+    openMoverModal: useCallback((sym) => setDrawer({ type: "stock-detail", sym }),[]),
     openStockDetail: useCallback((sym, list) => setDrawer({ type: "stock-detail", sym, list }), []),
     openStockFull: useCallback((sym) => {
       const s = sym.trim().toUpperCase();
@@ -1346,9 +1389,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           {drawer?.type === "stock" && (
             <StockDrawer sym={drawer.sym} companies={shellCompanies} sectorsLive={shellSectors} loading={shellCompaniesLoading} onClose={() => setDrawer(null)} />
           )}
-          {drawer?.type === "mover-modal" && (
+          {/* {drawer?.type === "mover-modal" && (
             <MoverModal key={drawer.sym} sym={drawer.sym} onClose={() => setDrawer(null)} />
-          )}
+          )} */}
           {drawer?.type === "stock-detail" && (
             <StockDetailPopover key={drawer.sym} sym={drawer.sym} list={drawer.list}
               onNavigate={(s) => setDrawer({ type: "stock-detail", sym: s, list: drawer.list })}

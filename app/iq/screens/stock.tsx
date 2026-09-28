@@ -566,7 +566,7 @@ function StockChartExpanded({
   );
 }
 
-export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean } = {}) {
+export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {initialSym?: string;hideHeader?: boolean;hideChart?: boolean;headerActions?: ReactNode;} = {}) {
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
@@ -1208,7 +1208,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     // See .sd-scope in iq.css.
     <div className="sd-scope">
       {/* Symbol bar — search left, chips right */}
-      {!hideHeader && (
+      {/* {!hideHeader && (
         <div className="fbar" style={{ position: "relative" }}>
           <div style={{ position: "relative", flexShrink: 0 }}>
             <input
@@ -1253,7 +1253,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             <button key={s} className={`chip${sym === s ? " active" : ""}`} onClick={() => selectSym(s)}>{s}</button>
           ))}
         </div>
-      )}
+      )} */}
 
       {!hideHeader && (
         <div style={{ padding: "14px 18px 0" }}>
@@ -1334,7 +1334,22 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 Without a description there is no neighbouring tag, and the
                 header keeps its own — attribution is never dropped. */}
             {!data.description && (
-              <span style={{ marginLeft: "auto", alignSelf: "flex-start" }}><VendorTag v="polygon" /></span>
+              <span style={{ alignSelf: "flex-start" }}>
+                <VendorTag v="polygon" />
+              </span>
+            )}
+            {headerActions && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginLeft: "auto",
+                  flex: "none",
+                }}
+              >
+                {headerActions}
+              </div>
             )}
           </div>
 

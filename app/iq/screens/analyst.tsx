@@ -190,7 +190,7 @@ export function AnalystScreen() {
       {view === "consensus" && (<>
       {/* ── Signal cards ── */}
       <div className="dash" style={{ marginBottom: 14 }}>
-        <div className="col-6">
+        <div className="col-12">
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <h3>Cluster alerts <VendorTag v={["fmp", "polygon"]} /></h3>
@@ -218,7 +218,7 @@ export function AnalystScreen() {
             </div>
           </div>
         </div>
-        <div className="col-6">
+        {/* <div className="col-6">
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h"><h3>Recent rating activity <VendorTag v={["fmp", "polygon"]} /></h3></div>
             <div className="card-b" style={{ paddingTop: 4 }}>
@@ -234,23 +234,27 @@ export function AnalystScreen() {
               )}
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* ── Live analyst consensus + price target ── */}
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div className="card-h">
-          {/* Search sits on the LEFT, next to the title (left-aligned). */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h3>Price Targets <VendorTag v={["fmp", "polygon"]} /></h3>
-            <input
-              value={consQuery}
-              onChange={e => setConsQuery(e.target.value.toUpperCase())}
-              placeholder="Search ticker…"
-              style={{ width: 230, boxSizing: "border-box", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "5px 9px", fontSize: ".74rem", color: "var(--text-hi)", outline: "none", fontFamily: "var(--f-mono)", textAlign: "left" }}
-            />
+      <div className="card"style={{margin: "0 18px 14px",boxSizing: "border-box",}}>
+        <div className="col-12">
+          <div className="card" style={{ width: "100%", boxSizing: "border-box" }}>
+            <div className="card-h">
+              {/* Search sits on the LEFT, next to the title (left-aligned). */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <h3>Price Targets <VendorTag v={["fmp", "polygon"]} /></h3>
+                <input
+                  value={consQuery}
+                  onChange={e => setConsQuery(e.target.value.toUpperCase())}
+                  placeholder="Search ticker…"
+                  style={{ width: 230, boxSizing: "border-box", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "5px 9px", fontSize: ".74rem", color: "var(--text-hi)", outline: "none", fontFamily: "var(--f-mono)", textAlign: "left" }}
+                />
+              </div>
+              {consensusRows.length > 0 && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)" }}>live</span>}
+            </div>
           </div>
-          {consensusRows.length > 0 && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)" }}>live</span>}
         </div>
         <div className="card-b" style={{ paddingTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
           {consensusRows.length === 0 ? (

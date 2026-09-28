@@ -284,8 +284,9 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
           justifyContent: "center",
           fontFamily:
             "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-          fontSize: 14,
-          color: "var(--text-dim-solid)",
+          fontSize: 18,
+          // color: "var(--text-dim-solid)",
+          color: "var(--text-hi)",
           whiteSpace: "nowrap",
         }}
       >

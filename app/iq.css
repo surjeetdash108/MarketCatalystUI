@@ -280,13 +280,16 @@
    Horizontal variant of .nav-clock: no full-width border, never shrinks, and
    hidden on narrow viewports so it can't crowd the right-side controls. */
 .topbar-clock {
-  font-size: .72rem; color: var(--text-dim-solid);
+  font-size: .72rem; color: var(--text-hi);
   font-family: var(--f-mono); white-space: nowrap; flex-shrink: 0;
   /* Right-align the clock (and the market-open pill + icons after it): the
      search is max-width-capped, so it fills to 30rem first, then this auto
      margin absorbs the rest — parking the date/time immediately left of the
      "Market open" pill instead of floating mid-bar. */
   margin-left: auto;
+}
+.iq-root[data-theme="dark"] .topbar-clock {
+  color: #F4F6F5;
 }
 @media (max-width: 720px) { .topbar-clock { display: none; } }
 .logo {

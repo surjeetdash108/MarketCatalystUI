@@ -396,14 +396,14 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .bp-art .body ul,.bp-art .body ol{padding-left:20px}
 .bp-empty{padding:60px 24px;text-align:center;color:var(--dim2);font-size:13px}
 .zone-pill{display:inline-flex;align-items:center;gap:6px;font:600 10px var(--f-mono);padding:3px 9px;border-radius:20px}
-.z-edu{color:var(--warn);background:#F5B5441a}.z-recap{color:var(--up);background:#4ADE8016}.z-research{color:#c58bae;background:#c58bae1a}
+.z-edu{color:var(--warn);background:#F5B5441a}.z-recap{color:var(--up);background:#4ADE8016}.z-research{color:#c58bae;background:#c58bae1a}.z-news{color:#60A5FA;background:#60A5FA1a}
 /* blog zone board */
 .board-note{font-size:13px;color:var(--dim);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 15px;margin-bottom:16px}
 .board-note .cash{font-family:var(--f-mono);color:var(--brand2)}
-.blogboard{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-areas:"left center right";gap:14px}
-.z-l{grid-area:left}.z-c{grid-area:center}.z-r{grid-area:right}
+.blogboard{display:grid;grid-template-columns: repeat(4, minmax(0, 1fr));grid-template-areas: "left center-left center-right right";gap:14px}
+.z-l {grid-area: left;}.z-c1 {grid-area: center-left;}.z-c2 {grid-area: center-right;}.z-r {grid-area: right;}
 .bzone{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:14px;display:flex;flex-direction:column;min-height:230px}
-.bzone.z-c{min-height:340px}
+.bzone.z-c1,.bzone.z-c2{min-height:340px}
 .bzone .zh{display:flex;align-items:center;gap:8px;margin-bottom:11px}
 .bzone .zh .zdot{width:9px;height:9px;border-radius:3px;flex:none}
 .bzone .zh h4{font-family:var(--f-disp);font-size:14px;font-weight:600;margin:0;color:var(--hi)}
@@ -1092,7 +1092,7 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
     <div class="brow2">
       <div><label class="fl">Kicker / category</label><input id="bKick" autocomplete="off" class="inp" placeholder="Analysis · $NVDA"></div>
       <div><label class="fl">Placement</label><select id="bZone" class="inp">
-        <option value="edu">Educational — left</option><option value="recap">Recap — center</option><option value="research">Research desk — right</option></select></div>
+        <option value="edu">Educational — left</option><option value="recap">Recap — center-left</option><option value="research">Research desk — center-right</option><option value="news">News — right</option></select></div>
     </div>
     <div class="brow3">
       <div><label class="fl">Author</label><input id="bAuthor" autocomplete="off" class="inp" placeholder="Desk"></div>
@@ -2022,10 +2022,11 @@ initStudio();
 /* ================= BLOGS (zone board) ================= */
 const ZONES={
   edu:{label:'Educational',pos:'left column',cls:'z-edu',dot:'#F5B544',area:'z-l'},
-  recap:{label:'Recap',pos:'center',cls:'z-recap',dot:'#4ADE80',area:'z-c'},
-  research:{label:'Research desk',pos:'right column',cls:'z-research',dot:'#c58bae',area:'z-r'}
+  recap:{label:'Recap',pos:'center-left',cls:'z-recap',dot:'#4ADE80',area:'z-c1'},
+  research:{label:'Research desk',pos:'center-right',cls:'z-research',dot:'#c58bae',area:'z-c2'},
+  news:{label:'News',pos:'right column',cls:'z-news',dot:'#60A5FA',area:'z-r'}
 };
-const ZORDER=['edu','recap','research'];
+const ZORDER=['edu','recap','research','news'];
 /* ---------------------------------------------------------------
    REAL CONTENT — the board reads its articles from the staged admin
    dataset (REAL.blogs), delivered by the React parent before this

@@ -318,7 +318,7 @@ export function DashboardScreen() {
   // reached that ticker yet) — same overlay every other screen uses.
   const searchedLive = useLiveQuotes(searchedDeduped.map((s) => s.ticker));
 
-  const pulse = pulseFromLive(liveIndices);
+  const pulse = pulseFromLive(liveIndices).filter(x => x.label !== "Dollar (DXY)");
   const movers = mergeMoversData(liveMovers, companies);
   const earnings = mergeEarningsData(liveEarnings);
   // "Earnings Today" is exactly today's reported companies — no fallback to the
