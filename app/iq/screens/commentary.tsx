@@ -304,7 +304,7 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onTicker(item.ticker);
+            // onTicker(item.ticker);
             onStockOpen(item.ticker);
           }}
           title={`Filter the feed by ${item.ticker} and open stock details`}
