@@ -848,7 +848,7 @@ export function EarningsScreen() {
   const { data: analystActions } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const liveEarningsData = liveEarnings;
 
-  const [mode, setMode]     = useState<"day" | "week" | "month">("day");
+  const [mode, setMode]     = useState<"day" | "week" | "month">("month");
   // Per-day expanded state for Day and Week views so +N expands inline.
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const toggleDayExpanded = (iso: string) => {
