@@ -928,10 +928,10 @@ function CandleChartInner({
           and a × (drop it from this list) — matching a real chart legend
           instead of bare SVG text floating over the candles. */}
       <div className="chart-hud">
-        <div className="chart-hud-head">
+        {/* <div className="chart-hud-head">
           <span className="chart-hud-sym">{sym}</span>
           <span className="chart-hud-tf">· {TF_LABELS[tf] ?? tf}{exchange ? ` · ${exchange}` : ""}</span>
-        </div>
+        </div> */}
         <div className="chart-hud-ohlc">
           O<b>${dispBar.o.toFixed(2)}</b>H<b>${dispBar.h.toFixed(2)}</b>L<b>${dispBar.l.toFixed(2)}</b>C<b>${dispBar.c.toFixed(2)}</b>
           <span style={{ color: dispChg >= 0 ? "var(--up)" : "var(--down)" }}>
