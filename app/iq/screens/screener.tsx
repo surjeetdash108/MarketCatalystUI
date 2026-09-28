@@ -82,7 +82,9 @@ export function ScreenerScreen() {
   const [filtersOpen, setFiltersOpen] = useState(true);
 
   /* ── Sector/theme filter — one uniform option set app-wide (sectors + themes). ── */
-  const [sector, setSector] = useState("All");
+  // "" = nothing picked yet (the "Select" placeholder). Choosing "All" is an
+  // explicit filter choice and populates Results with the full universe.
+  const [sector, setSector] = useState("");
   const sectorOptions = sectorFilterOptions(companies);
 
   /* ── Manual filter state ── */
@@ -198,7 +200,7 @@ export function ScreenerScreen() {
 
   function resetAll() {
     setActivePresets(new Set());
-    setSector("All");
+    setSector("");
     setRs90(false); setRs7090(false); setRsLt40(false);
     setSalesGt20(false); setEpsGt25(false); setMarginPos(false);
     setRatingBuy(false); setMcGt10(false); setRvolGt15(false);
@@ -210,7 +212,7 @@ export function ScreenerScreen() {
   // at least one filter (a preset, the sector, or any manual criterion). This
   // is a screener — an unfiltered "everything" list isn't a useful default.
   const hasActiveFilters =
-    activePresets.size > 0 || sector !== "All" ||
+    activePresets.size > 0 || sector !== "" ||
     rs90 || rs7090 || rsLt40 || salesGt20 || epsGt25 || marginPos ||
     ratingBuy || mcGt10 || rvolGt15 || dmaAbove || rsiBand || priceGt5;
 
@@ -366,6 +368,7 @@ export function ScreenerScreen() {
               onChange={e => setSector(e.target.value)}
               style={{ width: "auto", minWidth: 150, padding: "4px 10px", fontSize: ".72rem" }}
             >
+              <option value="" disabled>Select</option>
               {sectorOptions.map(s => <option key={s} value={s}>{titleCaseLabel(s)}</option>)}
             </select>
           </div>

@@ -3,7 +3,7 @@ import { AuthBackdrop } from "./auth-backdrop";
 import { ReactNode } from "react";
 
 const PILLS = [
-  { label: "14 live workspaces",     d: ".30s" },
+  { label: "16 live workspaces",     d: ".30s" },
   { label: "AI-generated briefs",    d: ".45s" },
   { label: "Earnings hub",           d: ".60s" },
   { label: "Analyst actions",        d: ".75s" },

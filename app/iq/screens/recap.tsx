@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { cls, sign, StockLogo, DataState, NotAvailable, VendorTag, titleCaseLabel} from "../utils";
+import { fmtDate } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs, pulseFromLive } from "../live-market-indices";

@@ -25,7 +25,9 @@ export function useBackendBars(
   enabled = true,
 ): { bars: OHLCBar[] | undefined; loading: boolean; asOf?: string; source?: BarsResponse["source"] } {
   const { data, loading } = useApiResource<BarsResponse>(
-    enabled ? `/live/bars?ticker=${encodeURIComponent(sym)}&tf=${tf}` : null,
+    // No ticker yet (e.g. an empty list's chart card) → no request; the
+    // backend rejects an empty ticker with a 400.
+    enabled && sym ? `/live/bars?ticker=${encodeURIComponent(sym)}&tf=${tf}` : null,
   );
   const bars = !data || data.bars.length < 2
     ? undefined

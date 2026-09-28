@@ -186,7 +186,9 @@ function ThemeDetail({
     companies.find(c => c.ticker === selectedTicker) ?? companies[0] ?? null;
 
   return (
-    <>
+    // Fills .main exactly so the page itself never scrolls — only the company
+    // list and the details card do (same behavior as Earnings Hub detail mode).
+    <div className="aic-detail">
       <div className="page-head">
         <div
           style={{
@@ -223,9 +225,9 @@ function ThemeDetail({
         </button>
       </div>
 
-      <div className="dash">
-        <div className="col-12">
-          {companies.length === 0 ? (
+      {companies.length === 0 ? (
+        <div className="dash">
+          <div className="col-12">
             <DataState
               loading={loading}
               label={
@@ -234,21 +236,13 @@ function ThemeDetail({
                   : "No companies classified into this sector yet."
               }
             />
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "minmax(250px, 0.32fr) minmax(0, 1fr)",
-                gap: 14,
-                alignItems: "stretch",
-                height: "calc(100vh - 110px)",
-                minHeight: 0,
-              }}
-            >
+          </div>
+        </div>
+      ) : (
+            <div className="aic-split">
               {/* LEFT — companies */}
               <div
-                className="card"
+                className="card aic-list"
                 style={{
                   overflow: "hidden",
                   minHeight: 0,
@@ -367,6 +361,7 @@ function ThemeDetail({
                   minWidth: 0,
                   minHeight: 0,
                   overflowY: "auto",
+                  overscrollBehavior: "contain",
                 }}
               >
                 {selectedCompany ? (
@@ -381,10 +376,8 @@ function ThemeDetail({
                 )}
               </div>
             </div>
-          )}
-        </div>
-      </div>
-    </>
+      )}
+    </div>
   );
 }
 

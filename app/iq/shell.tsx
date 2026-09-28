@@ -128,10 +128,11 @@ export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
 
 // ---- Nav icon SVG ----
 /**
- * MarketCatalyst brand mark — inline SVG (gradient ascending bar-chart +
- * trend line ending in an arrowhead) and the wordmark "Market" (light) +
- * "Catalyst" (brand green). Crisp at any size, theme-aware (the gradient's
- * bright stop tracks var(--brand) per theme).
+ * MarketCatalyst brand mark — inline SVG (three gradient bars whose tops
+ * trace an "M" — peak, valley, peak — continuing into a solid arrowhead)
+ * and the wordmark "Market" (light) + "Catalyst" (brand green). Crisp at
+ * any size, theme-aware (the gradient's bright stop tracks var(--brand)
+ * per theme).
  */
 function BrandLogo({ height = 28 }: { height?: number }) {
   return (
@@ -143,12 +144,13 @@ function BrandLogo({ height = 28 }: { height?: number }) {
             <stop offset="1" style={{ stopColor: "var(--brand)" }} />
           </linearGradient>
         </defs>
-        <rect x="5" y="27" width="6" height="12" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="14" y="21" width="6" height="18" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="23" y="15" width="6" height="24" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="32" y="9" width="6" height="30" rx="2" fill="url(#mcBrandGrad)" />
-        <path d="M7 30 L16 23 L25 17 L36 8" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M28 8 L36 8 L36 16" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="5" y="22" width="6" height="17" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="15" y="28" width="6" height="11" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="25" y="14" width="6" height="25" rx="2" fill="url(#mcBrandGrad)" />
+        {/* Peak-valley-peak "M" silhouette across the three bar tops, continuing
+            into the arrowhead — not a smooth ascending staircase. */}
+        <path d="M8 22 L18 28 L28 14 L36 6" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M40 2 L36 11 L31 6 Z" fill="url(#mcBrandGrad)" />
       </svg>
       <span style={{
         fontFamily: "var(--f-display), system-ui, sans-serif",
@@ -173,6 +175,7 @@ function NavIcon({ slug }: { slug: string }) {
     ipos:        "M3 17l6-6 4 4 8-8M14 7h7v7",
     portfolio:   "M3 13a9 9 0 1 0 18 0 9 9 0 0 0-18 0ZM12 7v6l4 2",
     watchlist:   "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7ZM12 12m-3 0a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
+    notes:       "M5 3h10l4 4v14H5V3Zm10 0v4h4M8 11h8M8 15h8M8 19h5",
     stock:       "M4 19V5M4 19h16M8 15l3-4 3 2 4-7",
     insider:     "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-1a6 6 0 0 1 12 0v1M18 11l2 2 3-3",
     commentary:  "M4 5h16v11H8l-4 4V5z",
@@ -1229,6 +1232,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <button className="pd-item" onClick={() => { router.push("/settings"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">⚙</span> Settings
                     </button>
+                    <button className="pd-item" onClick={() => { router.push("/menu/notes"); setProfileDropdownOpen(false); }}>
+                      <span className="pd-icon">📝</span> Chart Notes
+                    </button>
                     <button className="pd-item" onClick={() => { router.push("/manage-plan"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">◈</span> Manage Account
                     </button>
@@ -1329,7 +1335,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     that open in a new tab rather than router navigations, and a
                     signed-in reader keeps their session here. */}
                 <nav className="disclaimer-links">
-                  <a href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">Blogs</a>
+                  <a href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">Research</a>
                   <a href="https://marketcatalyst.ai/faqs" target="_blank" rel="noopener noreferrer">FAQs</a>
                 </nav>
               </footer>
