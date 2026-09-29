@@ -953,37 +953,70 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   // exact same number as the heatmap tile / movers row for the same ticker.
   // useLiveTick still drives the intraday chart overlay below.
   const sharedQuote = useLiveQuotes([sym]).get(sym);
+
   const livePrice = sharedQuote?.price ?? live.tick?.price ?? null;
-  // Nullable: live tick, then the company snapshot — but NOT `p`'s 0 fallback, so
-  // an entirely-unknown quote stays null and the header renders a dash instead of
-  // $0.00 (BUG-DATA-007).
   const dispPrice = livePrice ?? data.price;
-  const dispPct = sharedQuote?.pctChange ?? live.pct ?? data.pctChange;
-  // Derive the $ move from whichever feed supplied the price and % above, so the
-  // three numbers in the header always describe the same tick. Taking it from
-  // live.change while price/% came from sharedQuote mixed two independent polls:
-  // $6.10 could sit beside a price and % captured seconds apart.
-  //   prevClose = price / (1 + pct/100)  =>  change = price - prevClose
+
+  const dispPct =
+    sharedQuote?.pctChange ??
+    live.pct ??
+    data.pctChange;
+
   const sharedDollar =
     sharedQuote?.price != null && sharedQuote.pctChange != null
       ? Math.abs(
-          sharedQuote.price - sharedQuote.price / (1 + sharedQuote.pctChange / 100),
+          sharedQuote.price -
+          sharedQuote.price / (1 + sharedQuote.pctChange / 100),
         )
       : null;
+
   const dispDollar =
-    sharedDollar ?? (live.change != null ? Math.abs(live.change) : dollar);
-  // Outside regular hours the headline change is an extended-hours move, and
-  // printing it bare contradicts the chart — whose last completed candle is the
-  // regular session that closed. MDB read +3.73% green beside a red final
-  // candle: the vendor had regular_trading_change_percent 0 and
-  // late_trading_change_percent 3.734, so the whole move was after the bell.
-  // Both numbers were right; the label was missing. See extendedSession.
-  const extLabel = extendedSession(sharedQuote);
-  // The regular session's closing price, which the extended move is measured
-  // from — the number the chart's last candle actually ends at.
-  const atClose =
-    dispPrice != null && dispPct != null && dispPct !== -100
+    sharedDollar ??
+    (live.change != null ? Math.abs(live.change) : dollar);
+
+  /*
+  * Regular-session close.
+  *
+  * The current live price may be an extended-hours price. Reconstruct
+  * the regular-session close from the current price + its move.
+  */
+  const marketClose =
+    dispPrice != null &&
+    dispPct != null &&
+    dispPct !== -100
       ? dispPrice / (1 + dispPct / 100)
+      : null;
+
+  /*
+  * Extended-session detection.
+  *
+  * extendedSession() is already provided by live-quotes-context and is
+  * the source of truth for whether this quote is outside regular hours.
+  */
+  const isAfterHours = !!extendedSession(sharedQuote);
+
+  /*
+  * After-hours price/change.
+  *
+  * Only show this section when the market is actually outside
+  * regular trading hours and the quote contains an extended-hours move.
+  */
+  const afterHoursPrice =
+    isAfterHours && sharedQuote?.price != null
+      ? sharedQuote.price
+      : null;
+
+  const afterHoursPct =
+    isAfterHours && sharedQuote?.pctChange != null
+      ? sharedQuote.pctChange
+      : null;
+
+  const afterHoursDollar =
+    afterHoursPrice != null && afterHoursPct != null
+      ? Math.abs(
+          afterHoursPrice -
+          afterHoursPrice / (1 + afterHoursPct / 100),
+        )
       : null;
   // Freshness stamp for the price-chart bars (backend createdAt), surfaced by the
   // chart toolbar in the same muted style as the header's delayed-quote marker
@@ -1273,17 +1306,101 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                   start higher. It still wraps rather than clips on a narrow
                   window — flex-wrap with a small row-gap, so a wrapped header
                   degrades to the old two-line look instead of losing text. */}
-              <div className="sd-headline">
+              <div
+                className="sd-headline"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  flexWrap: "wrap",
+                }}
+              >
                 <h1>{sym}</h1>
-                <div className="sd-px" style={{ margin: 0, display: "flex", alignItems: "baseline", gap: 10 }}>
-                  {dispPrice != null
-                    ? <span className="p">${fmt(dispPrice, 2)}</span>
-                    : <span className="p" style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                  {dispPct != null && (
-                    <span className={`c ${cls(dispPct)}`}>{arr(dispPct)} {dispPct >= 0 ? "+" : ""}${fmt(dispDollar ?? 0, 2)} ({sign(dispPct)})</span>
-                  )}
 
+                {/* REGULAR MARKET CLOSE */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    minHeight: 42,
+                  }}
+                >
+                  <span className="p">
+                    ${fmt(marketClose ?? dispPrice ?? 0, 2)}
+                  </span>
+
+                  {dispPct != null && (
+                    <span className={`c ${cls(dispPct)}`}>
+                      {arr(dispPct)}{" "}
+                      {dispPct >= 0 ? "+" : "-"}$
+                      {fmt(dispDollar ?? 0, 2)}{" "}
+                      ({sign(dispPct)})
+                    </span>
+                  )}
                 </div>
+
+                {/* AFTER HOURS — ONLY SHOWN AFTER REGULAR MARKET CLOSE */}
+                {isAfterHours && afterHoursPrice != null && (
+                  <div
+                    style={{
+                      height: 48,
+                      borderLeft: "5px solid var(--up)",
+                      paddingLeft: 14,
+                      marginLeft: 2,
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      gap: 2,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: ".72rem",
+                        fontWeight: 800,
+                        color: "var(--text-hi)",
+                        letterSpacing: ".02em",
+                        lineHeight: 1,
+                      }}
+                    >
+                      AFTER HOURS
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: 9,
+                      }}
+                    >
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: "1.05rem",
+                          fontWeight: 700,
+                          color: "var(--text-hi)",
+                        }}
+                      >
+                        ${fmt(afterHoursPrice, 2)}
+                      </span>
+
+                      {afterHoursPct != null && (
+                        <span
+                          className={`c ${cls(afterHoursPct)}`}
+                          style={{
+                            fontSize: ".82rem",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {arr(afterHoursPct)}{" "}
+                          {afterHoursPct >= 0 ? "+" : "-"}$
+                          {fmt(afterHoursDollar ?? 0, 2)}{" "}
+                          ({sign(afterHoursPct)})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               {/* Second line, under the price: market cap, exchange/sector and
                   the provenance pills. These used to share the identity line
@@ -1314,7 +1431,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                     exactly h1 + price + change on one line; a pill up there
                     overflows that budget and wraps the change under a clipped
                     price. This row already wraps by design. */}
-                {extLabel && (
+                {/* {extLabel && (
                   <span
                     className="pill"
                     title={`This move happened outside regular trading hours. The last regular session closed at $${fmt(atClose ?? 0, 2)} — that close is what the chart's final candle shows.`}
@@ -1322,7 +1439,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                   >
                     {extLabel}{atClose != null ? ` · at close $${fmt(atClose, 2)}` : ""}
                   </span>
-                )}
+                )} */}
                 {isLiveStock && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>
                     live quote · {vendorLabel(liveCompany?.source)}
