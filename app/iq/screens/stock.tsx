@@ -678,8 +678,8 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   // Tab shown below the persistent header + chart, in the full (non-embedded)
   // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
   // its original single stacked-card layout, so this state is unused there.
-  type StockTab = "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news";
-  const [activeTab, setActiveTab] = useState<StockTab>("overview");
+  type StockTab = "chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers";
+  const [activeTab, setActiveTab] = useState<StockTab>("chart");
 
   // Watchlists are backend-synced (multiple named lists). The star is "filled"
   // when the ticker is in ANY list; clicking it opens the which-list picker.
@@ -1207,16 +1207,18 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   // tags still key off pmx/pmn, so they stay correct regardless of sort.
   const sortedPeers = [...peersAll].sort((a, b) => (peerSort === "asc" ? a.c - b.c : b.c - a.c));
 
-  // Tab bar config — mirrors the mockup's Overview/Analysis/Earnings/
+  // Tab bar config — mirrors the Chart/Overview/Analysis/Earnings/
   // Financials/Holdings/News split. Counts are real data (quarters on file /
   // articles fetched), not decorative.
   const TABS: { id: StockTab; label: string; count?: number }[] = [
+    { id: "chart", label: "Chart" },
     { id: "overview", label: "Overview" },
     { id: "analysis", label: "Analysis" },
     { id: "earnings", label: "Earnings", count: hist10.length || undefined },
     { id: "financials", label: "Financials" },
     { id: "holdings", label: "Holdings" },
     { id: "news", label: "News", count: tickerNews?.length || undefined },
+    { id: "peers", label: "Peers" },
   ];
   // Every rail card lives on exactly one tab (Analysis) — no card is
   // duplicated across tabs. The rest show a full-width main column instead of
@@ -1499,10 +1501,32 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
         style={hideHeader ? { paddingTop: 0 } : (showRail ? undefined : { gridTemplateColumns: "1fr" })}
       >
 
-        {/* Full-width chart */}
-        {!hideChart && <div style={{ gridColumn: "1 / -1" }}>
-          {/* Chart card */}
-          <div className="card">
+        {/* ── Tab bar — Chart / Overview / Analysis / Earnings / Financials / Holdings /
+             News. Full-view only; the compact embed (hideHeader, used inline in
+             StockPanelLayout) keeps its original single stacked-card layout,
+             rendered unchanged in the `hideHeader &&` branch below. */}
+        {!hideHeader && (
+          <nav className="sd-tabbar" style={{ gridColumn: "1 / -1" }} role="tablist" aria-label="Stock detail sections">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                className="sd-tabbtn"
+                role="tab"
+                aria-selected={activeTab === t.id}
+                onClick={() => setActiveTab(t.id)}
+              >
+                {t.label}
+                {t.count ? <span className="count">{t.count}</span> : null}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {/* Full-width chart — rendered in full view when activeTab === "chart", or in compact embed mode when !hideChart */}
+        {((!hideHeader && !hideChart && activeTab === "chart") || (hideHeader && !hideChart)) && (
+          <div style={{ gridColumn: "1 / -1" }}>
+            {/* Chart card */}
+            <div className="card">
             <div className="chart-toolbar">
               <ChartSelect value={tfActive} options={TF_OPTIONS} onChange={setTfActive} title="Timeframe" />
               <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
@@ -1729,28 +1753,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
               </>
             )}
           </div>
-        </div>}
-
-        {/* ── Tab bar — Overview / Analysis / Earnings / Financials / Holdings /
-             News. Full-view only; the compact embed (hideHeader, used inline in
-             StockPanelLayout) keeps its original single stacked-card layout,
-             rendered unchanged in the `hideHeader &&` branch below. */}
-        {!hideHeader && (
-          <nav className="sd-tabbar" style={{ gridColumn: "1 / -1" }} role="tablist" aria-label="Stock detail sections">
-            {TABS.map(t => (
-              <button
-                key={t.id}
-                className="sd-tabbtn"
-                role="tab"
-                aria-selected={activeTab === t.id}
-                onClick={() => setActiveTab(t.id)}
-              >
-                {t.label}
-                {t.count ? <span className="count">{t.count}</span> : null}
-              </button>
-            ))}
-          </nav>
-        )}
+        </div>)}
 
       {hideHeader && (<>
         {/* LEFT COLUMN — natural height (no stretch) so leftColRef measures the
@@ -2971,6 +2974,58 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
             </div>
           )}
 
+          {activeTab === "peers" && (
+            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+              <div className="card-h">
+                <div>
+                  <h3>Peers · {sym}</h3>
+                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                    {peersTotal} peer{peersTotal === 1 ? "" : "s"} with live data{data.sector ? ` in ${titleCaseLabel(data.sector)}` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {peersTotal > 1 && (
+                    <button
+                      onClick={() => setPeerSort(s => (s === "desc" ? "asc" : "desc"))}
+                      title={`Sort by % change — ${peerSort === "desc" ? "highest first" : "lowest first"}`}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        fontSize: ".62rem", fontWeight: 700, letterSpacing: ".02em",
+                        color: "var(--text-dim-solid)", background: "var(--surface-3)",
+                        border: "1px solid var(--border-soft)", borderRadius: 6,
+                        padding: "3px 7px", cursor: "pointer",
+                      }}
+                    >
+                      % <span style={{ color: "var(--brand-2)" }}>{peerSort === "desc" ? "▼" : "▲"}</span>
+                    </button>
+                  )}
+                  <VendorTag v="polygon" />
+                  {peersTotal > peers.length && <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>}
+                </div>
+              </div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                {sortedPeers.length ? sortedPeers.map(peer => {
+                  const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
+                  return (
+                    <div key={peer.t} className="minirow"
+                      style={{ cursor: "pointer" }} onClick={() => openStock(peer.t)}>
+                      <StockLogo sym={peer.t} size={24} />
+                      <span className="mono" style={{ fontWeight: 700, minWidth: 52, color: peer.t === sym ? "var(--brand-2)" : "var(--text-hi)" }}>{peer.t}</span>
+                      <span className="mid" style={{ fontSize: ".78rem" }}>
+                        {peer.name ? <span>{peer.name}</span> : null}
+                        {tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`} style={{ marginLeft: 6 }}>{tag}</span>}
+                        {peer.rsRating != null && (
+                          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 4, fontSize: ".62rem" }}>RS {peer.rsRating}</span>
+                        )}
+                      </span>
+                      <span className={`r mono ${cls(peer.c)}`} style={{ fontSize: ".82rem" }}>{sign(peer.c)}</span>
+                    </div>
+                  );
+                }) : <DataState loading={companiesLoading} label="No live peers found in this sector yet." />}
+              </div>
+            </div>
+          )}
+
         </div>
 
         {showRail && (
@@ -3139,51 +3194,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
               </div>
             )}
 
-            {activeTab === "analysis" && (
-              <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-                <div className="card-h">
-                  <h3>Peers</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {peersTotal > 1 && (
-                      <button
-                        onClick={() => setPeerSort(s => (s === "desc" ? "asc" : "desc"))}
-                        title={`Sort by % change — ${peerSort === "desc" ? "highest first" : "lowest first"}`}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 4,
-                          fontSize: ".62rem", fontWeight: 700, letterSpacing: ".02em",
-                          color: "var(--text-dim-solid)", background: "var(--surface-3)",
-                          border: "1px solid var(--border-soft)", borderRadius: 6,
-                          padding: "3px 7px", cursor: "pointer",
-                        }}
-                      >
-                        % <span style={{ color: "var(--brand-2)" }}>{peerSort === "desc" ? "▼" : "▲"}</span>
-                      </button>
-                    )}
-                    <VendorTag v="polygon" />
-                    {peersTotal > peers.length && <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>}
-                  </div>
-                </div>
-                <div className="card-b" style={{ paddingTop: 6, flex: 1, minHeight: 0, overflowY: "auto" }}>
-                  {sortedPeers.length ? sortedPeers.map(peer => {
-                    const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
-                    return (
-                      <div key={peer.t} className="minirow"
-                        style={{ cursor: "pointer" }} onClick={() => openStock(peer.t)}>
-                        <StockLogo sym={peer.t} size={22} />
-                        <span className="tkr">{peer.t}</span>
-                        <span className="mid">
-                          {tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`}>{tag}</span>}
-                          {peer.rsRating != null && (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 4, fontSize: ".62rem" }}>RS {peer.rsRating}</span>
-                          )}
-                        </span>
-                        <span className={`r ${cls(peer.c)}`}>{sign(peer.c)}</span>
-                      </div>
-                    );
-                  }) : <DataState loading={companiesLoading} label="No live peers found in this sector yet." />}
-                </div>
-              </div>
-            )}
+
 
           </div>
         )}
