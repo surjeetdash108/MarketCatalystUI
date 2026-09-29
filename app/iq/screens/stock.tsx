@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { fmtDate } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
@@ -567,6 +568,7 @@ function StockChartExpanded({
 }
 
 export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {initialSym?: string;hideHeader?: boolean;hideChart?: boolean;headerActions?: ReactNode;} = {}) {
+  const router = useRouter();
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
@@ -1257,6 +1259,41 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
 
       {!hideHeader && (
         <div style={{ padding: "14px 18px 0" }}>
+
+          {/* Back navigation box */}
+          <div
+            style={{
+              height: 40,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              padding: "0 10px",
+              marginBottom: 8,
+              background: "transparent",
+              border: "none",
+            }}
+          >
+            <button
+              onClick={() => router.back()}
+              aria-label="Go back"
+              title="Go back"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "6px 3px",
+                border: "none",
+                background: "transparent",
+                color: "var(--text-dim-solid)",
+                cursor: "pointer",
+                fontSize: ".94rem",
+                fontWeight: 600,
+                fontFamily: "var(--f-body)",
+              }}
+            >
+              ✕ Back
+            </button>
+          </div>
           {/* Header row: identity/quote on the left, the About blurb in the dead
               space to its right. The blurb used to sit on its own line BELOW the
               header, pushing the chart ~90px down the page for no informational

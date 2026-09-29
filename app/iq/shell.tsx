@@ -894,11 +894,20 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   function goToStock(sym: string) {
     const s = sym.trim().toUpperCase();
     if (!s) return;
+
     logSearchedTicker(s);
+
     if (typeof window !== "undefined") {
       localStorage.setItem("iq-stock", s);
-      window.dispatchEvent(new CustomEvent("iq-stock-change", { detail: s }));
+      window.dispatchEvent(
+        new CustomEvent("iq-stock-change", { detail: s })
+      );
     }
+
+    // Keep the main sidebar open when viewing a stock.
+    setNavCollapsed(false);
+    localStorage.setItem("iq-nav-collapsed", "0");
+
     setSearchOpen(false);
     setSearchQ("");
     router.push("/menu/stock");
@@ -1035,10 +1044,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // is transient — it does NOT write localStorage, so the manual toggle's saved
   // preference is preserved and re-applied on exit.
   useEffect(() => {
-    if (pathname === "/menu/stock") {
-      setNavCollapsed(true);
-    } else if (typeof window !== "undefined") {
-      setNavCollapsed(localStorage.getItem("iq-nav-collapsed") === "1");
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("iq-nav-collapsed");
+      setNavCollapsed(saved === "1");
     }
   }, [pathname]);
 
