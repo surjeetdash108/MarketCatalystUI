@@ -600,6 +600,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   const [showEarnings, setShowEarnings] = useState(true);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [maStep, setMaStep] = useState(0);
+  const [chartMinimized, setChartMinimized] = useState(false);
 
   // Live overlays for the detail panels — analyst consensus, insider
   // transactions, the full company universe (for peer/sector lookups), sector
@@ -1420,76 +1421,196 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                   as of {barsAsOfLabel}
                 </span>
               )}
-              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>scroll to zoom · drag to pan · double-click to reset</span>
-              <ExpandBtn
-                title={`${sym} · Price Chart`}
-                node={
-                  <StockChartExpanded
-                    sym={sym} px={p}
-                    initialTf={tfActive} initialChartType={chartType}
-                    initialMaStep={maStep} initialEmaStep={emaStep}
-                    initialShowVol={showVol} initialShowRsi={showRsi}
-                    initialShowEarnings={showEarnings}
-                    hist10={hist10} rsi={rsi} rsiLoading={liveCompanyLoading} erDate={erDate}
-                    earnings={chartEarnings}
-                  />
-                }
-              />
-            </div>
-            <div id="chartHost" style={{ padding: "0 14px 0" }} ref={chartRef}
-              onContextMenu={handleChartRightClick}>
-              <CandleChart sym={sym} tf={tfActive} px={p}
-                maStep={maStep} emaStep={emaStep}
-                showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars}
-                exchange={ex}
-                live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low } : null}
-                earnings={showEarnings ? chartEarnings : []} />
-            </div>
-            {showRsi && (
-              <div id="rsiHost">
-                <div style={{ padding: "6px 14px 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
-                  <span>RSI (14)</span>
-                  <span className="mono" style={{ color: "var(--warn)" }}>
-                    {rsi != null ? `${Math.round(rsi)} · ${rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}` : "not available"}
-                  </span>
-                </div>
-                <div style={{ padding: "0 14px 4px" }}><RsiPane rsi14={rsi} loading={liveCompanyLoading} /></div>
-              </div>
-            )}
-            <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-              Pattern: <b style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
-                {isUp ? "cup-with-handle breakout" : "breakdown below support"}
-              </b> {isUp ? "on above-average volume." : "on rising volume."}
+
+              {/* Hide instructions when chart is minimised */}
+              {!chartMinimized && (
+                <span
+                  style={{
+                    fontSize: ".72rem",
+                    color: "var(--text-dim-solid)",
+                    marginRight: 8,
+                  }}
+                >
+                  scroll to zoom · drag to pan · double-click to reset
+                </span>
+              )}
+
+              {/* Always keep Minimise / Maximise button visible */}
+              <button
+                type="button"
+                onClick={() => setChartMinimized(v => !v)}
+                title={chartMinimized ? "Maximise chart" : "Minimise chart"}
+                aria-label={chartMinimized ? "Maximise chart" : "Minimise chart"}
+                style={{
+                  marginLeft: "auto",
+                  alignSelf: "flex-start",
+                  marginTop: 0,
+                  padding: "5px 10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 7,
+                  background: "var(--surface-2)",
+                  color: "var(--text-dim-solid)",
+                  cursor: "pointer",
+                  fontSize: ".68rem",
+                  fontWeight: 600,
+                }}
+              >
+                {chartMinimized ? "Maximise" : "Minimise"}
+              </button>
             </div>
 
-            {/* Chart notes — inline inside chart card */}
-            <div className="cn-wrap">
-              <div className="cn-h">
-                Chart notes
-                <span className="cn-hint">right-click to add · saved to your account</span>
-                <button className="chip ai-c" style={{ marginLeft: "auto", fontSize: ".7rem" }}
-                  onClick={() => setNoteOpen(true)}>+ Add note</button>
-              </div>
-              {notes.length === 0 ? (
-                <div className="cn-empty">No notes yet. Right-click the chart or click &ldquo;Add note&rdquo; to record a trade decision.</div>
-              ) : (
-                notes.map(n => (
-                  <div key={n.id} className="cn-row">
-                    <div className="cn-dot" />
-                    <div className="cn-tx">
-                      {n.comment}
-                      <span className="cn-ts">
-                        {" · "}
-                        {n.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                        {" "}
-                        {n.createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+            {/* Chart content disappears when minimised */}
+            {!chartMinimized && (
+              <>
+                <div
+                  id="chartHost"
+                  style={{ padding: "0 14px 0" }}
+                  ref={chartRef}
+                  onContextMenu={handleChartRightClick}
+                >
+                  <CandleChart
+                    sym={sym}
+                    tf={tfActive}
+                    px={p}
+                    maStep={maStep}
+                    emaStep={emaStep}
+                    showVol={showVol}
+                    chartType={chartType.toLowerCase()}
+                    realBars={realBars}
+                    exchange={ex}
+                    live={
+                      live.tick
+                        ? {
+                            price: live.tick.price,
+                            high: live.tick.high,
+                            low: live.tick.low,
+                          }
+                        : null
+                    }
+                    earnings={showEarnings ? chartEarnings : []}
+                  />
+                </div>
+
+                {showRsi && (
+                  <div id="rsiHost">
+                    <div
+                      style={{
+                        padding: "6px 14px 4px",
+                        fontSize: ".66rem",
+                        color: "var(--text-dim-solid)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <span>RSI (14)</span>
+
+                      <span
+                        className="mono"
+                        style={{ color: "var(--warn)" }}
+                      >
+                        {rsi != null
+                          ? `${Math.round(rsi)} · ${
+                              rsi > 70
+                                ? "overbought"
+                                : rsi < 40
+                                  ? "weak"
+                                  : "neutral-to-strong"
+                            }`
+                          : "not available"}
                       </span>
                     </div>
-                    <button className="icon-x" onClick={() => removeNote(n.id)}>✕</button>
+
+                    <div style={{ padding: "0 14px 4px" }}>
+                      <RsiPane
+                        rsi14={rsi}
+                        loading={liveCompanyLoading}
+                      />
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
+                )}
+
+                <div
+                  style={{
+                    padding: "6px 14px 12px",
+                    fontSize: ".7rem",
+                    color: "var(--text-dim-solid)",
+                  }}
+                >
+                  Pattern:{" "}
+                  <b
+                    style={{
+                      color: isUp ? "var(--up)" : "var(--down)",
+                    }}
+                  >
+                    {isUp
+                      ? "cup-with-handle breakout"
+                      : "breakdown below support"}
+                  </b>{" "}
+                  {isUp
+                    ? "on above-average volume."
+                    : "on rising volume."}
+                </div>
+
+                {/* Chart notes — inline inside chart card */}
+                <div className="cn-wrap">
+                  <div className="cn-h">
+                    Chart notes
+
+                    <span className="cn-hint">
+                      right-click to add · saved to your account
+                    </span>
+
+                    <button
+                      className="chip ai-c"
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: ".7rem",
+                      }}
+                      onClick={() => setNoteOpen(true)}
+                    >
+                      + Add note
+                    </button>
+                  </div>
+
+                  {notes.length === 0 ? (
+                    <div className="cn-empty">
+                      No notes yet. Right-click the chart or click
+                      &ldquo;Add note&rdquo; to record a trade decision.
+                    </div>
+                  ) : (
+                    notes.map(n => (
+                      <div key={n.id} className="cn-row">
+                        <div className="cn-dot" />
+
+                        <div className="cn-tx">
+                          {n.comment}
+
+                          <span className="cn-ts">
+                            {" · "}
+                            {n.createdAt.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                            {" "}
+                            {n.createdAt.toLocaleTimeString("en-US", {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+
+                        <button
+                          className="icon-x"
+                          onClick={() => removeNote(n.id)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>}
 
