@@ -1478,8 +1478,9 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
               inside its box, which is now the header's right-hand half. */}
           {data.description && (
             <div className="sd-about">
-              <div className="sd-about-lbl" style={{ display: "flex", alignItems: "center", gap: 8 }}>About {data.name} <VendorTag v="polygon" /></div>
-              <p style={{ margin: "4px 0 0", fontSize: ".82rem", lineHeight: 1.6, color: "var(--text-dim-solid)" }}>
+              {/* <div className="sd-about-lbl" style={{ display: "flex", alignItems: "center", gap: 8 }}>About {data.name} <VendorTag v="polygon" /></div> */}
+              <div className="sd-about-lbl"style={{display: "flex",alignItems: "center",justifyContent: "flex-end",gap: 8,}}><VendorTag v="polygon" /></div>
+              <p style={{ margin: "4px 0 0", fontSize: ".82rem", lineHeight: 1.6,  color: "var(--text-primary)" }}>
                 {data.description}
               </p>
               {data.homepageUrl && (
