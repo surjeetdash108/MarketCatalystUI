@@ -987,13 +987,11 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
    alignment, not an oversight. Capped at 45% so About keeps the bulk of the
    row on narrower windows. */
 .sd-headwrap > .sd-head {
-  flex: 0 1 auto; min-width: min(460px, 45%); margin-bottom: 14px;
+  flex: 0 0 auto; margin-bottom: 14px;
 }
-/* Taller than the identity block so the blurb shows more before it scrolls;
-   min-height keeps a SHORT description from collapsing the box well above the
-   header's bottom edge. */
+/* Expanded width for the About box on the right extending to the right edge */
 .sd-headwrap > .sd-about {
-  flex: 1 1 auto; min-width: 300px; margin-top: 0;
+  flex: 1 1 auto; width: auto; max-width: none; min-width: 280px; margin-top: 0;
   min-height: 104px; max-height: 148px;
 }
 /* Basis 0, NOT auto. .sd-head is a wrapping flex row, and wrapping is decided
@@ -1007,7 +1005,7 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 @media (max-width: 1100px) {
   .sd-headwrap { flex-wrap: wrap; }
   .sd-headwrap > .sd-head { flex: 1 1 100%; margin-bottom: 0; }
-  .sd-headwrap > .sd-about { flex: 1 1 100%; min-width: 0; margin-top: 12px; max-height: 104px; }
+  .sd-headwrap > .sd-about { flex: 1 1 100%; width: 100%; max-width: 100%; min-width: 0; margin-top: 12px; max-height: 104px; }
 }
 /* The identity line: symbol, quote, market cap, name/exchange/sector, pills —
    all baseline-aligned on ONE row. It wraps rather than clipping when the

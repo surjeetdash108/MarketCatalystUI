@@ -974,50 +974,62 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
     sharedDollar ??
     (live.change != null ? Math.abs(live.change) : dollar);
 
-  /*
-  * Regular-session close.
-  *
-  * The current live price may be an extended-hours price. Reconstruct
-  * the regular-session close from the current price + its move.
-  */
-  const marketClose =
-    dispPrice != null &&
-    dispPct != null &&
-    dispPct !== -100
-      ? dispPrice / (1 + dispPct / 100)
-      : null;
+  const isMarketOpen = sharedQuote?.marketStatus === "open";
 
   /*
-  * Extended-session detection.
-  *
-  * extendedSession() is already provided by live-quotes-context and is
-  * the source of truth for whether this quote is outside regular hours.
-  */
-  const isAfterHours = !!extendedSession(sharedQuote);
+   * Extended-session detection.
+   *
+   * True if market status is late_trading, or if Polygon snapshot reports a
+   * non-zero lateTradingChangePct, or extendedSession detects after hours.
+   */
+  const isAfterHours =
+    sharedQuote?.marketStatus === "late_trading" ||
+    (sharedQuote?.latePct != null && sharedQuote.latePct !== 0) ||
+    extendedSession(sharedQuote) === "after hours";
 
   /*
-  * After-hours price/change.
-  *
-  * Only show this section when the market is actually outside
-  * regular trading hours and the quote contains an extended-hours move.
-  */
-  const afterHoursPrice =
-    isAfterHours && sharedQuote?.price != null
-      ? sharedQuote.price
-      : null;
+   * Regular-session price and move.
+   *
+   * If currently in after-hours, data.price is the regular session close.
+   * If data.price is not present, reconstruct regular close from after-hours quote.
+   */
+  const regPrice =
+    isAfterHours && data.price != null && data.price > 0
+      ? data.price
+      : isAfterHours && sharedQuote?.latePct != null && sharedQuote?.price != null
+        ? sharedQuote.price / (1 + sharedQuote.latePct / 100)
+        : (dispPrice ?? data.price ?? 0);
 
-  const afterHoursPct =
-    isAfterHours && sharedQuote?.pctChange != null
+  const regPct =
+    isAfterHours && data.pctChange != null
+      ? data.pctChange
+      : (sharedQuote?.regularPct ?? dispPct ?? data.pctChange ?? 0);
+
+  const regDollar =
+    regPrice > 0 && regPct != null && regPct !== -100
+      ? Math.abs(regPrice - regPrice / (1 + regPct / 100))
+      : (dispDollar ?? 0);
+
+  /*
+   * After-hours price and move.
+   */
+  const ahPct =
+    sharedQuote?.latePct ??
+    (isAfterHours && sharedQuote?.pctChange != null && sharedQuote.pctChange !== regPct
       ? sharedQuote.pctChange
-      : null;
+      : null);
 
-  const afterHoursDollar =
-    afterHoursPrice != null && afterHoursPct != null
-      ? Math.abs(
-          afterHoursPrice -
-          afterHoursPrice / (1 + afterHoursPct / 100),
-        )
-      : null;
+  const ahPrice =
+    isAfterHours && sharedQuote?.price != null && (sharedQuote.latePct != null || sharedQuote.price !== regPrice)
+      ? sharedQuote.price
+      : (ahPct != null && regPrice > 0 ? regPrice * (1 + ahPct / 100) : null);
+
+  const ahDollar =
+    ahPrice != null && regPrice > 0
+      ? Math.abs(ahPrice - regPrice)
+      : (ahPct != null && regPrice > 0 ? Math.abs((ahPct / 100) * regPrice) : null);
+
+  const showAfterHours = isAfterHours && ahPrice != null && ahPct != null;
   // Freshness stamp for the price-chart bars (backend createdAt), surfaced by the
   // chart toolbar in the same muted style as the header's delayed-quote marker
   // (BUG-DATA-008).
@@ -1299,7 +1311,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
               gain — the header never used its right half. */}
           <div className="sd-headwrap">
           <div className="sd-head">
-            <StockLogo sym={sym} size={46} />
+            <StockLogo sym={sym} size={38} />
             <div className="sd-name">
               {/* ONE line for the whole identity: symbol, quote, market cap,
                   then name / exchange / sector and the pills. Name-and-sector
@@ -1313,105 +1325,170 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 14,
-                  flexWrap: "wrap",
+                  gap: 10,
+                  flexWrap: "nowrap",
                 }}
               >
-                <h1>{sym}</h1>
+                <h1 style={{ margin: 0, flexShrink: 0, fontSize: "0.95rem" }}>{sym}</h1>
 
-                {/* REGULAR MARKET CLOSE */}
+                {/* PARALLEL SESSIONS CONTAINER: Regular Market Close + After Hours */}
                 <div
                   style={{
-                    display: "flex",
+                    display: "inline-flex",
                     alignItems: "center",
                     gap: 10,
-                    minHeight: 42,
+                    flexWrap: "nowrap",
+                    flexShrink: 0,
                   }}
                 >
-                  <span className="p">
-                    ${fmt(marketClose ?? dispPrice ?? 0, 2)}
-                  </span>
-
-                  {dispPct != null && (
-                    <span className={`c ${cls(dispPct)}`}>
-                      {arr(dispPct)}{" "}
-                      {dispPct >= 0 ? "+" : "-"}$
-                      {fmt(dispDollar ?? 0, 2)}{" "}
-                      ({sign(dispPct)})
-                    </span>
-                  )}
-                </div>
-
-                {/* AFTER HOURS — ONLY SHOWN AFTER REGULAR MARKET CLOSE */}
-                {isAfterHours && afterHoursPrice != null && (
+                  {/* REGULAR MARKET CLOSE */}
                   <div
                     style={{
-                      height: 48,
-                      borderLeft: "5px solid var(--up)",
-                      paddingLeft: 14,
-                      marginLeft: 2,
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "center",
-                      gap: 2,
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
                     }}
                   >
                     <div
                       style={{
-                        fontSize: ".72rem",
-                        fontWeight: 800,
-                        color: "var(--text-hi)",
-                        letterSpacing: ".02em",
-                        lineHeight: 1,
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: 5,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      AFTER HOURS
+                      <span
+                        className="p"
+                        style={{
+                          fontFamily: "var(--f-mono)",
+                          fontSize: "1.05rem",
+                          fontWeight: 800,
+                          color: "var(--text-hi)",
+                          lineHeight: 1.1,
+                          letterSpacing: "-.02em",
+                        }}
+                      >
+                        ${fmt(regPrice, 2)}
+                      </span>
+
+                      {regPct != null && (
+                        <span
+                          className={`c ${cls(regPct)}`}
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: "0.76rem",
+                            fontWeight: 700,
+                            display: "inline-flex",
+                            alignItems: "baseline",
+                            gap: 4,
+                            lineHeight: 1.1,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <span style={{ fontSize: "0.68rem" }}>{arr(regPct)}</span>
+                          <span>{fmt(Math.abs(regDollar ?? 0), 2)}</span>
+                          <span>({regPct >= 0 ? "" : "-"}{fmt(Math.abs(regPct), 2)}%)</span>
+                        </span>
+                      )}
                     </div>
 
                     <div
                       style={{
-                        display: "flex",
-                        alignItems: "baseline",
-                        gap: 9,
+                        fontSize: ".54rem",
+                        fontWeight: 600,
+                        color: "var(--text-dim-solid)",
+                        marginTop: 1,
+                        lineHeight: 1,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      <span
-                        className="mono"
-                        style={{
-                          fontSize: "1.05rem",
-                          fontWeight: 700,
-                          color: "var(--text-hi)",
-                        }}
-                      >
-                        ${fmt(afterHoursPrice, 2)}
-                      </span>
-
-                      {afterHoursPct != null && (
-                        <span
-                          className={`c ${cls(afterHoursPct)}`}
-                          style={{
-                            fontSize: ".82rem",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {arr(afterHoursPct)}{" "}
-                          {afterHoursPct >= 0 ? "+" : "-"}$
-                          {fmt(afterHoursDollar ?? 0, 2)}{" "}
-                          ({sign(afterHoursPct)})
-                        </span>
-                      )}
+                      {isMarketOpen ? "Market Open" : "Market Close"}
                     </div>
                   </div>
-                )}
+
+                  {/* AFTER HOURS — ONLY SHOWN AFTER REGULAR MARKET CLOSE */}
+                  {showAfterHours && (
+                    <div
+                      style={{
+                        borderLeft: `2.5px solid ${regPct >= 0 ? "var(--up)" : "var(--down)"}`,
+                        paddingLeft: 8,
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: ".54rem",
+                          fontWeight: 800,
+                          color: "var(--text-hi)",
+                          letterSpacing: ".03em",
+                          textTransform: "uppercase",
+                          lineHeight: 1.1,
+                          marginBottom: 2,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        AFTER HOURS
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "baseline",
+                          gap: 4,
+                          lineHeight: 1.1,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: "0.78rem",
+                            fontWeight: 800,
+                            color: "var(--text-hi)",
+                          }}
+                        >
+                          ${fmt(ahPrice, 2)}
+                        </span>
+
+                        <span
+                          className={`c ${cls(ahPct)}`}
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".65rem",
+                            fontWeight: 700,
+                            display: "inline-flex",
+                            alignItems: "baseline",
+                            gap: 3,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <span>
+                            {ahPct >= 0 ? "+" : "-"}{fmt(ahDollar ?? 0, 2)}
+                          </span>
+                          <span style={{ fontSize: ".58rem" }}>{arr(ahPct)}</span>
+                          <span>
+                            {ahPct >= 0 ? `+${fmt(ahPct, 2)}%` : `${fmt(ahPct, 2)}%`}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               {/* Second line, under the price: market cap, exchange/sector and
                   the provenance pills. These used to share the identity line
                   with the symbol and quote, which left the header wide and the
                   About box squeezed into a 30% column. Dropping them one row
                   narrows what the header needs and lets About take the width. */}
-              <div className="sd-meta">
+              <div className="sd-meta" style={{ marginTop: 3, columnGap: 8 }}>
                 {mc != null && (
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 600,
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".58rem", fontWeight: 600,
                     color: "var(--text-dim-solid)", letterSpacing: ".02em", whiteSpace: "nowrap" }}>
                     Mkt cap {cap(mc)}
                   </span>
@@ -1420,11 +1497,11 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                     showing, because its own heading already reads "About <full
                     name>" to the right — repeating it is pure duplication. With
                     no About box the name has nowhere else to appear, so it stays. */}
-                <span className="sub" title={`${data.name} · ${ex} · ${group}`}>
+                <span className="sub" title={`${data.name} · ${ex} · ${group}`} style={{ fontSize: ".64rem" }}>
                   {data.description ? "" : `${data.name} · `}{ex} · {group}
                 </span>
                 {inSectorRank != null && inSectorTotal != null && (
-                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".62rem" }}>
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".52rem", padding: "1px 5px" }}>
                     #{inSectorRank} of {inSectorTotal} in sector
                   </span>
                 )}
@@ -1443,7 +1520,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                   </span>
                 )} */}
                 {isLiveStock && (
-                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".52rem", padding: "1px 5px" }}>
                     live quote · {vendorLabel(liveCompany?.source)}
                   </span>
                 )}
@@ -1477,7 +1554,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
               via /live/company. Shown in full (no clamp / no toggle); it scrolls
               inside its box, which is now the header's right-hand half. */}
           {data.description && (
-            <div className="sd-about">
+            <div className="sd-about" style={{ flex: "1 1 auto", width: "auto", maxWidth: "none" }}>
               {/* <div className="sd-about-lbl" style={{ display: "flex", alignItems: "center", gap: 8 }}>About {data.name} <VendorTag v="polygon" /></div> */}
               <div className="sd-about-lbl"style={{display: "flex",alignItems: "center",justifyContent: "flex-end",gap: 8,}}><VendorTag v="polygon" /></div>
               <p style={{ margin: "4px 0 0", fontSize: ".82rem", lineHeight: 1.6,  color: "var(--text-primary)" }}>
