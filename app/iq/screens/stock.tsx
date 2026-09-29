@@ -602,6 +602,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   const [showEarnings, setShowEarnings] = useState(true);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [maStep, setMaStep] = useState(0);
+  const [chartMinimized, setChartMinimized] = useState(false);
 
   // Live overlays for the detail panels — analyst consensus, insider
   // transactions, the full company universe (for peer/sector lookups), sector
@@ -1458,21 +1459,29 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                 </span>
               )}
               <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>scroll to zoom · drag to pan · double-click to reset</span>
-              <ExpandBtn
-                title={`${sym} · Price Chart`}
-                node={
-                  <StockChartExpanded
-                    sym={sym} px={p}
-                    initialTf={tfActive} initialChartType={chartType}
-                    initialMaStep={maStep} initialEmaStep={emaStep}
-                    initialShowVol={showVol} initialShowRsi={showRsi}
-                    initialShowEarnings={showEarnings}
-                    hist10={hist10} rsi={rsi} rsiLoading={liveCompanyLoading} erDate={erDate}
-                    earnings={chartEarnings}
-                  />
-                }
-              />
+              <button
+                type="button"
+                onClick={() => setChartMinimized(v => !v)}
+                title={chartMinimized ? "Maximise chart" : "Minimise chart"}
+                aria-label={chartMinimized ? "Maximise chart" : "Minimise chart"}
+                style={{
+                  marginLeft: 8,
+                  padding: "5px 10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 7,
+                  background: "var(--surface-2)",
+                  color: "var(--text-dim-solid)",
+                  cursor: "pointer",
+                  fontSize: ".68rem",
+                  fontWeight: 600,
+                }}
+              >
+                {chartMinimized ? "Maximise" : "Minimise"}
+              </button>
             </div>
+
+        {!chartMinimized && (
+          <>
             <div id="chartHost" style={{ padding: "0 14px 0" }} ref={chartRef}
               onContextMenu={handleChartRightClick}>
               <CandleChart sym={sym} tf={tfActive} px={p}
@@ -1527,6 +1536,8 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                 ))
               )}
             </div>
+          </>
+          )}
           </div>
         </div>}
 
