@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { fmtDate } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
@@ -568,7 +567,6 @@ function StockChartExpanded({
 }
 
 export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {initialSym?: string;hideHeader?: boolean;hideChart?: boolean;headerActions?: ReactNode;} = {}) {
-  const router = useRouter();
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
@@ -602,7 +600,6 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   const [showEarnings, setShowEarnings] = useState(true);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [maStep, setMaStep] = useState(0);
-  const [chartMinimized, setChartMinimized] = useState(false);
 
   // Live overlays for the detail panels — analyst consensus, insider
   // transactions, the full company universe (for peer/sector lookups), sector
@@ -1260,41 +1257,6 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
 
       {!hideHeader && (
         <div style={{ padding: "14px 18px 0" }}>
-
-          {/* Back navigation box */}
-          <div
-            style={{
-              height: 40,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              padding: "0 10px",
-              marginBottom: 8,
-              background: "transparent",
-              border: "none",
-            }}
-          >
-            <button
-              onClick={() => router.back()}
-              aria-label="Go back"
-              title="Go back"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "6px 3px",
-                border: "none",
-                background: "transparent",
-                color: "var(--text-dim-solid)",
-                cursor: "pointer",
-                fontSize: ".94rem",
-                fontWeight: 600,
-                fontFamily: "var(--f-body)",
-              }}
-            >
-              ✕ Back
-            </button>
-          </div>
           {/* Header row: identity/quote on the left, the About blurb in the dead
               space to its right. The blurb used to sit on its own line BELOW the
               header, pushing the chart ~90px down the page for no informational
@@ -1459,29 +1421,21 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                 </span>
               )}
               <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>scroll to zoom · drag to pan · double-click to reset</span>
-              <button
-                type="button"
-                onClick={() => setChartMinimized(v => !v)}
-                title={chartMinimized ? "Maximise chart" : "Minimise chart"}
-                aria-label={chartMinimized ? "Maximise chart" : "Minimise chart"}
-                style={{
-                  marginLeft: 8,
-                  padding: "5px 10px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 7,
-                  background: "var(--surface-2)",
-                  color: "var(--text-dim-solid)",
-                  cursor: "pointer",
-                  fontSize: ".68rem",
-                  fontWeight: 600,
-                }}
-              >
-                {chartMinimized ? "Maximise" : "Minimise"}
-              </button>
+              <ExpandBtn
+                title={`${sym} · Price Chart`}
+                node={
+                  <StockChartExpanded
+                    sym={sym} px={p}
+                    initialTf={tfActive} initialChartType={chartType}
+                    initialMaStep={maStep} initialEmaStep={emaStep}
+                    initialShowVol={showVol} initialShowRsi={showRsi}
+                    initialShowEarnings={showEarnings}
+                    hist10={hist10} rsi={rsi} rsiLoading={liveCompanyLoading} erDate={erDate}
+                    earnings={chartEarnings}
+                  />
+                }
+              />
             </div>
-
-        {!chartMinimized && (
-          <>
             <div id="chartHost" style={{ padding: "0 14px 0" }} ref={chartRef}
               onContextMenu={handleChartRightClick}>
               <CandleChart sym={sym} tf={tfActive} px={p}
@@ -1536,8 +1490,6 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                 ))
               )}
             </div>
-          </>
-          )}
           </div>
         </div>}
 
