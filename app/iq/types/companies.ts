@@ -92,11 +92,9 @@ export interface CompanyDoc {
   avgVolume20?: number | null;
   /** Forward-annualized dividend per share (pairs with dividendYield). */
   dividendPerShare?: number | null;
-  /** Only ever set by /live/company/summary — the full doc has no earnings-date
-   *  field of its own (Next ER comes from the separate /market-data/earnings
-   *  feed instead). Declared here, always undefined on a real full doc, so
-   *  `CompanyDoc | CompanySummary` key-stats code can read it off either
-   *  without a type guard. */
+  /** Next earnings date, returned by /live/company (and /live/company/summary).
+   *  Primary source for "Next ER"; the /market-data/earnings feed is only the
+   *  fallback when this is missing. Absent on bulk-synced docs. */
   nextEarningsDate?: string | null;
   /** Trailing RSI(14) history, oldest→newest — powers the RSI sparkline. */
   rsi14Series?: number[] | null;

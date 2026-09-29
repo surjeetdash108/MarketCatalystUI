@@ -909,13 +909,12 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     .filter(e => e.ticker === sym)
     .sort((a, b) => a.date.localeCompare(b.date));
   const todayStr = new Date().toISOString().slice(0, 10);
-  const erDate = symEvents.find(e => e.date >= todayStr)?.date
-    ?? symEvents[symEvents.length - 1]?.date
-    // The synced earnings feed is authoritative once it has this ticker; the
-    // summary's freshly-fetched nextEarningsDate only fills the gap for a
-    // ticker that feed hasn't picked up yet (brand-new / on-demand).
-    ?? keyStats?.nextEarningsDate
-    ?? "—";
+  // The backend's nextEarningsDate (on both /live/company and its /summary)
+  // wins; the synced earnings feed only fills in when the backend has none.
+  const erDate = keyStats?.nextEarningsDate
+    || symEvents.find(e => e.date >= todayStr)?.date
+    || symEvents[symEvents.length - 1]?.date
+    || "—";
   // Earnings dots for both charts on this screen. Shared derivation (see
   // chart-earnings.ts) so the panel charts on watchlist / portfolio / screener /
   // movers / IPOs place the same reports at the same points. Called with the

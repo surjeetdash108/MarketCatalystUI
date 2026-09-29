@@ -157,11 +157,15 @@ export function StockListCard({
  * the live earnings feed for one ticker — same pattern stock.tsx uses for its
  * own hist10, shared here so the two never drift onto different data.
  */
-function useLiveEarningsForSym(sym: string): { hist: EarnQ[]; erDate: string; loading: boolean } {
+function useLiveEarningsForSym(sym: string, nextEarningsDate?: string | null): { hist: EarnQ[]; erDate: string; loading: boolean } {
   const { data: liveEarnings, loading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   const symEvents = liveEarnings.filter(e => e.ticker === sym).sort((a, b) => a.date.localeCompare(b.date));
   const todayStr = new Date().toISOString().slice(0, 10);
-  const erDate = symEvents.find(e => e.date >= todayStr)?.date ?? symEvents[symEvents.length - 1]?.date ?? "—";
+  // Backend's /live/company nextEarningsDate wins; the feed is the fallback.
+  const erDate = nextEarningsDate
+    || symEvents.find(e => e.date >= todayStr)?.date
+    || symEvents[symEvents.length - 1]?.date
+    || "—";
   const hist: EarnQ[] = symEvents
     .filter(e => e.epsEstimate != null && e.epsActual != null)
     .slice(-8)
@@ -261,7 +265,7 @@ export function ChartCard({
   const { bars: realBars } = useBackendBars(sym, tf);
   const { data: liveCompany, loading: liveCompanyLoading } = useApiResource<CompanyDoc>(sym ? `/live/company?ticker=${encodeURIComponent(sym)}` : null);
   const rsi = liveCompany?.rsi14 ?? null;
-  const { hist, erDate, loading: earningsLoading } = useLiveEarningsForSym(sym);
+  const { hist, erDate, loading: earningsLoading } = useLiveEarningsForSym(sym, liveCompany?.nextEarningsDate);
   // Same derivation as stock details — see chart-earnings.ts. Fetched only while
   // the Earnings overlay is on; before this the toggle below flipped state that
   // nothing read, so this chart never drew a dot.
