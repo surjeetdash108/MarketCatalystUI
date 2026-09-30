@@ -1389,6 +1389,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               sym={wlPicker.sym}
               watchlists={wl.watchlists}
               onAdd={id => wl.addTicker(id, wlPicker.sym)}
+              tickerLimit={wl.tickerLimit}
               onRemove={id => wl.removeTicker(id, wlPicker.sym)}
               onCreate={name => wl.createList(name)}
               onClose={() => setWlPicker(null)}

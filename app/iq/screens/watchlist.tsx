@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
-import { useWatchlistsContext } from "../hooks/useWatchlists";
+import { useWatchlistsContext, watchlistFullMessage } from "../hooks/useWatchlists";
 import type { CompanyDoc } from "../types";
 import { arr, sign, DataState, VendorTag } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
@@ -13,7 +14,7 @@ import { AiSummaryCard } from "../ai-summary-card";
 import { AiAggregateBlock } from "../ai-aggregate-block";
 
 export function WatchlistScreen() {
-  const { uid, watchlists, loading: wlLoading, createList, renameList, deleteList, addTicker, removeTicker } = useWatchlistsContext();
+  const { uid, watchlists, loading: wlLoading, tickerLimit, createList, renameList, deleteList, addTicker, removeTicker } = useWatchlistsContext();
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const byTicker = useMemo(() => new Map(companies.map(c => [c.ticker, c])), [companies]);
 
@@ -21,6 +22,8 @@ export function WatchlistScreen() {
   const [sel, setSel]                     = useState<string | null>(null);
   const [addOpen, setAddOpen]             = useState(false);
   const [newSym, setNewSym]               = useState("");
+  const [addError, setAddError]           = useState<string | null>(null);
+  const [adding, setAdding]               = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [nameModal, setNameModal]         = useState<{ mode: "create" | "rename"; value: string } | null>(null);
   const [confirmDeleteList, setConfirmDeleteList] = useState(false);
@@ -32,6 +35,8 @@ export function WatchlistScreen() {
   }, [watchlists]);
 
   const active = watchlists.find(w => w.id === activeId) ?? null;
+  // At the plan's per-list cap (Free plan); null limit = unlimited.
+  const isFull = tickerLimit != null && active != null && active.tickers.length >= tickerLimit;
 
   // Cumulative AI read for the list currently on screen. Deferred until the
   // summary card is expanded (it starts collapsed), and keyed per list so each
@@ -90,13 +95,21 @@ export function WatchlistScreen() {
     setSel(prev => (prev && items.includes(prev) ? prev : items[0] ?? null));
   }, [activeId, items.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function openAddStock() {
+    setNewSym(""); setAddError(null);
+    setAddOpen(true);
+  }
+
+  /** Keeps the dialog open on failure so the reason (e.g. a full list) is shown. */
   async function addStock() {
     const s = newSym.trim().toUpperCase();
-    setNewSym("");
-    setAddOpen(false);
-    if (!s || !activeId || items.includes(s)) return;
-    setSel(s);
-    await addTicker(activeId, s);
+    if (!s || !activeId || adding) return;
+    if (items.includes(s)) { setAddError(`${s} is already in ${active?.name ?? "this watchlist"}.`); return; }
+    setAdding(true); setAddError(null);
+    const res = await addTicker(activeId, s);
+    setAdding(false);
+    if (!res.ok) { setAddError(res.message); return; }
+    setSel(s); setNewSym(""); setAddOpen(false);
   }
 
   async function deleteStock(sym: string) {
@@ -185,14 +198,20 @@ export function WatchlistScreen() {
 
           <div className="page-sub" style={{ marginLeft: 4, display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span>
-              {items.length} stocks{priced.length > 0 && <> · {up} up / {dn} down today</>}
+              {tickerLimit != null ? (
+                <span
+                  className={`wl-usage${isFull ? " full" : ""}`}
+                  title={isFull ? watchlistFullMessage(tickerLimit) : `The Free plan holds up to ${tickerLimit} stocks per watchlist`}
+                >{items.length} / {tickerLimit} stocks</span>
+              ) : <>{items.length} stocks</>}
+              {priced.length > 0 && <> · {up} up / {dn} down today</>}
               {watchlists.length > 1 && <> · {totalWatched} across {watchlists.length} lists</>}
             </span>
             <VendorTag v="polygon" />
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn primary" disabled={!uid || !activeId} onClick={() => setAddOpen(true)}>
+          <button className="btn primary" disabled={!uid || !activeId} onClick={openAddStock}>
             <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
               <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
@@ -246,17 +265,42 @@ export function WatchlistScreen() {
       {addOpen && (
         <>
           <div className="scrim" onClick={() => setAddOpen(false)} />
-          <div className="drawer" style={{ maxHeight: "min(440px,85vh)" }}>
+          <div className="drawer" style={{ height: "fit-content", maxHeight: "min(440px,85vh)" }}>
             <div className="drawer-h">
               <div style={{ flex: 1, fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Add Stock to {active?.name}</div>
               <button className="closebtn" onClick={() => setAddOpen(false)}>✕</button>
             </div>
             <div className="drawer-b" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Ticker symbol</label>
-                <TickerSearchField value={newSym} onChange={setNewSym} onEnter={addStock} />
-              </div>
-              <button className="btn primary" style={{ width: "100%" }} onClick={addStock}>Add to {active?.name}</button>
+              {isFull && tickerLimit != null ? (
+                // Say so up front instead of letting the add fail.
+                <div className="wl-full" role="status">
+                  <div className="wl-full-title">This watchlist is full</div>
+                  <div className="wl-full-text">
+                    The Free plan holds up to {tickerLimit} stocks per watchlist. Remove a stock from{" "}
+                    <b>{active?.name}</b>, or upgrade for unlimited stocks.
+                  </div>
+                  <div className="wl-full-actions">
+                    <button className="btn" onClick={() => setAddOpen(false)}>Close</button>
+                    <Link className="btn primary" href="/manage-plan">View plans</Link>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", display: "block", marginBottom: 5 }}>Ticker symbol</label>
+                    <TickerSearchField value={newSym} onChange={v => { setAddError(null); setNewSym(v); }} onEnter={() => void addStock()} />
+                    {tickerLimit != null && (
+                      <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
+                        {tickerLimit - items.length} of {tickerLimit} spots left on the Free plan.
+                      </div>
+                    )}
+                  </div>
+                  {addError && <div className="wl-add-err" role="alert">{addError}</div>}
+                  <button className="btn primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => void addStock()} disabled={adding}>
+                    {adding ? "Adding…" : `Add to ${active?.name ?? "watchlist"}`}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </>

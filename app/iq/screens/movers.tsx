@@ -277,19 +277,24 @@ export function MoversScreen() {
   const { watchlists, addTicker, createList } = useWatchlistsContext();
   const watchedSet = useMemo(() => new Set(watchlists.flatMap(w => w.tickers)), [watchlists]);
   const [toast, setToast] = useState<string | null>(null);
+  // "error" styles the toast as a failure (e.g. the watchlist is full).
+  const [toastKind, setToastKind] = useState<"ok" | "error">("ok");
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2600);
+    // Failures carry a longer explanation, so they stay up a little longer.
+    const t = setTimeout(() => setToast(null), toastKind === "error" ? 5000 : 2600);
     return () => clearTimeout(t);
-  }, [toast]);
+  }, [toast, toastKind]);
   const addToWatchlist = useCallback(async (sym: string) => {
     const s = sym.toUpperCase();
-    if (watchedSet.has(s)) { setToast(`${s} is already in your watchlist`); return; }
+    if (watchedSet.has(s)) { setToastKind("ok"); setToast(`${s} is already in your watchlist`); return; }
     let listId: string | undefined = watchlists[0]?.id;
     if (!listId) listId = (await createList("My Watchlist"))?.id;
-    if (!listId) { setToast("Couldn't add — please sign in first"); return; }
-    await addTicker(listId, s);
-    setToast(`${s} added to watchlist`);
+    if (!listId) { setToastKind("error"); setToast("Couldn't add — please sign in first"); return; }
+    // Only confirm once the server has actually saved it.
+    const res = await addTicker(listId, s);
+    if (res.ok) { setToastKind("ok"); setToast(`${s} added to watchlist`); }
+    else { setToastKind("error"); setToast(res.message); }
   }, [watchedSet, watchlists, addTicker, createList]);
 
   const sectors = sectorFilterOptions(rvolCompanies);
@@ -806,18 +811,24 @@ export function MoversScreen() {
           the drawer's 51), auto-dismisses after 2.6s; the drawer stays open. */}
       {toast && (
         <div
-          role="status"
-          aria-live="polite"
+          role={toastKind === "error" ? "alert" : "status"}
+          aria-live={toastKind === "error" ? "assertive" : "polite"}
           style={{
             position: "fixed", top: 22, left: "50%", transform: "translateX(-50%)",
-            zIndex: 999, background: "var(--surface-1)", border: "1px solid var(--brand)",
+            zIndex: 999, background: "var(--surface-1)",
+            border: `1px solid ${toastKind === "error" ? "var(--down)" : "var(--brand)"}`,
             color: "var(--text-hi)", borderRadius: 10, padding: "11px 20px",
-            fontSize: ".85rem", fontWeight: 600, whiteSpace: "nowrap",
+            fontSize: ".85rem", fontWeight: 600, lineHeight: 1.4,
+            // A failure explains itself, so let it wrap instead of overflowing.
+            whiteSpace: toastKind === "error" ? "normal" : "nowrap",
+            maxWidth: "min(560px, calc(100vw - 32px))",
             boxShadow: "0 14px 40px -10px rgba(0,0,0,.6)",
             display: "inline-flex", alignItems: "center", gap: 9,
           }}
         >
-          <span style={{ color: "var(--brand)", fontSize: "1rem" }}>★</span>
+          <span style={{ color: toastKind === "error" ? "var(--down)" : "var(--brand)", fontSize: "1rem", flexShrink: 0 }}>
+            {toastKind === "error" ? "!" : "★"}
+          </span>
           {toast}
         </div>
       )}

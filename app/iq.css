@@ -3943,3 +3943,22 @@ button.pill.lf-chip {
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .pf-li.active .pf-tag { color: var(--text); border-color: var(--border-strong); }
+
+/* ── Watchlist plan limit (watchlist.tsx) ── */
+.wl-usage { font-variant-numeric: tabular-nums; }
+.wl-usage.full { color: var(--warn); font-weight: 600; }
+.wl-full {
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+}
+.wl-full-title { font-weight: 700; font-size: .9rem; color: var(--text-hi); }
+.wl-full-text { font-size: .8rem; line-height: 1.5; color: var(--text); }
+.wl-full-text b { color: var(--text-hi); }
+.wl-full-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.wl-full-actions .btn { text-decoration: none; }
+.wl-add-err {
+  padding: 9px 11px; border-radius: 8px; font-size: .78rem; line-height: 1.45;
+  background: var(--down-dim); color: var(--down);
+  border: 1px solid color-mix(in srgb, var(--down) 35%, transparent);
+}
