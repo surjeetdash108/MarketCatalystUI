@@ -439,7 +439,9 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
   const router = useRouter(); // before the early return — hooks must run on every render
   const x = livePulse[idx];
   if (!x) return null;
-  const dec = x.value > 1000 ? 0 : 2;
+  // Always 2 decimals (QA row 317) — matches the tape, the Dashboard boxes,
+  // the VIX widgets and the website tape.
+  const dec = 2;
   const dollar = x.value - x.prevClose;
   /**
    * Whether the open / high / low below describe the SAME session as the price
@@ -1317,7 +1319,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 {tickerItems.map((x, i) => (
                   <div key={i} className="tk">
                     <span className="lbl">{x.label}</span>
-                    <span className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</span>
+                    <span className="val">{fmt(x.value, 2)}</span>
                     <span className={`chg ${cls(x.change)}`}>{arr(x.change)} {Math.abs(x.change).toFixed(2)}%</span>
                   </div>
                 ))}

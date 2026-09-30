@@ -505,7 +505,7 @@ export function DashboardScreen() {
             {pulse.map((x, i) => (
               <div key={x.label} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(i)}>
                 <div className="lbl">{x.label}</div>
-                <div className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</div>
+                <div className="val">{fmt(x.value, 2)}</div>
                 <div className={`chg ${cls(x.change)}`}>{arr(x.change)} {sign(x.change)}</div>
                 <Spark seed={i + 1} up={x.change >= 0} />
               </div>
