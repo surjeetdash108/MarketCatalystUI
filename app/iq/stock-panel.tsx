@@ -76,10 +76,22 @@ function EarnPane({ hist, loading }: { hist: EarnQ[]; loading: boolean }) {
   );
 }
 
+/** Clock with a counter-clockwise arrow — the conventional "history" glyph. */
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }} aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 4v4h4" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
 /* ── StockRow: one pf-li row ── */
 export function StockRow({
   sym, name, seed, sparkUp,
-  isSelected, onClick, onDelete,
+  isSelected, onClick, onDelete, onHistory, muted = false, tag, tagTitle,
   valueTop, valueBottom, valueBottomClass = "",
 }: {
   sym: string;
@@ -89,18 +101,35 @@ export function StockRow({
   isSelected: boolean;
   onClick: () => void;
   onDelete?: () => void;
+  /** Shows a history button that opens this row's transaction history. */
+  onHistory?: () => void;
+  /** Dims the row, e.g. for a closed position. */
+  muted?: boolean;
+  /** Small label shown after the symbol, e.g. the share count. */
+  tag?: string;
+  /** Hover text explaining the tag. */
+  tagTitle?: string;
   valueTop: string;
   valueBottom: string;
   valueBottomClass?: string;
 }) {
   return (
     <div
-      className={`pf-li${isSelected ? " active" : ""}`}
-      style={{ gridTemplateColumns: onDelete ? "1fr 60px auto auto" : "1fr 60px auto" }}
+      className={`pf-li${isSelected ? " active" : ""}${muted ? " muted" : ""}`}
+      // A row with a tag gives the (currently empty) sparkline slot's width to
+      // the symbol line, so the symbol and its tag stay on one line.
+      style={{ gridTemplateColumns: `minmax(0, 1fr) ${tag ? "0px" : "60px"} auto${onDelete || onHistory ? " auto" : ""}` }}
       onClick={onClick}
     >
       <div>
-        <span className="s">{sym}</span>
+        {tag ? (
+          <span className="pf-symline">
+            <span className="s">{sym}</span>
+            <span className="pf-tag" title={tagTitle}>{tag}</span>
+          </span>
+        ) : (
+          <span className="s">{sym}</span>
+        )}
         <span className="n">{name}</span>
       </div>
       <div className="pf-spark">
@@ -110,10 +139,24 @@ export function StockRow({
         <span className="px">{valueTop}</span>
         <span className={`ch${valueBottomClass ? ` ${valueBottomClass}` : ""}`}>{valueBottom}</span>
       </div>
-      {onDelete && (
-        <button className="wl-del-btn" title="Remove" onClick={e => { e.stopPropagation(); onDelete(); }}>
-          <TrashIcon />
-        </button>
+      {(onDelete || onHistory) && (
+        <div className="pf-li-actions">
+          {onHistory && (
+            <button
+              className="pf-hist-btn"
+              title="Transaction history"
+              aria-label={`${sym} transaction history`}
+              onClick={e => { e.stopPropagation(); onHistory(); }}
+            >
+              <HistoryIcon />
+            </button>
+          )}
+          {onDelete && (
+            <button className="wl-del-btn" title="Remove" onClick={e => { e.stopPropagation(); onDelete(); }}>
+              <TrashIcon />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -121,9 +164,11 @@ export function StockRow({
 
 /* ── StockListCard: 340px card with scrollable list ── */
 export function StockListCard({
-  title, headerRight, isEmpty, emptyMessage = "No items.", loading, maxListHeight, showVendor = true, children,
+  title, titleCount, headerRight, isEmpty, emptyMessage = "No items.", loading, maxListHeight, showVendor = true, children,
 }: {
   title: string;
+  /** Optional count pill rendered right after the title (e.g. "Holdings 3"). */
+  titleCount?: ReactNode;
   headerRight?: ReactNode;
   isEmpty?: boolean;
   emptyMessage?: string;
@@ -140,6 +185,19 @@ export function StockListCard({
         <div className="card-h">
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <h3>{title}</h3>
+            {titleCount != null && (
+              <span
+                className="pill"
+                style={{
+                  background: "var(--surface-3)",
+                  color: "var(--text-hi)",
+                  border: "1px solid var(--border-strong)",
+                  fontSize: ".7rem",
+                  padding: "2px 8px",
+                  lineHeight: 1.3,
+                }}
+              >{titleCount}</span>
+            )}
             {showVendor && <VendorTag v="polygon" />}
           </span>
           {headerRight}

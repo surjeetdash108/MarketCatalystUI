@@ -577,6 +577,29 @@ export function AiInfrastructureScreen() {
                               {tk}
                             </span>
                           ))}
+                          {/* The chips are only the largest few; say how many
+                              more the category holds. The whole tile already
+                              opens the full list. */}
+                          {t.companyCount > t.sampleTickers.length && (
+                            <span
+                              title={`${t.companyCount - t.sampleTickers.length} more · see all ${t.companyCount} companies`}
+                              aria-label={`${t.companyCount - t.sampleTickers.length} more companies`}
+                              style={{
+                                padding: "4px 7px",
+                                borderRadius: 4,
+                                background: "transparent",
+                                border: "1px dashed var(--border-strong)",
+                                color: "var(--text-dim-solid)",
+                                fontFamily: "var(--f-mono)",
+                                fontSize: ".62rem",
+                                fontWeight: 600,
+                                lineHeight: 1,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              +{t.companyCount - t.sampleTickers.length}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>

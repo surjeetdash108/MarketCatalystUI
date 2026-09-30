@@ -683,7 +683,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
 
   // Watchlists are backend-synced (multiple named lists). The star is "filled"
   // when the ticker is in ANY list; clicking it opens the which-list picker.
-  const { watchlists, addTicker, removeTicker, createList } = useWatchlistsContext();
+  const { watchlists, addTicker, removeTicker, createList, tickerLimit } = useWatchlistsContext();
   const watchedSet = useMemo(() => new Set(watchlists.flatMap(w => w.tickers)), [watchlists]);
   const [wlPicker, setWlPicker] = useState<{ sym: string; x: number; y: number } | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -3943,6 +3943,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
           sym={wlPicker.sym}
           watchlists={watchlists}
           onAdd={id => addTicker(id, wlPicker.sym)}
+          tickerLimit={tickerLimit}
           onRemove={id => removeTicker(id, wlPicker.sym)}
           onCreate={name => createList(name)}
           onClose={() => setWlPicker(null)}
