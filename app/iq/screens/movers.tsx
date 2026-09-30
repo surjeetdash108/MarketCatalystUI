@@ -575,7 +575,7 @@ export function MoversScreen() {
   return (
     <>
       <div className="page-head">
-        <div className="tabs">
+        <div className="tabs" >
           {TABS.map(([k, l]) => (
             <button key={k} className={`tab${k === tab ? " on" : ""}`} onClick={() => setTab(k as TabKey)}>{l}</button>
           ))}
@@ -598,7 +598,7 @@ export function MoversScreen() {
       </div>
 
       {/* Filter bar */}
-      <div className="fbar">
+      <div className="fbar" style={{padding:"10px 24px"}}>
         <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center" }}>Sector</span>
         <select className="mv-sel" value={sector} onChange={e => setSector(e.target.value)}>
           {sectors.map(s => <option key={s} value={s}>{titleCaseLabel(s)}</option>)}
@@ -617,7 +617,7 @@ export function MoversScreen() {
         <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{visible.length} stocks</span>
       </div>
 
-      <div className="card">
+      <div className="card" style={{marginLeft: 16,marginRight: 20, marginTop:16}}>
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "8px 12px 0" }}><VendorTag v="polygon" /></div>
         <div className="tbl-wrap">
         <table className="tbl">
@@ -628,7 +628,7 @@ export function MoversScreen() {
               {sortTh("price",   "Price",  true)}
               {sortTh("change",  isWeekTab(tab) ? "5-day" : "Change", true)}
               {sortTh("rvol",    "RVOL",   true)}
-              {sortTh("cap",     "Cap · Sector", "center")}
+              {sortTh("cap", "Cap · Sector", true)}
               <th style={{ whiteSpace: "nowrap" }}>Why It Moved</th>
             </tr>
           </thead>
@@ -688,7 +688,7 @@ export function MoversScreen() {
                         ? <b style={{ color: m.rvolRatio > 3 ? "var(--warn)" : "var(--text)" }}>{m.rvolRatio.toFixed(1)}×</b>
                         : <span style={{ color: "var(--text-dim-solid)" }}>—</span>}
                     </td>
-                    <td className="center">
+                    <td style={{ textAlign: "left" }}>
                       <span style={{ fontSize: ".74rem" }}>
                         <b style={{ color: "var(--text-hi)" }}>{m.cap}</b>
                         {" · "}
@@ -742,20 +742,20 @@ export function MoversScreen() {
         <>
           <div className="scrim" onClick={() => setSelectedSym(null)} />
           <div className="stock-side-drawer">
-            <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
-              <StockLogo sym={selectedSym} size={32} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
-                  {selectedSym} · Stock Details
-                </div>
-                <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                  Full analysis · chart · technicals · peers
-                </div>
-              </div>
+           <div
+              className="drawer-h"
+              style={{
+                paddingTop: 14,
+                paddingBottom: 14,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
               {(() => {
                 const sym = selectedSym!;
                 const inList = watchedSet.has(sym);
                 const moverItem = movers.find(m => m.ticker === sym);
+
                 return (
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
@@ -770,35 +770,69 @@ export function MoversScreen() {
                       }
                       title="View News & Catalyst why this stock moved"
                       style={{
-                        display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        whiteSpace: "nowrap",
                         background: "rgba(74,222,128, 0.15)",
                         border: "1px solid var(--brand, #4ADE80)",
                         color: "var(--text-hi, #ffffff)",
-                        borderRadius: 8, padding: "7px 13px", cursor: "pointer",
-                        fontSize: ".8rem", fontWeight: 600, fontFamily: "var(--f-body)",
+                        borderRadius: 8,
+                        padding: "7px 13px",
+                        cursor: "pointer",
+                        fontSize: ".8rem",
+                        fontWeight: 600,
+                        fontFamily: "var(--f-body)",
                       }}
                     >
                       <span>📰</span> Why It Moved (News)
                     </button>
+
                     <button
                       onClick={() => addToWatchlist(sym)}
+                      // No hover text once saved: right after a successful add
+                      // the cursor is still on the button, and "Already in your
+                      // watchlist" read as a failure (QA). The filled star and
+                      // "In watchlist" label already show the state.
                       title={inList ? undefined : "Add this stock to your watchlist"}
                       style={{
-                        display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
-                        background: inList ? "var(--brand-dim)" : "var(--surface-2)",
-                        border: `1px solid ${inList ? "var(--brand)" : "var(--border-soft)"}`,
-                        color: inList ? "var(--brand)" : "var(--text-hi)",
-                        borderRadius: 8, padding: "7px 13px", cursor: "pointer",
-                        fontSize: ".8rem", fontWeight: 600, fontFamily: "var(--f-body)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        whiteSpace: "nowrap",
+                        background: inList
+                          ? "var(--brand-dim)"
+                          : "var(--surface-2)",
+                        border: `1px solid ${
+                          inList ? "var(--brand)" : "var(--border-soft)"
+                        }`,
+                        color: inList
+                          ? "var(--brand)"
+                          : "var(--text-hi)",
+                        borderRadius: 8,
+                        padding: "7px 13px",
+                        cursor: "pointer",
+                        fontSize: ".8rem",
+                        fontWeight: 600,
+                        fontFamily: "var(--f-body)",
                       }}
                     >
-                      <span style={{ fontSize: ".95rem", lineHeight: 1 }}>{inList ? "★" : "☆"}</span>
+                      <span style={{ fontSize: ".95rem", lineHeight: 1 }}>
+                        {inList ? "★" : "☆"}
+                      </span>
                       {inList ? "In watchlist" : "Add to watchlist"}
                     </button>
                   </div>
                 );
               })()}
-              <button className="closebtn" onClick={() => setSelectedSym(null)}>✕</button>
+
+              <button
+                className="closebtn"
+                onClick={() => setSelectedSym(null)}
+                style={{ marginLeft: "auto" }}
+              >
+                ✕
+              </button>
             </div>
             <div className="drawer-b">
               <StockScreenEmbed initialSym={selectedSym} />

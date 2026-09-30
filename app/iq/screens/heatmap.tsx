@@ -135,14 +135,21 @@ export function HeatmapScreen() {
       <div className="fbar">
         <button className="chip on">Color: % change</button>
         {tab !== 0 && (
-          <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+          <span style={{ fontSize: ".72rem", color: "var(--text-hi)",transform: "translateY(10px)", }}>
             {tabKey === "RUT"
               ? "Small-cap constituents aren't in the synced universe"
               : `${membersShown} ${TABS[tab]} member${membersShown === 1 ? "" : "s"} in the live universe`}
           </span>
         )}
         <div className="spacer" />
-        <VendorTag v="polygon" />
+        <div
+          style={{
+            transform: "scaleY(1) translateY(6px)",
+            transformOrigin: "center",
+          }}
+        >
+          <VendorTag v="polygon" />
+        </div>
         <div className="legend" style={{ gap: 4 }}>
           <span style={{ fontSize: ".66rem", color: "var(--down)" }}>−3%</span>
           {(["rgba(138,46,21,.85)", "rgba(138,46,21,.4)", "#2A3037", "rgba(31,122,70,.4)", "rgba(31,122,70,.85)"] as const).map((bg, i) => (
@@ -211,7 +218,7 @@ export function HeatmapScreen() {
                 }}>
                   <span style={{
                     fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em",
-                    textTransform: "uppercase", color: "var(--text-dim-solid)",
+                    textTransform: "uppercase", color: "var(--text-hi)",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>{g.name}</span>
                   <span style={{

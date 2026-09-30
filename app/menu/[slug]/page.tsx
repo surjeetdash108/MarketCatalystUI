@@ -9,6 +9,7 @@ import { ScreenerScreen } from "../../iq/screens/screener";
 import { IPOsScreen } from "../../iq/screens/ipos";
 import { PortfolioScreen } from "../../iq/screens/portfolio";
 import { WatchlistScreen } from "../../iq/screens/watchlist";
+import { NotesScreen } from "../../iq/screens/notes";
 import { StockScreen } from "../../iq/screens/stock";
 import { InsiderScreen } from "../../iq/screens/insider";
 import { CommentaryScreen } from "../../iq/screens/commentary";
@@ -38,6 +39,7 @@ const SCREENS: Record<string, React.ReactNode> = {
   ipos:        <IPOsScreen />,
   portfolio:   <PortfolioScreen />,
   watchlist:   <WatchlistScreen />,
+  notes:       <NotesScreen />,
   stock:       <StockScreen />,
   options:     <OptionsScreen />,
   insider:     <InsiderScreen />,

@@ -12,16 +12,17 @@ export const menuItems = [
   { label: 'Screener', slug: 'screener', group: 'Research', icon: '🔍', badge: null },
   { label: 'Themes', slug: 'themes', group: 'Research', icon: '◈', badge: null },
   { label: 'IPOs', slug: 'ipos', group: 'Research', icon: '🚀', badge: null },
-  { label: 'Ownership', slug: 'insider', group: 'Research', icon: '📄', badge: null },
+  { label: '13F & Insider', slug: 'insider', group: 'Research', icon: '📄', badge: null },
   // { label: 'Search', slug: 'stock', group: 'Research', icon: '📊', badge: null },
   { label: 'ETF Corner', slug: 'etf-corner', group: 'Research', icon: '🧺', badge: null },
-  { label: 'AI Corner', slug: 'ai-infrastructure', group: 'Research', icon: '🧠', badge: null },
+  { label: 'AI Companies', slug: 'ai-infrastructure', group: 'Research', icon: '🧠', badge: null },
   // ---- Market Recaps ----
   { label: 'Daily Recaps', slug: 'recap', group: 'Market Recaps', icon: '🔖', badge: null },
   { label: 'Weekly Recaps', slug: 'weekly-recap', group: 'Market Recaps', icon: '🗓️', badge: null },
   // ---- My Workspace ----
   { label: 'Portfolio', slug: 'portfolio', group: 'My Workspace', icon: '💼', badge: null },
   { label: 'Watchlist', slug: 'watchlist', group: 'My Workspace', icon: '⭐', badge: null },
+  // { label: 'Chart Notes', slug: 'notes', group: 'My Workspace', icon: '📝', badge: null },
   // ---- Hidden: route kept (static export), not shown in the nav. Options is
   //      hidden "for now". The 'Hidden' group is not in the shell's rendered
   //      group order, so it never appears in the menu. ----

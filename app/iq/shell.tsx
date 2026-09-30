@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 
 // Dynamic import breaks the circular dep: stock.tsx → shell.tsx → stock.tsx
-export const StockScreenEmbed = dynamic<{ initialSym?: string }>(
+export const StockScreenEmbed = dynamic<{initialSym?: string;hideHeader?: boolean;}>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
@@ -128,10 +128,11 @@ export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
 
 // ---- Nav icon SVG ----
 /**
- * MarketCatalyst brand mark — inline SVG (gradient ascending bar-chart +
- * trend line ending in an arrowhead) and the wordmark "Market" (light) +
- * "Catalyst" (brand green). Crisp at any size, theme-aware (the gradient's
- * bright stop tracks var(--brand) per theme).
+ * MarketCatalyst brand mark — inline SVG (three gradient bars whose tops
+ * trace an "M" — peak, valley, peak — continuing into a solid arrowhead)
+ * and the wordmark "Market" (light) + "Catalyst" (brand green). Crisp at
+ * any size, theme-aware (the gradient's bright stop tracks var(--brand)
+ * per theme).
  */
 function BrandLogo({ height = 28 }: { height?: number }) {
   return (
@@ -143,12 +144,13 @@ function BrandLogo({ height = 28 }: { height?: number }) {
             <stop offset="1" style={{ stopColor: "var(--brand)" }} />
           </linearGradient>
         </defs>
-        <rect x="5" y="27" width="6" height="12" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="14" y="21" width="6" height="18" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="23" y="15" width="6" height="24" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="32" y="9" width="6" height="30" rx="2" fill="url(#mcBrandGrad)" />
-        <path d="M7 30 L16 23 L25 17 L36 8" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M28 8 L36 8 L36 16" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="5" y="22" width="6" height="17" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="15" y="28" width="6" height="11" rx="2" fill="url(#mcBrandGrad)" />
+        <rect x="25" y="14" width="6" height="25" rx="2" fill="url(#mcBrandGrad)" />
+        {/* Peak-valley-peak "M" silhouette across the three bar tops, continuing
+            into the arrowhead — not a smooth ascending staircase. */}
+        <path d="M8 22 L18 28 L28 14 L36 6" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M40 2 L36 11 L31 6 Z" fill="url(#mcBrandGrad)" />
       </svg>
       <span style={{
         fontFamily: "var(--f-display), system-ui, sans-serif",
@@ -173,6 +175,7 @@ function NavIcon({ slug }: { slug: string }) {
     ipos:        "M3 17l6-6 4 4 8-8M14 7h7v7",
     portfolio:   "M3 13a9 9 0 1 0 18 0 9 9 0 0 0-18 0ZM12 7v6l4 2",
     watchlist:   "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7ZM12 12m-3 0a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
+    notes:       "M5 3h10l4 4v14H5V3Zm10 0v4h4M8 11h8M8 15h8M8 19h5",
     stock:       "M4 19V5M4 19h16M8 15l3-4 3 2 4-7",
     insider:     "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-1a6 6 0 0 1 12 0v1M18 11l2 2 3-3",
     commentary:  "M4 5h16v11H8l-4 4V5z",
@@ -537,29 +540,29 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
 }
 
 // ---- Mover Drawer — full stock page in a right-side sliding drawer ----
-function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
-  return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <div className="stock-side-drawer">
-        <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
-          {/* The company logo, as every ticker row draws it. */}
-          <StockLogo sym={sym} size={31} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
-              {sym} · Stock Details
-            </div>
-            <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Full analysis · chart · technicals · peers</div>
-          </div>
-          <button className="closebtn" onClick={onClose}>✕</button>
-        </div>
-        <div className="drawer-b">
-          <StockScreenEmbed initialSym={sym} />
-        </div>
-      </div>
-    </>
-  );
-}
+// function MoverModal({ sym, onClose }: { sym: string; onClose: () => void }) {
+//   return (
+//     <>
+//       <div className="scrim" onClick={onClose} />
+//       <div className="stock-side-drawer">
+//         <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
+//           {/* The company logo, as every ticker row draws it. */}
+//           <StockLogo sym={sym} size={31} />
+//           <div style={{ flex: 1 }}>
+//             <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+//               {sym} · Stock Details
+//             </div>
+//             <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Full analysis · chart · technicals · peers</div>
+//           </div>
+//           <button className="closebtn" onClick={onClose}>✕</button>
+//         </div>
+//         <div className="drawer-b">
+//           <StockScreenEmbed initialSym={sym} />
+//         </div>
+//       </div>
+//     </>
+//   );
+// }
 
 /**
  * The whole stock detail screen rendered INSIDE the centred popover, instead of
@@ -591,30 +594,73 @@ function StockDetailPopover({ sym, list, onNavigate, onClose }: {
     <>
       <div className="scrim" onClick={onClose} />
       <div className="drawer open wide">
-        <div className="drawer-h" style={{ paddingTop: 14, paddingBottom: 14 }}>
-          {/* The company logo, as every ticker row draws it. */}
-          <StockLogo sym={sym} size={31} />
+        {/* The company logo, as every ticker row draws it. */}
+          {/* <StockLogo sym={sym} size={31} />
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
               {sym} · Stock Details
             </div>
             <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Full analysis · chart · technicals · peers</div>
-          </div>
+          </div> */}
           {/* .closebtn carries margin-left:auto; the group takes that over. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+        <div
+          className="drawer-h"
+          style={{
+            paddingTop: 14,
+            paddingBottom: 14,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          {/* Empty space on the left */}
+          <div style={{ flex: 1 }} />
+
+          {/* Navigation + close buttons on the right */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
             {list && list.length > 1 && (
               <>
-                <button className="closebtn" style={{ marginLeft: 0 }} disabled={!prev}
+                <button
+                  className="closebtn"
+                  style={{ marginLeft: 0 }}
+                  disabled={!prev}
                   title={prev ? `Previous · ${prev}` : "Start of list"}
-                  aria-label={prev ? `Show previous ticker, ${prev}` : "Start of list"}
-                  onClick={() => prev && onNavigate(prev)}>◀</button>
-                <button className="closebtn" style={{ marginLeft: 0 }} disabled={!next}
+                  aria-label={
+                    prev ? `Show previous ticker, ${prev}` : "Start of list"
+                  }
+                  onClick={() => prev && onNavigate(prev)}
+                >
+                  ◀
+                </button>
+
+                <button
+                  className="closebtn"
+                  style={{ marginLeft: 0 }}
+                  disabled={!next}
                   title={next ? `Next · ${next}` : "End of list"}
-                  aria-label={next ? `Show next ticker, ${next}` : "End of list"}
-                  onClick={() => next && onNavigate(next)}>▶</button>
+                  aria-label={
+                    next ? `Show next ticker, ${next}` : "End of list"
+                  }
+                  onClick={() => next && onNavigate(next)}
+                >
+                  ▶
+                </button>
               </>
             )}
-            <button className="closebtn" style={{ marginLeft: 0 }} aria-label="Close" onClick={onClose}>✕</button>
+
+            <button
+              className="closebtn"
+              style={{ marginLeft: 0 }}
+              aria-label="Close"
+              onClick={onClose}
+            >
+              ✕
+            </button>
           </div>
         </div>
         <div className="drawer-b">
@@ -848,11 +894,20 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   function goToStock(sym: string) {
     const s = sym.trim().toUpperCase();
     if (!s) return;
+
     logSearchedTicker(s);
+
     if (typeof window !== "undefined") {
       localStorage.setItem("iq-stock", s);
-      window.dispatchEvent(new CustomEvent("iq-stock-change", { detail: s }));
+      window.dispatchEvent(
+        new CustomEvent("iq-stock-change", { detail: s })
+      );
     }
+
+    // Keep the main sidebar open when viewing a stock.
+    setNavCollapsed(false);
+    localStorage.setItem("iq-nav-collapsed", "0");
+
     setSearchOpen(false);
     setSearchQ("");
     router.push("/menu/stock");
@@ -904,7 +959,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const railRef = useRef<HTMLElement>(null);
   const [drawer, setDrawer] = useState<
     | { type: "stock"; sym: string }
-    | { type: "mover-modal"; sym: string }
+    // | { type: "mover-modal"; sym: string }
     | { type: "stock-detail"; sym: string; list?: string[] }
     | { type: "earnings"; sym: string }
     | { type: "sector"; name: string }
@@ -989,10 +1044,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // is transient — it does NOT write localStorage, so the manual toggle's saved
   // preference is preserved and re-applied on exit.
   useEffect(() => {
-    if (pathname === "/menu/stock") {
-      setNavCollapsed(true);
-    } else if (typeof window !== "undefined") {
-      setNavCollapsed(localStorage.getItem("iq-nav-collapsed") === "1");
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("iq-nav-collapsed");
+      setNavCollapsed(saved === "1");
     }
   }, [pathname]);
 
@@ -1020,7 +1074,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // Action context
   const actions: IQActions = {
     openStock: useCallback((sym) => setDrawer({ type: "stock", sym }), []),
-    openMoverModal: useCallback((sym) => setDrawer({ type: "mover-modal", sym }), []),
+    openMoverModal: useCallback((sym) => setDrawer({ type: "stock-detail", sym }),[]),
     openStockDetail: useCallback((sym, list) => setDrawer({ type: "stock-detail", sym, list }), []),
     openStockFull: useCallback((sym) => {
       const s = sym.trim().toUpperCase();
@@ -1229,6 +1283,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <button className="pd-item" onClick={() => { router.push("/settings"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">⚙</span> Settings
                     </button>
+                    <button className="pd-item" onClick={() => { router.push("/menu/notes"); setProfileDropdownOpen(false); }}>
+                      <span className="pd-icon">📝</span> Chart Notes
+                    </button>
                     <button className="pd-item" onClick={() => { router.push("/manage-plan"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">◈</span> Manage Account
                     </button>
@@ -1329,7 +1386,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     that open in a new tab rather than router navigations, and a
                     signed-in reader keeps their session here. */}
                 <nav className="disclaimer-links">
-                  <a href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">Blogs</a>
+                  <a href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">Research</a>
                   <a href="https://marketcatalyst.ai/faqs" target="_blank" rel="noopener noreferrer">FAQs</a>
                 </nav>
               </footer>
@@ -1340,9 +1397,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
           {drawer?.type === "stock" && (
             <StockDrawer sym={drawer.sym} companies={shellCompanies} sectorsLive={shellSectors} loading={shellCompaniesLoading} onClose={() => setDrawer(null)} />
           )}
-          {drawer?.type === "mover-modal" && (
+          {/* {drawer?.type === "mover-modal" && (
             <MoverModal key={drawer.sym} sym={drawer.sym} onClose={() => setDrawer(null)} />
-          )}
+          )} */}
           {drawer?.type === "stock-detail" && (
             <StockDetailPopover key={drawer.sym} sym={drawer.sym} list={drawer.list}
               onNavigate={(s) => setDrawer({ type: "stock-detail", sym: s, list: drawer.list })}

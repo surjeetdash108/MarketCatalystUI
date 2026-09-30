@@ -1,11 +1,7 @@
 "use client";
 
-import { useState } from "react";
-
-/**
- * ETF Corner — visual placeholder only, no backend wiring yet.
- * ETF list mirrors the funds shown in the current ETF UI design.
- */
+import { useEffect, useState } from "react";
+import { StockScreenEmbed } from "../shell";
 
 const ETF_DATA = [
   { symbol: "CIBR", name: "First Trust NASDAQ Cybersecurity ETF" },
@@ -30,11 +26,34 @@ const ETF_CATEGORIES = ETF_DATA.map(etf => ({
   key: etf.symbol.toLowerCase(),
   symbol: etf.symbol,
   title: etf.name,
-  blurb: etf.name,
 }));
 
 export function ComingSoonEtfScreen() {
   const [query, setQuery] = useState("");
+  const [selectedEtf, setSelectedEtf] = useState<string | null>(null);
+
+  /*
+   * Clicking ETF Corner in the sidebar should ALWAYS return
+   * to the ETF grid, even if an ETF is currently open.
+   */
+  useEffect(() => {
+    const handleEtfCornerHome = () => {
+      setSelectedEtf(null);
+    };
+
+    window.addEventListener(
+      "etf-corner-home",
+      handleEtfCornerHome
+    );
+
+    return () => {
+      window.removeEventListener(
+        "etf-corner-home",
+        handleEtfCornerHome
+      );
+    };
+  }, []);
+
   const q = query.trim().toLowerCase();
 
   const filteredCategories = q
@@ -45,10 +64,103 @@ export function ComingSoonEtfScreen() {
       )
     : ETF_CATEGORIES;
 
+  /*
+   * ETF DETAIL VIEW
+   *
+   * The ETF itself is passed directly into the existing
+   * StockScreenEmbed.
+   *
+   * CIBR -> StockScreenEmbed("CIBR")
+   * DIA  -> StockScreenEmbed("DIA")
+   * QQQ  -> StockScreenEmbed("QQQ")
+   */
+  if (selectedEtf) {
+    const etf = ETF_DATA.find(
+      item => item.symbol === selectedEtf
+    );
+
+    return (
+      <>
+        <div
+          className="page-head"
+          style={{
+            alignItems: "center",
+          }}
+        >
+          {/* <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: "1.1rem",
+                fontWeight: 700,
+                color: "var(--text-hi)",
+              }}
+            >
+              {selectedEtf}
+            </div>
+
+            <div
+              style={{
+                marginTop: 3,
+                fontSize: ".72rem",
+                // color: "var(--text-dim-solid)",
+              }}
+            >
+              {etf?.name ?? selectedEtf}
+            </div>
+          </div> */}
+          <div></div>
+
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setSelectedEtf(null)}
+            aria-label="Close ETF"
+            title="Back to ETF Corner"
+            style={{
+              fontSize: "1.1rem",
+              lineHeight: 1,
+              padding: "6px 10px",
+            }}
+          >
+            ✕ Back
+          </button>
+        </div>
+
+        <div className="dash">
+          <div className="col-12">
+            <div
+              className="card"
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+              }}
+            >
+              <StockScreenEmbed
+                initialSym={selectedEtf}
+              />
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  /*
+   * DEFAULT ETF CORNER VIEW
+   *
+   * This is the screen that should appear whenever ETF Corner
+   * is opened.
+   */
   return (
     <>
       <div className="page-head">
-        <div style={{ position: "relative", flex: 1, maxWidth: 420 }}>
+        <div
+          style={{
+            position: "relative",
+            flex: 1,
+            maxWidth: 420,
+          }}
+        >
           <span
             style={{
               position: "absolute",
@@ -116,11 +228,20 @@ export function ComingSoonEtfScreen() {
               }}
             >
               {filteredCategories.map(c => (
-                <div
+                <button
                   key={c.key}
-                  className="card"
+                  type="button"
+                  onClick={() =>
+                    setSelectedEtf(c.symbol)
+                  }
+                  className="card ai-theme-card"
                   style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: 0,
                     opacity: 0.88,
+                    cursor: "pointer",
+                    color: "inherit",
                   }}
                 >
                   <div className="card-b">
@@ -154,20 +275,8 @@ export function ComingSoonEtfScreen() {
                     >
                       {c.title}
                     </p>
-
-                    <div style={{ marginTop: 10 }}>
-                      <span
-                        className="pill"
-                        style={{
-                          background: "var(--surface-3)",
-                          color: "var(--text-dim-solid)",
-                        }}
-                      >
-                        Coming soon
-                      </span>
-                    </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

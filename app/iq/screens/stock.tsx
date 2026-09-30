@@ -566,7 +566,7 @@ function StockChartExpanded({
   );
 }
 
-export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?: string; hideHeader?: boolean; hideChart?: boolean } = {}) {
+export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {initialSym?: string;hideHeader?: boolean;hideChart?: boolean;headerActions?: ReactNode;} = {}) {
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
@@ -600,6 +600,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   const [showEarnings, setShowEarnings] = useState(true);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [maStep, setMaStep] = useState(0);
+  const [chartMinimized, setChartMinimized] = useState(false);
 
   // Live overlays for the detail panels — analyst consensus, insider
   // transactions, the full company universe (for peer/sector lookups), sector
@@ -677,8 +678,8 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // Tab shown below the persistent header + chart, in the full (non-embedded)
   // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
   // its original single stacked-card layout, so this state is unused there.
-  type StockTab = "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news";
-  const [activeTab, setActiveTab] = useState<StockTab>("overview");
+  type StockTab = "chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers";
+  const [activeTab, setActiveTab] = useState<StockTab>("chart");
 
   // Watchlists are backend-synced (multiple named lists). The star is "filled"
   // when the ticker is in ANY list; clicking it opens the which-list picker.
@@ -952,38 +953,83 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // exact same number as the heatmap tile / movers row for the same ticker.
   // useLiveTick still drives the intraday chart overlay below.
   const sharedQuote = useLiveQuotes([sym]).get(sym);
+
   const livePrice = sharedQuote?.price ?? live.tick?.price ?? null;
-  // Nullable: live tick, then the company snapshot — but NOT `p`'s 0 fallback, so
-  // an entirely-unknown quote stays null and the header renders a dash instead of
-  // $0.00 (BUG-DATA-007).
   const dispPrice = livePrice ?? data.price;
-  const dispPct = sharedQuote?.pctChange ?? live.pct ?? data.pctChange;
-  // Derive the $ move from whichever feed supplied the price and % above, so the
-  // three numbers in the header always describe the same tick. Taking it from
-  // live.change while price/% came from sharedQuote mixed two independent polls:
-  // $6.10 could sit beside a price and % captured seconds apart.
-  //   prevClose = price / (1 + pct/100)  =>  change = price - prevClose
+
+  const dispPct =
+    sharedQuote?.pctChange ??
+    live.pct ??
+    data.pctChange;
+
   const sharedDollar =
     sharedQuote?.price != null && sharedQuote.pctChange != null
       ? Math.abs(
-          sharedQuote.price - sharedQuote.price / (1 + sharedQuote.pctChange / 100),
+          sharedQuote.price -
+          sharedQuote.price / (1 + sharedQuote.pctChange / 100),
         )
       : null;
+
   const dispDollar =
-    sharedDollar ?? (live.change != null ? Math.abs(live.change) : dollar);
-  // Outside regular hours the headline change is an extended-hours move, and
-  // printing it bare contradicts the chart — whose last completed candle is the
-  // regular session that closed. MDB read +3.73% green beside a red final
-  // candle: the vendor had regular_trading_change_percent 0 and
-  // late_trading_change_percent 3.734, so the whole move was after the bell.
-  // Both numbers were right; the label was missing. See extendedSession.
-  const extLabel = extendedSession(sharedQuote);
-  // The regular session's closing price, which the extended move is measured
-  // from — the number the chart's last candle actually ends at.
-  const atClose =
-    dispPrice != null && dispPct != null && dispPct !== -100
-      ? dispPrice / (1 + dispPct / 100)
-      : null;
+    sharedDollar ??
+    (live.change != null ? Math.abs(live.change) : dollar);
+
+  const isMarketOpen = sharedQuote?.marketStatus === "open";
+
+  /*
+   * Extended-session detection.
+   *
+   * True if market status is late_trading, or if Polygon snapshot reports a
+   * non-zero lateTradingChangePct, or extendedSession detects after hours.
+   */
+  const isAfterHours =
+    sharedQuote?.marketStatus === "late_trading" ||
+    (sharedQuote?.latePct != null && sharedQuote.latePct !== 0) ||
+    extendedSession(sharedQuote) === "after hours";
+
+  /*
+   * Regular-session price and move.
+   *
+   * If currently in after-hours, data.price is the regular session close.
+   * If data.price is not present, reconstruct regular close from after-hours quote.
+   */
+  const regPrice =
+    isAfterHours && data.price != null && data.price > 0
+      ? data.price
+      : isAfterHours && sharedQuote?.latePct != null && sharedQuote?.price != null
+        ? sharedQuote.price / (1 + sharedQuote.latePct / 100)
+        : (dispPrice ?? data.price ?? 0);
+
+  const regPct =
+    isAfterHours && data.pctChange != null
+      ? data.pctChange
+      : (sharedQuote?.regularPct ?? dispPct ?? data.pctChange ?? 0);
+
+  const regDollar =
+    regPrice > 0 && regPct != null && regPct !== -100
+      ? Math.abs(regPrice - regPrice / (1 + regPct / 100))
+      : (dispDollar ?? 0);
+
+  /*
+   * After-hours price and move.
+   */
+  const ahPct =
+    sharedQuote?.latePct ??
+    (isAfterHours && sharedQuote?.pctChange != null && sharedQuote.pctChange !== regPct
+      ? sharedQuote.pctChange
+      : null);
+
+  const ahPrice =
+    isAfterHours && sharedQuote?.price != null && (sharedQuote.latePct != null || sharedQuote.price !== regPrice)
+      ? sharedQuote.price
+      : (ahPct != null && regPrice > 0 ? regPrice * (1 + ahPct / 100) : null);
+
+  const ahDollar =
+    ahPrice != null && regPrice > 0
+      ? Math.abs(ahPrice - regPrice)
+      : (ahPct != null && regPrice > 0 ? Math.abs((ahPct / 100) * regPrice) : null);
+
+  const showAfterHours = isAfterHours && ahPrice != null && ahPct != null;
   // Freshness stamp for the price-chart bars (backend createdAt), surfaced by the
   // chart toolbar in the same muted style as the header's delayed-quote marker
   // (BUG-DATA-008).
@@ -1173,16 +1219,18 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
   // tags still key off pmx/pmn, so they stay correct regardless of sort.
   const sortedPeers = [...peersAll].sort((a, b) => (peerSort === "asc" ? a.c - b.c : b.c - a.c));
 
-  // Tab bar config — mirrors the mockup's Overview/Analysis/Earnings/
+  // Tab bar config — mirrors the Chart/Overview/Analysis/Earnings/
   // Financials/Holdings/News split. Counts are real data (quarters on file /
   // articles fetched), not decorative.
   const TABS: { id: StockTab; label: string; count?: number }[] = [
+    { id: "chart", label: "Chart" },
     { id: "overview", label: "Overview" },
     { id: "analysis", label: "Analysis" },
     { id: "earnings", label: "Earnings", count: hist10.length || undefined },
     { id: "financials", label: "Financials" },
     { id: "holdings", label: "Holdings" },
     { id: "news", label: "News", count: tickerNews?.length || undefined },
+    { id: "peers", label: "Peers" },
   ];
   // Every rail card lives on exactly one tab (Analysis) — no card is
   // duplicated across tabs. The rest show a full-width main column instead of
@@ -1208,7 +1256,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
     // See .sd-scope in iq.css.
     <div className="sd-scope">
       {/* Symbol bar — search left, chips right */}
-      {!hideHeader && (
+      {/* {!hideHeader && (
         <div className="fbar" style={{ position: "relative" }}>
           <div style={{ position: "relative", flexShrink: 0 }}>
             <input
@@ -1253,7 +1301,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             <button key={s} className={`chip${sym === s ? " active" : ""}`} onClick={() => selectSym(s)}>{s}</button>
           ))}
         </div>
-      )}
+      )} */}
 
       {!hideHeader && (
         <div style={{ padding: "14px 18px 0" }}>
@@ -1263,7 +1311,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               gain — the header never used its right half. */}
           <div className="sd-headwrap">
           <div className="sd-head">
-            <StockLogo sym={sym} size={46} />
+            <StockLogo sym={sym} size={38} />
             <div className="sd-name">
               {/* ONE line for the whole identity: symbol, quote, market cap,
                   then name / exchange / sector and the pills. Name-and-sector
@@ -1272,16 +1320,165 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   start higher. It still wraps rather than clips on a narrow
                   window — flex-wrap with a small row-gap, so a wrapped header
                   degrades to the old two-line look instead of losing text. */}
-              <div className="sd-headline">
-                <h1>{sym}</h1>
-                <div className="sd-px" style={{ margin: 0, display: "flex", alignItems: "baseline", gap: 10 }}>
-                  {dispPrice != null
-                    ? <span className="p">${fmt(dispPrice, 2)}</span>
-                    : <span className="p" style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                  {dispPct != null && (
-                    <span className={`c ${cls(dispPct)}`}>{arr(dispPct)} {dispPct >= 0 ? "+" : ""}${fmt(dispDollar ?? 0, 2)} ({sign(dispPct)})</span>
-                  )}
+              <div
+                className="sd-headline"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "nowrap",
+                }}
+              >
+                <h1 style={{ margin: 0, flexShrink: 0, fontSize: "0.95rem" }}>{sym}</h1>
 
+                {/* PARALLEL SESSIONS CONTAINER: Regular Market Close + After Hours */}
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {/* REGULAR MARKET CLOSE */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: 5,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <span
+                        className="p"
+                        style={{
+                          fontFamily: "var(--f-mono)",
+                          fontSize: "1.05rem",
+                          fontWeight: 800,
+                          color: "var(--text-hi)",
+                          lineHeight: 1.1,
+                          letterSpacing: "-.02em",
+                        }}
+                      >
+                        ${fmt(regPrice, 2)}
+                      </span>
+
+                      {regPct != null && (
+                        <span
+                          className={`c ${cls(regPct)}`}
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: "0.76rem",
+                            fontWeight: 700,
+                            display: "inline-flex",
+                            alignItems: "baseline",
+                            gap: 4,
+                            lineHeight: 1.1,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <span style={{ fontSize: "0.68rem" }}>{arr(regPct)}</span>
+                          <span>{fmt(Math.abs(regDollar ?? 0), 2)}</span>
+                          <span>({regPct >= 0 ? "" : "-"}{fmt(Math.abs(regPct), 2)}%)</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: ".54rem",
+                        fontWeight: 600,
+                        color: "var(--text-dim-solid)",
+                        marginTop: 1,
+                        lineHeight: 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {isMarketOpen ? "Market Open" : "Market Close"}
+                    </div>
+                  </div>
+
+                  {/* AFTER HOURS — ONLY SHOWN AFTER REGULAR MARKET CLOSE */}
+                  {showAfterHours && (
+                    <div
+                      style={{
+                        borderLeft: `2.5px solid ${regPct >= 0 ? "var(--up)" : "var(--down)"}`,
+                        paddingLeft: 8,
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: ".54rem",
+                          fontWeight: 800,
+                          color: "var(--text-hi)",
+                          letterSpacing: ".03em",
+                          textTransform: "uppercase",
+                          lineHeight: 1.1,
+                          marginBottom: 2,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        AFTER HOURS
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "baseline",
+                          gap: 4,
+                          lineHeight: 1.1,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: "0.78rem",
+                            fontWeight: 800,
+                            color: "var(--text-hi)",
+                          }}
+                        >
+                          ${fmt(ahPrice, 2)}
+                        </span>
+
+                        <span
+                          className={`c ${cls(ahPct)}`}
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".65rem",
+                            fontWeight: 700,
+                            display: "inline-flex",
+                            alignItems: "baseline",
+                            gap: 3,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <span>
+                            {ahPct >= 0 ? "+" : "-"}{fmt(ahDollar ?? 0, 2)}
+                          </span>
+                          <span style={{ fontSize: ".58rem" }}>{arr(ahPct)}</span>
+                          <span>
+                            {ahPct >= 0 ? `+${fmt(ahPct, 2)}%` : `${fmt(ahPct, 2)}%`}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               {/* Second line, under the price: market cap, exchange/sector and
@@ -1289,9 +1486,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   with the symbol and quote, which left the header wide and the
                   About box squeezed into a 30% column. Dropping them one row
                   narrows what the header needs and lets About take the width. */}
-              <div className="sd-meta">
+              <div className="sd-meta" style={{ marginTop: 3, columnGap: 8 }}>
                 {mc != null && (
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", fontWeight: 600,
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".58rem", fontWeight: 600,
                     color: "var(--text-dim-solid)", letterSpacing: ".02em", whiteSpace: "nowrap" }}>
                     Mkt cap {cap(mc)}
                   </span>
@@ -1300,11 +1497,11 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                     showing, because its own heading already reads "About <full
                     name>" to the right — repeating it is pure duplication. With
                     no About box the name has nowhere else to appear, so it stays. */}
-                <span className="sub" title={`${data.name} · ${ex} · ${group}`}>
+                <span className="sub" title={`${data.name} · ${ex} · ${group}`} style={{ fontSize: ".64rem" }}>
                   {data.description ? "" : `${data.name} · `}{ex} · {group}
                 </span>
                 {inSectorRank != null && inSectorTotal != null && (
-                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".62rem" }}>
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".52rem", padding: "1px 5px" }}>
                     #{inSectorRank} of {inSectorTotal} in sector
                   </span>
                 )}
@@ -1313,7 +1510,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                     exactly h1 + price + change on one line; a pill up there
                     overflows that budget and wraps the change under a clipped
                     price. This row already wraps by design. */}
-                {extLabel && (
+                {/* {extLabel && (
                   <span
                     className="pill"
                     title={`This move happened outside regular trading hours. The last regular session closed at $${fmt(atClose ?? 0, 2)} — that close is what the chart's final candle shows.`}
@@ -1321,9 +1518,9 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   >
                     {extLabel}{atClose != null ? ` · at close $${fmt(atClose, 2)}` : ""}
                   </span>
-                )}
+                )} */}
                 {isLiveStock && (
-                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".52rem", padding: "1px 5px" }}>
                     live quote · {vendorLabel(liveCompany?.source)}
                   </span>
                 )}
@@ -1334,7 +1531,22 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                 Without a description there is no neighbouring tag, and the
                 header keeps its own — attribution is never dropped. */}
             {!data.description && (
-              <span style={{ marginLeft: "auto", alignSelf: "flex-start" }}><VendorTag v="polygon" /></span>
+              <span style={{ alignSelf: "flex-start" }}>
+                <VendorTag v="polygon" />
+              </span>
+            )}
+            {headerActions && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginLeft: "auto",
+                  flex: "none",
+                }}
+              >
+                {headerActions}
+              </div>
             )}
           </div>
 
@@ -1342,9 +1554,10 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               via /live/company. Shown in full (no clamp / no toggle); it scrolls
               inside its box, which is now the header's right-hand half. */}
           {data.description && (
-            <div className="sd-about">
-              <div className="sd-about-lbl" style={{ display: "flex", alignItems: "center", gap: 8 }}>About {data.name} <VendorTag v="polygon" /></div>
-              <p style={{ margin: "4px 0 0", fontSize: ".82rem", lineHeight: 1.6, color: "var(--text-dim-solid)" }}>
+            <div className="sd-about" style={{ flex: "1 1 auto", width: "auto", maxWidth: "none" }}>
+              {/* <div className="sd-about-lbl" style={{ display: "flex", alignItems: "center", gap: 8 }}>About {data.name} <VendorTag v="polygon" /></div> */}
+              <div className="sd-about-lbl"style={{display: "flex",alignItems: "center",justifyContent: "flex-end",gap: 8,}}><VendorTag v="polygon" /></div>
+              <p style={{ margin: "4px 0 0", fontSize: ".82rem", lineHeight: 1.6,  color: "var(--text-primary)" }}>
                 {data.description}
               </p>
               {data.homepageUrl && (
@@ -1366,10 +1579,32 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
         style={hideHeader ? { paddingTop: 0 } : (showRail ? undefined : { gridTemplateColumns: "1fr" })}
       >
 
-        {/* Full-width chart */}
-        {!hideChart && <div style={{ gridColumn: "1 / -1" }}>
-          {/* Chart card */}
-          <div className="card">
+        {/* ── Tab bar — Chart / Overview / Analysis / Earnings / Financials / Holdings /
+             News. Full-view only; the compact embed (hideHeader, used inline in
+             StockPanelLayout) keeps its original single stacked-card layout,
+             rendered unchanged in the `hideHeader &&` branch below. */}
+        {!hideHeader && (
+          <nav className="sd-tabbar" style={{ gridColumn: "1 / -1" }} role="tablist" aria-label="Stock detail sections">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                className="sd-tabbtn"
+                role="tab"
+                aria-selected={activeTab === t.id}
+                onClick={() => setActiveTab(t.id)}
+              >
+                {t.label}
+                {t.count ? <span className="count">{t.count}</span> : null}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {/* Full-width chart — rendered in full view when activeTab === "chart", or in compact embed mode when !hideChart */}
+        {((!hideHeader && !hideChart && activeTab === "chart") || (hideHeader && !hideChart)) && (
+          <div style={{ gridColumn: "1 / -1" }}>
+            {/* Chart card */}
+            <div className="card">
             <div className="chart-toolbar">
               <ChartSelect value={tfActive} options={TF_OPTIONS} onChange={setTfActive} title="Timeframe" />
               <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
@@ -1405,99 +1640,198 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
                   as of {barsAsOfLabel}
                 </span>
               )}
-              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>scroll to zoom · drag to pan · double-click to reset</span>
-              <ExpandBtn
-                title={`${sym} · Price Chart`}
-                node={
-                  <StockChartExpanded
-                    sym={sym} px={p}
-                    initialTf={tfActive} initialChartType={chartType}
-                    initialMaStep={maStep} initialEmaStep={emaStep}
-                    initialShowVol={showVol} initialShowRsi={showRsi}
-                    initialShowEarnings={showEarnings}
-                    hist10={hist10} rsi={rsi} rsiLoading={liveCompanyLoading} erDate={erDate}
-                    earnings={chartEarnings}
-                  />
-                }
-              />
-            </div>
-            <div id="chartHost" style={{ padding: "0 14px 0" }} ref={chartRef}
-              onContextMenu={handleChartRightClick}>
-              <CandleChart sym={sym} tf={tfActive} px={p}
-                maStep={maStep} emaStep={emaStep}
-                showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars}
-                exchange={ex}
-                live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low } : null}
-                earnings={showEarnings ? chartEarnings : []} />
-            </div>
-            {showRsi && (
-              <div id="rsiHost">
-                <div style={{ padding: "6px 14px 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
-                  <span>RSI (14)</span>
-                  <span className="mono" style={{ color: "var(--warn)" }}>
-                    {rsi != null ? `${Math.round(rsi)} · ${rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}` : "not available"}
-                  </span>
-                </div>
-                <div style={{ padding: "0 14px 4px" }}><RsiPane rsi14={rsi} loading={liveCompanyLoading} /></div>
-              </div>
-            )}
-            <div style={{ padding: "6px 14px 12px", fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-              Pattern: <b style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
-                {isUp ? "cup-with-handle breakout" : "breakdown below support"}
-              </b> {isUp ? "on above-average volume." : "on rising volume."}
+
+              {/* Hide instructions when chart is minimised */}
+              {!chartMinimized && (
+                <span
+                  style={{
+                    fontSize: ".72rem",
+                    color: "var(--text-dim-solid)",
+                    marginRight: 8,
+                  }}
+                >
+                  scroll to zoom · drag to pan · double-click to reset
+                </span>
+              )}
+
+              {/* Always keep Minimise / Maximise button visible */}
+              <button
+                type="button"
+                onClick={() => setChartMinimized(v => !v)}
+                title={chartMinimized ? "Maximise chart" : "Minimise chart"}
+                aria-label={chartMinimized ? "Maximise chart" : "Minimise chart"}
+                style={{
+                  marginLeft: "auto",
+                  alignSelf: "flex-start",
+                  marginTop: 0,
+                  padding: "5px 10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 7,
+                  background: "var(--surface-2)",
+                  color: "var(--text-dim-solid)",
+                  cursor: "pointer",
+                  fontSize: ".68rem",
+                  fontWeight: 600,
+                }}
+              >
+                {chartMinimized ? "Maximise" : "Minimise"}
+              </button>
             </div>
 
-            {/* Chart notes — inline inside chart card */}
-            <div className="cn-wrap">
-              <div className="cn-h">
-                Chart notes
-                <span className="cn-hint">right-click to add · saved to your account</span>
-                <button className="chip ai-c" style={{ marginLeft: "auto", fontSize: ".7rem" }}
-                  onClick={() => setNoteOpen(true)}>+ Add note</button>
-              </div>
-              {notes.length === 0 ? (
-                <div className="cn-empty">No notes yet. Right-click the chart or click &ldquo;Add note&rdquo; to record a trade decision.</div>
-              ) : (
-                notes.map(n => (
-                  <div key={n.id} className="cn-row">
-                    <div className="cn-dot" />
-                    <div className="cn-tx">
-                      {n.comment}
-                      <span className="cn-ts">
-                        {" · "}
-                        {n.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                        {" "}
-                        {n.createdAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+            {/* Chart content disappears when minimised */}
+            {!chartMinimized && (
+              <>
+                <div
+                  id="chartHost"
+                  style={{ padding: "0 14px 0" }}
+                  ref={chartRef}
+                  onContextMenu={handleChartRightClick}
+                >
+                  <CandleChart
+                    sym={sym}
+                    tf={tfActive}
+                    px={p}
+                    maStep={maStep}
+                    emaStep={emaStep}
+                    showVol={showVol}
+                    chartType={chartType.toLowerCase()}
+                    realBars={realBars}
+                    exchange={ex}
+                    live={
+                      live.tick
+                        ? {
+                            price: live.tick.price,
+                            high: live.tick.high,
+                            low: live.tick.low,
+                          }
+                        : null
+                    }
+                    earnings={showEarnings ? chartEarnings : []}
+                  />
+                </div>
+
+                {showRsi && (
+                  <div id="rsiHost">
+                    <div
+                      style={{
+                        padding: "6px 14px 4px",
+                        fontSize: ".66rem",
+                        color: "var(--text-dim-solid)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <span>RSI (14)</span>
+
+                      <span
+                        className="mono"
+                        style={{ color: "var(--warn)" }}
+                      >
+                        {rsi != null
+                          ? `${Math.round(rsi)} · ${
+                              rsi > 70
+                                ? "overbought"
+                                : rsi < 40
+                                  ? "weak"
+                                  : "neutral-to-strong"
+                            }`
+                          : "not available"}
                       </span>
                     </div>
-                    <button className="icon-x" onClick={() => removeNote(n.id)}>✕</button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>}
 
-        {/* ── Tab bar — Overview / Analysis / Earnings / Financials / Holdings /
-             News. Full-view only; the compact embed (hideHeader, used inline in
-             StockPanelLayout) keeps its original single stacked-card layout,
-             rendered unchanged in the `hideHeader &&` branch below. */}
-        {!hideHeader && (
-          <nav className="sd-tabbar" style={{ gridColumn: "1 / -1" }} role="tablist" aria-label="Stock detail sections">
-            {TABS.map(t => (
-              <button
-                key={t.id}
-                className="sd-tabbtn"
-                role="tab"
-                aria-selected={activeTab === t.id}
-                onClick={() => setActiveTab(t.id)}
-              >
-                {t.label}
-                {t.count ? <span className="count">{t.count}</span> : null}
-              </button>
-            ))}
-          </nav>
-        )}
+                    <div style={{ padding: "0 14px 4px" }}>
+                      <RsiPane
+                        rsi14={rsi}
+                        loading={liveCompanyLoading}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    padding: "6px 14px 12px",
+                    fontSize: ".7rem",
+                    color: "var(--text-dim-solid)",
+                  }}
+                >
+                  Pattern:{" "}
+                  <b
+                    style={{
+                      color: isUp ? "var(--up)" : "var(--down)",
+                    }}
+                  >
+                    {isUp
+                      ? "cup-with-handle breakout"
+                      : "breakdown below support"}
+                  </b>{" "}
+                  {isUp
+                    ? "on above-average volume."
+                    : "on rising volume."}
+                </div>
+
+                {/* Chart notes — inline inside chart card */}
+                <div className="cn-wrap">
+                  <div className="cn-h">
+                    Chart notes
+
+                    <span className="cn-hint">
+                      right-click to add · saved to your account
+                    </span>
+
+                    <button
+                      className="chip ai-c"
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: ".7rem",
+                      }}
+                      onClick={() => setNoteOpen(true)}
+                    >
+                      + Add note
+                    </button>
+                  </div>
+
+                  {notes.length === 0 ? (
+                    <div className="cn-empty">
+                      No notes yet. Right-click the chart or click
+                      &ldquo;Add note&rdquo; to record a trade decision.
+                    </div>
+                  ) : (
+                    notes.map(n => (
+                      <div key={n.id} className="cn-row">
+                        <div className="cn-dot" />
+
+                        <div className="cn-tx">
+                          {n.comment}
+
+                          <span className="cn-ts">
+                            {" · "}
+                            {n.createdAt.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                            {" "}
+                            {n.createdAt.toLocaleTimeString("en-US", {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+
+                        <button
+                          className="icon-x"
+                          onClick={() => removeNote(n.id)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>)}
 
       {hideHeader && (<>
         {/* LEFT COLUMN — natural height (no stretch) so leftColRef measures the
@@ -2718,6 +3052,58 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
             </div>
           )}
 
+          {activeTab === "peers" && (
+            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+              <div className="card-h">
+                <div>
+                  <h3>Peers · {sym}</h3>
+                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                    {peersTotal} peer{peersTotal === 1 ? "" : "s"} with live data{data.sector ? ` in ${titleCaseLabel(data.sector)}` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {peersTotal > 1 && (
+                    <button
+                      onClick={() => setPeerSort(s => (s === "desc" ? "asc" : "desc"))}
+                      title={`Sort by % change — ${peerSort === "desc" ? "highest first" : "lowest first"}`}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        fontSize: ".62rem", fontWeight: 700, letterSpacing: ".02em",
+                        color: "var(--text-dim-solid)", background: "var(--surface-3)",
+                        border: "1px solid var(--border-soft)", borderRadius: 6,
+                        padding: "3px 7px", cursor: "pointer",
+                      }}
+                    >
+                      % <span style={{ color: "var(--brand-2)" }}>{peerSort === "desc" ? "▼" : "▲"}</span>
+                    </button>
+                  )}
+                  <VendorTag v="polygon" />
+                  {peersTotal > peers.length && <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>}
+                </div>
+              </div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
+                {sortedPeers.length ? sortedPeers.map(peer => {
+                  const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
+                  return (
+                    <div key={peer.t} className="minirow"
+                      style={{ cursor: "pointer" }} onClick={() => openStock(peer.t)}>
+                      <StockLogo sym={peer.t} size={24} />
+                      <span className="mono" style={{ fontWeight: 700, minWidth: 52, color: peer.t === sym ? "var(--brand-2)" : "var(--text-hi)" }}>{peer.t}</span>
+                      <span className="mid" style={{ fontSize: ".78rem" }}>
+                        {peer.name ? <span>{peer.name}</span> : null}
+                        {tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`} style={{ marginLeft: 6 }}>{tag}</span>}
+                        {peer.rsRating != null && (
+                          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 4, fontSize: ".62rem" }}>RS {peer.rsRating}</span>
+                        )}
+                      </span>
+                      <span className={`r mono ${cls(peer.c)}`} style={{ fontSize: ".82rem" }}>{sign(peer.c)}</span>
+                    </div>
+                  );
+                }) : <DataState loading={companiesLoading} label="No live peers found in this sector yet." />}
+              </div>
+            </div>
+          )}
+
         </div>
 
         {showRail && (
@@ -2886,51 +3272,7 @@ export function StockScreen({ initialSym, hideHeader, hideChart }: { initialSym?
               </div>
             )}
 
-            {activeTab === "analysis" && (
-              <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-                <div className="card-h">
-                  <h3>Peers</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {peersTotal > 1 && (
-                      <button
-                        onClick={() => setPeerSort(s => (s === "desc" ? "asc" : "desc"))}
-                        title={`Sort by % change — ${peerSort === "desc" ? "highest first" : "lowest first"}`}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 4,
-                          fontSize: ".62rem", fontWeight: 700, letterSpacing: ".02em",
-                          color: "var(--text-dim-solid)", background: "var(--surface-3)",
-                          border: "1px solid var(--border-soft)", borderRadius: 6,
-                          padding: "3px 7px", cursor: "pointer",
-                        }}
-                      >
-                        % <span style={{ color: "var(--brand-2)" }}>{peerSort === "desc" ? "▼" : "▲"}</span>
-                      </button>
-                    )}
-                    <VendorTag v="polygon" />
-                    {peersTotal > peers.length && <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>}
-                  </div>
-                </div>
-                <div className="card-b" style={{ paddingTop: 6, flex: 1, minHeight: 0, overflowY: "auto" }}>
-                  {sortedPeers.length ? sortedPeers.map(peer => {
-                    const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
-                    return (
-                      <div key={peer.t} className="minirow"
-                        style={{ cursor: "pointer" }} onClick={() => openStock(peer.t)}>
-                        <StockLogo sym={peer.t} size={22} />
-                        <span className="tkr">{peer.t}</span>
-                        <span className="mid">
-                          {tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`}>{tag}</span>}
-                          {peer.rsRating != null && (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 4, fontSize: ".62rem" }}>RS {peer.rsRating}</span>
-                          )}
-                        </span>
-                        <span className={`r ${cls(peer.c)}`}>{sign(peer.c)}</span>
-                      </div>
-                    );
-                  }) : <DataState loading={companiesLoading} label="No live peers found in this sector yet." />}
-                </div>
-              </div>
-            )}
+
 
           </div>
         )}

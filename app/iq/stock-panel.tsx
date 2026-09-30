@@ -164,7 +164,7 @@ export function StockRow({
 
 /* ── StockListCard: 340px card with scrollable list ── */
 export function StockListCard({
-  title, titleCount, headerRight, isEmpty, emptyMessage = "No items.", loading, maxListHeight, children,
+  title, titleCount, headerRight, isEmpty, emptyMessage = "No items.", loading, maxListHeight, showVendor = true, children,
 }: {
   title: string;
   /** Optional count pill rendered right after the title (e.g. "Holdings 3"). */
@@ -175,6 +175,8 @@ export function StockListCard({
   /** True while the underlying fetch is still in flight — shows a spinner instead of the empty message. */
   loading?: boolean;
   maxListHeight?: number;
+  /** The Polygon source tag — off for lists that aren't vendor data (e.g. chart notes). */
+  showVendor?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -196,7 +198,7 @@ export function StockListCard({
                 }}
               >{titleCount}</span>
             )}
-            <VendorTag v="polygon" />
+            {showVendor && <VendorTag v="polygon" />}
           </span>
           {headerRight}
         </div>

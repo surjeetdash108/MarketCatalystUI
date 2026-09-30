@@ -280,13 +280,16 @@
    Horizontal variant of .nav-clock: no full-width border, never shrinks, and
    hidden on narrow viewports so it can't crowd the right-side controls. */
 .topbar-clock {
-  font-size: .72rem; color: var(--text-dim-solid);
+  font-size: .72rem; color: var(--text-hi);
   font-family: var(--f-mono); white-space: nowrap; flex-shrink: 0;
   /* Right-align the clock (and the market-open pill + icons after it): the
      search is max-width-capped, so it fills to 30rem first, then this auto
      margin absorbs the rest — parking the date/time immediately left of the
      "Market open" pill instead of floating mid-bar. */
   margin-left: auto;
+}
+.iq-root[data-theme="dark"] .topbar-clock {
+  color: #F4F6F5;
 }
 @media (max-width: 720px) { .topbar-clock { display: none; } }
 .logo {
@@ -984,13 +987,11 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
    alignment, not an oversight. Capped at 45% so About keeps the bulk of the
    row on narrower windows. */
 .sd-headwrap > .sd-head {
-  flex: 0 1 auto; min-width: min(460px, 45%); margin-bottom: 14px;
+  flex: 0 0 auto; margin-bottom: 14px;
 }
-/* Taller than the identity block so the blurb shows more before it scrolls;
-   min-height keeps a SHORT description from collapsing the box well above the
-   header's bottom edge. */
+/* Expanded width for the About box on the right extending to the right edge */
 .sd-headwrap > .sd-about {
-  flex: 1 1 auto; min-width: 300px; margin-top: 0;
+  flex: 1 1 auto; width: auto; max-width: none; min-width: 280px; margin-top: 0;
   min-height: 104px; max-height: 148px;
 }
 /* Basis 0, NOT auto. .sd-head is a wrapping flex row, and wrapping is decided
@@ -1004,7 +1005,7 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 @media (max-width: 1100px) {
   .sd-headwrap { flex-wrap: wrap; }
   .sd-headwrap > .sd-head { flex: 1 1 100%; margin-bottom: 0; }
-  .sd-headwrap > .sd-about { flex: 1 1 100%; min-width: 0; margin-top: 12px; max-height: 104px; }
+  .sd-headwrap > .sd-about { flex: 1 1 100%; width: 100%; max-width: 100%; min-width: 0; margin-top: 12px; max-height: 104px; }
 }
 /* The identity line: symbol, quote, market cap, name/exchange/sector, pills —
    all baseline-aligned on ONE row. It wraps rather than clipping when the
@@ -1411,9 +1412,9 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .theme-secrow:hover { background: var(--surface-2); color: var(--text-hi); }
 .theme-secrow input { accent-color: var(--brand); cursor: pointer; }
 
-/* Earnings-dot popover on the price chart. Absolute like .chart-tip, so it
-   rides the same positioned chart host; `left` is set inline as a percentage
-   because the SVG scales with the card. */
+/* Earnings-dot popover on the price chart. Absolutely positioned against the
+   chart's own relative host; `left` is set inline as a percentage because the
+   SVG scales with the card. */
 .chart-erpop {
   position: absolute; top: 30px; z-index: 6;
   min-width: 186px; padding: 9px 11px;
@@ -2168,6 +2169,23 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 .ew-tickrow-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ew-tickrow-surp { font-family: var(--f-mono); font-size: .62rem; font-weight: 700; letter-spacing: .01em; }
 .ew-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* AI Corner category detail — company list (left) + stock details (right).
+   Sized to .main's content box (not a 100vh calc, which ignored the page head
+   and overflowed .main by ~100px) so the page itself never scrolls; only the
+   list and the details card do. `minmax(0,1fr)` rows keep the tall stock
+   screen from growing the row past the viewport. */
+.aic-detail { height: 100%; display: flex; flex-direction: column; }
+.aic-detail > .page-head { flex: none; }
+.aic-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(250px, .32fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 14px; padding: 14px 18px; }
+/* Narrow: stack, and let .main scroll the page as usual — two nested
+   scrollers on a phone are unusable. The list is capped so the details
+   aren't pushed far below the fold. */
+@media (max-width: 900px) {
+  .aic-detail { height: auto; }
+  .aic-split { grid-template-columns: 1fr; grid-template-rows: auto; }
+  .aic-list { max-height: 40vh; }
+}
 .ew-toprow { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 /* "What this company does" + "AI summary" capped compact (scroll for the rest). */
 .ew-toprow .card-b { max-height: 100px; overflow-y: auto; }
@@ -2225,7 +2243,7 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 
 /* ── Earnings calendar toolbar (Before Open / After Close / Both, Day/Week) ── */
 
-.ecal { display: flex; flex-direction: column; gap: 12px; }
+.ecal { display: flex; flex-direction: column; gap: 12px; padding: 24px;}
 
 .ecal-top {
   position: relative;
