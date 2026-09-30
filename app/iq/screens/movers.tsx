@@ -777,7 +777,7 @@ export function MoversScreen() {
                     </button>
                     <button
                       onClick={() => addToWatchlist(sym)}
-                      title={inList ? "Already in your watchlist" : "Add this stock to your watchlist"}
+                      title={inList ? undefined : "Add this stock to your watchlist"}
                       style={{
                         display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
                         background: inList ? "var(--brand-dim)" : "var(--surface-2)",
