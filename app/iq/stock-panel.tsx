@@ -91,7 +91,7 @@ function HistoryIcon() {
 /* ── StockRow: one pf-li row ── */
 export function StockRow({
   sym, name, seed, sparkUp,
-  isSelected, onClick, onDelete, onHistory,
+  isSelected, onClick, onDelete, onHistory, muted = false, tag, tagTitle,
   valueTop, valueBottom, valueBottomClass = "",
 }: {
   sym: string;
@@ -101,20 +101,35 @@ export function StockRow({
   isSelected: boolean;
   onClick: () => void;
   onDelete?: () => void;
-  /** Shows a history button that opens this row's purchase history. */
+  /** Shows a history button that opens this row's transaction history. */
   onHistory?: () => void;
+  /** Dims the row, e.g. for a closed position. */
+  muted?: boolean;
+  /** Small label shown after the symbol, e.g. the share count. */
+  tag?: string;
+  /** Hover text explaining the tag. */
+  tagTitle?: string;
   valueTop: string;
   valueBottom: string;
   valueBottomClass?: string;
 }) {
   return (
     <div
-      className={`pf-li${isSelected ? " active" : ""}`}
-      style={{ gridTemplateColumns: onDelete || onHistory ? "1fr 60px auto auto" : "1fr 60px auto" }}
+      className={`pf-li${isSelected ? " active" : ""}${muted ? " muted" : ""}`}
+      // A row with a tag gives the (currently empty) sparkline slot's width to
+      // the symbol line, so the symbol and its tag stay on one line.
+      style={{ gridTemplateColumns: `minmax(0, 1fr) ${tag ? "0px" : "60px"} auto${onDelete || onHistory ? " auto" : ""}` }}
       onClick={onClick}
     >
       <div>
-        <span className="s">{sym}</span>
+        {tag ? (
+          <span className="pf-symline">
+            <span className="s">{sym}</span>
+            <span className="pf-tag" title={tagTitle}>{tag}</span>
+          </span>
+        ) : (
+          <span className="s">{sym}</span>
+        )}
         <span className="n">{name}</span>
       </div>
       <div className="pf-spark">
@@ -129,8 +144,8 @@ export function StockRow({
           {onHistory && (
             <button
               className="pf-hist-btn"
-              title="Purchase history"
-              aria-label={`${sym} purchase history`}
+              title="Transaction history"
+              aria-label={`${sym} transaction history`}
               onClick={e => { e.stopPropagation(); onHistory(); }}
             >
               <HistoryIcon />

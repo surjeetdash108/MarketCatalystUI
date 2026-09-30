@@ -2,31 +2,35 @@
 export interface HoldingDoc {
   id: string;
   ticker: string;
+  /** 0 when the position is closed (every share sold). */
   shares: number;
   positionSize: "Small" | "Medium" | "Large";
   conviction: "High" | "Medium" | "Low";
-  /** Average cost per share; null when the user hasn't entered one. */
+  /** Average cost per share of the open position; null when closed or unpriced. */
   costBasis: number | null;
-  /** Purchase (trade) date as YYYY-MM-DD; null when the user didn't enter one. */
+  /** Realized P/L from all sells of this holding. */
+  realizedPL: number;
+  /** Date of the first transaction, YYYY-MM-DD; null when never recorded. */
   purchaseDate: string | null;
 }
 
-/** One purchase (buy lot) — GET /api/portfolio/holdings/:ticker/lots. */
-export interface HoldingLot {
+/** One buy or sell — GET /api/portfolio/holdings/:ticker/transactions. */
+export interface HoldingTransaction {
   id: string;
+  type: "buy" | "sell";
   shares: number;
-  /** Price per share; null only for an opening lot migrated without a cost. */
+  /** Price per share; null only for a migrated buy without a recorded cost. */
   price: number | null;
   /** Trade date, YYYY-MM-DD. */
   date: string;
   createdAt: string;
-  /** True for the lot synthesized from a holding saved before lots existed. */
-  opening?: boolean;
-  /** shares × price; null when the lot has no price. */
+  /** shares × price; null when the transaction has no price. */
   amount: number | null;
-  /** Total shares held right after this purchase. */
+  /** Realized P/L of a sell; null for buys. */
+  realizedPL: number | null;
+  /** Shares held right after this transaction. */
   sharesAfter: number;
-  /** Average cost per share right after this purchase. */
+  /** Average cost per share right after this transaction; null when none held. */
   avgCostAfter: number | null;
 }
 
@@ -36,12 +40,15 @@ export interface HoldingHistory {
     shares: number;
     avgCost: number | null;
     totalCost: number | null;
-    /** Some lot has no price, so avgCost covers only part of the position. */
+    realizedPL: number;
+    /** Part of the open position has no price, so avgCost covers only part of it. */
     partialCost: boolean;
     firstDate: string | null;
     lastDate: string | null;
     lotCount: number;
+    buyCount: number;
+    sellCount: number;
   };
   /** Newest first. */
-  lots: HoldingLot[];
+  transactions: HoldingTransaction[];
 }

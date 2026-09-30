@@ -3663,11 +3663,11 @@ button.pill.lf-chip {
    light and dark both work. */
 /* .drawer centres with inset:0 + margin:auto, which stretches it to max-height;
    fit-content keeps this short form from carrying a band of empty space. */
-.drawer.hf-drawer { width: min(520px, 96vw); height: fit-content; max-height: min(640px, 90vh); }
+.drawer.hf-drawer { width: min(520px, 96vw); height: fit-content; max-height: min(780px, 94vh); }
 /* The symbol input is TickerSearchField's (inline-styled), so give it the same
    green focus ring as the other fields instead of the browser's blue outline. */
 .hf-form #hf-symbol:focus { outline: none; box-shadow: 0 0 0 1px var(--brand), 0 0 0 4px var(--brand-dim); }
-.hf-form { display: flex; flex-direction: column; gap: 16px; padding-bottom: 20px; }
+.hf-form { display: flex; flex-direction: column; gap: 14px; padding-bottom: 18px; }
 .hf-row { display: flex; flex-direction: column; min-width: 0; }
 .hf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 560px) { .hf-grid { grid-template-columns: 1fr; } }
@@ -3829,8 +3829,8 @@ button.pill.lf-chip {
 .hh-drawer .drawer-h { align-items: center; }
 .hh-name { font-family: var(--f-body); font-size: .8rem; font-weight: 500; color: var(--text-dim-solid); margin-left: 6px; }
 .hh-body { display: flex; flex-direction: column; gap: 16px; padding-bottom: 20px; }
-.hh-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-@media (max-width: 720px) { .hh-stats { grid-template-columns: repeat(2, 1fr); } }
+.hh-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 560px) { .hh-stats { grid-template-columns: repeat(2, 1fr); } }
 .hh-stat {
   display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; border-radius: 10px;
   background: var(--surface-2); border: 1px solid var(--border);
@@ -3841,7 +3841,7 @@ button.pill.lf-chip {
 .hh-stat em { font-style: normal; font-family: var(--f-mono); font-size: .72rem; }
 .hh-stat em.up { color: var(--up); } .hh-stat em.down { color: var(--down); }
 .hh-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
-.hh-table { width: 100%; border-collapse: collapse; font-size: .8rem; min-width: 680px; table-layout: fixed; }
+.hh-table { width: 100%; border-collapse: collapse; font-size: .8rem; min-width: 780px; table-layout: fixed; }
 .hh-table th {
   position: sticky; top: 0; background: var(--surface-1); text-align: left; white-space: nowrap;
   padding: 9px 12px; font-size: .62rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
@@ -3858,3 +3858,88 @@ button.pill.lf-chip {
 .hh-table td.strong { color: var(--text-hi); font-weight: 600; }
 .hh-foot { font-size: .7rem; color: var(--text-dim-solid); line-height: 1.5; }
 .hh-state { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; font-size: .82rem; color: var(--down); }
+
+/* ── Buy / Sell (portfolio.tsx) ─────────────────────────────────────────────
+   Buttons are prefixed with `.iq-root button` so the global button reset
+   (background:none; border:none) cannot outrank them. */
+.hf-seg {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+}
+.iq-root .hf-seg button {
+  height: 34px; border-radius: 7px; border: 1px solid transparent; background: none; cursor: pointer;
+  font-size: .84rem; font-weight: 700; color: var(--text-dim-solid); transition: background .14s, color .14s, border-color .14s;
+}
+.iq-root .hf-seg button:hover:not(:disabled):not(.on) { color: var(--text-hi); background: var(--surface-3); }
+.iq-root .hf-seg button.buy.on { background: var(--up-dim); border-color: color-mix(in srgb, var(--up) 45%, transparent); color: var(--up); }
+.iq-root .hf-seg button.sell.on { background: var(--down-dim); border-color: color-mix(in srgb, var(--down) 45%, transparent); color: var(--down); }
+.iq-root .hf-seg button:disabled { opacity: .35; cursor: default; }
+.hf-select select {
+  flex: 1; min-width: 0; appearance: none; background: transparent; border: 0; outline: 0; cursor: pointer;
+  padding: 8px 32px 8px 12px; color: var(--text-hi); font-size: .9rem; font-family: var(--f-body);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim-solid) 50%), linear-gradient(135deg, var(--text-dim-solid) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 55%, calc(100% - 12px) 55%;
+  background-size: 5px 5px; background-repeat: no-repeat;
+}
+.hf-select select option { background: var(--surface-1); color: var(--text-hi); }
+.iq-root button.hf-max {
+  margin-right: 8px; padding: 3px 8px; border-radius: 6px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border-strong);
+  font-size: .66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim-solid);
+}
+.iq-root button.hf-max:hover { color: var(--text-hi); border-color: var(--brand); }
+.hf-note.sell { background: var(--down-dim); border-color: color-mix(in srgb, var(--down) 35%, transparent); }
+.hf-note.sell .hf-note-ic { background: var(--down); color: var(--on-brand); }
+.hf-sum-row b.up { color: var(--up); } .hf-sum-row b.down { color: var(--down); }
+.btn.primary.sell { background: linear-gradient(135deg, var(--down), #7A2E2E); color: #fff; }
+.hh-actions { display: flex; gap: 8px; }
+.hh-actions .btn { padding: 6px 14px; font-size: .78rem; }
+.btn.hh-buy { border-color: color-mix(in srgb, var(--up) 45%, transparent); color: var(--up); }
+.btn.hh-buy:hover { background: var(--up-dim); color: var(--up); border-color: var(--up); }
+.btn.hh-sell { border-color: color-mix(in srgb, var(--down) 45%, transparent); color: var(--down); }
+.btn.hh-sell:hover:not(:disabled) { background: var(--down-dim); color: var(--down); border-color: var(--down); }
+.btn.hh-sell:disabled { opacity: .4; cursor: default; }
+.hh-table tbody tr td.up { color: var(--up); }
+.hh-table tbody tr td.down { color: var(--down); }
+.pf-li.muted { opacity: .55; }
+.pf-li.muted:hover, .pf-li.muted.active { opacity: .85; }
+
+/* ── Delete one transaction (portfolio.tsx) ── */
+.hh-table td.hh-act { padding: 6px 8px; text-align: right; overflow: visible; }
+.iq-root button.hh-del {
+  width: 24px; height: 24px; padding: 0; border-radius: 6px; cursor: pointer;
+  display: inline-grid; place-items: center; color: var(--text-dim-solid);
+  opacity: 0; transition: opacity .15s, background .15s, color .15s;
+}
+.iq-root button.hh-del svg { width: 13px; height: 13px; }
+.hh-table tbody tr:hover .hh-del, .iq-root button.hh-del:focus-visible { opacity: 1; }
+.iq-root button.hh-del:hover { background: var(--down-dim); color: var(--down); }
+.txd-dialog {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 61;
+  width: min(420px, calc(100vw - 32px)); padding: 22px 24px;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: 0 16px 48px rgba(0,0,0,.5); animation: iq-popIn .18s cubic-bezier(.34,1.18,.64,1);
+}
+.txd-title { font-weight: 700; font-size: 1rem; color: var(--text-hi); margin-bottom: 12px; }
+.txd-body { font-size: .86rem; color: var(--text); line-height: 1.5; }
+.txd-body p { margin: 12px 0 0; }
+.txd-body b { color: var(--text-hi); }
+.txd-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--f-mono); font-size: .82rem;
+}
+.txd-date { margin-left: auto; color: var(--text-dim-solid); font-family: var(--f-body); }
+.txd-err { margin-top: 12px; }
+.txd-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.txd-actions .btn:disabled { opacity: .6; cursor: default; }
+
+/* Share count after the symbol in a holding row (stock-panel.tsx `tag`). */
+.pf-symline { display: flex; align-items: center; gap: 7px; white-space: nowrap; min-width: 0; }
+.pf-tag {
+  display: inline-block; flex-shrink: 0; padding: 1px 6px; border-radius: 5px; vertical-align: 1px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--f-mono); font-size: .64rem; font-weight: 600; color: var(--text-dim-solid);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pf-li.active .pf-tag { color: var(--text); border-color: var(--border-strong); }
