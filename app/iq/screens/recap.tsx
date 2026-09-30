@@ -163,6 +163,19 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const todayStr = now.toISOString().slice(0, 10);
   const weekAgoStr = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
   const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  // The weekly recap is a ROLLING last 7 days (weekAgoStr → today), both here
+  // and in the backend recaps job — not a calendar week. So its title states
+  // that range ("Last 7 days · Sep 23 – Sep 30, 2026") instead of "Week ending
+  // <today>", which read oddly mid-week (QA row 263). Formatted from the same
+  // UTC date strings the filters use, so title and data always agree.
+  const weekRangeLabel = (() => {
+    const fmtDay = (iso: string, withYear: boolean) =>
+      new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+        timeZone: "UTC", month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}),
+      });
+    const sameYear = weekAgoStr.slice(0, 4) === todayStr.slice(0, 4);
+    return `Last 7 days · ${fmtDay(weekAgoStr, !sameYear)} – ${fmtDay(todayStr, true)}`;
+  })();
 
   const surprises = earnSurprises(liveEarnings);
   const todaySurprises = surprises.filter(e => e.date === todayStr);
@@ -463,7 +476,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   // identical widget set (windowed to their period) so they can't drift apart.
   const RecapBody = (period: "daily" | "weekly") => {
     const isWeek = period === "weekly";
-    const heroTitle = isWeek ? `Week ending ${dateLabel}` : dateLabel;
+    const heroTitle = isWeek ? weekRangeLabel : dateLabel;
     const indicesList = isWeek ? weeklyIndices : liveIndices;
     const indicesEmpty = isWeek
       ? "Weekly index performance needs at least two synced sessions this week — check back after the next daily run."
@@ -490,7 +503,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
               DOWNLOAD:
             </span>
             {isWeek ? (
-              <button className="btn" onClick={() => downloadRecap(dateLabel, weekHeadlines, weekSurprises, weekGrades, "this-week")}>{DL_ICON} This Week</button>
+              <button className="btn" onClick={() => downloadRecap(weekRangeLabel, weekHeadlines, weekSurprises, weekGrades, "this-week")}>{DL_ICON} This Week</button>
             ) : (
               <button className="btn" onClick={() => downloadRecap(dateLabel, todayHeadlines, todaySurprises, todayGrades, "today")}>{DL_ICON} Today (EOD)</button>
             )}

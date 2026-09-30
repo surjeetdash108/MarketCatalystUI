@@ -505,7 +505,7 @@ export function DashboardScreen() {
             {pulse.map((x, i) => (
               <div key={x.label} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(i)}>
                 <div className="lbl">{x.label}</div>
-                <div className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</div>
+                <div className="val">{fmt(x.value, 2)}</div>
                 <div className={`chg ${cls(x.change)}`}>{arr(x.change)} {sign(x.change)}</div>
                 <Spark seed={i + 1} up={x.change >= 0} />
               </div>
@@ -557,9 +557,12 @@ export function DashboardScreen() {
                         {wmn.keyDevelopments.slice(0, 4).map((k, i) => <li key={i}>{k}</li>)}
                       </ul>
                     )}
+                    {/* The counts are the inputs the AI read, not items shown on
+                        this card (the headline list was removed), so the wording
+                        says "based on" rather than implying a list. QA row 248. */}
                     <div className="wmn-ai-foot">
-                      AI-generated · {wmn.sourceCounts?.news ?? 0} headlines
-                      {wmn.sourceCounts?.analyses ? ` · ${wmn.sourceCounts.analyses} analyses` : ""}
+                      AI summary based on {wmn.sourceCounts?.news ?? 0} news {(wmn.sourceCounts?.news ?? 0) === 1 ? "story" : "stories"}
+                      {wmn.sourceCounts?.analyses ? ` · ${wmn.sourceCounts.analyses} ${wmn.sourceCounts.analyses === 1 ? "analysis" : "analyses"}` : ""}
                       {wmn.generatedAt ? ` · ${wmn.generatedAt.slice(11, 16)} UTC` : ""}
                     </div>
                   </div>

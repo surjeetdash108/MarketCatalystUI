@@ -524,7 +524,7 @@ function StockChartExpanded({
         <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
         <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
         <button className={`rng indbtn${maStep > 0 ? " on" : ""}`} onClick={() => setMaStep(s => (s + 1) % 5)}>
-          MA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
+          SMA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
         </button>
         <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`} onClick={() => setEmaStep(s => (s + 1) % 5)}>
           EMA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
@@ -1610,7 +1610,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
               <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
               <button className={`rng indbtn${maStep > 0 ? " on" : ""}`}
                 onClick={() => setMaStep(s => (s + 1) % 5)}>
-                MA {[9,21,50,200].map((p, i) => (
+                SMA {[9,21,50,200].map((p, i) => (
                   <span key={p} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>
                     {i > 0 ? '/' : ''}{p}
                   </span>
@@ -1747,27 +1747,10 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                   </div>
                 )}
 
-                <div
-                  style={{
-                    padding: "6px 14px 12px",
-                    fontSize: ".7rem",
-                    color: "var(--text-dim-solid)",
-                  }}
-                >
-                  Pattern:{" "}
-                  <b
-                    style={{
-                      color: isUp ? "var(--up)" : "var(--down)",
-                    }}
-                  >
-                    {isUp
-                      ? "cup-with-handle breakout"
-                      : "breakdown below support"}
-                  </b>{" "}
-                  {isUp
-                    ? "on above-average volume."
-                    : "on rising volume."}
-                </div>
+                {/* The hard-coded "Pattern: cup-with-handle breakout / breakdown
+                    below support" line was removed (QA row 259): it wasn't a
+                    real pattern detector, and showed "breakout" even for
+                    stocks that were down. */}
 
                 {/* Chart notes — inline inside chart card */}
                 <div className="cn-wrap">

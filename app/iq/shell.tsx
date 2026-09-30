@@ -436,9 +436,12 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
   idx: number; pulse: PulseItem[]; sectorsLive: SectorApiDoc[]; loading: boolean;
   phase: "open" | "pre" | "after" | "closed" | "unknown"; onClose: () => void;
 }) {
+  const router = useRouter(); // before the early return — hooks must run on every render
   const x = livePulse[idx];
   if (!x) return null;
-  const dec = x.value > 1000 ? 0 : 2;
+  // Always 2 decimals (QA row 317) — matches the tape, the Dashboard boxes,
+  // the VIX widgets and the website tape.
+  const dec = 2;
   const dollar = x.value - x.prevClose;
   /**
    * Whether the open / high / low below describe the SAME session as the price
@@ -530,7 +533,16 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
               )}
             </>
           )}
-          <button className="btn primary" style={{ width: "100%", marginTop: 14 }} onClick={onClose}>
+          <button
+            className="btn primary"
+            style={{ width: "100%", marginTop: 14 }}
+            onClick={() => {
+              onClose();
+              // Equity indices open the Heatmap on their own tab (the tab names
+              // match these labels); everything else goes to Macro & VIX.
+              router.push(eq ? `/menu/heatmap?index=${encodeURIComponent(x.label)}` : "/menu/macro");
+            }}
+          >
             {eq ? "View market heatmap →" : "Go to Macro & VIX →"}
           </button>
         </div>
@@ -1307,7 +1319,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 {tickerItems.map((x, i) => (
                   <div key={i} className="tk">
                     <span className="lbl">{x.label}</span>
-                    <span className="val">{fmt(x.value, x.value > 1000 ? 0 : 2)}</span>
+                    <span className="val">{fmt(x.value, 2)}</span>
                     <span className={`chg ${cls(x.change)}`}>{arr(x.change)} {Math.abs(x.change).toFixed(2)}%</span>
                   </div>
                 ))}
