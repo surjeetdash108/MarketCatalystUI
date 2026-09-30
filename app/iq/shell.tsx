@@ -436,6 +436,7 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
   idx: number; pulse: PulseItem[]; sectorsLive: SectorApiDoc[]; loading: boolean;
   phase: "open" | "pre" | "after" | "closed" | "unknown"; onClose: () => void;
 }) {
+  const router = useRouter(); // before the early return — hooks must run on every render
   const x = livePulse[idx];
   if (!x) return null;
   const dec = x.value > 1000 ? 0 : 2;
@@ -530,7 +531,16 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
               )}
             </>
           )}
-          <button className="btn primary" style={{ width: "100%", marginTop: 14 }} onClick={onClose}>
+          <button
+            className="btn primary"
+            style={{ width: "100%", marginTop: 14 }}
+            onClick={() => {
+              onClose();
+              // Equity indices open the Heatmap on their own tab (the tab names
+              // match these labels); everything else goes to Macro & VIX.
+              router.push(eq ? `/menu/heatmap?index=${encodeURIComponent(x.label)}` : "/menu/macro");
+            }}
+          >
             {eq ? "View market heatmap →" : "Go to Macro & VIX →"}
           </button>
         </div>

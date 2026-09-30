@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useIQActions } from "../shell";
 import { sign, heatCol, fmt, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
@@ -57,7 +58,26 @@ interface HoverStock {
   peers: [string, number, number][];
 }
 
+/** Tab named by `?index=` (e.g. from the Dashboard index pop-up), else "Stocks". */
+function tabFromParam(v: string | null): number {
+  const i = v ? TABS.indexOf(v) : -1;
+  return i > 0 ? i : 0;
+}
+
+/**
+ * The Suspense boundary is required: HeatmapInner reads useSearchParams, and a
+ * static export prerenders this page before the query string exists. It lives
+ * here rather than in app/menu/[slug]/page.tsx so no other screen is affected.
+ */
 export function HeatmapScreen() {
+  return (
+    <Suspense fallback={<DataState loading label="Loading heatmap…" />}>
+      <HeatmapInner />
+    </Suspense>
+  );
+}
+
+function HeatmapInner() {
   const { openSector } = useIQActions();
   // Clicking a tile opens the stock in a slide-in drawer (same as Movers),
   // rather than navigating away to the full stock page.
@@ -66,13 +86,21 @@ export function HeatmapScreen() {
   const { data: sectorsLive } = useApiList<SectorApiDoc>("/market-data/sectors");
   const fullSectorList = buildSectorList(companies, sectorsLive);
 
-  const [tab, setTab]     = useState(0);
+  // The URL picks the starting tab; a tab the user clicks wins until the URL
+  // asks for a different index (e.g. another pop-up link while already here).
+  const urlTab = tabFromParam(useSearchParams().get("index"));
+  const [picked, setPicked] = useState<{ tab: number; urlTab: number } | null>(null);
+  const tab = picked && picked.urlTab === urlTab ? picked.tab : urlTab;
+  const setTab = (i: number) => setPicked({ tab: i, urlTab });
 
   // Tab 0 = all synced stocks; 1-3 filter to the S&P 500 / Nasdaq-100 / Dow-30
   // members that also exist in the live universe; 4 (Russell 2000) has no set.
   const tabKey    = HEATMAP_TAB_KEYS[tab];
   const memberSet = tabKey && tabKey !== "RUT" ? INDEX_MEMBERS[tabKey] : null;
-  const baseSectorList = memberSet
+  // No member list for the Russell 2000: show nothing (and say so below)
+  // rather than falling back to the full large-cap map under its name.
+  const noMap = tabKey === "RUT";
+  const baseSectorList = noMap ? [] : memberSet
     ? fullSectorList
         .map(g => ({ ...g, items: g.items.filter(([sym]) => memberSet.has(sym)) }))
         .filter(g => g.items.length > 0)
@@ -134,11 +162,9 @@ export function HeatmapScreen() {
 
       <div className="fbar">
         <button className="chip on">Color: % change</button>
-        {tab !== 0 && (
+        {tab !== 0 && !noMap && (
           <span style={{ fontSize: ".72rem", color: "var(--text-hi)",transform: "translateY(10px)", }}>
-            {tabKey === "RUT"
-              ? "Small-cap constituents aren't in the synced universe"
-              : `${membersShown} ${TABS[tab]} member${membersShown === 1 ? "" : "s"} in the live universe`}
+            {`${membersShown} ${TABS[tab]} member${membersShown === 1 ? "" : "s"} in the live universe`}
           </span>
         )}
         <div className="spacer" />
@@ -166,25 +192,41 @@ export function HeatmapScreen() {
         borderRadius: 10, overflow: "hidden",
         border: "1px solid var(--border)", background: "var(--bg)",
       }}>
-        {mergedSectorList.length === 0 && companiesLoading && (
+        {mergedSectorList.length === 0 && companiesLoading && !noMap && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <DataState loading label="Loading heatmap…" />
           </div>
         )}
-        {mergedSectorList.length === 0 && !companiesLoading && (
+        {mergedSectorList.length === 0 && (!companiesLoading || noMap) && (
           <div style={{
             position: "absolute", inset: 0, display: "flex",
             flexDirection: "column", alignItems: "center", justifyContent: "center",
             gap: 8, textAlign: "center", padding: 24,
           }}>
             <div style={{ fontSize: ".92rem", fontWeight: 700, color: "var(--text-hi)" }}>
-              No {TABS[tab]} constituents available
+              {noMap ? `${TABS[tab]} heatmap isn't available yet` : `No ${TABS[tab]} stocks to show yet`}
             </div>
             <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", maxWidth: 460, lineHeight: 1.55 }}>
-              {tabKey === "RUT"
-                ? "The Russell 2000 is a small-cap index. The synced universe is large-cap, so there are no overlapping names to plot. The data plan doesn't include index constituents to source them dynamically."
-                : "None of this index's members are in the currently synced universe yet."}
+              {noMap
+                ? `We don't have the list of ${TABS[tab]} member stocks yet, so there is nothing to map. You can view one of these indices instead:`
+                : "This index's member stocks haven't loaded yet. Please check back shortly."}
             </div>
+            {noMap && (
+              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap", justifyContent: "center" }}>
+                {TABS.map((t, i) => (i === 0 || i === tab ? null : (
+                  HEATMAP_TAB_KEYS[i] === "RUT" ? null : (
+                    <button
+                      key={t}
+                      className="btn"
+                      onClick={() => setTab(i)}
+                      // Inline so the global `.iq-root button` reset can't strip the
+                      // border/fill and leave these looking like plain text.
+                      style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--text-hi)", fontWeight: 600 }}
+                    >{t}</button>
+                  )
+                )))}
+              </div>
+            )}
           </div>
         )}
         {sorted.map(g => {
