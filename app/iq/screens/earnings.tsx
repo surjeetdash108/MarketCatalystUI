@@ -806,8 +806,8 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
               {sortTh("actualRev", "Actual Rev")}
               {sortTh("consRev", "Cons. Rev")}
               {sortTh("yoyRev", "Yr/Yr Rev")}
-              <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-mkt</th>
-              <th className="r" title="After-hours move as reported by the data vendor (~15 min delayed). Vendor-reported: the field's window and baseline are undocumented — see LiveQuote.latePct.">After-hrs</th>
+              <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-market</th>
+              <th className="r" title="Post-market move as reported by the data vendor (~15 min delayed). Vendor-reported: the field's window and baseline are undocumented — see LiveQuote.latePct.">Post-market</th>
               {sortTh("guidance", "Guidance")}
             </tr>
           </thead>
@@ -1292,8 +1292,8 @@ export function EarningsScreen() {
           {SESSION_FILTER_ENABLED && (
             <div className="ecal-seg">
               <button className={`ecal-segbtn${session === "both" ? " on" : ""}`} onClick={() => setSession("both")} title="Every reporter for this day">All</button>
-              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Moved pre-mkt</button>
-              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed after hours. Inferred from price, not from an announced reporting time — and the after-hours field is vendor-reported, see LiveQuote.latePct.">Moved after-hrs</button>
+              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Moved pre-market</button>
+              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">Moved post-market</button>
             </div>
           )}
           <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 10 }}>
@@ -1314,8 +1314,8 @@ export function EarningsScreen() {
         {atGlance ? (
           glanceItems.length > 0 ? (
             <div>
-              <GlanceTable title="Before open" items={glanceBmo} showDate={glanceShowDate} onSelect={(s, d) => openStockDetail(s, d)} />
-              <GlanceTable title="After close" items={glanceAmc} showDate={glanceShowDate} onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Moved pre-market" items={glanceBmo} showDate={glanceShowDate} onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Moved post-market" items={glanceAmc} showDate={glanceShowDate} onSelect={(s, d) => openStockDetail(s, d)} />
               <GlanceTable title="Time not specified" items={glanceTbd} showDate={glanceShowDate} onSelect={(s, d) => openStockDetail(s, d)} />
             </div>
           ) : (
