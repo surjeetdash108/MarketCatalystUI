@@ -25,11 +25,14 @@ export function TickerSearchField({
   onChange,
   onEnter,
   placeholder = "Search ticker or company…",
+  id,
 }: {
   value: string;
   onChange: (ticker: string) => void;
   onEnter?: () => void;
   placeholder?: string;
+  /** Optional input id so an external <label htmlFor> can target it. */
+  id?: string;
 }) {
   const [picked, setPicked] = useState(false);
   const results = useTickerSearch(value);
@@ -38,6 +41,7 @@ export function TickerSearchField({
   return (
     <div>
       <input
+        id={id}
         autoFocus
         style={INPUT_STYLE}
         placeholder={placeholder}

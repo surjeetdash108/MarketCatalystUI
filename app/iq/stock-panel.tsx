@@ -76,10 +76,22 @@ function EarnPane({ hist, loading }: { hist: EarnQ[]; loading: boolean }) {
   );
 }
 
+/** Clock with a counter-clockwise arrow — the conventional "history" glyph. */
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }} aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 4v4h4" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
 /* ── StockRow: one pf-li row ── */
 export function StockRow({
   sym, name, seed, sparkUp,
-  isSelected, onClick, onDelete,
+  isSelected, onClick, onDelete, onHistory,
   valueTop, valueBottom, valueBottomClass = "",
 }: {
   sym: string;
@@ -89,6 +101,8 @@ export function StockRow({
   isSelected: boolean;
   onClick: () => void;
   onDelete?: () => void;
+  /** Shows a history button that opens this row's purchase history. */
+  onHistory?: () => void;
   valueTop: string;
   valueBottom: string;
   valueBottomClass?: string;
@@ -96,7 +110,7 @@ export function StockRow({
   return (
     <div
       className={`pf-li${isSelected ? " active" : ""}`}
-      style={{ gridTemplateColumns: onDelete ? "1fr 60px auto auto" : "1fr 60px auto" }}
+      style={{ gridTemplateColumns: onDelete || onHistory ? "1fr 60px auto auto" : "1fr 60px auto" }}
       onClick={onClick}
     >
       <div>
@@ -110,10 +124,24 @@ export function StockRow({
         <span className="px">{valueTop}</span>
         <span className={`ch${valueBottomClass ? ` ${valueBottomClass}` : ""}`}>{valueBottom}</span>
       </div>
-      {onDelete && (
-        <button className="wl-del-btn" title="Remove" onClick={e => { e.stopPropagation(); onDelete(); }}>
-          <TrashIcon />
-        </button>
+      {(onDelete || onHistory) && (
+        <div className="pf-li-actions">
+          {onHistory && (
+            <button
+              className="pf-hist-btn"
+              title="Purchase history"
+              aria-label={`${sym} purchase history`}
+              onClick={e => { e.stopPropagation(); onHistory(); }}
+            >
+              <HistoryIcon />
+            </button>
+          )}
+          {onDelete && (
+            <button className="wl-del-btn" title="Remove" onClick={e => { e.stopPropagation(); onDelete(); }}>
+              <TrashIcon />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -121,9 +149,11 @@ export function StockRow({
 
 /* ── StockListCard: 340px card with scrollable list ── */
 export function StockListCard({
-  title, headerRight, isEmpty, emptyMessage = "No items.", loading, maxListHeight, children,
+  title, titleCount, headerRight, isEmpty, emptyMessage = "No items.", loading, maxListHeight, children,
 }: {
   title: string;
+  /** Optional count pill rendered right after the title (e.g. "Holdings 3"). */
+  titleCount?: ReactNode;
   headerRight?: ReactNode;
   isEmpty?: boolean;
   emptyMessage?: string;
@@ -138,6 +168,19 @@ export function StockListCard({
         <div className="card-h">
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <h3>{title}</h3>
+            {titleCount != null && (
+              <span
+                className="pill"
+                style={{
+                  background: "var(--surface-3)",
+                  color: "var(--text-hi)",
+                  border: "1px solid var(--border-strong)",
+                  fontSize: ".7rem",
+                  padding: "2px 8px",
+                  lineHeight: 1.3,
+                }}
+              >{titleCount}</span>
+            )}
             <VendorTag v="polygon" />
           </span>
           {headerRight}
