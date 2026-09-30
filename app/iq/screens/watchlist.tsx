@@ -179,7 +179,7 @@ export function WatchlistScreen() {
           {active && (
             <>
               <button className="btn" title="Rename this watchlist" onClick={() => setNameModal({ mode: "rename", value: active.name })} style={{ padding: "6px 9px", fontSize: ".76rem" }}>Rename</button>
-              <button className="btn" title="Delete this watchlist" disabled={watchlists.length <= 1} onClick={() => setConfirmDeleteList(true)} style={{ padding: "6px 9px", fontSize: ".76rem", opacity: watchlists.length <= 1 ? 0.4 : 1 }}>Delete</button>
+              <button className="btn" title="Delete this watchlist" onClick={() => setConfirmDeleteList(true)} style={{ padding: "6px 9px", fontSize: ".76rem" }}>Delete</button>
             </>
           )}
 
@@ -323,6 +323,11 @@ export function WatchlistScreen() {
             <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)", marginBottom: 8 }}>Delete watchlist</div>
             <div style={{ fontSize: ".88rem", color: "var(--text)", marginBottom: 20 }}>
               Delete <b style={{ color: "var(--text-hi)" }}>{active.name}</b> and its {active.tickers.length} stock{active.tickers.length === 1 ? "" : "s"}? This can&apos;t be undone.
+              {watchlists.length === 1 && (
+                <div style={{ marginTop: 8, color: "var(--text-dim-solid)", fontSize: ".82rem" }}>
+                  This is your only watchlist, so it will be replaced with an empty <b style={{ color: "var(--text-hi)" }}>My Watchlist</b>.
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button className="btn" onClick={() => setConfirmDeleteList(false)}>Cancel</button>

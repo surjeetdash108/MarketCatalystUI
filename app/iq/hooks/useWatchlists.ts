@@ -63,7 +63,10 @@ export function useWatchlists() {
   }, [refresh]);
 
   const deleteList = useCallback(async (id: string) => {
-    setWatchlists(prev => prev.filter(w => w.id !== id));
+    // Deleting the last list makes the server recreate an empty "My Watchlist".
+    // Removing it locally first would flash a no-watchlist screen until the
+    // reply lands, so in that case keep it on screen and swap in the reply.
+    setWatchlists(prev => (prev.length > 1 ? prev.filter(w => w.id !== id) : prev));
     try {
       const res = await apiDelete<{ watchlists: Watchlist[] }>(`/api/watchlists/${id}`);
       setWatchlists(res.watchlists ?? []);
