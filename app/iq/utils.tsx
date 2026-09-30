@@ -552,8 +552,15 @@ const POOL_TF = "5Y";
 const DAILY_INITIAL_LEN: Record<string, number> = { "3M": 64, "6M": 128, "1Y": 252 };
 
 const MA_PERS = [9, 21, 50, 200];
-const MA_COLS = ['#F5B544', '#F5B544', '#4ADE80', '#4ADE80'];
-const EMA_COLS = ['#A7F3C0', '#2FB6A8', '#A7F3C0', '#EC8585'];
+/*
+ * Line colours from the stock-detail design (QA rows 308 / 320): its indicator
+ * PALETTE, one distinct colour per line so all eight can be told apart. SMA 50
+ * amber and SMA 200 blue match the design's defaults; EMA 21 is the design's
+ * EMA colour. Green (#4bd99a) is left out so no line looks like an up candle.
+ * All lines are solid, as in the design.
+ */
+const MA_COLS = ['#8b7ef0', '#6ee7ff', '#f3b24a', '#4a67d8'];   // SMA 9, 21, 50, 200
+const EMA_COLS = ['#f07be0', '#2fd9d0', '#ff9d5c', '#c9a227'];  // EMA 9, 21, 50, 200
 
 const TF_LABELS: Record<string, string> = {
   "1D": "1 day", "1W": "1 week", "1M": "1 month", "3M": "3 months", "6M": "6 months", "1Y": "1 year", "5Y": "5 years",
@@ -954,12 +961,12 @@ function CandleChartInner({
           if (v == null || removedIds.has(id)) return null;
           return (
             <div key={id} className={`chart-hud-row${hiddenIds.has(id) ? " dim" : ""}`}>
-              <i style={{ background: MA_COLS[idx] }} />MA {MA_PERS[idx]} <b>${v.toFixed(2)}</b>
+              <i style={{ background: MA_COLS[idx] }} />SMA {MA_PERS[idx]} <b>{v.toFixed(2)}</b>
               <span className="chart-hud-acts">
-                <button type="button" onClick={() => toggleHiddenId(id)} title={hiddenIds.has(id) ? "Show" : "Hide"} aria-label={`Toggle MA ${MA_PERS[idx]}`}>
+                <button type="button" onClick={() => toggleHiddenId(id)} title={hiddenIds.has(id) ? "Show" : "Hide"} aria-label={`Toggle SMA ${MA_PERS[idx]}`}>
                   <EyeIcon off={hiddenIds.has(id)} />
                 </button>
-                <button type="button" onClick={() => removeId(id)} title="Remove" aria-label={`Remove MA ${MA_PERS[idx]}`}>✕</button>
+                <button type="button" onClick={() => removeId(id)} title="Remove" aria-label={`Remove SMA ${MA_PERS[idx]}`}>✕</button>
               </span>
             </div>
           );
@@ -969,7 +976,7 @@ function CandleChartInner({
           if (v == null || removedIds.has(id)) return null;
           return (
             <div key={id} className={`chart-hud-row${hiddenIds.has(id) ? " dim" : ""}`}>
-              <i style={{ background: EMA_COLS[idx] }} />EMA {MA_PERS[idx]} <b>${v.toFixed(2)}</b>
+              <i style={{ background: EMA_COLS[idx] }} />EMA {MA_PERS[idx]} <b>{v.toFixed(2)}</b>
               <span className="chart-hud-acts">
                 <button type="button" onClick={() => toggleHiddenId(id)} title={hiddenIds.has(id) ? "Show" : "Hide"} aria-label={`Toggle EMA ${MA_PERS[idx]}`}>
                   <EyeIcon off={hiddenIds.has(id)} />
@@ -1145,13 +1152,13 @@ function CandleChartInner({
         {maPaths.map((d, idx) => {
           const id = `ma${MA_PERS[idx]}`;
           if (!d || removedIds.has(id) || hiddenIds.has(id)) return null;
-          return <path key={id} d={d} fill="none" stroke={MA_COLS[idx]} strokeWidth="1.4" opacity={0.95} />;
+          return <path key={id} d={d} fill="none" stroke={MA_COLS[idx]} strokeWidth="1.6" opacity={0.95} />;
         })}
         {/* EMA overlays */}
         {emaPaths.map((d, idx) => {
           const id = `ema${MA_PERS[idx]}`;
           if (!d || removedIds.has(id) || hiddenIds.has(id)) return null;
-          return <path key={id} d={d} fill="none" stroke={EMA_COLS[idx]} strokeWidth="1.4" strokeDasharray="4 3" opacity={0.95} />;
+          return <path key={id} d={d} fill="none" stroke={EMA_COLS[idx]} strokeWidth="1.6" opacity={0.95} />;
         })}
         {/* X-axis date/time ticks — edge ticks anchor inward so their text never clips off the plot */}
         {xTickIdx.map((i, k) => (
