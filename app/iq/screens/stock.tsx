@@ -1748,27 +1748,10 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
                   </div>
                 )}
 
-                <div
-                  style={{
-                    padding: "6px 14px 12px",
-                    fontSize: ".7rem",
-                    color: "var(--text-dim-solid)",
-                  }}
-                >
-                  Pattern:{" "}
-                  <b
-                    style={{
-                      color: isUp ? "var(--up)" : "var(--down)",
-                    }}
-                  >
-                    {isUp
-                      ? "cup-with-handle breakout"
-                      : "breakdown below support"}
-                  </b>{" "}
-                  {isUp
-                    ? "on above-average volume."
-                    : "on rising volume."}
-                </div>
+                {/* The hard-coded "Pattern: cup-with-handle breakout / breakdown
+                    below support" line was removed (QA row 259): it wasn't a
+                    real pattern detector, and showed "breakout" even for
+                    stocks that were down. */}
 
                 {/* Chart notes — inline inside chart card */}
                 <div className="cn-wrap">
