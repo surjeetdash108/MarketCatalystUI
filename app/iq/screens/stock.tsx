@@ -13,6 +13,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
 import { useBackendBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
+import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useLiveQuotes, extendedSession } from "../live-quotes-context";
 import { EarningsPlaybook } from "./EarningsPlaybook";
 import type {
@@ -973,18 +974,23 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
     sharedDollar ??
     (live.change != null ? Math.abs(live.change) : dollar);
 
-  const isMarketOpen = sharedQuote?.marketStatus === "open";
+  const mkt = useBackendMarketStatus();
+  const isMarketOpen = mkt.phase === "open";
 
   /*
    * Extended-session detection.
    *
+   * Only active after regular market hours have closed (mkt.phase !== "open").
    * True if market status is late_trading, or if Polygon snapshot reports a
    * non-zero lateTradingChangePct, or extendedSession detects after hours.
    */
   const isAfterHours =
-    sharedQuote?.marketStatus === "late_trading" ||
-    (sharedQuote?.latePct != null && sharedQuote.latePct !== 0) ||
-    extendedSession(sharedQuote) === "after hours";
+    !isMarketOpen &&
+    (mkt.phase === "after" ||
+      mkt.phase === "closed" ||
+      sharedQuote?.marketStatus === "late_trading" ||
+      (sharedQuote?.latePct != null && sharedQuote.latePct !== 0) ||
+      extendedSession(sharedQuote) === "after hours");
 
   /*
    * Regular-session price and move.
@@ -1028,7 +1034,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
       ? Math.abs(ahPrice - regPrice)
       : (ahPct != null && regPrice > 0 ? Math.abs((ahPct / 100) * regPrice) : null);
 
-  const showAfterHours = isAfterHours && ahPrice != null && ahPct != null;
+  const showAfterHours = !isMarketOpen && isAfterHours && ahPrice != null && ahPct != null;
   // Freshness stamp for the price-chart bars (backend createdAt), surfaced by the
   // chart toolbar in the same muted style as the header's delayed-quote marker
   // (BUG-DATA-008).
