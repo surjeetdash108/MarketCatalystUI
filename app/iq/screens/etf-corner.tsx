@@ -505,7 +505,23 @@ export function EtfMarketFunds() {
 
       <div className="dash" style={{ paddingBottom: 30 }}>
         {/* Top 16 ETFs Grid: 8 in each row on desktop, reactive */}
-        <div className="col-12">
+        {/* ── Section: Popular ETFs ── */}
+        <div className="col-12" style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 10 }}>
+            <h2
+              style={{
+                fontSize: "1.08rem",
+                fontWeight: 700,
+                color: "var(--text-hi)",
+                margin: 0,
+                letterSpacing: "-.01em",
+              }}
+            >
+              Popular ETFs
+            </h2>
+          </div>
+          {/* Top 16 ETFs Grid: 8 in each row on desktop, reactive */}
+          <div>
           {filteredCategories.length === 0 ? (
             <div
               style={{
@@ -560,7 +576,7 @@ export function EtfMarketFunds() {
             </div>
           )}
         </div>
-
+      </div>
         {/* ── Section: Other ETF Market Funds ── */}
         <div className="col-12" style={{ marginTop: 14 }}>
           <div style={{ marginBottom: 12 }}>
