@@ -7,11 +7,11 @@ import { apiGet } from "../backend";
 import { useIQActions, ExpandBtn } from "../shell";
 import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem, maPostureLabel, isLeveragedProduct } from "../data";
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, cleanCatalystText } from "../utils";
-import { isoDay, fmtDate } from "../calendar-range";
+import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
-import { useLiveQuotes, pairedQuote } from "../live-quotes-context";
+import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-context";
 import { pulseFromLive, buildSectorList, tapeItemsToIndexDocs } from "../live-market-indices";
 import type {
   LiveMoverDoc, LiveEarningsDoc, CompanyDoc, SectorApiDoc,
@@ -34,7 +34,7 @@ import type {
 type DrawerKey = "fg-history" | null;
 
 // ---- Dash hover popup ----
-type PopBlock = "earnings" | "movers" | "analyst" | "watchlist" | "portfolio" | "insider" | "screener";
+type PopBlock = "earnings" | "movers" | "analyst" | "watchlist" | "portfolio" | "insider" | "screener" | "searched";
 
 interface PopState {
   sym: string;
@@ -51,6 +51,7 @@ const BLOCK_LABEL: Record<PopBlock, string> = {
   portfolio: "Portfolio",
   insider:   "Insider / 13F",
   screener:  "Screener",
+  searched:  "Most searched",
 };
 
 const BLOCK_NAV: Record<PopBlock, string> = {
@@ -61,6 +62,7 @@ const BLOCK_NAV: Record<PopBlock, string> = {
   portfolio: "portfolio",
   insider:   "insider feed",
   screener:  "screener",
+  searched:  "stock details",
 };
 
 function DpRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -132,12 +134,14 @@ function pctBorderColor(pct: number | null | undefined): string {
 }
 
 function DashPopContent({
-  sym, block, movers, earnings, watchlist, portfolio, companies, consensus, insiderMini, announcements, news, onDemandNews, catalystCache,
+  sym, block, movers, earnings, watchlist, portfolio, companies, consensus, insiderMini, announcements, news, onDemandNews, catalystCache, searchedQuote,
 }: {
   sym: string; block: PopBlock; movers: Mover[]; earnings: Earning[]; watchlist: WatchItem[]; portfolio: FolioItem[];
   companies: CompanyDoc[]; consensus: AnalystConsensusDoc[]; insiderMini: { key: string; s: string; role: string; dir: "buy" | "sell"; val: string }[];
   announcements: EarningsAnnouncementDoc[]; news: NewsArticleDoc[]; onDemandNews: Record<string, NewsArticleDoc | null>;
   catalystCache: Record<string, MoverCatalystDoc | null>;
+  /** Live price/change shown on the Most Searched tile, so the popup matches it. */
+  searchedQuote?: { price: number | null; pctChange: number | null };
 }) {
   // Latest headline: bulk news first (instant), else the on-demand fetch result
   // (which covers ANY ticker), else still loading.
@@ -239,6 +243,25 @@ function DashPopContent({
       <DpRow label="Rev growth">{scr.revenueGrowthYoY != null ? <span className={cls(scr.revenueGrowthYoY)}>{sign(scr.revenueGrowthYoY * 100)}</span> : <NotAvailable />}</DpRow>
       <div className="dp-note">Why it&apos;s here: clears the leaders screen — high relative strength + growth.</div>
     </>;
+  } else if (block === "searched") {
+    // Most Searched tile (QA row 99): what the stock is and how it is moving.
+    // Uses the latest headline only — the AI catalyst endpoint is reserved
+    // for the movers block because it can generate (and store) a new summary.
+    const px = searchedQuote?.price ?? null;
+    const pct = searchedQuote?.pctChange ?? null;
+    body = <>
+      <DpRow label="Price">{px != null ? <span className="mono">${fmt(px, 2)}</span> : <NotAvailable />}</DpRow>
+      <DpRow label="Today">{pct != null ? <span className={cls(pct)}>{sign(pct)}</span> : <NotAvailable />}</DpRow>
+      <DpRow label="Mkt Cap">{scr?.marketCap != null ? fmt(scr.marketCap) : <NotAvailable />}</DpRow>
+      <DpRow label="Sector">{scr?.sector ?? <NotAvailable />}</DpRow>
+      <DpRow label="RS rank">{scr?.rsRating != null ? `${scr.rsRating}/99` : <NotAvailable />}</DpRow>
+      {an && <DpRow label="Consensus"><b style={{ color: "var(--text-hi)" }}>{an.consensus}</b></DpRow>}
+      <div className="dp-note">
+        {latestNews
+          ? <><b style={{ color: "var(--text-hi)" }}>Latest:</b> {latestNews.headline}{latestNews.source ? <span style={{ color: "var(--text-dim-solid)" }}> · {latestNews.source}</span> : null}</>
+          : !newsResolved ? "Loading news…" : "News not available."}
+      </div>
+    </>;
   } else {
     // Price below reads from `mv`, so the percentage must too — falling through
     // to `w` only when `mv` is absent entirely, never mid-pair.
@@ -325,7 +348,7 @@ export function DashboardScreen() {
   // most recent prior day, so when nothing has reported today the widget is
   // empty rather than showing stale rows. (`earnings` above stays the full list
   // for popover name/EPS lookups.)
-  const earningsToday = mergeEarningsData(liveEarnings.filter(e => e.date === isoDay(new Date())));
+  const earningsToday = mergeEarningsData(liveEarnings.filter(e => e.date === etTodayIso()));
   const earningsLive = useLiveQuotes(earningsToday.map(e => e.ticker));
   const mergedSectorList = buildSectorList(companies, sectorsLive);
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
@@ -398,6 +421,11 @@ export function DashboardScreen() {
   const rankedCompanies = companies.filter(c => c.rsRating != null);
   const leaders  = [...rankedCompanies].sort((a, b) => (b.rsRating ?? 0) - (a.rsRating ?? 0)).slice(0, 20);
   const laggards = [...rankedCompanies].sort((a, b) => (a.rsRating ?? 0) - (b.rsRating ?? 0)).slice(0, 20);
+  // Each ranked stock's OWN day move (QA rows 204/233). It used to be looked up
+  // in the movers list — only today's top gainers/losers — so every other name
+  // fell back to +0.00%. Live quote first, the stored company doc second, never
+  // a spliced pair (see pairedQuote).
+  const scrLive = useLiveQuotes([...leaders, ...laggards].map(s => s.ticker));
 
   // Analyst Actions widget: deterministic pick — the 4 names with the strongest
   // BUY lean and the 4 with the strongest SELL lean, measured by the buy−sell
@@ -602,6 +630,7 @@ export function DashboardScreen() {
                     const { price, pctChange: pct } = pairedQuote(q, c);
                     return (
                       <div key={ticker}
+                        {...mr(ticker, "searched")}
                         onClick={() => openStockDetail(ticker, searchedDeduped.map(x => x.ticker))}
                         style={{
                           display: "flex", alignItems: "center", gap: 9,
@@ -902,7 +931,13 @@ export function DashboardScreen() {
               {rankedCompanies.length < 12 ? (
                 <DataState loading={companiesLoading} label={`Rankings build as price history syncs — ${rankedCompanies.length} of ${companies.length} companies scored so far.`} height={80} />
               ) : (scrTab === "leaders" ? leaders : laggards).map(s => {
-                const dayC = movers.find(m => m.ticker === s.ticker)?.pctChange ?? 0;
+                // Same rule as the Movers board: outside regular hours the live
+                // quote is an extended-hours print, so the row keeps the last
+                // completed session's move and marks the live trading with PM/AH.
+                const q = scrLive.get(s.ticker);
+                const ext = extendedSession(q);
+                const dayC = ext ? (s.pctChange ?? null) : pairedQuote(q, s).pctChange;
+                const tag = ext ? (ext === "pre-market" ? "PM" : ext === "after hours" ? "AH" : "EXT") : null;
                 return (
                   <div key={s.ticker} className="minirow" style={{ cursor: "pointer" }}
                     onClick={() => openStock(s.ticker)}
@@ -910,8 +945,12 @@ export function DashboardScreen() {
                   >
                     <StockLogo sym={s.ticker} size={26} />
                     <span className="tkr">{s.ticker}</span>
-                    <span className="mid">{s.sector ?? "—"}</span>
-                    <span className={`r ${cls(dayC)}`}>{sign(dayC)}</span>
+                    <span className="mid">RS {s.rsRating}{s.sector ? ` · ${s.sector}` : ""}</span>
+                    {dayC != null
+                      ? <span className={`r ${cls(dayC)}`}>{sign(dayC)}{tag && (
+                          <span className="mv-sess" title={`Change is the last completed session's.${q?.price != null ? ` Trading ${ext} now at $${q.price.toFixed(2)}.` : ""}`}>{tag}</span>
+                        )}</span>
+                      : <span className="r" style={{ color: "var(--text-dim-solid)" }}>—</span>}
                   </div>
                 );
               })}
@@ -1296,10 +1335,11 @@ export function DashboardScreen() {
             setPop(null);
             if (pop.block === "earnings") openEarnings(pop.sym);
             else if (pop.block === "movers") openMoverModal(pop.sym);
+            else if (pop.block === "searched") openStockDetail(pop.sym, searchedDeduped.map(x => x.ticker));
             else openStock(pop.sym);
           }}
         >
-          <DashPopContent sym={pop.sym} block={pop.block} movers={movers} earnings={earnings} watchlist={watchMini} portfolio={folioMini} companies={companies} consensus={consensusLive} insiderMini={INSIDER_MINI} announcements={earningsAnnouncements} news={dashNews} onDemandNews={popNewsCache} catalystCache={popCatalystCache} />
+          <DashPopContent sym={pop.sym} block={pop.block} movers={movers} earnings={earnings} watchlist={watchMini} portfolio={folioMini} companies={companies} consensus={consensusLive} insiderMini={INSIDER_MINI} announcements={earningsAnnouncements} news={dashNews} onDemandNews={popNewsCache} catalystCache={popCatalystCache} searchedQuote={pop.block === "searched" ? pairedQuote(searchedLive.get(pop.sym), companyByTicker.get(pop.sym)) : undefined} />
         </div>
       )}
     </div>

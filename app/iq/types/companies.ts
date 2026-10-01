@@ -45,6 +45,8 @@ export interface CompanyDoc {
   grossMargin: number | null;
   dividendYield: number | null;
   beta: number | null;
+  /** Daily bars the technicals job had for this ticker (backend field). */
+  barsAnalyzed?: number | null;
   sector: string | null;
   // FMP profile industry (e.g. "Consumer Electronics") when FMP is wired,
   // else the Polygon SIC description. Shown next to Sector on the detail page.

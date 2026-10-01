@@ -16,6 +16,12 @@ export type RangeTabKey =
 
 export const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
+/** Today's date (YYYY-MM-DD) on the New York market calendar. isoDay(new Date())
+ *  is the UTC date, which flips to tomorrow at 8 PM ET while the app header
+ *  still shows today. `en-CA` is only used because it formats as YYYY-MM-DD. */
+export const etTodayIso = (d: Date = new Date()) =>
+  d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+
 export const addDays = (d: Date, n: number) => {
   const c = new Date(d);
   c.setUTCDate(c.getUTCDate() + n);

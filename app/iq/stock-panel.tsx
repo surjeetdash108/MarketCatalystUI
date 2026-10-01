@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { fmtDate } from "./calendar-range";
+import { fmtDate, etTodayIso } from "./calendar-range";
 import dynamic from "next/dynamic";
 import { CandleChart, ChartSelect, TF_OPTIONS, CHART_TYPE_OPTIONS, RsiPane, DataState, Spark, VendorTag, type EarnQ } from "./utils";
 import { ExpandBtn } from "./shell";
@@ -218,7 +218,7 @@ export function StockListCard({
 function useLiveEarningsForSym(sym: string, nextEarningsDate?: string | null): { hist: EarnQ[]; erDate: string; loading: boolean } {
   const { data: liveEarnings, loading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   const symEvents = liveEarnings.filter(e => e.ticker === sym).sort((a, b) => a.date.localeCompare(b.date));
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = etTodayIso();
   // Backend's /live/company nextEarningsDate wins; the feed is the fallback.
   const erDate = nextEarningsDate
     || symEvents.find(e => e.date >= todayStr)?.date

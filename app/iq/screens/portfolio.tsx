@@ -7,7 +7,7 @@ import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
 import type { CompanyDoc, HoldingDoc, HoldingHistory, HoldingTransaction } from "../types";
-import { cls, arr, sign, DataState, VendorTag } from "../utils";
+import { cls, arr, sign, DataState, VendorTag, fmtPrice } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { TickerSearchField } from "../ticker-search-field";
 import { DatePicker, formatDisplayDate } from "../date-picker";
@@ -434,7 +434,7 @@ export function PortfolioScreen() {
                   onClick={() => setPfSel(f.ticker)}
                   onDelete={() => setConfirmDel(f.ticker)}
                   onHistory={() => openHistory(f.ticker)}
-                  valueTop={f.price == null ? "—" : f.price >= 1000 ? `$${(f.price / 1000).toFixed(2)}K` : `$${f.price.toFixed(2)}`}
+                  valueTop={fmtPrice(f.price)}
                   valueBottom={f.closed ? "Closed" : f.pctChange == null ? "—" : `${arr(f.pctChange)} ${sign(f.pctChange)}`}
                   valueBottomClass={f.closed || f.pctChange == null ? "" : f.pctChange >= 0 ? "up" : "down"}
                 />

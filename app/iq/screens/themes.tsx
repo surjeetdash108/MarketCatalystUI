@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { cls, arr, sign, DataState, VendorTag, titleCaseLabel} from "../utils";
+import { cls, arr, sign, DataState, VendorTag, titleCaseLabel, fmtPrice } from "../utils";
 import { useApiList } from "../hooks/useApiList";
 import type { CompanyDoc } from "../types";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
@@ -245,7 +245,7 @@ export function ThemesScreen() {
                       sparkUp={stock.c >= 0}
                       isSelected={sel === stock.s}
                       onClick={() => setSel(stock.s)}
-                      valueTop={stock.price >= 1000 ? `$${(stock.price / 1000).toFixed(2)}K` : `$${stock.price.toFixed(2)}`}
+                      valueTop={fmtPrice(stock.price)}
                       valueBottom={`${arr(stock.c)} ${sign(stock.c)}`}
                       valueBottomClass={cls(stock.c)}
                     />

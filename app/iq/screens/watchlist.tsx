@@ -7,7 +7,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useWatchlistsContext, watchlistFullMessage } from "../hooks/useWatchlists";
 import type { CompanyDoc } from "../types";
-import { arr, sign, DataState, VendorTag } from "../utils";
+import { arr, sign, DataState, VendorTag, fmtPrice } from "../utils";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { TickerSearchField } from "../ticker-search-field";
 import { AiSummaryCard } from "../ai-summary-card";
@@ -249,7 +249,7 @@ export function WatchlistScreen() {
                   isSelected={sel === w.ticker}
                   onClick={() => setSel(w.ticker)}
                   onDelete={() => setConfirmDelete(w.ticker)}
-                  valueTop={w.price == null ? "—" : w.price >= 1000 ? `$${(w.price / 1000).toFixed(2)}K` : `$${w.price.toFixed(2)}`}
+                  valueTop={fmtPrice(w.price)}
                   valueBottom={w.pctChange == null ? "—" : `${arr(w.pctChange)} ${sign(w.pctChange)}`}
                   valueBottomClass={w.pctChange == null ? "" : w.pctChange >= 0 ? "up" : "down"}
                 />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { fmtDate } from "../calendar-range";
+import { fmtDate, etTodayIso } from "../calendar-range";
 import { useBackendBars } from "../hooks/useBackendBars";
 import type { OHLCBar } from "../utils";
 import { DataState, VendorTag } from "../utils";
@@ -97,7 +97,7 @@ function buildModel(reports: PlaybookReport[], bars: OHLCBar[] | undefined, maxR
   if (!bars || bars.length < 3) return null;
   const sorted = [...bars].sort((a, b) => a.t - b.t);
   const dates = sorted.map((b) => isoOf(b.t));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = etTodayIso();
 
   // Baseline "normal day" = median absolute daily close-to-close return.
   const dailyMoves: number[] = [];

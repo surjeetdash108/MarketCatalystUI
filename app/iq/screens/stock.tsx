@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
-import { fmtDate } from "../calendar-range";
+import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
@@ -909,7 +909,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   const symEvents = liveEarningsEvents
     .filter(e => e.ticker === sym)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = etTodayIso();
   // The backend's nextEarningsDate (on both /live/company and its /summary)
   // wins; the synced earnings feed only fills in when the backend has none.
   const erDate = keyStats?.nextEarningsDate

@@ -6,7 +6,7 @@ import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import type { CompanyDoc } from "../types";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
-import { VendorTag, titleCaseLabel} from "../utils";
+import { VendorTag, titleCaseLabel, fmtPrice } from "../utils";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 
 // Maps the numeric 1-99 tech rating onto the filter's string categories
@@ -430,7 +430,7 @@ export function ScreenerScreen() {
                     sparkUp={(s.relativeStrength ?? 0) >= 60}
                     isSelected={selSym === s.ticker}
                     onClick={() => setScrSel(s.ticker)}
-                    valueTop={px == null ? "—" : px >= 1000 ? `$${(px / 1000).toFixed(2)}K` : `$${px.toFixed(2)}`}
+                    valueTop={fmtPrice(px)}
                     valueBottom={`RS ${s.relativeStrength ?? "—"} · ${s.techRating}`}
                     valueBottomClass={s.techRating.includes("Buy") ? "up" : s.techRating.includes("Sell") ? "down" : ""}
                   />

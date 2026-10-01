@@ -161,8 +161,9 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
     };
   });
 
-  // A pre-revenue / blank-check (SPAC) company has filing periods but every EPS
-  // and revenue value is null — detect that so we show a clear message rather
+  // Some companies have filing periods but every EPS and revenue value is null —
+  // foreign filers (20-F/6-K, e.g. WALD — QA row 201), new listings, SPACs. The
+  // message names those reasons instead of assuming a SPAC — detect that so we show a clear message rather
   // than empty labelled bars and "—" tables.
   const hasData =
     series.some(d => d.eps != null || d.sales != null) ||
@@ -186,7 +187,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
         </div>
         <div className="card-b" style={{ paddingTop: 8 }}>
           <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", padding: "10px 0", lineHeight: 1.55 }}>
-            No reported financials — this looks like a pre-revenue or blank-check (SPAC) company, so there&apos;s no revenue, EPS, or earnings history to chart yet.
+            No reported revenue or EPS for this company in our data source yet. This is common for foreign companies (they file annual reports in a format our source doesn&apos;t read), new listings, and blank-check (SPAC) companies.
           </div>
         </div>
       </div>
