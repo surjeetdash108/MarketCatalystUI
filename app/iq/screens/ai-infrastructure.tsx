@@ -154,6 +154,7 @@ function ThemeDetail({
   onBack: () => void;
 }) {
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const [companySearch, setCompanySearch] = useState("");
 
   const {
     data: detail,
@@ -165,8 +166,7 @@ function ThemeDetail({
 
   const companies = detail?.companies ?? [];
 
-  // Select the first company automatically when the theme loads.
-  // If the current selection disappears, fall back to the first available company.
+  // When companies change, keep selection only if still present; otherwise stay null for list view
   useEffect(() => {
     if (companies.length === 0) {
       setSelectedTicker(null);
@@ -178,12 +178,22 @@ function ThemeDetail({
         return current;
       }
 
-      return companies[0].ticker;
+      return null;
     });
   }, [companies]);
 
-  const selectedCompany =
-    companies.find(c => c.ticker === selectedTicker) ?? companies[0] ?? null;
+  const q = companySearch.trim().toLowerCase();
+  const filteredCompanies = q
+    ? companies.filter(
+        c =>
+          c.ticker.toLowerCase().includes(q) ||
+          (c.name && c.name.toLowerCase().includes(q))
+      )
+    : companies;
+
+  const selectedCompany = selectedTicker
+    ? companies.find(c => c.ticker === selectedTicker) ?? null
+    : null;
 
   return (
     // Fills .main exactly so the page itself never scrolls — only the company
@@ -220,9 +230,21 @@ function ThemeDetail({
           </div>
         </div>
 
-        <button className="btn" onClick={onBack}>
-          ← Back
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {selectedTicker && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setSelectedTicker(null)}
+              title="Return to full company list"
+            >
+              ← Full list
+            </button>
+          )}
+          <button type="button" className="btn" onClick={onBack}>
+            ← Back
+          </button>
+        </div>
       </div>
 
       {companies.length === 0 ? (
@@ -238,105 +260,125 @@ function ThemeDetail({
             />
           </div>
         </div>
-      ) : (
-            <div className="aic-split">
-              {/* LEFT — companies */}
-              <div
-                className="card aic-list"
-                style={{
-                  overflow: "hidden",
-                  minHeight: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <div className="card-h">
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <h3>
-                      {companies.length} compan
-                      {companies.length === 1 ? "y" : "ies"}
-                    </h3>
-
-                    <VendorTag v="polygon" />
-                  </div>
-                </div>
-
-                <div
+      ) : !selectedTicker ? (
+        /* WHOLE SCREEN JUST LIST */
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            padding: "14px 18px 28px",
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="card-h"
+              style={{
+                padding: "14px 18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <div>
+                <h3
                   style={{
-                    padding: 8,
-                    overflowY: "auto",
-                    minHeight: 0,
-                    flex: 1,
+                    margin: 0,
+                    fontSize: ".95rem",
+                    fontWeight: 700,
+                    color: "var(--text-hi)",
                   }}
                 >
+                  {detail?.title ?? "Sector"} Companies ({filteredCompanies.length})
+                </h3>
+                <div style={{ marginTop: 2, fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                  Click any stock to open live chart, indicators, financials, and deep analysis
+                </div>
+              </div>
 
-                  {companies.map(c => {
-                    const active = c.ticker === selectedTicker;
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ position: "relative", minWidth: 220 }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 10,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "var(--text-dim-solid)",
+                      fontSize: ".85rem",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    ⌕
+                  </span>
+                  <input
+                    value={companySearch}
+                    onChange={e => setCompanySearch(e.target.value)}
+                    placeholder="Search in this sector…"
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border-soft)",
+                      borderRadius: 7,
+                      padding: "6px 10px 6px 28px",
+                      fontSize: ".78rem",
+                      color: "var(--text-hi)",
+                      outline: "none",
+                      fontFamily: "var(--f-mono)",
+                    }}
+                  />
+                </div>
+                <VendorTag v="polygon" />
+              </div>
+            </div>
 
-                    return (
-                      <button
-                        key={c.ticker}
-                        type="button"
-                        onClick={() => setSelectedTicker(c.ticker)}
-                        style={{
-                          width: "100%",
-                          display: "grid",
-                          gridTemplateColumns: "34px minmax(0, 1fr) auto",
-                          alignItems: "center",
-                          gap: 20,
-                          padding: "10px 9px",
-                          marginBottom: 4,
-                          borderRadius: 8,
-                          border: active
-                            ? "1px solid var(--brand)"
-                            : "1px solid transparent",
-                          background: active
-                            ? "rgba(74,222,128,.08)"
-                            : "transparent",
-                          color: "inherit",
-                          textAlign: "left",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <StockLogo
-                          sym={c.ticker}
-                          size={30}
-                        />
+            <div style={{ padding: 12 }}>
+              {filteredCompanies.length === 0 ? (
+                <div
+                  style={{
+                    padding: "36px 0",
+                    textAlign: "center",
+                    color: "var(--text-dim-solid)",
+                    fontSize: ".82rem",
+                  }}
+                >
+                  No companies match “{companySearch}”.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {filteredCompanies.map(c => (
+                    <button
+                      key={c.ticker}
+                      type="button"
+                      onClick={() => setSelectedTicker(c.ticker)}
+                      className="aic-full-row"
+                    >
+                      <StockLogo sym={c.ticker} size={24} />
 
-                        <div
-                          style={{
-                            minWidth: 0,
-                          }}
-                        >
-                          <div
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <b
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 7,
+                              color: "var(--text-hi)",
+                              fontSize: ".92rem",
+                              fontFamily: "var(--f-mono)",
+                              fontWeight: 800,
                             }}
                           >
-                            <b
-                              style={{
-                                color: active
-                                  ? "var(--brand-2)"
-                                  : "var(--text-hi)",
-                                fontSize: ".82rem",
-                              }}
-                            >
-                              {c.ticker}
-                            </b>
-                          </div>
-
-                          <div
+                            {c.ticker}
+                          </b>
+                          <span
                             style={{
-                              marginTop: 2,
-                              fontSize: ".68rem",
+                              fontSize: ".78rem",
                               color: "var(--text-dim-solid)",
                               whiteSpace: "nowrap",
                               overflow: "hidden",
@@ -344,38 +386,237 @@ function ThemeDetail({
                             }}
                           >
                             {c.name ?? c.ticker}
-                          </div>
+                          </span>
                         </div>
 
-                        <CapPill cap={c.capBucket} />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                        {c.blurb && (
+                          <div
+                            style={{
+                              marginTop: 3,
+                              fontSize: ".7rem",
+                              color: "var(--text-dim-solid)",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              maxWidth: 620,
+                            }}
+                          >
+                            {c.blurb}
+                          </div>
+                        )}
+                      </div>
 
-              {/* RIGHT — full stock detail/chart */}
+                      <div style={{ justifySelf: "end" }}>
+                        <CapPill cap={c.capBucket} />
+                      </div>
+
+                      <div style={{ textAlign: "right", minWidth: 90 }}>
+                        <div
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontWeight: 700,
+                            fontSize: ".86rem",
+                            color: "var(--text-hi)",
+                          }}
+                        >
+                          {c.price != null ? `$${fmt(c.price)}` : <NotAvailable />}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".7rem",
+                            fontWeight: 600,
+                            color: c.pctChange != null ? `var(--${cls(c.pctChange)})` : "var(--text-dim-solid)",
+                          }}
+                        >
+                          {c.pctChange != null ? sign(c.pctChange) : "—"}
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: "right", minWidth: 80 }} className="aic-col-mcap">
+                        <div style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", textTransform: "uppercase" }}>
+                          Mkt Cap
+                        </div>
+                        <div style={{ fontFamily: "var(--f-mono)", fontSize: ".78rem", fontWeight: 600, color: "var(--text-hi)" }}>
+                          {fmtMcap(c.marketCap)}
+                        </div>
+                      </div>
+
+                      <span
+                        className="aic-full-row-action"
+                        style={{
+                          fontSize: ".76rem",
+                          fontWeight: 600,
+                          color: "var(--brand-2)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        View Details →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* SPLIT VIEW (Stock list on left, Chart etc on right) */
+        <div className="aic-split">
+          {/* LEFT — companies */}
+          <div
+            className="card aic-list"
+            style={{
+              overflow: "hidden",
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div className="card-h">
               <div
-                className="card"
                 style={{
-                  minWidth: 0,
-                  minHeight: 0,
-                  overflowY: "auto",
-                  overscrollBehavior: "contain",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
                 }}
               >
-                {selectedCompany ? (
-                  <StockScreenEmbed
-                    initialSym={selectedCompany.ticker}
-                  />
-                ) : (
-                  <DataState
-                    loading={false}
-                    label="Select a company."
-                  />
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setSelectedTicker(null)}
+                    title="Back to full company list"
+                    style={{
+                      padding: "3px 8px",
+                      fontSize: ".7rem",
+                      lineHeight: 1,
+                    }}
+                  >
+                    ← Full list
+                  </button>
+                  <h3 style={{ margin: 0, fontSize: ".82rem", fontWeight: 700, color: "var(--text-hi)" }}>
+                    {filteredCompanies.length} compan{filteredCompanies.length === 1 ? "y" : "ies"}
+                  </h3>
+                </div>
+
+                <VendorTag v="polygon" />
               </div>
             </div>
+
+            <div
+              style={{
+                padding: 8,
+                overflowY: "auto",
+                minHeight: 0,
+                flex: 1,
+              }}
+            >
+              {filteredCompanies.map(c => {
+                const active = c.ticker === selectedTicker;
+
+                return (
+                  <button
+                    key={c.ticker}
+                    type="button"
+                    onClick={() => setSelectedTicker(c.ticker)}
+                    style={{
+                      width: "100%",
+                      display: "grid",
+                      gridTemplateColumns: "38px minmax(0, 1fr) auto",
+                      alignItems: "center",
+                      gap: 14,
+                      padding: "9px 10px",
+                      marginBottom: 4,
+                      borderRadius: 8,
+                      border: active
+                        ? "1px solid var(--brand)"
+                        : "1px solid transparent",
+                      background: active
+                        ? "rgba(74,222,128,.08)"
+                        : "transparent",
+                      color: "inherit",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <StockLogo
+                      sym={c.ticker}
+                      size={24}
+                    />
+
+                    <div
+                      style={{
+                        minWidth: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 7,
+                        }}
+                      >
+                        <b
+                          style={{
+                            color: active
+                              ? "var(--brand-2)"
+                              : "var(--text-hi)",
+                            fontSize: ".82rem",
+                          }}
+                        >
+                          {c.ticker}
+                        </b>
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 2,
+                          fontSize: ".68rem",
+                          color: "var(--text-dim-solid)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {c.name ?? c.ticker}
+                      </div>
+                    </div>
+
+                    <CapPill cap={c.capBucket} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* RIGHT — full stock detail/chart */}
+          <div
+            className="card"
+            style={{
+              minWidth: 0,
+              minHeight: 0,
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+            }}
+          >
+            {selectedCompany ? (
+              <StockScreenEmbed
+                key={selectedCompany.ticker}
+                initialSym={selectedCompany.ticker}
+              />
+            ) : (
+              <DataState
+                loading={false}
+                label="Select a company."
+              />
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

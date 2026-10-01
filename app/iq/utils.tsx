@@ -185,70 +185,114 @@ const cs = (n: number) => Math.round(n * CHART_SCALE);
  *     for, which completes successfully with nothing to draw.
  */
 export function useTickerLogo(sym: string) {
+  const [sourceIdx, setSourceIdx] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  // Reset when the component is reused for a different ticker (lists re-order).
-  // Adjusted DURING render off a remembered prop rather than in an effect: an
-  // effect resets after the browser has already painted, so the row would flash
-  // the previous ticker's logo for a frame on every re-sort.
   const [prevSym, setPrevSym] = useState(sym);
-  if (prevSym !== sym) { setPrevSym(sym); setLoaded(false); setFailed(false); }
-  const ref = useCallback((el: HTMLImageElement | null) => {
-    if (!el || !el.complete) return;
-    if (el.naturalWidth > 0) setLoaded(true); else setFailed(true);
-  }, []);
+
+  if (prevSym !== sym) {
+    setPrevSym(sym);
+    setSourceIdx(0);
+    setLoaded(false);
+    setFailed(false);
+  }
+
+  // Multi-tier logo resolution:
+  // 1. Backend proxy / Polygon branding (/live/logo?ticker=...)
+  // 2. Parqet symbol logo CDN (covers ETFs: SPY, IVV, VOO, etc.)
+  const sources = [
+    backendUrl(`/live/logo?ticker=${encodeURIComponent(sym)}`),
+    `https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}?format=png`,
+  ];
+
+  const currentSrc = sources[sourceIdx] ?? "";
+
+  const handleFailure = useCallback(() => {
+    setSourceIdx(idx => {
+      if (idx + 1 < sources.length) {
+        return idx + 1;
+      }
+      setFailed(true);
+      return idx;
+    });
+  }, [sources.length]);
+
+  const ref = useCallback(
+    (el: HTMLImageElement | null) => {
+      if (!el || !el.complete) return;
+      if (el.naturalWidth > 0) {
+        setLoaded(true);
+        setFailed(false);
+      } else {
+        handleFailure();
+      }
+    },
+    [handleFailure]
+  );
+
   return {
     loaded,
     failed,
     sym,
+    sourceIdx,
     imgProps: {
       ref,
-      // Logos come from Polygon's ticker `branding`, proxied by the backend
-      // (`/live/logo`) so the API key stays server-side — no third-party CDN.
-      src: backendUrl(`/live/logo?ticker=${encodeURIComponent(sym)}`),
+      src: currentSrc,
       alt: "",
-      onLoad: () => setLoaded(true),
-      onError: () => setFailed(true),
+      onLoad: (e: React.SyntheticEvent<HTMLImageElement>) => {
+        if (e.currentTarget.naturalWidth > 0) {
+          setLoaded(true);
+          setFailed(false);
+        } else {
+          handleFailure();
+        }
+      },
+      onError: handleFailure,
     } as const,
   };
 }
 
 /**
  * Geometry for the branding image inside a rounded, overflow-hidden tile.
- *
- * Deliberately 1px OVERSIZED on every edge. The tile is rounded with
- * border-radius + overflow:hidden and that clip is antialiased — its edge
- * pixels are part image, part whatever is behind it — so an image sized exactly
- * to the box lets the tile colour show through as a hairline at the corners.
- * Overhanging the clip by a pixel means the only thing at the boundary is the
- * logo itself, whatever the load state, so the ring cannot reappear even if the
- * flags above are ever wrong. A pixel off a logo that is mostly white margin is
- * not visible; cover (not contain) still avoids letterboxing a non-square one.
  */
 export const LOGO_IMG_STYLE: React.CSSProperties = {
   position: "absolute",
-  top: -1, left: -1,
-  width: "calc(100% + 2px)", height: "calc(100% + 2px)",
-  objectFit: "cover",
+  top: 0,
+  left: 0,
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+  padding: "2px",
 };
 
-export function StockLogo({ sym, size = 22 }: { sym: string; size?: number }) {
-  const idx = sym.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % _LP.length;
+export function StockLogo({ sym, size = 22, style }: { sym: string; size?: number; style?: React.CSSProperties }) {
+  const s = (sym || "").toUpperCase().trim();
+  const idx = s.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % _LP.length;
   const px = Math.round(size * TICKER_LOGO_SCALE);
-  const { loaded, failed, sym: logoSym, imgProps } = useTickerLogo(sym);
+  const { loaded, failed, sym: logoSym, sourceIdx, imgProps } = useTickerLogo(s);
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: px, height: px, borderRadius: Math.round(px * 0.3),
-      // Transparent once the logo has painted: nothing behind it means nothing
-      // can bleed at the clip edge. The colour is only ever a placeholder.
-      background: loaded ? 'transparent' : _LP[idx], color: '#fff',
+      width: px, height: px, borderRadius: Math.round(px * 0.28),
+      background: loaded ? '#ffffff' : _LP[idx], color: '#fff',
       fontSize: Math.round(px * 0.44), fontWeight: 800,
       fontFamily: 'var(--f-display)', flexShrink: 0, lineHeight: 1,
       position: 'relative', overflow: 'hidden',
+      boxShadow: loaded ? '0 1px 3px rgba(0,0,0,.15)' : undefined,
+      ...style,
     }}>
-      {!loaded && sym[0]}
-      {!failed && <img key={logoSym} {...imgProps} style={LOGO_IMG_STYLE} />}
+      {!loaded && (s[0] ?? "")}
+      {!failed && (
+        <img
+          key={`${logoSym}_${sourceIdx}`}
+          {...imgProps}
+          style={{
+            ...LOGO_IMG_STYLE,
+            opacity: loaded ? 1 : 0,
+            transition: 'opacity .15s ease',
+          }}
+        />
+      )}
     </span>
   );
 }
