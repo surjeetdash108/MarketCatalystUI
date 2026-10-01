@@ -503,7 +503,7 @@ export function DashboardScreen() {
           </div>
           <div className="pulse">
             {pulse.map((x, i) => (
-              <div key={x.label} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(i)}>
+              <div key={x.label} className="p" style={{ cursor: "pointer" }} onClick={() => openIndex(x.label)}>
                 <div className="lbl">{x.label}</div>
                 <div className="val">{fmt(x.value, 2)}</div>
                 <div className={`chg ${cls(x.change)}`}>{arr(x.change)} {sign(x.change)}</div>

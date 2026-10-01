@@ -2,7 +2,17 @@
 // STOCKWISE — MOCK DATA (TypeScript)
 // ============================================================
 
-export interface PulseItem { label: string; value: number; change: number; open: number; prevClose: number; dayHigh?: number; dayLow?: number; }
+export interface PulseItem {
+  id?: string;
+  label: string;
+  value: number;
+  change: number;
+  open: number;
+  prevClose: number;
+  dayHigh?: number;
+  dayLow?: number;
+  proxyTicker?: string;
+}
 export interface Earning {
   ticker: string; name: string; session: string; marketCap: string; sector: string;
   // nullable: the live earnings feed supplies estimate/actual only, and not

@@ -109,6 +109,7 @@ export function pulseFromLive(live: IndexDoc[]): PulseItem[] {
     const l = byId.get(id);
     if (!l) continue;
     out.push({
+      id: l.id,
       label: l.label,
       value: l.value,
       change: l.pctChange,
@@ -116,6 +117,7 @@ export function pulseFromLive(live: IndexDoc[]): PulseItem[] {
       prevClose: l.prevClose ?? l.value,
       dayHigh: l.dayHigh,
       dayLow: l.dayLow,
+      proxyTicker: l.proxyTicker || undefined,
     });
   }
   return out;

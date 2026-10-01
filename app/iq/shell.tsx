@@ -47,7 +47,8 @@ const navItemsByGroup = Object.fromEntries(
 ) as Record<NavGroup, { label: string; slug: string; group: string; icon: string; badge: string | null }[]>;
 
 import { type PulseItem } from "./data";
-import { fmt, sign, cls, arr, SemiGauge, DataState, NotAvailable, VendorTag, titleCaseLabel, StockLogo} from "./utils";
+import { fmt, sign, cls, arr, SemiGauge, DataState, NotAvailable, VendorTag, titleCaseLabel, StockLogo, CandleChart, ChartSelect, TF_OPTIONS, CHART_TYPE_OPTIONS } from "./utils";
+import { useBackendBars } from "./hooks/useBackendBars";
 import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
 import { useTapeStream } from "./hooks/useTapeStream";
@@ -90,7 +91,7 @@ interface IQActions {
   openMoverModal: (sym: string) => void;
   openEarnings: (sym: string) => void;
   openSector: (name: string) => void;
-  openIndex: (i: number) => void;
+  openIndex: (i: number | string) => void;
   openFearGreed: () => void;
   setCopilot: (open: boolean) => void;
   openChart: (title: string, node: ReactNode) => void;
@@ -437,34 +438,69 @@ function SessionNotice({ phase, pathname }: { phase: "open" | "pre" | "after" | 
 }
 */
 
+const INDEX_BENCHMARKS: Record<string, { ticker: string; title: string; subtitle: string }> = {
+  "S&P 500": { ticker: "SPY", title: "S&P 500 (SPY)", subtitle: "SPDR S&P 500 ETF Trust" },
+  "SPX": { ticker: "SPY", title: "S&P 500 (SPY)", subtitle: "SPDR S&P 500 ETF Trust" },
+  "Nasdaq": { ticker: "QQQ", title: "Nasdaq 100 (QQQ)", subtitle: "Invesco QQQ Trust" },
+  "Nasdaq 100": { ticker: "QQQ", title: "Nasdaq 100 (QQQ)", subtitle: "Invesco QQQ Trust" },
+  "NDX": { ticker: "QQQ", title: "Nasdaq 100 (QQQ)", subtitle: "Invesco QQQ Trust" },
+  "Dow": { ticker: "DIA", title: "Dow Jones (DIA)", subtitle: "SPDR Dow Jones Industrial Average" },
+  "Dow Jones": { ticker: "DIA", title: "Dow Jones (DIA)", subtitle: "SPDR Dow Jones Industrial Average" },
+  "DJI": { ticker: "DIA", title: "Dow Jones (DIA)", subtitle: "SPDR Dow Jones Industrial Average" },
+  "Russell 2000": { ticker: "IWM", title: "Russell 2000 (IWM)", subtitle: "iShares Russell 2000 ETF" },
+  "RUT": { ticker: "IWM", title: "Russell 2000 (IWM)", subtitle: "iShares Russell 2000 ETF" },
+  "VIX": { ticker: "VIXY", title: "VIX Volatility (VIXY)", subtitle: "ProShares VIX Short-Term Futures ETF" },
+  "Gold": { ticker: "GLD", title: "Gold (GLD)", subtitle: "SPDR Gold Shares" },
+  "GOLD": { ticker: "GLD", title: "Gold (GLD)", subtitle: "SPDR Gold Shares" },
+  "WTI Crude": { ticker: "USO", title: "WTI Crude Oil (USO)", subtitle: "United States Oil Fund" },
+  "Crude Oil": { ticker: "USO", title: "WTI Crude Oil (USO)", subtitle: "United States Oil Fund" },
+  "WTI": { ticker: "USO", title: "WTI Crude Oil (USO)", subtitle: "United States Oil Fund" },
+  "10Y Yield": { ticker: "TLT", title: "10Y Treasury (TLT)", subtitle: "iShares 20+ Year Treasury Bond ETF" },
+  "US10Y": { ticker: "TLT", title: "10Y Treasury (TLT)", subtitle: "iShares 20+ Year Treasury Bond ETF" },
+  "Bitcoin": { ticker: "IBIT", title: "Bitcoin (IBIT)", subtitle: "iShares Bitcoin Trust" },
+  "BTC": { ticker: "IBIT", title: "Bitcoin (IBIT)", subtitle: "iShares Bitcoin Trust" },
+  "Ethereum": { ticker: "ETHA", title: "Ethereum (ETHA)", subtitle: "iShares Ethereum Trust" },
+  "ETH": { ticker: "ETHA", title: "Ethereum (ETHA)", subtitle: "iShares Ethereum Trust" },
+  "Dollar (DXY)": { ticker: "UUP", title: "US Dollar Index (UUP)", subtitle: "Invesco DB US Dollar Index" },
+  "DXY": { ticker: "UUP", title: "US Dollar Index (UUP)", subtitle: "Invesco DB US Dollar Index" },
+};
+
 // ---- Index drawer (openIndex) ----
 function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClose }: {
-  idx: number; pulse: PulseItem[]; sectorsLive: SectorApiDoc[]; loading: boolean;
+  idx: number | string; pulse: PulseItem[]; sectorsLive: SectorApiDoc[]; loading: boolean;
   phase: "open" | "pre" | "after" | "closed" | "unknown"; onClose: () => void;
 }) {
-  const router = useRouter(); // before the early return — hooks must run on every render
-  const x = livePulse[idx];
+  const x = typeof idx === "number"
+    ? (livePulse[idx] ?? livePulse.find(p => p.label.toLowerCase() === String(idx).toLowerCase()))
+    : livePulse.find(p => p.label.toLowerCase() === idx.toLowerCase() || p.id?.toLowerCase() === idx.toLowerCase());
+
   if (!x) return null;
-  // Always 2 decimals (QA row 317) — matches the tape, the Dashboard boxes,
-  // the VIX widgets and the website tape.
+
+  return (
+    <IndexDrawerInner
+      x={x}
+      sectorsLive={sectorsLive}
+      loading={loading}
+      phase={phase}
+      onClose={onClose}
+    />
+  );
+}
+
+function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
+  x: PulseItem; sectorsLive: SectorApiDoc[]; loading: boolean;
+  phase: "open" | "pre" | "after" | "closed" | "unknown"; onClose: () => void;
+}) {
+  const router = useRouter();
+  const [tf, setTf] = useState<string>("3M");
+  const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
+  const [showVol, setShowVol] = useState<boolean>(true);
+  const [maStep, setMaStep] = useState<number>(0);
+  const [emaStep, setEmaStep] = useState<number>(0);
+
   const dec = 2;
   const dollar = x.value - x.prevClose;
-  /**
-   * Whether the open / high / low below describe the SAME session as the price
-   * above them.
-   *
-   * The vendor's OHLC block is the last COMPLETED regular session, while the
-   * price keeps updating through pre- and post-market. Outside regular hours
-   * the two therefore describe different sessions, and the drawer was labelling
-   * the older one "Day high" / "Day low" next to a newer price — MDB showed a
-   * price of 382.51 above a day high of 381.25, a range that excluded the very
-   * number printed above it.
-   *
-   * Two independent signals, because either alone can miss:
-   *  - the market phase says a regular session is not running;
-   *  - the price sits outside the quoted range, which is proof on its own that
-   *    the two cannot be the same session, whatever the clock says.
-   */
+
   const outsideRange =
     x.dayHigh != null && x.dayLow != null &&
     (x.value > x.dayHigh || x.value < x.dayLow);
@@ -484,22 +520,49 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
         : crypto
           ? "Cryptocurrency"
           : "Market benchmark";
+
+  const benchmark = INDEX_BENCHMARKS[x.label] ?? (x.id ? INDEX_BENCHMARKS[x.id] : undefined);
+  const chartTicker = x.proxyTicker || benchmark?.ticker || x.label;
+  const chartTitle = benchmark?.title || `${x.label} (${chartTicker})`;
+  const chartSubtitle = benchmark?.subtitle || `${chartTicker} Tracking Asset`;
+
+  const { bars: realBars, loading: barsLoading } = useBackendBars(chartTicker, tf);
+
+  const latestBarPx = realBars && realBars.length > 0 ? realBars[realBars.length - 1].c : undefined;
+  const chartPx = latestBarPx ?? x.value;
+  const firstBarPx = realBars && realBars.length > 0 ? realBars[0].o : undefined;
+  const periodReturn = (latestBarPx != null && firstBarPx != null && firstBarPx > 0)
+    ? ((latestBarPx - firstBarPx) / firstBarPx) * 100
+    : null;
+
   return (
     <>
       <div className="scrim open" onClick={onClose} />
-      <div className="side-drawer">
+      <div className="side-drawer index-side-drawer">
         <div className="drawer-h">
-          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#14181B,#0E1013)", color: "var(--brand)" }}>{x.label[0]}</div>
-          <div><div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>{x.label}</div><div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>{sub} · {QUOTE_DELAY_LABEL}</div></div>
+          <div className="sd-logo" style={{ background: "linear-gradient(135deg,#14181B,#0E1013)", color: "var(--brand)" }}>
+            {x.label[0]}
+          </div>
+          <div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
+              {x.label}
+            </div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
+              {sub} · {QUOTE_DELAY_LABEL}
+            </div>
+          </div>
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-b">
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
-            <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>{fmt(x.value, dec)}</div>
-            <div className={c} style={{ fontWeight: 600 }}>{arr(x.change)} {x.change >= 0 ? "+" : ""}{fmt(Math.abs(dollar), dec)} ({sign(x.change)})</div>
+            <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>
+              {fmt(x.value, dec)}
+            </div>
+            <div className={c} style={{ fontWeight: 600 }}>
+              {arr(x.change)} {x.change >= 0 ? "+" : ""}{fmt(Math.abs(dollar), dec)} ({sign(x.change)})
+            </div>
           </div>
-          {/* "Last session" rather than "Day" whenever these do not describe the
-              same session as the price above — see priorSession. */}
+
           <div className="metric-grid">
             <div className="m"><div className="k">{priorSession ? "Session open" : "Open"}</div><div className="v">{fmt(x.open, dec)}</div></div>
             <div className="m"><div className="k">Prev close</div><div className="v">{fmt(x.prevClose, dec)}</div></div>
@@ -518,39 +581,152 @@ function IndexDrawer({ idx, pulse: livePulse, sectorsLive, loading, phase, onClo
               {sortedSectors.length === 0 ? (
                 <div style={{ marginTop: 16 }}><DataState loading={loading} label="No live sector performance data yet." /></div>
               ) : (
-                <>
-                  <div className="ai-sec" style={{ marginTop: 16 }}><div className="h">Leading sectors today</div></div>
-                  {lead.map(g => (
-                    <div key={g.sector} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
-                      <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{titleCaseLabel(g.sector)}</span>
-                      <span className="mid" />
-                      <span className="r up">{sign(g.pctChange)}</span>
-                    </div>
-                  ))}
-                  <div className="ai-sec" style={{ marginTop: 12 }}><div className="h">Lagging sectors today</div></div>
-                  {lag.map(g => (
-                    <div key={g.sector} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
-                      <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{titleCaseLabel(g.sector)}</span>
-                      <span className="mid" />
-                      <span className="r down">{sign(g.pctChange)}</span>
-                    </div>
-                  ))}
-                </>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16 }}>
+                  <div>
+                    <div className="ai-sec"><div className="h">Leading sectors today</div></div>
+                    {lead.map(g => (
+                      <div key={g.sector} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
+                        <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{titleCaseLabel(g.sector)}</span>
+                        <span className="mid" />
+                        <span className="r up">{sign(g.pctChange)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div className="ai-sec"><div className="h">Lagging sectors today</div></div>
+                    {lag.map(g => (
+                      <div key={g.sector} className="minirow" style={{ cursor: "pointer" }} onClick={() => { onClose(); }}>
+                        <span className="tkr" style={{ fontFamily: "var(--f-body)", fontWeight: 600, width: "auto" }}>{titleCaseLabel(g.sector)}</span>
+                        <span className="mid" />
+                        <span className="r down">{sign(g.pctChange)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </>
           )}
+
           <button
             className="btn primary"
             style={{ width: "100%", marginTop: 14 }}
             onClick={() => {
               onClose();
-              // Equity indices open the Heatmap on their own tab (the tab names
-              // match these labels); everything else goes to Macro & VIX.
               router.push(eq ? `/menu/heatmap?index=${encodeURIComponent(x.label)}` : "/menu/macro");
             }}
           >
             {eq ? "View market heatmap →" : "Go to Macro & VIX →"}
           </button>
+
+          {/* Under redirection to heatmap: stock chart for each individual index/asset */}
+          <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid var(--border)", paddingBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <StockLogo sym={chartTicker} size={30} />
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
+                      {chartTitle}
+                    </span>
+                    <VendorTag v="polygon" />
+                  </div>
+                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 1 }}>
+                    {chartSubtitle} · Price Chart
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeframe & Chart Type Selectors */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <ChartSelect value={tf} options={TF_OPTIONS} onChange={v => setTf(v)} title="Timeframe" />
+                <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
+              </div>
+            </div>
+
+            {/* Price & Period Performance Badge */}
+            {latestBarPx != null && (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+                <span className="mono" style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-hi)" }}>
+                  ${fmt(latestBarPx, 2)}
+                </span>
+                {periodReturn != null && (
+                  <span className={`mono ${cls(periodReturn)}`} style={{ fontSize: ".8rem", fontWeight: 600 }}>
+                    {arr(periodReturn)} {sign(periodReturn)} ({tf})
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Indicator Toggles */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+              <button
+                className={`rng indbtn${showVol ? " on" : ""}`}
+                style={{ fontSize: ".7rem", padding: "3px 8px" }}
+                onClick={() => setShowVol(v => !v)}
+              >
+                Volume
+              </button>
+              <button
+                className={`rng indbtn${maStep > 0 ? " on" : ""}`}
+                style={{ fontSize: ".7rem", padding: "3px 8px" }}
+                onClick={() => setMaStep(s => (s + 1) % 5)}
+              >
+                SMA {[9, 21, 50, 200].map((v, i) => (
+                  <span key={v} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>
+                    {i > 0 ? "/" : ""}{v}
+                  </span>
+                ))}
+              </button>
+              <button
+                className={`rng indbtn${emaStep > 0 ? " on" : ""}`}
+                style={{ fontSize: ".7rem", padding: "3px 8px" }}
+                onClick={() => setEmaStep(s => (s + 1) % 5)}
+              >
+                EMA {[9, 21, 50, 200].map((v, i) => (
+                  <span key={v} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>
+                    {i > 0 ? "/" : ""}{v}
+                  </span>
+                ))}
+              </button>
+            </div>
+
+            {/* Interactive CandleChart */}
+            <div style={{ minHeight: 260 }}>
+              {barsLoading && (!realBars || realBars.length < 2) ? (
+                <DataState loading label={`Loading ${chartTicker} chart…`} height={240} />
+              ) : (
+                <CandleChart
+                  sym={chartTicker}
+                  tf={tf}
+                  px={chartPx}
+                  maStep={maStep}
+                  emaStep={emaStep}
+                  showVol={showVol}
+                  chartType={chartType.toLowerCase()}
+                  realBars={realBars}
+                />
+              )}
+            </div>
+
+            {/* Deep-link to full stock page */}
+            <button
+              className="btn"
+              style={{
+                width: "100%",
+                marginTop: 14,
+                fontSize: ".78rem",
+                color: "var(--text-dim-solid)",
+                background: "var(--surface-1)",
+                border: "1px solid var(--border)",
+              }}
+              onClick={() => {
+                onClose();
+                router.push(`/menu/stock?ticker=${encodeURIComponent(chartTicker)}`);
+              }}
+            >
+              Open {chartTicker} full analysis & technicals →
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -981,7 +1157,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     | { type: "stock-detail"; sym: string; list?: string[] }
     | { type: "earnings"; sym: string }
     | { type: "sector"; name: string }
-    | { type: "index"; idx: number }
+    | { type: "index"; idx: number | string }
     | { type: "feargreed" }
     | null
   >(null);

@@ -1271,12 +1271,23 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 /* right-side sliding drawer — used for index / fear&greed panels */
 .side-drawer {
   position: fixed; top: 0; right: 0; bottom: 0;
-  width: min(480px, 96vw);
+  width: min(520px, 96vw);
   background: var(--surface-0); border-left: 1px solid var(--border);
   z-index: 51;
   display: flex; flex-direction: column; overflow: hidden;
   animation: iq-slideIn .26s cubic-bezier(.25,.8,.25,1);
   box-shadow: -24px 0 64px rgba(0,0,0,.5);
+}
+.side-drawer.index-side-drawer {
+  width: min(960px, 96vw);
+}
+.side-drawer.index-side-drawer .metric-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 640px) {
+  .side-drawer.index-side-drawer .metric-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 @keyframes iq-slideIn {
   from { transform: translateX(100%); }
