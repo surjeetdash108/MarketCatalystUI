@@ -18,7 +18,7 @@ import { MacroScreen } from "../../iq/screens/macro";
 import { OptionsScreen } from "../../iq/screens/options";
 import { ThemesScreen } from "../../iq/screens/themes";
 import { AiInfrastructureScreen } from "../../iq/screens/ai-infrastructure";
-import { ComingSoonEtfScreen } from "../../iq/screens/etf-corner";
+import { EtfMarketFunds } from "../../iq/screens/etf-corner";
 
 export function generateStaticParams() {
   return [
@@ -47,7 +47,7 @@ const SCREENS: Record<string, React.ReactNode> = {
   recap:         <RecapScreen mode="daily" />,
   "weekly-recap": <RecapScreen mode="weekly" />,
   macro:       <MacroScreen />,
-  "etf-corner":        <ComingSoonEtfScreen />,
+  "etf-corner":        <EtfMarketFunds />,
   "ai-infrastructure": <AiInfrastructureScreen />,
 };
 

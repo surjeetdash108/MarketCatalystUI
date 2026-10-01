@@ -282,7 +282,7 @@ const ETF_CATEGORY_RULES: EtfCategoryRule[] = [
   },
 ];
 
-export function ComingSoonEtfScreen() {
+export function EtfMarketFunds() {
   const [query, setQuery] = useState("");
   const [selectedEtf, setSelectedEtf] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string>("largest");
@@ -492,7 +492,7 @@ export function ComingSoonEtfScreen() {
           />
         </div>
 
-        <span
+        {/* <span
           className="pill"
           style={{
             background: "var(--surface-3)",
@@ -500,7 +500,7 @@ export function ComingSoonEtfScreen() {
           }}
         >
           Coming soon
-        </span>
+        </span> */}
       </div>
 
       <div className="dash" style={{ paddingBottom: 30 }}>
@@ -583,16 +583,7 @@ export function ComingSoonEtfScreen() {
               >
                 Other ETF Market Funds
               </h2>
-              <span
-                className="pill"
-                style={{
-                  background: "var(--surface-3)",
-                  color: "var(--text-dim-solid)",
-                  fontSize: ".66rem",
-                }}
-              >
-                Category Explorer
-              </span>
+
             </div>
 
             {/* TAB BAR: All sections visible in full screen without scrolling */}
