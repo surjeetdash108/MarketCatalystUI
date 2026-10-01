@@ -6,6 +6,7 @@ export interface LiveMoverDoc {
   price: number;
   pctChange: number;
   volume: number;
+  rvol?: number | null;
   sector: string | null;
   cap: string | null;
   /** Raw USD market cap from the movers job's Polygon ticker-details enrichment.

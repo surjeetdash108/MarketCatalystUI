@@ -114,11 +114,11 @@ function mergeMovers(
       name: l.name ?? l.ticker,
       price: l.price,
       pctChange: l.pctChange,
-      rvolRatio: c?.rvol ?? 0,
+      rvolRatio: l.rvol ?? c?.rvol ?? 0,
       relativeStrength: 0,
       maPosture: maPostureLabel(c?.aboveSma50, c?.aboveSma200),
       owned: false,
-      sector: l.sector ?? "—",
+      sector: l.sector ?? c?.sector ?? "—",
       // Prefer the mover doc's own market cap (covers micro-caps outside the
       // tracked universe); fall back to the companies doc for tracked names.
       marketCap: mcap,
