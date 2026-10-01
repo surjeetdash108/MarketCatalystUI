@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
 import { cls, sign, StockLogo, DataState, NotAvailable, VendorTag, titleCaseLabel} from "../utils";
-import { fmtDate } from "../calendar-range";
+import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs, pulseFromLive } from "../live-market-indices";
@@ -160,9 +160,11 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const pageSectors = sortedSectors.slice(pageStart, pageStart + SEC_PAGE);
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const weekAgoStr = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-  const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  // Market (New York) dates, matching the backend recaps job — the UTC date
+  // flipped to tomorrow at 8 PM ET, and the title used the viewer's own clock.
+  const todayStr = etTodayIso(now);
+  const weekAgoStr = new Date(Date.parse(`${todayStr}T00:00:00Z`) - 7 * 86400000).toISOString().slice(0, 10);
+  const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
   // The weekly recap is a ROLLING last 7 days (weekAgoStr → today), both here
   // and in the backend recaps job — not a calendar week. So its title states
   // that range ("Last 7 days · Sep 23 – Sep 30, 2026") instead of "Week ending

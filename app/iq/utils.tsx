@@ -99,6 +99,13 @@ export function DataState({
 }
 
 // ---- Number formatting ----
+/** A stock PRICE, always exact: $1,065.11 (never shortened to $1.07K).
+ *  Used by every price list so screens cannot drift apart (QA row 205). */
+export function fmtPrice(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function fmt(n: number, d = 2): string {
   if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
   if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
@@ -1000,12 +1007,16 @@ function CandleChartInner({
             </span>
           </div>
         )}
+        {/* A selected period with too few bars used to vanish from the legend,
+            leaving an empty box (QA row 206). It now stays, marked "—" with the reason
+            on hover. Plain "—" (not "not enough history") because a daily chart
+            shows it for a moment while the 5Y warm-up bars are still loading. */}
         {maVals.map((v, idx) => {
           const id = `ma${MA_PERS[idx]}`;
-          if (v == null || removedIds.has(id)) return null;
+          if (removedIds.has(id)) return null;
           return (
             <div key={id} className={`chart-hud-row${hiddenIds.has(id) ? " dim" : ""}`}>
-              <i style={{ background: MA_COLS[idx] }} />SMA {MA_PERS[idx]} <b>{v.toFixed(2)}</b>
+              <i style={{ background: MA_COLS[idx] }} />SMA {MA_PERS[idx]} {v != null ? <b>{v.toFixed(2)}</b> : <b title={`Not enough price history yet (needs ${MA_PERS[idx]} trading days)`}>—</b>}
               <span className="chart-hud-acts">
                 <button type="button" onClick={() => toggleHiddenId(id)} title={hiddenIds.has(id) ? "Show" : "Hide"} aria-label={`Toggle SMA ${MA_PERS[idx]}`}>
                   <EyeIcon off={hiddenIds.has(id)} />
@@ -1017,10 +1028,10 @@ function CandleChartInner({
         })}
         {emaVals.map((v, idx) => {
           const id = `ema${MA_PERS[idx]}`;
-          if (v == null || removedIds.has(id)) return null;
+          if (removedIds.has(id)) return null;
           return (
             <div key={id} className={`chart-hud-row${hiddenIds.has(id) ? " dim" : ""}`}>
-              <i style={{ background: EMA_COLS[idx] }} />EMA {MA_PERS[idx]} <b>{v.toFixed(2)}</b>
+              <i style={{ background: EMA_COLS[idx] }} />EMA {MA_PERS[idx]} {v != null ? <b>{v.toFixed(2)}</b> : <b title={`Not enough price history yet (needs ${MA_PERS[idx]} trading days)`}>—</b>}
               <span className="chart-hud-acts">
                 <button type="button" onClick={() => toggleHiddenId(id)} title={hiddenIds.has(id) ? "Show" : "Hide"} aria-label={`Toggle EMA ${MA_PERS[idx]}`}>
                   <EyeIcon off={hiddenIds.has(id)} />

@@ -13,6 +13,7 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 import { useApiList } from "../hooks/useApiList";
 import type { IpoEventDoc, IpoPipelineDoc, CompanyDoc } from "../types";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
+import { fmtMonthDay } from "../calendar-range";
 
 const IPO_PAGE_SIZE = 20;
 
@@ -35,6 +36,8 @@ interface IpoRow {
   /** Shares offered and total deal size (shares × offer), from the ipos job. */
   shares: number | null; deal: number | null;
   sec: string; live?: boolean;
+  /** Listing venue MIC from the ipos job (XNAS, XNYS, XASE, OTCM…). */
+  exch?: string | null;
 }
 
 /** Compact magnitude label (12.5M, 1.2B) for share counts and deal sizes. */
@@ -138,6 +141,7 @@ export function IPOsScreen() {
     deal: e.totalSharesValue,
     sec: secForIpo(e),
     live: true,
+    exch: e.exchange ?? null,
   }));
   const filtered = liveRows
     .filter(r => matchesSector(sector, r.s, r.sec))
@@ -200,9 +204,15 @@ export function IPOsScreen() {
   };
 
   // Only rows with BOTH an offer price and a current price can produce a return.
+  // Summary cards use exchange-listed IPOs only (QA row 200): an OTC listing
+  // (TCGLF, +667% on a $10M deal) is not comparable and topped "Best performer".
+  // The table below still lists every IPO, OTC included.
+  const isOtc = (r: IpoRow) => /^OTC/i.test(r.exch ?? "");
   const perf = filtered.filter(
-    (r): r is IpoRow & { cur: number; offer: number } => r.cur != null && r.offer != null && r.offer !== 0,
+    (r): r is IpoRow & { cur: number; offer: number } => r.cur != null && r.offer != null && r.offer !== 0 && !isOtc(r),
   );
+  const perfSince = perf.reduce<string | null>((m, r) => (!m || r.date < m ? r.date : m), null);
+  const perfScope = perfSince ? `NYSE/Nasdaq IPOs since ${fmtMonthDay(perfSince)}` : "NYSE/Nasdaq IPOs";
   const winners = perf.filter(r => r.cur > r.offer).length;
   const returns = perf.map(r => (r.cur - r.offer) / r.offer * 100).sort((a, b) => a - b);
   const median  = returns.length ? returns[Math.floor(returns.length / 2)] : null;
@@ -296,6 +306,7 @@ export function IPOsScreen() {
               <div className="mono up" style={{ fontSize: "1.6rem", fontWeight: 700 }}>
                 {perf.length ? `${winners}/${perf.length}` : "—"}
               </div>
+              <div style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", marginTop: 4 }}>{perfScope}</div>
             </div>
           </div>
         </div>
@@ -306,6 +317,7 @@ export function IPOsScreen() {
               <div className="mono up" style={{ fontSize: "1.6rem", fontWeight: 700 }}>
                 {best ? `${best.s} +${bestRet}%` : "—"}
               </div>
+              <div style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", marginTop: 4 }}>Return vs offer price · {perfScope}</div>
             </div>
           </div>
         </div>
@@ -316,6 +328,7 @@ export function IPOsScreen() {
               <div className={`mono ${median != null ? cls(median) : ""}`} style={{ fontSize: "1.6rem", fontWeight: 700 }}>
                 {median != null ? sign(median) : "—"}
               </div>
+              <div style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", marginTop: 4 }}>{perfScope}</div>
             </div>
           </div>
         </div>

@@ -8,7 +8,7 @@ import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
 import type { MacroEventDoc, DividendHistoryDoc, CompanyDoc } from "../types";
 import type { MarketStatusPayload } from "../types/market-status";
-import { fmtMonthDay, isoDay, addDays, mondayOf, fmtDate } from "../calendar-range";
+import { fmtMonthDay, isoDay, addDays, mondayOf, fmtDate, etTodayIso } from "../calendar-range";
 
 // ── Economic calendar ────────────────────────────────────────────────────────
 interface MacroEvent {
@@ -254,9 +254,19 @@ export function MacroScreen() {
   const betaStocks = [...companies]
     .filter((c): c is CompanyDoc & { beta: number } => c.beta != null)
     .sort((a, b) => b.beta - a.beta);
+  // Default list = real companies only (QA row 253). The raw top-10 by beta
+  // was mostly 2x leveraged ETFs (no market cap, months of history) whose beta
+  // says nothing about a company's sensitivity to volatility. Rules:
+  //   - a company worth $300M+ (funds have no market cap, so they drop out)
+  //   - ~1 year of daily prices (250+ bars) so the beta is reliable
+  //   - beta 5 or below: real companies stay under ~4; higher is a data error
+  // The search box still looks up ANY ticker, funds included.
+  const VIX_MIN_MCAP = 300e6, VIX_MIN_BARS = 250, VIX_MAX_BETA = 5;
+  const vixEligible = betaStocks.filter(c =>
+    (c.marketCap ?? 0) >= VIX_MIN_MCAP && (c.barsAnalyzed ?? 0) >= VIX_MIN_BARS && c.beta <= VIX_MAX_BETA);
   const highBetaStocks = vixQ
     ? betaStocks.filter(c => c.ticker.toUpperCase().includes(vixQ)).slice(0, 25)
-    : betaStocks.slice(0, 10);
+    : vixEligible.slice(0, 10);
 
   // One clock for the whole screen so tabs cannot disagree mid-render.
   const now = new Date();
@@ -264,7 +274,7 @@ export function MacroScreen() {
   const [holidaysAllOpen, setHolidaysAllOpen] = useState(false);
 
   // ── Economic calendar: Earnings-Hub-style week grid (Mon–Fri) ──
-  const [ecoAnchor, setEcoAnchor] = useState(() => isoDay(now));
+  const [ecoAnchor, setEcoAnchor] = useState(() => etTodayIso(now));
   const [ecoSel, setEcoSel] = useState<MacroEventDoc | null>(null);
   const ecoAnchorDate = new Date(`${ecoAnchor}T00:00:00Z`);
   const ecoWeekMon = mondayOf(ecoAnchorDate);
@@ -317,7 +327,7 @@ export function MacroScreen() {
         <button className="ecal-arrow" onClick={() => setEcoAnchor(isoDay(addDays(ecoAnchorDate, -7)))} aria-label="Previous week">‹</button>
         <span style={{ fontSize: "1.02rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)", minWidth: 220, textAlign: "center" }}>{ecoWeekLabel}</span>
         <button className="ecal-arrow" onClick={() => setEcoAnchor(isoDay(addDays(ecoAnchorDate, 7)))} aria-label="Next week">›</button>
-        <button className="chip" onClick={() => setEcoAnchor(isoDay(new Date()))} style={{ marginLeft: 4 }}>Today</button>
+        <button className="chip" onClick={() => setEcoAnchor(etTodayIso())} style={{ marginLeft: 4 }}>Today</button>
       </div>
 
       {/* ── Market regime + VIX + Economic calendar ── */}
@@ -388,7 +398,7 @@ export function MacroScreen() {
                 {ecoWeekDays.map((iso, di) => {
                   const evs = ecoByDate.get(iso) ?? [];
                   const dn = ["MON", "TUE", "WED", "THU", "FRI"][di];
-                  const isToday = iso === isoDay(new Date());
+                  const isToday = iso === etTodayIso();
                   const isSel = iso === ecoAnchor;
                   return (
                     <div key={iso} className={`ec-day${isToday ? " is-today" : ""}${isSel && !isToday ? " is-sel" : ""}`}
@@ -591,9 +601,19 @@ export function MacroScreen() {
                     Change vs previous: <b className={change >= 0 ? "up" : "down"}>{change >= 0 ? "+" : ""}{change.toFixed(2)}{unit}</b>
                   </div>
                 )}
-                {d.actual == null && (
+                {/* The API labels each event (QA row 185). Speeches and reports
+                    never carry figures; a data release that is blank simply has
+                    not been published yet — guessing from empty values called
+                    an upcoming CPI or jobless-claims release a "speech". */}
+                {(d.kind === "speech" || d.kind === "report") ? (
                   <div style={{ marginTop: 12, fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
-                    Not yet released — showing the consensus estimate and prior reading.
+                    {`No figures for this event — ${d.kind === "speech" ? "speeches" : "reports and minutes"} don't come with numbers.`}
+                  </div>
+                ) : d.actual == null && (
+                  <div style={{ marginTop: 12, fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
+                    {d.previous == null && d.estimate == null
+                      ? "Not yet released — no forecast or previous figure available yet."
+                      : "Not yet released — showing the consensus estimate and prior reading."}
                   </div>
                 )}
                 <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-soft)", fontSize: ".68rem", color: "var(--text-dim-solid)", fontFamily: "var(--f-mono)" }}>

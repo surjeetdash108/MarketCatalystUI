@@ -13,4 +13,7 @@ export interface MacroEventDoc {
   /** Country code — "US" on FMP economic events. */
   country?: string;
   source: string;
+  /** Set by the API: speeches/reports never carry figures; "data" releases can
+   *  be blank only until published. Optional so an older backend still works. */
+  kind?: "speech" | "report" | "data";
 }

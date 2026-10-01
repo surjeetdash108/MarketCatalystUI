@@ -47,6 +47,12 @@ function shortDate(iso: string): string {
 const money = (v: number | null | undefined, d = 0): string =>
   v == null ? "—" : `$${v.toFixed(d)}`;
 
+type ActSortKey = "ticker" | "firm" | "action" | "grade" | "pt" | "upside" | "date";
+/** Text columns start A→Z; numbers and dates start largest / newest first. */
+const ACT_FIRST_DIR: Record<ActSortKey, "asc" | "desc"> = {
+  ticker: "asc", firm: "asc", action: "asc", grade: "asc", pt: "desc", upside: "desc", date: "desc",
+};
+
 export function AnalystScreen() {
   const { openStock } = useIQActions();
   const { data: liveConsensus, loading: consensusLoading } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
@@ -59,6 +65,10 @@ export function AnalystScreen() {
   const [analystQuery, setAnalystQuery] = useState("");// search within Top Firms
   const [selAnalyst, setSelAnalyst] = useState<string | null>(null); // firm clicked → drawer of its tickers
   const [shown, setShown] = useState(40); // paginate the feed 40 rows at a time
+  // Column sort for the Analyst Actions table (QA row 143). null = default
+  // newest-first order from allActions.
+  const [actSort, setActSort] = useState<ActSortKey | null>(null);
+  const [actDir, setActDir] = useState<"asc" | "desc">("desc");
   const [showAllClusters, setShowAllClusters] = useState(false);
 
   const priceByTicker = useMemo(
@@ -129,7 +139,44 @@ export function AnalystScreen() {
     .filter(a => actionMatches(a.action, tab))
     .filter(a => !clustersOnly || clusterSet.has(a.ticker))
     .filter(a => !actQ || a.ticker.toUpperCase().includes(actQ));
+  // Sort the whole filtered list (not just the visible page) so "Show more"
+  // continues in the same order. Empty values always sink to the bottom.
+  if (actSort) {
+    const val = (a: typeof filteredActions[number]): string | number | null => {
+      switch (actSort) {
+        case "ticker": return a.ticker;
+        case "firm": return a.firm ?? null;
+        case "action": return a.action ?? null;
+        case "grade": return a.newGrade ?? null;
+        case "pt": return a.pt;
+        case "upside": return upside(a.pt, a.ticker);
+        case "date": return a.date ?? null;
+      }
+    };
+    const m = actDir === "asc" ? 1 : -1;
+    filteredActions.sort((x, y) => {
+      const a = val(x), b = val(y);
+      if (a == null || a === "") return b == null || b === "" ? 0 : 1;
+      if (b == null || b === "") return -1;
+      return (typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b))) * m;
+    });
+  }
   const feedRows = filteredActions.slice(0, shown);
+  /** First click: the column's natural direction; second: reverse; third: back to newest first. */
+  const toggleActSort = (k: ActSortKey) => {
+    if (actSort !== k) { setActSort(k); setActDir(ACT_FIRST_DIR[k]); return; }
+    if (actDir === ACT_FIRST_DIR[k]) { setActDir(actDir === "asc" ? "desc" : "asc"); return; }
+    setActSort(null);
+  };
+  const actTh = (k: ActSortKey, label: string, num = false) => (
+    <th className={num ? "num" : undefined} onClick={() => toggleActSort(k)} title={`Sort by ${label}`}
+      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}>
+      {label}
+      <span style={{ color: "var(--brand-2)", fontSize: ".82em", marginLeft: 4, opacity: actSort === k ? 1 : 0.45 }}>
+        {actSort === k && actDir === "asc" ? "▲" : "▼"}
+      </span>
+    </th>
+  );
 
   const consQ = consQuery.trim().toUpperCase();
   const consensusRows = [...liveConsensus]
@@ -315,10 +362,10 @@ export function AnalystScreen() {
           <table className="tbl">
             <thead>
               <tr>
-                <th>Ticker</th><th>Firm</th><th>Action</th>
-                <th>Previous → New</th>
-                <th className="num">PT</th><th className="num">Upside</th>
-                <th className="num">Date</th>
+                {actTh("ticker", "Ticker")}{actTh("firm", "Firm")}{actTh("action", "Action")}
+                {actTh("grade", "Previous → New")}
+                {actTh("pt", "PT", true)}{actTh("upside", "Upside", true)}
+                {actTh("date", "Date", true)}
               </tr>
             </thead>
             <tbody>

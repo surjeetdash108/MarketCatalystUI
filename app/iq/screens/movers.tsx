@@ -279,6 +279,14 @@ export function MoversScreen() {
   const [toast, setToast] = useState<string | null>(null);
   // "error" styles the toast as a failure (e.g. the watchlist is full).
   const [toastKind, setToastKind] = useState<"ok" | "error">("ok");
+  // Tickers added from this screen in this visit. Their button reads "Added to
+  // your watchlist"; only tickers that were ALREADY saved read "Already in your
+  // watchlist" — the wording QA asked for (row 315), instead of no hover text.
+  const [justAdded, setJustAdded] = useState<Set<string>>(() => new Set());
+  // Ticker whose save is in flight: the shared hook marks it watched straight
+  // away (optimistic), so without this the button claimed "In watchlist" before
+  // the server answered — and flipped back if the add was refused.
+  const [adding, setAdding] = useState<string | null>(null);
   useEffect(() => {
     if (!toast) return;
     // Failures carry a longer explanation, so they stay up a little longer.
@@ -292,8 +300,9 @@ export function MoversScreen() {
     if (!listId) listId = (await createList("My Watchlist"))?.id;
     if (!listId) { setToastKind("error"); setToast("Couldn't add — please sign in first"); return; }
     // Only confirm once the server has actually saved it.
-    const res = await addTicker(listId, s);
-    if (res.ok) { setToastKind("ok"); setToast(`${s} added to watchlist`); }
+    setAdding(s);
+    const res = await addTicker(listId, s).finally(() => setAdding(null));
+    if (res.ok) { setJustAdded(prev => new Set(prev).add(s)); setToastKind("ok"); setToast(`${s} added to watchlist`); }
     else { setToastKind("error"); setToast(res.message); }
   }, [watchedSet, watchlists, addTicker, createList]);
 
@@ -753,7 +762,8 @@ export function MoversScreen() {
             >
               {(() => {
                 const sym = selectedSym!;
-                const inList = watchedSet.has(sym);
+                // Shown as saved only once the server confirmed it (see `adding`).
+                const inList = watchedSet.has(sym) && adding !== sym.toUpperCase();
                 const moverItem = movers.find(m => m.ticker === sym);
 
                 return (
@@ -790,11 +800,11 @@ export function MoversScreen() {
 
                     <button
                       onClick={() => addToWatchlist(sym)}
-                      // No hover text once saved: right after a successful add
-                      // the cursor is still on the button, and "Already in your
-                      // watchlist" read as a failure (QA). The filled star and
-                      // "In watchlist" label already show the state.
-                      title={inList ? undefined : "Add this stock to your watchlist"}
+                      disabled={adding === sym.toUpperCase()}
+                      title={adding === sym.toUpperCase() ? "Saving to your watchlist…"
+                        : !inList ? "Add this stock to your watchlist"
+                        : justAdded.has(sym.toUpperCase()) ? "Added to your watchlist"
+                        : "Already in your watchlist"}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -820,7 +830,7 @@ export function MoversScreen() {
                       <span style={{ fontSize: ".95rem", lineHeight: 1 }}>
                         {inList ? "★" : "☆"}
                       </span>
-                      {inList ? "In watchlist" : "Add to watchlist"}
+                      {adding === sym.toUpperCase() ? "Adding…" : inList ? "In watchlist" : "Add to watchlist"}
                     </button>
                   </div>
                 );

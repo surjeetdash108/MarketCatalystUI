@@ -11,7 +11,7 @@ import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
 import type { LiveEarningsDoc, CompanyDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EarningsAnnouncementDoc, AnalystConsensusDoc } from "../types";
-import { isoDay, addDays, mondayOf, fmtDate } from "../calendar-range";
+import { isoDay, addDays, mondayOf, fmtDate, etTodayIso } from "../calendar-range";
 import { surprisePct, reportedQuarterEps, quarterEpsSurprisePct } from "../types";
 
 // Live source (Polygon SEC financials) has ticker/date/epsEstimate/epsActual —
@@ -222,7 +222,7 @@ function MiniCalendar({ value, onPick, onClose }: { value: string; onPick: (iso:
   const firstDow = first.getUTCDay();
   const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
   const monthLabel = first.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-  const today = isoDay(new Date());
+  const today = etTodayIso();
 
   const cells: (string | null)[] = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
@@ -743,7 +743,6 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
   const [expanded, setExpanded] = useState(false);
   const [sortKey, setSortKey] = useState<GlanceSortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  if (items.length === 0) return null;
 
   /** First click applies the column's natural direction, the second toggles,
    *  the third clears back to the incoming largest-cap-first ordering. */
@@ -787,6 +786,10 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
   // Pre-market only. The vendor's after-hours field is not wired — see the note
   // on LiveQuote.earlyPct for the measurement that disqualified it.
   const preQuotes = useLiveQuotes(shown.map(i => i.s));
+  // Hide an empty section only AFTER every hook has run. Returning earlier
+  // changed the hook count whenever a section emptied or refilled (switching
+  // day, or the session chip), and React crashed the page. QA row 304.
+  if (items.length === 0) return null;
   return (
     <div className="ecal-day" style={{ marginBottom: 14 }}>
       <div className="ecal-day-h">
@@ -859,7 +862,7 @@ export function EarningsScreen() {
       return next;
     });
   };
-  const [anchor, setAnchor] = useState<string>(() => isoDay(new Date()));
+  const [anchor, setAnchor] = useState<string>(() => etTodayIso());
   // At-a-glance snapshot: a Nasdaq-style results table (actual vs consensus,
   // surprise, revenue, year-ago) for the selected day/week/month, toggled from
   // the calendar header. Off = the normal icon calendar.
@@ -942,7 +945,7 @@ export function EarningsScreen() {
 
   // Rows dated after today cannot be classified by their move — see
   // inferredSession. Computed once so every consumer agrees on "today".
-  const todayIso = isoDay(new Date());
+  const todayIso = etTodayIso();
   const dayRows = rowsForDate(anchor, liveEarningsData).map(toCalRow);
   const glanceRaw: EarnCalItem[] =
     mode === "month"
@@ -1053,7 +1056,7 @@ export function EarningsScreen() {
     const isExpanded = expandedDays.has(anchor);
     const shown  = isExpanded ? visibleRows : visibleRows.slice(0, MAX_CAL_LOGOS);
     const extra  = visibleRows.length - MAX_CAL_LOGOS;
-    const isToday = anchor === isoDay(new Date());
+    const isToday = anchor === etTodayIso();
     calNode = visibleRows.length > 0 ? (
       <div className="ec-grid">
         <div className={`ec-day ec-day-solo${isToday ? " is-today" : ""}`}>
@@ -1088,7 +1091,7 @@ export function EarningsScreen() {
         {weekDays5.map((iso, di) => {
           const items = filterSortRows(rowsForDate(iso, liveEarningsData).map(toCalRow), { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: iso, usual: annUsualSession });
           const dn = ["Mon", "Tue", "Wed", "Thu", "Fri"][di];
-          const isToday = iso === isoDay(new Date());
+          const isToday = iso === etTodayIso();
           const isExpanded = expandedDays.has(iso);
           const shown = isExpanded ? items : items.slice(0, MAX_CAL_LOGOS);
           const extra = items.length - MAX_CAL_LOGOS;
@@ -1130,7 +1133,7 @@ export function EarningsScreen() {
     const gridStart  = addDays(mFirst, -leadOffset); // Monday of the first week
     const weeks = Math.ceil((leadOffset + mLast.getUTCDate()) / 7);
     const monthKey = isoDay(mFirst).slice(0, 7);
-    const todayIso = isoDay(new Date());
+    const todayIso = etTodayIso();
     const MAX_LOGOS = MAX_CAL_LOGOS;
     const cells: string[] = [];
     for (let wk = 0; wk < weeks; wk++) for (let d = 0; d < 5; d++) cells.push(isoDay(addDays(gridStart, wk * 7 + d)));

@@ -5,6 +5,7 @@ import { useApiResource } from "./useApiResource";
 import { useApiList } from "./useApiList";
 import { buildChartEarnings, type ChartEarnings } from "../chart-earnings";
 import type { FinancialsDoc, LiveEarningsDoc } from "../types";
+import { etTodayIso } from "../calendar-range";
 
 /**
  * Chart earnings dots for one ticker, for callers that do NOT already hold a
@@ -26,7 +27,7 @@ export function useChartEarnings(sym: string, enabled = true): ChartEarnings[] {
 
   return useMemo(() => {
     if (!enabled || !sym) return [];
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = etTodayIso();
     const events = calendar.filter(e => e.ticker === sym);
     return buildChartEarnings(doc, events, todayIso);
   }, [enabled, sym, doc, calendar]);
