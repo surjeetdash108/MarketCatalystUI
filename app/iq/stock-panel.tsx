@@ -13,7 +13,13 @@ import type { LiveEarningsDoc, CompanyDoc } from "./types";
 import { surprisePct } from "./types";
 
 /* ── Shared dynamic embed — one definition for all screens ── */
-export const StockScreenEmbed = dynamic<{ initialSym?: string; hideHeader?: boolean; hideChart?: boolean }>(
+export const StockScreenEmbed = dynamic<{
+  initialSym?: string;
+  hideHeader?: boolean;
+  hideChart?: boolean;
+  headerActions?: React.ReactNode;
+  visibleTabs?: ("chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers")[];
+}>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );

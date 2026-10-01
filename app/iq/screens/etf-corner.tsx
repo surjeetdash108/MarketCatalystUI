@@ -137,6 +137,7 @@ export function ComingSoonEtfScreen() {
             >
               <StockScreenEmbed
                 initialSym={selectedEtf}
+                visibleTabs={["chart", "news"]}
               />
             </div>
           </div>

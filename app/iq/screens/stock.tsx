@@ -567,7 +567,21 @@ function StockChartExpanded({
   );
 }
 
-export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {initialSym?: string;hideHeader?: boolean;hideChart?: boolean;headerActions?: ReactNode;} = {}) {
+export type StockTab = "chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers";
+
+export function StockScreen({
+  initialSym,
+  hideHeader,
+  hideChart,
+  headerActions,
+  visibleTabs,
+}: {
+  initialSym?: string;
+  hideHeader?: boolean;
+  hideChart?: boolean;
+  headerActions?: ReactNode;
+  visibleTabs?: StockTab[];
+} = {}) {
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
@@ -679,8 +693,18 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   // Tab shown below the persistent header + chart, in the full (non-embedded)
   // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
   // its original single stacked-card layout, so this state is unused there.
-  type StockTab = "chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers";
-  const [activeTab, setActiveTab] = useState<StockTab>("chart");
+  const [activeTab, setActiveTab] = useState<StockTab>(() => {
+    if (visibleTabs && visibleTabs.length > 0 && !visibleTabs.includes("chart")) {
+      return visibleTabs[0];
+    }
+    return "chart";
+  });
+
+  useEffect(() => {
+    if (visibleTabs && visibleTabs.length > 0 && !visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0]);
+    }
+  }, [visibleTabs, activeTab]);
 
   // Watchlists are backend-synced (multiple named lists). The star is "filled"
   // when the ticker is in ANY list; clicking it opens the which-list picker.
@@ -1227,7 +1251,7 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
   // Tab bar config — mirrors the Chart/Overview/Analysis/Earnings/
   // Financials/Holdings/News split. Counts are real data (quarters on file /
   // articles fetched), not decorative.
-  const TABS: { id: StockTab; label: string; count?: number }[] = [
+  const ALL_TABS: { id: StockTab; label: string; count?: number }[] = [
     { id: "chart", label: "Chart" },
     { id: "overview", label: "Overview" },
     { id: "analysis", label: "Analysis" },
@@ -1237,6 +1261,11 @@ export function StockScreen({initialSym,hideHeader,hideChart,headerActions,}: {i
     { id: "news", label: "News", count: tickerNews?.length || undefined },
     { id: "peers", label: "Peers" },
   ];
+
+  const TABS = useMemo(() => {
+    if (!visibleTabs || visibleTabs.length === 0) return ALL_TABS;
+    return ALL_TABS.filter(t => visibleTabs.includes(t.id));
+  }, [visibleTabs, hist10.length, tickerNews?.length]);
   // Every rail card lives on exactly one tab (Analysis) — no card is
   // duplicated across tabs. The rest show a full-width main column instead of
   // an empty second track.

@@ -7,7 +7,13 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 
 // Dynamic import breaks the circular dep: stock.tsx → shell.tsx → stock.tsx
-export const StockScreenEmbed = dynamic<{initialSym?: string;hideHeader?: boolean;}>(
+export const StockScreenEmbed = dynamic<{
+  initialSym?: string;
+  hideHeader?: boolean;
+  hideChart?: boolean;
+  headerActions?: ReactNode;
+  visibleTabs?: ("chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers")[];
+}>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
