@@ -1024,7 +1024,7 @@ function CandleChartInner({
             </span>
           </div>
         )}
-        {showVol && !removedIds.has("vol") && (
+        {/* {showVol && !removedIds.has("vol") && (
           <div className={`chart-hud-row${hiddenIds.has("vol") ? " dim" : ""}`}>
             <i style={{ background: "var(--text-dim-solid)" }} />Volume <b>{fmt(lastBar.v)}</b>
             <span className="chart-hud-acts">
@@ -1034,7 +1034,7 @@ function CandleChartInner({
               <button type="button" onClick={() => removeId("vol")} title="Remove" aria-label="Remove volume">✕</button>
             </span>
           </div>
-        )}
+        )} */}
         {/* A selected period with too few bars used to vanish from the legend,
             leaving an empty box (QA row 206). It now stays, marked "—" with the reason
             on hover. Plain "—" (not "not enough history") because a daily chart
