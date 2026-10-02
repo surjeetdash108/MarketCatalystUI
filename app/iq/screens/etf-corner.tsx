@@ -68,6 +68,7 @@ export function EtfMarketFunds() {
   const [selectedFundTicker, setSelectedFundTicker] = useState<string | null>(null);
   const [page, setPage] = useState<number>(0);
   const [popularOpen, setPopularOpen] = useState<boolean>(true);
+  const [otherOpen, setOtherOpen] = useState<boolean>(true);
 
   // Dynamic API-driven ETF Discovery & Classification dataset
   const { data: etfData, loading, error } = useApiResource<EtfMarketResponse>(
@@ -342,36 +343,45 @@ export function EtfMarketFunds() {
           </div>
         </div>
 
-        {/* ── Section: Other ETF Market Funds ── */}
+        {/* ── Section: Other ETF Market Funds (Collapsible like What Matters Now in Dashboard) ── */}
         <div className="col-12" style={{ marginTop: 14 }}>
-          <div style={{ marginBottom: 12 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 10,
-              }}
+          <div className={`wmn${otherOpen ? " open" : ""}`}>
+            <button
+              type="button"
+              className="wmn-h"
+              aria-expanded={otherOpen}
+              onClick={() => setOtherOpen(o => !o)}
             >
-              <h2
-                style={{
-                  fontSize: "1.08rem",
-                  fontWeight: 700,
-                  color: "var(--text-hi)",
-                  margin: 0,
-                  letterSpacing: "-.01em",
-                }}
-              >
-                Other ETF Market Funds
-              </h2>
-            </div>
-
-            {/* TAB BAR: All 10 sections visible */}
-            <nav
-              className="etf-tabbar"
-              role="tablist"
-              aria-label="Other ETF Market Funds categories"
-            >
+              <div className="t">
+                <div className="wmn-orb">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                  </svg>
+                </div>
+                <h2>Other ETF Market Funds</h2>
+              </div>
+              <span style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
+                <span className="wmn-live">
+                  <span className="dot" />
+                  10 Categories
+                </span>
+                <svg className="wmn-chev" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </button>
+            <div className="wmn-collapse">
+              <div className="wmn-collapse-inner">
+                {/* TAB BAR: All 10 sections visible */}
+                <nav
+                  className="etf-tabbar"
+                  role="tablist"
+                  aria-label="Other ETF Market Funds categories"
+                  style={{ marginTop: 4, marginBottom: 12 }}
+                >
               {sections.map(s => {
                 const active =
                   activeSectionId === s.id ||
@@ -869,6 +879,8 @@ export function EtfMarketFunds() {
                 </div>
               </div>
             )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
