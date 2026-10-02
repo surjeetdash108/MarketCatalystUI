@@ -5,7 +5,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, CandleChart, ChartSelect, TF_OPTIONS, CHART_TYPE_OPTIONS, RsiPane, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings } from "../utils";
+import { fmt, cls, arr, sign, CandleChart, ChartSelect, TF_OPTIONS, CHART_TYPE_OPTIONS, RsiPane, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type ChartHoverOhlc } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
 import { firebaseAuth } from "../../firebase";
 import { apiGet, apiPost, apiDelete } from "../backend";
@@ -616,6 +616,17 @@ export function StockScreen({
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [maStep, setMaStep] = useState(0);
   const [chartMinimized, setChartMinimized] = useState(false);
+  const [hoverOhlc, setHoverOhlc] = useState<ChartHoverOhlc | null>(null);
+
+  const handleBarHover = useCallback((bar: ChartHoverOhlc | null) => {
+    setHoverOhlc(prev => {
+      if (!bar && !prev) return prev;
+      if (bar && prev && bar.o === prev.o && bar.h === prev.h && bar.l === prev.l && bar.c === prev.c && Math.abs(bar.pctChg - prev.pctChg) < 0.001) {
+        return prev;
+      }
+      return bar;
+    });
+  }, []);
 
   // Live overlays for the detail panels — analyst consensus, insider
   // transactions, the full company universe (for peer/sector lookups), sector
@@ -865,6 +876,35 @@ export function StockScreen({
   const avgVol20 = yr.length > 0
     ? yr.slice(-20).reduce((s, b) => s + b.v, 0) / Math.min(20, yr.length)
     : (keyStats?.avgVolume20 ?? null);
+
+  const sessionVol = useMemo(() => {
+    if (yr && yr.length > 0) {
+      const v = yr[yr.length - 1]?.v;
+      if (typeof v === "number" && v > 0) return v;
+    }
+    if (realBars && realBars.length > 0) {
+      const v = realBars[realBars.length - 1]?.v;
+      if (typeof v === "number" && v > 0) return v;
+    }
+    return keyStats?.avgVolume20 ?? null;
+  }, [yr, realBars, keyStats]);
+
+  const defaultOhlc = useMemo(() => {
+    if (realBars && realBars.length > 0) {
+      const b = realBars[realBars.length - 1];
+      const pct = b.o > 0 ? ((b.c - b.o) / b.o) * 100 : 0;
+      return { o: b.o, h: b.h, l: b.l, c: b.c, pctChg: pct };
+    }
+    if (yr && yr.length > 0) {
+      const b = yr[yr.length - 1];
+      const pct = b.o > 0 ? ((b.c - b.o) / b.o) * 100 : 0;
+      return { o: b.o, h: b.h, l: b.l, c: b.c, pctChg: pct };
+    }
+    return null;
+  }, [realBars, yr]);
+
+  const currentOhlc = hoverOhlc ?? defaultOhlc;
+
   const ema50 = ema(yr, 50);
   const sma200 = sma(yr, 200);
 
@@ -1515,6 +1555,30 @@ export function StockScreen({
                   )}
                 </div>
               </div>
+              {/* Volume line: under NVDA text beside logo, above Mkt cap */}
+              <div
+                className="sd-vol"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginTop: 2,
+                  lineHeight: 1.2,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--f-mono)",
+                    fontSize: ".58rem",
+                    fontWeight: 600,
+                    color: "var(--text-dim-solid)",
+                    letterSpacing: ".02em",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Volume <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{sessionVol != null ? fmt(sessionVol) : "—"}</span>
+                </span>
+              </div>
               {/* Second line, under the price: market cap, exchange/sector and
                   the provenance pills. These used to share the identity line
                   with the symbol and quote, which left the header wide and the
@@ -1639,110 +1703,156 @@ export function StockScreen({
           <div style={{ gridColumn: "1 / -1" }}>
             {/* Chart card */}
             <div className="card">
-            <div className="chart-toolbar">
-              <ChartSelect value={tfActive} options={TF_OPTIONS} onChange={setTfActive} title="Timeframe" />
-              <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
-              <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
-              <button className={`rng indbtn${maStep > 0 ? " on" : ""}`}
-                onClick={() => setMaStep(s => (s + 1) % 5)}>
-                SMA {[9,21,50,200].map((p, i) => (
-                  <span key={p} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>
-                    {i > 0 ? '/' : ''}{p}
+              <div className="chart-toolbar">
+                <ChartSelect value={tfActive} options={TF_OPTIONS} onChange={setTfActive} title="Timeframe" />
+                <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
+                <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
+                <button className={`rng indbtn${maStep > 0 ? " on" : ""}`}
+                  onClick={() => setMaStep(s => (s + 1) % 5)}>
+                  SMA {[9,21,50,200].map((p, i) => (
+                    <span key={p} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>
+                      {i > 0 ? '/' : ''}{p}
+                    </span>
+                  ))}
+                </button>
+                <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`}
+                  onClick={() => setEmaStep(s => (s + 1) % 5)}>
+                  EMA {[9,21,50,200].map((p, i) => (
+                    <span key={p} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>
+                      {i > 0 ? '/' : ''}{p}
+                    </span>
+                  ))}
+                </button>
+                <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
+                <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
+                <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
+                <div style={{ flex: 1 }} />
+                <span style={{ marginRight: 6 }}><VendorTag v="polygon" /></span>
+                {realBars && (
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem", marginRight: 6 }}>
+                    live · Polygon
                   </span>
-                ))}
-              </button>
-              <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`}
-                onClick={() => setEmaStep(s => (s + 1) % 5)}>
-                EMA {[9,21,50,200].map((p, i) => (
-                  <span key={p} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>
-                    {i > 0 ? '/' : ''}{p}
+                )}
+                {barsAsOfLabel && (
+                  <span style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", letterSpacing: ".02em", marginRight: 6 }}>
+                    as of {barsAsOfLabel}
                   </span>
-                ))}
-              </button>
-              <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
-              <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
-              <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
-              <div style={{ flex: 1 }} />
-              <span style={{ marginRight: 6 }}><VendorTag v="polygon" /></span>
-              {realBars && (
-                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem", marginRight: 6 }}>
-                  live · Polygon
-                </span>
-              )}
-              {barsAsOfLabel && (
-                <span style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", letterSpacing: ".02em", marginRight: 6 }}>
-                  as of {barsAsOfLabel}
-                </span>
-              )}
+                )}
+              </div>
 
-              {/* Hide instructions when chart is minimised */}
-              {!chartMinimized && (
-                <span
-                  style={{
-                    fontSize: ".72rem",
-                    color: "var(--text-dim-solid)",
-                    marginRight: 8,
-                  }}
-                >
-                  scroll to zoom · drag to pan · double-click to reset
-                </span>
-              )}
-
-              {/* Always keep Minimise / Maximise button visible */}
-              <button
-                type="button"
-                onClick={() => setChartMinimized(v => !v)}
-                title={chartMinimized ? "Maximise chart" : "Minimise chart"}
-                aria-label={chartMinimized ? "Maximise chart" : "Minimise chart"}
+              {/* Subbar: Zoom hint on left, OHLC data in center, Minimise / Maximise on right */}
+              <div
+                className="chart-subbar"
                 style={{
-                  marginLeft: "auto",
-                  alignSelf: "flex-start",
-                  marginTop: 0,
-                  padding: "5px 10px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 7,
-                  background: "var(--surface-2)",
-                  color: "var(--text-dim-solid)",
-                  cursor: "pointer",
-                  fontSize: ".68rem",
-                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 14px",
+                  borderBottom: chartMinimized ? "none" : "1px solid var(--border-soft)",
+                  gap: 12,
                 }}
               >
-                {chartMinimized ? "Maximise" : "Minimise"}
-              </button>
-            </div>
-
-            {/* Chart content disappears when minimised */}
-            {!chartMinimized && (
-              <>
-                <div
-                  id="chartHost"
-                  style={{ padding: "0 14px 0" }}
-                  ref={chartRef}
-                  onContextMenu={handleChartRightClick}
-                >
-                  <CandleChart
-                    sym={sym}
-                    tf={tfActive}
-                    px={p}
-                    maStep={maStep}
-                    emaStep={emaStep}
-                    showVol={showVol}
-                    chartType={chartType.toLowerCase()}
-                    realBars={realBars}
-                    exchange={ex}
-                    live={
-                      live.tick
-                        ? {
-                            price: live.tick.price,
-                            high: live.tick.high,
-                            low: live.tick.low,
-                          }
-                        : null
-                    }
-                    earnings={showEarnings ? chartEarnings : []}
-                  />
+                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", alignItems: "center" }}>
+                  {!chartMinimized && (
+                    <span
+                      style={{
+                        fontSize: ".72rem",
+                        color: "var(--text-hi)",
+                        letterSpacing: ".01em",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Scroll to zoom · Drag to pan · Double-click to reset
+                    </span>
+                  )}
                 </div>
+
+                <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {!chartMinimized && currentOhlc && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontFamily: "var(--f-mono)",
+                        fontSize: ".72rem",
+                        color: "var(--text-dim-solid)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <span>O <b style={{ color: "var(--text-hi)", fontWeight: 700 }}>${currentOhlc.o.toFixed(2)}</b></span>
+                      <span>H <b style={{ color: "var(--text-hi)", fontWeight: 700 }}>${currentOhlc.h.toFixed(2)}</b></span>
+                      <span>L <b style={{ color: "var(--text-hi)", fontWeight: 700 }}>${currentOhlc.l.toFixed(2)}</b></span>
+                      <span>C <b style={{ color: "var(--text-hi)", fontWeight: 700 }}>${currentOhlc.c.toFixed(2)}</b></span>
+                      <span
+                        style={{
+                          color: currentOhlc.pctChg >= 0 ? "var(--up)" : "var(--down)",
+                          fontWeight: 700,
+                          marginLeft: 2,
+                        }}
+                      >
+                        {currentOhlc.pctChg >= 0 ? "+" : ""}{currentOhlc.pctChg.toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ flex: "1 1 0", display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={() => setChartMinimized(v => !v)}
+                    title={chartMinimized ? "Maximise chart" : "Minimise chart"}
+                    aria-label={chartMinimized ? "Maximise chart" : "Minimise chart"}
+                    style={{
+                      padding: "4px 10px",
+                      border: "1px solid var(--border)",
+                      borderRadius: 7,
+                      background: "var(--surface-2)",
+                      color: "var(--text-dim-solid)",
+                      cursor: "pointer",
+                      fontSize: ".68rem",
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {chartMinimized ? "Maximise" : "Minimise"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Chart content disappears when minimised */}
+              {!chartMinimized && (
+                <>
+                  <div
+                    id="chartHost"
+                    style={{ padding: "0 14px 0" }}
+                    ref={chartRef}
+                    onContextMenu={handleChartRightClick}
+                  >
+                    <CandleChart
+                      sym={sym}
+                      tf={tfActive}
+                      px={p}
+                      maStep={maStep}
+                      emaStep={emaStep}
+                      showVol={showVol}
+                      chartType={chartType.toLowerCase()}
+                      realBars={realBars}
+                      exchange={ex}
+                      live={
+                        live.tick
+                          ? {
+                              price: live.tick.price,
+                              high: live.tick.high,
+                              low: live.tick.low,
+                            }
+                          : null
+                      }
+                      earnings={showEarnings ? chartEarnings : []}
+                      hideHudOhlc={true}
+                      onBarHover={handleBarHover}
+                    />
+                  </div>
 
                 {showRsi && (
                   <div id="rsiHost">

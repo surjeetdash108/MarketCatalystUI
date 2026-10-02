@@ -630,6 +630,14 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
+export type ChartHoverOhlc = {
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  pctChg: number;
+};
+
 type CandleChartProps = {
   sym: string; tf: string; px: number;
   maStep?: number; emaStep?: number;
@@ -642,6 +650,10 @@ type CandleChartProps = {
   live?: { price: number; high: number | null; low: number | null } | null;
   /** Reported quarters to mark on the chart. Omit (or pass []) to hide them. */
   earnings?: ChartEarnings[];
+  /** Hide floating OHLC line inside the chart canvas (e.g. when rendered in toolbar). */
+  hideHudOhlc?: boolean;
+  /** Callback fired whenever the hovered bar or latest bar changes. */
+  onBarHover?: (bar: ChartHoverOhlc | null) => void;
 };
 
 /**
@@ -661,7 +673,7 @@ export function CandleChart(props: CandleChartProps) {
 
 function CandleChartInner({
   sym, tf, px, maStep = 0, emaStep = 0, showVol = true, chartType = "candles", exchange, realBars, live,
-  earnings = [],
+  earnings = [], hideHudOhlc, onBarHover,
 }: CandleChartProps) {
   /** Bar index under the pointer — drives the crosshair guides, the right-axis
    *  price readout, and the HUD's OHLC row (falls back to the last bar). */
@@ -980,6 +992,18 @@ function CandleChartInner({
   const dispBar = visible[hoverInRange ? (hoverIdx as number) : vn - 1];
   const dispChg = (dispBar.c - dispBar.o) / dispBar.o * 100;
 
+  useEffect(() => {
+    if (onBarHover && dispBar) {
+      onBarHover({
+        o: dispBar.o,
+        h: dispBar.h,
+        l: dispBar.l,
+        c: dispBar.c,
+        pctChg: dispChg,
+      });
+    }
+  }, [onBarHover, dispBar, dispChg]);
+
   return (
     <div style={{ position: "relative" }}>
       {/* HUD legend — ticker/interval header, an OHLC+change readout that
@@ -992,12 +1016,14 @@ function CandleChartInner({
           <span className="chart-hud-sym">{sym}</span>
           <span className="chart-hud-tf">· {TF_LABELS[tf] ?? tf}{exchange ? ` · ${exchange}` : ""}</span>
         </div> */}
-        <div className="chart-hud-ohlc">
-          O<b>${dispBar.o.toFixed(2)}</b>H<b>${dispBar.h.toFixed(2)}</b>L<b>${dispBar.l.toFixed(2)}</b>C<b>${dispBar.c.toFixed(2)}</b>
-          <span style={{ color: dispChg >= 0 ? "var(--up)" : "var(--down)" }}>
-            {dispChg >= 0 ? "+" : ""}{dispChg.toFixed(2)}%
-          </span>
-        </div>
+        {!hideHudOhlc && (
+          <div className="chart-hud-ohlc">
+            O<b>${dispBar.o.toFixed(2)}</b>H<b>${dispBar.h.toFixed(2)}</b>L<b>${dispBar.l.toFixed(2)}</b>C<b>${dispBar.c.toFixed(2)}</b>
+            <span style={{ color: dispChg >= 0 ? "var(--up)" : "var(--down)" }}>
+              {dispChg >= 0 ? "+" : ""}{dispChg.toFixed(2)}%
+            </span>
+          </div>
+        )}
         {showVol && !removedIds.has("vol") && (
           <div className={`chart-hud-row${hiddenIds.has("vol") ? " dim" : ""}`}>
             <i style={{ background: "var(--text-dim-solid)" }} />Volume <b>{fmt(lastBar.v)}</b>
