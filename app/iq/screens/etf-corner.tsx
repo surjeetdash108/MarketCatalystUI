@@ -67,6 +67,7 @@ export function EtfMarketFunds() {
   const [activeSectionId, setActiveSectionId] = useState<string>("largest");
   const [selectedFundTicker, setSelectedFundTicker] = useState<string | null>(null);
   const [page, setPage] = useState<number>(0);
+  const [popularOpen, setPopularOpen] = useState<boolean>(true);
 
   // Dynamic API-driven ETF Discovery & Classification dataset
   const { data: etfData, loading, error } = useApiResource<EtfMarketResponse>(
@@ -198,7 +199,7 @@ export function EtfMarketFunds() {
               <StockScreenEmbed
                 key={selectedEtf}
                 initialSym={selectedEtf}
-                visibleTabs={["chart", "news"]}
+                visibleTabs={["chart", "overview", "holdings", "news"]}
               />
             </div>
           </div>
@@ -257,76 +258,87 @@ export function EtfMarketFunds() {
       </div>
 
       <div className="dash" style={{ paddingBottom: 30 }}>
-        {/* ── Section: Popular ETFs (Hardcoded 16) ── */}
-        <div className="col-12" style={{ marginBottom: 12 }}>
-          <div style={{ marginBottom: 10 }}>
-            <h2
-              style={{
-                fontSize: "1.08rem",
-                fontWeight: 700,
-                color: "var(--text-hi)",
-                margin: 0,
-                letterSpacing: "-.01em",
-              }}
+        {/* ── Section: Popular ETFs (Collapsible like What Matters Now in Dashboard) ── */}
+        <div className="col-12" style={{ marginBottom: 14 }}>
+          <div className={`wmn${popularOpen ? " open" : ""}`}>
+            <button
+              type="button"
+              className="wmn-h"
+              aria-expanded={popularOpen}
+              onClick={() => setPopularOpen(o => !o)}
             >
-              Popular ETFs
-            </h2>
-          </div>
-
-          <div>
-            {filteredPopular.length === 0 ? (
-              <div
-                style={{
-                  padding: "24px 0",
-                  textAlign: "center",
-                  color: "var(--text-dim-solid)",
-                  fontSize: ".82rem",
-                }}
-              >
-                No ETFs match “{query}”.
+              <div className="t">
+                <div className="wmn-orb">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
+                  </svg>
+                </div>
+                <h2>Popular ETFs</h2>
               </div>
-            ) : (
-              <div className="etf-top-grid">
-                {filteredPopular.map(c => (
-                  <button
-                    key={c.symbol}
-                    type="button"
-                    onClick={() => setSelectedEtf(c.symbol)}
-                    className="card etf-card"
+              <span style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
+                <span className="wmn-live"><span className="dot" />16 Funds</span>
+                <svg className="wmn-chev" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </button>
+            <div className="wmn-collapse">
+              <div className="wmn-collapse-inner">
+                {filteredPopular.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "24px 0",
+                      textAlign: "center",
+                      color: "var(--text-dim-solid)",
+                      fontSize: ".82rem",
+                    }}
                   >
-                    <div className="card-b">
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          marginBottom: 4,
-                        }}
+                    No ETFs match “{query}”.
+                  </div>
+                ) : (
+                  <div className="etf-top-grid" style={{ paddingTop: 4 }}>
+                    {filteredPopular.map(c => (
+                      <button
+                        key={c.symbol}
+                        type="button"
+                        onClick={() => setSelectedEtf(c.symbol)}
+                        className="card etf-card"
                       >
-                        <StockLogo sym={c.symbol} size={20} />
-                        <h3
-                          style={{
-                            margin: 0,
-                            fontSize: ".88rem",
-                            fontWeight: 700,
-                            color: "var(--text-hi)",
-                          }}
-                        >
-                          {c.symbol}
-                        </h3>
-                      </div>
+                        <div className="card-b">
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              marginBottom: 4,
+                            }}
+                          >
+                            <StockLogo sym={c.symbol} size={20} />
+                            <h3
+                              style={{
+                                margin: 0,
+                                fontSize: ".88rem",
+                                fontWeight: 700,
+                                color: "var(--text-hi)",
+                              }}
+                            >
+                              {c.symbol}
+                            </h3>
+                          </div>
 
-                      <p
-                        title={c.name}
-                        className="etf-card-title"
-                      >
-                        {c.name}
-                      </p>
-                    </div>
-                  </button>
-                ))}
+                          <p
+                            title={c.name}
+                            className="etf-card-title"
+                          >
+                            {c.name}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
@@ -852,6 +864,7 @@ export function EtfMarketFunds() {
                   <StockScreenEmbed
                     key={selectedFundTicker}
                     initialSym={selectedFundTicker}
+                    visibleTabs={["chart", "overview", "holdings", "news"]}
                   />
                 </div>
               </div>
