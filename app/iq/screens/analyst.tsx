@@ -72,9 +72,19 @@ export function AnalystScreen() {
   const [showAllClusters, setShowAllClusters] = useState(false);
 
   const priceByTicker = useMemo(
-    () => new Map(companies.filter(c => c.ticker).map(c => [c.ticker as string, c.price ?? null])),
+    () => new Map(companies.filter(c => c.ticker).map(c => [c.ticker.trim().toUpperCase(), c.price ?? null])),
     [companies],
   );
+
+  const companyNameByTicker = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of companies) {
+      if (c.ticker) {
+        map.set(c.ticker.trim().toUpperCase(), c.name?.trim() || "");
+      }
+    }
+    return map;
+  }, [companies]);
 
   /** A price target more than 10x above, or below a tenth of, the live price is
    *  a stale/unadjusted target rather than a real call — the vendor doesn't
@@ -84,16 +94,19 @@ export function AnalystScreen() {
     pt != null && px != null && px > 0 && pt <= px * 10 && pt >= px * 0.1;
 
   const upside = (pt: number | null | undefined, ticker: string): number | null => {
-    const px = priceByTicker.get(ticker);
+    const px = priceByTicker.get(ticker.trim().toUpperCase());
     if (!targetIsSane(pt, px)) return null;
     return (pt! - px!) / px! * 100;
   };
 
   // Flatten every ticker's recent per-firm rating changes into one feed.
   const allActions = useMemo(() => {
-    const rows = liveConsensus.flatMap(c =>
-      (c.recentGrades ?? []).map(g => ({
-        ticker: c.ticker,
+    const rows = liveConsensus.flatMap(c => {
+      const sym = (c.ticker || "").trim().toUpperCase();
+      const companyName = companyNameByTicker.get(sym) || "";
+      return (c.recentGrades ?? []).map(g => ({
+        ticker: sym,
+        companyName,
         // THIS firm's own target (not the ticker consensus — that made every
         // row identical). null shows "—" when the firm posted no target.
         pt: g.priceTarget ?? null,
@@ -102,10 +115,10 @@ export function AnalystScreen() {
         previousGrade: g.previousGrade,
         newGrade: g.newGrade,
         action: g.action,
-      })),
-    );
+      }));
+    });
     return rows.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
-  }, [liveConsensus]);
+  }, [liveConsensus, companyNameByTicker]);
 
   // Cluster = >=2 distinct firms with a recent action on the same ticker.
   const clusters = useMemo(() => {
@@ -138,7 +151,13 @@ export function AnalystScreen() {
   const filteredActions = allActions
     .filter(a => actionMatches(a.action, tab))
     .filter(a => !clustersOnly || clusterSet.has(a.ticker))
-    .filter(a => !actQ || a.ticker.toUpperCase().includes(actQ));
+    .filter(a => {
+      if (!actQ) return true;
+      const tickerUpper = a.ticker.toUpperCase();
+      const companyUpper = (a.companyName || "").toUpperCase();
+      // Strictly search ONLY ticker name and company name
+      return tickerUpper.includes(actQ) || companyUpper.includes(actQ);
+    });
   // Sort the whole filtered list (not just the visible page) so "Show more"
   // continues in the same order. Empty values always sink to the bottom.
   if (actSort) {
@@ -160,6 +179,29 @@ export function AnalystScreen() {
       if (b == null || b === "") return -1;
       return (typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b))) * m;
     });
+  } else if (actQ) {
+    // When searching without an explicit column sort, prioritize highest relevance matches:
+    // 1. Exact ticker match (e.g. ticker === "MU")
+    // 2. Ticker prefix match (e.g. ticker starts with "MU")
+    // 3. Company name starts with query or contains word starting with query
+    // 4. Ticker contains query
+    // 5. Company name contains query
+    // Within the same relevance tier, sort by newest date first.
+    const score = (item: typeof filteredActions[number]): number => {
+      const tkr = item.ticker.toUpperCase();
+      const comp = (item.companyName || "").toUpperCase();
+      if (tkr === actQ) return 0;
+      if (tkr.startsWith(actQ)) return 1;
+      if (comp.startsWith(actQ) || comp.split(/\s+/).some(w => w.startsWith(actQ))) return 2;
+      if (tkr.includes(actQ)) return 3;
+      if (comp.includes(actQ)) return 4;
+      return 5;
+    };
+    filteredActions.sort((x, y) => {
+      const sDiff = score(x) - score(y);
+      if (sDiff !== 0) return sDiff;
+      return (y.date ?? "").localeCompare(x.date ?? "");
+    });
   }
   const feedRows = filteredActions.slice(0, shown);
   /** First click: the column's natural direction; second: reverse; third: back to newest first. */
@@ -180,8 +222,22 @@ export function AnalystScreen() {
 
   const consQ = consQuery.trim().toUpperCase();
   const consensusRows = [...liveConsensus]
-    .filter(c => !consQ || c.ticker.toUpperCase().includes(consQ))
-    .sort((a, b) => (b.strongBuy + b.buy) - (a.strongBuy + a.buy))
+    .filter(c => {
+      if (!consQ) return true;
+      const tkrUpper = c.ticker.toUpperCase();
+      const compName = (companyNameByTicker.get(tkrUpper) || "").toUpperCase();
+      return tkrUpper.includes(consQ) || compName.includes(consQ);
+    })
+    .sort((a, b) => {
+      if (consQ) {
+        const aTkr = a.ticker.toUpperCase();
+        const bTkr = b.ticker.toUpperCase();
+        const aScore = aTkr === consQ ? 0 : aTkr.startsWith(consQ) ? 1 : 2;
+        const bScore = bTkr === consQ ? 0 : bTkr.startsWith(consQ) ? 1 : 2;
+        if (aScore !== bScore) return aScore - bScore;
+      }
+      return (b.strongBuy + b.buy) - (a.strongBuy + a.buy);
+    })
     .slice(0, consQ ? 50 : 8); // top 8 by default; up to 50 matches when searching
 
   // ── Analysts view: the same actions grouped BY analyst firm, honoring the
@@ -294,8 +350,8 @@ export function AnalystScreen() {
                 <h3>Price Targets <VendorTag v={["fmp", "polygon"]} /></h3>
                 <input
                   value={consQuery}
-                  onChange={e => setConsQuery(e.target.value.toUpperCase())}
-                  placeholder="Search ticker…"
+                  onChange={e => setConsQuery(e.target.value)}
+                  placeholder="Search ticker or company…"
                   style={{ width: 230, boxSizing: "border-box", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "5px 9px", fontSize: ".74rem", color: "var(--text-hi)", outline: "none", fontFamily: "var(--f-mono)", textAlign: "left" }}
                 />
               </div>
@@ -312,7 +368,14 @@ export function AnalystScreen() {
             return (
               <div key={c.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(c.ticker)}>
                 <StockLogo sym={c.ticker} size={20} />
-                <span className="tkr">{c.ticker}</span>
+                <div className="co" style={{ minWidth: 90, maxWidth: 170, marginRight: 8 }}>
+                  <span className="s" style={{ fontSize: ".78rem" }}>{c.ticker}</span>
+                  {companyNameByTicker.get(c.ticker.toUpperCase()) && (
+                    <span className="n" title={companyNameByTicker.get(c.ticker.toUpperCase())}>
+                      {companyNameByTicker.get(c.ticker.toUpperCase())}
+                    </span>
+                  )}
+                </div>
                 <span className="mid" style={{ display: "flex", alignItems: "center", gap: 1, flex: 1, minWidth: 60 }}>
                   <span style={{ width: `${c.strongBuy / total * 100}%`, minWidth: c.strongBuy ? 3 : 0, height: 6, background: "var(--up)", borderRadius: 2 }} />
                   <span style={{ width: `${c.buy / total * 100}%`, minWidth: c.buy ? 3 : 0, height: 6, background: "var(--up)", opacity: .6, borderRadius: 2 }} />
@@ -346,13 +409,13 @@ export function AnalystScreen() {
       {/* ── Per-firm analyst actions ── */}
       <div className="card">
         <div className="card-h">
-          {/* Search sits on the LEFT, next to the title — filters THIS table's rows by ticker. */}
+          {/* Search sits on the LEFT, next to the title — filters THIS table's rows strictly by ticker or company name. */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h3>Analyst Actions <VendorTag v={["fmp", "polygon"]} /></h3>
             <input
               value={actQuery}
-              onChange={e => { setActQuery(e.target.value.toUpperCase()); setShown(40); }}
-              placeholder="Search ticker…"
+              onChange={e => { setActQuery(e.target.value); setShown(40); }}
+              placeholder="Search ticker or company…"
               style={{ width: 230, boxSizing: "border-box", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "5px 9px", fontSize: ".74rem", color: "var(--text-hi)", outline: "none", fontFamily: "var(--f-mono)", textAlign: "left" }}
             />
           </div>
@@ -362,7 +425,7 @@ export function AnalystScreen() {
           <table className="tbl">
             <thead>
               <tr>
-                {actTh("ticker", "Ticker")}{actTh("firm", "Firm")}{actTh("action", "Action")}
+                {actTh("ticker", "Ticker / Company")}{actTh("firm", "Firm")}{actTh("action", "Action")}
                 {actTh("grade", "Previous → New")}
                 {actTh("pt", "PT", true)}{actTh("upside", "Upside", true)}
                 {actTh("date", "Date", true)}
@@ -379,7 +442,17 @@ export function AnalystScreen() {
                   const up = upside(a.pt, a.ticker);
                   return (
                   <tr key={`${a.ticker}-${a.firm}-${a.date}-${i}`} style={{ cursor: "pointer" }} onClick={() => openStock(a.ticker)}>
-                    <td style={{ display: "flex", alignItems: "center", gap: 6 }}><StockLogo sym={a.ticker} size={16} /> {a.ticker}</td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <StockLogo sym={a.ticker} size={20} />
+                        <div className="co" style={{ minWidth: 0, maxWidth: 220 }}>
+                          <span className="s">{a.ticker}</span>
+                          {a.companyName && (
+                            <span className="n" title={a.companyName}>{a.companyName}</span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
                     <td>{a.firm ?? "—"}</td>
                     <td><span style={{ color: actionTone(a.action), fontWeight: 600, textTransform: "capitalize" }}>{a.action ?? "—"}</span></td>
                     <td style={{ color: "var(--text-dim-solid)" }}>{a.previousGrade ?? "—"} <span style={{ opacity: .6 }}>→</span> <b style={{ color: "var(--text)" }}>{a.newGrade ?? "—"}</b></td>
@@ -498,12 +571,22 @@ export function AnalystScreen() {
                 <div style={{ overflowX: "auto" }}>
                 <table className="tbl">
                   <thead>
-                    <tr><th>Ticker</th><th>Action</th><th>Previous → New</th><th className="num">Date</th></tr>
+                    <tr><th>Ticker / Company</th><th>Action</th><th>Previous → New</th><th className="num">Date</th></tr>
                   </thead>
                   <tbody>
                     {selAnalystActions.map((a, i) => (
                       <tr key={`${a.ticker}-${a.date}-${i}`} style={{ cursor: "pointer" }} onClick={() => { openStock(a.ticker); setSelAnalyst(null); }}>
-                        <td><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><StockLogo sym={a.ticker} size={16} /> {a.ticker}</span></td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <StockLogo sym={a.ticker} size={18} />
+                            <div className="co" style={{ minWidth: 0, maxWidth: 180 }}>
+                              <span className="s">{a.ticker}</span>
+                              {a.companyName && (
+                                <span className="n" title={a.companyName}>{a.companyName}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
                         <td style={{ color: actionTone(a.action), fontWeight: 600, textTransform: "capitalize" }}>{a.action ?? "—"}</td>
                         <td style={{ color: "var(--text-dim-solid)" }}>{a.previousGrade ?? "—"} → {a.newGrade ?? "—"}</td>
                         <td className="num" style={{ color: "var(--text-dim-solid)" }}>{shortDate(a.date)}</td>
