@@ -436,7 +436,23 @@ export function EtfMarketFunds() {
                         fontSize: ".8rem",
                       }}
                     >
-                      {error ? `Failed to load ETFs: ${error}` : `No funds match “${query}”.`}
+                      {error ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                          <span style={{ color: "#ef4444", fontSize: ".82rem" }}>
+                            Failed to load ETF funds. Please retry.
+                          </span>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => window.location.reload()}
+                            style={{ fontSize: ".76rem", padding: "4px 12px" }}
+                          >
+                            ↻ Retry
+                          </button>
+                        </div>
+                      ) : (
+                        `No funds match “${query}”.`
+                      )}
                     </div>
                   ) : (
                     <>
