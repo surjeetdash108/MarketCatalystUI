@@ -8,6 +8,7 @@ export interface LiveMoverDoc {
   volume: number;
   rvol?: number | null;
   sector: string | null;
+  industry?: string | null;
   cap: string | null;
   /** Raw USD market cap from the movers job's Polygon ticker-details enrichment.
    *  Present for micro-caps outside the tracked `companies` universe, where the

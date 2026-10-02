@@ -26,6 +26,7 @@ export interface Mover {
   ticker: string; name: string; price: number; pctChange: number; rvolRatio: number; relativeStrength: number;
   maPosture: string; owned: boolean;
   sector: string;
+  industry?: string | null;
   /** Market-cap bucket, derived from `marketCap` — see capFromMarketCap.
       'Micro' was missing from this union even though the board has always shown
       it, so every assignment was written `as Mover["cap"]` and the cast hid the

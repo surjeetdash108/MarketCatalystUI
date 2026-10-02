@@ -102,35 +102,36 @@ const SORT_FIRST_DIR: Record<MoverSortKey, "asc" | "desc"> = {
  * has no catalyst feed, so it only ever showed "—".)
  */
 
+interface CanonicalMoverClassification {
+  name: string;
+  sector: string;
+  industry: string | null;
+  marketCap: number | null;
+  cap: Mover["cap"];
+}
+
 function mergeMovers(
   live: LiveMoverDoc[],
   companyByTicker: Map<string, CompanyDoc>,
+  resolveClassification: (ticker: string) => CanonicalMoverClassification,
 ): Mover[] {
   return uniqueByTicker(live.filter(l => !isLeveragedProduct(l.name))).map(l => {
-    const c = companyByTicker.get(l.ticker);
-    const mcap = l.marketCap ?? c?.marketCap ?? null;
+    const sym = l.ticker?.trim().toUpperCase();
+    const c = companyByTicker.get(sym);
+    const canon = resolveClassification(l.ticker);
     return {
       ticker: l.ticker,
-      name: l.name ?? l.ticker,
+      name: canon.name,
       price: l.price,
       pctChange: l.pctChange,
       rvolRatio: l.rvol ?? c?.rvol ?? 0,
       relativeStrength: 0,
       maPosture: maPostureLabel(c?.aboveSma50, c?.aboveSma200),
       owned: false,
-      sector: l.sector ?? c?.sector ?? "—",
-      // Prefer the mover doc's own market cap (covers micro-caps outside the
-      // tracked universe); fall back to the companies doc for tracked names.
-      marketCap: mcap,
-      /* Bucketed from the SAME figure the Mkt Cap column prints.
-         It used to read the mover doc's pre-bucketed `l.cap` while the number
-         beside it could come from the companies doc — two sources for one fact,
-         so a row could show "$33M" labelled "Mid". Worse, the fallback was a
-         literal `?? "Mid"`: a ticker with no bucket was ASSERTED to be mid-cap
-         rather than left unknown, and the Market cap filter then matched it.
-         Derived from the printed number, the two cannot disagree; `l.cap` is
-         still the fallback for a row whose cap figure is missing entirely. */
-      cap: mcap != null ? capFromMarketCap(mcap) : ((l.cap as Mover["cap"] | null) ?? "—"),
+      sector: canon.sector,
+      industry: canon.industry,
+      marketCap: canon.marketCap,
+      cap: canon.cap,
       // Real 5-session change from technical-indicators.job; null → "—".
       weekPct: c?.week5ChangePct ?? null,
       weekBase: c?.week5BaseClose ?? null,
@@ -143,38 +144,101 @@ function mergeMovers(
 export function MoversScreen() {
   const { data: liveMovers, loading: moversLoading, error: moversError } = useApiList<LiveMoverDoc>("/market-data/movers");
   const { data: rvolCompanies, loading: companiesLoading, error: companiesError } = useApiList<CompanyDoc>("/market-data/companies");
-  const companyByTicker = new Map(rvolCompanies.map(c => [c.ticker, c]));
-  const movers = mergeMovers(liveMovers, companyByTicker);
+  const companyByTicker = useMemo(
+    () => new Map(rvolCompanies.map(c => [c.ticker?.trim().toUpperCase(), c])),
+    [rvolCompanies],
+  );
+  const liveMoverByTicker = useMemo(
+    () => new Map(liveMovers.map(l => [l.ticker?.trim().toUpperCase(), l])),
+    [liveMovers],
+  );
+
+  /**
+   * CANONICAL CLASSIFICATION RESOLVER:
+   * Guarantees that for any ticker T, Top Gainers, Top Losers, Unusual Volume,
+   * Weekly Gainers, and Weekly Losers always receive the exact same:
+   * - Company Name
+   * - Sector (authoritative SEC EDGAR SIC -> TradingView RBICS taxonomy, freshly enriched)
+   * - Industry
+   * - Market Cap figure
+   * - Market Cap classification bucket ('Mega' | 'Large' | 'Mid' | 'Small' | 'Micro' | '—')
+   */
+  const canonicalClassification = useCallback((ticker: string): CanonicalMoverClassification => {
+    const sym = ticker?.trim().toUpperCase();
+    const l = liveMoverByTicker.get(sym);
+    const c = companyByTicker.get(sym);
+
+    // 1. Company Name: prefer canonical company doc name, fall back to mover doc
+    const name = (c?.name && c.name !== sym ? c.name : l?.name) ?? c?.name ?? sym;
+
+    // 2. Market Cap: prefer canonical company market cap, fall back to mover doc
+    const marketCap = (c?.marketCap != null && c.marketCap > 0)
+      ? c.marketCap
+      : (l?.marketCap != null && l.marketCap > 0)
+        ? l.marketCap
+        : null;
+
+    // 3. Cap tier: strictly derived from marketCap figure using capFromMarketCap thresholds
+    const cap: Mover["cap"] = marketCap != null ? capFromMarketCap(marketCap) : ((l?.cap as Mover["cap"] | null) ?? "—");
+
+    // 4. Sector: canonical companies collection primary (SIC -> RBICS), fall back to mover doc
+    const sector = (c?.sector && c.sector !== "—")
+      ? c.sector
+      : (l?.sector && l.sector !== "—")
+        ? l.sector
+        : "—";
+
+    // 5. Industry: canonical companies collection primary, fall back to mover doc
+    const industry = (c?.industry && c.industry !== "—")
+      ? c.industry
+      : (l?.industry && l.industry !== "—")
+        ? l.industry
+        : null;
+
+    return { name, sector, industry, marketCap, cap };
+  }, [liveMoverByTicker, companyByTicker]);
+
+  const movers = useMemo(
+    () => mergeMovers(liveMovers, companyByTicker, canonicalClassification),
+    [liveMovers, companyByTicker, canonicalClassification],
+  );
 
   /** One `companies` doc as a board row. Shared by every tab built from the
    *  tracked universe rather than the daily movers feed. */
-  const companyRow = (c: CompanyDoc): Mover => ({
-    ticker: c.ticker,
-    name: c.name ?? c.ticker,
-    price: c.price ?? 0,
-    // pctChange stays TODAY's move (the Price column and live overlay still
-    // want it); the weekly number lives in weekPct.
-    pctChange: c.pctChange ?? 0,
-    rvolRatio: c.rvol ?? 0,
-    relativeStrength: 0,
-    maPosture: maPostureLabel(c.aboveSma50, c.aboveSma200),
-    owned: false,
-    sector: c.sector ?? "—",
-    cap: capFromMarketCap(c.marketCap),
-    marketCap: c.marketCap ?? null,
-    weekPct: c.week5ChangePct ?? c.pctChange ?? null,
-    weekBase: c.week5BaseClose ?? null,
-    techContext: "",
-    newsContext: "",
-  });
+  const companyRow = useCallback((c: CompanyDoc): Mover => {
+    const canon = canonicalClassification(c.ticker);
+    return {
+      ticker: c.ticker,
+      name: canon.name,
+      price: c.price ?? 0,
+      // pctChange stays TODAY's move (the Price column and live overlay still
+      // want it); the weekly number lives in weekPct.
+      pctChange: c.pctChange ?? 0,
+      rvolRatio: c.rvol ?? 0,
+      relativeStrength: 0,
+      maPosture: maPostureLabel(c.aboveSma50, c.aboveSma200),
+      owned: false,
+      sector: canon.sector,
+      industry: canon.industry,
+      cap: canon.cap,
+      marketCap: canon.marketCap,
+      weekPct: c.week5ChangePct ?? c.pctChange ?? null,
+      weekBase: c.week5BaseClose ?? null,
+      techContext: "",
+      newsContext: "",
+    };
+  }, [canonicalClassification]);
 
   // Leveraged/inverse products are excluded from every universe-built tab for
   // the same reason mergeMovers excludes them from the daily feed: a 2x ETF's
   // move is a multiple of something else's.
-  const universeRows = uniqueByTicker(
-    rvolCompanies.filter(
-      c => c.ticker && !isLeveragedProduct(c.name),
-    )
+  const universeRows = useMemo(
+    () => uniqueByTicker(
+      rvolCompanies.filter(
+        c => c.ticker && !isLeveragedProduct(canonicalClassification(c.ticker).name),
+      )
+    ),
+    [rvolCompanies, canonicalClassification],
   );
 
   /**
@@ -183,9 +247,12 @@ export function MoversScreen() {
    * outside the tracked universe — so only ~46 of its 200 rows carry
    * `week5ChangePct` at all, which made the weekly board look broken.
    */
-  const weeklyRows: Mover[] = universeRows
-    .filter(c => typeof c.week5ChangePct === "number" || typeof c.pctChange === "number")
-    .map(companyRow);
+  const weeklyRows: Mover[] = useMemo(
+    () => universeRows
+      .filter(c => typeof c.week5ChangePct === "number" || typeof c.pctChange === "number")
+      .map(companyRow),
+    [universeRows, companyRow],
+  );
 
   /**
    * UNUSUAL VOLUME, ranked across the whole tracked universe.
@@ -224,12 +291,13 @@ export function MoversScreen() {
     if (served.length > 0) {
       return uniqueByTicker(
         served.filter(
-          l => !isLeveragedProduct(companyByTicker.get(l.ticker)?.name)
+          l => !isLeveragedProduct(canonicalClassification(l.ticker).name)
         )
       ).map(l => {
-          const c = companyByTicker.get(l.ticker);
+          const c = companyByTicker.get(l.ticker?.trim().toUpperCase());
+          const baseRow = companyRow(c ?? ({ ticker: l.ticker } as CompanyDoc));
           return {
-            ...companyRow(c ?? ({ ticker: l.ticker } as CompanyDoc)),
+            ...baseRow,
             // The served row is the authority for the volume numbers; the
             // companies doc only supplies name/sector/cap where we track it.
             price: l.close ?? c?.price ?? 0,
@@ -241,8 +309,7 @@ export function MoversScreen() {
     return universeRows
       .filter(c => typeof c.rvol === "number" && (c.rvol as number) > 0)
       .map(companyRow);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [volumeLeaders, rvolCompanies]);
+  }, [volumeLeaders, universeRows, companyByTicker, canonicalClassification, companyRow]);
 
 
   const [tab,          setTab]          = useState<TabKey>("win");
@@ -306,7 +373,14 @@ export function MoversScreen() {
     else { setToastKind("error"); setToast(res.message); }
   }, [watchedSet, watchlists, addTicker, createList]);
 
-  const sectors = sectorFilterOptions(rvolCompanies);
+  const allSectorsSource = useMemo(
+    () => [...movers, ...weeklyRows, ...volumeRows, ...rvolCompanies],
+    [movers, weeklyRows, volumeRows, rvolCompanies],
+  );
+  const sectors = useMemo(
+    () => sectorFilterOptions(allSectorsSource),
+    [allSectorsSource],
+  );
 
   // Only the cap tiers present in the current feed are selectable; if the chosen
   // tier is no longer present (data refreshed), behave as "All".
