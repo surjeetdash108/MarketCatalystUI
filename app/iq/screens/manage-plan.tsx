@@ -16,7 +16,7 @@ const FEATURES = [
   { label: "Screener with all filters", free: false, premium: true },
   { label: "Weekly Recaps (PDF export)", free: false, premium: true },
   { label: "Analyst Actions feed", free: false, premium: true },
-  { label: "Macro & VIX calendar", free: true, premium: true },
+  { label: "Calendar", free: true, premium: true },
   { label: "Priority support", free: false, premium: true },
 ];
 

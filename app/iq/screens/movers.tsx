@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { fmtDate } from "../calendar-range";
 import dynamic from "next/dynamic";
 import { type Mover, maPostureLabel, isLeveragedProduct } from "../data";
-import { fmt, sign, arr, StockLogo, DataState, VendorTag, titleCaseLabel} from "../utils";
+import { fmt, sign, arr, StockLogo, DataState, VendorTag, titleCaseLabel, cls } from "../utils";
 import { apiGet } from "../backend";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
@@ -19,16 +19,206 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
 
+interface ScanItem {
+  ticker: string;
+  name: string | null;
+  pctChange: number | null;
+  price?: number | null;
+  volume?: number | null;
+  rvol?: number | null;
+}
+interface SectorGroup {
+  sector: string;
+  items: ScanItem[];
+}
+interface BiggestPctScan {
+  generatedAt: string;
+  gainers: SectorGroup[];
+  losers: SectorGroup[];
+}
+
+const scanTime = (iso?: string) =>
+  iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+
 const TABS = [
   ["win",      "Top Gainers"],
   ["lose",     "Top Losers"],
+  ["biggest",  "Biggest %"],
   ["vol",      "Unusual Volume"],
   ["weekwin",  "Weekly Gainers"],
   ["weeklose", "Weekly Losers"],
 ] as const;
-type TabKey = "win" | "lose" | "vol" | "weekwin" | "weeklose";
+type TabKey = "win" | "lose" | "biggest" | "vol" | "weekwin" | "weeklose";
 /** True for the two 5-day tabs, which rank on weekPct rather than today's move. */
 const isWeekTab = (t: TabKey) => t === "weekwin" || t === "weeklose";
+
+function ScanSection({
+  title,
+  color,
+  groups,
+  onSelect,
+}: {
+  title: string;
+  color: string;
+  groups: SectorGroup[];
+  onSelect: (sym: string) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: ".82rem",
+          color,
+          marginBottom: 10,
+          textTransform: "uppercase",
+          letterSpacing: ".04em",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <span>{title}</span>
+      </div>
+
+      {(!groups || groups.length === 0) ? (
+        <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", padding: "14px 0" }}>
+          No stocks match the selected filters.
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: 12,
+          }}
+        >
+          {groups.map((g) => {
+            const up = g.items.filter(it => (it.pctChange ?? 0) >= 0).length;
+            const down = g.items.length - up;
+            const maxAbs = Math.max(...g.items.map(it => Math.abs(it.pctChange ?? 0)), 1);
+
+            return (
+              <div
+                key={g.sector}
+                style={{
+                  background: "var(--surface-1)",
+                  border: "1px solid var(--border-soft)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Sector header */}
+                <div
+                  style={{
+                    padding: "10px 12px 8px",
+                    borderBottom: "1px solid var(--border-soft)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ fontSize: ".78rem", fontWeight: 700, color: "var(--text-hi)" }}>
+                    {titleCaseLabel(g.sector)}
+                  </span>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".62rem", whiteSpace: "nowrap" }}>
+                    <span style={{ color: "var(--up)" }}>▲ {up}</span>{" "}
+                    <span style={{ color: "var(--down)" }}>▼ {down}</span>
+                  </span>
+                </div>
+
+                {/* Stocks */}
+                <div>
+                  {g.items.map((it) => {
+                    const pct = it.pctChange ?? 0;
+                    const width = Math.min(100, Math.max(4, (Math.abs(pct) / maxAbs) * 100));
+                    return (
+                      <button
+                        key={it.ticker}
+                        type="button"
+                        onClick={() => onSelect(it.ticker)}
+                        style={{
+                          width: "100%",
+                          display: "grid",
+                          gridTemplateColumns: "minmax(64px, auto) minmax(46px, auto) 1fr auto",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "8px 11px",
+                          border: 0,
+                          borderBottom: "1px solid var(--border-soft)",
+                          background: "transparent",
+                          color: "inherit",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                          <StockLogo sym={it.ticker} size={20} />
+                          <b style={{ fontFamily: "var(--f-mono)", fontSize: ".74rem", color: "var(--text-hi)" }}>
+                            {it.ticker}
+                          </b>
+                        </span>
+
+                        <span
+                          style={{
+                            justifySelf: "start",
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".6rem",
+                            fontWeight: 700,
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            background: it.rvol != null ? "rgba(245,181,68,.14)" : "var(--surface-3)",
+                            color: it.rvol != null ? "var(--warn)" : "var(--text-dim-solid)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {it.rvol != null
+                            ? `${it.rvol.toFixed(1)}x`
+                            : it.volume != null
+                              ? `${(it.volume / 1e6).toFixed(1)}M`
+                              : "—"}
+                        </span>
+
+                        <div style={{ height: 6, display: "flex", justifyContent: pct >= 0 ? "flex-start" : "flex-end", overflow: "hidden" }}>
+                          <div
+                            style={{
+                              width: `${width}%`,
+                              maxWidth: "100%",
+                              height: 6,
+                              borderRadius: 2,
+                              background: pct >= 0 ? "var(--up)" : "var(--down)",
+                              opacity: 0.9,
+                            }}
+                          />
+                        </div>
+
+                        <span
+                          className={cls(pct)}
+                          style={{
+                            fontFamily: "var(--f-mono)",
+                            fontSize: ".66rem",
+                            fontWeight: 700,
+                            padding: "3px 6px",
+                            borderRadius: 4,
+                            background: pct >= 0 ? "var(--up-dim)" : "var(--down-dim)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {sign(pct)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Cap tier from a raw USD market cap — same thresholds the Live Feed uses.
@@ -318,6 +508,43 @@ export function MoversScreen() {
   const [sector,       setSector]       = useState("All");
   const [cap,          setCap]          = useState("All");
   const [query,        setQuery]        = useState("");
+
+  const { data: biggestPctData, loading: biggestLoading } = useApiResource<BiggestPctScan>(
+    tab === "biggest" ? "/live/scan/biggest-pct" : null,
+  );
+
+  const filteredBiggest = useMemo(() => {
+    if (!biggestPctData) return null;
+    const sFilter = sector === "all" || sector === "All" ? null : sector.toLowerCase();
+    const qFilter = query.trim().toUpperCase();
+
+    const filterGroups = (groups: SectorGroup[]) => {
+      return groups
+        .map(g => ({
+          ...g,
+          items: g.items.filter(it => {
+            if (!matchesSector(sector, it.ticker, g.sector)) return false;
+            if (qFilter && !it.ticker.toUpperCase().includes(qFilter) && !(it.name && it.name.toUpperCase().includes(qFilter))) {
+              return false;
+            }
+            return true;
+          }),
+        }))
+        .filter(g => g.items.length > 0);
+    };
+
+    return {
+      generatedAt: biggestPctData.generatedAt,
+      gainers: filterGroups(biggestPctData.gainers || []),
+      losers: filterGroups(biggestPctData.losers || []),
+    };
+  }, [biggestPctData, sector, query]);
+
+  const biggestCount = useMemo(() => {
+    if (!filteredBiggest) return 0;
+    return (filteredBiggest.gainers?.reduce((n, g) => n + g.items.length, 0) ?? 0) +
+           (filteredBiggest.losers?.reduce((n, g) => n + g.items.length, 0) ?? 0);
+  }, [filteredBiggest]);
   // Column sort. null = the tab's own ranking (gainers by %chg desc, losers by
   // %chg asc, unusual-volume by RVOL desc). Clicking a header overrides it.
   const [sortKey,      setSortKey]      = useState<MoverSortKey | null>(null);
@@ -669,13 +896,15 @@ export function MoversScreen() {
             Unusual Volume and the two weekly ones, which draw from the tracked
             universe and rank by RVOL or by the 5-day move. It was stating the
             wrong source AND the wrong ranking on three tabs out of five. */}
-        {liveCount > 0 && (
+        {((tab === "biggest" ? biggestCount : liveCount) > 0) && (
           <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-            {liveCount} names · {
-              isWeekTab(tab) ? "tracked universe · ranked by 5-day move"
-              : tab === "vol" ? "tracked universe · ranked by relative volume"
-              : "top 100 gainers + 100 losers · ranked by session move"
-            } · {QUOTE_DELAY_LABEL}
+            {tab === "biggest"
+              ? `${biggestCount} names · top 20 gainers + top 20 losers by sector · ${QUOTE_DELAY_LABEL}`
+              : `${liveCount} names · ${
+                  isWeekTab(tab) ? "tracked universe · ranked by 5-day move"
+                  : tab === "vol" ? "tracked universe · ranked by relative volume"
+                  : "top 100 gainers + 100 losers · ranked by session move"
+                } · ${QUOTE_DELAY_LABEL}`}
           </span>
         )}
       </div>
@@ -686,10 +915,14 @@ export function MoversScreen() {
         <select className="mv-sel" value={sector} onChange={e => setSector(e.target.value)}>
           {sectors.map(s => <option key={s} value={s}>{titleCaseLabel(s)}</option>)}
         </select>
-        <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center", marginLeft: 10 }}>Market cap</span>
-        <select className="mv-sel" value={effCap} onChange={e => setCap(e.target.value)}>
-          {availableCaps.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        {tab !== "biggest" && (
+          <>
+            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center", marginLeft: 10 }}>Market cap</span>
+            <select className="mv-sel" value={effCap} onChange={e => setCap(e.target.value)}>
+              {availableCaps.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </>
+        )}
         <input
           value={query}
           onChange={e => setQuery(e.target.value.toUpperCase())}
@@ -697,9 +930,50 @@ export function MoversScreen() {
           style={{ marginLeft: 10, width: 230, boxSizing: "border-box", background: "var(--surface-3)", border: "1px solid var(--border-soft)", borderRadius: 8, padding: "5px 9px", fontSize: ".74rem", color: "var(--text-hi)", outline: "none", fontFamily: "var(--f-mono)", textAlign: "left" }}
         />
         <div className="spacer" />
-        <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{visible.length} stocks</span>
+        <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+          {tab === "biggest" ? `${biggestCount} stocks` : `${visible.length} stocks`}
+        </span>
       </div>
 
+      {tab === "biggest" ? (
+        <div style={{ marginLeft: 16, marginRight: 20, marginTop: 16 }}>
+          <div className="card">
+            <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: ".9rem", fontWeight: 700, color: "var(--text-hi)" }}>
+                  Today&apos;s Biggest % Gainers &amp; Losers by Sector
+                </h3>
+                <VendorTag v="polygon" />
+              </div>
+              {filteredBiggest?.generatedAt && (
+                <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                  as of {scanTime(filteredBiggest.generatedAt)}
+                </span>
+              )}
+            </div>
+            <div className="card-b" style={{ maxHeight: "none", padding: "16px 18px" }}>
+              {!filteredBiggest ? (
+                <DataState loading={biggestLoading} label="Generating scan…" />
+              ) : (
+                <>
+                  <ScanSection
+                    title="Today's top 20 % gainers"
+                    color="var(--up)"
+                    groups={filteredBiggest.gainers}
+                    onSelect={setSelectedSym}
+                  />
+                  <ScanSection
+                    title="Today's top 20 % losers"
+                    color="var(--down)"
+                    groups={filteredBiggest.losers}
+                    onSelect={setSelectedSym}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="card" style={{marginLeft: 16,marginRight: 20, marginTop:16}}>
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "8px 12px 0" }}><VendorTag v="polygon" /></div>
         <div className="tbl-wrap">
@@ -817,6 +1091,7 @@ export function MoversScreen() {
         </table>
         </div>
       </div>
+      )}
 
 
 

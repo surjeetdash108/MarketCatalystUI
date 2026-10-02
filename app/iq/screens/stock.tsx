@@ -1438,7 +1438,7 @@ export function StockScreen({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {isMarketOpen ? "Market Open" : "Market Close"}
+                      {/* {isMarketOpen ? "Market Open" : "Market Close"} */}
                     </div>
                   </div>
 

@@ -7,7 +7,7 @@ export const menuItems = [
   { label: 'Movers', slug: 'movers', group: 'Markets', icon: '📈', badge: null },
   { label: 'Heatmap', slug: 'heatmap', group: 'Markets', icon: '🟩', badge: null },
   { label: 'Analyst Actions', slug: 'analyst', group: 'Markets', icon: '🔔', badge: null },
-  { label: 'Macro & VIX', slug: 'macro', group: 'Markets', icon: '📅', badge: null },
+  { label: 'Calendar', slug: 'macro', group: 'Markets', icon: '📅', badge: null },
   // ---- Research ----
   { label: 'Screener', slug: 'screener', group: 'Research', icon: '🔍', badge: null },
   { label: 'Themes', slug: 'themes', group: 'Research', icon: '◈', badge: null },

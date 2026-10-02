@@ -481,10 +481,9 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
   );
 }
 /* ── Main commentary / Live Feed screen ── */
-// ── SCANX market scans (Most Active / Biggest %) ────────────────────────────
+// ── SCANX market scans (Most Active) ─────────────────────────────────────────
 interface ScanItem { ticker: string; name: string | null; pctChange: number | null; price?: number | null; volume?: number | null; rvol?: number | null; }
 interface SectorGroup { sector: string; items: ScanItem[]; }
-interface BiggestPctScan { generatedAt: string; gainers: SectorGroup[]; losers: SectorGroup[]; }
 interface MostActiveScan { generatedAt: string; byVolume: SectorGroup[]; byRelVolume: SectorGroup[]; }
 
 const scanTime = (iso?: string) =>
@@ -1440,32 +1439,6 @@ function MostActiveTab() {
   );
 }
 
-/** Biggest % tab — top 20 gainers + top 20 losers, by sector. */
-function BiggestPctTab() {
-  const { data, loading } = useApiResource<BiggestPctScan>("/live/scan/biggest-pct");
-  const [sel, setSel] = useState<string | null>(null);
-  return (
-    <div style={{ padding: "14px 18px 18px" }}>
-      <div className="card">
-        <div className="card-h">
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Today&apos;s biggest % gainers / losers</h3><VendorTag v="polygon" /></div>
-          {data?.generatedAt && <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>as of {scanTime(data.generatedAt)}</span>}
-        </div>
-        <div className="card-b" style={{ maxHeight: "none" }}>
-          {!data ? <DataState loading={loading} label="Generating scan…" /> : (
-            <>
-              <ScanSection title="Today's top 20 % gainers" color="var(--up)" groups={data.gainers} onSelect={setSel}
-                render={(it) => `${it.price != null ? it.price.toFixed(2) : "—"} ${sign(it.pctChange ?? 0)}`} />
-              <ScanSection title="Today's top 20 % losers" color="var(--down)" groups={data.losers} onSelect={setSel}
-                render={(it) => `${it.price != null ? it.price.toFixed(2) : "—"} ${sign(it.pctChange ?? 0)}`} />
-            </>
-          )}
-        </div>
-      </div>
-      {sel && <ScanTray sym={sel} onClose={() => setSel(null)} />}
-    </div>
-  );
-}
 
 // ── Weekly / Monthly summary ────────────────────────────────────────────────
 type GlanceSentiment = "bullish" | "bearish" | "neutral" | "mixed";
@@ -1829,9 +1802,8 @@ export function CommentaryScreen() {
           <button className={`tab${mainTab === 0 ? " on" : ""}`} style={mainTab === 0 ? SEL_TAB : undefined} onClick={() => setMainTab(0)}>News</button>
           <button className={`tab${mainTab === 1 ? " on" : ""}`} style={mainTab === 1 ? SEL_TAB : undefined} onClick={() => setMainTab(1)}>Announcement</button>
           <button className={`tab${mainTab === 2 ? " on" : ""}`} style={mainTab === 2 ? SEL_TAB : undefined} onClick={() => setMainTab(2)}>Most Active</button>
-          <button className={`tab${mainTab === 3 ? " on" : ""}`} style={mainTab === 3 ? SEL_TAB : undefined} onClick={() => setMainTab(3)}>Biggest %</button>
-          <button className={`tab${mainTab === 4 ? " on" : ""}`} style={mainTab === 4 ? SEL_TAB : undefined} onClick={() => setMainTab(4)}>Weekly Summary</button>
-          <button className={`tab${mainTab === 5 ? " on" : ""}`} style={mainTab === 5 ? SEL_TAB : undefined} onClick={() => setMainTab(5)}>Monthly Summary</button>
+          <button className={`tab${mainTab === 3 ? " on" : ""}`} style={mainTab === 3 ? SEL_TAB : undefined} onClick={() => setMainTab(3)}>Weekly Summary</button>
+          <button className={`tab${mainTab === 4 ? " on" : ""}`} style={mainTab === 4 ? SEL_TAB : undefined} onClick={() => setMainTab(4)}>Monthly Summary</button>
         </div>
       </div>
 
@@ -2006,9 +1978,8 @@ export function CommentaryScreen() {
 
       {mainTab === 1 && <EarningsAnnouncementsTab />}
       {mainTab === 2 && <MostActiveTab />}
-      {mainTab === 3 && <BiggestPctTab />}
-      {mainTab === 4 && <GlanceTab period="weekly" heading="Weekly summary" />}
-      {mainTab === 5 && <GlanceTab period="monthly" heading="Monthly summary" />}
+      {mainTab === 3 && <GlanceTab period="weekly" heading="Weekly summary" />}
+      {mainTab === 4 && <GlanceTab period="monthly" heading="Monthly summary" />}
 
       {analysisTicker && (
         <TickerAnalysisDrawer sym={analysisTicker} onClose={() => setAnalysisTicker(null)} />

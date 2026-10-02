@@ -615,7 +615,7 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
               router.push(eq ? `/menu/heatmap?index=${encodeURIComponent(x.label)}` : "/menu/macro");
             }}
           >
-            {eq ? "View market heatmap →" : "Go to Macro & VIX →"}
+            {eq ? "View market heatmap →" : "Go to Calendar →"}
           </button>
 
           {/* Under redirection to heatmap: stock chart for each individual index/asset */}
