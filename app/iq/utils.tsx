@@ -269,7 +269,9 @@ export const LOGO_IMG_STYLE: React.CSSProperties = {
   width: "100%",
   height: "100%",
   objectFit: "contain",
-  padding: "2px",
+  padding: 0,
+  transform: "scale(1.15)",
+  transformOrigin: "center center",
 };
 
 export function StockLogo({ sym, size = 22, style }: { sym: string; size?: number; style?: React.CSSProperties }) {
