@@ -84,8 +84,16 @@ async function authHeaders(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}` };
 }
 
-/** Requests abort after this long so a stalled mobile connection can't hang forever. */
-const REQUEST_TIMEOUT_MS = 20_000;
+/**
+ * Requests abort after this long so a stalled mobile connection can't hang forever.
+ * NEXT_PUBLIC_REQUEST_TIMEOUT_MS overrides it, for local dev only: a local
+ * backend reading Firestore across the world can take >20s on a cold cache.
+ * Unset in production builds, so production keeps 20s.
+ */
+const REQUEST_TIMEOUT_MS =
+  Number(process.env.NEXT_PUBLIC_REQUEST_TIMEOUT_MS) > 0
+    ? Number(process.env.NEXT_PUBLIC_REQUEST_TIMEOUT_MS)
+    : 20_000;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = { ...(await authHeaders()), ...(init.headers ?? {}) };
