@@ -342,7 +342,25 @@ function chunkForSpeech(text: string): string[] {
   return chunks;
 }
 
-function CallDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
+interface AiSummaryData {
+  aiRead: string;
+  annMatch?: { reactionPct?: number | null } | null;
+  hasEstimates?: boolean;
+  beats?: number;
+  histLength?: number;
+  streetExpects?: string | null;
+  consensusForSel?: AnalystConsensusDoc | null;
+}
+
+function CallDrawer({
+  sym,
+  onClose,
+  aiSummary,
+}: {
+  sym: string;
+  onClose: () => void;
+  aiSummary?: AiSummaryData;
+}) {
   const { data, loading } = useApiResource<TranscriptDoc>(
     `/live/earnings-transcript?ticker=${encodeURIComponent(sym)}`,
   );
@@ -398,7 +416,7 @@ function CallDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <div className="side-drawer">
+      <div className="drawer open" style={{ width: "min(840px, 96vw)", maxHeight: "min(88vh, 860px)" }}>
         <div className="drawer-h">
           <StockLogo sym={sym} size={38} />
           <div style={{ flex: 1 }}>
@@ -415,6 +433,49 @@ function CallDrawer({ sym, onClose }: { sym: string; onClose: () => void }) {
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-b">
+          {aiSummary && (
+            <div style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border-soft)",
+              borderRadius: 12,
+              padding: "14px 16px",
+              marginBottom: 18,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: ".88rem", color: "var(--text-hi)" }}>
+                  <span>AI summary</span>
+                  <VendorTag v={["fmp", "polygon", "sec"]} />
+                </div>
+                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)", fontWeight: 700 }}>
+                  ◆ AI
+                </span>
+              </div>
+              <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)", margin: "0 0 12px" }}>
+                {aiSummary.aiRead}
+              </p>
+              <div className="ew-aisum">
+                <div>
+                  <span>Post-earnings reaction</span>
+                  <b>{aiSummary.annMatch?.reactionPct != null ? <span className={cls(aiSummary.annMatch.reactionPct)}>{sign(aiSummary.annMatch.reactionPct)}</span> : <NotAvailable />}</b>
+                </div>
+                <div>
+                  <span>Historical EPS beats</span>
+                  <b>{aiSummary.hasEstimates ? `${aiSummary.beats} / ${aiSummary.histLength}` : <span style={{ color: "var(--text-dim-solid)", fontWeight: 500 }}>Pending — needs estimates</span>}</b>
+                </div>
+                <div>
+                  <span>What street expects</span>
+                  <b>{aiSummary.streetExpects ?? <span style={{ color: "var(--text-dim-solid)", fontWeight: 500 }}>Pending — no estimate yet</span>}</b>
+                </div>
+                {aiSummary.consensusForSel?.priceTargetConsensus != null && (
+                  <div>
+                    <span>Analyst target</span>
+                    <b>${aiSummary.consensusForSel.priceTargetConsensus.toFixed(0)}{aiSummary.consensusForSel.consensus ? ` · ${aiSummary.consensusForSel.consensus}` : ""}</b>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {!hasTx ? (
             <DataState loading={loading} label={`No earnings-call transcript available for ${sym} yet.`} />
           ) : (
@@ -1418,34 +1479,127 @@ export function EarningsScreen() {
                       <svg viewBox="0 0 24 24" width={12} height={12} fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg>
                       Earnings call
                     </button>
-                    <button
+                    {/* <button
                       className="ew-actbtn ai"
                       title="Analyst & earnings analysis (FMP)"
                       onClick={() => setAiModalSym(sel)}
                     >
                       <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19V5m0 14h16M8 15l3-4 3 3 4-6"/></svg>
                       Analysis
-                    </button>
+                    </button> */}
                   </span>
                 </div>
-                <div className="card-b">
+                <div className="card-b" style={{ maxHeight: 220, overflowY: "auto" }}>
                   {liveCompanySel?.description
                     ? <p style={{ fontSize: ".82rem", lineHeight: 1.6, color: "var(--text)", margin: 0 }}>{liveCompanySel.description}</p>
                     : <DataState loading={!liveCompanySel} label={`No company description synced for ${sel} yet.`} />}
                 </div>
               </div>
               <div className="card">
-                <div className="card-h"><h3>AI summary <VendorTag v={["fmp", "polygon", "sec"]} /></h3><span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)" }}>◆ AI</span></div>
-                <div className="card-b">
-                  <p style={{ fontSize: ".82rem", lineHeight: 1.6, color: "var(--text)", margin: "0 0 10px" }}>{aiRead}</p>
-                  <div className="ew-aisum">
-                    <div><span>Post-earnings reaction</span><b>{annMatch?.reactionPct != null ? <span className={cls(annMatch.reactionPct)}>{sign(annMatch.reactionPct)}</span> : <NotAvailable />}</b></div>
-                    <div><span>Historical EPS beats</span><b>{hasEstimates ? `${beats} / ${hist.length}` : <span style={{ color: "var(--text-dim-solid)", fontWeight: 500 }}>Pending — needs estimates</span>}</b></div>
-                    <div><span>What street expects</span><b>{streetExpects ?? <span style={{ color: "var(--text-dim-solid)", fontWeight: 500 }}>Pending — no estimate yet</span>}</b></div>
-                    {consensusForSel?.priceTargetConsensus != null && (
-                      <div><span>Analyst target</span><b>${consensusForSel.priceTargetConsensus.toFixed(0)}{consensusForSel.consensus ? ` · ${consensusForSel.consensus}` : ""}</b></div>
-                    )}
+                <div className="card-h">
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <h3>Analysis <VendorTag v={["fmp", "polygon"]} /></h3>
                   </div>
+                  {consensusForSel?.consensus && (
+                    <span
+                      className="pill"
+                      style={{
+                        background: "var(--surface-3)",
+                        color: /buy|outperform|overweight/i.test(consensusForSel.consensus)
+                          ? "var(--up)"
+                          : /sell|underperform|underweight/i.test(consensusForSel.consensus)
+                          ? "var(--down)"
+                          : "var(--text-hi)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {consensusForSel.consensus}
+                    </span>
+                  )}
+                </div>
+                <div className="card-b" style={{ maxHeight: 220, overflowY: "auto" }}>
+                  {(() => {
+                    const c = consensusForSel;
+                    const px = liveCompanySel?.price ?? null;
+                    const pt = c?.priceTargetConsensus ?? null;
+                    const upside = pt != null && px != null && px > 0 ? ((pt - px) / px) * 100 : null;
+                    const votes = c ? c.strongBuy + c.buy + c.hold + c.sell + c.strongSell : 0;
+                    const buyPct = votes ? Math.round(((c!.strongBuy + c!.buy) / votes) * 100) : null;
+                    const rc = c && /buy|outperform|overweight/i.test(c.consensus) ? "var(--up)"
+                      : c && /sell|underperform|underweight/i.test(c.consensus) ? "var(--down)" : "var(--text-hi)";
+                    let streak = 0; for (const q of hist) { if (q.surp >= 0) streak++; else break; }
+                    const lastSurp = hist.length ? hist[0].surp : null;
+                    const ptTrend = c?.ptAvgLastMonth != null && c?.ptAvgLastQuarter != null ? c.ptAvgLastMonth - c.ptAvgLastQuarter : null;
+                    const anyData = !!c || px != null || (hasEstimates && pairedTotal > 0) || !!streetExpects || annMatch?.reactionPct != null;
+
+                    if (!anyData) return <DataState label={`No analyst or earnings analysis synced for ${sel} yet.`} />;
+
+                    const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, fontSize: ".8rem", borderBottom: "1px solid var(--border-soft)", padding: "5px 0" }}>
+                        <span style={{ color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>{label}</span>
+                        <span style={{ textAlign: "right", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</span>
+                      </div>
+                    );
+
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        {c && votes > 0 && (
+                          <Row label="Analyst consensus">
+                            <b style={{ color: rc }}>{c.consensus}</b>
+                            <span style={{ color: "var(--text-dim-solid)" }}> · {votes} analysts · {buyPct}% buy</span>
+                          </Row>
+                        )}
+                        {pt != null && (
+                          <Row label="Price target (12-mo)">
+                            <b>${pt.toFixed(0)}</b>
+                            {upside != null && <span className={cls(upside)}> · {sign(upside)}{px != null ? ` vs $${px.toFixed(2)}` : ""}</span>}
+                            {c?.priceTargetLow != null && c?.priceTargetHigh != null && (
+                              <span style={{ color: "var(--text-dim-solid)" }}> · range ${c.priceTargetLow.toFixed(0)}–${c.priceTargetHigh.toFixed(0)}</span>
+                            )}
+                          </Row>
+                        )}
+                        {ptTrend != null && Math.abs(ptTrend) >= 0.01 && (
+                          <Row label="Target trend">
+                            <span className={cls(ptTrend)}>{ptTrend >= 0 ? "Rising" : "Falling"}</span>
+                            <span style={{ color: "var(--text-dim-solid)" }}> · 1-mo ${c!.ptAvgLastMonth!.toFixed(0)} vs 1-qtr ${c!.ptAvgLastQuarter!.toFixed(0)}</span>
+                          </Row>
+                        )}
+                        {hasEstimates && pairedTotal > 0 && (
+                          <Row label="EPS track record">
+                            <b>{beats}/{pairedTotal} beats</b>
+                            {streak > 0 && <span className="pill up" style={{ marginLeft: 6 }}>{streak}-qtr beat streak</span>}
+                            {lastSurp != null && <span style={{ color: "var(--text-dim-solid)" }}> · last {lastSurp >= 0 ? "beat" : "miss"} {Math.abs(lastSurp)}%</span>}
+                          </Row>
+                        )}
+                        {streetExpects && (
+                          <Row label="Street expects (next)"><b>{streetExpects}</b></Row>
+                        )}
+                        {annMatch?.reactionPct != null && (
+                          <Row label="Last post-earnings move">
+                            <span className={cls(annMatch.reactionPct)}>{sign(annMatch.reactionPct)}</span>
+                          </Row>
+                        )}
+                        {c?.recentGrades && c.recentGrades.length > 0 && (
+                          <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-hi)", marginBottom: 4 }}>Recent rating changes</div>
+                            {c.recentGrades.slice(0, 3).map((g, i) => (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: ".74rem", padding: "3px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                                <span style={{ color: "var(--text-dim-solid)", width: 70, flexShrink: 0 }}>{g.date ? String(g.date).slice(0, 10) : "—"}</span>
+                                <span style={{ flex: 1, color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.firm ?? "—"}</span>
+                                <span style={{ color: "var(--text-dim-solid)" }}>{g.previousGrade ? `${g.previousGrade} → ` : ""}{g.newGrade ?? "—"}</span>
+                                {g.action && (
+                                  <span className={/upgrade|initiat/i.test(g.action) ? "pill up" : /downgrade/i.test(g.action) ? "pill dn" : "pill"} style={{ flexShrink: 0 }}>{g.action}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8, lineHeight: 1.4 }}>
+                          Compiled from live analyst &amp; earnings data (FMP · Polygon) — not an AI/LLM narrative.
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1492,7 +1646,19 @@ export function EarningsScreen() {
 
       {/* Earnings call detail drawer — honest not-connected state, no fabricated summary/transcript */}
       {selectedCall && (
-        <CallDrawer sym={selectedCall} onClose={() => setSelectedCall(null)} />
+        <CallDrawer
+          sym={selectedCall}
+          onClose={() => setSelectedCall(null)}
+          aiSummary={{
+            aiRead,
+            annMatch,
+            hasEstimates,
+            beats,
+            histLength: hist.length,
+            streetExpects,
+            consensusForSel,
+          }}
+        />
       )}
 
       {/* Analysis modal — compiled from live analyst + earnings data (FMP),
