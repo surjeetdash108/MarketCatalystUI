@@ -669,11 +669,11 @@ function CallDrawer({
               <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: ".88rem", color: "var(--text-hi)" }}>
                 <span>AI summary</span>
                 <VendorTag v="fmp" />
-                {aiSummaryDoc?.source === "llm" && (
+                {/* {aiSummaryDoc?.source === "llm" && (
                   <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", fontWeight: 500 }}>
                     · synthesized via {aiSummaryDoc.model?.replace(/^groq:/, "") ?? "LLM"}
                   </span>
-                )}
+                )} */}
               </div>
               <span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)", fontWeight: 700 }}>
                 ◆ AI{activeInsights.length > 0 ? ` · ${activeInsights.length} insights` : ""}
