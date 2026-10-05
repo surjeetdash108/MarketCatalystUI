@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
 import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
@@ -352,21 +352,245 @@ interface AiSummaryData {
   consensusForSel?: AnalystConsensusDoc | null;
 }
 
+interface TranscriptInsight {
+  category: string;
+  headline: string;
+  summary: string;
+  speaker?: string;
+  sentiment: "bullish" | "bearish" | "neutral";
+  importance?: number;
+  evidence?: string;
+}
+
+interface TranscriptAiSummaryDoc {
+  ticker: string;
+  quarter?: number | null;
+  year?: number | null;
+  period?: string | null;
+  date?: string | null;
+  insights: TranscriptInsight[];
+  model?: string;
+  generatedAt?: string;
+  source?: "llm" | "fallback";
+}
+
+interface TranscriptSummaryPoint {
+  catId: string;
+  catLabel: string;
+  speaker: string;
+  text: string;
+  priority: number;
+  score: number;
+}
+
+/**
+ * Splits transcript paragraphs into individual sentences without breaking on
+ * floating-point decimals ($46.2B, 12.5%) or corporate/title abbreviations.
+ */
+function splitTranscriptSentences(text: string): string[] {
+  let safe = text.replace(/(\d+)\.(\d+)/g, "$1__DOT__$2");
+  safe = safe.replace(/\b(Mr|Mrs|Ms|Dr|Inc|Corp|Ltd|Co|vs|approx|e\.g|i\.e)\./gi, "$1__PERIOD__");
+  safe = safe.replace(/\b(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\./gi, "$1__PERIOD__");
+  const rawMatches = safe.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) ?? [safe];
+  return rawMatches
+    .map(s => s.replace(/__DOT__/g, ".").replace(/__PERIOD__/g, ".").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+/**
+ * Analyzes the earnings-call transcript text below the AI summary, filters out
+ * procedural boilerplate and Q&A clutter, scores high-impact statements from
+ * executive leadership, and produces 6 to 8 prioritized bullet points with the
+ * major impact point first (Guidance/Outlook, Financial Performance, Segment Growth,
+ * Margins, AI/Strategic Tech, Capital Returns, Demand/Scale, Macro/Efficiency).
+ */
+function extractTranscriptSummary(content: string, _sym: string): TranscriptSummaryPoint[] {
+  if (!content || !content.trim()) return [];
+
+  const rawParas = content.split(/\n+/).map(p => p.trim()).filter(Boolean);
+  const cleanSentences: { text: string; speaker: string }[] = [];
+  const boilerplateRegex = /^(good (afternoon|morning|evening)|thank you|welcome to|my name is|today\x27s call is being recorded|please note that|forward-looking statements|safe harbor|operator|at this time|turn the call over|instructions|open the call|replay of this call|press star one|conference operator)/i;
+
+  for (const para of rawParas) {
+    let speaker = "";
+    let body = para;
+    const colonIdx = para.indexOf(":");
+    if (colonIdx > 0 && colonIdx < 50) {
+      speaker = para.slice(0, colonIdx).trim();
+      body = para.slice(colonIdx + 1).trim();
+    }
+
+    const sents = splitTranscriptSentences(body);
+    for (const s of sents) {
+      const clean = s.replace(/\s+/g, " ").trim();
+      if (clean.length < 35 || clean.length > 360) continue;
+      if (boilerplateRegex.test(clean)) continue;
+      // Filter out analyst questions
+      if (/\?$|can you give|could you talk|could you provide color|wondering if you could|my first question|follow-up question/i.test(clean)) continue;
+
+      cleanSentences.push({ text: clean, speaker });
+    }
+  }
+
+  const categories = [
+    {
+      id: "guidance",
+      label: "Guidance & Forward Outlook",
+      regex: /\b(guidance|outlook|expect|anticipate|project|forecast|target(ed|ing)?)\b.*(\$|\%|\b(quarter|fiscal|year|range|growth)\b)/i,
+      priority: 100,
+    },
+    {
+      id: "revenue_headline",
+      label: "Financial Results & Headline Performance",
+      regex: /\b(revenue|eps|earnings per share|net income)\b.*(\$|\%|\b(billion|million|record|grew|growth|all-time)\b)/i,
+      priority: 90,
+    },
+    {
+      id: "segments",
+      label: "Core Segment & Product Growth",
+      regex: /\b(segment|data center|cloud|services|iphone|mac|ipad|automotive|gaming|enterprise|software|hardware|subscription|networking|energy|deliveries|advertising)\b.*(\$|\%|\b(grew|growth|record|up|accelerat|million|billion)\b)/i,
+      priority: 80,
+    },
+    {
+      id: "margins",
+      label: "Margin & Profitability Trends",
+      regex: /\b(gross margin|operating margin|profit margin|operating income|ebitda|basis points|operating leverage)\b/i,
+      priority: 75,
+    },
+    {
+      id: "strategic_ai",
+      label: "Strategic AI & Technology Initiatives",
+      regex: /\b(artificial intelligence|generative ai|\bai\b|accelerated computing|blackwell|hopper|copilot|azure ai|neural|machine learning|platform|capex|infrastructure|investing in|autonomous|full self-driving|fsd)\b/i,
+      priority: 70,
+    },
+    {
+      id: "capital_return",
+      label: "Cash Flow & Capital Allocation",
+      regex: /\b(operating cash flow|free cash flow|cash flow|share repurchase|buyback|dividend|returned to shareholders|capital return)\b/i,
+      priority: 65,
+    },
+    {
+      id: "demand_scale",
+      label: "Installed Base & Market Demand",
+      regex: /\b(installed base|active devices|customer demand|adoption|order|backlog|volume|market share|users|customers)\b/i,
+      priority: 60,
+    },
+    {
+      id: "headwinds_macro",
+      label: "Macro Trends, Headwinds & Efficiency",
+      regex: /\b(foreign exchange|fx|headwind|macroeconomic|supply chain|inventory|efficiency|cost savings|restructuring|cost per)\b/i,
+      priority: 50,
+    },
+  ];
+
+  const candidates: TranscriptSummaryPoint[] = [];
+  for (const s of cleanSentences) {
+    let bestCat = null;
+    let maxCatPri = -1;
+
+    for (const cat of categories) {
+      if (cat.regex.test(s.text)) {
+        if (cat.priority > maxCatPri) {
+          maxCatPri = cat.priority;
+          bestCat = cat;
+        }
+      }
+    }
+
+    if (!bestCat) continue;
+
+    let score = bestCat.priority;
+    const dollarMatches = (s.text.match(/\$\d+(\.\d+)?(\s?(billion|million|b|m))?/gi) || []).length;
+    const pctMatches = (s.text.match(/\d+(\.\d+)?%/g) || []).length;
+    score += dollarMatches * 8;
+    score += pctMatches * 6;
+    if (/CEO|CFO|Chief|Cook|Kress|Huang|Maestri|Nadella|Musk|Pichai|Zuckerberg/i.test(s.speaker)) score += 15;
+    if (s.text.length < 50) score -= 10;
+    if (/\b(maybe|perhaps|sort of|kind of)\b/i.test(s.text)) score -= 15;
+
+    candidates.push({
+      ...s,
+      catId: bestCat.id,
+      catLabel: bestCat.label,
+      priority: bestCat.priority,
+      score,
+    });
+  }
+
+  const selected: TranscriptSummaryPoint[] = [];
+  const usedTexts = new Set<string>();
+
+  // Pass 1: select top candidate from each category in priority order
+  for (const cat of categories) {
+    if (selected.length >= 8) break;
+    const catCandidates = candidates
+      .filter(c => c.catId === cat.id && !usedTexts.has(c.text))
+      .sort((a, b) => b.score - a.score);
+
+    if (catCandidates.length > 0) {
+      const best = catCandidates[0];
+      selected.push(best);
+      usedTexts.add(best.text);
+    }
+  }
+
+  // Pass 2: if fewer than 6, fill from remaining top scoring candidates
+  if (selected.length < 6) {
+    const remaining = candidates
+      .filter(c => !usedTexts.has(c.text))
+      .sort((a, b) => b.score - a.score);
+    for (const r of remaining) {
+      if (selected.length >= 7) break;
+      selected.push(r);
+      usedTexts.add(r.text);
+    }
+  }
+
+  // Sort strictly by priority descending (Major impact point first: Guidance -> Results -> Segments -> etc.)
+  selected.sort((a, b) => b.priority - a.priority || b.score - a.score);
+
+  return selected.slice(0, 8);
+}
+
 function CallDrawer({
   sym,
   onClose,
-  aiSummary,
+  aiSummary: _aiSummary,
 }: {
   sym: string;
   onClose: () => void;
   aiSummary?: AiSummaryData;
 }) {
-  const { data, loading } = useApiResource<TranscriptDoc>(
+  const { data, loading: transcriptLoading } = useApiResource<TranscriptDoc>(
     `/live/earnings-transcript?ticker=${encodeURIComponent(sym)}`,
   );
+  const { data: aiSummaryDoc, loading: summaryLoading } = useApiResource<TranscriptAiSummaryDoc>(
+    `/live/earnings-transcript-summary?ticker=${encodeURIComponent(sym)}`,
+  );
+
   const content = data?.content ?? "";
   const hasTx = !!data?.hasTranscript && content.trim().length > 0;
   const paras = hasTx ? content.split(/\n+/).map(p => p.trim()).filter(Boolean) : [];
+
+  // Active insights: Real server-side LLM synthesized insights (8-12 points),
+  // falling back gracefully to client-side rule extractor if LLM is unavailable or unconfigured.
+  const activeInsights: TranscriptInsight[] = useMemo(() => {
+    if (aiSummaryDoc?.insights && Array.isArray(aiSummaryDoc.insights) && aiSummaryDoc.insights.length >= 4) {
+      return aiSummaryDoc.insights;
+    }
+    if (hasTx && content) {
+      return extractTranscriptSummary(content, sym).map((pt, i) => ({
+        category: pt.catLabel,
+        headline: pt.catLabel,
+        summary: pt.text,
+        speaker: pt.speaker,
+        sentiment: "neutral" as const,
+        importance: i + 1,
+        evidence: pt.text,
+      }));
+    }
+    return [];
+  }, [aiSummaryDoc, hasTx, content, sym]);
 
   const period = [
     data?.quarter ? `Q${data.quarter}` : null,
@@ -433,71 +657,173 @@ function CallDrawer({
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-b">
-          {aiSummary && (
-            <div style={{
-              background: "var(--surface-1)",
-              border: "1px solid var(--border-soft)",
-              borderRadius: 12,
-              padding: "14px 16px",
-              marginBottom: 18,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: ".88rem", color: "var(--text-hi)" }}>
-                  <span>AI summary</span>
-                  <VendorTag v={["fmp", "polygon", "sec"]} />
-                </div>
-                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)", fontWeight: 700 }}>
-                  ◆ AI
-                </span>
-              </div>
-              <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)", margin: "0 0 12px" }}>
-                {aiSummary.aiRead}
-              </p>
-              <div className="ew-aisum">
-                <div>
-                  <span>Post-earnings reaction</span>
-                  <b>{aiSummary.annMatch?.reactionPct != null ? <span className={cls(aiSummary.annMatch.reactionPct)}>{sign(aiSummary.annMatch.reactionPct)}</span> : <NotAvailable />}</b>
-                </div>
-                <div>
-                  <span>Historical EPS beats</span>
-                  <b>{aiSummary.hasEstimates ? `${aiSummary.beats} / ${aiSummary.histLength}` : <span style={{ color: "var(--text-dim-solid)", fontWeight: 500 }}>Pending — needs estimates</span>}</b>
-                </div>
-                <div>
-                  <span>What street expects</span>
-                  <b>{aiSummary.streetExpects ?? <span style={{ color: "var(--text-dim-solid)", fontWeight: 500 }}>Pending — no estimate yet</span>}</b>
-                </div>
-                {aiSummary.consensusForSel?.priceTargetConsensus != null && (
-                  <div>
-                    <span>Analyst target</span>
-                    <b>${aiSummary.consensusForSel.priceTargetConsensus.toFixed(0)}{aiSummary.consensusForSel.consensus ? ` · ${aiSummary.consensusForSel.consensus}` : ""}</b>
-                  </div>
+          {/* AI Summary Section: Real LLM-synthesized 8-12 insights, with deterministic fallback */}
+          <div style={{
+            background: "var(--surface-1)",
+            border: "1px solid var(--border-soft)",
+            borderRadius: 12,
+            padding: "14px 16px",
+            marginBottom: 18,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: ".88rem", color: "var(--text-hi)" }}>
+                <span>AI summary</span>
+                <VendorTag v="fmp" />
+                {aiSummaryDoc?.source === "llm" && (
+                  <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", fontWeight: 500 }}>
+                    · synthesized via {aiSummaryDoc.model?.replace(/^groq:/, "") ?? "LLM"}
+                  </span>
                 )}
               </div>
+              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)", fontWeight: 700 }}>
+                ◆ AI{activeInsights.length > 0 ? ` · ${activeInsights.length} insights` : ""}
+              </span>
             </div>
-          )}
+
+            {summaryLoading && !aiSummaryDoc && activeInsights.length === 0 ? (
+              <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", padding: "10px 0" }}>
+                Synthesizing executive insights from call transcript...
+              </div>
+            ) : activeInsights.length > 0 ? (
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
+                {activeInsights.map((ins, idx) => {
+                  const isBull = ins.sentiment === "bullish";
+                  const isBear = ins.sentiment === "bearish";
+                  const sentimentColor = isBull ? "var(--up)" : isBear ? "var(--down)" : "var(--text-dim-solid)";
+                  const sentimentBg = isBull ? "rgba(16, 185, 129, 0.12)" : isBear ? "rgba(239, 68, 68, 0.12)" : "var(--surface-3)";
+
+                  return (
+                    <li
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        fontSize: ".84rem",
+                        lineHeight: 1.55,
+                        color: "var(--text)",
+                        paddingBottom: idx < activeInsights.length - 1 ? 12 : 0,
+                        borderBottom: idx < activeInsights.length - 1 ? "1px solid var(--border-soft)" : "none",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "var(--ai)",
+                          fontSize: "1.2rem",
+                          lineHeight: "1.2",
+                          flexShrink: 0,
+                          marginTop: 1,
+                        }}
+                      >
+                        •
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                          <span
+                            style={{
+                              fontFamily: "var(--f-mono)",
+                              fontSize: ".7rem",
+                              fontWeight: 700,
+                              color: "var(--text-hi)",
+                              background: "var(--surface-2)",
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              border: "1px solid var(--border-soft)",
+                            }}
+                          >
+                            {ins.category}
+                          </span>
+                          {ins.sentiment && (
+                            <span
+                              style={{
+                                fontSize: ".68rem",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: ".04em",
+                                color: sentimentColor,
+                                background: sentimentBg,
+                                padding: "1px 6px",
+                                borderRadius: 4,
+                              }}
+                            >
+                              {ins.sentiment}
+                            </span>
+                          )}
+                          {ins.headline && (
+                            <span style={{ fontWeight: 650, color: "var(--text-hi)", fontSize: ".86rem" }}>
+                              {ins.headline}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ color: "var(--text)", fontSize: ".83rem", lineHeight: 1.55 }}>
+                          {ins.summary}
+                        </div>
+                        {ins.speaker && (
+                          <div style={{ marginTop: 4 }}>
+                            <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
+                              — {ins.speaker}
+                            </span>
+                          </div>
+                        )}
+                        {ins.evidence && (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              padding: "6px 10px",
+                              background: "var(--surface-2)",
+                              borderRadius: 6,
+                              borderLeft: "2px solid var(--ai)",
+                              fontSize: ".75rem",
+                              color: "var(--text-dim-solid)",
+                              fontStyle: "italic",
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            "{ins.evidence}"
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text-dim-solid)", margin: 0 }}>
+                {hasTx
+                  ? "No key impact points could be extracted from this transcript."
+                  : `No earnings-call transcript available for ${sym} to summarize.`}
+              </p>
+            )}
+          </div>
+
 
           {!hasTx ? (
-            <DataState loading={loading} label={`No earnings-call transcript available for ${sym} yet.`} />
+            <DataState loading={transcriptLoading} label={`No earnings-call transcript available for ${sym} yet.`} />
           ) : (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                {ttsSupported && (
-                  <button
-                    onClick={tts === "playing" ? pause : play}
-                    className="btn primary"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
-                  >
-                    {tts === "playing"
-                      ? <><span style={{ fontSize: ".9em" }}>❚❚</span> Pause</>
-                      : <><span style={{ fontSize: ".9em" }}>▶</span> {tts === "paused" ? "Resume" : "Read aloud"}</>}
-                  </button>
-                )}
-                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)" }}>
+              {/* Controls: "text-to-speech narration of the transcript" placed directly UNDER the Read aloud button */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+                  {ttsSupported && (
+                    <button
+                      onClick={tts === "playing" ? pause : play}
+                      className="btn primary"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
+                    >
+                      {tts === "playing"
+                        ? <><span style={{ fontSize: ".9em" }}>❚❚</span> Pause</>
+                        : <><span style={{ fontSize: ".9em" }}>▶</span> {tts === "paused" ? "Resume" : "Read aloud"}</>}
+                    </button>
+                  )}
+                  {ttsSupported && (
+                    <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                      {tts === "playing" ? "Reading aloud…" : "text-to-speech narration of the transcript"}
+                    </span>
+                  )}
+                </div>
+                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", marginTop: 4 }}>
                   live · FMP transcript
                 </span>
-                {tts === "playing"
-                  ? <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>Reading aloud…</span>
-                  : ttsSupported && <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>text-to-speech narration of the transcript</span>}
               </div>
               <div style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
                 {paras.map((p, i) => (
@@ -511,6 +837,7 @@ function CallDrawer({
     </>
   );
 }
+
 
 // ── Day-view table (Before Open / After Close) ────────────────────────────────
 
