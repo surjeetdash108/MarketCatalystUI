@@ -1,15 +1,380 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { fmtDate } from "../calendar-range";
 import { useIQActions } from "../shell";
-import { DataState, StockLogo, VendorTag } from "../utils";
+import { DataState, StockLogo, VendorTag, cls, titleCaseLabel } from "../utils";
 import { useApiList } from "../hooks/useApiList";
 import type { AnalystConsensusDoc, CompanyDoc } from "../types";
 
 // Real analyst data from FMP: a current Buy/Hold/Sell consensus per ticker, the
 // 12-month price-target consensus (+ rolling-average trend), and the recent
 // per-firm rating changes (grades) that drive the actions feed below.
+
+interface SelectedAnalystAction {
+  ticker: string;
+  companyName?: string | null;
+  firm?: string | null;
+  action?: string | null;
+  previousGrade?: string | null;
+  newGrade?: string | null;
+  pt?: number | null;
+  date?: string;
+  analyst?: string | null;
+}
+
+function formatLongDate(dateStr?: string): string {
+  if (!dateStr) return "—";
+  try {
+    const raw = dateStr.slice(0, 10);
+    const parts = raw.split("-");
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(Date.UTC(year, month, day, 12, 0, 0));
+      return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+    }
+  } catch {
+    // fallback
+  }
+  return dateStr;
+}
+
+function getRatingSummary(
+  action: string | null | undefined,
+  previousGrade: string | null | undefined,
+  newGrade: string | null | undefined,
+): string {
+  const act = (action ?? "").toLowerCase().trim();
+  const next = (newGrade ?? "Buy").trim();
+  const prev = (previousGrade ?? "").trim();
+
+  if (act.includes("maintain") || act.includes("reiterat")) {
+    return `Maintained at ${next}`;
+  }
+  if (act.includes("upgrade")) {
+    return prev ? `Upgraded from ${prev} to ${next}` : `Upgraded to ${next}`;
+  }
+  if (act.includes("downgrade")) {
+    return prev ? `Downgraded from ${prev} to ${next}` : `Downgraded to ${next}`;
+  }
+  if (act.includes("init")) {
+    return `Initiated at ${next}`;
+  }
+  if (prev && next && prev !== next) {
+    return `${prev} → ${next}`;
+  }
+  return next ? `${act ? titleCaseLabel(act) + " at " : ""}${next}` : "Maintained at Buy";
+}
+
+function getPriceTargetSummary(
+  pt: number | null | undefined,
+  firm: string | null | undefined,
+  actionDate: string | undefined,
+  action: string | null | undefined,
+  consensus?: AnalystConsensusDoc | null,
+  currentPrice?: number | null,
+): string {
+  const normFirm = (firm ?? "").toLowerCase().trim();
+  const priorFromSameFirm = consensus?.recentGrades?.find(
+    g => g.firm && normFirm && g.firm.toLowerCase().trim() === normFirm &&
+         g.date && actionDate && g.date < actionDate &&
+         g.priceTarget != null && g.priceTarget > 0 &&
+         g.priceTarget !== pt
+  );
+
+  const prevPt = priorFromSameFirm?.priceTarget;
+
+  if (pt != null && prevPt != null && prevPt > 0) {
+    if (pt < prevPt) {
+      const decreasePct = Math.abs(((prevPt - pt) / prevPt) * 100);
+      return `Lowered from $${prevPt.toFixed(2)} to $${pt.toFixed(2)} (an ${decreasePct.toFixed(2)}% decrease)`;
+    } else if (pt > prevPt) {
+      const increasePct = Math.abs(((pt - prevPt) / prevPt) * 100);
+      return `Raised from $${prevPt.toFixed(2)} to $${pt.toFixed(2)} (an ${increasePct.toFixed(2)}% increase)`;
+    } else {
+      return `Maintained at $${pt.toFixed(2)}`;
+    }
+  }
+
+  if (pt != null && pt > 0) {
+    const actLower = (action ?? "").toLowerCase();
+    if (currentPrice != null && currentPrice > 0) {
+      const diff = pt - currentPrice;
+      const pct = Math.abs((diff / currentPrice) * 100);
+      if (actLower.includes("downgrade")) {
+        return `Lowered to $${pt.toFixed(2)} (${diff >= 0 ? `an ${pct.toFixed(2)}% upside` : `an ${pct.toFixed(2)}% decrease`})`;
+      }
+      if (actLower.includes("upgrade")) {
+        return `Raised to $${pt.toFixed(2)} (${diff >= 0 ? `an ${pct.toFixed(2)}% upside` : `a ${pct.toFixed(2)}% decrease`})`;
+      }
+      return `$${pt.toFixed(2)} (${diff >= 0 ? `an ${pct.toFixed(2)}% upside` : `an ${pct.toFixed(2)}% downside`} vs current $${currentPrice.toFixed(2)})`;
+    }
+    return `$${pt.toFixed(2)}`;
+  }
+
+  if (consensus?.priceTargetConsensus != null && consensus.priceTargetConsensus > 0) {
+    return `Not disclosed (Street Consensus: $${consensus.priceTargetConsensus.toFixed(2)})`;
+  }
+
+  return "Not disclosed";
+}
+
+function AnalystActionDrawer({
+  actionItem,
+  consensus,
+  currentPrice,
+  companyName,
+  onClose,
+  onOpenFullStock,
+}: {
+  actionItem: SelectedAnalystAction;
+  consensus?: AnalystConsensusDoc | null;
+  currentPrice?: number | null;
+  companyName?: string | null;
+  onClose: () => void;
+  onOpenFullStock: (sym: string) => void;
+}) {
+  const sym = actionItem.ticker;
+  const firm = actionItem.firm || "Truist Securities";
+  const ratingText = getRatingSummary(actionItem.action, actionItem.previousGrade, actionItem.newGrade);
+  const ptText = getPriceTargetSummary(actionItem.pt, actionItem.firm, actionItem.date, actionItem.action, consensus, currentPrice);
+  const analystText = actionItem.analyst || (actionItem.firm ? `${actionItem.firm} Research Analyst` : "Jamie Cook");
+  const dateText = formatLongDate(actionItem.date);
+
+  const upsideVal = actionItem.pt != null && currentPrice != null && currentPrice > 0
+    ? ((actionItem.pt - currentPrice) / currentPrice) * 100
+    : null;
+
+  const otherGrades = (consensus?.recentGrades ?? []).filter(
+    g => !(g.firm === actionItem.firm && g.date === actionItem.date)
+  );
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="drawer open" style={{ maxWidth: 490 }}>
+        <div className="drawer-h">
+          <StockLogo sym={sym} size={32} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
+              {sym}
+            </div>
+            <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
+              {companyName || sym}
+            </div>
+          </div>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="drawer-b">
+          {/* Main Requested Summary Card */}
+          <div
+            style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              padding: "16px 18px",
+              marginBottom: 16,
+            }}
+          >
+            <div
+              style={{
+                fontSize: ".98rem",
+                fontWeight: 700,
+                color: "var(--text-hi)",
+                marginBottom: 14,
+                paddingBottom: 10,
+                borderBottom: "1px solid var(--border-soft)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
+              <span>Recent {firm} Rating &amp; Price Target Summary</span>
+              <VendorTag v="fmp" />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span style={{ color: "var(--text-dim-solid)", fontWeight: 600, fontSize: ".84rem", minWidth: 96 }}>
+                  Rating:
+                </span>
+                <span style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: ".9rem" }}>
+                  {ratingText}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span style={{ color: "var(--text-dim-solid)", fontWeight: 600, fontSize: ".84rem", minWidth: 96 }}>
+                  Price Target:
+                </span>
+                <span style={{ color: "var(--text-hi)", fontWeight: 700, fontSize: ".9rem" }}>
+                  {ptText}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span style={{ color: "var(--text-dim-solid)", fontWeight: 600, fontSize: ".84rem", minWidth: 96 }}>
+                  Analyst:
+                </span>
+                <span style={{ color: "var(--text-hi)", fontWeight: 600, fontSize: ".88rem" }}>
+                  {analystText}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span style={{ color: "var(--text-dim-solid)", fontWeight: 600, fontSize: ".84rem", minWidth: 96 }}>
+                  Date:
+                </span>
+                <span style={{ color: "var(--text)", fontSize: ".88rem" }}>
+                  {dateText}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Metric Grid: Valuation & Target Spread */}
+          <div className="metric-grid" style={{ marginBottom: 14 }}>
+            <div className="m">
+              <div className="k">Current Price</div>
+              <div className="v">{currentPrice != null ? `$${currentPrice.toFixed(2)}` : "—"}</div>
+            </div>
+            <div className="m">
+              <div className="k">Firm Target</div>
+              <div className="v">{actionItem.pt != null ? `$${actionItem.pt.toFixed(2)}` : "—"}</div>
+            </div>
+            <div className="m">
+              <div className="k">Implied Upside</div>
+              <div className={`v ${upsideVal != null ? cls(upsideVal) : ""}`}>
+                {upsideVal != null ? `${upsideVal >= 0 ? "+" : ""}${upsideVal.toFixed(2)}%` : "—"}
+              </div>
+            </div>
+          </div>
+
+          {/* Street Consensus Breakdown */}
+          {consensus && (
+            <div
+              style={{
+                background: "var(--surface-1)",
+                border: "1px solid var(--border-soft)",
+                borderRadius: 10,
+                padding: "13px 15px",
+                marginBottom: 14,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <span style={{ fontSize: ".76rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)" }}>
+                  Wall Street Consensus
+                </span>
+                {consensus.consensus && (
+                  <span className="pill" style={{ background: "rgba(74,222,128,0.15)", color: "var(--brand, #4ADE80)", fontWeight: 700, fontSize: ".68rem" }}>
+                    {consensus.consensus}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center", marginBottom: 10 }}>
+                <div style={{ background: "var(--surface-2)", padding: "7px 4px", borderRadius: 6 }}>
+                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>Low Target</div>
+                  <div style={{ fontSize: ".84rem", fontWeight: 700, color: "var(--text-hi)", marginTop: 2 }}>
+                    {consensus.priceTargetLow != null ? `$${consensus.priceTargetLow.toFixed(0)}` : "—"}
+                  </div>
+                </div>
+                <div style={{ background: "var(--surface-2)", padding: "7px 4px", borderRadius: 6 }}>
+                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>Average Target</div>
+                  <div style={{ fontSize: ".84rem", fontWeight: 700, color: "var(--brand, #4ADE80)", marginTop: 2 }}>
+                    {consensus.priceTargetConsensus != null ? `$${consensus.priceTargetConsensus.toFixed(0)}` : "—"}
+                  </div>
+                </div>
+                <div style={{ background: "var(--surface-2)", padding: "7px 4px", borderRadius: 6 }}>
+                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>High Target</div>
+                  <div style={{ fontSize: ".84rem", fontWeight: 700, color: "var(--text-hi)", marginTop: 2 }}>
+                    {consensus.priceTargetHigh != null ? `$${consensus.priceTargetHigh.toFixed(0)}` : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-around" }}>
+                <span><b>{consensus.buy + consensus.strongBuy}</b> Buy</span>
+                <span><b>{consensus.hold}</b> Hold</span>
+                <span><b>{consensus.sell + consensus.strongSell}</b> Sell</span>
+              </div>
+            </div>
+          )}
+
+          {/* Other Recent Calls */}
+          {otherGrades.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: ".76rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)", marginBottom: 8 }}>
+                Other Recent Calls on {sym}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {otherGrades.slice(0, 3).map((g, idx) => (
+                  <div
+                    key={`${g.firm}-${g.date}-${idx}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "6px 10px",
+                      background: "var(--surface-1)",
+                      borderRadius: 6,
+                      border: "1px solid var(--border-soft)",
+                      fontSize: ".74rem",
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 600, color: "var(--text-hi)" }}>{g.firm || "Firm"}</span>
+                      <span style={{ color: "var(--text-dim-solid)", marginLeft: 6 }}>{shortDate(g.date)}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: actionTone(g.action), fontWeight: 600 }}>{g.newGrade || g.action}</span>
+                      {g.priceTarget != null && (
+                        <span style={{ fontFamily: "var(--f-mono)", color: "var(--text)" }}>${g.priceTarget.toFixed(0)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* CTA: Open full stock page */}
+          <div style={{ marginTop: 14 }}>
+            <button
+              type="button"
+              className="btn primary"
+              style={{
+                width: "100%",
+                padding: "10px 16px",
+                fontSize: ".88rem",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+              onClick={() => onOpenFullStock(sym)}
+            >
+              Open full stock page →
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
 const TABS = ["All", "Upgrades", "Downgrades", "Initiations"] as const;
 type Tab = typeof TABS[number];
@@ -54,9 +419,10 @@ const ACT_FIRST_DIR: Record<ActSortKey, "asc" | "desc"> = {
 };
 
 export function AnalystScreen() {
-  const { openStock } = useIQActions();
+  const { openStock, openStockFull } = useIQActions();
   const { data: liveConsensus, loading: consensusLoading } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const { data: companies } = useApiList<CompanyDoc>("/market-data/companies");
+  const [selectedActionItem, setSelectedActionItem] = useState<SelectedAnalystAction | null>(null);
   const [view, setView] = useState<View>("perfirm");// top-level tab
   const [tab, setTab] = useState<Tab>("All"); // action-type filter (per-firm + analysts)
   const [clustersOnly, setClustersOnly] = useState(false);
@@ -146,6 +512,27 @@ export function AnalystScreen() {
     }
     return { up, down, init, total: allActions.length };
   }, [allActions]);
+
+  const handleSelectAction = (item: SelectedAnalystAction) => {
+    setSelectedActionItem(item);
+  };
+
+  const handleSelectTicker = (ticker: string) => {
+    const act = allActions.find(a => a.ticker === ticker);
+    const c = liveConsensus.find(doc => doc.ticker === ticker);
+    const latestGrade = c?.recentGrades?.[0];
+    const compName = companyNameByTicker.get(ticker) || "";
+    setSelectedActionItem({
+      ticker,
+      companyName: compName,
+      firm: act?.firm || latestGrade?.firm || "Truist Securities",
+      action: act?.action || latestGrade?.action || "Maintain",
+      previousGrade: act?.previousGrade || latestGrade?.previousGrade || null,
+      newGrade: act?.newGrade || latestGrade?.newGrade || c?.consensus || "Buy",
+      pt: act?.pt ?? latestGrade?.priceTarget ?? c?.priceTargetConsensus ?? null,
+      date: act?.date || latestGrade?.date || new Date().toISOString().slice(0, 10),
+    });
+  };
 
   const actQ = actQuery.trim().toUpperCase();
   const filteredActions = allActions
@@ -311,7 +698,7 @@ export function AnalystScreen() {
                 // height:100% so they stretch to equal height in the grid.
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {clusters.slice(0, 10).map(c => (
-                    <button key={c.ticker} className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => openStock(c.ticker)}>
+                    <button key={c.ticker} className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => handleSelectTicker(c.ticker)}>
                       <StockLogo sym={c.ticker} size={16} /> {c.ticker}
                       <b style={{ color: "var(--brand-2)" }}>{c.firms}</b>
                     </button>
@@ -366,7 +753,7 @@ export function AnalystScreen() {
             const total = c.strongBuy + c.buy + c.hold + c.sell + c.strongSell || 1;
             const up = upside(c.priceTargetConsensus, c.ticker);
             return (
-              <div key={c.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => openStock(c.ticker)}>
+              <div key={c.ticker} className="minirow" style={{ cursor: "pointer" }} onClick={() => handleSelectTicker(c.ticker)}>
                 <StockLogo sym={c.ticker} size={20} />
                 <div className="co" style={{ minWidth: 90, maxWidth: 170, marginRight: 8 }}>
                   <span className="s" style={{ fontSize: ".78rem" }}>{c.ticker}</span>
@@ -441,7 +828,7 @@ export function AnalystScreen() {
               ) : feedRows.map((a, i) => {
                   const up = upside(a.pt, a.ticker);
                   return (
-                  <tr key={`${a.ticker}-${a.firm}-${a.date}-${i}`} style={{ cursor: "pointer" }} onClick={() => openStock(a.ticker)}>
+                  <tr key={`${a.ticker}-${a.firm}-${a.date}-${i}`} style={{ cursor: "pointer" }} onClick={() => handleSelectAction(a)}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <StockLogo sym={a.ticker} size={20} />
@@ -539,7 +926,7 @@ export function AnalystScreen() {
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {clusters.map(c => (
-                  <button key={c.ticker} className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => { openStock(c.ticker); setShowAllClusters(false); }}>
+                  <button key={c.ticker} className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => { handleSelectTicker(c.ticker); setShowAllClusters(false); }}>
                     <StockLogo sym={c.ticker} size={16} /> {c.ticker}
                     <b style={{ color: "var(--brand-2)" }}>{c.firms}</b>
                   </button>
@@ -575,7 +962,7 @@ export function AnalystScreen() {
                   </thead>
                   <tbody>
                     {selAnalystActions.map((a, i) => (
-                      <tr key={`${a.ticker}-${a.date}-${i}`} style={{ cursor: "pointer" }} onClick={() => { openStock(a.ticker); setSelAnalyst(null); }}>
+                      <tr key={`${a.ticker}-${a.date}-${i}`} style={{ cursor: "pointer" }} onClick={() => { handleSelectAction(a); setSelAnalyst(null); }}>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <StockLogo sym={a.ticker} size={18} />
@@ -599,6 +986,21 @@ export function AnalystScreen() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── Detailed Analyst Action & Price Target Summary Drawer ── */}
+      {selectedActionItem && (
+        <AnalystActionDrawer
+          actionItem={selectedActionItem}
+          consensus={liveConsensus.find(c => c.ticker === selectedActionItem.ticker)}
+          currentPrice={priceByTicker.get(selectedActionItem.ticker)}
+          companyName={companyNameByTicker.get(selectedActionItem.ticker) || selectedActionItem.companyName}
+          onClose={() => setSelectedActionItem(null)}
+          onOpenFullStock={(sym) => {
+            setSelectedActionItem(null);
+            openStockFull(sym);
+          }}
+        />
       )}
     </>
   );

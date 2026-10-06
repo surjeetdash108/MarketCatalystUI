@@ -94,14 +94,10 @@ export function LoginForm() {
   async function handleGoogle() {
     setError(""); setIsSubmitting(true);
 
-    // On mobile browsers and standalone PWAs, popups are unreliable — Safari
-    // dismisses the cross-origin auth popup (yielding auth/popup-closed-by-user)
-    // and, added to the home screen, popups don't open at all. Use the redirect
-    // flow there; it's completed by getRedirectResult() in the mount effect above.
+    // Standalone PWA environment cannot open popup windows — use redirect flow there
     if (shouldUseGoogleRedirect()) {
       try {
         await signInWithRedirect(firebaseAuth, googleAuthProvider);
-        // Page navigates away — leave isSubmitting set so the button stays disabled.
       } catch (err) {
         const msg = getAuthErrorMessage(err);
         setError(msg); showError(msg);
@@ -111,13 +107,13 @@ export function LoginForm() {
     }
 
     try {
-      // Desktop: signInWithPopup works when called directly from a user gesture.
+      // Direct user gesture allows popup on modern desktop and mobile browsers (iOS Safari & Chrome Android)
       const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
       await completeGoogleLogin(result);
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
-        // Popup was blocked (rare on desktop) — fall back to redirect.
+        // Fall back to redirect if popup was explicitly blocked by browser
         try {
           await signInWithRedirect(firebaseAuth, googleAuthProvider);
         } catch (redirectErr) {

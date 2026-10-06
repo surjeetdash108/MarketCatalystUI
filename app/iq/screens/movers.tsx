@@ -685,6 +685,22 @@ export function MoversScreen() {
     pctChange?: number | null;
     direction?: string;
   } | null>(null);
+
+  // Pressing Escape closes the open stock drawer or news modal
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (newsModalSym) {
+          setNewsModalSym(null);
+        } else if (selectedSym) {
+          setSelectedSym(null);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedSym, newsModalSym]);
+
   const sourceRows =
     isWeekTab(tab) ? weeklyRows
     : tab === "vol" ? volumeRows
@@ -1386,7 +1402,7 @@ export function MoversScreen() {
             <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: ".9rem", fontWeight: 700, color: "var(--text-hi)" }}>
-                  Today&apos;s Biggest % Gainers &amp; Losers by Sector
+                  Today&apos;s Biggest Gainers and Losers
                 </h3>
                 <VendorTag v="polygon" />
               </div>
