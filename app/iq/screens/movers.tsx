@@ -170,8 +170,6 @@ function ScanSection({
                 volume,
               };
             });
-            const up = items.filter(it => (it.pctChange ?? 0) >= 0).length;
-            const down = items.length - up;
             const maxAbs = Math.max(...items.map(it => Math.abs(it.pctChange ?? 0)), 1);
 
             return (
@@ -191,16 +189,10 @@ function ScanSection({
                     borderBottom: "1px solid var(--border-soft)",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
                   }}
                 >
                   <span style={{ fontSize: ".78rem", fontWeight: 700, color: "var(--text-hi)" }}>
                     {titleCaseLabel(g.sector)}
-                  </span>
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".62rem", whiteSpace: "nowrap" }}>
-                    <span style={{ color: "var(--up)" }}>▲ {up}</span>{" "}
-                    <span style={{ color: "var(--down)" }}>▼ {down}</span>
                   </span>
                 </div>
 
