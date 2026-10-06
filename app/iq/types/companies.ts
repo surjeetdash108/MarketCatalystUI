@@ -26,6 +26,9 @@ export interface CompanyDoc {
   // populated on-demand by /live/company. Absent on bulk-synced docs.
   description?: string | null;
   homepageUrl?: string | null;
+  // Listing venue — FMP short name ("NASDAQ", "OTC", "PNK") or a Polygon MIC
+  // ("XNAS", "OTCM"); run it through exchangeLabel() before display.
+  exchange?: string | null;
   price: number | null;
   pctChange: number | null;
   marketCap: number | null;
