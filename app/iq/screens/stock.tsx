@@ -7,6 +7,7 @@ import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
 import { fmt, cls, arr, sign, CandleChart, ChartSelect, TF_OPTIONS, CHART_TYPE_OPTIONS, RsiPane, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type ChartHoverOhlc } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
+import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
 import { apiGet, apiPost, apiDelete } from "../backend";
 import { useApiResource } from "../hooks/useApiResource";
@@ -169,6 +170,9 @@ function vendorLabel(source: string | null | undefined): string {
   return base.toLowerCase() === "fmp" ? "FMP" : base[0].toUpperCase() + base.slice(1);
 }
 
+// Last-resort labels for a few mega-caps, used only while the backend's own
+// `exchange` field hasn't loaded (or is missing). Never defaulted for other
+// tickers — that used to stamp "NASDAQ" on OTC names like TCEHY / TCGLF.
 const EXCHANGE: Record<string, string> = {
   AAPL: "NASDAQ", NVDA: "NASDAQ", MSFT: "NASDAQ", GOOGL: "NASDAQ", META: "NASDAQ",
   AMZN: "NASDAQ", TSLA: "NASDAQ", JPM: "NYSE", V: "NYSE", UNH: "NYSE",
@@ -496,9 +500,11 @@ function EarnPane({ hist10 }: { hist10: EarnQ[] }) {
 function StockChartExpanded({
   sym, px, initialTf, initialChartType, initialMaStep, initialEmaStep,
   initialShowVol, initialShowRsi, initialShowEarnings, hist10, rsi, rsiLoading, erDate,
-  earnings,
+  earnings, exchange,
 }: {
   sym: string; px: number; initialTf: string;
+  /** Display label from exchangeLabel(); omitted from the HUD when null. */
+  exchange?: string | null;
   initialChartType: "Candles" | "Hollow" | "Bars" | "Line" | "Area";
   initialMaStep: number; initialEmaStep: number;
   initialShowVol: boolean; initialShowRsi: boolean; initialShowEarnings: boolean;
@@ -535,7 +541,7 @@ function StockChartExpanded({
         <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
       </div>
       <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars}
-        exchange={EXCHANGE[sym] ?? "NASDAQ"}
+        exchange={exchange ?? undefined}
         live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low } : null}
         earnings={showEarnings ? earnings : []} />
       {showRsi && (
@@ -967,7 +973,15 @@ export function StockScreen({
   // shown as its own block rather than mislabeled as a technical-indicator read.
   const consensusDoc = liveConsensus.find(c => c.ticker === sym);
 
-  const ex = EXCHANGE[sym] ?? "NASDAQ";
+  // Backend venue first: the full doc, then the fast summary (the full doc can
+  // be a bulk-synced one without `exchange` while the summary has it), then the
+  // companies-list row. null when nobody knows — the header just omits it.
+  const ex = exchangeLabel(
+    liveCompany?.exchange
+    ?? companySummary?.exchange
+    ?? companies.find(c => c.ticker === sym)?.exchange
+    ?? EXCHANGE[sym],
+  );
   const group = data.sector;
 
   // Next/most-recent earnings date from the live earnings feed.
@@ -1595,8 +1609,8 @@ export function StockScreen({
                     showing, because its own heading already reads "About <full
                     name>" to the right — repeating it is pure duplication. With
                     no About box the name has nowhere else to appear, so it stays. */}
-                <span className="sub" title={`${data.name} · ${ex} · ${group}`} style={{ fontSize: ".64rem" }}>
-                  {data.description ? "" : `${data.name} · `}{ex} · {group}
+                <span className="sub" title={[data.name, ex, group].filter(Boolean).join(" · ")} style={{ fontSize: ".64rem" }}>
+                  {[data.description ? null : data.name, ex, group].filter(Boolean).join(" · ")}
                 </span>
                 {inSectorRank != null && inSectorTotal != null && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".52rem", padding: "1px 5px" }}>
@@ -1838,7 +1852,7 @@ export function StockScreen({
                       showVol={showVol}
                       chartType={chartType.toLowerCase()}
                       realBars={realBars}
-                      exchange={ex}
+                      exchange={ex ?? undefined}
                       live={
                         live.tick
                           ? {
