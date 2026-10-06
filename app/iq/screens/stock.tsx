@@ -15,7 +15,7 @@ import { useBackendBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useLiveQuotes, extendedSession } from "../live-quotes-context";
-import { EarningsPlaybook } from "./EarningsPlaybook";
+import { EarningsPlaybook, playbookReports } from "./EarningsPlaybook";
 import type {
   CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc,
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
@@ -2187,9 +2187,7 @@ export function StockScreen({
                     </div>
                     <EarningsPlaybook
                       sym={sym}
-                      reports={(financialsDoc?.quarters ?? [])
-                        .filter((q) => q.filingDate)
-                        .map((q) => ({ date: q.filingDate as string, epsActual: q.epsActual, epsEstimate: q.epsEstimate, epsReported: q.epsActualReported ?? null, epsEstimateReported: q.epsEstimateReported ?? null }))}
+                      reports={playbookReports(financialsDoc)}
                     />
                   </div>
                 </div>
@@ -2892,9 +2890,7 @@ export function StockScreen({
               <div className="card-b">
                 <EarningsPlaybook
                   sym={sym}
-                  reports={(financialsDoc?.quarters ?? [])
-                    .filter((q) => q.filingDate)
-                    .map((q) => ({ date: q.filingDate as string, epsActual: q.epsActual, epsEstimate: q.epsEstimate, epsReported: q.epsActualReported ?? null, epsEstimateReported: q.epsEstimateReported ?? null }))}
+                  reports={playbookReports(financialsDoc)}
                 />
               </div>
             </div>
