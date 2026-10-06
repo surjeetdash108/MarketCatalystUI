@@ -341,7 +341,7 @@ export function EtfMarketFunds() {
                     No ETFs match “{query}”.
                   </div>
                 ) : (
-                  <div className="etf-top-grid" style={{ paddingTop: 4 }}>
+                  <div className="etf-top-grid" style={{ padding: "6px 2px" }}>
                     {filteredPopular.map(c => {
                       const q = liveQuotes.get(c.symbol);
                       const pct = q?.pctChange;
@@ -350,7 +350,7 @@ export function EtfMarketFunds() {
                           key={c.symbol}
                           type="button"
                           onClick={() => setSelectedEtf(c.symbol)}
-                          className="card etf-card"
+                          className="p etf-card"
                         >
                           <div className="card-b">
                             <div

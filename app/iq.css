@@ -4013,11 +4013,21 @@ button.pill.lf-chip {
   padding: 0;
   cursor: pointer;
   color: inherit;
-  transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease;
+  border-radius: 11px;
+  position: relative;
+  overflow: hidden;
+  transition: .15s;
 }
+.etf-card::after {
+  display: none !important;
+}
+.iq-root .etf-card:hover,
 .etf-card:hover {
-  border-color: var(--brand);
-  transform: translateY(-1px);
+  border-color: var(--brand) !important;
+  background: transparent !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 0 0 1px var(--brand),
+              0 0 18px -6px var(--brand) !important;
 }
 .etf-card .card-b {
   min-height: 100px;
