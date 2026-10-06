@@ -637,6 +637,8 @@ function CallDrawer({
     setTts("paused");
   }
 
+  const [aiSummaryOpen, setAiSummaryOpen] = useState(true);
+
   return (
     <>
       <div className="scrim" onClick={onClose} />
@@ -657,15 +659,32 @@ function CallDrawer({
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-b">
-          {/* AI Summary Section: Real LLM-synthesized 8-12 insights, with deterministic fallback */}
+          {/* AI Summary Section: Real LLM-synthesized 8-12 insights, with deterministic fallback, collapsible like What Matters Now */}
           <div style={{
             background: "var(--surface-1)",
             border: "1px solid var(--border-soft)",
             borderRadius: 12,
-            padding: "14px 16px",
+            padding: 0,
+            overflow: "hidden",
             marginBottom: 18,
           }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <button
+              type="button"
+              onClick={() => setAiSummaryOpen(o => !o)}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 16px",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                textAlign: "left",
+                outline: "none",
+                borderBottom: aiSummaryOpen ? "1px solid var(--border-soft)" : "none",
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: ".88rem", color: "var(--text-hi)" }}>
                 <span>AI summary</span>
                 <VendorTag v="fmp" />
@@ -675,125 +694,152 @@ function CallDrawer({
                   </span>
                 )} */}
               </div>
-              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)", fontWeight: 700 }}>
-                ◆ AI{activeInsights.length > 0 ? ` · ${activeInsights.length} insights` : ""}
-              </span>
-            </div>
-
-            {summaryLoading && !aiSummaryDoc && activeInsights.length === 0 ? (
-              <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", padding: "10px 0" }}>
-                Synthesizing executive insights from call transcript...
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="pill" style={{ background: "var(--surface-3)", color: "var(--ai)", fontWeight: 700 }}>
+                  ◆ AI{activeInsights.length > 0 ? ` · ${activeInsights.length} insights` : ""}
+                </span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    flex: "none",
+                    color: "var(--text-dim-solid)",
+                    transition: "transform .25s ease",
+                    transform: aiSummaryOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                >
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </div>
-            ) : activeInsights.length > 0 ? (
-              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
-                {activeInsights.map((ins, idx) => {
-                  const isBull = ins.sentiment === "bullish";
-                  const isBear = ins.sentiment === "bearish";
-                  const sentimentColor = isBull ? "var(--up)" : isBear ? "var(--down)" : "var(--text-dim-solid)";
-                  const sentimentBg = isBull ? "rgba(16, 185, 129, 0.12)" : isBear ? "rgba(239, 68, 68, 0.12)" : "var(--surface-3)";
+            </button>
 
-                  return (
-                    <li
-                      key={idx}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 10,
-                        fontSize: ".84rem",
-                        lineHeight: 1.55,
-                        color: "var(--text)",
-                        paddingBottom: idx < activeInsights.length - 1 ? 12 : 0,
-                        borderBottom: idx < activeInsights.length - 1 ? "1px solid var(--border-soft)" : "none",
-                      }}
-                    >
-                      <span
-                        style={{
-                          color: "var(--ai)",
-                          fontSize: "1.2rem",
-                          lineHeight: "1.2",
-                          flexShrink: 0,
-                          marginTop: 1,
-                        }}
-                      >
-                        •
-                      </span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                          <span
+            <div style={{
+              display: "grid",
+              gridTemplateRows: aiSummaryOpen ? "1fr" : "0fr",
+              transition: "grid-template-rows .28s ease",
+            }}>
+              <div style={{ overflow: "hidden", minHeight: 0 }}>
+                <div style={{ padding: "14px 16px" }}>
+                  {summaryLoading && !aiSummaryDoc && activeInsights.length === 0 ? (
+                    <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", padding: "10px 0" }}>
+                      Synthesizing executive insights from call transcript...
+                    </div>
+                  ) : activeInsights.length > 0 ? (
+                    <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
+                      {activeInsights.map((ins, idx) => {
+                        const isBull = ins.sentiment === "bullish";
+                        const isBear = ins.sentiment === "bearish";
+                        const sentimentColor = isBull ? "var(--up)" : isBear ? "var(--down)" : "var(--text-dim-solid)";
+                        const sentimentBg = isBull ? "rgba(16, 185, 129, 0.12)" : isBear ? "rgba(239, 68, 68, 0.12)" : "var(--surface-3)";
+
+                        return (
+                          <li
+                            key={idx}
                             style={{
-                              fontFamily: "var(--f-mono)",
-                              fontSize: ".7rem",
-                              fontWeight: 700,
-                              color: "var(--text-hi)",
-                              background: "var(--surface-2)",
-                              padding: "1px 6px",
-                              borderRadius: 4,
-                              border: "1px solid var(--border-soft)",
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: 10,
+                              fontSize: ".84rem",
+                              lineHeight: 1.55,
+                              color: "var(--text)",
+                              paddingBottom: idx < activeInsights.length - 1 ? 12 : 0,
+                              borderBottom: idx < activeInsights.length - 1 ? "1px solid var(--border-soft)" : "none",
                             }}
                           >
-                            {ins.category}
-                          </span>
-                          {ins.sentiment && (
                             <span
                               style={{
-                                fontSize: ".68rem",
-                                fontWeight: 700,
-                                textTransform: "uppercase",
-                                letterSpacing: ".04em",
-                                color: sentimentColor,
-                                background: sentimentBg,
-                                padding: "1px 6px",
-                                borderRadius: 4,
+                                color: "var(--ai)",
+                                fontSize: "1.2rem",
+                                lineHeight: "1.2",
+                                flexShrink: 0,
+                                marginTop: 1,
                               }}
                             >
-                              {ins.sentiment}
+                              •
                             </span>
-                          )}
-                          {ins.headline && (
-                            <span style={{ fontWeight: 650, color: "var(--text-hi)", fontSize: ".86rem" }}>
-                              {ins.headline}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ color: "var(--text)", fontSize: ".83rem", lineHeight: 1.55 }}>
-                          {ins.summary}
-                        </div>
-                        {ins.speaker && (
-                          <div style={{ marginTop: 4 }}>
-                            <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
-                              — {ins.speaker}
-                            </span>
-                          </div>
-                        )}
-                        {ins.evidence && (
-                          <div
-                            style={{
-                              marginTop: 6,
-                              padding: "6px 10px",
-                              background: "var(--surface-2)",
-                              borderRadius: 6,
-                              borderLeft: "2px solid var(--ai)",
-                              fontSize: ".75rem",
-                              color: "var(--text-dim-solid)",
-                              fontStyle: "italic",
-                              lineHeight: 1.45,
-                            }}
-                          >
-                            "{ins.evidence}"
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text-dim-solid)", margin: 0 }}>
-                {hasTx
-                  ? "No key impact points could be extracted from this transcript."
-                  : `No earnings-call transcript available for ${sym} to summarize.`}
-              </p>
-            )}
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                                <span
+                                  style={{
+                                    fontFamily: "var(--f-mono)",
+                                    fontSize: ".7rem",
+                                    fontWeight: 700,
+                                    color: "var(--text-hi)",
+                                    background: "var(--surface-2)",
+                                    padding: "1px 6px",
+                                    borderRadius: 4,
+                                    border: "1px solid var(--border-soft)",
+                                  }}
+                                >
+                                  {ins.category}
+                                </span>
+                                {ins.sentiment && (
+                                  <span
+                                    style={{
+                                      fontSize: ".68rem",
+                                      fontWeight: 700,
+                                      textTransform: "uppercase",
+                                      letterSpacing: ".04em",
+                                      color: sentimentColor,
+                                      background: sentimentBg,
+                                      padding: "1px 6px",
+                                      borderRadius: 4,
+                                    }}
+                                  >
+                                    {ins.sentiment}
+                                  </span>
+                                )}
+                                {ins.headline && (
+                                  <span style={{ fontWeight: 650, color: "var(--text-hi)", fontSize: ".86rem" }}>
+                                    {ins.headline}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ color: "var(--text)", fontSize: ".83rem", lineHeight: 1.55 }}>
+                                {ins.summary}
+                              </div>
+                              {ins.speaker && (
+                                <div style={{ marginTop: 4 }}>
+                                  <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
+                                    — {ins.speaker}
+                                  </span>
+                                </div>
+                              )}
+                              {ins.evidence && (
+                                <div
+                                  style={{
+                                    marginTop: 6,
+                                    padding: "6px 10px",
+                                    background: "var(--surface-2)",
+                                    borderRadius: 6,
+                                    borderLeft: "2px solid var(--ai)",
+                                    fontSize: ".75rem",
+                                    color: "var(--text-dim-solid)",
+                                    fontStyle: "italic",
+                                    lineHeight: 1.45,
+                                  }}
+                                >
+                                  "{ins.evidence}"
+                                </div>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text-dim-solid)", margin: 0 }}>
+                      {hasTx
+                        ? "No key impact points could be extracted from this transcript."
+                        : `No earnings-call transcript available for ${sym} to summarize.`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
 
@@ -807,8 +853,18 @@ function CallDrawer({
                   {ttsSupported && (
                     <button
                       onClick={tts === "playing" ? pause : play}
-                      className="btn primary"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 7 }}
+                      className="btn"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 7,
+                        background: "var(--ai)",
+                        color: "var(--on-brand)",
+                        fontWeight: 700,
+                        border: "none",
+                        boxShadow: "0 2px 8px rgba(16, 185, 129, 0.35)",
+                        cursor: "pointer",
+                      }}
                     >
                       {tts === "playing"
                         ? <><span style={{ fontSize: ".9em" }}>❚❚</span> Pause</>
@@ -817,7 +873,7 @@ function CallDrawer({
                   )}
                   {ttsSupported && (
                     <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                      {tts === "playing" ? "Reading aloud…" : "text-to-speech narration of the transcript"}
+                      {tts === "playing" ? "Reading aloud…" : "text-to-speech narration of the earnings call"}
                     </span>
                   )}
                 </div>

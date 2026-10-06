@@ -195,12 +195,12 @@
 /* ---- APP SHELL GRID ---- */
 .app {
   display: grid;
-  grid-template-columns: var(--rail-w) 1fr;
+  grid-template-columns: 3.875rem calc(var(--rail-w) - 3.875rem) 1fr;
   grid-template-rows: 44px 34px 1fr;
   grid-template-areas:
-    'brand topbar'
-    'rail ticker'
-    'rail main';
+    'brand brand topbar'
+    'rail rail ticker'
+    'rail rail main';
   height: 100vh;
   height: 100dvh;
   position: relative;
@@ -208,26 +208,19 @@
 }
 
 /* ---- COLLAPSIBLE NAV ---- */
-.app { transition: grid-template-columns 0.22s cubic-bezier(.4,0,.2,1); }
 .app.nav-collapsed {
-  --rail-w: 3.875rem;
-  grid-template-columns: var(--rail-w) 1fr;
+  grid-template-columns: 3.875rem calc(var(--rail-w) - 3.875rem) 1fr;
+  grid-template-areas:
+    'brand brand topbar'
+    'rail ticker ticker'
+    'rail main main';
 }
 .app.nav-collapsed .wordmark,
 .app.nav-collapsed .nav-clock,
 .app.nav-collapsed .sec-lbl,
 .app.nav-collapsed .nav-label,
 .app.nav-collapsed .nav-tag { display: none; }
-.app.nav-collapsed .brandcell { align-items: center; justify-content: center; padding: 0 8px; }
-.app.nav-collapsed .brand-top { justify-content: center; width: 100%; }
-/* Collapsed the rail is ~54px of usable width — not enough for the logo and the
-   toggle side by side. The toggle wins: it is the only way back out, whereas the
-   logo is decorative and returns on expand. `margin-left: 0` undoes the
-   right-push so it centres. */
-.app.nav-collapsed .logo,
-.app.nav-collapsed .brand-logo { display: none; }
-.app.nav-collapsed .nav-collapse-btn { margin-left: 0; }
-.app.nav-collapsed .rail { padding: 10px 6px 8px; align-items: center; }
+.app.nav-collapsed .rail { padding: 10px 6px 8px; align-items: center; width: 3.875rem; }
 .app.nav-collapsed .navitem { justify-content: center; padding: 7px; gap: 0; }
 /* Icon-only rail: section headers are gone (the accordion is bypassed — see the
    comment in shell.tsx), so groups are separated by a rule instead. */

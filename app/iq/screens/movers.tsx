@@ -37,18 +37,71 @@ interface BiggestPctScan {
   losers: SectorGroup[];
 }
 
+interface MostActiveScan {
+  generatedAt: string;
+  byVolume: SectorGroup[];
+  byRelVolume: SectorGroup[];
+}
+
+function mergeMostActiveSectors(
+  data: MostActiveScan,
+  resolveClassification?: (ticker: string) => CanonicalMoverClassification,
+): SectorGroup[] {
+  const map = new Map<string, Map<string, ScanItem>>();
+  const addGroups = (groups: SectorGroup[] = []) => {
+    for (const group of groups) {
+      for (const item of group.items) {
+        const canon = resolveClassification ? resolveClassification(item.ticker) : null;
+        const canonSector = (canon?.sector && canon.sector !== "—") ? canon.sector : group.sector;
+        if (!map.has(canonSector)) {
+          map.set(canonSector, new Map());
+        }
+        const sectorMap = map.get(canonSector)!;
+        const existing = sectorMap.get(item.ticker);
+        if (!existing) {
+          sectorMap.set(item.ticker, {
+            ...item,
+            name: canon?.name || item.name,
+          });
+        } else {
+          sectorMap.set(item.ticker, {
+            ...existing,
+            ...item,
+            name: canon?.name || item.name || existing.name,
+            rvol: item.rvol ?? existing.rvol ?? null,
+            volume: item.volume ?? existing.volume ?? null,
+            price: item.price ?? existing.price ?? null,
+            pctChange: item.pctChange ?? existing.pctChange ?? null,
+          });
+        }
+      }
+    }
+  };
+
+  addGroups(data.byVolume);
+  addGroups(data.byRelVolume);
+
+  return Array.from(map.entries())
+    .map(([sector, items]) => ({
+      sector,
+      items: Array.from(items.values()),
+    }))
+    .sort((a, b) => b.items.length - a.items.length);
+}
+
 const scanTime = (iso?: string) =>
   iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
 
 const TABS = [
   ["win",      "Top Gainers"],
   ["lose",     "Top Losers"],
+  ["active",   "Most Active"],
   ["biggest",  "Biggest %"],
   ["vol",      "Unusual Volume"],
   ["weekwin",  "Weekly Gainers"],
   ["weeklose", "Weekly Losers"],
 ] as const;
-type TabKey = "win" | "lose" | "biggest" | "vol" | "weekwin" | "weeklose";
+type TabKey = "win" | "lose" | "active" | "biggest" | "vol" | "weekwin" | "weeklose";
 /** True for the two 5-day tabs, which rank on weekPct rather than today's move. */
 const isWeekTab = (t: TabKey) => t === "weekwin" || t === "weeklose";
 
@@ -57,11 +110,23 @@ function ScanSection({
   color,
   groups,
   onSelect,
+  resolvePriceAndChange,
+  resolveRvolAndVolume,
 }: {
   title: string;
   color: string;
   groups: SectorGroup[];
   onSelect: (sym: string) => void;
+  resolvePriceAndChange: (
+    ticker: string,
+    fallbackPrice?: number | null,
+    fallbackPct?: number | null,
+  ) => { price: number | null; change: number | null };
+  resolveRvolAndVolume: (
+    ticker: string,
+    fallbackRvol?: number | null,
+    fallbackVolume?: number | null,
+  ) => { rvol: number | null; volume: number | null };
 }) {
   return (
     <div style={{ marginBottom: 22 }}>
@@ -94,9 +159,20 @@ function ScanSection({
           }}
         >
           {groups.map((g) => {
-            const up = g.items.filter(it => (it.pctChange ?? 0) >= 0).length;
-            const down = g.items.length - up;
-            const maxAbs = Math.max(...g.items.map(it => Math.abs(it.pctChange ?? 0)), 1);
+            const items = g.items.map((it) => {
+              const { price, change } = resolvePriceAndChange(it.ticker, it.price, it.pctChange);
+              const { rvol, volume } = resolveRvolAndVolume(it.ticker, it.rvol, it.volume);
+              return {
+                ...it,
+                price: price ?? it.price,
+                pctChange: change ?? it.pctChange,
+                rvol,
+                volume,
+              };
+            });
+            const up = items.filter(it => (it.pctChange ?? 0) >= 0).length;
+            const down = items.length - up;
+            const maxAbs = Math.max(...items.map(it => Math.abs(it.pctChange ?? 0)), 1);
 
             return (
               <div
@@ -130,7 +206,7 @@ function ScanSection({
 
                 {/* Stocks */}
                 <div>
-                  {g.items.map((it) => {
+                  {items.map((it) => {
                     const pct = it.pctChange ?? 0;
                     const width = Math.min(100, Math.max(4, (Math.abs(pct) / maxAbs) * 100));
                     return (
@@ -303,18 +379,20 @@ interface CanonicalMoverClassification {
 function mergeMovers(
   live: LiveMoverDoc[],
   companyByTicker: Map<string, CompanyDoc>,
+  volumeLeaderByTicker: Map<string, VolumeLeaderDoc>,
   resolveClassification: (ticker: string) => CanonicalMoverClassification,
 ): Mover[] {
   return uniqueByTicker(live.filter(l => !isLeveragedProduct(l.name))).map(l => {
     const sym = l.ticker?.trim().toUpperCase();
     const c = companyByTicker.get(sym);
+    const vl = volumeLeaderByTicker.get(sym);
     const canon = resolveClassification(l.ticker);
     return {
       ticker: l.ticker,
       name: canon.name,
       price: l.price,
       pctChange: l.pctChange,
-      rvolRatio: l.rvol ?? c?.rvol ?? 0,
+      rvolRatio: vl?.rvol ?? l.rvol ?? c?.rvol ?? 0,
       relativeStrength: 0,
       maPosture: maPostureLabel(c?.aboveSma50, c?.aboveSma200),
       owned: false,
@@ -334,6 +412,9 @@ function mergeMovers(
 export function MoversScreen() {
   const { data: liveMovers, loading: moversLoading, error: moversError } = useApiList<LiveMoverDoc>("/market-data/movers");
   const { data: rvolCompanies, loading: companiesLoading, error: companiesError } = useApiList<CompanyDoc>("/market-data/companies");
+  const { data: volumeLeaders, loading: volumeLoading } = useApiResource<{ leaders: VolumeLeaderDoc[] }>(
+    "/market-data/volume-leaders",
+  );
   const companyByTicker = useMemo(
     () => new Map(rvolCompanies.map(c => [c.ticker?.trim().toUpperCase(), c])),
     [rvolCompanies],
@@ -341,6 +422,10 @@ export function MoversScreen() {
   const liveMoverByTicker = useMemo(
     () => new Map(liveMovers.map(l => [l.ticker?.trim().toUpperCase(), l])),
     [liveMovers],
+  );
+  const volumeLeaderByTicker = useMemo(
+    () => new Map((volumeLeaders?.leaders ?? []).map(l => [l.ticker?.trim().toUpperCase(), l])),
+    [volumeLeaders],
   );
 
   /**
@@ -389,22 +474,23 @@ export function MoversScreen() {
   }, [liveMoverByTicker, companyByTicker]);
 
   const movers = useMemo(
-    () => mergeMovers(liveMovers, companyByTicker, canonicalClassification),
-    [liveMovers, companyByTicker, canonicalClassification],
+    () => mergeMovers(liveMovers, companyByTicker, volumeLeaderByTicker, canonicalClassification),
+    [liveMovers, companyByTicker, volumeLeaderByTicker, canonicalClassification],
   );
 
   /** One `companies` doc as a board row. Shared by every tab built from the
    *  tracked universe rather than the daily movers feed. */
   const companyRow = useCallback((c: CompanyDoc): Mover => {
+    const sym = c.ticker?.trim().toUpperCase();
     const canon = canonicalClassification(c.ticker);
+    const lm = liveMoverByTicker.get(sym);
+    const vl = volumeLeaderByTicker.get(sym);
     return {
       ticker: c.ticker,
       name: canon.name,
-      price: c.price ?? 0,
-      // pctChange stays TODAY's move (the Price column and live overlay still
-      // want it); the weekly number lives in weekPct.
-      pctChange: c.pctChange ?? 0,
-      rvolRatio: c.rvol ?? 0,
+      price: lm?.price ?? c.price ?? 0,
+      pctChange: lm?.pctChange ?? c.pctChange ?? 0,
+      rvolRatio: vl?.rvol ?? lm?.rvol ?? c.rvol ?? 0,
       relativeStrength: 0,
       maPosture: maPostureLabel(c.aboveSma50, c.aboveSma200),
       owned: false,
@@ -417,7 +503,7 @@ export function MoversScreen() {
       techContext: "",
       newsContext: "",
     };
-  }, [canonicalClassification]);
+  }, [canonicalClassification, liveMoverByTicker, volumeLeaderByTicker]);
 
   // Leveraged/inverse products are excluded from every universe-built tab for
   // the same reason mergeMovers excludes them from the daily feed: a 2x ETF's
@@ -445,21 +531,6 @@ export function MoversScreen() {
   );
 
   /**
-   * UNUSUAL VOLUME, ranked across the whole tracked universe.
-   *
-   * It used to rank RVOL within the daily movers feed — the top 100 gainers and
-   * 100 losers, chosen by PRICE. Unusual volume is a volume event, and the
-   * clearest cases are heavy trading on a flat price, which that feed by
-   * construction never contains. Measured against the live data, 17 of the 20
-   * highest-RVOL names in the universe could not appear at all: WBS at 13.97x on
-   * +0.23%, LBRDK 11.62x on +0.31%, AVY 10.23x on +0.11%, ROIV 6.58x on +0.04%.
-   * A cross-check of 30 names against Yahoo Finance and MarketChameleon matched
-   * only 2.
-   *
-   * `companies` carries rvol for ~900 names, so ranking there covers the tracked
-   * market instead of a price-selected slice of it.
-   */
-  /**
    * UNUSUAL VOLUME — the whole US market, ranked on the server.
    *
    * It used to rank RVOL inside the daily movers feed: the top 100 gainers and
@@ -473,9 +544,6 @@ export function MoversScreen() {
    * browser. Falls back to the tracked-universe ranking (~900 names) until the
    * volume-leaders job has run, so the tab is never empty.
    */
-  const { data: volumeLeaders, loading: volumeLoading } = useApiResource<{ leaders: VolumeLeaderDoc[] }>(
-    "/market-data/volume-leaders",
-  );
   const volumeRows: Mover[] = useMemo(() => {
     const served = volumeLeaders?.leaders ?? [];
     if (served.length > 0) {
@@ -484,22 +552,24 @@ export function MoversScreen() {
           l => !isLeveragedProduct(canonicalClassification(l.ticker).name)
         )
       ).map(l => {
-          const c = companyByTicker.get(l.ticker?.trim().toUpperCase());
+          const sym = l.ticker?.trim().toUpperCase();
+          const c = companyByTicker.get(sym);
+          const lm = liveMoverByTicker.get(sym);
           const baseRow = companyRow(c ?? ({ ticker: l.ticker } as CompanyDoc));
           return {
             ...baseRow,
             // The served row is the authority for the volume numbers; the
             // companies doc only supplies name/sector/cap where we track it.
-            price: l.close ?? c?.price ?? 0,
-            pctChange: l.changePct ?? c?.pctChange ?? 0,
-            rvolRatio: l.rvol,
+            price: lm?.price ?? l.close ?? c?.price ?? 0,
+            pctChange: lm?.pctChange ?? l.changePct ?? c?.pctChange ?? 0,
+            rvolRatio: l.rvol ?? lm?.rvol ?? c?.rvol ?? 0,
           };
         });
     }
     return universeRows
       .filter(c => typeof c.rvol === "number" && (c.rvol as number) > 0)
       .map(companyRow);
-  }, [volumeLeaders, universeRows, companyByTicker, canonicalClassification, companyRow]);
+  }, [volumeLeaders, universeRows, companyByTicker, liveMoverByTicker, canonicalClassification, companyRow]);
 
 
   const [tab,          setTab]          = useState<TabKey>("win");
@@ -515,21 +585,28 @@ export function MoversScreen() {
 
   const filteredBiggest = useMemo(() => {
     if (!biggestPctData) return null;
-    const sFilter = sector === "all" || sector === "All" ? null : sector.toLowerCase();
     const qFilter = query.trim().toUpperCase();
 
     const filterGroups = (groups: SectorGroup[]) => {
-      return groups
-        .map(g => ({
-          ...g,
-          items: g.items.filter(it => {
-            if (!matchesSector(sector, it.ticker, g.sector)) return false;
-            if (qFilter && !it.ticker.toUpperCase().includes(qFilter) && !(it.name && it.name.toUpperCase().includes(qFilter))) {
-              return false;
-            }
-            return true;
-          }),
-        }))
+      const bySector = new Map<string, ScanItem[]>();
+      for (const g of groups) {
+        for (const it of g.items) {
+          const canon = canonicalClassification(it.ticker);
+          const targetSector = (canon.sector && canon.sector !== "—") ? canon.sector : g.sector;
+          if (!matchesSector(sector, it.ticker, targetSector)) continue;
+          const name = (canon.name && canon.name !== it.ticker ? canon.name : it.name) ?? it.name;
+          if (qFilter && !it.ticker.toUpperCase().includes(qFilter) && !(name && name.toUpperCase().includes(qFilter))) {
+            continue;
+          }
+          if (!bySector.has(targetSector)) bySector.set(targetSector, []);
+          bySector.get(targetSector)!.push({
+            ...it,
+            name,
+          });
+        }
+      }
+      return Array.from(bySector.entries())
+        .map(([sec, items]) => ({ sector: sec, items }))
         .filter(g => g.items.length > 0);
     };
 
@@ -538,13 +615,64 @@ export function MoversScreen() {
       gainers: filterGroups(biggestPctData.gainers || []),
       losers: filterGroups(biggestPctData.losers || []),
     };
-  }, [biggestPctData, sector, query]);
+  }, [biggestPctData, sector, query, canonicalClassification]);
 
   const biggestCount = useMemo(() => {
     if (!filteredBiggest) return 0;
     return (filteredBiggest.gainers?.reduce((n, g) => n + g.items.length, 0) ?? 0) +
            (filteredBiggest.losers?.reduce((n, g) => n + g.items.length, 0) ?? 0);
   }, [filteredBiggest]);
+
+  const { data: mostActiveData, loading: mostActiveLoading } = useApiResource<MostActiveScan>(
+    tab === "active" ? "/live/scan/most-active" : null,
+  );
+
+  const filteredMostActive = useMemo(() => {
+    if (!mostActiveData) return null;
+    const qFilter = query.trim().toUpperCase();
+
+    const filterGroups = (groups: SectorGroup[]) => {
+      return groups
+        .map(g => ({
+          ...g,
+          items: g.items.filter(it => {
+            const canon = canonicalClassification(it.ticker);
+            const targetSector = (canon.sector && canon.sector !== "—") ? canon.sector : g.sector;
+            if (!matchesSector(sector, it.ticker, targetSector)) return false;
+            const name = (canon.name && canon.name !== it.ticker ? canon.name : it.name) ?? it.name;
+            if (qFilter && !it.ticker.toUpperCase().includes(qFilter) && !(name && name.toUpperCase().includes(qFilter))) {
+              return false;
+            }
+            return true;
+          }).map(it => {
+            const canon = canonicalClassification(it.ticker);
+            return {
+              ...it,
+              name: (canon.name && canon.name !== it.ticker ? canon.name : it.name) ?? it.name,
+            };
+          }),
+        }))
+        .filter(g => g.items.length > 0);
+    };
+
+    return {
+      generatedAt: mostActiveData.generatedAt,
+      byVolume: filterGroups(mostActiveData.byVolume || []),
+      byRelVolume: filterGroups(mostActiveData.byRelVolume || []),
+    };
+  }, [mostActiveData, sector, query, canonicalClassification]);
+
+  const activeSectors = useMemo(() => {
+    if (!filteredMostActive) return [];
+    return mergeMostActiveSectors(filteredMostActive, canonicalClassification);
+  }, [filteredMostActive, canonicalClassification]);
+
+  const activeCount = useMemo(() => {
+    return activeSectors.reduce((sum, s) => sum + s.items.length, 0);
+  }, [activeSectors]);
+
+  const activeAllItems = useMemo(() => activeSectors.flatMap(s => s.items), [activeSectors]);
+
   // Column sort. null = the tab's own ranking (gainers by %chg desc, losers by
   // %chg asc, unusual-volume by RVOL desc). Clicking a header overrides it.
   const [sortKey,      setSortKey]      = useState<MoverSortKey | null>(null);
@@ -658,10 +786,155 @@ export function MoversScreen() {
   // universal-snapshot quote). Fetched for ALL shown rows — the list is small
   // (top gainers/losers/unusual-volume) and useLiveQuotes is a shared union poll
   // that chunks at 250, so no pagination cap is needed. Polls every 30s.
-  const shownTickers = searched.map(m => m.ticker);
+  // In addition, include tickers from activeAllItems and filteredBiggest so all sections
+  // in Movers share the exact same live quotes.
+  const shownTickers = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of searched) {
+      if (m.ticker) set.add(m.ticker.trim().toUpperCase());
+    }
+    if (tab === "active") {
+      for (const it of activeAllItems) {
+        if (it.ticker) set.add(it.ticker.trim().toUpperCase());
+      }
+    } else if (tab === "biggest" && filteredBiggest) {
+      for (const g of filteredBiggest.gainers ?? []) {
+        for (const it of g.items) {
+          if (it.ticker) set.add(it.ticker.trim().toUpperCase());
+        }
+      }
+      for (const g of filteredBiggest.losers ?? []) {
+        for (const it of g.items) {
+          if (it.ticker) set.add(it.ticker.trim().toUpperCase());
+        }
+      }
+    }
+    for (const m of liveMovers) {
+      if (m.ticker) set.add(m.ticker.trim().toUpperCase());
+    }
+    return Array.from(set);
+  }, [searched, tab, activeAllItems, filteredBiggest, liveMovers]);
+
   // Shared app-wide poll: one timer + one request for every live surface, so a
   // ticker here always matches the same ticker on the heatmap/drawer exactly.
   const quoteByTicker = useLiveQuotes(shownTickers);
+
+  /**
+   * CANONICAL RVOL AND VOLUME RESOLVER:
+   * Guarantees that whether a ticker is shown in Top Gainers, Unusual Volume,
+   * Most Active, or Biggest %, its RVOL and volume figures are identical.
+   */
+  const resolveRvolAndVolume = useCallback((
+    ticker: string,
+    fallbackRvol?: number | null,
+    fallbackVolume?: number | null,
+  ): { rvol: number | null; volume: number | null } => {
+    const sym = ticker?.trim().toUpperCase();
+    const vl = volumeLeaderByTicker.get(sym);
+    const lm = liveMoverByTicker.get(sym);
+    const c = companyByTicker.get(sym);
+
+    const rvol = vl?.rvol ?? lm?.rvol ?? c?.rvol ?? fallbackRvol ?? null;
+    const volume = vl?.volume ?? fallbackVolume ?? null;
+
+    return { rvol, volume };
+  }, [volumeLeaderByTicker, liveMoverByTicker, companyByTicker]);
+
+  /**
+   * CANONICAL PRICE AND % CHANGE RESOLVER:
+   * Guarantees that whether a ticker is shown in Top Gainers, Top Losers,
+   * Most Active, Biggest %, Unusual Volume, or Weekly Movers, its displayed
+   * price and percent change are completely identical and sourced from the
+   * authoritative live quote / paired snapshot.
+   */
+  const resolvePriceAndChange = useCallback((
+    ticker: string,
+    fallbackPrice?: number | null,
+    fallbackPct?: number | null,
+    weekBase?: number | null,
+    weekPct?: number | null,
+  ): { price: number | null; change: number | null } => {
+    const sym = ticker?.trim().toUpperCase();
+    const q = quoteByTicker.get(sym);
+    const lm = liveMoverByTicker.get(sym);
+    const c = companyByTicker.get(sym);
+    const vl = volumeLeaderByTicker.get(sym);
+
+    const extOnly = extendedSession(q) !== null;
+
+    const baselinePair = pairedQuote(
+      lm ? { price: lm.price, pctChange: lm.pctChange } : null,
+      fallbackPrice != null && fallbackPct != null ? { price: fallbackPrice, pctChange: fallbackPct } : null,
+      vl ? { price: vl.close, pctChange: vl.changePct } : null,
+      c ? { price: c.price, pctChange: c.pctChange } : null,
+      { price: fallbackPrice ?? null, pctChange: fallbackPct ?? null },
+    );
+
+    const pq = extOnly ? baselinePair : pairedQuote(q, baselinePair);
+
+    const change = isWeekTab(tab)
+      ? (pq.price != null && weekBase != null && weekBase > 0
+          ? ((pq.price - weekBase) / weekBase) * 100
+          : (weekPct ?? pq.pctChange))
+      : pq.pctChange;
+
+    return { price: pq.price, change };
+  }, [quoteByTicker, liveMoverByTicker, companyByTicker, volumeLeaderByTicker, tab]);
+
+  /**
+   * Most Active items mapped through canonical resolvers so summary cards and
+   * sector cards agree perfectly with each other and with Top Gainers / Losers.
+   */
+  const resolvedActiveItems = useMemo(() => {
+    return activeAllItems.map(it => {
+      const { price, change } = resolvePriceAndChange(it.ticker, it.price, it.pctChange);
+      const { rvol, volume } = resolveRvolAndVolume(it.ticker, it.rvol, it.volume);
+      const canon = canonicalClassification(it.ticker);
+      return {
+        ...it,
+        name: (canon.name && canon.name !== it.ticker ? canon.name : it.name) ?? it.name,
+        price: price ?? it.price,
+        pctChange: change ?? it.pctChange,
+        rvol,
+        volume,
+      };
+    });
+  }, [activeAllItems, resolvePriceAndChange, resolveRvolAndVolume, canonicalClassification]);
+
+  const activeGainers = useMemo(() => resolvedActiveItems
+    .filter(it => (it.pctChange ?? 0) > 0)
+    .sort((a, b) => (b.pctChange ?? 0) - (a.pctChange ?? 0)), [resolvedActiveItems]);
+
+  const activeLosers = useMemo(() => resolvedActiveItems
+    .filter(it => (it.pctChange ?? 0) < 0)
+    .sort((a, b) => (a.pctChange ?? 0) - (b.pctChange ?? 0)), [resolvedActiveItems]);
+
+  const activeHeaviestVolume = useMemo(() => [...resolvedActiveItems]
+    .filter(it => it.volume != null)
+    .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))[0], [resolvedActiveItems]);
+
+  const activeTotalVolume = useMemo(() => resolvedActiveItems.reduce(
+    (sum, it) => sum + (it.volume ?? 0),
+    0
+  ), [resolvedActiveItems]);
+
+  const activeRvolItems = useMemo(() => resolvedActiveItems.filter(it => it.rvol != null), [resolvedActiveItems]);
+
+  const activeAvgRvol = useMemo(() =>
+    activeRvolItems.length > 0
+      ? activeRvolItems.reduce(
+          (sum, it) => sum + (it.rvol ?? 0),
+          0
+        ) / activeRvolItems.length
+      : 0, [activeRvolItems]);
+
+  const activeUpCount = useMemo(() => resolvedActiveItems.filter(
+    it => (it.pctChange ?? 0) > 0
+  ).length, [resolvedActiveItems]);
+
+  const activeDownCount = useMemo(() => resolvedActiveItems.filter(
+    it => (it.pctChange ?? 0) < 0
+  ).length, [resolvedActiveItems]);
 
   /**
    * The Price and Change this row will actually SHOW.
@@ -670,49 +943,8 @@ export function MoversScreen() {
    * displays and what decides it belongs cannot come apart.
    */
   const shownValues = useCallback((m: Mover): { price: number | null; change: number | null } => {
-    const q = quoteByTicker.get(m.ticker);
-
-    /* Outside regular hours the board keeps the COMPLETED SESSION's pair.
-     *
-     * This is a session leaderboard: rows are ranked on the stored session
-     * move, and the caption says so. The live overlay was replacing that with
-     * an extended-hours print measured from the previous close — a different
-     * quantity, arriving about a second after first paint. BNC rendered $5.25
-     * (the 16:00 close) and then silently became $5.20 (a pre-market trade),
-     * which is the flip that made the board disagree with every consumer site.
-     *
-     * Two things were wrong with overlaying it, beyond the flicker. The number
-     * shown stopped being the number the row was ranked by — which the `visible`
-     * guard below then papers over by HIDING names whose extended-hours move
-     * contradicts their tab, so a genuine top gainer vanishes from Top Gainers.
-     * And the price and the percentage described different sessions.
-     *
-     * So: when extendedSession says no regular session has run since the last
-     * close, the stored EOD pair stands and the live print is reported in the
-     * PM/AH marker instead of replacing it. During regular hours — and the
-     * moment a regular session has moved the price — the live overlay is exactly
-     * as before, which is what keeps this table matching the stock drawer. */
-    const extOnly = extendedSession(q) !== null;
-
-    // Price and Change come from ONE source — see pairedQuote. Read per-field,
-    // a live price could land beside the stored percentage.
-    const pq = extOnly ? { price: m.price, pctChange: m.pctChange } : pairedQuote(q, m);
-    // On the weekly tabs the Change column shows the 5-DAY move, so the live
-    // quote (which is today's %) must NOT overwrite it — otherwise a "Weekly
-    // Gainers" row could render today's negative number.
-    //
-    // The stored move ends at the last stored BAR, which can be days behind the
-    // price beside it: DAIC read +1258% to a close two sessions old, from which
-    // it had since fallen ~37%. Given the base that move was measured from,
-    // re-measure it to the price this row is actually showing. Falls back to the
-    // stored figure when either the base or the live price is missing.
-    const change = isWeekTab(tab)
-      ? (pq.price != null && m.weekBase != null && m.weekBase > 0
-          ? ((pq.price - m.weekBase) / m.weekBase) * 100
-          : m.weekPct)
-      : pq.pctChange;
-    return { price: pq.price, change };
-  }, [quoteByTicker, tab]);
+    return resolvePriceAndChange(m.ticker, m.price, m.pctChange, m.weekBase, m.weekPct);
+  }, [resolvePriceAndChange]);
 
   /**
    * The marker that qualifies a Change value with the session it happened in —
@@ -896,10 +1128,12 @@ export function MoversScreen() {
             Unusual Volume and the two weekly ones, which draw from the tracked
             universe and rank by RVOL or by the 5-day move. It was stating the
             wrong source AND the wrong ranking on three tabs out of five. */}
-        {((tab === "biggest" ? biggestCount : liveCount) > 0) && (
+        {((tab === "biggest" ? biggestCount : tab === "active" ? activeCount : liveCount) > 0) && (
           <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
             {tab === "biggest"
               ? `${biggestCount} names · top 20 gainers + top 20 losers by sector · ${QUOTE_DELAY_LABEL}`
+              : tab === "active"
+              ? `${activeCount} names · top volume + top relative volume by sector · ${QUOTE_DELAY_LABEL}`
               : `${liveCount} names · ${
                   isWeekTab(tab) ? "tracked universe · ranked by 5-day move"
                   : tab === "vol" ? "tracked universe · ranked by relative volume"
@@ -915,7 +1149,7 @@ export function MoversScreen() {
         <select className="mv-sel" value={sector} onChange={e => setSector(e.target.value)}>
           {sectors.map(s => <option key={s} value={s}>{titleCaseLabel(s)}</option>)}
         </select>
-        {tab !== "biggest" && (
+        {tab !== "biggest" && tab !== "active" && (
           <>
             <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center", marginLeft: 10 }}>Market cap</span>
             <select className="mv-sel" value={effCap} onChange={e => setCap(e.target.value)}>
@@ -931,11 +1165,222 @@ export function MoversScreen() {
         />
         <div className="spacer" />
         <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-          {tab === "biggest" ? `${biggestCount} stocks` : `${visible.length} stocks`}
+          {tab === "biggest" ? `${biggestCount} stocks` : tab === "active" ? `${activeCount} stocks` : `${visible.length} stocks`}
         </span>
       </div>
 
-      {tab === "biggest" ? (
+      {tab === "active" ? (
+        <div style={{ marginLeft: 16, marginRight: 20, marginTop: 16 }}>
+          <div className="card">
+            <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: ".9rem", fontWeight: 700, color: "var(--text-hi)" }}>
+                  Today&apos;s Most Active Stocks by Sector
+                </h3>
+                <VendorTag v="polygon" />
+              </div>
+              {filteredMostActive?.generatedAt && (
+                <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                  as of {scanTime(filteredMostActive.generatedAt)}
+                </span>
+              )}
+            </div>
+            <div className="card-b" style={{ maxHeight: "none", padding: "16px 18px" }}>
+              {!filteredMostActive ? (
+                <DataState loading={mostActiveLoading} label="Generating scan…" />
+              ) : activeSectors.length === 0 ? (
+                <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", padding: "14px 0" }}>
+                  No stocks match the selected filters.
+                </div>
+              ) : (
+                <>
+                  {/* Summary Cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
+                    {/* UP / DOWN */}
+                    <div className="card" style={{ padding: 14 }}>
+                      <div style={{ fontSize: ".6rem", fontWeight: 700, color: "var(--text-dim-solid)", letterSpacing: ".08em", textTransform: "uppercase" }}>
+                        Up / Down
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontFamily: "var(--f-mono)", fontSize: "1rem", fontWeight: 700 }}>
+                        <span style={{ color: "var(--up)" }}>▲ {activeUpCount}</span>
+                        <span style={{ color: "var(--down)" }}>▼ {activeDownCount}</span>
+                      </div>
+                      <div style={{ display: "flex", height: 5, marginTop: 8, borderRadius: 4, overflow: "hidden", background: "var(--down)" }}>
+                        <div style={{ width: `${activeAllItems.length ? (activeUpCount / activeAllItems.length) * 100 : 0}%`, background: "var(--up)" }} />
+                      </div>
+                    </div>
+
+                    {/* BIGGEST GAINER */}
+                    <div className="card" style={{ padding: 14 }}>
+                      <div style={{ fontSize: ".6rem", fontWeight: 700, color: "var(--text-dim-solid)", letterSpacing: ".08em", textTransform: "uppercase" }}>
+                        Biggest Gainer
+                      </div>
+                      <div style={{ marginTop: 7, display: "flex", alignItems: "baseline", gap: 6 }}>
+                        <b style={{ fontFamily: "var(--f-mono)", fontSize: "1rem", color: "var(--text-hi)" }}>
+                          {activeGainers[0]?.ticker ?? "—"}
+                        </b>
+                        {activeGainers[0] && (
+                          <span className="up" style={{ fontFamily: "var(--f-mono)", fontWeight: 700 }}>
+                            {sign(activeGainers[0].pctChange ?? 0)}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ marginTop: 5, fontSize: ".68rem", color: "var(--text-dim-solid)" }}>
+                        {activeGainers[0]?.ticker
+                          ? (() => {
+                              const canonSec = canonicalClassification(activeGainers[0].ticker).sector;
+                              const sec = activeSectors.find(s => s.items.some(i => i.ticker === activeGainers[0]?.ticker))?.sector;
+                              const finalSec = canonSec && canonSec !== "—" ? canonSec : sec;
+                              return finalSec ? titleCaseLabel(finalSec) : "—";
+                            })()
+                          : "—"}
+                      </div>
+                    </div>
+
+                    {/* BIGGEST LOSER */}
+                    <div className="card" style={{ padding: 14 }}>
+                      <div style={{ fontSize: ".6rem", fontWeight: 700, color: "var(--text-dim-solid)", letterSpacing: ".08em", textTransform: "uppercase" }}>
+                        Biggest Loser
+                      </div>
+                      <div style={{ marginTop: 7, display: "flex", alignItems: "baseline", gap: 6 }}>
+                        <b style={{ fontFamily: "var(--f-mono)", fontSize: "1rem", color: "var(--text-hi)" }}>
+                          {activeLosers[0]?.ticker ?? "—"}
+                        </b>
+                        {activeLosers[0] && (
+                          <span className="down" style={{ fontFamily: "var(--f-mono)", fontWeight: 700 }}>
+                            {sign(activeLosers[0].pctChange ?? 0)}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ marginTop: 5, fontSize: ".68rem", color: "var(--text-dim-solid)" }}>
+                        {activeLosers[0]?.ticker
+                          ? (() => {
+                              const canonSec = canonicalClassification(activeLosers[0].ticker).sector;
+                              const sec = activeSectors.find(s => s.items.some(i => i.ticker === activeLosers[0]?.ticker))?.sector;
+                              const finalSec = canonSec && canonSec !== "—" ? canonSec : sec;
+                              return finalSec ? titleCaseLabel(finalSec) : "—";
+                            })()
+                          : "—"}
+                      </div>
+                    </div>
+
+                    {/* HEAVIEST VOLUME */}
+                    <div className="card" style={{ padding: 14 }}>
+                      <div style={{ fontSize: ".6rem", fontWeight: 700, color: "var(--text-dim-solid)", letterSpacing: ".08em", textTransform: "uppercase" }}>
+                        Heaviest Volume
+                      </div>
+                      <div style={{ marginTop: 7, display: "flex", alignItems: "baseline", gap: 7 }}>
+                        <b style={{ fontFamily: "var(--f-mono)", fontSize: "1rem", color: "var(--text-hi)" }}>
+                          {activeHeaviestVolume?.ticker ?? "—"}
+                        </b>
+                        {activeHeaviestVolume?.volume != null && (
+                          <span style={{ fontFamily: "var(--f-mono)", fontWeight: 700, fontSize: ".78rem" }}>
+                            {(activeHeaviestVolume.volume / 1e6).toFixed(1)}M
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ marginTop: 5, fontSize: ".68rem", color: "var(--text-dim-solid)" }}>
+                        shares traded · {activeHeaviestVolume ? sign(activeHeaviestVolume.pctChange ?? 0) : "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Volume stats bar */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, fontSize: ".65rem", color: "var(--text-dim-solid)" }}>
+                    <div>
+                      <span style={{ display: "inline-block", padding: "3px 6px", marginRight: 5, borderRadius: 4, background: "var(--surface-3)", color: "var(--text-hi)", fontFamily: "var(--f-mono)", fontWeight: 700 }}>
+                        {(activeTotalVolume / 1e6).toFixed(1)}M
+                      </span>
+                      shares traded
+                      <span style={{ margin: "0 7px" }}>·</span>
+                      <span style={{ display: "inline-block", padding: "3px 6px", borderRadius: 4, background: "rgba(245,181,68,.14)", color: "var(--warn)", fontFamily: "var(--f-mono)", fontWeight: 700 }}>
+                        {activeAvgRvol ? `${activeAvgRvol.toFixed(1)}x` : "—"}
+                      </span>
+                      <span style={{ marginLeft: 5 }}>vs 1-month avg volume</span>
+                    </div>
+                    <span>Sectors ordered by number of active names</span>
+                  </div>
+
+                  {/* Sector Board */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 10 }}>
+                    {activeSectors.map((sec) => (
+                      <div key={sec.sector} style={{ minWidth: 0 }}>
+                        <div style={{ background: "var(--surface-1)", border: "1px solid var(--border-soft)", borderRadius: 10, overflow: "hidden" }}>
+                          <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--border-soft)" }}>
+                            <span style={{ fontSize: ".78rem", fontWeight: 700, color: "var(--text-hi)" }}>
+                              {titleCaseLabel(sec.sector)}
+                            </span>
+                          </div>
+                          {sec.items.map((it) => {
+                            const { price, change } = resolvePriceAndChange(it.ticker, it.price, it.pctChange);
+                            const { rvol, volume } = resolveRvolAndVolume(it.ticker, it.rvol, it.volume);
+                            const pct = change ?? it.pctChange ?? 0;
+                            return (
+                              <button
+                                key={it.ticker}
+                                type="button"
+                                onClick={() => setSelectedSym(it.ticker)}
+                                style={{
+                                  width: "100%",
+                                  display: "grid",
+                                  gridTemplateColumns: "60px 46px 1fr auto",
+                                  alignItems: "center",
+                                  gap: 7,
+                                  padding: "9px 11px",
+                                  border: 0,
+                                  borderBottom: "1px solid var(--border-soft)",
+                                  background: "transparent",
+                                  color: "inherit",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <b style={{ fontFamily: "var(--f-mono)", fontSize: ".86rem", color: "var(--text-hi)" }}>
+                                  {it.ticker}
+                                </b>
+                                <span style={{
+                                  fontFamily: "var(--f-mono)",
+                                  fontSize: ".66rem",
+                                  fontWeight: 700,
+                                  padding: "3px 5px",
+                                  borderRadius: 4,
+                                  background: rvol != null ? "rgba(245,181,68,.14)" : "var(--surface-3)",
+                                  color: rvol != null ? "var(--warn)" : "var(--text-dim-solid)",
+                                }}>
+                                  {rvol != null ? `${rvol.toFixed(1)}x` : volume != null ? `${(volume / 1e6).toFixed(1)}M` : "—"}
+                                </span>
+                                <div style={{ height: 5, display: "flex", justifyContent: pct >= 0 ? "flex-start" : "flex-end" }}>
+                                  <div style={{
+                                    width: `${Math.min(100, Math.max(5, Math.abs(pct) * 4))}%`,
+                                    height: 8,
+                                    borderRadius: 2,
+                                    background: pct >= 0 ? "var(--up)" : "var(--down)",
+                                  }} />
+                                </div>
+                                <span className={cls(pct)} style={{
+                                  fontFamily: "var(--f-mono)",
+                                  fontSize: ".66rem",
+                                  fontWeight: 700,
+                                  padding: "3px 6px",
+                                  borderRadius: 4,
+                                  background: pct >= 0 ? "var(--up-dim)" : "var(--down-dim)",
+                                  whiteSpace: "nowrap",
+                                }}>
+                                  {sign(pct)}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : tab === "biggest" ? (
         <div style={{ marginLeft: 16, marginRight: 20, marginTop: 16 }}>
           <div className="card">
             <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px" }}>
@@ -961,12 +1406,16 @@ export function MoversScreen() {
                     color="var(--up)"
                     groups={filteredBiggest.gainers}
                     onSelect={setSelectedSym}
+                    resolvePriceAndChange={resolvePriceAndChange}
+                    resolveRvolAndVolume={resolveRvolAndVolume}
                   />
                   <ScanSection
                     title="Today's top 20 % losers"
                     color="var(--down)"
                     groups={filteredBiggest.losers}
                     onSelect={setSelectedSym}
+                    resolvePriceAndChange={resolvePriceAndChange}
+                    resolveRvolAndVolume={resolveRvolAndVolume}
                   />
                 </>
               )}
@@ -1056,12 +1505,14 @@ export function MoversScreen() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          const canon = canonicalClassification(m.ticker);
+                          const { price: nPrice, change: nChange } = shownValues(m);
                           setNewsModalSym({
                             ticker: m.ticker,
-                            name: m.name,
-                            price,
-                            pctChange: v,
-                            direction: tab === "lose" || tab === "weeklose" ? "loser" : "gainer",
+                            name: canon.name,
+                            price: nPrice,
+                            pctChange: nChange,
+                            direction: (nChange ?? 0) >= 0 ? "gainer" : "loser",
                           });
                         }}
                         title="View news catalyst for why this stock moved"
@@ -1113,7 +1564,8 @@ export function MoversScreen() {
                 const sym = selectedSym!;
                 // Shown as saved only once the server confirmed it (see `adding`).
                 const inList = watchedSet.has(sym) && adding !== sym.toUpperCase();
-                const moverItem = movers.find(m => m.ticker === sym);
+                const canon = canonicalClassification(sym);
+                const { price: dPrice, change: dPct } = resolvePriceAndChange(sym);
 
                 return (
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1121,10 +1573,10 @@ export function MoversScreen() {
                       onClick={() =>
                         setNewsModalSym({
                           ticker: sym,
-                          name: moverItem?.name,
-                          price: moverItem?.price,
-                          pctChange: moverItem?.pctChange,
-                          direction: (moverItem?.pctChange ?? 0) >= 0 ? "gainer" : "loser",
+                          name: canon.name,
+                          price: dPrice,
+                          pctChange: dPct,
+                          direction: (dPct ?? 0) >= 0 ? "gainer" : "loser",
                         })
                       }
                       title="View News & Catalyst why this stock moved"

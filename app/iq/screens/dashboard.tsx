@@ -323,7 +323,7 @@ export function DashboardScreen() {
   const { data: consensusLive, loading: consensusLoading } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const { data: recaps, loading: recapsLoading } = useApiList<RecapDoc>("/market-data/recaps");
   const latestRecap = [...recaps].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0] ?? null;
-  const { data: mostSearched, loading: mostSearchedLoading } = useApiResource<{ results: Array<{ ticker: string; count: number }> }>("/live/most-searched-tickers?limit=10");
+  const { data: mostSearched, loading: mostSearchedLoading } = useApiResource<{ results: Array<{ ticker: string; count: number }> }>("/live/most-searched-tickers?limit=18");
   // Dedupe: merge any repeated ticker and collapse Google's dual class
   // (GOOG → GOOGL) so the same company never appears twice.
   const searchedDeduped = (() => {
@@ -334,7 +334,7 @@ export function DashboardScreen() {
       if (cur) cur.count += r.count;
       else map.set(key, { ticker: key, count: r.count });
     }
-    return [...map.values()].sort((a, b) => b.count - a.count);
+    return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 18);
   })();
   // Live quotes for the searched names so this widget shows a current price even
   // when the base `companies` doc has a null price (the deep profile sweep hasn't
@@ -689,15 +689,21 @@ export function DashboardScreen() {
                     const rawSession = e.session || ann?.session || (liveEarnings.find(l => l.ticker === e.ticker)?.session) || null;
 
                     return (
-                      <div key={e.ticker} className="minirow" style={{ cursor: "pointer" }}
+                      <div key={e.ticker} className="minirow" style={{
+                        cursor: "pointer",
+                        display: "grid",
+                        gridTemplateColumns: "26px minmax(0, 1fr) 92px 70px",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
                         onClick={() => openEarnings(e.ticker)}
                         {...mr(e.ticker, "earnings")}
                       >
                         <StockLogo sym={e.ticker} size={26} />
-                        <span className="tkr" style={{ width: "auto", flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span className="tkr" style={{ width: "auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {e.ticker}<small title={e.name ?? c?.name ?? ""}>{e.name ?? c?.name ?? "—"}</small>
                         </span>
-                        <span className="mid" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <span className="mid" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
                           {e.epsActual != null ? (
                             <span className="pill" style={{
                               background: e.epsEstimate != null
@@ -706,28 +712,29 @@ export function DashboardScreen() {
                               color: e.epsEstimate != null
                                 ? (e.epsActual >= e.epsEstimate ? "var(--up)" : "var(--down)")
                                 : "var(--text-hi)",
+                              whiteSpace: "nowrap",
                             }}>
                               EPS ${e.epsActual.toFixed(2)}
                             </span>
                           ) : e.epsEstimate != null ? (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
                               Est ${e.epsEstimate.toFixed(2)}
                             </span>
                           ) : rawSession ? (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)" }}>
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", whiteSpace: "nowrap" }}>
                               {rawSession}
                             </span>
                           ) : c?.marketCap != null ? (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
                               {fmt(c.marketCap)} Cap
                             </span>
                           ) : (
-                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
                               Today
                             </span>
                           )}
                         </span>
-                        <div className="r" style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div className="r" style={{ textAlign: "right", minWidth: 0 }}>
                           {e.revenueActual != null ? (
                             <span style={{ color: "var(--text-hi)", fontFamily: "var(--f-mono)", fontSize: ".8rem" }}>
                               ${e.revenueActual >= 1e9 ? (e.revenueActual / 1e9).toFixed(1) + "B" : (e.revenueActual / 1e6).toFixed(0) + "M"}
