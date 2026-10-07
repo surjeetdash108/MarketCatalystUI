@@ -1170,7 +1170,10 @@ export function DashboardScreen() {
         <div className="col-4">
           <div className="card vix" style={{ height: "100%" }}>
             <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>VIX · Volatility</h3><VendorTag v="polygon" /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <h3>VIX · Volatility</h3>
+                {(() => { const src = liveIndices.find(i => i.id === "VIX")?.source; return src && <VendorTag v={src} />; })()}
+              </div>
               <Link className="link" href="/menu/macro">View all →</Link>
             </div>
             <div className="card-b">
