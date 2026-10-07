@@ -692,7 +692,7 @@ export function DashboardScreen() {
                       <div key={e.ticker} className="minirow" style={{
                         cursor: "pointer",
                         display: "grid",
-                        gridTemplateColumns: "26px minmax(0, 1fr) 92px 70px",
+                        gridTemplateColumns: "auto minmax(0, 1fr) 92px 70px",
                         alignItems: "center",
                         gap: 8,
                       }}
