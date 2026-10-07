@@ -1,5 +1,8 @@
 export type TapeKind = "index" | "stock" | "rate";
 
+/** Vendor the tile's number came from (backend TapeSource). */
+export type TapeSource = "fmp" | "polygon" | "fred";
+
 /** Mirrors backend TapeItem (src/live/tape.service.ts) — one tile in the header ticker tape. */
 export interface TapeItem {
   id: string;
@@ -17,6 +20,9 @@ export interface TapeItem {
   dayHigh: number | null;
   dayLow: number | null;
   prevClose: number | null;
+  // Required on the backend; optional here so a client talking to a backend
+  // deployed before the field existed renders no badge instead of a wrong one.
+  source?: TapeSource;
 }
 
 /** Mirrors backend TapeFrame — the payload broadcast over GET /live/tape/stream. */

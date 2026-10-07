@@ -33,6 +33,18 @@ import type {
 // branches are archived in Doc/ARCHIVED-dashboard-viewall-drawers.md.
 type DrawerKey = "fg-history" | null;
 
+// Metals row on the Market Heatmap card. Spot metals aren't in the
+// `companies`-driven sector map, so each metal is represented by its most
+// liquid physically-backed ETF and priced off the shared live-quotes poll.
+const METAL_ETFS: { sym: string; label: string; name: string }[] = [
+  { sym: "GLD",  label: "Gold",   name: "Gold (SPDR Gold Shares)" },
+  { sym: "SLV",  label: "Silver", name: "Silver (iShares Silver Trust)" },
+  { sym: "CPER", label: "Copper", name: "Copper (US Copper Index Fund)" },
+  { sym: "PPLT", label: "Plat.",  name: "Platinum (abrdn Physical Platinum)" },
+  { sym: "PALL", label: "Pall.",  name: "Palladium (abrdn Physical Palladium)" },
+];
+const METAL_TICKERS = METAL_ETFS.map(m => m.sym);
+
 // ---- Dash hover popup ----
 type PopBlock = "earnings" | "movers" | "analyst" | "watchlist" | "portfolio" | "insider" | "screener" | "searched";
 
@@ -351,6 +363,13 @@ export function DashboardScreen() {
   const earningsToday = mergeEarningsData(liveEarnings.filter(e => e.date === etTodayIso()));
   const earningsLive = useLiveQuotes(earningsToday.map(e => e.ticker));
   const mergedSectorList = buildSectorList(companies, sectorsLive);
+  const metalsLive = useLiveQuotes(METAL_TICKERS);
+  // Only metals with a live % are shown — no fabricated 0% tiles.
+  const metals = METAL_ETFS.flatMap(m => {
+    const chg = metalsLive.get(m.sym)?.pctChange;
+    return chg == null ? [] : [{ ...m, chg }];
+  });
+  const metalsAvg = metals.length ? metals.reduce((s, m) => s + m.chg, 0) / metals.length : null;
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
 
   // key = the Firestore doc id, not ticker+dir: a single ticker can have
@@ -819,9 +838,52 @@ export function DashboardScreen() {
                 .map(sd => ({ sd, stocks: top30.filter(s => s.sd === sd) }))
                 .filter(g => g.stocks.length > 0);
 
+              const tile = (sym: string, label: string, chg: number, title: string) => {
+                const hc = heatCol(chg);
+                return (
+                  <div key={sym}
+                    onClick={() => openStock(sym)}
+                    title={`${title}  ${sign(chg)}`}
+                    style={{
+                      background: hc.bg, borderRadius: 7,
+                      width: 64, height: 48, flexShrink: 0,
+                      display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center",
+                      cursor: "pointer", transition: "filter .12s",
+                      gap: 2,
+                    }}
+                    onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.3)")}
+                    onMouseOut={e => (e.currentTarget.style.filter = "")}
+                  >
+                    <span style={{ fontSize: ".72rem", fontWeight: 800, color: hc.fg, lineHeight: 1 }}>{label}</span>
+                    <span style={{ fontSize: ".62rem", fontFamily: "var(--f-mono)", color: hc.fg, opacity: .88, lineHeight: 1 }}>{sign(chg)}</span>
+                  </div>
+                );
+              };
+              const hcMetals = heatCol(metalsAvg ?? 0);
+
               return (
                 <div className="card-b" style={{ paddingTop: 6, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    {metals.length > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div
+                          title="Equal-weighted average of the metal ETFs shown"
+                          style={{
+                            width: 104, flexShrink: 0,
+                            background: hcMetals.bg, borderRadius: 7,
+                            padding: "5px 8px", height: 48,
+                            display: "flex", flexDirection: "column", justifyContent: "center", gap: 2,
+                          }}
+                        >
+                          <span style={{ fontSize: ".7rem", fontWeight: 700, color: hcMetals.fg }}>Metals</span>
+                          <span style={{ fontFamily: "var(--f-mono)", fontSize: ".64rem", color: hcMetals.fg, opacity: .9 }}>{sign(metalsAvg ?? 0)}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          {metals.map(m => tile(m.sym, m.label, m.chg, `${m.name} · ${m.sym}`))}
+                        </div>
+                      </div>
+                    )}
                     {groups.map(({ sd, stocks }) => {
                       const hcSect = heatCol(sd.pctChange ?? 0);
                       return (
@@ -841,28 +903,7 @@ export function DashboardScreen() {
                             <span style={{ fontFamily: "var(--f-mono)", fontSize: ".64rem", color: hcSect.fg, opacity: .9 }}>{sd.pctChange == null ? <NotAvailable /> : sign(sd.pctChange)}</span>
                           </div>
                           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                            {stocks.map(({ sym, chg }) => {
-                              const hc = heatCol(chg);
-                              return (
-                                <div key={sym}
-                                  onClick={() => openStock(sym)}
-                                  title={`${sym}  ${sign(chg)}`}
-                                  style={{
-                                    background: hc.bg, borderRadius: 7,
-                                    width: 64, height: 48, flexShrink: 0,
-                                    display: "flex", flexDirection: "column",
-                                    alignItems: "center", justifyContent: "center",
-                                    cursor: "pointer", transition: "filter .12s",
-                                    gap: 2,
-                                  }}
-                                  onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.3)")}
-                                  onMouseOut={e => (e.currentTarget.style.filter = "")}
-                                >
-                                  <span style={{ fontSize: ".72rem", fontWeight: 800, color: hc.fg, lineHeight: 1 }}>{sym.slice(0, 4)}</span>
-                                  <span style={{ fontSize: ".62rem", fontFamily: "var(--f-mono)", color: hc.fg, opacity: .88, lineHeight: 1 }}>{sign(chg)}</span>
-                                </div>
-                              );
-                            })}
+                            {stocks.map(({ sym, chg }) => tile(sym, sym.slice(0, 4), chg, sym))}
                           </div>
                         </div>
                       );
@@ -1170,7 +1211,10 @@ export function DashboardScreen() {
         <div className="col-4">
           <div className="card vix" style={{ height: "100%" }}>
             <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>VIX · Volatility</h3><VendorTag v="polygon" /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <h3>VIX · Volatility</h3>
+                {(() => { const src = liveIndices.find(i => i.id === "VIX")?.source; return src && <VendorTag v={src} />; })()}
+              </div>
               <Link className="link" href="/menu/macro">View all →</Link>
             </div>
             <div className="card-b">

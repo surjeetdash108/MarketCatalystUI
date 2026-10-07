@@ -5,7 +5,7 @@ import { StockLogo, DataState, NotAvailable, VendorTag } from "../utils";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
-import { tapeItemsToIndexDocs } from "../live-market-indices";
+import { tapeItemsToIndexDocs, TAPE_SOURCE_NAME } from "../live-market-indices";
 import type { MacroEventDoc, DividendHistoryDoc, CompanyDoc } from "../types";
 import type { MarketStatusPayload } from "../types/market-status";
 import { fmtMonthDay, isoDay, addDays, mondayOf, fmtDate, etTodayIso } from "../calendar-range";
@@ -362,8 +362,10 @@ export function MacroScreen() {
           </div>
           <div className="card vix" style={{ flex: 1 }}>
             <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>VIX</h3><VendorTag v="polygon" /></div>
-              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>VIX</h3>{liveVix?.source && <VendorTag v={liveVix.source} />}</div>
+              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>
+                {liveVix?.source ? `live · ${TAPE_SOURCE_NAME[liveVix.source]}` : "live"}
+              </span>
             </div>
             <div className="card-b">
               {!liveVix ? (
