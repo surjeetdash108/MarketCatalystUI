@@ -147,6 +147,9 @@ export function AdminConsole() {
           // theme, so nothing per-post is sent for it.
           ...(d.format ? { format: d.format } : {}),
           ...(d.heroImageUrl !== undefined ? { heroImageUrl: d.heroImageUrl } : {}),
+          // Sent only when the admin changed it, so a save never re-asserts a
+          // stale value over a choice made since this console loaded.
+          ...(typeof d.editorsChoice === "boolean" ? { editorsChoice: d.editorsChoice } : {}),
           // Source PDF, present only when the article was imported from one.
           // The backend hoists it to Storage and keeps the URL on the doc; it is
           // never written into Firestore (well past the 1 MB document cap).

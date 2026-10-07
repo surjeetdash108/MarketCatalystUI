@@ -105,6 +105,9 @@ export interface ConsoleBlogRow {
   status: string;
   /** Display date string, as stored. */
   date: string;
+  /** ISO timestamps behind `date`, for sorting the board by date. */
+  publishedAt: string | null;
+  createdAt: string | null;
   /** Source document, when the post was published from a PDF or Word file.
    *  The editor shows the document itself instead of an editable body. */
   pdfUrl: string | null;
@@ -117,6 +120,8 @@ export interface ConsoleBlogRow {
   css: string[];
   /** Hero image shown above the article on the site. */
   heroImageUrl: string | null;
+  /** The one post featured as Editor's choice on the public blog. */
+  editorsChoice: boolean;
 }
 
 export interface ApiHealthEndpoint {
@@ -242,12 +247,15 @@ interface BackendBlog {
   html?: string;
   status?: string;
   date?: string;
+  publishedAt?: string | null;
+  createdAt?: string | null;
   pdfUrl?: string | null;
   pdfName?: string | null;
   sourceKind?: string | null;
   format?: string;
   css?: string[];
   heroImageUrl?: string | null;
+  editorsChoice?: boolean;
 }
 
 /** Presentation mapping for one backend blog row → the console's shape. Missing
@@ -272,6 +280,8 @@ function toConsoleBlog(b: BackendBlog): ConsoleBlogRow {
     html: b.html ?? "",
     status: b.status ?? "Published",
     date: b.date ?? "",
+    publishedAt: b.publishedAt ?? null,
+    createdAt: b.createdAt ?? null,
     pdfUrl: b.pdfUrl ?? null,
     pdfName: b.pdfName ?? null,
     sourceKind: b.sourceKind ?? null,
@@ -280,6 +290,7 @@ function toConsoleBlog(b: BackendBlog): ConsoleBlogRow {
     format: b.format ?? (b.pdfUrl ? "pdf" : "text"),
     css: Array.isArray(b.css) ? b.css : [],
     heroImageUrl: typeof b.heroImageUrl === "string" && b.heroImageUrl.trim() ? b.heroImageUrl.trim() : null,
+    editorsChoice: b.editorsChoice === true,
   };
 }
 
