@@ -5,14 +5,14 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, CandleChart, ChartSelect, TF_OPTIONS, CHART_TYPE_OPTIONS, RsiPane, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type ChartHoverOhlc } from "../utils";
+import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, intervalLabel, CHART_TYPE_OPTIONS, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
 import { apiGet, apiPost, apiDelete } from "../backend";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
-import { useBackendBars } from "../hooks/useBackendBars";
+import { useBackendBars, useIntervalBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useLiveQuotes, extendedSession } from "../live-quotes-context";
@@ -24,6 +24,9 @@ import type {
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct } from "../types";
+import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
+
+const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
 
 // Maps the numeric 1-99 tech rating onto the same string categories the
 // Screener/TrGauge use (Strong Buy / Buy / Neutral / Sell / Strong Sell).
@@ -101,13 +104,6 @@ function ema(bars: { c: number }[], n: number): number | null {
   for (let i = n; i < bars.length; i++) e = bars[i].c * k + e * (1 - k);
   return e;
 }
-// Ichimoku base line (Kijun-sen): (n-period high + n-period low) / 2 — real,
-// computed from the same daily bars as SMA/EMA above.
-function ichimokuBase(bars: { h: number; l: number }[], n: number): number | null {
-  if (bars.length < n) return null;
-  const w = bars.slice(-n);
-  return (Math.max(...w.map(b => b.h)) + Math.min(...w.map(b => b.l))) / 2;
-}
 
 interface StockNote {
   id: string;
@@ -181,6 +177,43 @@ const EXCHANGE: Record<string, string> = {
 };
 
 const ac = (a: string) => a === "Buy" ? "var(--up)" : a === "Sell" ? "var(--down)" : "var(--text-dim-solid)";
+
+const VOTE_WORD: Record<Vote, string> = { buy: "Buy", sell: "Sell", neutral: "Neutral" };
+
+/** Sell / Neutral / Buy vote counts under a rating gauge. */
+function RatingTally({ t }: { t: Tally }) {
+  return (
+    <div className="counts">
+      <span style={{ color: "var(--down)" }}>Sell<b>{t.sell}</b></span>
+      <span style={{ color: "var(--text-dim-solid)" }}>Neutral<b>{t.neutral}</b></span>
+      <span style={{ color: "var(--up)" }}>Buy<b>{t.buy}</b></span>
+    </div>
+  );
+}
+
+/** One block of the rating drawer: its own verdict, then a row per indicator vote. */
+function RatingSection({ title, rows }: { title: string; rows: RatingRow[] }) {
+  const t = tally(rows), label = labelOfTally(t);
+  return (
+    <>
+      <div className="ai-sec" style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div className="h">{title}</div>
+        <span className="mono" style={{ fontSize: ".72rem", fontWeight: 600, color: ac(label.replace("Strong ", "")) }}>{label}</span>
+      </div>
+      <table className="ind-tbl">
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.name}>
+              <td>{r.name}</td>
+              <td className="v">{r.value ?? "–"}</td>
+              <td className="a" style={{ color: ac(VOTE_WORD[r.vote]) }}>{VOTE_WORD[r.vote]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
 
 /**
  * Colour for an ANALYST consensus label.
@@ -497,81 +530,6 @@ function EarnPane({ hist10 }: { hist10: EarnQ[] }) {
   );
 }
 
-function StockChartExpanded({
-  sym, px, initialTf, initialChartType, initialMaStep, initialEmaStep,
-  initialShowVol, initialShowRsi, initialShowEarnings, hist10, rsi, rsiLoading, erDate,
-  earnings, exchange,
-}: {
-  sym: string; px: number; initialTf: string;
-  /** Display label from exchangeLabel(); omitted from the HUD when null. */
-  exchange?: string | null;
-  initialChartType: "Candles" | "Hollow" | "Bars" | "Line" | "Area";
-  initialMaStep: number; initialEmaStep: number;
-  initialShowVol: boolean; initialShowRsi: boolean; initialShowEarnings: boolean;
-  hist10: EarnQ[]; rsi: number | null; rsiLoading: boolean; erDate: string;
-  /** Reported quarters for the dots. Without this the Earnings toggle below
-   *  was inert: it flipped state that nothing read, so the expanded chart never
-   *  drew a dot and its timeframe dropdown had no earnings to re-filter. */
-  earnings: ChartEarnings[];
-}) {
-  const [tf, setTf] = useState(initialTf);
-  const [chartType, setChartType] = useState(initialChartType);
-  const [maStep, setMaStep] = useState(initialMaStep);
-  const [emaStep, setEmaStep] = useState(initialEmaStep);
-  const [showVol, setShowVol] = useState(initialShowVol);
-  const [showRsi, setShowRsi] = useState(initialShowRsi);
-  const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
-  const { bars: realBars } = useBackendBars(sym, tf);
-  const live = useLiveTick(sym);
-  const isUp = px > 0;
-  return (
-    <div>
-      <div className="chart-toolbar" style={{ flexWrap: "wrap", gap: "4px 0", paddingBottom: 8 }}>
-        <ChartSelect value={tf} options={TF_OPTIONS} onChange={v => setTf(v as typeof tf)} title="Timeframe" />
-        <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
-        <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
-        <button className={`rng indbtn${maStep > 0 ? " on" : ""}`} onClick={() => setMaStep(s => (s + 1) % 5)}>
-          SMA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
-        </button>
-        <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`} onClick={() => setEmaStep(s => (s + 1) % 5)}>
-          EMA {[9,21,50,200].map((v, i) => <span key={v} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>{i > 0 ? "/" : ""}{v}</span>)}
-        </button>
-        <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
-        <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
-        <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
-      </div>
-      <CandleChart sym={sym} tf={tf} px={px} maStep={maStep} emaStep={emaStep} showVol={showVol} chartType={chartType.toLowerCase()} realBars={realBars}
-        exchange={exchange ?? undefined}
-        live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low } : null}
-        earnings={showEarnings ? earnings : []} />
-      {showRsi && (
-        <div style={{ marginTop: 4 }}>
-          <div style={{ padding: "4px 0", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between" }}>
-            <span>RSI (14)</span>
-            <span className="mono" style={{ color: "var(--warn)" }}>
-              {rsi != null ? `${Math.round(rsi)} · ${rsi > 70 ? "overbought" : rsi < 40 ? "weak" : "neutral-to-strong"}` : "not available"}
-            </span>
-          </div>
-          <RsiPane rsi14={rsi} loading={rsiLoading} />
-        </div>
-      )}
-      {showEarnings && (
-        <div style={{ borderTop: "1px solid var(--border)", marginTop: 4 }}>
-          <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Earnings · EPS Surprise</span>
-            <span className="mono" style={{ color: "var(--warn)", fontWeight: 600 }}>Next: {erDate}</span>
-          </div>
-          <EarnPane hist10={hist10} />
-        </div>
-      )}
-      <div style={{ marginTop: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-        Pattern: <b style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
-          {isUp ? "cup-with-handle breakout" : "breakdown below support"}
-        </b> {isUp ? "on above-average volume." : "on rising volume."}
-      </div>
-    </div>
-  );
-}
 
 export type StockTab = "chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers";
 
@@ -612,27 +570,14 @@ export function StockScreen({
     return () => window.removeEventListener("iq-stock-change", onChange);
   }, []);
   const [search, setSearch] = useState("");
-  const [tfActive, setTfActive] = useState("3M");
-  const [showVol, setShowVol] = useState(true);
-  const [showRsi, setShowRsi] = useState(false);
+  // Candle size, not a date range — the backend sizes each interval's history.
+  const [barInterval, setBarInterval] = useState<BarInterval>("1D");
   // Default ON: the earnings dots are the chart's main annotation, and behind a
   // default-off toggle they were invisible unless you knew to look for the
   // button. The toggle still turns them off for a clean price-only chart.
   const [showEarnings, setShowEarnings] = useState(true);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
-  const [maStep, setMaStep] = useState(0);
-  const [chartMinimized, setChartMinimized] = useState(false);
-  const [hoverOhlc, setHoverOhlc] = useState<ChartHoverOhlc | null>(null);
 
-  const handleBarHover = useCallback((bar: ChartHoverOhlc | null) => {
-    setHoverOhlc(prev => {
-      if (!bar && !prev) return prev;
-      if (bar && prev && bar.o === prev.o && bar.h === prev.h && bar.l === prev.l && bar.c === prev.c && Math.abs(bar.pctChg - prev.pctChg) < 0.001) {
-        return prev;
-      }
-      return bar;
-    });
-  }, []);
 
   // Live overlays for the detail panels — analyst consensus, insider
   // transactions, the full company universe (for peer/sector lookups), sector
@@ -645,8 +590,11 @@ export function StockScreen({
   const { data: sectorsLive, loading: sectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
   const { data: liveEarningsEvents, loading: earningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   const { bars: yearBars, loading: yearBarsLoading } = useBackendBars(sym, "1Y");
-  const [emaStep, setEmaStep] = useState(0);
-  const { bars: realBars, asOf: barsAsOf } = useBackendBars(sym, tfActive);
+  const { bars: realBars, asOf: barsAsOf, loading: barsLoading } = useIntervalBars(sym, barInterval);
+  // Technical rating on the chart's own candles, so it re-rates whenever the
+  // candle interval changes. Null until enough candles have loaded, when the
+  // backend's daily rating stands in (see `rating` below).
+  const techRating = useMemo(() => (realBars ? computeTechnicalRating(realBars) : null), [realBars]);
   // Live (delayed) price stream for the header + chart overlay: SSE push with a
   // /live/quotes poll fallback (Firebase Hosting doesn't proxy the SSE stream).
   const live = useLiveTick(sym);
@@ -888,28 +836,14 @@ export function StockScreen({
       const v = yr[yr.length - 1]?.v;
       if (typeof v === "number" && v > 0) return v;
     }
-    if (realBars && realBars.length > 0) {
+    // Only a 1D candle's volume IS the session's — a 5m or 1W candle's isn't.
+    if (barInterval === "1D" && realBars && realBars.length > 0) {
       const v = realBars[realBars.length - 1]?.v;
       if (typeof v === "number" && v > 0) return v;
     }
     return keyStats?.avgVolume20 ?? null;
-  }, [yr, realBars, keyStats]);
+  }, [yr, realBars, barInterval, keyStats]);
 
-  const defaultOhlc = useMemo(() => {
-    if (realBars && realBars.length > 0) {
-      const b = realBars[realBars.length - 1];
-      const pct = b.o > 0 ? ((b.c - b.o) / b.o) * 100 : 0;
-      return { o: b.o, h: b.h, l: b.l, c: b.c, pctChg: pct };
-    }
-    if (yr && yr.length > 0) {
-      const b = yr[yr.length - 1];
-      const pct = b.o > 0 ? ((b.c - b.o) / b.o) * 100 : 0;
-      return { o: b.o, h: b.h, l: b.l, c: b.c, pctChg: pct };
-    }
-    return null;
-  }, [realBars, yr]);
-
-  const currentOhlc = hoverOhlc ?? defaultOhlc;
 
   const ema50 = ema(yr, 50);
   const sma200 = sma(yr, 200);
@@ -960,11 +894,12 @@ export function StockScreen({
   // Peers scrolls inside it and Key levels sits at the base, level with
   // Financials' bottom border — regardless of peer count.
 
-  const rating = ratingLabel(liveCompany?.techRating ?? null);
+  const rating = techRating?.label ?? ratingLabel(liveCompany?.techRating ?? null);
+  const ratingBasis = techRating ? intervalLabel(barInterval) : "1 day";
   const rs = liveCompany?.rsRating ?? null;
   const rv = liveCompany?.rvol ?? null;
   const mc = keyStats?.marketCap != null ? keyStats.marketCap / 1e9 : null;
-  const gv = RATING_VAL[rating] ?? 0;
+  const gv = techRating?.score ?? RATING_VAL[rating] ?? 0;
   // (The technical `tone` that used to live here is gone: TrGauge already
   // colours its own label from `rating`, and its only other consumer was the
   // analyst-consensus label, which now derives its colour from the consensus
@@ -1013,11 +948,9 @@ export function StockScreen({
   const rsi = liveCompany?.rsi14 ?? null;
   const macd = liveCompany?.macd ?? null;
   const macdBuy = macd != null ? macd >= (liveCompany?.macdSignal ?? 0) : null;
+  // technical-indicators.job also writes these (daily basis).
   const stochKv = liveCompany?.stochK ?? null;
   const adx14 = liveCompany?.adx14 ?? null;
-  // technical-indicators.job also writes these; they were being rendered as
-  // "N/A" in the Technical Rating drawer even though the values were present.
-  const vwapV = liveCompany?.vwap ?? null;
   const offHigh52 = keyStats?.pctFromHigh52 ?? null;
   const offLow52 = keyStats?.pctFromLow52 ?? null;
   const rsiSeries = liveCompany?.rsi14Series ?? null;
@@ -1717,194 +1650,28 @@ export function StockScreen({
           <div style={{ gridColumn: "1 / -1" }}>
             {/* Chart card */}
             <div className="card">
-              <div className="chart-toolbar">
-                <ChartSelect value={tfActive} options={TF_OPTIONS} onChange={setTfActive} title="Timeframe" />
-                <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
-                <span style={{ width: 1, height: 16, background: "var(--border)", margin: "0 4px" }} />
-                <button className={`rng indbtn${maStep > 0 ? " on" : ""}`}
-                  onClick={() => setMaStep(s => (s + 1) % 5)}>
-                  SMA {[9,21,50,200].map((p, i) => (
-                    <span key={p} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>
-                      {i > 0 ? '/' : ''}{p}
-                    </span>
-                  ))}
-                </button>
-                <button className={`rng indbtn${emaStep > 0 ? " on" : ""}`}
-                  onClick={() => setEmaStep(s => (s + 1) % 5)}>
-                  EMA {[9,21,50,200].map((p, i) => (
-                    <span key={p} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>
-                      {i > 0 ? '/' : ''}{p}
-                    </span>
-                  ))}
-                </button>
-                <button className={`rng indbtn${showVol ? " on" : ""}`} onClick={() => setShowVol(v => !v)}>Volume</button>
-                <button className={`rng indbtn${showRsi ? " on" : ""}`} onClick={() => setShowRsi(v => !v)}>RSI</button>
-                <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
-                <div style={{ flex: 1 }} />
-                <span style={{ marginRight: 6 }}><VendorTag v="polygon" /></span>
-                {realBars && (
-                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem", marginRight: 6 }}>
-                    live · Polygon
-                  </span>
-                )}
-                {barsAsOfLabel && (
-                  <span style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", letterSpacing: ".02em", marginRight: 6 }}>
-                    as of {barsAsOfLabel}
-                  </span>
-                )}
+              <div id="chartHost" ref={chartRef} onContextMenu={handleChartRightClick} style={{ padding: "0 14px 6px" }}>
+                <CandleChart
+                  sym={sym}
+                  tf={barInterval}
+                  interval={barInterval}
+                  chartType={chartType.toLowerCase()}
+                  realBars={realBars}
+                  loading={barsLoading}
+                  live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low, at: live.tick.at } : null}
+                  earnings={showEarnings ? chartEarnings : []}
+                  toolbarStart={<>
+                    <IntervalMenu value={barInterval} onChange={setBarInterval} />
+                    <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
+                    <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
+                  </>}
+                  toolbarEnd={<>
+                    <VendorTag v="polygon" />
+                    {realBars && <span className="cc-chip live">live</span>}
+                    {barsAsOfLabel && <span className="cc-asof">as of {barsAsOfLabel}</span>}
+                  </>}
+                />
               </div>
-
-              {/* Subbar: Zoom hint on left, OHLC data in center, Minimise / Maximise on right */}
-              <div
-                className="chart-subbar"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "8px 14px",
-                  borderBottom: chartMinimized ? "none" : "1px solid var(--border-soft)",
-                  gap: 12,
-                }}
-              >
-                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", alignItems: "center" }}>
-                  {!chartMinimized && (
-                    <span
-                      style={{
-                        fontSize: ".72rem",
-                        color: "var(--text-hi)",
-                        letterSpacing: ".01em",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Scroll to zoom · Drag to pan · Double-click to reset
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {!chartMinimized && currentOhlc && (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        fontFamily: "var(--f-mono)",
-                        fontSize: ".72rem",
-                        color: "var(--text-dim-solid)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <span>O <b style={{ color: "var(--text-hi)", fontWeight: 700 }}>${currentOhlc.o.toFixed(2)}</b></span>
-                      <span>H <b style={{ color: "var(--text-hi)", fontWeight: 700 }}>${currentOhlc.h.toFixed(2)}</b></span>
-                      <span>L <b style={{ color: "var(--text-hi)", fontWeight: 700 }}>${currentOhlc.l.toFixed(2)}</b></span>
-                      <span>C <b style={{ color: "var(--text-hi)", fontWeight: 700 }}>${currentOhlc.c.toFixed(2)}</b></span>
-                      <span
-                        style={{
-                          color: currentOhlc.pctChg >= 0 ? "var(--up)" : "var(--down)",
-                          fontWeight: 700,
-                          marginLeft: 2,
-                        }}
-                      >
-                        {currentOhlc.pctChg >= 0 ? "+" : ""}{currentOhlc.pctChg.toFixed(2)}%
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ flex: "1 1 0", display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    onClick={() => setChartMinimized(v => !v)}
-                    title={chartMinimized ? "Maximise chart" : "Minimise chart"}
-                    aria-label={chartMinimized ? "Maximise chart" : "Minimise chart"}
-                    style={{
-                      padding: "4px 10px",
-                      border: "1px solid var(--border)",
-                      borderRadius: 7,
-                      background: "var(--surface-2)",
-                      color: "var(--text-dim-solid)",
-                      cursor: "pointer",
-                      fontSize: ".68rem",
-                      fontWeight: 600,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {chartMinimized ? "Maximise" : "Minimise"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Chart content disappears when minimised */}
-              {!chartMinimized && (
-                <>
-                  <div
-                    id="chartHost"
-                    style={{ padding: "0 14px 0" }}
-                    ref={chartRef}
-                    onContextMenu={handleChartRightClick}
-                  >
-                    <CandleChart
-                      sym={sym}
-                      tf={tfActive}
-                      px={p}
-                      maStep={maStep}
-                      emaStep={emaStep}
-                      showVol={showVol}
-                      chartType={chartType.toLowerCase()}
-                      realBars={realBars}
-                      exchange={ex ?? undefined}
-                      live={
-                        live.tick
-                          ? {
-                              price: live.tick.price,
-                              high: live.tick.high,
-                              low: live.tick.low,
-                            }
-                          : null
-                      }
-                      earnings={showEarnings ? chartEarnings : []}
-                      hideHudOhlc={true}
-                      onBarHover={handleBarHover}
-                    />
-                  </div>
-
-                {showRsi && (
-                  <div id="rsiHost">
-                    <div
-                      style={{
-                        padding: "6px 14px 4px",
-                        fontSize: ".66rem",
-                        color: "var(--text-dim-solid)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <span>RSI (14)</span>
-
-                      <span
-                        className="mono"
-                        style={{ color: "var(--warn)" }}
-                      >
-                        {rsi != null
-                          ? `${Math.round(rsi)} · ${
-                              rsi > 70
-                                ? "overbought"
-                                : rsi < 40
-                                  ? "weak"
-                                  : "neutral-to-strong"
-                            }`
-                          : "not available"}
-                      </span>
-                    </div>
-
-                    <div style={{ padding: "0 14px 4px" }}>
-                      <RsiPane
-                        rsi14={rsi}
-                        loading={liveCompanyLoading}
-                      />
-                    </div>
-                  </div>
-                )}
 
                 {/* The hard-coded "Pattern: cup-with-handle breakout / breakdown
                     below support" line was removed (QA row 259): it wasn't a
@@ -1969,8 +1736,6 @@ export function StockScreen({
                     ))
                   )}
                 </div>
-              </>
-            )}
           </div>
         </div>)}
 
@@ -2230,8 +1995,9 @@ export function StockScreen({
             </div>
             <div className="card-b">
               <div className="trgroup" style={{ borderColor: "var(--ai-dim)", marginBottom: 10 }}>
-                <div className="gl ai-c">Summary</div>
+                <div className="gl ai-c">Summary · {ratingBasis}</div>
                 <TrGauge val={gv} label={rating} />
+                {techRating && <RatingTally t={techRating.all} />}
               </div>
               {consensusDoc && (
                 <div className="trgroup" style={{ marginBottom: 12 }}>
@@ -3261,8 +3027,9 @@ export function StockScreen({
                 </div>
                 <div className="card-b">
                   <div className="trgroup" style={{ borderColor: "var(--ai-dim)", marginBottom: 10 }}>
-                    <div className="gl ai-c">Summary</div>
+                    <div className="gl ai-c">Summary · {ratingBasis}</div>
                     <TrGauge val={gv} label={rating} />
+                    {techRating && <RatingTally t={techRating.all} />}
                   </div>
                   {consensusDoc && (
                     <div className="trgroup">
@@ -3455,69 +3222,41 @@ export function StockScreen({
                 <StockLogo sym={sym} size={34} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Technical Rating · {sym}</div>
-                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>11 oscillators · 15 moving averages</div>
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>8 oscillators · 12 moving averages · {ratingBasis} candles</div>
                 </div>
                 <VendorTag v="polygon" />
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
-                <div className="trgroup" style={{ borderColor: "var(--ai-dim)", marginBottom: 14 }}>
-                  <div className="gl ai-c">Summary · {rating}</div>
-                  <TrGauge val={gv} label={rating} />
-                </div>
-                <div className="ai-sec"><div className="h">Oscillators</div></div>
-                <table className="ind-tbl">
-                  <tbody>
-                    {([
-                      ["RSI (14)", rsi != null ? rsi.toFixed(2) : null, rsi == null ? "" : rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
-                      ["Stoch %K", stochKv != null ? stochKv.toFixed(1) : null, stochKv == null ? "" : stochKv > 80 ? "Sell" : stochKv < 20 ? "Buy" : "Neutral"],
-                      ["CCI (14)", null, ""],
-                      ["MACD (12,26)", macd != null ? macd.toFixed(1) : null, macdBuy == null ? "" : macdBuy ? "Buy" : "Sell"],
-                      ["Williams %R", null, ""],
-                      ["Bull/Bear Power", null, ""],
-                      ["ADX (14)", adx14 != null ? adx14.toFixed(1) : null, adx14 == null ? "" : adx14 > 25 ? "Strong" : adx14 < 20 ? "Weak" : "Neutral"],
-                      ["Ultimate Osc.", null, ""],
-                      ["ROC", null, ""],
-                      ["Stoch RSI", null, ""],
-                      ["ATR (14)", null, ""],
-                    ] as [string, string | null, string][]).map(r => (
-                      <tr key={r[0]}>
-                        <td>{r[0]}</td><td className="v">{r[1] ?? <NotAvailable />}</td>
-                        <td className="a" style={{ color: ac(r[2]) }}>{r[2]}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">Moving Averages</div></div>
-                <table className="ind-tbl">
-                  <tbody>
-                    {([
-                      ["SMA 10",  sma(yr, 10)],
-                      ["SMA 20",  sma(yr, 20)],
-                      ["SMA 30",  sma(yr, 30)],
-                      ["SMA 50",  sma(yr, 50)],
-                      ["SMA 100", sma(yr, 100)],
-                      ["SMA 200", sma(yr, 200)],
-                      ["EMA 10",  ema(yr, 10)],
-                      ["EMA 20",  ema(yr, 20)],
-                      ["EMA 30",  ema(yr, 30)],
-                      ["EMA 50",  ema(yr, 50)],
-                      ["EMA 100", ema(yr, 100)],
-                      ["EMA 200", ema(yr, 200)],
-                      ["Ichimoku Base", ichimokuBase(yr, 26)],
-                      ["VWAP", vwapV],
-                      ["Hull MA (9)", null],
-                    ] as [string, number | null][]).map(([label, v]) => (
-                      <tr key={label}>
-                        <td>{label}</td><td className="v">{v != null ? nf(v) : <NotAvailable />}</td>
-                        <td className="a" style={{ color: v != null ? ac(p > v ? "Buy" : "Sell") : "var(--text-dim-solid)" }}>{v != null ? (p > v ? "Above" : "Below") : ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                  RSI/MACD/Stoch %K/ADX/VWAP from technical-indicators.job · SMA/EMA/Ichimoku computed from a year of daily bars — real. CCI/Williams %R/Bull-Bear/Ultimate Osc/ROC/Stoch RSI/ATR/Hull MA need a fuller technicals vendor and aren&apos;t wired up yet. Not investment advice.
-                </div>
+                {techRating ? (
+                  <>
+                    <div className="tr-gauges">
+                      <div className="trgroup">
+                        <div className="gl">Oscillators</div>
+                        <TrGauge val={scoreOf(techRating.osc)} label={labelOfTally(techRating.osc)} />
+                        <RatingTally t={techRating.osc} />
+                      </div>
+                      <div className="trgroup" style={{ borderColor: "var(--ai-dim)" }}>
+                        <div className="gl ai-c">Summary</div>
+                        <TrGauge val={techRating.score} label={techRating.label} />
+                        <RatingTally t={techRating.all} />
+                      </div>
+                      <div className="trgroup">
+                        <div className="gl">Moving averages</div>
+                        <TrGauge val={scoreOf(techRating.ma)} label={labelOfTally(techRating.ma)} />
+                        <RatingTally t={techRating.ma} />
+                      </div>
+                    </div>
+                    <RatingSection title="Oscillators" rows={techRating.oscillators} />
+                    <RatingSection title="Moving Averages" rows={techRating.movingAverages} />
+                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
+                      Computed from the {techRating.count} {ratingBasis} candles on the chart — change the chart&apos;s interval to re-rate.
+                      Readings marked &ldquo;–&rdquo; need more candles than this interval has and count as neutral. Not investment advice.
+                    </div>
+                  </>
+                ) : (
+                  <DataState loading={barsLoading} label={`Not enough ${ratingBasis} candles to rate ${sym} yet.`} />
+                )}
               </div>
             </div>
           )}

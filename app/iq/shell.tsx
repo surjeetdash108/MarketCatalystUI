@@ -494,9 +494,6 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
   const router = useRouter();
   const [tf, setTf] = useState<string>("3M");
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
-  const [showVol, setShowVol] = useState<boolean>(true);
-  const [maStep, setMaStep] = useState<number>(0);
-  const [emaStep, setEmaStep] = useState<number>(0);
 
   const dec = 2;
   const dollar = x.value - x.prevClose;
@@ -657,39 +654,6 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
               </div>
             )}
 
-            {/* Indicator Toggles */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-              <button
-                className={`rng indbtn${showVol ? " on" : ""}`}
-                style={{ fontSize: ".7rem", padding: "3px 8px" }}
-                onClick={() => setShowVol(v => !v)}
-              >
-                Volume
-              </button>
-              <button
-                className={`rng indbtn${maStep > 0 ? " on" : ""}`}
-                style={{ fontSize: ".7rem", padding: "3px 8px" }}
-                onClick={() => setMaStep(s => (s + 1) % 5)}
-              >
-                SMA {[9, 21, 50, 200].map((v, i) => (
-                  <span key={v} style={{ opacity: i < maStep ? 1 : 0.4, fontWeight: i < maStep ? 700 : undefined }}>
-                    {i > 0 ? "/" : ""}{v}
-                  </span>
-                ))}
-              </button>
-              <button
-                className={`rng indbtn${emaStep > 0 ? " on" : ""}`}
-                style={{ fontSize: ".7rem", padding: "3px 8px" }}
-                onClick={() => setEmaStep(s => (s + 1) % 5)}
-              >
-                EMA {[9, 21, 50, 200].map((v, i) => (
-                  <span key={v} style={{ opacity: i < emaStep ? 1 : 0.4, fontWeight: i < emaStep ? 700 : undefined }}>
-                    {i > 0 ? "/" : ""}{v}
-                  </span>
-                ))}
-              </button>
-            </div>
-
             {/* Interactive CandleChart */}
             <div style={{ minHeight: 260 }}>
               {barsLoading && (!realBars || realBars.length < 2) ? (
@@ -699,9 +663,7 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
                   sym={chartTicker}
                   tf={tf}
                   px={chartPx}
-                  maStep={maStep}
-                  emaStep={emaStep}
-                  showVol={showVol}
+                  height={280}
                   chartType={chartType.toLowerCase()}
                   realBars={realBars}
                 />
