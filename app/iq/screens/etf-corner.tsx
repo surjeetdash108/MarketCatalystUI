@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { StockScreenEmbed } from "../shell";
-import { StockLogo, VendorTag, DataState, cls, sign, arr } from "../utils";
+import { StockLogo, VendorTag, DataState, cls, sign, arr, fmtPrice } from "../utils";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
 
@@ -353,60 +353,19 @@ export function EtfMarketFunds() {
                           className="p etf-card"
                         >
                           <div className="card-b">
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                gap: 6,
-                                marginBottom: 6,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                }}
-                              >
-                                <StockLogo sym={c.symbol} size={20} />
-                                <h3
-                                  style={{
-                                    margin: 0,
-                                    fontSize: ".88rem",
-                                    fontWeight: 700,
-                                    color: "var(--text-hi)",
-                                  }}
-                                >
-                                  {c.symbol}
-                                </h3>
-                              </div>
-
-                              {pct != null ? (
-                                <span
-                                  className={`chg ${cls(pct)}`}
-                                  style={{
-                                    fontSize: ".74rem",
-                                    fontWeight: 700,
-                                    fontFamily: "var(--f-mono)",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 2,
-                                  }}
-                                >
-                                  {arr(pct)} {sign(pct)}
-                                </span>
-                              ) : (
-                                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", fontFamily: "var(--f-mono)" }}>
-                                  —
-                                </span>
-                              )}
+                            <div className="etf-card-head">
+                              <StockLogo sym={c.symbol} size={20} />
+                              <h3>{c.symbol}</h3>
                             </div>
 
-                            <p
-                              title={c.name}
-                              className="etf-card-title"
-                            >
+                            <div className="val">{fmtPrice(q?.price)}</div>
+                            {pct != null && (
+                              <div className={`chg ${cls(pct)}`}>
+                                {arr(pct)} {sign(pct)}
+                              </div>
+                            )}
+
+                            <p title={c.name} className="etf-card-title">
                               {c.name}
                             </p>
                           </div>
