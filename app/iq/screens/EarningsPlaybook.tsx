@@ -6,12 +6,17 @@ import { useBackendBars } from "../hooks/useBackendBars";
 import type { OHLCBar } from "../utils";
 import { DataState, VendorTag } from "../utils";
 import { surprisePct as calcSurprisePct } from "../types";
+import type { FinancialsDoc } from "../types";
 
 /** One reported quarter: report date (SEC filing date) + EPS actual/estimate.
  * Sourced from the financials doc's `quarters` (~10 quarters) rather than the
  * live earnings *calendar* feed, which only carries the most recent report. */
 export type PlaybookReport = {
   date: string;
+  /** FMP announcement date (from `epsHistory`) — when results were released,
+   * as opposed to `date`, the 10-Q filing that follows days-to-weeks later.
+   * When present it pins the reaction day; null falls back to the volume search. */
+  announceDate?: string | null;
   epsActual: number | null;
   epsEstimate: number | null;
   /** FMP's reported (consensus-basis) EPS actual. Beat/miss = THIS vs
@@ -47,8 +52,49 @@ export type PlaybookReport = {
 // the threshold — a quiet report, or missing bars — it falls back to the old
 // filing-date anchor rather than inventing one.
 //
+// The volume search is only a FALLBACK now. Its 25-session window is wide
+// enough to catch an unrelated heavy day: DELL's Q3 FY26 (announced 25 Nov
+// 2025, filed 9 Dec) resolved to 17 Nov — a 2.7x market-selloff session —
+// because the true reaction on 26 Nov had a 20-day average already swollen by
+// the run-up. When the FMP announcement date is known (`epsHistory`), D0 is
+// pinned to it instead: the announcement session or the next one, whichever
+// traded more volume (see findReactionIdx).
+//
 // "gap" is D0's open vs the prior close; Day 1/3/5 are its close / +2 / +4
 // closes against that same prior close.
+
+/** Announcements land 2–6 weeks after a quarter ends; the next quarter's is
+ * ~13 weeks after that, so this can never pick up a neighbouring report. */
+const ANNOUNCE_AFTER_END_MAX_DAYS = 100;
+
+/**
+ * Playbook rows from a financials doc: each reported quarter, keyed on its SEC
+ * filing date, with the FMP announcement date attached from `epsHistory` (the
+ * first announcement after the quarter's period end). Shared by every screen
+ * that renders the Playbook so they cannot drift apart.
+ */
+export function playbookReports(doc: FinancialsDoc | null | undefined): PlaybookReport[] {
+  const announced = (doc?.epsHistory ?? [])
+    .map((h) => h.date)
+    .filter((d): d is string => !!d)
+    .sort();
+  const announceFor = (endDate: string | null): string | null => {
+    if (!endDate) return null;
+    const end = Date.parse(endDate);
+    const hit = announced.find((d) => d > endDate);
+    return hit && (Date.parse(hit) - end) / 86_400_000 <= ANNOUNCE_AFTER_END_MAX_DAYS ? hit : null;
+  };
+  return (doc?.quarters ?? [])
+    .filter((q) => q.filingDate)
+    .map((q) => ({
+      date: q.filingDate as string,
+      announceDate: announceFor(q.endDate),
+      epsActual: q.epsActual,
+      epsEstimate: q.epsEstimate,
+      epsReported: q.epsActualReported ?? null,
+      epsEstimateReported: q.epsEstimateReported ?? null,
+    }));
+}
 
 type Row = {
   date: string;
@@ -109,13 +155,28 @@ function buildModel(reports: PlaybookReport[], bars: OHLCBar[] | undefined, maxR
   /**
    * Index of the session that actually reacted to a report.
    *
-   * Searches back from the filing date (the announcement always precedes the
-   * filing) with a small forward margin, and takes the heaviest relative volume.
-   * The window is narrower than the ~63 sessions between quarters, so it cannot
-   * stray into a neighbouring report.
+   * With an announcement date: results come out before the open (that session
+   * reacts) or after the close (the next one does), and the vendor feed does
+   * not say which. The reacting session trades the heavier volume of the two.
+   * Raw volumes are compared directly — the same baseline for both — because
+   * the opening gap is NOT a reliable tie-break: DELL's muted May 2025
+   * reaction gapped 1.0% on 3.4x volume after a 1.2% gap on the announcement
+   * day itself. An announcement on a non-trading day can only be reacted to
+   * by the next session.
+   *
+   * Without one: searches back from the filing date (the announcement always
+   * precedes the filing) with a small forward margin, and takes the heaviest
+   * relative volume. Can latch onto an unrelated heavy session — fallback only.
    */
-  const findReactionIdx = (reportDate: string): number => {
-    const anchor = dates.findIndex((d) => d >= reportDate);
+  const findReactionIdx = (report: PlaybookReport): number => {
+    if (report.announceDate) {
+      const at = dates.findIndex((d) => d >= report.announceDate!);
+      if (at > 0) {
+        if (dates[at] !== report.announceDate || at + 1 >= sorted.length) return at;
+        return sorted[at + 1].v > sorted[at].v ? at + 1 : at;
+      }
+    }
+    const anchor = dates.findIndex((d) => d >= report.date);
     if (anchor <= 0) return -1;
     const lo = Math.max(1, anchor - 25);
     const hi = Math.min(sorted.length - 1, anchor + 3);
@@ -146,7 +207,7 @@ function buildModel(reports: PlaybookReport[], bars: OHLCBar[] | undefined, maxR
 
   const rows: Row[] = [];
   for (const e of past) {
-    const d0 = findReactionIdx(e.date);
+    const d0 = findReactionIdx(e);
     if (d0 <= 0) continue; // need a prior bar to measure against
     const pre = sorted[d0 - 1].c;
     if (!(pre > 0)) continue;

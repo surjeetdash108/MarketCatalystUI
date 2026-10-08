@@ -6,7 +6,7 @@ import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTic
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
 import { ChartCard } from "../stock-panel";
 import { EpsSalesWidget } from "../eps-sales-widget";
-import { EarningsPlaybook } from "./EarningsPlaybook";
+import { EarningsPlaybook, playbookReports } from "./EarningsPlaybook";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
@@ -2013,9 +2013,7 @@ export function EarningsScreen() {
               <div className="card-b" style={{ paddingTop: 6 }}>
                 <EarningsPlaybook
                   sym={sel}
-                  reports={(financialsDoc?.quarters ?? [])
-                    .filter(q => q.filingDate)
-                    .map(q => ({ date: q.filingDate as string, epsActual: q.epsActual, epsEstimate: q.epsEstimate, epsReported: q.epsActualReported ?? null, epsEstimateReported: q.epsEstimateReported ?? null }))}
+                  reports={playbookReports(financialsDoc)}
                 />
               </div>
             </div>
