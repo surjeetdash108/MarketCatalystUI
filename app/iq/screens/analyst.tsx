@@ -19,8 +19,35 @@ interface SelectedAnalystAction {
   previousGrade?: string | null;
   newGrade?: string | null;
   pt?: number | null;
+  /** The firm's target before this action (backend `previousPriceTarget`). */
+  prevPt?: number | null;
   date?: string;
   analyst?: string | null;
+}
+
+/** % move from the firm's previous target to this one; null when either is unknown. */
+function ptChangePct(pt: number | null | undefined, prevPt: number | null | undefined): number | null {
+  if (pt == null || prevPt == null || prevPt <= 0) return null;
+  return ((pt - prevPt) / prevPt) * 100;
+}
+
+/**
+ * The label for the Action column. FMP files a target cut with the rating held
+ * as "maintain", which hid the actual news — Benzinga lists the same CVNA rows
+ * as "PT Cut". Rating changes keep their own label; only a held rating whose
+ * target moved is relabelled.
+ */
+function displayAction(
+  action: string | null | undefined,
+  pt: number | null | undefined,
+  prevPt: number | null | undefined,
+): string | null {
+  const a = (action ?? "").toLowerCase();
+  const held = a === "" || a.includes("maintain") || a.includes("reiterat");
+  if (held && pt != null && prevPt != null && pt !== prevPt) {
+    return pt > prevPt ? "PT Raise" : "PT Cut";
+  }
+  return action ?? null;
 }
 
 function formatLongDate(dateStr?: string): string {
@@ -68,50 +95,29 @@ function getRatingSummary(
   return next ? `${act ? titleCaseLabel(act) + " at " : ""}${next}` : "Maintained at Buy";
 }
 
+/**
+ * The firm's price-target move, from the backend's stored previous target.
+ *
+ * This used to reconstruct the previous target by searching the ~20 stored rows
+ * for an earlier, DIFFERENT target from the same firm. Skipping equal values
+ * jumped past the latest one (CVNA/Barclays read "$94 → $80" where the firm went
+ * $93 → $80), and with no match it printed the upside vs the current price in
+ * the slot a target change belongs in — or "Raised/Lowered" inferred from the
+ * rating, which says nothing about the target. Upside has its own metric below.
+ */
 function getPriceTargetSummary(
   pt: number | null | undefined,
-  firm: string | null | undefined,
-  actionDate: string | undefined,
-  action: string | null | undefined,
+  prevPt: number | null | undefined,
   consensus?: AnalystConsensusDoc | null,
-  currentPrice?: number | null,
 ): string {
-  const normFirm = (firm ?? "").toLowerCase().trim();
-  const priorFromSameFirm = consensus?.recentGrades?.find(
-    g => g.firm && normFirm && g.firm.toLowerCase().trim() === normFirm &&
-         g.date && actionDate && g.date < actionDate &&
-         g.priceTarget != null && g.priceTarget > 0 &&
-         g.priceTarget !== pt
-  );
-
-  const prevPt = priorFromSameFirm?.priceTarget;
-
-  if (pt != null && prevPt != null && prevPt > 0) {
-    if (pt < prevPt) {
-      const decreasePct = Math.abs(((prevPt - pt) / prevPt) * 100);
-      return `Lowered from $${prevPt.toFixed(2)} to $${pt.toFixed(2)} (an ${decreasePct.toFixed(2)}% decrease)`;
-    } else if (pt > prevPt) {
-      const increasePct = Math.abs(((pt - prevPt) / prevPt) * 100);
-      return `Raised from $${prevPt.toFixed(2)} to $${pt.toFixed(2)} (an ${increasePct.toFixed(2)}% increase)`;
-    } else {
+  if (pt != null && pt > 0) {
+    const chg = ptChangePct(pt, prevPt);
+    if (chg != null && prevPt != null) {
+      if (pt > prevPt) return `Raised from $${prevPt.toFixed(2)} to $${pt.toFixed(2)} (+${chg.toFixed(2)}%)`;
+      if (pt < prevPt) return `Lowered from $${prevPt.toFixed(2)} to $${pt.toFixed(2)} (${chg.toFixed(2)}%)`;
       return `Maintained at $${pt.toFixed(2)}`;
     }
-  }
-
-  if (pt != null && pt > 0) {
-    const actLower = (action ?? "").toLowerCase();
-    if (currentPrice != null && currentPrice > 0) {
-      const diff = pt - currentPrice;
-      const pct = Math.abs((diff / currentPrice) * 100);
-      if (actLower.includes("downgrade")) {
-        return `Lowered to $${pt.toFixed(2)} (${diff >= 0 ? `an ${pct.toFixed(2)}% upside` : `an ${pct.toFixed(2)}% decrease`})`;
-      }
-      if (actLower.includes("upgrade")) {
-        return `Raised to $${pt.toFixed(2)} (${diff >= 0 ? `an ${pct.toFixed(2)}% upside` : `a ${pct.toFixed(2)}% decrease`})`;
-      }
-      return `$${pt.toFixed(2)} (${diff >= 0 ? `an ${pct.toFixed(2)}% upside` : `an ${pct.toFixed(2)}% downside`} vs current $${currentPrice.toFixed(2)})`;
-    }
-    return `$${pt.toFixed(2)}`;
+    return `$${pt.toFixed(2)} · previous target not available`;
   }
 
   if (consensus?.priceTargetConsensus != null && consensus.priceTargetConsensus > 0) {
@@ -139,7 +145,7 @@ function AnalystActionDrawer({
   const sym = actionItem.ticker;
   const firm = actionItem.firm || "Truist Securities";
   const ratingText = getRatingSummary(actionItem.action, actionItem.previousGrade, actionItem.newGrade);
-  const ptText = getPriceTargetSummary(actionItem.pt, actionItem.firm, actionItem.date, actionItem.action, consensus, currentPrice);
+  const ptText = getPriceTargetSummary(actionItem.pt, actionItem.prevPt, consensus);
   const analystText = actionItem.analyst || (actionItem.firm ? `${actionItem.firm} Research Analyst` : "Jamie Cook");
   const dateText = formatLongDate(actionItem.date);
 
@@ -397,8 +403,8 @@ function actionMatches(action: string | null | undefined, tab: Tab): boolean {
 
 function actionTone(action: string | null | undefined): string {
   const a = (action ?? "").toLowerCase();
-  if (a.includes("upgrade")) return "var(--up)";
-  if (a.includes("downgrade")) return "var(--down)";
+  if (a.includes("upgrade") || a === "pt raise") return "var(--up)";
+  if (a.includes("downgrade") || a === "pt cut") return "var(--down)";
   if (a.includes("init")) return "var(--brand-2)";
   return "var(--text-dim-solid)";
 }
@@ -411,6 +417,11 @@ function shortDate(iso: string): string {
 
 const money = (v: number | null | undefined, d = 0): string =>
   v == null ? "—" : `$${v.toFixed(d)}`;
+
+/** A target in whole dollars unless it has cents — "$15.5" must not read as "$16"
+ *  beside a "$15 → $15.5" move. */
+const ptMoney = (v: number | null | undefined): string =>
+  money(v, v != null && !Number.isInteger(v) ? 2 : 0);
 
 type ActSortKey = "ticker" | "firm" | "action" | "grade" | "pt" | "upside" | "date";
 /** Text columns start A→Z; numbers and dates start largest / newest first. */
@@ -476,6 +487,7 @@ export function AnalystScreen() {
         // THIS firm's own target (not the ticker consensus — that made every
         // row identical). null shows "—" when the firm posted no target.
         pt: g.priceTarget ?? null,
+        prevPt: g.previousPriceTarget ?? null,
         date: g.date,
         firm: g.firm,
         previousGrade: g.previousGrade,
@@ -530,6 +542,8 @@ export function AnalystScreen() {
       previousGrade: act?.previousGrade || latestGrade?.previousGrade || null,
       newGrade: act?.newGrade || latestGrade?.newGrade || c?.consensus || "Buy",
       pt: act?.pt ?? latestGrade?.priceTarget ?? c?.priceTargetConsensus ?? null,
+      // Only the firm's own target has a "previous"; a consensus fallback has none.
+      prevPt: act?.pt != null ? act.prevPt : null,
       date: act?.date || latestGrade?.date || new Date().toISOString().slice(0, 10),
     });
   };
@@ -552,10 +566,10 @@ export function AnalystScreen() {
       switch (actSort) {
         case "ticker": return a.ticker;
         case "firm": return a.firm ?? null;
-        case "action": return a.action ?? null;
+        case "action": return displayAction(a.action, a.pt, a.prevPt);
         case "grade": return a.newGrade ?? null;
         case "pt": return a.pt;
-        case "upside": return upside(a.pt, a.ticker);
+        case "upside": return ptChangePct(a.pt, a.prevPt);
         case "date": return a.date ?? null;
       }
     };
@@ -826,7 +840,11 @@ export function AnalystScreen() {
                   </td>
                 </tr>
               ) : feedRows.map((a, i) => {
-                  const up = upside(a.pt, a.ticker);
+                  // "Upside" is the firm's target move ($92 → $83 = −9.8%), not the
+                  // target vs today's price — that read +32% on a target CUT.
+                  // Price upside stays in the drawer's Implied Upside metric.
+                  const up = ptChangePct(a.pt, a.prevPt);
+                  const shownAction = displayAction(a.action, a.pt, a.prevPt);
                   return (
                   <tr key={`${a.ticker}-${a.firm}-${a.date}-${i}`} style={{ cursor: "pointer" }} onClick={() => handleSelectAction(a)}>
                     <td>
@@ -841,11 +859,15 @@ export function AnalystScreen() {
                       </div>
                     </td>
                     <td>{a.firm ?? "—"}</td>
-                    <td><span style={{ color: actionTone(a.action), fontWeight: 600, textTransform: "capitalize" }}>{a.action ?? "—"}</span></td>
+                    <td><span style={{ color: actionTone(shownAction), fontWeight: 600, textTransform: "capitalize" }}>{shownAction ?? "—"}</span></td>
                     <td style={{ color: "var(--text-dim-solid)" }}>{a.previousGrade ?? "—"} <span style={{ opacity: .6 }}>→</span> <b style={{ color: "var(--text)" }}>{a.newGrade ?? "—"}</b></td>
-                    <td className="num" style={{ fontWeight: 600 }}>{money(a.pt)}</td>
-                    <td className="num" style={{ fontWeight: 700, color: up == null ? "var(--text-dim-solid)" : up >= 0 ? "var(--up)" : "var(--down)" }}>
-                      {up == null ? "—" : `${up >= 0 ? "+" : ""}${up.toFixed(0)}%`}
+                    <td className="num" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {a.prevPt != null && a.pt != null && a.prevPt !== a.pt
+                        ? <><span style={{ color: "var(--text-dim-solid)", fontWeight: 500 }}>{ptMoney(a.prevPt)}</span> <span style={{ opacity: .6 }}>→</span> {ptMoney(a.pt)}</>
+                        : ptMoney(a.pt)}
+                    </td>
+                    <td className="num" style={{ fontWeight: 700, color: up == null || up === 0 ? "var(--text-dim-solid)" : up > 0 ? "var(--up)" : "var(--down)" }}>
+                      {up == null ? "—" : `${up > 0 ? "+" : ""}${up.toFixed(1)}%`}
                     </td>
                     <td className="num" style={{ color: "var(--text-dim-solid)" }}>{shortDate(a.date)}</td>
                   </tr>
@@ -974,7 +996,7 @@ export function AnalystScreen() {
                             </div>
                           </div>
                         </td>
-                        <td style={{ color: actionTone(a.action), fontWeight: 600, textTransform: "capitalize" }}>{a.action ?? "—"}</td>
+                        <td style={{ color: actionTone(displayAction(a.action, a.pt, a.prevPt)), fontWeight: 600, textTransform: "capitalize" }}>{displayAction(a.action, a.pt, a.prevPt) ?? "—"}</td>
                         <td style={{ color: "var(--text-dim-solid)" }}>{a.previousGrade ?? "—"} → {a.newGrade ?? "—"}</td>
                         <td className="num" style={{ color: "var(--text-dim-solid)" }}>{shortDate(a.date)}</td>
                       </tr>

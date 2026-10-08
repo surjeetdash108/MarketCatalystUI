@@ -244,7 +244,7 @@ export function EtfMarketFunds() {
               <StockScreenEmbed
                 key={selectedEtf}
                 initialSym={selectedEtf}
-                visibleTabs={["chart", "overview", "holdings", "news"]}
+                visibleTabs={["overview", "holdings", "news"]}
               />
             </div>
           </div>
@@ -910,7 +910,7 @@ export function EtfMarketFunds() {
                   <StockScreenEmbed
                     key={selectedFundTicker}
                     initialSym={selectedFundTicker}
-                    visibleTabs={["chart", "overview", "holdings", "news"]}
+                    visibleTabs={["overview", "holdings", "news"]}
                   />
                 </div>
               </div>

@@ -9,13 +9,13 @@ import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, intervalLa
 import { buildChartEarnings } from "../chart-earnings";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
-import { apiGet, apiPost, apiDelete } from "../backend";
+import { apiPost } from "../backend";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
 import { useBackendBars, useIntervalBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
-import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
-import { useLiveQuotes, extendedSession } from "../live-quotes-context";
+import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
+import { useLiveQuotes } from "../live-quotes-context";
 import { EarningsPlaybook } from "./EarningsPlaybook";
 import type {
   CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc,
@@ -105,34 +105,12 @@ function ema(bars: { c: number }[], n: number): number | null {
   return e;
 }
 
-interface StockNote {
-  id: string;
-  sym: string;
-  name: string;
-  comment: string;
-  createdAt: Date;
-}
-
-async function loadNotes(sym: string): Promise<StockNote[]> {
-  if (!firebaseAuth.currentUser) return [];
-  try {
-    const rows = await apiGet<Array<{ id: string; sym: string; name: string; comment: string; createdAt: string }>>(
-      `/api/stock-notes?sym=${encodeURIComponent(sym)}`,
-    );
-    return rows.map(r => ({ ...r, createdAt: new Date(r.createdAt) }));
-  } catch { return []; }
-}
-
 async function saveNote(sym: string, name: string, comment: string): Promise<string | null> {
   if (!firebaseAuth.currentUser || !comment.trim()) return null;
   try {
     const row = await apiPost<{ id: string }>("/api/stock-notes", { sym, name, comment: comment.trim() });
     return row.id;
   } catch { return null; }
-}
-
-async function deleteNote(id: string): Promise<void> {
-  try { await apiDelete(`/api/stock-notes/${encodeURIComponent(id)}`); } catch { /* ignore */ }
 }
 
 const LOGO_BG: Record<string, [string, string]> = {
@@ -531,20 +509,30 @@ function EarnPane({ hist10 }: { hist10: EarnQ[] }) {
 }
 
 
-export type StockTab = "chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers";
+export type StockTab = "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news";
 
 export function StockScreen({
   initialSym,
   hideHeader,
+  hideIdentity,
   hideChart,
   headerActions,
   visibleTabs,
+  barInterval: barIntervalProp,
 }: {
   initialSym?: string;
   hideHeader?: boolean;
+  /** Drop only the identity/quote header but keep the full tabbed layout —
+   *  for hosts that already show the ticker and price (the panel chart card).
+   *  hideHeader, by contrast, switches to the compact stacked layout. */
+  hideIdentity?: boolean;
   hideChart?: boolean;
   headerActions?: ReactNode;
   visibleTabs?: StockTab[];
+  /** Candle size owned by a chart OUTSIDE this screen (the list+chart panels,
+   *  which pass hideChart). Drives the technical rating so it re-rates when
+   *  that chart's interval changes, exactly as it does on the full page. */
+  barInterval?: BarInterval;
 } = {}) {
   const { openStock, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
@@ -571,7 +559,8 @@ export function StockScreen({
   }, []);
   const [search, setSearch] = useState("");
   // Candle size, not a date range — the backend sizes each interval's history.
-  const [barInterval, setBarInterval] = useState<BarInterval>("1D");
+  const [ownBarInterval, setBarInterval] = useState<BarInterval>("1D");
+  const barInterval = barIntervalProp ?? ownBarInterval;
   // Default ON: the earnings dots are the chart's main annotation, and behind a
   // default-off toggle they were invisible unless you knew to look for the
   // button. The toggle still turns them off for a clean price-only chart.
@@ -644,7 +633,6 @@ export function StockScreen({
   const { data: aiAnalysis, loading: aiLoading, error: aiError } = useApiResource<AiAnalysisDoc>(`/live/ai-analysis?ticker=${encodeURIComponent(sym)}`);
 
   // ── Notes (Firebase stock_comments) ──────────────────────────────────────
-  const [notes, setNotes]       = useState<StockNote[]>([]);
   const [noteInput, setNoteInput] = useState("");
   const [noteOpen, setNoteOpen]  = useState(false);
   const [ctxMenu, setCtxMenu]    = useState<{ x: number; y: number } | null>(null);
@@ -659,10 +647,10 @@ export function StockScreen({
   // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
   // its original single stacked-card layout, so this state is unused there.
   const [activeTab, setActiveTab] = useState<StockTab>(() => {
-    if (visibleTabs && visibleTabs.length > 0 && !visibleTabs.includes("chart")) {
+    if (visibleTabs && visibleTabs.length > 0 && !visibleTabs.includes("overview")) {
       return visibleTabs[0];
     }
-    return "chart";
+    return "overview";
   });
 
   useEffect(() => {
@@ -738,27 +726,13 @@ export function StockScreen({
     return () => window.clearInterval(id);
   }, [measureCols, sym, finPeriod]);
 
-  const refreshNotes = useCallback(async () => {
-    setNotes(await loadNotes(sym));
-  }, [sym]);
-
-  useEffect(() => { void refreshNotes(); }, [refreshNotes]);
-
+  // Right-click → Add note saves to the account; the notes themselves are
+  // listed on the Notes screen (the inline list under the chart was removed).
   async function submitNote() {
     const id = await saveNote(sym, data.name ?? sym, noteInput);
     if (id) {
-      setNotes(prev => [{
-        id, sym, name: data.name ?? sym,
-        comment: noteInput.trim(),
-        createdAt: new Date(),
-      }, ...prev]);
       setNoteInput(""); setNoteOpen(false);
     }
-  }
-
-  async function removeNote(id: string) {
-    await deleteNote(id);
-    setNotes(prev => prev.filter(n => n.id !== id));
   }
 
   function handleChartRightClick(e: React.MouseEvent) {
@@ -955,97 +929,11 @@ export function StockScreen({
   const offLow52 = keyStats?.pctFromLow52 ?? null;
   const rsiSeries = liveCompany?.rsi14Series ?? null;
   const divPerShare = keyStats?.dividendPerShare ?? null;
-  const dollar = data.pctChange != null ? Math.abs((data.pctChange / 100) * p) : null;
-
-  // Live overlay values for the header. Kept separate from `p`/`dollar` so the
-  // many derived stats below (EPS, 52w positioning, chart baseline) stay pinned
-  // to the company snapshot and don't churn on every tick.
-  // Headline price/%: prefer the SHARED app-wide quote so this drawer shows the
-  // exact same number as the heatmap tile / movers row for the same ticker.
-  // useLiveTick still drives the intraday chart overlay below.
-  const sharedQuote = useLiveQuotes([sym]).get(sym);
-
-  const livePrice = sharedQuote?.price ?? live.tick?.price ?? null;
-  const dispPrice = livePrice ?? data.price;
-
-  const dispPct =
-    sharedQuote?.pctChange ??
-    live.pct ??
-    data.pctChange;
-
-  const sharedDollar =
-    sharedQuote?.price != null && sharedQuote.pctChange != null
-      ? Math.abs(
-          sharedQuote.price -
-          sharedQuote.price / (1 + sharedQuote.pctChange / 100),
-        )
-      : null;
-
-  const dispDollar =
-    sharedDollar ??
-    (live.change != null ? Math.abs(live.change) : dollar);
-
-  const mkt = useBackendMarketStatus();
-  const isMarketOpen = mkt.phase === "open";
-
-  /*
-   * Extended-session detection.
-   *
-   * Only active after regular market hours have closed (mkt.phase !== "open").
-   * True if market status is late_trading, or if Polygon snapshot reports a
-   * non-zero lateTradingChangePct, or extendedSession detects after hours.
-   */
-  const isAfterHours =
-    !isMarketOpen &&
-    (mkt.phase === "after" ||
-      mkt.phase === "closed" ||
-      sharedQuote?.marketStatus === "late_trading" ||
-      (sharedQuote?.latePct != null && sharedQuote.latePct !== 0) ||
-      extendedSession(sharedQuote) === "after hours");
-
-  /*
-   * Regular-session price and move.
-   *
-   * If currently in after-hours, data.price is the regular session close.
-   * If data.price is not present, reconstruct regular close from after-hours quote.
-   */
-  const regPrice =
-    isAfterHours && data.price != null && data.price > 0
-      ? data.price
-      : isAfterHours && sharedQuote?.latePct != null && sharedQuote?.price != null
-        ? sharedQuote.price / (1 + sharedQuote.latePct / 100)
-        : (dispPrice ?? data.price ?? 0);
-
-  const regPct =
-    isAfterHours && data.pctChange != null
-      ? data.pctChange
-      : (sharedQuote?.regularPct ?? dispPct ?? data.pctChange ?? 0);
-
-  const regDollar =
-    regPrice > 0 && regPct != null && regPct !== -100
-      ? Math.abs(regPrice - regPrice / (1 + regPct / 100))
-      : (dispDollar ?? 0);
-
-  /*
-   * After-hours price and move.
-   */
-  const ahPct =
-    sharedQuote?.latePct ??
-    (isAfterHours && sharedQuote?.pctChange != null && sharedQuote.pctChange !== regPct
-      ? sharedQuote.pctChange
-      : null);
-
-  const ahPrice =
-    isAfterHours && sharedQuote?.price != null && (sharedQuote.latePct != null || sharedQuote.price !== regPrice)
-      ? sharedQuote.price
-      : (ahPct != null && regPrice > 0 ? regPrice * (1 + ahPct / 100) : null);
-
-  const ahDollar =
-    ahPrice != null && regPrice > 0
-      ? Math.abs(ahPrice - regPrice)
-      : (ahPct != null && regPrice > 0 ? Math.abs((ahPct / 100) * regPrice) : null);
-
-  const showAfterHours = !isMarketOpen && isAfterHours && ahPrice != null && ahPct != null;
+  // Headline quote (regular session + after hours), shared with the panel
+  // charts so both print the same number. Kept separate from `p` so the many
+  // derived stats below (EPS, 52w positioning) stay pinned to the snapshot.
+  const hq = useHeadlineQuote(sym, live, { price: data.price, pctChange: data.pctChange });
+  const { dispPrice } = hq;
   // Freshness stamp for the price-chart bars (backend createdAt), surfaced by the
   // chart toolbar in the same muted style as the header's delayed-quote marker
   // (BUG-DATA-008).
@@ -1235,28 +1123,27 @@ export function StockScreen({
   // tags still key off pmx/pmn, so they stay correct regardless of sort.
   const sortedPeers = [...peersAll].sort((a, b) => (peerSort === "asc" ? a.c - b.c : b.c - a.c));
 
-  // Tab bar config — mirrors the Chart/Overview/Analysis/Earnings/
-  // Financials/Holdings/News split. Counts are real data (quarters on file /
+  // Tab bar config — mirrors the stock-detail design's Overview/Analysis/
+  // Earnings/Financials/Holdings/News split (the price chart sits on
+  // Overview, Peers in its rail). Counts are real data (quarters on file /
   // articles fetched), not decorative.
   const ALL_TABS: { id: StockTab; label: string; count?: number }[] = [
-    { id: "chart", label: "Chart" },
     { id: "overview", label: "Overview" },
     { id: "analysis", label: "Analysis" },
     { id: "earnings", label: "Earnings", count: hist10.length || undefined },
     { id: "financials", label: "Financials" },
     { id: "holdings", label: "Holdings" },
     { id: "news", label: "News", count: tickerNews?.length || undefined },
-    { id: "peers", label: "Peers" },
   ];
 
   const TABS = useMemo(() => {
     if (!visibleTabs || visibleTabs.length === 0) return ALL_TABS;
     return ALL_TABS.filter(t => visibleTabs.includes(t.id));
   }, [visibleTabs, hist10.length, tickerNews?.length]);
-  // Every rail card lives on exactly one tab (Analysis) — no card is
-  // duplicated across tabs. The rest show a full-width main column instead of
-  // an empty second track.
-  const showRail = !hideHeader && activeTab === "analysis";
+  // Rail cards belong to one tab each, as in the design: Peers on Overview;
+  // Technical rating / Indicators / analyst actions / Key levels on Analysis.
+  // Every other tab gets a full-width main column instead of an empty track.
+  const showRail = !hideHeader && (activeTab === "overview" || activeTab === "analysis");
 
   function selectSym(s: string) {
     setSym(s);
@@ -1324,7 +1211,7 @@ export function StockScreen({
         </div>
       )} */}
 
-      {!hideHeader && (
+      {!hideHeader && !hideIdentity && (
         <div style={{ padding: "14px 18px 0" }}>
           {/* Header row: identity/quote on the left, the About blurb in the dead
               space to its right. The blurb used to sit on its own line BELOW the
@@ -1352,155 +1239,7 @@ export function StockScreen({
               >
                 <h1 style={{ margin: 0, flexShrink: 0, fontSize: "0.95rem" }}>{sym}</h1>
 
-                {/* PARALLEL SESSIONS CONTAINER: Regular Market Close + After Hours */}
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexWrap: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {/* REGULAR MARKET CLOSE */}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "center",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "baseline",
-                        gap: 5,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      <span
-                        className="p"
-                        style={{
-                          fontFamily: "var(--f-mono)",
-                          fontSize: "1.05rem",
-                          fontWeight: 800,
-                          color: "var(--text-hi)",
-                          lineHeight: 1.1,
-                          letterSpacing: "-.02em",
-                        }}
-                      >
-                        ${fmt(regPrice, 2)}
-                      </span>
-
-                      {regPct != null && (
-                        <span
-                          className={`c ${cls(regPct)}`}
-                          style={{
-                            fontFamily: "var(--f-mono)",
-                            fontSize: "0.76rem",
-                            fontWeight: 700,
-                            display: "inline-flex",
-                            alignItems: "baseline",
-                            gap: 4,
-                            lineHeight: 1.1,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          <span style={{ fontSize: "0.68rem" }}>{arr(regPct)}</span>
-                          <span>{fmt(Math.abs(regDollar ?? 0), 2)}</span>
-                          <span>({regPct >= 0 ? "" : "-"}{fmt(Math.abs(regPct), 2)}%)</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: ".54rem",
-                        fontWeight: 600,
-                        color: "var(--text-dim-solid)",
-                        marginTop: 1,
-                        lineHeight: 1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {/* {isMarketOpen ? "Market Open" : "Market Close"} */}
-                    </div>
-                  </div>
-
-                  {/* AFTER HOURS — ONLY SHOWN AFTER REGULAR MARKET CLOSE */}
-                  {showAfterHours && (
-                    <div
-                      style={{
-                        borderLeft: `2.5px solid ${regPct >= 0 ? "var(--up)" : "var(--down)"}`,
-                        paddingLeft: 8,
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "center",
-                        whiteSpace: "nowrap",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: ".54rem",
-                          fontWeight: 800,
-                          color: "var(--text-hi)",
-                          letterSpacing: ".03em",
-                          textTransform: "uppercase",
-                          lineHeight: 1.1,
-                          marginBottom: 2,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        AFTER HOURS
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "baseline",
-                          gap: 4,
-                          lineHeight: 1.1,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontFamily: "var(--f-mono)",
-                            fontSize: "0.78rem",
-                            fontWeight: 800,
-                            color: "var(--text-hi)",
-                          }}
-                        >
-                          ${fmt(ahPrice, 2)}
-                        </span>
-
-                        <span
-                          className={`c ${cls(ahPct)}`}
-                          style={{
-                            fontFamily: "var(--f-mono)",
-                            fontSize: ".65rem",
-                            fontWeight: 700,
-                            display: "inline-flex",
-                            alignItems: "baseline",
-                            gap: 3,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          <span>
-                            {ahPct >= 0 ? "+" : "-"}{fmt(ahDollar ?? 0, 2)}
-                          </span>
-                          <span style={{ fontSize: ".58rem" }}>{arr(ahPct)}</span>
-                          <span>
-                            {ahPct >= 0 ? `+${fmt(ahPct, 2)}%` : `${fmt(ahPct, 2)}%`}
-                          </span>
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <QuoteHeadline q={hq} />
               </div>
               {/* Volume line: under NVDA text beside logo, above Mkt cap */}
               <div
@@ -1645,8 +1384,9 @@ export function StockScreen({
           </nav>
         )}
 
-        {/* Full-width chart — rendered in full view when activeTab === "chart", or in compact embed mode when !hideChart */}
-        {((!hideHeader && !hideChart && activeTab === "chart") || (hideHeader && !hideChart)) && (
+        {/* Full-width chart — above Overview's content (and its Peers rail) in
+            the full view, as in the design; always shown in compact embed mode. */}
+        {((!hideHeader && !hideChart && activeTab === "overview") || (hideHeader && !hideChart)) && (
           <div style={{ gridColumn: "1 / -1" }}>
             {/* Chart card */}
             <div className="card">
@@ -1677,65 +1417,6 @@ export function StockScreen({
                     below support" line was removed (QA row 259): it wasn't a
                     real pattern detector, and showed "breakout" even for
                     stocks that were down. */}
-
-                {/* Chart notes — inline inside chart card */}
-                <div className="cn-wrap">
-                  <div className="cn-h">
-                    Chart notes
-
-                    <span className="cn-hint">
-                      right-click to add · saved to your account
-                    </span>
-
-                    <button
-                      className="chip ai-c"
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: ".7rem",
-                      }}
-                      onClick={() => setNoteOpen(true)}
-                    >
-                      + Add note
-                    </button>
-                  </div>
-
-                  {notes.length === 0 ? (
-                    <div className="cn-empty">
-                      No notes yet. Right-click the chart or click
-                      &ldquo;Add note&rdquo; to record a trade decision.
-                    </div>
-                  ) : (
-                    notes.map(n => (
-                      <div key={n.id} className="cn-row">
-                        <div className="cn-dot" />
-
-                        <div className="cn-tx">
-                          {n.comment}
-
-                          <span className="cn-ts">
-                            {" · "}
-                            {n.createdAt.toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                            {" "}
-                            {n.createdAt.toLocaleTimeString("en-US", {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-
-                        <button
-                          className="icon-x"
-                          onClick={() => removeNote(n.id)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
           </div>
         </div>)}
 
@@ -2527,16 +2208,20 @@ export function StockScreen({
                 <div style={{ marginTop: 10, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
                   Source: rs-rating.job, technical-indicators.job, a year of daily bars · informational purposes only, not investment advice.
                 </div>
+              </div>
+            </div>
 
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
-                  <div style={{ fontSize: ".66rem", fontWeight: 700, color: "var(--ai)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span>◆ AI read · {sym}</span>
-                    {aiAnalysis?.ok && (
-                      <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", color: "var(--text-dim-solid)", textTransform: "none", letterSpacing: 0 }}>
-                        {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}
-                      </span>
-                    )}
-                  </div>
+            <div className="ai-block">
+              <div className="card-h">
+                <h3 className="ai-c">◆ AI read · {sym}</h3>
+                {aiAnalysis?.ok && (
+                  <span className="pill" style={{ fontSize: ".58rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
+                    {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}
+                  </span>
+                )}
+              </div>
+              <div className="card-b" style={{ maxHeight: "none" }}>
+                <div>
                   {aiLoading && <DataState loading label="Generating AI analysis…" />}
                   {!aiLoading && (!!aiError || aiAnalysis?.ok === false) && (
                     <div style={{ fontSize: ".76rem", color: "var(--text-dim-solid)", padding: "2px 0" }}>AI analysis unavailable right now.</div>
@@ -2600,6 +2285,7 @@ export function StockScreen({
           </>)}
 
           {activeTab === "earnings" && (<>
+            <div className="sd-two">
             <div className="card">
               <div className="card-h">
                 <h3>Earnings · EPS Surprise</h3>
@@ -2663,6 +2349,7 @@ export function StockScreen({
                 </div>
               );
             })()}
+            </div>
 
             <div className="card">
               <div className="card-h">
@@ -2715,56 +2402,117 @@ export function StockScreen({
           </>)}
 
           {activeTab === "financials" && (<>
+            <div className="tf-pills" style={{ alignSelf: "flex-start" }} role="group" aria-label="Period">
+              <button className={`rng${finPeriod === "Q" ? " on" : ""}`} aria-pressed={finPeriod === "Q"} onClick={() => setFinPeriod("Q")}>Quarterly</button>
+              <button className={`rng${finPeriod === "A" ? " on" : ""}`} aria-pressed={finPeriod === "A"} onClick={() => setFinPeriod("A")}>Annual</button>
+            </div>
             {(() => {
               const inc = incRowsFromFinancials(finPeriod, financialsDoc, () => []);
               const epsSales = epsSalesSeries(finPeriod, financialsDoc);
               return (
-                <div className="card">
-                  <div className="card-h">
-                    <h3>Financials</h3>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <VendorTag v="polygon" />
-                      {financialsDoc && (
-                        <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>
-                      )}
-                      <div className="tf-pills">
-                        <button className={`rng${finPeriod === "Q" ? " on" : ""}`} onClick={() => setFinPeriod("Q")}>Quarterly</button>
-                        <button className={`rng${finPeriod === "A" ? " on" : ""}`} onClick={() => setFinPeriod("A")}>Annual</button>
+                <div className="sd-two">
+                  <div className="card">
+                    <div className="card-h">
+                      <h3>EPS &amp; Sales</h3>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <VendorTag v="polygon" />
+                        {financialsDoc && (
+                          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>
+                        )}
                       </div>
-                      <span className="link" onClick={() => setInnerDrawer("financials")}>View all →</span>
-                      <ExpandBtn title={`${sym} · Financials (${finPeriod === "Q" ? "Quarterly" : "Annual"})`} node={<EarnIncChart inc={inc} />} />
+                    </div>
+                    <div className="card-b" style={{ paddingTop: 8 }}>
+                      {epsSales.length > 0 ? (
+                        <>
+                          <EpsSalesBars data={epsSales} />
+                          <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                            {finPeriod === "Q" ? "Reported quarters" : "Reported fiscal years"} · actuals only
+                          </div>
+                        </>
+                      ) : (
+                        <DataState loading={financialsLoading} label={`No reported ${finPeriod === "Q" ? "quarterly" : "annual"} EPS or sales on file for ${sym}.`} />
+                      )}
                     </div>
                   </div>
-                  <div className="card-b" style={{ paddingTop: 8 }}>
-                    {epsSales.length > 0 && (
-                      <div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: "1px solid var(--border-soft)" }}>
-                        <EpsSalesBars data={epsSales} />
-                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                          {finPeriod === "Q" ? "Reported quarters" : "Reported fiscal years"} · actuals only
-                        </div>
+
+                  <div className="card">
+                    <div className="card-h">
+                      <h3>{finPeriod === "Q" ? "Quarterly" : "Annual"} income</h3>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <VendorTag v="polygon" />
+                        <span className="link" onClick={() => setInnerDrawer("financials")}>View all →</span>
+                        <ExpandBtn title={`${sym} · Financials (${finPeriod === "Q" ? "Quarterly" : "Annual"})`} node={<EarnIncChart inc={inc} />} />
                       </div>
-                    )}
-                    {inc.length === 0 ? (
-                      <DataState loading={financialsLoading} label={
-                        financialsDoc && (financialsDoc.epsHistory?.length ?? 0) > 0
-                          ? `No ${finPeriod === "Q" ? "quarterly" : "annual"} income statement is published for ${sym} — reported EPS is shown above where available.`
-                          : `No ${finPeriod === "Q" ? "quarterly" : "annual"} financials on file for ${sym}.`
-                      } />
+                    </div>
+                    <div className="card-b" style={{ paddingTop: 8 }}>
+                      {inc.length === 0 ? (
+                        <DataState loading={financialsLoading} label={
+                          financialsDoc && (financialsDoc.epsHistory?.length ?? 0) > 0
+                            ? `No ${finPeriod === "Q" ? "quarterly" : "annual"} income statement is published for ${sym} — reported EPS is shown alongside where available.`
+                            : `No ${finPeriod === "Q" ? "quarterly" : "annual"} financials on file for ${sym}.`
+                        } />
+                      ) : (
+                        <>
+                          <div className="ec-legend">
+                            <span><i style={{ background: "var(--brand)" }} />Revenue</span>
+                            <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
+                            <span><i style={{ background: "var(--up)" }} />Net income</span>
+                          </div>
+                          <EarnIncChart inc={inc} />
+                          <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
+                            {finPeriod === "Q"
+                              ? "Last 10 quarters · revenue, gross profit & net income"
+                              : "Last 10 fiscal years · revenue, gross profit & net income"}
+                            {" · tap "}&#8220;View all&#8221; for the full statement.
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="sd-two" style={{ alignItems: "start" }}>
+            {(() => {
+              // Newest first; %Chg is vs the same period a year earlier.
+              const rows = epsSalesSeries(finPeriod, financialsDoc);
+              const back = finPeriod === "Q" ? 4 : 1;
+              const tbl = rows.map((r, i) => {
+                const prior = rows[i - back]?.sales;
+                const chg = r.sales != null && prior != null && prior !== 0 ? ((r.sales - prior) / Math.abs(prior)) * 100 : null;
+                return { ...r, chg };
+              }).reverse();
+              return (
+                <div className="card">
+                  <div className="card-h">
+                    <h3>{finPeriod === "Q" ? "Quarterly" : "Annual"} sales</h3>
+                    <VendorTag v="polygon" />
+                  </div>
+                  <div className="card-b" style={{ paddingTop: 4, overflowX: "auto" }}>
+                    {tbl.length === 0 ? (
+                      <DataState loading={financialsLoading} label={`No reported sales on file for ${sym}.`} />
                     ) : (
-                      <>
-                        <div className="ec-legend">
-                          <span><i style={{ background: "var(--brand)" }} />Revenue</span>
-                          <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
-                          <span><i style={{ background: "var(--up)" }} />Net income</span>
-                        </div>
-                        <EarnIncChart inc={inc} />
-                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                          {finPeriod === "Q"
-                            ? "Last 10 quarters · revenue, gross profit & net income"
-                            : "Last 10 fiscal years · revenue, gross profit & net income"}
-                          {" · tap "}&#8220;View all&#8221; for the full statement.
-                        </div>
-                      </>
+                      <table className="ind-tbl">
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left" }}>{finPeriod === "Q" ? "Quarter" : "Fiscal year"}</th>
+                            <th>Sales ($B)</th><th>%Chg</th><th>EPS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tbl.map(r => (
+                            <tr key={r.label}>
+                              <td>{r.label}</td>
+                              <td className="v">{r.sales != null ? (r.sales / 1e3).toFixed(2) : "—"}</td>
+                              <td className="v" style={{ color: r.chg == null ? undefined : r.chg >= 0 ? "var(--up)" : "var(--down)" }}>
+                                {r.chg != null ? `${r.chg >= 0 ? "+" : ""}${r.chg.toFixed(1)}%` : "—"}
+                              </td>
+                              <td className="v">{r.eps != null ? `$${r.eps.toFixed(2)}` : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     )}
                   </div>
                 </div>
@@ -2834,21 +2582,20 @@ export function StockScreen({
                 </div>
               );
             })()}
+            </div>
           </>)}
 
           {activeTab === "holdings" && (<>
+            <div className="sd-hold">
             <div className="card" style={{ display: "flex", flexDirection: "column" }}>
               <div className="card-h">
-                <h3>Insider &amp; institutional</h3>
+                <h3>Recent insider transactions</h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <VendorTag v="sec" />
                   <span className="link" onClick={() => setInnerDrawer("insider")}>View all →</span>
                 </div>
               </div>
               <div className="card-b" style={{ paddingTop: 6 }}>
-                <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
-                  Recent insider transactions
-                </div>
                 {data.insiderActivity.length > 0 ? (
                   data.insiderActivity.map((n, idx) => {
                     const isSell = /sale|sold|exercis/i.test(n.action);
@@ -2869,13 +2616,13 @@ export function StockScreen({
                     No recent Form 4 activity.
                   </div>
                 )}
-                <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                  <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>
-                    Institutional
-                  </span>
-                  <VendorTag v="fmp" />
-                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+            <div className="card">
+              <div className="card-h"><h3>Institutional</h3><VendorTag v="fmp" /></div>
+              <div className="card-b" style={{ paddingTop: 6 }}>
                 {(() => {
                   const io = liveCompany?.instOwnershipPct;
                   const holders = liveCompany?.inst13FHolders;
@@ -2922,6 +2669,8 @@ export function StockScreen({
                 )}
               </div>
             </div>
+            </div>
+            </div>
           </>)}
 
           {activeTab === "news" && (
@@ -2959,11 +2708,18 @@ export function StockScreen({
             </div>
           )}
 
-          {activeTab === "peers" && (
-            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+        </div>
+
+        {showRail && (
+          // Pinned to the left column's height on Analysis (so Key levels sits
+          // level with its last card); Overview's column is short, so its
+          // rail keeps its natural height and Peers scrolls inside its card.
+          <div className="sd-rail" style={activeTab === "analysis" ? { height: rightColH, minHeight: 0, overflow: rightColH ? "hidden" : undefined } : undefined}>
+            {activeTab === "overview" && (
+            <div className="card sd-rail-full" style={{ display: "flex", flexDirection: "column" }}>
               <div className="card-h">
                 <div>
-                  <h3>Peers · {sym}</h3>
+                  <h3>Peers</h3>
                   <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
                     {peersTotal} peer{peersTotal === 1 ? "" : "s"} with live data{data.sector ? ` in ${titleCaseLabel(data.sector)}` : ""}
                   </div>
@@ -2988,7 +2744,7 @@ export function StockScreen({
                   {peersTotal > peers.length && <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>}
                 </div>
               </div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
+              <div className="card-b" style={{ paddingTop: 6, maxHeight: 460, overflowY: "auto" }}>
                 {sortedPeers.length ? sortedPeers.map(peer => {
                   const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
                   return (
@@ -3009,12 +2765,8 @@ export function StockScreen({
                 }) : <DataState loading={companiesLoading} label="No live peers found in this sector yet." />}
               </div>
             </div>
-          )}
+            )}
 
-        </div>
-
-        {showRail && (
-          <div className="sd-rail" style={{ height: rightColH, minHeight: 0, overflow: rightColH ? "hidden" : undefined }}>
 
             {activeTab === "analysis" && (
               <div className="card sd-rail-full">

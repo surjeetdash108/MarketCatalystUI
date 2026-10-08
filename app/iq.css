@@ -672,8 +672,10 @@
 }
 .chart-modal-close:hover { background: var(--surface-3); color: var(--text-hi); }
 .chart-modal-body { padding: 20px 32px 24px; overflow-y: auto; flex: 1; }
-.chart-modal-body svg { max-width: 100% !important; width: 100% !important; }
-.chart-modal-body canvas { width: 100% !important; max-width: 100% !important; }
+/* Stretches the legacy SVG charts to the modal — but never CandleChart (.cc),
+   whose toolbar / legend icons are SVGs too and sizes its own canvas. */
+.chart-modal-body svg:not(.cc *) { max-width: 100% !important; width: 100% !important; }
+.chart-modal-body canvas:not(.cc *) { width: 100% !important; max-width: 100% !important; }
 
 /* market pulse */
 .pulse { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; }
@@ -913,6 +915,14 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
 /* Same idea for the flex pair — the cards already carry flex:1;min-width:0, so
    they only need permission to wrap. */
 .sd-rowflex { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; }
+/* Tabbed stock view, after the stock-detail design: paired cards side by side
+   (EPS surprise | growth, EPS & sales | income, sales table | dividends), and
+   Holdings as insider list | (institutional, splits). Both stack when narrow. */
+.sd-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; align-items: stretch; }
+.sd-two > .card { min-width: 0; }
+.sd-hold { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@container sd (max-width: 860px) { .sd-hold { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .sd-hold { grid-template-columns: 1fr; } }
 .sd-rowflex > .card { flex: 1 1 330px; }
 
 /* ── stock detail tab bar (full view only — Overview / Analysis / Earnings /

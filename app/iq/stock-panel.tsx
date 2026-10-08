@@ -3,11 +3,13 @@
 import { useState, type ReactNode } from "react";
 import { fmtDate, etTodayIso } from "./calendar-range";
 import dynamic from "next/dynamic";
-import { CandleChart, ChartSelect, TF_OPTIONS, CHART_TYPE_OPTIONS, DataState, Spark, VendorTag, type EarnQ } from "./utils";
+import { CandleChart, ChartSelect, IntervalMenu, CHART_TYPE_OPTIONS, DataState, Spark, StockLogo, VendorTag, type EarnQ, type BarInterval } from "./utils";
 import { ExpandBtn } from "./shell";
 import { useApiList } from "./hooks/useApiList";
 import { useApiResource } from "./hooks/useApiResource";
-import { useBackendBars } from "./hooks/useBackendBars";
+import { useIntervalBars } from "./hooks/useBackendBars";
+import { useLiveTick } from "./hooks/useLiveTick";
+import { useHeadlineQuote, QuoteHeadline } from "./quote-headline";
 import { useChartEarnings } from "./hooks/useChartEarnings";
 import type { LiveEarningsDoc, CompanyDoc } from "./types";
 import { surprisePct } from "./types";
@@ -16,9 +18,11 @@ import { surprisePct } from "./types";
 export const StockScreenEmbed = dynamic<{
   initialSym?: string;
   hideHeader?: boolean;
+  hideIdentity?: boolean;
   hideChart?: boolean;
   headerActions?: React.ReactNode;
-  visibleTabs?: ("chart" | "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news" | "peers")[];
+  visibleTabs?: ("overview" | "analysis" | "earnings" | "financials" | "holdings" | "news")[];
+  barInterval?: BarInterval;
 }>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
@@ -245,31 +249,77 @@ function useLiveEarningsForSym(sym: string, nextEarningsDate?: string | null): {
   return { hist, erDate, loading };
 }
 
-/* ── Expanded chart rendered inside the modal opened by ExpandBtn ── */
-function ChartCardExpanded({
-  sym, px, initialTf, initialChartType, initialShowEarnings, hist, earningsLoading, erDate,
-}: {
-  sym: string; px: number; initialTf: string;
-  initialChartType: "Candles" | "Hollow" | "Bars" | "Line" | "Area";
-  initialShowEarnings: boolean;
-  hist: EarnQ[]; earningsLoading: boolean; erDate: string;
-}) {
-  const [tf, setTf] = useState(initialTf);
-  const [chartType, setChartType] = useState(initialChartType);
-  const [showEarnings, setShowEarnings] = useState(initialShowEarnings);
-  const { bars: realBars, loading } = useBackendBars(sym, tf);
+type ChartType = "Candles" | "Hollow" | "Bars" | "Line" | "Area";
+
+/** Bars freshness stamp (backend createdAt) — same format as stock details. */
+function fmtAsOf(asOf: string | null | undefined): string | null {
+  if (!asOf) return null;
+  const d = new Date(asOf);
+  return isNaN(d.getTime())
+    ? asOf
+    : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * Data + controls for a panel chart, driven exactly like the stock-details
+ * chart: candle SIZE (not a date range), live delayed tick folded onto the
+ * forming candle, earnings markers on by default.
+ *
+ * The candle size is controlled when `controlled` is passed (StockPanelLayout
+ * shares it with the detail section's technical rating), else kept locally.
+ */
+function usePanelChart(
+  sym: string,
+  initial?: { interval: BarInterval; chartType: ChartType; showEarnings: boolean },
+  controlled?: { interval: BarInterval; onIntervalChange: (iv: BarInterval) => void },
+) {
+  const [ownInterval, setOwnInterval] = useState<BarInterval>(initial?.interval ?? "1D");
+  const interval = controlled?.interval ?? ownInterval;
+  const setBarInterval = controlled?.onIntervalChange ?? setOwnInterval;
+  const [chartType, setChartType] = useState<ChartType>(initial?.chartType ?? "Candles");
+  const [showEarnings, setShowEarnings] = useState(initial?.showEarnings ?? true);
+  const { bars: realBars, asOf, loading } = useIntervalBars(sym, interval);
+  const live = useLiveTick(sym);
+  const { tick } = live;
   // Same derivation as stock details, so a report lands on the same bar with
   // the same numbers here as it does there.
   const chartEarnings = useChartEarnings(sym, showEarnings);
+  const asOfLabel = fmtAsOf(asOf);
+
+  const chartProps = {
+    sym, tf: interval, interval, chartType: chartType.toLowerCase(), realBars, loading,
+    live: tick ? { price: tick.price, high: tick.high, low: tick.low, at: tick.at } : null,
+    earnings: showEarnings ? chartEarnings : [],
+    toolbarStart: <>
+      <IntervalMenu value={interval} onChange={setBarInterval} />
+      <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as ChartType)} title="Chart type" />
+      <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
+    </>,
+  };
+  const freshness = <>
+    <VendorTag v="polygon" />
+    {realBars && <span className="cc-chip live">live</span>}
+    {asOfLabel && <span className="cc-asof">as of {asOfLabel}</span>}
+  </>;
+  return { interval, chartType, showEarnings, live, chartProps, freshness };
+}
+
+/* ── Expanded chart rendered inside the modal opened by ExpandBtn ── */
+function ChartCardExpanded({
+  sym, initialInterval, initialChartType, initialShowEarnings, hist, earningsLoading, erDate,
+}: {
+  sym: string; initialInterval: BarInterval;
+  initialChartType: ChartType;
+  initialShowEarnings: boolean;
+  hist: EarnQ[]; earningsLoading: boolean; erDate: string;
+}) {
+  const { showEarnings, chartProps, freshness } = usePanelChart(sym, {
+    interval: initialInterval, chartType: initialChartType, showEarnings: initialShowEarnings,
+  });
   return (
     <div>
-      <CandleChart sym={sym} tf={tf} px={px} chartType={chartType.toLowerCase()} realBars={realBars} loading={loading}
-        earnings={showEarnings ? chartEarnings : []} height={520}
-        toolbarStart={<>
-          <ChartSelect value={tf} options={TF_OPTIONS} onChange={setTf} title="Timeframe" />
-          <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
-          <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
-        </>} />
+      {/* Fill the full-screen expand modal (its header + toolbar take ~210px). */}
+      <CandleChart {...chartProps} height="max(420px, calc(100vh - 210px))" toolbarEnd={freshness} />
       {showEarnings && (
         <div style={{ borderTop: "1px solid var(--border)", marginTop: 4 }}>
           <div style={{ padding: "6px 0 4px", fontSize: ".66rem", color: "var(--text-dim-solid)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -287,43 +337,52 @@ function ChartCardExpanded({
 export function ChartCard({
   sym, px,
   emptyText = "Select a stock to see chart",
+  interval: intervalProp, onIntervalChange,
 }: {
   sym: string;
   px: number;
   emptyText?: string;
+  /** Controlled candle size — pass both to share it with sibling panels. */
+  interval?: BarInterval;
+  onIntervalChange?: (iv: BarInterval) => void;
 }) {
-  const [tf, setTf] = useState("3M");
-  const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
-  const [showEarnings, setShowEarnings] = useState(false);
-
-  const { bars: realBars, loading: barsLoading } = useBackendBars(sym, tf);
+  const { interval, chartType, showEarnings, live, chartProps, freshness } = usePanelChart(
+    sym, undefined,
+    intervalProp && onIntervalChange ? { interval: intervalProp, onIntervalChange } : undefined,
+  );
   const { data: liveCompany } = useApiResource<CompanyDoc>(sym ? `/live/company?ticker=${encodeURIComponent(sym)}` : null);
   const { hist, erDate, loading: earningsLoading } = useLiveEarningsForSym(sym, liveCompany?.nextEarningsDate);
-  // Same derivation as stock details — see chart-earnings.ts. Fetched only while
-  // the Earnings overlay is on; before this the toggle below flipped state that
-  // nothing read, so this chart never drew a dot.
-  const chartEarnings = useChartEarnings(sym, showEarnings);
+  // Same headline as the stock page header (shared quote, after-hours block).
+  // `px` (the list row's price) stands in until /live/company answers.
+  const hq = useHeadlineQuote(sym, live, {
+    price: liveCompany?.price ?? (px > 0 ? px : null),
+    pctChange: liveCompany?.pctChange ?? null,
+  });
 
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       {sym ? (
         <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px 0", flexWrap: "wrap" }}>
+            <StockLogo sym={sym} size={30} />
+            <h1 style={{ margin: 0, flexShrink: 0, fontSize: "0.95rem", fontFamily: "var(--f-display)", color: "var(--text-hi)" }}>{sym}</h1>
+            <QuoteHeadline q={hq} />
+            {liveCompany?.name && (
+              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {liveCompany.name}
+              </span>
+            )}
+          </div>
           <div style={{ padding: "0 14px" }}>
-            <CandleChart sym={sym} tf={tf} px={px} chartType={chartType.toLowerCase()} realBars={realBars} loading={barsLoading}
-              earnings={showEarnings ? chartEarnings : []} height={320}
-              toolbarStart={<>
-                <ChartSelect value={tf} options={TF_OPTIONS} onChange={setTf} title="Timeframe" />
-                <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
-                <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
-              </>}
+            <CandleChart {...chartProps} px={px} height={320}
               toolbarEnd={<>
-                <VendorTag v="polygon" />
+                {freshness}
                 <ExpandBtn
                   title={`${sym} · Price Chart`}
                   node={
                     <ChartCardExpanded
-                      sym={sym} px={px}
-                      initialTf={tf} initialChartType={chartType}
+                      sym={sym}
+                      initialInterval={interval} initialChartType={chartType}
                       initialShowEarnings={showEarnings}
                       hist={hist} earningsLoading={earningsLoading} erDate={erDate}
                     />
@@ -362,14 +421,20 @@ export function StockPanelLayout({
   chartEmptyText?: string;
   detailEmptyText?: string;
 }) {
+  // One candle size for the chart AND the detail section's technical rating,
+  // so changing the chart's interval re-rates — same as the stock page.
+  const [barInterval, setBarInterval] = useState<BarInterval>("1D");
   return (
     <>
       <div className="sp-row" style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14 }}>
         {listCard}
-        <ChartCard sym={selectedSym} px={chartPx} emptyText={chartEmptyText} />
+        <ChartCard sym={selectedSym} px={chartPx} emptyText={chartEmptyText}
+          interval={barInterval} onIntervalChange={setBarInterval} />
       </div>
       {selectedSym ? (
-        <StockScreenEmbed initialSym={selectedSym} hideHeader hideChart />
+        // Same tabbed sections as the stock page (Overview / Analysis / …);
+        // the chart card above already carries the ticker, quote and chart.
+        <StockScreenEmbed initialSym={selectedSym} hideIdentity hideChart barInterval={barInterval} />
       ) : (
         <div className="card">
           <div className="card-b" style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>

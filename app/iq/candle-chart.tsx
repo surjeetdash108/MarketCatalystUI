@@ -928,8 +928,9 @@ type CandleChartProps = {
   hideHudOhlc?: boolean;
   /** Fired whenever the hovered bar (or, with no hover, the latest bar) changes. */
   onBarHover?: (bar: ChartHoverOhlc | null) => void;
-  /** Plot height in px. Omit for the stock-detail sizing (560px, shorter on short viewports). */
-  height?: number;
+  /** Plot height — px, or any CSS length (e.g. to fill a modal). Omit for the
+   *  stock-detail sizing (560px, shorter on short viewports). */
+  height?: number | string;
   /** Rendered at the start of the chart toolbar — the caller's timeframe / type pickers. */
   toolbarStart?: ReactNode;
   /** Rendered before the toolbar's log / full-screen buttons — vendor chips, freshness stamps. */
