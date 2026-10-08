@@ -10,7 +10,8 @@ import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes, QUOTE_DELAY_LABEL, pairedQuote, extendedSession } from "../live-quotes-context";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
-import type { LiveMoverDoc, CompanyDoc, NewsArticleDoc, AnalystConsensusDoc, AnalystRatingChange } from "../types";
+import type { LiveMoverDoc, CompanyDoc, NewsArticleDoc, AnalystConsensusDoc, AnalystRatingChange, Week5Close } from "../types";
+import { latestSessionDate, sessionsBetween } from "../market-status";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { MoverNewsModal } from "../mover-news-modal";
 
@@ -313,6 +314,27 @@ function fmtMcap(mc: number | null | undefined): string {
   if (mc >= 1e6)  return `$${(mc / 1e6).toFixed(0)}M`;
   return `$${Math.round(mc).toLocaleString()}`;
 }
+/**
+ * The close a live 5-day move starts from: the one exactly 5 sessions before
+ * `sessionDate`, the session the shown price belongs to.
+ *
+ * `closes` are the last 6 dated closes, oldest → newest. While the newest bar
+ * is from that same session the base is closes[0]; each session the bars lag
+ * behind the price moves it forward one. Re-measuring the live price against
+ * a fixed closes[0] instead (the old week5BaseClose path) counted 6+ sessions
+ * as soon as a new session opened.
+ *
+ * null when the window cannot reach the base: bars more than 5 sessions behind,
+ * or a newest bar later than the shown price.
+ */
+function week5Base(closes: Week5Close[] | null | undefined, sessionDate: string): number | null {
+  if (!closes || closes.length !== 6) return null;
+  const newest = closes[5].date;
+  if (newest > sessionDate) return null;
+  const lag = sessionsBetween(newest, sessionDate);
+  return lag <= 5 ? closes[lag].close : null;
+}
+
 // Largest → smallest. The dropdown only offers tiers that actually have movers
 // right now — the day's top movers are almost never mega-caps, so "Mega" would
 // otherwise sit there returning nothing; "Micro" (which the feed does produce)
@@ -395,6 +417,7 @@ function mergeMovers(
       // Real 5-session change from technical-indicators.job; null → "—".
       weekPct: c?.week5ChangePct ?? null,
       weekBase: c?.week5BaseClose ?? null,
+      weekCloses: c?.week5Closes ?? null,
       techContext: `Live EOD data as of ${l.asOfDate}.`,
       newsContext: "",
     };
@@ -490,8 +513,11 @@ export function MoversScreen() {
       industry: canon.industry,
       cap: canon.cap,
       marketCap: canon.marketCap,
-      weekPct: c.week5ChangePct ?? c.pctChange ?? null,
+      // No 1-day fallback: today's % under a "5-day" header is a wrong number,
+      // and it ranked rows on the weekly board by their daily move.
+      weekPct: c.week5ChangePct ?? null,
       weekBase: c.week5BaseClose ?? null,
+      weekCloses: c.week5Closes ?? null,
       techContext: "",
       newsContext: "",
     };
@@ -517,7 +543,7 @@ export function MoversScreen() {
    */
   const weeklyRows: Mover[] = useMemo(
     () => universeRows
-      .filter(c => typeof c.week5ChangePct === "number" || typeof c.pctChange === "number")
+      .filter(c => typeof c.week5ChangePct === "number")
       .map(companyRow),
     [universeRows, companyRow],
   );
@@ -826,6 +852,10 @@ export function MoversScreen() {
   // Shared app-wide poll: one timer + one request for every live surface, so a
   // ticker here always matches the same ticker on the heatmap/drawer exactly.
   const quoteByTicker = useLiveQuotes(shownTickers);
+  // Session the shown prices belong to, for the 5-day base. Recomputed on each
+  // quote poll (a new Map every 30s), so it rolls over at the open on its own.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sessionDate = useMemo(() => latestSessionDate(), [quoteByTicker]);
 
   /**
    * CANONICAL RVOL AND VOLUME RESOLVER:
@@ -861,6 +891,7 @@ export function MoversScreen() {
     fallbackPct?: number | null,
     weekBase?: number | null,
     weekPct?: number | null,
+    weekCloses?: Week5Close[] | null,
   ): { price: number | null; change: number | null } => {
     const sym = ticker?.trim().toUpperCase();
     const q = quoteByTicker.get(sym);
@@ -880,14 +911,20 @@ export function MoversScreen() {
 
     const pq = extOnly ? baselinePair : pairedQuote(q, baselinePair);
 
-    const change = isWeekTab(tab)
-      ? (pq.price != null && weekBase != null && weekBase > 0
-          ? ((pq.price - weekBase) / weekBase) * 100
-          : (weekPct ?? pq.pctChange))
-      : pq.pctChange;
+    // 5-day move re-measured to the shown price, from the close exactly 5
+    // sessions before that price's session. Docs written before the backend
+    // published week5Closes keep the old fixed base. When no base is usable,
+    // the stored move stands — never today's 1-day %, which is not a 5-day number.
+    let change = pq.pctChange;
+    if (isWeekTab(tab)) {
+      const base = weekCloses ? week5Base(weekCloses, sessionDate) : weekBase;
+      change = pq.price != null && base != null && base > 0
+        ? ((pq.price - base) / base) * 100
+        : (weekPct ?? null);
+    }
 
     return { price: pq.price, change };
-  }, [quoteByTicker, liveMoverByTicker, companyByTicker, volumeLeaderByTicker, tab]);
+  }, [quoteByTicker, liveMoverByTicker, companyByTicker, volumeLeaderByTicker, tab, sessionDate]);
 
   /**
    * Most Active items mapped through canonical resolvers so summary cards and
@@ -951,7 +988,7 @@ export function MoversScreen() {
    * displays and what decides it belongs cannot come apart.
    */
   const shownValues = useCallback((m: Mover): { price: number | null; change: number | null } => {
-    return resolvePriceAndChange(m.ticker, m.price, m.pctChange, m.weekBase, m.weekPct);
+    return resolvePriceAndChange(m.ticker, m.price, m.pctChange, m.weekBase, m.weekPct, m.weekCloses);
   }, [resolvePriceAndChange]);
 
   /**

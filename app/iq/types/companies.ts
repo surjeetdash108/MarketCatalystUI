@@ -18,6 +18,13 @@ export interface PivotLevels {
   s3: number | null;
 }
 
+/** One dated daily close (technical-indicators.job `week5Closes`). */
+export interface Week5Close {
+  /** Session date, YYYY-MM-DD. */
+  date: string;
+  close: number;
+}
+
 export interface CompanyDoc {
   id: string;
   ticker: string;
@@ -81,6 +88,10 @@ export interface CompanyDoc {
   /** The close week5ChangePct is measured FROM, so the move can be
    *  re-measured to the live price instead of to a stale bar. */
   week5BaseClose?: number | null;
+  /** The last 6 dated closes (oldest → newest) from technical-indicators.job,
+   *  so the reader can pick the base exactly 5 sessions before the live price's
+   *  session. null/absent on docs written before the job published it. */
+  week5Closes?: Week5Close[] | null;
   stochK?: number | null;
   adx14?: number | null;
   /** Annualized 30-day realized volatility (%) — the Macro "30d Vol" column. */

@@ -40,6 +40,9 @@ export interface Mover {
   weekPct: number | null;
   /** Close the 5-day move is measured from; null when unknown. */
   weekBase: number | null;
+  /** Last 6 dated closes, oldest → newest; lets the 5-day move be re-based to
+   *  the live price's session. null/absent until the backend publishes it. */
+  weekCloses?: { date: string; close: number }[] | null;
   techContext: string; newsContext: string;
 }
 
