@@ -9,7 +9,7 @@ import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, intervalLa
 import { buildChartEarnings } from "../chart-earnings";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
-import { apiGet, apiPost, apiDelete } from "../backend";
+import { apiPost } from "../backend";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
 import { useBackendBars, useIntervalBars } from "../hooks/useBackendBars";
@@ -105,34 +105,12 @@ function ema(bars: { c: number }[], n: number): number | null {
   return e;
 }
 
-interface StockNote {
-  id: string;
-  sym: string;
-  name: string;
-  comment: string;
-  createdAt: Date;
-}
-
-async function loadNotes(sym: string): Promise<StockNote[]> {
-  if (!firebaseAuth.currentUser) return [];
-  try {
-    const rows = await apiGet<Array<{ id: string; sym: string; name: string; comment: string; createdAt: string }>>(
-      `/api/stock-notes?sym=${encodeURIComponent(sym)}`,
-    );
-    return rows.map(r => ({ ...r, createdAt: new Date(r.createdAt) }));
-  } catch { return []; }
-}
-
 async function saveNote(sym: string, name: string, comment: string): Promise<string | null> {
   if (!firebaseAuth.currentUser || !comment.trim()) return null;
   try {
     const row = await apiPost<{ id: string }>("/api/stock-notes", { sym, name, comment: comment.trim() });
     return row.id;
   } catch { return null; }
-}
-
-async function deleteNote(id: string): Promise<void> {
-  try { await apiDelete(`/api/stock-notes/${encodeURIComponent(id)}`); } catch { /* ignore */ }
 }
 
 const LOGO_BG: Record<string, [string, string]> = {
@@ -655,7 +633,6 @@ export function StockScreen({
   const { data: aiAnalysis, loading: aiLoading, error: aiError } = useApiResource<AiAnalysisDoc>(`/live/ai-analysis?ticker=${encodeURIComponent(sym)}`);
 
   // ── Notes (Firebase stock_comments) ──────────────────────────────────────
-  const [notes, setNotes]       = useState<StockNote[]>([]);
   const [noteInput, setNoteInput] = useState("");
   const [noteOpen, setNoteOpen]  = useState(false);
   const [ctxMenu, setCtxMenu]    = useState<{ x: number; y: number } | null>(null);
@@ -749,27 +726,13 @@ export function StockScreen({
     return () => window.clearInterval(id);
   }, [measureCols, sym, finPeriod]);
 
-  const refreshNotes = useCallback(async () => {
-    setNotes(await loadNotes(sym));
-  }, [sym]);
-
-  useEffect(() => { void refreshNotes(); }, [refreshNotes]);
-
+  // Right-click → Add note saves to the account; the notes themselves are
+  // listed on the Notes screen (the inline list under the chart was removed).
   async function submitNote() {
     const id = await saveNote(sym, data.name ?? sym, noteInput);
     if (id) {
-      setNotes(prev => [{
-        id, sym, name: data.name ?? sym,
-        comment: noteInput.trim(),
-        createdAt: new Date(),
-      }, ...prev]);
       setNoteInput(""); setNoteOpen(false);
     }
-  }
-
-  async function removeNote(id: string) {
-    await deleteNote(id);
-    setNotes(prev => prev.filter(n => n.id !== id));
   }
 
   function handleChartRightClick(e: React.MouseEvent) {
@@ -1454,65 +1417,6 @@ export function StockScreen({
                     below support" line was removed (QA row 259): it wasn't a
                     real pattern detector, and showed "breakout" even for
                     stocks that were down. */}
-
-                {/* Chart notes — inline inside chart card */}
-                <div className="cn-wrap">
-                  <div className="cn-h">
-                    Chart notes
-
-                    <span className="cn-hint">
-                      right-click to add · saved to your account
-                    </span>
-
-                    <button
-                      className="chip ai-c"
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: ".7rem",
-                      }}
-                      onClick={() => setNoteOpen(true)}
-                    >
-                      + Add note
-                    </button>
-                  </div>
-
-                  {notes.length === 0 ? (
-                    <div className="cn-empty">
-                      No notes yet. Right-click the chart or click
-                      &ldquo;Add note&rdquo; to record a trade decision.
-                    </div>
-                  ) : (
-                    notes.map(n => (
-                      <div key={n.id} className="cn-row">
-                        <div className="cn-dot" />
-
-                        <div className="cn-tx">
-                          {n.comment}
-
-                          <span className="cn-ts">
-                            {" · "}
-                            {n.createdAt.toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                            {" "}
-                            {n.createdAt.toLocaleTimeString("en-US", {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-
-                        <button
-                          className="icon-x"
-                          onClick={() => removeNote(n.id)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
           </div>
         </div>)}
 
