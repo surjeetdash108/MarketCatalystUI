@@ -1571,7 +1571,17 @@ table.tbl tr:hover td { background: var(--surface-2); cursor: pointer; }
   padding: 3px 5px; border-radius: 6px; cursor: pointer;
   transition: background .1s;
 }
-.hpop-row:hover, .hpop-row-hi { background: var(--surface-2); }
+.hpop-row:hover { background: var(--surface-2); }
+.hpop-row-hi {
+  background: var(--brand-dim);
+  outline: 1px solid var(--brand-line);
+}
+.hpop-row-hi .hpop-sym {
+  color: var(--brand);
+}
+.hpop-row-hi:hover {
+  background: rgba(74, 222, 128, 0.22);
+}
 .hpop-sym { font-family: var(--f-mono); font-size: .74rem; font-weight: 700; color: var(--text-hi); width: 42px; flex-shrink: 0; }
 .hpop-mcap { font-family: var(--f-mono); font-size: .66rem; color: var(--text-dim-solid); flex: 1; }
 .hpop-chg { font-family: var(--f-mono); font-size: .74rem; font-weight: 600; width: 52px; text-align: right; flex-shrink: 0; }
