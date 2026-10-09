@@ -73,10 +73,11 @@ function getCachedEtfData(): EtfMarketResponse | null {
     if (parsed && parsed.savedAt && Date.now() - parsed.savedAt < ONE_WEEK_MS && parsed.data) {
       const data = parsed.data as EtfMarketResponse;
       const totalFunds = data?.categories?.reduce((acc, c) => acc + (c.funds?.length || 0), 0) || 0;
-      if (totalFunds > 0) {
+      // Full ETF universe contains > 5,000 funds; purge legacy 150-capped cache (<= 1500 funds)
+      if (totalFunds > 1500) {
         return data;
       }
-      // Purge poisoned empty cache
+      // Purge poisoned or old capped cache
       localStorage.removeItem(ETF_CACHE_KEY);
     }
   } catch {
