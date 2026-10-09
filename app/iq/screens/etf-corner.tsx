@@ -71,7 +71,13 @@ function getCachedEtfData(): EtfMarketResponse | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && parsed.savedAt && Date.now() - parsed.savedAt < ONE_WEEK_MS && parsed.data) {
-      return parsed.data as EtfMarketResponse;
+      const data = parsed.data as EtfMarketResponse;
+      const totalFunds = data?.categories?.reduce((acc, c) => acc + (c.funds?.length || 0), 0) || 0;
+      if (totalFunds > 0) {
+        return data;
+      }
+      // Purge poisoned empty cache
+      localStorage.removeItem(ETF_CACHE_KEY);
     }
   } catch {
     // Ignore localStorage parse errors
@@ -81,6 +87,8 @@ function getCachedEtfData(): EtfMarketResponse | null {
 
 function setCachedEtfData(data: EtfMarketResponse) {
   if (typeof window === "undefined" || !data) return;
+  const totalFunds = data?.categories?.reduce((acc, c) => acc + (c.funds?.length || 0), 0) || 0;
+  if (totalFunds === 0) return; // Do not store empty payloads
   try {
     localStorage.setItem(ETF_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
   } catch {

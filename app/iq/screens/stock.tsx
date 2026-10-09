@@ -17,6 +17,13 @@ import { useLiveTick } from "../hooks/useLiveTick";
 import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
 import { useLiveQuotes } from "../live-quotes-context";
 import { EarningsPlaybook } from "./EarningsPlaybook";
+import { EtfHoldingsView } from "../etf-holdings-view";
+
+const POPULAR_16_ETFS = new Set([
+  "CIBR", "DIA", "GLD", "HACK", "HYG", "IBIT", "IWM", "QQEW",
+  "QQQ", "SMH", "SOXX", "SPY", "TLT", "XLE", "XLF", "XLK"
+]);
+
 import type {
   CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc,
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
@@ -2585,93 +2592,97 @@ export function StockScreen({
             </div>
           </>)}
 
-          {activeTab === "holdings" && (<>
-            <div className="sd-hold">
-            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <h3>Recent insider transactions</h3>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <VendorTag v="sec" />
-                  <span className="link" onClick={() => setInnerDrawer("insider")}>View all →</span>
+          {activeTab === "holdings" && (
+            POPULAR_16_ETFS.has(sym.toUpperCase()) ? (
+              <EtfHoldingsView symbol={sym} />
+            ) : (<>
+              <div className="sd-hold">
+              <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+                <div className="card-h">
+                  <h3>Recent insider transactions</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <VendorTag v="sec" />
+                    <span className="link" onClick={() => setInnerDrawer("insider")}>View all →</span>
+                  </div>
+                </div>
+                <div className="card-b" style={{ paddingTop: 6 }}>
+                  {data.insiderActivity.length > 0 ? (
+                    data.insiderActivity.map((n, idx) => {
+                      const isSell = /sale|sold|exercis/i.test(n.action);
+                      return (
+                        <div key={idx} className="minirow" style={{ cursor: "pointer", alignItems: "flex-start", gap: 10 }}>
+                          <span className="tkr" style={{ flex: "none" }}>{sym}</span>
+                          <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
+                            {n.name} {n.action} <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
+                          </span>
+                          <span className={`r ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
+                            {n.valueUsd != null ? `${isSell ? "−" : "+"}$${(n.valueUsd / 1e6).toFixed(1)}M` : <NotAvailable />}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "4px 0 8px" }}>
+                      No recent Form 4 activity.
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {data.insiderActivity.length > 0 ? (
-                  data.insiderActivity.map((n, idx) => {
-                    const isSell = /sale|sold|exercis/i.test(n.action);
-                    return (
-                      <div key={idx} className="minirow" style={{ cursor: "pointer", alignItems: "flex-start", gap: 10 }}>
-                        <span className="tkr" style={{ flex: "none" }}>{sym}</span>
-                        <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
-                          {n.name} {n.action} <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
-                        </span>
-                        <span className={`r ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
-                          {n.valueUsd != null ? `${isSell ? "−" : "+"}$${(n.valueUsd / 1e6).toFixed(1)}M` : <NotAvailable />}
-                        </span>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+              <div className="card">
+                <div className="card-h"><h3>Institutional</h3><VendorTag v="fmp" /></div>
+                <div className="card-b" style={{ paddingTop: 6 }}>
+                  {(() => {
+                    const io = liveCompany?.instOwnershipPct;
+                    const holders = liveCompany?.inst13FHolders;
+                    const chg = liveCompany?.inst13FHoldersChange;
+                    const rows: [string, ReactNode][] = [
+                      ["Inst. ownership", io != null ? `${io.toFixed(1)}%` : null],
+                      ["Short interest", null],
+                      ["13F filers holding", holders != null ? (
+                        <>
+                          {holders.toLocaleString()}
+                          {chg != null && chg !== 0 && (
+                            <span className={chg > 0 ? "up" : "down"} style={{ marginLeft: 6, fontSize: ".7rem" }}>
+                              {chg > 0 ? "+" : ""}{chg} QoQ
+                            </span>
+                          )}
+                        </>
+                      ) : null],
+                    ];
+                    return rows.map(([label, val]) => (
+                      <div key={label} className="minirow">
+                        <span className="mid">{label}</span>
+                        <span className="r">{val ?? <NotAvailable />}</span>
                       </div>
-                    );
-                  })
-                ) : (
-                  <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "4px 0 8px" }}>
-                    No recent Form 4 activity.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-            <div className="card">
-              <div className="card-h"><h3>Institutional</h3><VendorTag v="fmp" /></div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {(() => {
-                  const io = liveCompany?.instOwnershipPct;
-                  const holders = liveCompany?.inst13FHolders;
-                  const chg = liveCompany?.inst13FHoldersChange;
-                  const rows: [string, ReactNode][] = [
-                    ["Inst. ownership", io != null ? `${io.toFixed(1)}%` : null],
-                    ["Short interest", null],
-                    ["13F filers holding", holders != null ? (
-                      <>
-                        {holders.toLocaleString()}
-                        {chg != null && chg !== 0 && (
-                          <span className={chg > 0 ? "up" : "down"} style={{ marginLeft: 6, fontSize: ".7rem" }}>
-                            {chg > 0 ? "+" : ""}{chg} QoQ
-                          </span>
-                        )}
-                      </>
-                    ) : null],
-                  ];
-                  return rows.map(([label, val]) => (
-                    <div key={label} className="minirow">
-                      <span className="mid">{label}</span>
-                      <span className="r">{val ?? <NotAvailable />}</span>
+                    ));
+                  })()}
+                  {liveCompany?.instAsOf && (
+                    <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
+                      13F rollup · {liveCompany.instAsOf}
                     </div>
-                  ));
-                })()}
-                {liveCompany?.instAsOf && (
-                  <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                    13F rollup · {liveCompany.instAsOf}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="card">
-              <div className="card-h"><h3>Stock splits</h3><VendorTag v="polygon" /></div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 3).map(s => (
-                  <div key={s.executionDate} className="minirow">
-                    <span className="mid">{s.executionDate}</span>
-                    <span className="r" style={{ color: "var(--text-hi)" }}>{s.splitFrom}:{s.splitTo}</span>
-                  </div>
-                )) : (
-                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>No splits on record.</div>
-                )}
+              <div className="card">
+                <div className="card-h"><h3>Stock splits</h3><VendorTag v="polygon" /></div>
+                <div className="card-b" style={{ paddingTop: 6 }}>
+                  {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 3).map(s => (
+                    <div key={s.executionDate} className="minirow">
+                      <span className="mid">{s.executionDate}</span>
+                      <span className="r" style={{ color: "var(--text-hi)" }}>{s.splitFrom}:{s.splitTo}</span>
+                    </div>
+                  )) : (
+                    <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>No splits on record.</div>
+                  )}
+                </div>
               </div>
-            </div>
-            </div>
-            </div>
-          </>)}
+              </div>
+              </div>
+            </>)
+          )}
 
           {activeTab === "news" && (
             <div className="card">
