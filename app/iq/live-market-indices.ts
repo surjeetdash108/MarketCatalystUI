@@ -26,21 +26,20 @@ export function buildSectorList(
   // covered it. Companies are on the TradingView/FactSet taxonomy, so an
   // unrecognised label here means bad data, and dropping it is correct.
   const validSet = new Set(liveNames);
+  const hasValidSet = validSet.size > 0;
 
   const bySector = new Map<string, [string, number, number][]>();
   for (const c of companies) {
     const sec = c.sector;
-    if (!sec || !validSet.has(sec) || c.marketCap == null || c.pctChange == null) continue;
+    if (!sec || (hasValidSet && !validSet.has(sec)) || c.marketCap == null || c.pctChange == null) continue;
     let bucket = bySector.get(sec);
     if (!bucket) { bucket = []; bySector.set(sec, bucket); }
     bucket.push([c.ticker, c.marketCap / 1e9, c.pctChange]);
   }
 
-  // Every sector the aggregate produced, in its live order. There is no longer
-  // a second list to append: sectors.job emits one row per sector that actually
-  // has constituents, so the set is already complete and non-empty by
-  // construction.
-  const orderedNames = liveNames;
+  // Every sector the aggregate produced, in its live order. Falls back to
+  // sectors discovered on companies if sectorsLive has not loaded yet.
+  const orderedNames = liveNames.length > 0 ? liveNames : Array.from(bySector.keys()).sort();
   const rows: SectorRow[] = [];
   orderedNames.forEach((name, i) => {
     const items = bySector.get(name);
