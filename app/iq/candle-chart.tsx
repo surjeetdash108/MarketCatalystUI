@@ -363,6 +363,10 @@ interface View { from: number; to: number }
 interface Hover { i: number; y: number }
 interface ErHit { k: number; x: number; y: number }
 
+/** Earnings "E" marker radius, and how far from its centre a click still lands on it (CSS px). */
+const ER_R = 10;
+const ER_HIT_R = ER_R + 4;
+
 interface DrawModel {
   W: number; H: number;
   data: OHLCBar[];
@@ -376,6 +380,8 @@ interface DrawModel {
   intraday: boolean;
   monthly: boolean;
   erMarks: Array<{ i: number; e: ChartEarnings }>;
+  /** Index into erMarks of the hovered / opened marker, drawn with a halo. */
+  erActive: number | null;
   pal: Palette;
 }
 
@@ -565,11 +571,16 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
   m.erMarks.forEach(({ i }, k) => {
     if (i < i0 || i > i1) return;
     const x = xOf(i);
-    if (x < g.l || x > g.r || x - lastEr < 20) return;
+    if (x < g.l || x > g.r || x - lastEr < ER_R * 2 + 6) return;
     lastEr = x;
-    const y = Math.min(yOf(data[i].l) + 16, g.priceB - 8);
-    ctx.fillStyle = pal.er; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = pal.erInk; ctx.font = `bold 9px ${pal.font}`; ctx.textAlign = "center";
+    const y = Math.min(yOf(data[i].l) + ER_R + 10, g.priceB - ER_R - 2);
+    if (k === m.erActive) {
+      ctx.globalAlpha = 0.28; ctx.fillStyle = pal.er;
+      ctx.beginPath(); ctx.arc(x, y, ER_R + 5, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = pal.er; ctx.beginPath(); ctx.arc(x, y, ER_R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = pal.bg; ctx.lineWidth = 1.5; ctx.stroke(); ctx.lineWidth = 1;
+    ctx.fillStyle = pal.erInk; ctx.font = `bold 12px ${pal.font}`; ctx.textAlign = "center";
     ctx.fillText("E", x, y + 0.5); ctx.font = font;
     hits.push({ k, x, y });
   });
@@ -780,6 +791,59 @@ export function IntervalMenu({ value, onChange }: { value: BarInterval; onChange
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The quick toggles the charts had before the indicator browser — SMA and EMA
+ * 9/21/50/200, Volume and RSI — back as inline toolbar buttons. Each period
+ * maps to one study in the shared store, so the buttons stay in step with the
+ * legend and the browser.
+ */
+const MA_PERIODS = [9, 21, 50, 200] as const;
+
+const findPreset = (studies: readonly Study[], k: StudyKind, len: number | null) =>
+  studies.find(s => s.k === k && (len == null || s.len === len));
+
+function togglePreset(k: StudyKind, len: number | null) {
+  writePrefs(p => {
+    const has = findPreset(p.studies, k, len);
+    if (has && has.on) return { ...p, studies: p.studies.filter(s => s.id !== has.id) };
+    if (has) return { ...p, studies: p.studies.map(s => (s.id === has.id ? { ...s, on: true } : s)) };
+    return { ...p, studies: [...p.studies, { id: newStudyId(k), k, len, col: nextStudyColor(k, p.studies), on: true }] };
+  });
+}
+
+function QuickStudyButtons({ studies }: { studies: readonly Study[] }) {
+  const isOn = (k: StudyKind, len: number | null) => !!findPreset(studies, k, len)?.on;
+  const ma = (k: "sma" | "ema", name: string) => {
+    const any = MA_PERIODS.some(len => isOn(k, len));
+    return (
+      <span className={`rng indbtn cc-ma${any ? " on" : ""}`} role="group" aria-label={`${name} periods`}>
+        {name}
+        {MA_PERIODS.map((len, i) => {
+          const on = isOn(k, len);
+          return (
+            <button key={len} type="button" aria-pressed={on} title={`${on ? "Hide" : "Show"} ${name} ${len}`}
+              onClick={() => togglePreset(k, len)}>
+              {i > 0 && <span aria-hidden="true">/</span>}{len}
+            </button>
+          );
+        })}
+      </span>
+    );
+  };
+  const flag = (k: StudyKind, len: number | null, label: string) => (
+    <button type="button" className={`rng indbtn${isOn(k, len) ? " on" : ""}`} aria-pressed={isOn(k, len)}
+      onClick={() => togglePreset(k, len)}>{label}</button>
+  );
+  return (
+    <>
+      {ma("sma", "SMA")}
+      {ma("ema", "EMA")}
+      {flag("vol", null, "Volume")}
+      {flag("rsi", 14, "RSI")}
+    </>
   );
 }
 
@@ -1073,8 +1137,16 @@ function CandleChartInner({
   const cvRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<Hover | null>(null);
-  const [erTip, setErTip] = useState<{ k: number; x: number; y: number } | null>(null);
+  // Hovered earnings marker (pointer cursor + halo), and the one clicked open.
+  // The opened card remembers the view and marks it was placed against, so a
+  // pan / zoom / new series simply hides it instead of leaving it adrift.
+  const [erHover, setErHover] = useState<number | null>(null);
+  const [erSel, setErSel] = useState<{ hit: ErHit; view: View; marks: unknown; size: unknown } | null>(null);
   const erHitsRef = useRef<ErHit[]>([]);
+  const downRef = useRef<{ x: number; y: number } | null>(null);
+  const erCardRef = useRef<HTMLDivElement>(null);
+  const erOpen = erSel && erSel.view === view && erSel.marks === erMarks && erSel.size === size && erMarks[erSel.hit.k]
+    ? erSel.hit : null;
   const [folded, setFolded] = useState(false);
   const [full, setFull] = useState(false);
 
@@ -1100,7 +1172,7 @@ function CandleChartInner({
     erHitsRef.current = drawChart(ctx, {
       W: size.w, H: size.h, data, seed: series.seed, studies, computed, view, hover,
       chartType: chartType.toLowerCase(), log: prefs.log, intraday, monthly, erMarks,
-      pal: readPalette(cv),
+      erActive: erOpen?.k ?? erHover, pal: readPalette(cv),
     });
   });
 
@@ -1165,9 +1237,34 @@ function CandleChartInner({
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const i = Math.min(n - 1, Math.max(0, idxAt(mx)));
     setHover(h => (h && h.i === i && h.y === my ? h : { i, y: my }));
-    const hit = erHitsRef.current.find(p => Math.hypot(p.x - mx, p.y - my) <= 11);
-    setErTip(t => (hit ? (t && t.k === hit.k && t.x === hit.x && t.y === hit.y ? t : { k: hit.k, x: hit.x, y: hit.y }) : null));
+    setErHover(erHitAt(mx, my)?.k ?? null);
   };
+
+  const erHitAt = (mx: number, my: number) =>
+    erHitsRef.current.find(p => Math.hypot(p.x - mx, p.y - my) <= ER_HIT_R);
+
+  // A click (not the end of a drag) on an "E" opens its card; anywhere else closes it.
+  const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const d = downRef.current;
+    downRef.current = null;
+    if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const hit = erHitAt(e.clientX - r.left, e.clientY - r.top);
+    setErSel(!hit || erOpen?.k === hit.k ? null : { hit, view, marks: erMarks, size });
+  };
+
+  // The open card closes on Escape or a click outside it and the chart.
+  useEffect(() => {
+    if (!erOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!erCardRef.current?.contains(t) && t !== cvRef.current) setErSel(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setErSel(null); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [erOpen]);
 
   // Touch: one finger pans, two pinch-zoom.
   const touchRef = useRef<{ x: number; view: View; pinch: number | null } | null>(null);
@@ -1317,27 +1414,55 @@ function CandleChartInner({
     onBarHover?.({ o: bar.o, h: bar.h, l: bar.l, c: bar.c, pctChg: bar.o > 0 ? ((bar.c - bar.o) / bar.o) * 100 : 0 });
   }, [onBarHover, bar]);
 
-  /* ── earnings tooltip ─────────────────────────────────────────────── */
-  const tip = erTip && erMarks[erTip.k] ? (() => {
-    const { i, e } = erMarks[erTip.k];
-    const surp = e.epsActual != null && e.epsEstimate != null && e.epsEstimate !== 0
-      ? ((e.epsActual - e.epsEstimate) / Math.abs(e.epsEstimate)) * 100 : null;
+  /* ── earnings card (opened by clicking an "E") ────────────────────── */
+  const erCard = erOpen ? (() => {
+    const { i, e } = erMarks[erOpen.k];
+    const pct = (a: number | null | undefined, b: number | null | undefined) =>
+      a != null && b != null && b !== 0 ? ((a - b) / Math.abs(b)) * 100 : null;
+    const epsSurp = pct(e.epsActual, e.epsEstimate);
+    const revSurp = pct(e.revenueActual, e.revenueEstimate);
     // Reaction bar: an after-close report trades on the NEXT session.
     const r = e.session && /amc|after/i.test(e.session) ? i + 1 : i;
     const d1 = !monthly && barMs < 2 * 86_400_000 && r > 0 && r < n ? ((data[r].c - data[r - 1].c) / data[r - 1].c) * 100 : null;
     const sgn = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
     const eps = (v: number | null | undefined) => (v == null ? "—" : `$${v.toFixed(2)}`);
+    const rev = (v: number | null | undefined) => (v == null ? "—" : `$${bigVol(v)}`);
     const dt = new Date(`${e.date}T12:00:00Z`);
-    const left = Math.max(84, Math.min(size.w - 84, erTip.x));
-    const top = erTip.y + 16 + 74 > size.h ? erTip.y - 78 : erTip.y + 16;
+    const session = e.session === "BMO" ? "Before open" : e.session === "AMC" ? "After close" : null;
+    const CARD_W = 236, CARD_H = 168;
+    const left = Math.max(CARD_W / 2 + 4, Math.min(size.w - CARD_W / 2 - 4, erOpen.x));
+    const below = erOpen.y + ER_R + 8;
+    const top = below + CARD_H > size.h ? Math.max(4, erOpen.y - ER_R - 8 - CARD_H) : below;
     return (
-      <div className="cc-er-tip" style={{ left, top }} role="tooltip">
-        <span>
-          <span className="d">{dt.toLocaleDateString("en-US", { day: "numeric", month: "short", timeZone: "UTC" })} &apos;{String(dt.getUTCFullYear()).slice(2)}</span>
-          {surp != null && <> · <b className={surp >= 0 ? "up" : "down"}>{surp >= 0 ? "beat" : "miss"} {sgn(surp)}</b></>}
-        </span>
-        <span>EPS <b>{eps(e.epsActual)}</b> vs {eps(e.epsEstimate)} est</span>
-        {d1 != null && <span>Next day <b className={d1 >= 0 ? "up" : "down"}>{sgn(d1)}</b></span>}
+      <div ref={erCardRef} className="cc-er-card" style={{ left, top, width: CARD_W }} role="dialog" aria-label="Earnings report">
+        <div className="cc-er-hd">
+          <span className="cc-er-badge" aria-hidden="true">E</span>
+          <span className="d">
+            {dt.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
+            {session && <small>{session}</small>}
+          </span>
+          <button type="button" className="cc-x" aria-label="Close earnings details" onClick={() => setErSel(null)}>✕</button>
+        </div>
+        <dl>
+          <dt>EPS</dt>
+          <dd><b>{eps(e.epsActual)}</b> <span>vs {eps(e.epsEstimate)} est</span></dd>
+          {epsSurp != null && (<>
+            <dt>Surprise</dt>
+            <dd><b className={epsSurp >= 0 ? "up" : "down"}>{epsSurp >= 0 ? "Beat" : "Miss"} {sgn(epsSurp)}</b></dd>
+          </>)}
+          {(e.revenueActual != null || e.revenueEstimate != null) && (<>
+            <dt>Revenue</dt>
+            <dd>
+              <b>{rev(e.revenueActual)}</b>
+              {e.revenueEstimate != null && <span> vs {rev(e.revenueEstimate)} est</span>}
+              {revSurp != null && <b className={revSurp >= 0 ? "up" : "down"}> {sgn(revSurp)}</b>}
+            </dd>
+          </>)}
+          {d1 != null && (<>
+            <dt>{r === i ? "Same day" : "Next day"}</dt>
+            <dd><b className={d1 >= 0 ? "up" : "down"}>{sgn(d1)}</b></dd>
+          </>)}
+        </dl>
       </div>
     );
   })() : null;
@@ -1353,7 +1478,8 @@ function CandleChartInner({
           </svg>
           Indicators
         </button>
-        <span className="cc-hint">scroll to zoom · drag to pan · double-click to reset</span>
+        <QuickStudyButtons studies={studies} />
+        <span className="cc-hint">scroll to zoom · drag to pan · double-click to reset · click E for earnings</span>
         <span className="cc-spacer" />
         {toolbarEnd}
         <button type="button" className="cc-tvbtn cc-log" aria-pressed={prefs.log}
@@ -1428,14 +1554,19 @@ function CandleChartInner({
           ref={cvRef}
           tabIndex={0}
           aria-label={`${sym} price chart. Use arrow keys to pan, plus and minus to zoom, F for full screen.`}
-          style={{ cursor: dragging ? "grabbing" : erTip ? "pointer" : "crosshair" }}
-          onMouseDown={e => { if (e.button === 0) { dragRef.current = { x: e.clientX, view }; setDragging(true); setErTip(null); } }}
+          style={{ cursor: dragging ? "grabbing" : erHover != null ? "pointer" : "crosshair" }}
+          onMouseDown={e => {
+            if (e.button !== 0) return;
+            downRef.current = { x: e.clientX, y: e.clientY };
+            dragRef.current = { x: e.clientX, view }; setDragging(true);
+          }}
           onMouseMove={onCanvasMove}
-          onMouseLeave={() => { setHover(null); setErTip(null); }}
+          onClick={onCanvasClick}
+          onMouseLeave={() => { setHover(null); setErHover(null); }}
           onDoubleClick={resetView}
           onKeyDown={onCanvasKey}
         />
-        {tip}
+        {erCard}
       </div>
 
       {modalHost && browserOpen && createPortal(

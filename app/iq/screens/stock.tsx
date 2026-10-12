@@ -949,7 +949,7 @@ export function StockScreen({
     const d = new Date(barsAsOf);
     return isNaN(d.getTime())
       ? barsAsOf
-      : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+      : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
   })();
 
   // v is in $B. Below $1B, show millions so micro-caps (e.g. GAUZ ≈ $9M) read

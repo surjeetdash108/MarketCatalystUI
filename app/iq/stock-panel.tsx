@@ -257,7 +257,7 @@ function fmtAsOf(asOf: string | null | undefined): string | null {
   const d = new Date(asOf);
   return isNaN(d.getTime())
     ? asOf
-    : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 /**
