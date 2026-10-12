@@ -517,7 +517,7 @@ export function ChartSelect({ value, options, onChange, title }: {
 
 // The price chart lives in its own module; re-exported here so existing
 // `import { CandleChart } from "../utils"` call sites keep working.
-export { CandleChart, IntervalMenu, BAR_INTERVALS, isIntradayInterval, intervalLabel, LINE_PALETTE } from "./candle-chart";
+export { CandleChart, IntervalMenu, chartAsOfLabel, fmtFetchedAt, BAR_INTERVALS, isIntradayInterval, intervalLabel, LINE_PALETTE } from "./candle-chart";
 export type { OHLCBar, BarInterval, ChartHoverOhlc } from "./candle-chart";
 
 /**

@@ -4225,7 +4225,8 @@ button.pill.lf-chip {
 .iq-root .cc-tools .rng { font-family: var(--f-mono); font-size: .72rem; font-weight: 600; line-height: 1.2; padding: 6px 10px; border-radius: 7px; margin: 0; }
 .cc-tool-sep { width: 1px; height: 20px; background: var(--border); margin: 0 3px; flex: none; }
 .cc-spacer { flex: 1; }
-.cc-hint { font-family: var(--f-mono); font-size: .66rem; color: var(--text-dim-solid); opacity: .75; padding-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto !important; min-width: 0; }
+.cc-hint b { color: var(--cc-er); font-weight: 700; }
+.cc-hint { font-family: var(--f-mono); font-size: .7rem; color: var(--text); padding-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto !important; min-width: 0; }
 .cc-tools .cc-spacer { flex: 1 1 0; min-width: 0; }
 @container (max-width: 1100px) { .cc-hint { display: none; } }
 @container (max-width: 820px) { .cc-asof { display: none; } }
@@ -4289,12 +4290,27 @@ button.pill.lf-chip {
 .cc-acts .del { font-size: 13px; }
 .cc-acts .del:hover, .cc-acts .del:focus-visible { background: var(--down-dim); color: var(--down); }
 
-/* earnings tooltip */
-.cc-er-tip { position: absolute; z-index: 5; transform: translateX(-50%); pointer-events: none; white-space: nowrap; background: var(--surface-glass); border: 1px solid var(--border-strong); border-radius: 8px; padding: 7px 10px; font-family: var(--f-mono); font-size: 11.5px; color: var(--text-dim-solid); display: grid; gap: 2px; line-height: 1.35; box-shadow: 0 12px 28px rgba(0,0,0,.55); backdrop-filter: blur(3px); }
-.cc-er-tip .d { color: var(--cc-er); }
-.cc-er-tip b { color: var(--text-hi); font-weight: 500; }
-.cc-er-tip b.up { color: var(--up); }
-.cc-er-tip b.down { color: var(--down); }
+/* earnings card — opened by clicking an "E" marker */
+.cc-er-card { position: absolute; z-index: 6; transform: translateX(-50%); background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: 10px; padding: 8px 10px 10px; font-family: var(--f-mono); font-size: 11.5px; color: var(--text-dim-solid); line-height: 1.35; box-shadow: 0 16px 34px rgba(0,0,0,.55); }
+.cc-er-hd { display: flex; align-items: center; gap: 8px; padding-bottom: 7px; margin-bottom: 7px; border-bottom: 1px solid var(--border-soft); }
+.cc-er-badge { width: 20px; height: 20px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--cc-er); color: var(--cc-er-ink); font-weight: 700; font-size: 12px; }
+.cc-er-hd .d { flex: 1; min-width: 0; display: grid; color: var(--text-hi); font-weight: 500; }
+.cc-er-hd .d small { font-size: 10.5px; color: var(--text-dim-solid); font-weight: 400; }
+.iq-root .cc-er-hd .cc-x { width: 24px; height: 24px; font-size: 12px; flex: none; }
+.cc-er-card dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0; }
+.cc-er-card dt { color: var(--text-dim-solid); }
+.cc-er-card dd { margin: 0; text-align: right; }
+.cc-er-card b { color: var(--text-hi); font-weight: 600; }
+.cc-er-card b.up { color: var(--up); }
+.cc-er-card b.down { color: var(--down); }
+
+/* SMA / EMA quick buttons: each period toggles on its own — bold = on, dim = off */
+.iq-root .cc-tools .cc-ma { display: inline-flex; align-items: center; gap: 0; cursor: default; white-space: nowrap; }
+.iq-root .cc-ma > button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; opacity: .4; font-weight: 400; }
+.iq-root .cc-ma > button:first-of-type { margin-left: .45em; }
+.iq-root .cc-ma > button[aria-pressed="true"] { opacity: 1; font-weight: 700; }
+.iq-root .cc-ma > button:hover { opacity: .85; }
+.iq-root .cc-ma > button span { opacity: .4; font-weight: 400; }
 
 /* full screen (native API, or this fixed overlay where it is unavailable) */
 .cc.is-full { position: fixed; inset: 0; z-index: 150; margin: 0; padding: 0 14px 10px; background: var(--bg); display: flex; flex-direction: column; }
