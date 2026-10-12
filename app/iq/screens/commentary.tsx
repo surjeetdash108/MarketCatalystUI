@@ -684,7 +684,7 @@ export function CommentaryScreen() {
   const router = useRouter();
   const { openStockDetail } = useIQActions();
   const uid = firebaseAuth.currentUser?.uid ?? null;
-  const { data: liveNews, loading: liveNewsLoading } = useApiList<NewsArticleDoc>("/market-data/news");
+  const { data: liveNews, loading: liveNewsLoading } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   // /market-data/filings-wire and /market-data/macro-regime were fetched here
   // only to fill the Filings wire and Market regime rail cards. With the rail

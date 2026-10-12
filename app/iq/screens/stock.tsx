@@ -22,7 +22,6 @@ import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
 // import { EarningsPlaybook } from "./EarningsPlaybook";
 import { EtfHoldingsView } from "../etf-holdings-view";
 import { Stock13FFilingsView } from "../stock-13f-view";
-import { StockInsiderActivityView } from "../stock-insider-activity-view";
 
 const POPULAR_16_ETFS = new Set([
   "CIBR", "DIA", "GLD", "HACK", "HYG", "IBIT", "IWM", "QQEW",
@@ -528,7 +527,6 @@ export type StockTab =
   | "earnings"
   | "financials"
   | "holdings"
-  | "insider-activity"
   | "13f"
   | "news";
 
@@ -555,7 +553,7 @@ export function StockScreen({
    *  that chart's interval changes, exactly as it does on the full page. */
   barInterval?: BarInterval;
 } = {}) {
-  const { openStock, openSector } = useIQActions();
+  const { openStock, openStockDetail, openSector } = useIQActions();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
     if (typeof window !== "undefined") return localStorage.getItem("iq-stock") || "NVDA";
@@ -613,7 +611,7 @@ export function StockScreen({
   // GET /live/company|/live/dividend-history|/live/splits|/live/financials
   // (replacing the direct companies Firestore listener this screen used to
   // hold open). Re-fetches whenever `sym` changes since it's part of the path.
-  const { data: liveCompany, loading: liveCompanyLoading } = useApiResource<CompanyDoc>(`/live/company?ticker=${encodeURIComponent(sym)}`);
+  const { data: liveCompany, loading: liveCompanyLoading } = useApiResource<CompanyDoc>(`/live/company?ticker=${encodeURIComponent(sym)}`, 30000);
   // Fast key-stats-only read, fired alongside /live/company ONLY for a ticker
   // that isn't going to get a fast answer from /live/company anyway. Merely
   // being IN the `companies` list isn't enough to predict that: the backend's
@@ -648,7 +646,7 @@ export function StockScreen({
   const { data: dividendHistory, loading: dividendLoading } = useApiResource<DividendHistoryDoc>(`/live/dividend-history?ticker=${encodeURIComponent(sym)}`);
   const { data: splitsDoc } = useApiResource<SplitsDoc>(`/live/splits?ticker=${encodeURIComponent(sym)}`);
   const { data: financialsDoc, loading: financialsLoading } = useApiResource<FinancialsDoc>(`/live/financials?ticker=${encodeURIComponent(sym)}`);
-  const { data: tickerNews } = useApiResource<NewsArticleDoc[]>(`/live/news?ticker=${encodeURIComponent(sym)}`);
+  const { data: tickerNews } = useApiResource<NewsArticleDoc[]>(`/live/news?ticker=${encodeURIComponent(sym)}`, 30000);
   // On-demand AI read (technicals + news synthesised by OpenRouter), cached 30
   // min server-side. Appended below the deterministic rows + news list.
   const { data: aiAnalysis, loading: aiLoading, error: aiError } = useApiResource<AiAnalysisDoc>(`/live/ai-analysis?ticker=${encodeURIComponent(sym)}`);
@@ -872,6 +870,9 @@ export function StockScreen({
   const ema50 = ema(yr, 50);
   const sma200 = sma(yr, 200);
 
+  const [insTxSortCol, setInsTxSortCol] = useState<"date" | "shares">("date");
+  const [insTxSortDir, setInsTxSortDir] = useState<"asc" | "desc">("desc");
+
   // Real insider transactions for this ticker, with a real dollar value
   // (shares × pricePerShare from the Form 4 filing) instead of an estimate.
   const allSymInsiderTxns = useMemo(() => {
@@ -880,11 +881,27 @@ export function StockScreen({
       .sort((a, b) => (b.transactionDate ?? "").localeCompare(a.transactionDate ?? ""));
   }, [liveInsider, sym]);
 
+  const sortedSymInsiderTxns = useMemo(() => {
+    const list = [...allSymInsiderTxns];
+    list.sort((a, b) => {
+      if (insTxSortCol === "date") {
+        const da = a.transactionDate ?? "";
+        const db = b.transactionDate ?? "";
+        return insTxSortDir === "asc" ? da.localeCompare(db) : db.localeCompare(da);
+      } else {
+        const sa = a.shares ?? 0;
+        const sb = b.shares ?? 0;
+        return insTxSortDir === "asc" ? sa - sb : sb - sa;
+      }
+    });
+    return list;
+  }, [allSymInsiderTxns, insTxSortCol, insTxSortDir]);
+
   const symInsider = allSymInsiderTxns
     .slice(0, 8)
     .map(x => ({
       name: x.ownerName ?? "Insider",
-      action: `${x.acquiredOrDisposed === "A" ? "Buy" : "Sell"} ${Math.round(x.shares ?? 0).toLocaleString("en-US")} sh`,
+      action: `${x.acquiredOrDisposed === "A" ? "Buy" : "Sell"} ${Math.round(x.shares ?? 0).toLocaleString("en-US")}`,
       date: (x.transactionDate ?? "").slice(0, 10),
       valueUsd: x.pricePerShare != null ? x.shares * x.pricePerShare : null,
     }));
@@ -1251,7 +1268,6 @@ export function StockScreen({
     { id: "holdings", label: isEtf ? "Holdings" : "Insider Transactions" },
     ...(!isEtf
       ? [
-          { id: "insider-activity" as StockTab, label: "Insider Activity" },
           { id: "13f" as StockTab, label: "13F Filings" },
         ]
       : []),
@@ -1262,10 +1278,10 @@ export function StockScreen({
     if (!visibleTabs || visibleTabs.length === 0) return ALL_TABS;
     return ALL_TABS.filter(t => visibleTabs.includes(t.id));
   }, [visibleTabs, isEtf, hist10.length, tickerNews?.length, peersTotal]);
-  // Rail cards belong to one tab each, as in the design: Peers on Overview;
-  // Technical rating / Indicators / analyst actions / Key levels on Analysis.
+  // Rail cards belong to Analysis (Technical rating / Indicators / analyst actions / Key levels).
+  // Overview no longer carries Peers in rail — Peers has its own dedicated comparison section.
   // Every other tab gets a full-width main column instead of an empty track.
-  const showRail = !hideHeader && (activeTab === "overview" || activeTab === "analysis");
+  const showRail = !hideHeader && activeTab === "analysis";
 
   function selectSym(s: string) {
     setSym(s);
@@ -2733,18 +2749,44 @@ export function StockScreen({
                       <table className="tbl" style={{ width: "100%", fontSize: ".8rem" }}>
                         <thead>
                           <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
-                            <th style={{ textAlign: "left", padding: "10px 14px" }}>Date</th>
+                            <th
+                              onClick={() => {
+                                if (insTxSortCol === "date") {
+                                  setInsTxSortDir(d => (d === "asc" ? "desc" : "asc"));
+                                } else {
+                                  setInsTxSortCol("date");
+                                  setInsTxSortDir("desc");
+                                }
+                              }}
+                              style={{ textAlign: "left", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
+                              title="Click to sort by date"
+                            >
+                              Date {insTxSortCol === "date" ? (insTxSortDir === "desc" ? "▼" : "▲") : ""}
+                            </th>
                             <th style={{ textAlign: "left", padding: "10px 14px" }}>Insider / Owner</th>
                             <th style={{ textAlign: "left", padding: "10px 14px" }}>Role / Title</th>
                             <th style={{ textAlign: "center", padding: "10px 14px" }}>Side</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Shares</th>
+                            <th
+                              onClick={() => {
+                                if (insTxSortCol === "shares") {
+                                  setInsTxSortDir(d => (d === "asc" ? "desc" : "asc"));
+                                } else {
+                                  setInsTxSortCol("shares");
+                                  setInsTxSortDir("desc");
+                                }
+                              }}
+                              style={{ textAlign: "right", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
+                              title="Click to sort by shares"
+                            >
+                              Shares {insTxSortCol === "shares" ? (insTxSortDir === "desc" ? "▼" : "▲") : ""}
+                            </th>
                             <th style={{ textAlign: "right", padding: "10px 14px" }}>Price / Share</th>
                             <th style={{ textAlign: "right", padding: "10px 14px" }}>Total Value</th>
                             <th style={{ textAlign: "center", padding: "10px 14px" }}>Filing</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {allSymInsiderTxns.map((tx, idx) => {
+                          {sortedSymInsiderTxns.map((tx, idx) => {
                             const isBuy = tx.acquiredOrDisposed === "A";
                             const isSell = tx.acquiredOrDisposed === "D";
                             const valUsd = tx.pricePerShare != null && tx.shares > 0 ? tx.shares * tx.pricePerShare : null;
@@ -2775,7 +2817,7 @@ export function StockScreen({
                                   </span>
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-hi)" }}>
-                                  {Math.round(tx.shares ?? 0).toLocaleString("en-US")} sh
+                                  {Math.round(tx.shares ?? 0).toLocaleString("en-US")}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
                                   {tx.pricePerShare != null ? `$${tx.pricePerShare.toFixed(2)}` : "—"}
@@ -2804,10 +2846,6 @@ export function StockScreen({
                 </div>
               </div>
             )
-          )}
-
-          {activeTab === "insider-activity" && (
-            <StockInsiderActivityView symbol={sym} />
           )}
 
           {activeTab === "13f" && (
@@ -2933,7 +2971,6 @@ export function StockScreen({
                             <th style={{ textAlign: "right", padding: "10px 14px" }}>P/E Ratio</th>
                             <th style={{ textAlign: "center", padding: "10px 14px" }}>RS Rating</th>
                             <th style={{ textAlign: "right", padding: "10px 14px" }}>vs {sym}</th>
-                            <th style={{ textAlign: "center", padding: "10px 14px" }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2945,7 +2982,7 @@ export function StockScreen({
                             return (
                               <tr
                                 key={peer.t}
-                                onClick={() => openStock(peer.t)}
+                                onClick={() => openStockDetail(peer.t, displayPeers.map(x => x.t))}
                                 style={{
                                   cursor: "pointer",
                                   borderBottom: "1px solid var(--border-soft)",
@@ -3005,18 +3042,6 @@ export function StockScreen({
                                     </span>
                                   ) : "—"}
                                 </td>
-                                <td style={{ textAlign: "center", padding: "10px 14px" }}>
-                                  <button
-                                    className="link"
-                                    onClick={e => { e.stopPropagation(); openStock(peer.t); }}
-                                    style={{
-                                      background: "none", border: "none", color: "var(--brand-2)",
-                                      fontSize: ".74rem", fontWeight: 600, cursor: "pointer",
-                                    }}
-                                  >
-                                    View →
-                                  </button>
-                                </td>
                               </tr>
                             );
                           })}
@@ -3039,58 +3064,7 @@ export function StockScreen({
           // Pinned to the left column's height on Analysis (so Key levels sits
           // level with its last card); Overview's column is short, so its
           // rail keeps its natural height and Peers scrolls inside its card.
-          <div className="sd-rail" style={activeTab === "analysis" ? { height: rightColH, minHeight: 0, overflow: rightColH ? "hidden" : undefined } : undefined}>
-            {activeTab === "overview" && (
-            <div className="card sd-rail-full" style={{ display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <div>
-                  <h3>Peers</h3>
-                  <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                    {peersTotal} peer{peersTotal === 1 ? "" : "s"} with live data{data.sector ? ` in ${titleCaseLabel(data.sector)}` : ""}
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {peersTotal > 1 && (
-                    <button
-                      onClick={() => setPeerSort(s => (s === "desc" ? "asc" : "desc"))}
-                      title={`Sort by % change — ${peerSort === "desc" ? "highest first" : "lowest first"}`}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 4,
-                        fontSize: ".62rem", fontWeight: 700, letterSpacing: ".02em",
-                        color: "var(--text-dim-solid)", background: "var(--surface-3)",
-                        border: "1px solid var(--border-soft)", borderRadius: 6,
-                        padding: "3px 7px", cursor: "pointer",
-                      }}
-                    >
-                      % <span style={{ color: "var(--brand-2)" }}>{peerSort === "desc" ? "▼" : "▲"}</span>
-                    </button>
-                  )}
-                  <VendorTag v="polygon" />
-                  <span className="link" onClick={() => setActiveTab("peers")}>Full comparison →</span>
-                </div>
-              </div>
-              <div className="card-b" style={{ paddingTop: 6, maxHeight: 460, overflowY: "auto" }}>
-                {sortedPeers.length ? sortedPeers.map(peer => {
-                  const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
-                  return (
-                    <div key={peer.t} className="minirow"
-                      style={{ cursor: "pointer" }} onClick={() => openStock(peer.t)}>
-                      <StockLogo sym={peer.t} size={24} />
-                      <span className="mono" style={{ fontWeight: 700, minWidth: 52, color: peer.t === sym ? "var(--brand-2)" : "var(--text-hi)" }}>{peer.t}</span>
-                      <span className="mid" style={{ fontSize: ".78rem" }}>
-                        {peer.name ? <span>{peer.name}</span> : null}
-                        {tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`} style={{ marginLeft: 6 }}>{tag}</span>}
-                        {peer.rsRating != null && (
-                          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", marginLeft: 4, fontSize: ".62rem" }}>RS {peer.rsRating}</span>
-                        )}
-                      </span>
-                      <span className={`r mono ${cls(peer.c)}`} style={{ fontSize: ".82rem" }}>{sign(peer.c)}</span>
-                    </div>
-                  );
-                }) : <DataState loading={companiesLoading} label="No live peers found in this sector yet." />}
-              </div>
-            </div>
-            )}
+          <div className="sd-rail" style={{ height: rightColH, minHeight: 0, overflow: rightColH ? "hidden" : undefined }}>
 
 
             {activeTab === "analysis" && (
@@ -3359,7 +3333,7 @@ export function StockScreen({
                 ) : sortedPeers.map(peer => {
                   return (
                       <div key={peer.t} className="minirow" style={{ cursor: "pointer" }}
-                        onClick={() => { setInnerDrawer(null); openStock(peer.t); }}>
+                        onClick={() => { setInnerDrawer(null); openStockDetail(peer.t, sortedPeers.map(x => x.t)); }}>
                         <StockLogo sym={peer.t} size={22} />
                         <span className="mono" style={{
                           fontWeight: 700, minWidth: 52,

@@ -102,7 +102,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
 
   const { data: sectorsLive, loading: sectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
   const { data: liveEarnings, loading: earningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
-  const { data: liveNews, loading: liveNewsLoading } = useApiList<NewsArticleDoc>("/market-data/news");
+  const { data: liveNews, loading: liveNewsLoading } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
   const { data: macroEvents, loading: macroLoading } = useApiList<MacroEventDoc>("/market-data/macro-events");
   // Analyst rating changes (upgrades/downgrades) — FMP-backed analyst_actions.
   const { data: analystActions, loading: analystLoading } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");

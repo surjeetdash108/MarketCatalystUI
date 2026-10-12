@@ -321,7 +321,7 @@ export function DashboardScreen() {
   // latest-headlines list inside the "What Matters Now" card.
   // Still needed by the ticker popovers, but no longer for a loading state —
   // the What Matters Now card stopped rendering the headline list.
-  const { data: dashNews } = useApiList<NewsArticleDoc>("/market-data/news");
+  const { data: dashNews } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
   // Live Fear & Greed (fear-greed.job → market_sentiment/fear_greed). No mock
   // fallback: fgVal/fgLabel are null until the job has actually run.
   const { data: marketSentiment, loading: marketSentimentLoading } = useApiList<MarketSentimentDoc>("/market-data/market-sentiment");
@@ -1399,7 +1399,7 @@ export function DashboardScreen() {
 
 /** Live Market Feed — real synced news only; honest empty state when none are synced. */
 function LiveFeedList() {
-  const { data: news, loading } = useApiList<NewsArticleDoc>("/market-data/news");
+  const { data: news, loading } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
   // Dedupe by article URL: Polygon tags one story to every ticker it mentions,
   // so the same article arrives once per ticker — show each story once.
   const seenUrl = new Set<string>();

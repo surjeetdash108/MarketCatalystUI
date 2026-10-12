@@ -21,7 +21,7 @@ export const StockScreenEmbed = dynamic<{
   hideIdentity?: boolean;
   hideChart?: boolean;
   headerActions?: React.ReactNode;
-  visibleTabs?: ("overview" | "analysis" | "peers" | "earnings" | "financials" | "holdings" | "insider-activity" | "13f" | "news")[];
+  visibleTabs?: ("overview" | "analysis" | "peers" | "earnings" | "financials" | "holdings" | "13f" | "news")[];
   barInterval?: BarInterval;
 }>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
