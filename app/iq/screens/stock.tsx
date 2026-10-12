@@ -21,6 +21,8 @@ import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
 // import { useLiveQuotes } from "../live-quotes-context";
 // import { EarningsPlaybook } from "./EarningsPlaybook";
 import { EtfHoldingsView } from "../etf-holdings-view";
+import { Stock13FFilingsView } from "../stock-13f-view";
+import { StockInsiderActivityView } from "../stock-insider-activity-view";
 
 const POPULAR_16_ETFS = new Set([
   "CIBR", "DIA", "GLD", "HACK", "HYG", "IBIT", "IWM", "QQEW",
@@ -519,7 +521,16 @@ function EarnPane({ hist10 }: { hist10: EarnQ[] }) {
 }
 
 
-export type StockTab = "overview" | "analysis" | "peers" | "earnings" | "financials" | "holdings" | "news";
+export type StockTab =
+  | "overview"
+  | "analysis"
+  | "peers"
+  | "earnings"
+  | "financials"
+  | "holdings"
+  | "insider-activity"
+  | "13f"
+  | "news";
 
 export function StockScreen({
   initialSym,
@@ -863,9 +874,13 @@ export function StockScreen({
 
   // Real insider transactions for this ticker, with a real dollar value
   // (shares × pricePerShare from the Form 4 filing) instead of an estimate.
-  const symInsider = liveInsider
-    .filter(x => x.ticker === sym)
-    .sort((a, b) => (b.transactionDate ?? "").localeCompare(a.transactionDate ?? ""))
+  const allSymInsiderTxns = useMemo(() => {
+    return liveInsider
+      .filter(x => x.ticker === sym)
+      .sort((a, b) => (b.transactionDate ?? "").localeCompare(a.transactionDate ?? ""));
+  }, [liveInsider, sym]);
+
+  const symInsider = allSymInsiderTxns
     .slice(0, 8)
     .map(x => ({
       name: x.ownerName ?? "Insider",
@@ -1233,14 +1248,20 @@ export function StockScreen({
     { id: "peers", label: "Peers", count: peersTotal || undefined },
     { id: "earnings", label: "Earnings", count: hist10.length || undefined },
     { id: "financials", label: "Financials" },
-    { id: "holdings", label: "Holdings" },
+    { id: "holdings", label: isEtf ? "Holdings" : "Insider Transactions" },
+    ...(!isEtf
+      ? [
+          { id: "insider-activity" as StockTab, label: "Insider Activity" },
+          { id: "13f" as StockTab, label: "13F Filings" },
+        ]
+      : []),
     { id: "news", label: "News", count: tickerNews?.length || undefined },
   ];
 
   const TABS = useMemo(() => {
     if (!visibleTabs || visibleTabs.length === 0) return ALL_TABS;
     return ALL_TABS.filter(t => visibleTabs.includes(t.id));
-  }, [visibleTabs, hist10.length, tickerNews?.length]);
+  }, [visibleTabs, isEtf, hist10.length, tickerNews?.length, peersTotal]);
   // Rail cards belong to one tab each, as in the design: Peers on Overview;
   // Technical rating / Indicators / analyst actions / Key levels on Analysis.
   // Every other tab gets a full-width main column instead of an empty track.
@@ -2685,93 +2706,112 @@ export function StockScreen({
           {activeTab === "holdings" && (
             isEtf ? (
               <EtfHoldingsView symbol={sym} />
-            ) : (<>
-              <div className="sd-hold">
-              <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-                <div className="card-h">
-                  <h3>Recent insider transactions</h3>
+            ) : (
+              <div className="card">
+                <div className="card-h" style={{ flexWrap: "wrap", gap: 10, padding: "12px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <h3 style={{ margin: 0 }}>Insider Transactions ({allSymInsiderTxns.length})</h3>
                     <VendorTag v="sec" />
-                    <span className="link" onClick={() => setInnerDrawer("insider")}>View all →</span>
+                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".64rem" }}>
+                      SEC EDGAR Form 4
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+                    <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                      All recorded transactions for {sym}
+                    </span>
                   </div>
                 </div>
-                <div className="card-b" style={{ paddingTop: 6 }}>
-                  {data.insiderActivity.length > 0 ? (
-                    data.insiderActivity.map((n, idx) => {
-                      const isSell = /sale|sold|exercis/i.test(n.action);
-                      return (
-                        <div key={idx} className="minirow" style={{ cursor: "pointer", alignItems: "flex-start", gap: 10 }}>
-                          <span className="tkr" style={{ flex: "none" }}>{sym}</span>
-                          <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
-                            {n.name} {n.action} <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
-                          </span>
-                          <span className={`r ${isSell ? "down" : "up"}`} style={{ flex: "none" }}>
-                            {n.valueUsd != null ? `${isSell ? "−" : "+"}$${(n.valueUsd / 1e6).toFixed(1)}M` : <NotAvailable />}
-                          </span>
-                        </div>
-                      );
-                    })
+
+                <div className="card-b" style={{ padding: 0 }}>
+                  {allSymInsiderTxns.length === 0 ? (
+                    <div style={{ padding: 36 }}>
+                      <DataState loading={insiderLoading} label={`No Form 4 insider transactions recorded for ${sym}.`} />
+                    </div>
                   ) : (
-                    <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "4px 0 8px" }}>
-                      No recent Form 4 activity.
+                    <div className="table-wrap" style={{ overflowX: "auto" }}>
+                      <table className="tbl" style={{ width: "100%", fontSize: ".8rem" }}>
+                        <thead>
+                          <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
+                            <th style={{ textAlign: "left", padding: "10px 14px" }}>Date</th>
+                            <th style={{ textAlign: "left", padding: "10px 14px" }}>Insider / Owner</th>
+                            <th style={{ textAlign: "left", padding: "10px 14px" }}>Role / Title</th>
+                            <th style={{ textAlign: "center", padding: "10px 14px" }}>Side</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Shares</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Price / Share</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Total Value</th>
+                            <th style={{ textAlign: "center", padding: "10px 14px" }}>Filing</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allSymInsiderTxns.map((tx, idx) => {
+                            const isBuy = tx.acquiredOrDisposed === "A";
+                            const isSell = tx.acquiredOrDisposed === "D";
+                            const valUsd = tx.pricePerShare != null && tx.shares > 0 ? tx.shares * tx.pricePerShare : null;
+                            return (
+                              <tr key={`${tx.id || idx}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                                <td className="mono" style={{ padding: "10px 14px", color: "var(--text-dim-solid)", fontSize: ".76rem" }}>
+                                  {(tx.transactionDate ?? "").slice(0, 10)}
+                                </td>
+                                <td style={{ padding: "10px 14px" }}>
+                                  <b style={{ color: "var(--text-hi)" }}>{tx.ownerName ?? "Insider"}</b>
+                                </td>
+                                <td style={{ padding: "10px 14px", color: "var(--text-dim-solid)", fontSize: ".75rem" }}>
+                                  {tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% Owner")}
+                                </td>
+                                <td style={{ textAlign: "center", padding: "10px 14px" }}>
+                                  <span
+                                    className="tr-badge"
+                                    style={{
+                                      background: isBuy ? "var(--up)22" : isSell ? "var(--down)22" : "var(--surface-3)",
+                                      color: isBuy ? "var(--up)" : isSell ? "var(--down)" : "var(--text-dim-solid)",
+                                      fontWeight: 700,
+                                      padding: "3px 8px",
+                                      borderRadius: 6,
+                                      fontSize: ".66rem",
+                                    }}
+                                  >
+                                    {isBuy ? "BUY" : isSell ? "SELL" : tx.transactionCode || "TX"}
+                                  </span>
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-hi)" }}>
+                                  {Math.round(tx.shares ?? 0).toLocaleString("en-US")} sh
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
+                                  {tx.pricePerShare != null ? `$${tx.pricePerShare.toFixed(2)}` : "—"}
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
+                                  {valUsd != null ? (
+                                    <span className={isBuy ? "up" : "down"} style={{ fontWeight: 700 }}>
+                                      {isBuy ? "+" : "−"}${Math.abs(valUsd) >= 1e6 ? `${(Math.abs(valUsd) / 1e6).toFixed(1)}M` : Math.round(Math.abs(valUsd)).toLocaleString("en-US")}
+                                    </span>
+                                  ) : (
+                                    <NotAvailable />
+                                  )}
+                                </td>
+                                <td style={{ textAlign: "center", padding: "10px 14px" }}>
+                                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".62rem" }}>
+                                    Form 4
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
               </div>
+            )
+          )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-              <div className="card">
-                <div className="card-h"><h3>Institutional</h3><VendorTag v="fmp" /></div>
-                <div className="card-b" style={{ paddingTop: 6 }}>
-                  {(() => {
-                    const io = liveCompany?.instOwnershipPct;
-                    const holders = liveCompany?.inst13FHolders;
-                    const chg = liveCompany?.inst13FHoldersChange;
-                    const rows: [string, ReactNode][] = [
-                      ["Inst. ownership", io != null ? `${io.toFixed(1)}%` : null],
-                      ["Short interest", null],
-                      ["13F filers holding", holders != null ? (
-                        <>
-                          {holders.toLocaleString()}
-                          {chg != null && chg !== 0 && (
-                            <span className={chg > 0 ? "up" : "down"} style={{ marginLeft: 6, fontSize: ".7rem" }}>
-                              {chg > 0 ? "+" : ""}{chg} QoQ
-                            </span>
-                          )}
-                        </>
-                      ) : null],
-                    ];
-                    return rows.map(([label, val]) => (
-                      <div key={label} className="minirow">
-                        <span className="mid">{label}</span>
-                        <span className="r">{val ?? <NotAvailable />}</span>
-                      </div>
-                    ));
-                  })()}
-                  {liveCompany?.instAsOf && (
-                    <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                      13F rollup · {liveCompany.instAsOf}
-                    </div>
-                  )}
-                </div>
-              </div>
+          {activeTab === "insider-activity" && (
+            <StockInsiderActivityView symbol={sym} />
+          )}
 
-              <div className="card">
-                <div className="card-h"><h3>Stock splits</h3><VendorTag v="polygon" /></div>
-                <div className="card-b" style={{ paddingTop: 6 }}>
-                  {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 3).map(s => (
-                    <div key={s.executionDate} className="minirow">
-                      <span className="mid">{s.executionDate}</span>
-                      <span className="r" style={{ color: "var(--text-hi)" }}>{s.splitFrom}:{s.splitTo}</span>
-                    </div>
-                  )) : (
-                    <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>No splits on record.</div>
-                  )}
-                </div>
-              </div>
-              </div>
-              </div>
-            </>)
+          {activeTab === "13f" && (
+            <Stock13FFilingsView symbol={sym} />
           )}
 
           {activeTab === "news" && (
@@ -2811,145 +2851,12 @@ export function StockScreen({
 
           {activeTab === "peers" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* Header Benchmark Card */}
-              <div className="card" style={{ padding: "16px 20px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
-                        Industry Peers & Competitors
-                      </h2>
-                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".7rem", textTransform: "uppercase" }}>
-                        {data.sector ? titleCaseLabel(data.sector) : "Direct Peers"}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
-                      Benchmarking {sym} against {peersTotal} peer companies with live market data
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <VendorTag v="polygon" />
-                  </div>
-                </div>
-
-                {/* 4 Summary Cards */}
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                  gap: 12,
-                }}>
-                  {/* Target Stock */}
-                  <div style={{
-                    background: "var(--surface-1)",
-                    border: "1px solid var(--border-soft)",
-                    borderRadius: "var(--r-sm)",
-                    padding: "10px 14px",
-                  }}>
-                    <div style={{ fontSize: ".68rem", textTransform: "uppercase", color: "var(--text-dim-solid)", fontWeight: 700 }}>
-                      Target Stock ({sym})
-                    </div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
-                      <span className="mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)" }}>
-                        {p != null ? "$" + (p >= 10 ? p.toFixed(2) : p.toFixed(3)) : <NotAvailable />}
-                      </span>
-                      {data.pctChange != null && (
-                        <span className={`pill ${cls(data.pctChange)}`} style={{ fontSize: ".72rem" }}>
-                          {sign(data.pctChange)}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                      {mc != null ? `Mkt Cap ${cap(mc)}` : ""}
-                    </div>
-                  </div>
-
-                  {/* Peer Average Return */}
-                  <div style={{
-                    background: "var(--surface-1)",
-                    border: "1px solid var(--border-soft)",
-                    borderRadius: "var(--r-sm)",
-                    padding: "10px 14px",
-                  }}>
-                    <div style={{ fontSize: ".68rem", textTransform: "uppercase", color: "var(--text-dim-solid)", fontWeight: 700 }}>
-                      Peer Group Average
-                    </div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
-                      <span className={`mono ${avgPeerChange != null ? cls(avgPeerChange) : ""}`} style={{ fontSize: "1.1rem", fontWeight: 700 }}>
-                        {avgPeerChange != null ? sign(avgPeerChange) : <NotAvailable />}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                      {data.pctChange != null && avgPeerChange != null ? (
-                        data.pctChange >= avgPeerChange
-                          ? `${sym} +${(data.pctChange - avgPeerChange).toFixed(2)}% vs peers`
-                          : `${sym} ${(data.pctChange - avgPeerChange).toFixed(2)}% vs peers`
-                      ) : "Across all tracked peers"}
-                    </div>
-                  </div>
-
-                  {/* Group Leader */}
-                  <div style={{
-                    background: "var(--surface-1)",
-                    border: "1px solid var(--border-soft)",
-                    borderRadius: "var(--r-sm)",
-                    padding: "10px 14px",
-                  }}>
-                    <div style={{ fontSize: ".68rem", textTransform: "uppercase", color: "var(--text-dim-solid)", fontWeight: 700 }}>
-                      Group Leader
-                    </div>
-                    {leaderPeer ? (
-                      <div style={{ cursor: "pointer" }} onClick={() => openStock(leaderPeer.t)}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                          <StockLogo sym={leaderPeer.t} size={18} />
-                          <span className="mono" style={{ fontWeight: 700, fontSize: "1rem", color: "var(--brand-2)" }}>
-                            {leaderPeer.t}
-                          </span>
-                          <span className="pill up" style={{ fontSize: ".72rem", marginLeft: "auto" }}>
-                            {sign(leaderPeer.c)}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {leaderPeer.name || "Top Performer"}
-                        </div>
-                      </div>
-                    ) : <NotAvailable />}
-                  </div>
-
-                  {/* Group Laggard */}
-                  <div style={{
-                    background: "var(--surface-1)",
-                    border: "1px solid var(--border-soft)",
-                    borderRadius: "var(--r-sm)",
-                    padding: "10px 14px",
-                  }}>
-                    <div style={{ fontSize: ".68rem", textTransform: "uppercase", color: "var(--text-dim-solid)", fontWeight: 700 }}>
-                      Group Laggard
-                    </div>
-                    {laggardPeer ? (
-                      <div style={{ cursor: "pointer" }} onClick={() => openStock(laggardPeer.t)}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                          <StockLogo sym={laggardPeer.t} size={18} />
-                          <span className="mono" style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
-                            {laggardPeer.t}
-                          </span>
-                          <span className="pill dn" style={{ fontSize: ".72rem", marginLeft: "auto" }}>
-                            {sign(laggardPeer.c)}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {laggardPeer.name || "Lowest Performer"}
-                        </div>
-                      </div>
-                    ) : <NotAvailable />}
-                  </div>
-                </div>
-              </div>
-
               {/* Peer Comparison Table Card */}
               <div className="card">
                 <div className="card-h" style={{ flexWrap: "wrap", gap: 10, padding: "12px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <h3 style={{ margin: 0 }}>Peer Constituent Breakdown ({displayPeers.length})</h3>
+                    <VendorTag v="polygon" />
                     {/* Search box */}
                     <input
                       type="text"

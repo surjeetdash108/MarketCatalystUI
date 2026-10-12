@@ -12,7 +12,7 @@ export const StockScreenEmbed = dynamic<{
   hideHeader?: boolean;
   hideChart?: boolean;
   headerActions?: ReactNode;
-  visibleTabs?: ("overview" | "analysis" | "earnings" | "financials" | "holdings" | "news")[];
+  visibleTabs?: ("overview" | "analysis" | "peers" | "earnings" | "financials" | "holdings" | "insider-activity" | "13f" | "news")[];
 }>(
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
