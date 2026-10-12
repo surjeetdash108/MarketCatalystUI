@@ -95,8 +95,8 @@ function HeatmapInner() {
   const [picked, setPicked] = useState<{ tab: number; urlTab: number } | null>(null);
   const tab = picked && picked.urlTab === urlTab ? picked.tab : urlTab;
 
-  // Sector selection: null = Sector Directory Screen; string = Dedicated Sector Heatmap Screen
-  const [selectedSector, setSelectedSector] = useState<string | null>(urlSector || null);
+  // Sector selection: "Overall" or null = All Sectors Heatmap; string = Dedicated Sector Heatmap Screen
+  const [selectedSector, setSelectedSector] = useState<string | null>(urlSector || "Overall");
   const [moreModal, setMoreModal] = useState<[string, number, number][] | null>(null);
 
   useEffect(() => {
@@ -110,7 +110,7 @@ function HeatmapInner() {
 
   const setTab = (i: number) => {
     setPicked({ tab: i, urlTab });
-    setSelectedSector(null);
+    setSelectedSector("Overall");
     setMoreModal(null);
   };
 
@@ -166,12 +166,8 @@ function HeatmapInner() {
     (a, b) => b.items.reduce((s, i) => s + i[1], 0) - a.items.reduce((s, i) => s + i[1], 0)
   );
 
-  // Active sector: user-selected sector, else default to the first sector in the sorted list
-  const activeSectorName = selectedSector && sorted.some(g => g.name === selectedSector)
-    ? selectedSector
-    : (sorted[0]?.name ?? null);
-
-  const activeSector = sorted.find(g => g.name === activeSectorName) ?? null;
+  const isOverall = !selectedSector || selectedSector === "Overall";
+  const activeSector = !isOverall ? (sorted.find(g => g.name === selectedSector) ?? null) : null;
 
   return (
     <>
@@ -183,11 +179,18 @@ function HeatmapInner() {
           ))}
         </div>
 
-        {/* Level 2: Sector Selection (multiple rows so all sectors show at once) */}
+        {/* Level 2: Sector Selection (Overall + individual sectors) */}
         {!noMap && sorted.length > 0 && (
           <div className="tabs" style={{ maxWidth: "100%", flexWrap: "wrap", gap: 6 }}>
+            <button
+              className={`tab${isOverall ? " on" : ""}`}
+              onClick={() => setSelectedSector("Overall")}
+              style={{ flexShrink: 0, whiteSpace: "nowrap" }}
+            >
+              Overall
+            </button>
             {sorted.map(s => {
-              const isSelected = s.name === activeSectorName;
+              const isSelected = !isOverall && s.name === selectedSector;
               return (
                 <button
                   key={s.name}
@@ -205,11 +208,15 @@ function HeatmapInner() {
 
       <div className="fbar">
         <button className="chip on">Color: % change</button>
-        {activeSector && (
+        {isOverall ? (
+          <span style={{ fontSize: ".72rem", color: "var(--text-hi)", transform: "translateY(10px)" }}>
+            {`${membersShown} ${tab === 0 ? "stocks" : `${TABS[tab]} member${membersShown === 1 ? "" : "s"}`} in the live universe`}
+          </span>
+        ) : activeSector ? (
           <span style={{ fontSize: ".72rem", color: "var(--text-hi)", transform: "translateY(10px)" }}>
             {`${activeSector.items.length} ${activeSector.name} member${activeSector.items.length === 1 ? "" : "s"} in the live universe`}
           </span>
-        )}
+        ) : null}
         <div className="spacer" />
         <div
           style={{
@@ -271,7 +278,117 @@ function HeatmapInner() {
             )}
           </div>
         )}
-        {!noMap && activeSector && (() => {
+        {/* ── Overall Multi-Sector Treemap ── */}
+        {isOverall && !noMap && sorted.length > 0 && (() => {
+          const sectorItems   = sorted.map(g => ({ key: g.name, weight: g.items.reduce((s, i) => s + i[1], 0) }));
+          const sectorLayout  = bisect(sectorItems, 0, 0, 100, 100);
+          const sectorRectMap = Object.fromEntries(sectorLayout.map(r => [r.key, r]));
+
+          return (
+            <div style={{ position: "absolute", inset: 0, padding: 2, boxSizing: "border-box" }}>
+              {sorted.map(g => {
+                const lr = sectorRectMap[g.name];
+                if (!lr) return null;
+                const stocksSorted = [...g.items].sort((a, b) => b[1] - a[1]);
+                const stockLayout  = bisect(stocksSorted.map(([sym, mc]) => ({ key: sym, weight: mc })), 0, 0, 100, 100);
+                const stockMap     = Object.fromEntries(stockLayout.map(r => [r.key, r]));
+                const sectPxW      = (lr.w / 100) * APPROX_W;
+                const sectPxH      = (lr.h / 100) * APPROX_H;
+
+                return (
+                  <div key={g.name} style={{
+                    position: "absolute",
+                    left: `${lr.x}%`, top: `${lr.y}%`,
+                    width: `${lr.w}%`, height: `${lr.h}%`,
+                    padding: 2, boxSizing: "border-box",
+                  }}>
+                    <div style={{
+                      width: "100%", height: "100%", borderRadius: 6,
+                      overflow: "hidden", border: "1px solid rgba(255,255,255,.07)",
+                      position: "relative", background: "var(--surface-0)",
+                      display: "flex", flexDirection: "column",
+                    }}>
+                      {/* Sector header */}
+                      <div
+                        onClick={() => setSelectedSector(g.name)}
+                        title={`Click to focus on ${g.name}`}
+                        style={{
+                          height: HEADER_H, minHeight: HEADER_H, flexShrink: 0,
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "0 7px", cursor: "pointer",
+                          background: "rgba(0,0,0,.35)", borderBottom: "1px solid rgba(255,255,255,.06)", gap: 4,
+                        }}
+                      >
+                        <span style={{
+                          fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em",
+                          textTransform: "uppercase", color: "var(--text-hi)",
+                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        }}>{g.name}</span>
+                        <span style={{
+                          fontSize: ".62rem", fontFamily: "var(--f-mono)", fontWeight: 700,
+                          color: g.pctChange == null ? "var(--text-dim-solid)" : g.pctChange >= 0 ? "var(--up)" : "var(--down)", flexShrink: 0,
+                        }}>{g.pctChange == null ? <NotAvailable /> : sign(g.pctChange)}</span>
+                      </div>
+
+                      {/* Stock cells */}
+                      <div style={{ position: "relative", flex: 1 }}>
+                        {stocksSorted.map(([sym, mcap, chg]) => {
+                          const sr = stockMap[sym];
+                          if (!sr) return null;
+                          const hc      = heatCol(chg);
+                          const cellPxW = (sr.w / 100) * sectPxW;
+                          const cellPxH = (sr.h / 100) * (sectPxH - HEADER_H);
+                          const minDim  = Math.min(cellPxW, cellPxH);
+                          const showText   = minDim > 18 && cellPxW > 24;
+                          const showChange = minDim > 32 && cellPxW > 40;
+                          const fs = Math.max(0.56, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 72));
+
+                          return (
+                            <div key={sym}
+                              onClick={e => { e.stopPropagation(); setSelectedSym(sym); }}
+                              onMouseEnter={e => showHover(e, sym, chg, mcap)}
+                              onMouseLeave={hideHover}
+                              title={`${sym}  ${sign(chg)}`}
+                              style={{
+                                position: "absolute",
+                                left: `${sr.x}%`, top: `${sr.y}%`,
+                                width: `${sr.w}%`, height: `${sr.h}%`,
+                                background: hc.bg, cursor: "pointer",
+                                display: "flex", flexDirection: "column",
+                                justifyContent: "center", alignItems: "center",
+                                boxSizing: "border-box", border: "1px solid rgba(0,0,0,.18)",
+                                overflow: "hidden", padding: 2, transition: "filter .1s",
+                              }}
+                              onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
+                              onMouseOut={e => (e.currentTarget.style.filter = "")}
+                            >
+                              {showText && (
+                                <>
+                                  <span style={{
+                                    fontFamily: "var(--f-mono)", fontWeight: 700,
+                                    color: hc.fg, fontSize: `${fs}rem`,
+                                    lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
+                                  }}>{sym}</span>
+                                  {showChange && (
+                                    <span style={{
+                                      fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
+                                      fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 3,
+                                    }}>{sign(chg)}</span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+        {!isOverall && !noMap && activeSector && (() => {
           const stocksSorted = [...activeSector.items].sort((a, b) => b[1] - a[1]);
 
           const checkLayout = (cutoff: number) => {
@@ -526,7 +643,7 @@ function HeatmapInner() {
                     color: "var(--text-hi)",
                   }}
                 >
-                  +{moreModal.length} More {activeSectorName ? `${activeSectorName} ` : ""}Stocks
+                  +{moreModal.length} More {activeSector?.name ? `${activeSector.name} ` : ""}Stocks
                 </div>
                 <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
                   Smaller market-cap constituents bundled for readability · Click to view stock details

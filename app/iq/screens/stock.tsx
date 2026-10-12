@@ -19,7 +19,7 @@ import { useLiveQuotes, extendedSession } from "../live-quotes-context";
 import { EarningsPlaybook, playbookReports } from "./EarningsPlaybook";
 import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
 // import { useLiveQuotes } from "../live-quotes-context";
-import { EarningsPlaybook } from "./EarningsPlaybook";
+// import { EarningsPlaybook } from "./EarningsPlaybook";
 import { EtfHoldingsView } from "../etf-holdings-view";
 
 const POPULAR_16_ETFS = new Set([

@@ -5,6 +5,7 @@ import { fmtDate } from "../calendar-range";
 import { useIQActions } from "../shell";
 import { DataState, StockLogo, VendorTag, cls, titleCaseLabel } from "../utils";
 import { useApiList } from "../hooks/useApiList";
+import { apiGet } from "../backend";
 import type { AnalystConsensusDoc, CompanyDoc } from "../types";
 
 // Real analyst data from FMP: a current Buy/Hold/Sell consensus per ticker, the
@@ -429,9 +430,82 @@ const ACT_FIRST_DIR: Record<ActSortKey, "asc" | "desc"> = {
   ticker: "asc", firm: "asc", action: "asc", grade: "asc", pt: "desc", upside: "desc", date: "desc",
 };
 
+/**
+ * Calculates milliseconds until the next scheduled CST refresh milestone:
+ * 8:00 AM CST, 12:00 PM CST, 4:00 PM CST (America/Chicago).
+ * Adds a 15-second grace window so the backend Cloud Scheduler run has finished writing.
+ */
+function getNextCstRefreshDelayMs(): number {
+  const now = new Date();
+  const targets = [
+    { h: 8, m: 0, s: 15 },
+    { h: 12, m: 0, s: 15 },
+    { h: 16, m: 0, s: 15 },
+  ];
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+  }).formatToParts(now);
+
+  const p: Record<string, number> = {};
+  for (const part of parts) {
+    if (part.type !== "literal") p[part.type] = parseInt(part.value, 10);
+  }
+
+  const currentSecs = (p.hour || 0) * 3600 + (p.minute || 0) * 60 + (p.second || 0);
+
+  let minDiffSecs = Infinity;
+  for (const t of targets) {
+    const targetSecs = t.h * 3600 + t.m * 60 + t.s;
+    let diff = targetSecs - currentSecs;
+    if (diff <= 0) {
+      diff += 24 * 3600; // scheduled for tomorrow
+    }
+    if (diff < minDiffSecs) {
+      minDiffSecs = diff;
+    }
+  }
+
+  return Math.max(5000, minDiffSecs * 1000);
+}
+
 export function AnalystScreen() {
   const { openStock, openStockFull } = useIQActions();
-  const { data: liveConsensus, loading: consensusLoading } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
+  const { data: initialConsensus, loading: consensusLoading } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
+  const [liveConsensus, setLiveConsensus] = useState<AnalystConsensusDoc[]>([]);
+
+  useEffect(() => {
+    if (initialConsensus.length > 0) {
+      setLiveConsensus(initialConsensus);
+    }
+  }, [initialConsensus]);
+
+  // Scheduled refresh every day at 8 AM CST, 12 PM CST, and 4 PM CST (America/Chicago)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const scheduleNext = () => {
+      const delay = getNextCstRefreshDelayMs();
+      timer = setTimeout(async () => {
+        try {
+          const fresh = await apiGet<AnalystConsensusDoc[]>("/market-data/analyst-actions");
+          if (fresh && Array.isArray(fresh) && fresh.length > 0) {
+            setLiveConsensus(fresh);
+          }
+        } catch (e) {
+          console.warn("Scheduled analyst-actions refresh failed:", e);
+        }
+        scheduleNext();
+      }, delay);
+    };
+    scheduleNext();
+    return () => clearTimeout(timer);
+  }, []);
   const { data: companies } = useApiList<CompanyDoc>("/market-data/companies");
   const [selectedActionItem, setSelectedActionItem] = useState<SelectedAnalystAction | null>(null);
   const [view, setView] = useState<View>("perfirm");// top-level tab
