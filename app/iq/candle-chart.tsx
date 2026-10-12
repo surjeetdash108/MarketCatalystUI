@@ -129,6 +129,38 @@ function axisLabel(t: number, intraday: boolean, prevT: number | null, spanMs: n
   return spanMs < 300 * 86_400_000 ? fmtDay(t) : fmtMonthYear(t);
 }
 
+/**
+ * "as of" stamp for a chart's toolbar: when the newest PRICE on the chart is
+ * from, in exchange time — not the backend's fetch time, which on a cached
+ * daily series can be a weekend evening and read as a wrong clock.
+ *
+ * A live tick wins (it is folded onto the chart); else the last bar — its
+ * clock for intraday candles, its session ("Oct 9 close") for daily-and-up,
+ * or just the day while that session is still trading.
+ */
+export function chartAsOfLabel(
+  bars: ReadonlyArray<{ t: number }> | undefined,
+  interval: BarInterval,
+  tickAt?: number | null,
+): string | null {
+  const last = bars?.length ? bars[bars.length - 1].t : null;
+  if (tickAt != null && (last == null || tickAt >= last)) return `${fmtDay(tickAt)}, ${fmtClock(tickAt)} ET`;
+  if (last == null) return null;
+  if (isIntradayInterval(interval)) return `${fmtDay(last)}, ${fmtClock(last)} ET`;
+  const now = Date.now();
+  const trading = etSessionDate(last) === etSessionDate(now) && etMinuteOfDay(now) < 16 * 60;
+  return trading ? `${fmtDay(last)} (session open)` : `${fmtDay(last)} close`;
+}
+
+/** When the server last fetched the bars (backend createdAt), in the viewer's own zone — the "as of" tooltip. */
+export function fmtFetchedAt(asOf: string | null | undefined): string | undefined {
+  if (!asOf) return undefined;
+  const d = new Date(asOf);
+  return isNaN(d.getTime())
+    ? undefined
+    : `Data fetched ${d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}`;
+}
+
 /** Crosshair date tag — always precise enough to identify the bar. */
 function crossLabel(t: number, intraday: boolean, monthly: boolean): string {
   if (intraday) return `${fmtDay(t)} ${fmtClock(t)}`;
@@ -1479,7 +1511,7 @@ function CandleChartInner({
           Indicators
         </button>
         <QuickStudyButtons studies={studies} />
-        <span className="cc-hint">scroll to zoom · drag to pan · double-click to reset · click E for earnings</span>
+        <span className="cc-hint" title="Scroll to zoom · drag to pan · double-click to reset · click an E marker for earnings details">Scroll: zoom · Drag: pan · Double-click: reset · Click <b>E</b>: earnings</span>
         <span className="cc-spacer" />
         {toolbarEnd}
         <button type="button" className="cc-tvbtn cc-log" aria-pressed={prefs.log}

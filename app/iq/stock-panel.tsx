@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { fmtDate, etTodayIso } from "./calendar-range";
 import dynamic from "next/dynamic";
-import { CandleChart, ChartSelect, IntervalMenu, CHART_TYPE_OPTIONS, DataState, Spark, StockLogo, VendorTag, type EarnQ, type BarInterval } from "./utils";
+import { CandleChart, ChartSelect, IntervalMenu, chartAsOfLabel, fmtFetchedAt, CHART_TYPE_OPTIONS, DataState, Spark, StockLogo, VendorTag, type EarnQ, type BarInterval } from "./utils";
 import { ExpandBtn } from "./shell";
 import { useApiList } from "./hooks/useApiList";
 import { useApiResource } from "./hooks/useApiResource";
@@ -251,15 +251,6 @@ function useLiveEarningsForSym(sym: string, nextEarningsDate?: string | null): {
 
 type ChartType = "Candles" | "Hollow" | "Bars" | "Line" | "Area";
 
-/** Bars freshness stamp (backend createdAt) — same format as stock details. */
-function fmtAsOf(asOf: string | null | undefined): string | null {
-  if (!asOf) return null;
-  const d = new Date(asOf);
-  return isNaN(d.getTime())
-    ? asOf
-    : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-}
-
 /**
  * Data + controls for a panel chart, driven exactly like the stock-details
  * chart: candle SIZE (not a date range), live delayed tick folded onto the
@@ -284,7 +275,7 @@ function usePanelChart(
   // Same derivation as stock details, so a report lands on the same bar with
   // the same numbers here as it does there.
   const chartEarnings = useChartEarnings(sym, showEarnings);
-  const asOfLabel = fmtAsOf(asOf);
+  const asOfLabel = chartAsOfLabel(realBars, interval, tick?.at);
 
   const chartProps = {
     sym, tf: interval, interval, chartType: chartType.toLowerCase(), realBars, loading,
@@ -299,7 +290,7 @@ function usePanelChart(
   const freshness = <>
     <VendorTag v="polygon" />
     {realBars && <span className="cc-chip live">live</span>}
-    {asOfLabel && <span className="cc-asof">as of {asOfLabel}</span>}
+    {asOfLabel && <span className="cc-asof" title={fmtFetchedAt(asOf)}>as of {asOfLabel}</span>}
   </>;
   return { interval, chartType, showEarnings, live, chartProps, freshness };
 }

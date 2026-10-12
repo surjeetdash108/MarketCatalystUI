@@ -5,7 +5,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, intervalLabel, CHART_TYPE_OPTIONS, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
+import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, chartAsOfLabel, fmtFetchedAt, intervalLabel, CHART_TYPE_OPTIONS, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
@@ -941,16 +941,9 @@ export function StockScreen({
   // derived stats below (EPS, 52w positioning) stay pinned to the snapshot.
   const hq = useHeadlineQuote(sym, live, { price: data.price, pctChange: data.pctChange });
   const { dispPrice } = hq;
-  // Freshness stamp for the price-chart bars (backend createdAt), surfaced by the
-  // chart toolbar in the same muted style as the header's delayed-quote marker
-  // (BUG-DATA-008).
-  const barsAsOfLabel = (() => {
-    if (!barsAsOf) return null;
-    const d = new Date(barsAsOf);
-    return isNaN(d.getTime())
-      ? barsAsOf
-      : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-  })();
+  // "as of" stamp: when the newest price on the chart is from, in ET; the
+  // backend fetch time (createdAt, BUG-DATA-008) moves to its tooltip.
+  const barsAsOfLabel = chartAsOfLabel(realBars, barInterval, live.tick?.at);
 
   // v is in $B. Below $1B, show millions so micro-caps (e.g. GAUZ ≈ $9M) read
   // "$9.1M" rather than rounding to a meaningless "$0.0B".
@@ -1415,7 +1408,7 @@ export function StockScreen({
                   toolbarEnd={<>
                     <VendorTag v="polygon" />
                     {realBars && <span className="cc-chip live">live</span>}
-                    {barsAsOfLabel && <span className="cc-asof">as of {barsAsOfLabel}</span>}
+                    {barsAsOfLabel && <span className="cc-asof" title={fmtFetchedAt(barsAsOf)}>as of {barsAsOfLabel}</span>}
                   </>}
                 />
               </div>
