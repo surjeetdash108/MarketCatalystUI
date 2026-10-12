@@ -519,7 +519,7 @@ function EarnPane({ hist10 }: { hist10: EarnQ[] }) {
 }
 
 
-export type StockTab = "overview" | "analysis" | "earnings" | "financials" | "holdings" | "news";
+export type StockTab = "overview" | "analysis" | "peers" | "earnings" | "financials" | "holdings" | "news";
 
 export function StockScreen({
   initialSym,
@@ -651,6 +651,8 @@ export function StockScreen({
   const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
   // Peers list sort by session % change; default desc (best performers first).
   const [peerSort, setPeerSort] = useState<"desc" | "asc">("desc");
+  const [peerSortBy, setPeerSortBy] = useState<"c" | "mcap" | "rs" | "sym">("c");
+  const [peerQuery, setPeerQuery] = useState<string>("");
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
 
   // Tab shown below the persistent header + chart, in the full (non-embedded)
@@ -1095,7 +1097,15 @@ export function StockScreen({
   // leaders only if none of the related tickers are in the synced universe.
   // Raw related-tickers Polygon returned for this symbol. This is "how many
   // peers are in the response".
-  type PeerRow = { t: string; c: number; rsRating: number | null; name: string | null };
+  type PeerRow = {
+    t: string;
+    c: number;
+    price: number | null;
+    marketCap: number | null;
+    peRatio: number | null;
+    rsRating: number | null;
+    name: string | null;
+  };
   const rawPeerTickers = (liveCompany?.peers ?? []).filter(t => t !== sym);
   const inUniverse = new Set(companies.map(c => c.ticker));
   // Peers not in the synced universe are priced on demand (one snapshot call),
@@ -1105,9 +1115,29 @@ export function StockScreen({
 
   const relatedPeersAll: PeerRow[] = rawPeerTickers.map(t => {
     const c = companies.find(x => x.ticker === t);
-    if (c && c.pctChange != null) return { t: c.ticker, c: c.pctChange as number, rsRating: c.rsRating, name: c.name };
+    if (c && c.pctChange != null) {
+      return {
+        t: c.ticker,
+        c: c.pctChange as number,
+        price: c.price ?? null,
+        marketCap: c.marketCap != null ? c.marketCap / 1e9 : null,
+        peRatio: c.peRatio ?? null,
+        rsRating: c.rsRating,
+        name: c.name,
+      };
+    }
     const q = quoteByTicker.get(t);
-    if (q && q.pctChange != null) return { t, c: q.pctChange, rsRating: null, name: null };
+    if (q && q.pctChange != null) {
+      return {
+        t,
+        c: q.pctChange,
+        price: q.price ?? null,
+        marketCap: null,
+        peRatio: null,
+        rsRating: null,
+        name: null,
+      };
+    }
     return null;
   }).filter((x): x is PeerRow => !!x);
   // Fallback to same-sector RS leaders only if none of the related tickers resolve.
@@ -1116,23 +1146,64 @@ export function StockScreen({
     : companies
         .filter(c => c.sector === group && c.ticker !== sym && c.pctChange != null)
         .sort((a, b) => (b.rsRating ?? 0) - (a.rsRating ?? 0))
-        .map(c => ({ t: c.ticker, c: c.pctChange as number, rsRating: c.rsRating, name: c.name }));
+        .map(c => ({
+          t: c.ticker,
+          c: c.pctChange as number,
+          price: c.price ?? null,
+          marketCap: c.marketCap != null ? c.marketCap / 1e9 : null,
+          peRatio: c.peRatio ?? null,
+          rsRating: c.rsRating,
+          name: c.name,
+        }));
   const peers = peersAll;                    // card shows ALL peers (scrolls within the card body when they overflow)
   const peersTotal = peersAll.length;
   const pcs = peersAll.map(x => x.c);
   const pmx = pcs.length ? Math.max(...pcs) : 0;
   const pmn = pcs.length ? Math.min(...pcs) : 0;
+  const avgPeerChange = pcs.length ? pcs.reduce((a, b) => a + b, 0) / pcs.length : null;
+  const leaderPeer = peersAll.find(x => x.c === pmx);
+  const laggardPeer = peersAll.find(x => x.c === pmn);
+
   // User-controlled ordering by session % change (asc/desc). Leader/Laggard
   // tags still key off pmx/pmn, so they stay correct regardless of sort.
   const sortedPeers = [...peersAll].sort((a, b) => (peerSort === "asc" ? a.c - b.c : b.c - a.c));
 
-  // Tab bar config — mirrors the stock-detail design's Overview/Analysis/
+  const displayPeers = useMemo(() => {
+    let list = [...peersAll];
+    if (peerQuery.trim()) {
+      const q = peerQuery.trim().toUpperCase();
+      list = list.filter(p => p.t.toUpperCase().includes(q) || (p.name && p.name.toUpperCase().includes(q)));
+    }
+    list.sort((a, b) => {
+      if (peerSortBy === "c") {
+        return peerSort === "desc" ? b.c - a.c : a.c - b.c;
+      }
+      if (peerSortBy === "mcap") {
+        const ma = a.marketCap ?? -1;
+        const mb = b.marketCap ?? -1;
+        return peerSort === "desc" ? mb - ma : ma - mb;
+      }
+      if (peerSortBy === "rs") {
+        const rsa = a.rsRating ?? -1;
+        const rsb = b.rsRating ?? -1;
+        return peerSort === "desc" ? rsb - rsa : rsa - rsb;
+      }
+      if (peerSortBy === "sym") {
+        return peerSort === "desc" ? b.t.localeCompare(a.t) : a.t.localeCompare(b.t);
+      }
+      return 0;
+    });
+    return list;
+  }, [peersAll, peerQuery, peerSortBy, peerSort]);
+
+  // Tab bar config — mirrors the stock-detail design's Overview/Analysis/Peers/
   // Earnings/Financials/Holdings/News split (the price chart sits on
-  // Overview, Peers in its rail). Counts are real data (quarters on file /
-  // articles fetched), not decorative.
+  // Overview, Peers has its own dedicated comparison section). Counts are real
+  // data (quarters on file / articles fetched / peer counts), not decorative.
   const ALL_TABS: { id: StockTab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
     { id: "analysis", label: "Analysis" },
+    { id: "peers", label: "Peers", count: peersTotal || undefined },
     { id: "earnings", label: "Earnings", count: hist10.length || undefined },
     { id: "financials", label: "Financials" },
     { id: "holdings", label: "Holdings" },
@@ -2711,6 +2782,323 @@ export function StockScreen({
             </div>
           )}
 
+          {activeTab === "peers" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Header Benchmark Card */}
+              <div className="card" style={{ padding: "16px 20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
+                        Industry Peers & Competitors
+                      </h2>
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".7rem", textTransform: "uppercase" }}>
+                        {data.sector ? titleCaseLabel(data.sector) : "Direct Peers"}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", marginTop: 4 }}>
+                      Benchmarking {sym} against {peersTotal} peer companies with live market data
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <VendorTag v="polygon" />
+                  </div>
+                </div>
+
+                {/* 4 Summary Cards */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: 12,
+                }}>
+                  {/* Target Stock */}
+                  <div style={{
+                    background: "var(--surface-1)",
+                    border: "1px solid var(--border-soft)",
+                    borderRadius: "var(--r-sm)",
+                    padding: "10px 14px",
+                  }}>
+                    <div style={{ fontSize: ".68rem", textTransform: "uppercase", color: "var(--text-dim-solid)", fontWeight: 700 }}>
+                      Target Stock ({sym})
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+                      <span className="mono" style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)" }}>
+                        {p != null ? "$" + (p >= 10 ? p.toFixed(2) : p.toFixed(3)) : <NotAvailable />}
+                      </span>
+                      {data.pctChange != null && (
+                        <span className={`pill ${cls(data.pctChange)}`} style={{ fontSize: ".72rem" }}>
+                          {sign(data.pctChange)}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                      {mc != null ? `Mkt Cap ${cap(mc)}` : ""}
+                    </div>
+                  </div>
+
+                  {/* Peer Average Return */}
+                  <div style={{
+                    background: "var(--surface-1)",
+                    border: "1px solid var(--border-soft)",
+                    borderRadius: "var(--r-sm)",
+                    padding: "10px 14px",
+                  }}>
+                    <div style={{ fontSize: ".68rem", textTransform: "uppercase", color: "var(--text-dim-solid)", fontWeight: 700 }}>
+                      Peer Group Average
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+                      <span className={`mono ${avgPeerChange != null ? cls(avgPeerChange) : ""}`} style={{ fontSize: "1.1rem", fontWeight: 700 }}>
+                        {avgPeerChange != null ? sign(avgPeerChange) : <NotAvailable />}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                      {data.pctChange != null && avgPeerChange != null ? (
+                        data.pctChange >= avgPeerChange
+                          ? `${sym} +${(data.pctChange - avgPeerChange).toFixed(2)}% vs peers`
+                          : `${sym} ${(data.pctChange - avgPeerChange).toFixed(2)}% vs peers`
+                      ) : "Across all tracked peers"}
+                    </div>
+                  </div>
+
+                  {/* Group Leader */}
+                  <div style={{
+                    background: "var(--surface-1)",
+                    border: "1px solid var(--border-soft)",
+                    borderRadius: "var(--r-sm)",
+                    padding: "10px 14px",
+                  }}>
+                    <div style={{ fontSize: ".68rem", textTransform: "uppercase", color: "var(--text-dim-solid)", fontWeight: 700 }}>
+                      Group Leader
+                    </div>
+                    {leaderPeer ? (
+                      <div style={{ cursor: "pointer" }} onClick={() => openStock(leaderPeer.t)}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                          <StockLogo sym={leaderPeer.t} size={18} />
+                          <span className="mono" style={{ fontWeight: 700, fontSize: "1rem", color: "var(--brand-2)" }}>
+                            {leaderPeer.t}
+                          </span>
+                          <span className="pill up" style={{ fontSize: ".72rem", marginLeft: "auto" }}>
+                            {sign(leaderPeer.c)}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {leaderPeer.name || "Top Performer"}
+                        </div>
+                      </div>
+                    ) : <NotAvailable />}
+                  </div>
+
+                  {/* Group Laggard */}
+                  <div style={{
+                    background: "var(--surface-1)",
+                    border: "1px solid var(--border-soft)",
+                    borderRadius: "var(--r-sm)",
+                    padding: "10px 14px",
+                  }}>
+                    <div style={{ fontSize: ".68rem", textTransform: "uppercase", color: "var(--text-dim-solid)", fontWeight: 700 }}>
+                      Group Laggard
+                    </div>
+                    {laggardPeer ? (
+                      <div style={{ cursor: "pointer" }} onClick={() => openStock(laggardPeer.t)}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                          <StockLogo sym={laggardPeer.t} size={18} />
+                          <span className="mono" style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)" }}>
+                            {laggardPeer.t}
+                          </span>
+                          <span className="pill dn" style={{ fontSize: ".72rem", marginLeft: "auto" }}>
+                            {sign(laggardPeer.c)}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {laggardPeer.name || "Lowest Performer"}
+                        </div>
+                      </div>
+                    ) : <NotAvailable />}
+                  </div>
+                </div>
+              </div>
+
+              {/* Peer Comparison Table Card */}
+              <div className="card">
+                <div className="card-h" style={{ flexWrap: "wrap", gap: 10, padding: "12px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <h3 style={{ margin: 0 }}>Peer Constituent Breakdown ({displayPeers.length})</h3>
+                    {/* Search box */}
+                    <input
+                      type="text"
+                      placeholder="Filter by symbol or name..."
+                      value={peerQuery}
+                      onChange={e => setPeerQuery(e.target.value)}
+                      style={{
+                        background: "var(--surface-1)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--r-sm)",
+                        padding: "4px 8px",
+                        fontSize: ".75rem",
+                        color: "var(--text-hi)",
+                        outline: "none",
+                        width: 190,
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Sort:</span>
+                    <button
+                      className={`btn ${peerSortBy === "c" ? "on" : ""}`}
+                      onClick={() => {
+                        if (peerSortBy === "c") setPeerSort(s => (s === "desc" ? "asc" : "desc"));
+                        else { setPeerSortBy("c"); setPeerSort("desc"); }
+                      }}
+                      style={{ padding: "3px 8px", fontSize: ".68rem", borderRadius: 6 }}
+                    >
+                      % Change {peerSortBy === "c" ? (peerSort === "desc" ? "▼" : "▲") : ""}
+                    </button>
+                    <button
+                      className={`btn ${peerSortBy === "mcap" ? "on" : ""}`}
+                      onClick={() => {
+                        if (peerSortBy === "mcap") setPeerSort(s => (s === "desc" ? "asc" : "desc"));
+                        else { setPeerSortBy("mcap"); setPeerSort("desc"); }
+                      }}
+                      style={{ padding: "3px 8px", fontSize: ".68rem", borderRadius: 6 }}
+                    >
+                      Market Cap {peerSortBy === "mcap" ? (peerSort === "desc" ? "▼" : "▲") : ""}
+                    </button>
+                    <button
+                      className={`btn ${peerSortBy === "rs" ? "on" : ""}`}
+                      onClick={() => {
+                        if (peerSortBy === "rs") setPeerSort(s => (s === "desc" ? "asc" : "desc"));
+                        else { setPeerSortBy("rs"); setPeerSort("desc"); }
+                      }}
+                      style={{ padding: "3px 8px", fontSize: ".68rem", borderRadius: 6 }}
+                    >
+                      RS Rating {peerSortBy === "rs" ? (peerSort === "desc" ? "▼" : "▲") : ""}
+                    </button>
+                    <button
+                      className={`btn ${peerSortBy === "sym" ? "on" : ""}`}
+                      onClick={() => {
+                        if (peerSortBy === "sym") setPeerSort(s => (s === "desc" ? "asc" : "desc"));
+                        else { setPeerSortBy("sym"); setPeerSort("asc"); }
+                      }}
+                      style={{ padding: "3px 8px", fontSize: ".68rem", borderRadius: 6 }}
+                    >
+                      Ticker {peerSortBy === "sym" ? (peerSort === "desc" ? "▼" : "▲") : ""}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="card-b" style={{ padding: 0 }}>
+                  {displayPeers.length ? (
+                    <div className="table-wrap" style={{ overflowX: "auto" }}>
+                      <table className="tbl" style={{ width: "100%", fontSize: ".8rem" }}>
+                        <thead>
+                          <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
+                            <th style={{ textAlign: "left", padding: "10px 14px" }}>Company</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Price</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Today's Change</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Market Cap</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>P/E Ratio</th>
+                            <th style={{ textAlign: "center", padding: "10px 14px" }}>RS Rating</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>vs {sym}</th>
+                            <th style={{ textAlign: "center", padding: "10px 14px" }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displayPeers.map(peer => {
+                            const isCurrent = peer.t === sym;
+                            const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
+                            const diff = data.pctChange != null ? peer.c - data.pctChange : null;
+
+                            return (
+                              <tr
+                                key={peer.t}
+                                onClick={() => openStock(peer.t)}
+                                style={{
+                                  cursor: "pointer",
+                                  borderBottom: "1px solid var(--border-soft)",
+                                  background: isCurrent ? "rgba(0,180,216,0.06)" : undefined,
+                                  transition: "background .12s ease",
+                                }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isCurrent ? "rgba(0,180,216,0.12)" : "var(--surface-1)"; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isCurrent ? "rgba(0,180,216,0.06)" : ""; }}
+                              >
+                                <td style={{ padding: "10px 14px" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    <StockLogo sym={peer.t} size={28} />
+                                    <div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                        <span className="mono" style={{ fontWeight: 700, color: isCurrent ? "var(--brand-2)" : "var(--text-hi)" }}>
+                                          {peer.t}
+                                        </span>
+                                        {isCurrent && <span className="pill" style={{ fontSize: ".58rem", background: "var(--brand-2)", color: "#000" }}>CURRENT</span>}
+                                        {tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`} style={{ fontSize: ".58rem" }}>{tag}</span>}
+                                      </div>
+                                      <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {peer.name || "—"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", fontWeight: 600 }}>
+                                  {peer.price != null ? "$" + (peer.price >= 10 ? peer.price.toFixed(2) : peer.price.toFixed(3)) : "—"}
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
+                                  <span className={`pill ${cls(peer.c)}`} style={{ fontWeight: 700, padding: "3px 8px" }}>
+                                    {sign(peer.c)}
+                                  </span>
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
+                                  {peer.marketCap != null ? cap(peer.marketCap) : "—"}
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
+                                  {peer.peRatio != null ? peer.peRatio.toFixed(1) : "—"}
+                                </td>
+                                <td style={{ textAlign: "center", padding: "10px 14px" }}>
+                                  {peer.rsRating != null ? (
+                                    <span className="pill" style={{
+                                      background: peer.rsRating >= 70 ? "rgba(34,197,94,.15)" : peer.rsRating < 40 ? "rgba(239,68,68,.15)" : "var(--surface-3)",
+                                      color: peer.rsRating >= 70 ? "var(--up)" : peer.rsRating < 40 ? "var(--down)" : "var(--text-dim-solid)",
+                                      fontWeight: 700,
+                                      fontSize: ".66rem",
+                                    }}>
+                                      RS {peer.rsRating}
+                                    </span>
+                                  ) : "—"}
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", fontSize: ".75rem" }}>
+                                  {diff != null ? (
+                                    <span style={{ color: diff >= 0 ? "var(--up)" : "var(--down)" }}>
+                                      {diff > 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`}
+                                    </span>
+                                  ) : "—"}
+                                </td>
+                                <td style={{ textAlign: "center", padding: "10px 14px" }}>
+                                  <button
+                                    className="link"
+                                    onClick={e => { e.stopPropagation(); openStock(peer.t); }}
+                                    style={{
+                                      background: "none", border: "none", color: "var(--brand-2)",
+                                      fontSize: ".74rem", fontWeight: 600, cursor: "pointer",
+                                    }}
+                                  >
+                                    View →
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ padding: 24 }}>
+                      <DataState loading={companiesLoading} label={peerQuery ? "No peers match your search query." : "No live peers found for this company."} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
 
         {showRail && (
@@ -2744,7 +3132,7 @@ export function StockScreen({
                     </button>
                   )}
                   <VendorTag v="polygon" />
-                  {peersTotal > peers.length && <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>}
+                  <span className="link" onClick={() => setActiveTab("peers")}>Full comparison →</span>
                 </div>
               </div>
               <div className="card-b" style={{ paddingTop: 6, maxHeight: 460, overflowY: "auto" }}>
