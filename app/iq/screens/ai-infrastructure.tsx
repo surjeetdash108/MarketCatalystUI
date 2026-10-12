@@ -700,6 +700,17 @@ export function AiInfrastructureScreen() {
         </div> */}
 
         <div className="col-12">
+          <h2 style={{
+            fontSize: "1.15rem",
+            fontWeight: 700,
+            color: "var(--text-hi)",
+            margin: "0 0 16px 0",
+            letterSpacing: "-0.01em",
+            fontFamily: "var(--f-display)",
+            paddingLeft:"10px"
+          }}>
+            Companies shaping up the AI Infrastructure buildout
+          </h2>
           {themes.length === 0 ? (
             <DataState
               loading={loading}

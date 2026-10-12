@@ -1,14 +1,26 @@
 "use client";
 
-import type { OHLCBar } from "../utils";
+import type { BarInterval, OHLCBar } from "../candle-chart";
 import { useApiResource } from "./useApiResource";
 
 interface BarsResponse {
   ticker: string;
-  tf: string;
   bars: Array<{ t: number; o: number; h: number; l: number; c: number; v: number; vw: number | null }>;
   source: "memory" | "firestore" | "vendor";
   asOf: string;
+}
+
+type BarsResult = { bars: OHLCBar[] | undefined; loading: boolean; asOf?: string; source?: BarsResponse["source"] };
+
+function useBarsResource(url: string | null): BarsResult {
+  const { data, loading } = useApiResource<BarsResponse>(url);
+  const bars = !data || data.bars.length < 2
+    ? undefined
+    : data.bars.map((b) => ({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
+  // Surface the backend's freshness stamp (createdAt) and serving tier additively
+  // (BUG-DATA-008); existing call sites destructure only { bars, loading } and
+  // are unaffected.
+  return { bars, loading, asOf: data?.asOf, source: data?.source };
 }
 
 /**
@@ -23,17 +35,19 @@ export function useBackendBars(
   /** Skip the request entirely when false — used by the chart's moving-average
    *  warm-up fetch, which is only needed while an MA/EMA overlay is on. */
   enabled = true,
-): { bars: OHLCBar[] | undefined; loading: boolean; asOf?: string; source?: BarsResponse["source"] } {
-  const { data, loading } = useApiResource<BarsResponse>(
-    // No ticker yet (e.g. an empty list's chart card) → no request; the
-    // backend rejects an empty ticker with a 400.
-    enabled && sym ? `/live/bars?ticker=${encodeURIComponent(sym)}&tf=${tf}` : null,
+): BarsResult {
+  // No ticker yet (e.g. an empty list's chart card) → no request; the
+  // backend rejects an empty ticker with a 400.
+  return useBarsResource(enabled && sym ? `/live/bars?ticker=${encodeURIComponent(sym)}&tf=${tf}` : null);
+}
+
+/**
+ * Fixed-size candles via GET /live/bars?interval=… (1m…1M, regular session
+ * only for intraday sizes). Shares the backend's stock_bars docs and cache
+ * with the `tf` form; the two parameters are mutually exclusive server-side.
+ */
+export function useIntervalBars(sym: string, interval: BarInterval, enabled = true): BarsResult {
+  return useBarsResource(
+    enabled && sym ? `/live/bars?ticker=${encodeURIComponent(sym)}&interval=${encodeURIComponent(interval)}` : null,
   );
-  const bars = !data || data.bars.length < 2
-    ? undefined
-    : data.bars.map((b) => ({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
-  // Surface the backend's freshness stamp (createdAt) and serving tier additively
-  // (BUG-DATA-008); existing call sites destructure only { bars, loading } and
-  // are unaffected.
-  return { bars, loading, asOf: data?.asOf, source: data?.source };
 }

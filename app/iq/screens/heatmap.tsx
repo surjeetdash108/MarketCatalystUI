@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useIQActions } from "../shell";
@@ -88,10 +88,31 @@ function HeatmapInner() {
 
   // The URL picks the starting tab; a tab the user clicks wins until the URL
   // asks for a different index (e.g. another pop-up link while already here).
-  const urlTab = tabFromParam(useSearchParams().get("index"));
+  const searchParams = useSearchParams();
+  const urlTab = tabFromParam(searchParams.get("index"));
+  const urlSector = searchParams.get("sector");
+
   const [picked, setPicked] = useState<{ tab: number; urlTab: number } | null>(null);
   const tab = picked && picked.urlTab === urlTab ? picked.tab : urlTab;
-  const setTab = (i: number) => setPicked({ tab: i, urlTab });
+
+  // Sector selection: null = Sector Directory Screen; string = Dedicated Sector Heatmap Screen
+  const [selectedSector, setSelectedSector] = useState<string | null>(urlSector || null);
+  const [moreModal, setMoreModal] = useState<[string, number, number][] | null>(null);
+
+  useEffect(() => {
+    if (!moreModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMoreModal(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moreModal]);
+
+  const setTab = (i: number) => {
+    setPicked({ tab: i, urlTab });
+    setSelectedSector(null);
+    setMoreModal(null);
+  };
 
   // Tab 0 = all synced stocks; 1-3 filter to the S&P 500 / Nasdaq-100 / Dow-30
   // members that also exist in the live universe; 4 (Russell 2000) has no set.
@@ -144,27 +165,49 @@ function HeatmapInner() {
   const sorted = [...mergedSectorList].sort(
     (a, b) => b.items.reduce((s, i) => s + i[1], 0) - a.items.reduce((s, i) => s + i[1], 0)
   );
-  const sectorItems   = sorted.map(g => ({ key: g.name, weight: g.items.reduce((s, i) => s + i[1], 0) }));
-  const sectorLayout  = bisect(sectorItems, 0, 0, 100, 100);
-  const sectorRectMap = Object.fromEntries(sectorLayout.map(r => [r.key, r]));
+
+  // Active sector: user-selected sector, else default to the first sector in the sorted list
+  const activeSectorName = selectedSector && sorted.some(g => g.name === selectedSector)
+    ? selectedSector
+    : (sorted[0]?.name ?? null);
+
+  const activeSector = sorted.find(g => g.name === activeSectorName) ?? null;
 
   return (
     <>
-      <div className="page-head">
-        {/* Single line at all widths: never wrap; scroll horizontally if the five
-            index tabs don't fit rather than clipping "Russell 2000". */}
+      <div className="page-head" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* Level 1: Index Selection */}
         <div className="tabs" style={{ maxWidth: "100%", overflowX: "auto", flexWrap: "nowrap" }}>
           {TABS.map((t, i) => (
             <button key={t} className={`tab${i === tab ? " on" : ""}`} onClick={() => setTab(i)} style={{ flexShrink: 0, whiteSpace: "nowrap" }}>{t}</button>
           ))}
         </div>
+
+        {/* Level 2: Sector Selection (multiple rows so all sectors show at once) */}
+        {!noMap && sorted.length > 0 && (
+          <div className="tabs" style={{ maxWidth: "100%", flexWrap: "wrap", gap: 6 }}>
+            {sorted.map(s => {
+              const isSelected = s.name === activeSectorName;
+              return (
+                <button
+                  key={s.name}
+                  className={`tab${isSelected ? " on" : ""}`}
+                  onClick={() => setSelectedSector(s.name)}
+                  style={{ flexShrink: 0, whiteSpace: "nowrap" }}
+                >
+                  {s.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="fbar">
         <button className="chip on">Color: % change</button>
-        {tab !== 0 && !noMap && (
-          <span style={{ fontSize: ".72rem", color: "var(--text-hi)",transform: "translateY(10px)", }}>
-            {`${membersShown} ${TABS[tab]} member${membersShown === 1 ? "" : "s"} in the live universe`}
+        {activeSector && (
+          <span style={{ fontSize: ".72rem", color: "var(--text-hi)", transform: "translateY(10px)" }}>
+            {`${activeSector.items.length} ${activeSector.name} member${activeSector.items.length === 1 ? "" : "s"} in the live universe`}
           </span>
         )}
         <div className="spacer" />
@@ -191,6 +234,7 @@ function HeatmapInner() {
         height: "calc(100vh - 220px)", minHeight: 520,
         borderRadius: 10, overflow: "hidden",
         border: "1px solid var(--border)", background: "var(--bg)",
+        marginBottom: 24,
       }}>
         {mergedSectorList.length === 0 && companiesLoading && !noMap && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -219,8 +263,6 @@ function HeatmapInner() {
                       key={t}
                       className="btn"
                       onClick={() => setTab(i)}
-                      // Inline so the global `.iq-root button` reset can't strip the
-                      // border/fill and leave these looking like plain text.
                       style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--text-hi)", fontWeight: 600 }}
                     >{t}</button>
                   )
@@ -229,101 +271,169 @@ function HeatmapInner() {
             )}
           </div>
         )}
-        {sorted.map(g => {
-          const lr = sectorRectMap[g.name];
-          if (!lr) return null;
-          const stocksSorted = [...g.items].sort((a, b) => b[1] - a[1]);
-          const stockLayout  = bisect(stocksSorted.map(([sym, mc]) => ({ key: sym, weight: mc })), 0, 0, 100, 100);
-          const stockMap     = Object.fromEntries(stockLayout.map(r => [r.key, r]));
-          const sectPxW      = (lr.w / 100) * APPROX_W;
-          const sectPxH      = (lr.h / 100) * APPROX_H;
+        {!noMap && activeSector && (() => {
+          const stocksSorted = [...activeSector.items].sort((a, b) => b[1] - a[1]);
+
+          const checkLayout = (cutoff: number) => {
+            const visible = stocksSorted.slice(0, cutoff);
+            const more = stocksSorted.slice(cutoff);
+            const moreWeight = more.reduce((s, i) => s + i[1], 0);
+
+            const items: LItem[] = visible.map(([sym, mc]) => ({ key: sym, weight: mc }));
+            if (more.length > 0) {
+              items.push({ key: "__more__", weight: moreWeight });
+            }
+
+            const layout = bisect(items, 0, 0, 100, 100);
+            const map = Object.fromEntries(layout.map(r => [r.key, r]));
+
+            for (const [sym] of visible) {
+              const r = map[sym];
+              if (!r) return false;
+              const cellPxW = (r.w / 100) * (APPROX_W - 32);
+              const cellPxH = (r.h / 100) * (APPROX_H - 24);
+              const minW = Math.max(14, sym.length * 4.2);
+              if (cellPxW < minW || cellPxH < 10.5) return false;
+            }
+
+            if (more.length > 0) {
+              const rMore = map["__more__"];
+              if (!rMore) return false;
+              const cellPxW = (rMore.w / 100) * (APPROX_W - 32);
+              const cellPxH = (rMore.h / 100) * (APPROX_H - 24);
+              if (cellPxW < 28 || cellPxH < 14) return false;
+            }
+
+            return true;
+          };
+
+          let bestCutoff = stocksSorted.length;
+          if (stocksSorted.length > 1 && !checkLayout(stocksSorted.length)) {
+            let low = 1;
+            let high = stocksSorted.length - 1;
+            bestCutoff = 1;
+            while (low <= high) {
+              const mid = Math.floor((low + high) / 2);
+              if (checkLayout(mid)) {
+                bestCutoff = mid;
+                low = mid + 1; // Try to include more visible stocks
+              } else {
+                high = mid - 1; // Too many stocks, shrink
+              }
+            }
+          }
+
+          const visibleStocks = stocksSorted.slice(0, bestCutoff);
+          const moreStocks    = stocksSorted.slice(bestCutoff);
+          const moreWeight    = moreStocks.reduce((sum, s) => sum + s[1], 0);
+
+          const finalItems: LItem[] = visibleStocks.map(([sym, mc]) => ({ key: sym, weight: mc }));
+          if (moreStocks.length > 0) {
+            finalItems.push({ key: "__more__", weight: moreWeight });
+          }
+
+          const stockLayout = bisect(finalItems, 0, 0, 100, 100);
+          const stockMap    = Object.fromEntries(stockLayout.map(r => [r.key, r]));
+
+          const moreAvgChg = moreStocks.length > 0
+            ? (moreWeight > 0
+                ? moreStocks.reduce((sum, s) => sum + s[1] * s[2], 0) / moreWeight
+                : moreStocks.reduce((sum, s) => sum + s[2], 0) / moreStocks.length)
+            : 0;
 
           return (
-            <div key={g.name} style={{
-              position: "absolute",
-              left: `${lr.x}%`, top: `${lr.y}%`,
-              width: `${lr.w}%`, height: `${lr.h}%`,
-              padding: 2, boxSizing: "border-box",
-            }}>
-              <div style={{
-                width: "100%", height: "100%", borderRadius: 6,
-                overflow: "hidden", border: "1px solid rgba(255,255,255,.07)",
-                position: "relative", background: "var(--surface-0)",
-                display: "flex", flexDirection: "column",
-              }}>
-                {/* Sector header */}
-                <div onClick={() => openSector(g.name)} style={{
-                  height: HEADER_H, minHeight: HEADER_H, flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "0 7px", cursor: "pointer",
-                  background: "rgba(0,0,0,.3)", borderBottom: "1px solid rgba(255,255,255,.06)", gap: 4,
-                }}>
-                  <span style={{
-                    fontSize: ".6rem", fontWeight: 700, letterSpacing: ".05em",
-                    textTransform: "uppercase", color: "var(--text-hi)",
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}>{g.name}</span>
-                  <span style={{
-                    fontSize: ".62rem", fontFamily: "var(--f-mono)", fontWeight: 700,
-                    color: g.pctChange == null ? "var(--text-dim-solid)" : g.pctChange >= 0 ? "var(--up)" : "var(--down)", flexShrink: 0,
-                  }}>{g.pctChange == null ? <NotAvailable /> : sign(g.pctChange)}</span>
-                </div>
+            <div style={{ position: "absolute", top: 8, bottom: 16, left: 16, right: 16 }}>
+              {visibleStocks.map(([sym, mcap, chg]) => {
+                const sr = stockMap[sym];
+                if (!sr) return null;
+                const hc      = heatCol(chg);
+                const cellPxW = (sr.w / 100) * (APPROX_W - 32);
+                const cellPxH = (sr.h / 100) * (APPROX_H - 24);
+                const showText   = cellPxW >= Math.max(13, sym.length * 4) && cellPxH >= 10;
+                const showChange = cellPxW >= 32 && cellPxH >= 24;
+                const fs = Math.max(0.48, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 70));
 
-                {/* Stock cells */}
-                <div style={{ position: "relative", flex: 1 }}>
-                  {stocksSorted.map(([sym, mcap, chg]) => {
-                    const sr = stockMap[sym];
-                    if (!sr) return null;
-                    const hc      = heatCol(chg);
-                    const cellPxW = (sr.w / 100) * sectPxW;
-                    const cellPxH = (sr.h / 100) * (sectPxH - HEADER_H);
-                    const minDim  = Math.min(cellPxW, cellPxH);
-                    const showText   = minDim > 18 && cellPxW > 24;
-                    const showChange = minDim > 32 && cellPxW > 40;
-                    const fs = Math.max(0.56, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 72));
-
-                    return (
-                      <div key={sym}
-                        onClick={e => { e.stopPropagation(); setSelectedSym(sym); }}
-                        onMouseEnter={e => showHover(e, sym, chg, mcap)}
-                        onMouseLeave={hideHover}
-                        title={`${sym}  ${sign(chg)}`}
-                        style={{
-                          position: "absolute",
-                          left: `${sr.x}%`, top: `${sr.y}%`,
-                          width: `${sr.w}%`, height: `${sr.h}%`,
-                          background: hc.bg, cursor: "pointer",
-                          display: "flex", flexDirection: "column",
-                          justifyContent: "center", alignItems: "center",
-                          boxSizing: "border-box", border: "1px solid rgba(0,0,0,.18)",
-                          overflow: "hidden", padding: 2, transition: "filter .1s",
-                        }}
-                        onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
-                        onMouseOut={e => (e.currentTarget.style.filter = "")}
-                      >
-                        {showText && (
-                          <>
-                            <span style={{
-                              fontFamily: "var(--f-mono)", fontWeight: 700,
-                              color: hc.fg, fontSize: `${fs}rem`,
-                              lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
-                            }}>{sym}</span>
-                            {showChange && (
-                              <span style={{
-                                fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
-                                fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 3,
-                              }}>{sign(chg)}</span>
-                            )}
-                          </>
+                return (
+                  <div key={sym}
+                    onClick={e => { e.stopPropagation(); setSelectedSym(sym); }}
+                    onMouseEnter={e => showHover(e, sym, chg, mcap)}
+                    onMouseLeave={hideHover}
+                    title={`${sym}  ${sign(chg)}`}
+                    style={{
+                      position: "absolute",
+                      left: `${sr.x}%`, top: `${sr.y}%`,
+                      width: `${sr.w}%`, height: `${sr.h}%`,
+                      background: hc.bg, cursor: "pointer",
+                      display: "flex", flexDirection: "column",
+                      justifyContent: "center", alignItems: "center",
+                      boxSizing: "border-box", border: "1px solid rgba(0,0,0,.18)",
+                      overflow: "hidden", padding: 1, transition: "filter .1s",
+                    }}
+                    onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
+                    onMouseOut={e => (e.currentTarget.style.filter = "")}
+                  >
+                    {showText && (
+                      <>
+                        <span style={{
+                          fontFamily: "var(--f-mono)", fontWeight: 700,
+                          color: hc.fg, fontSize: `${fs}rem`,
+                          lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
+                        }}>{sym}</span>
+                        {showChange && (
+                          <span style={{
+                            fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
+                            fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 2,
+                          }}>{sign(chg)}</span>
                         )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+
+              {moreStocks.length > 0 && (() => {
+                const sr = stockMap["__more__"];
+                if (!sr) return null;
+                const hc      = heatCol(moreAvgChg);
+                const cellPxW = (sr.w / 100) * (APPROX_W - 32);
+                const cellPxH = (sr.h / 100) * (APPROX_H - 24);
+                const showChange = cellPxW >= 34 && cellPxH >= 24;
+                const fs = Math.max(0.48, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 70));
+
+                return (
+                  <div key="__more__"
+                    onClick={e => { e.stopPropagation(); setMoreModal(moreStocks); }}
+                    title={`+${moreStocks.length} more stocks (${sign(moreAvgChg)}) — Click to view`}
+                    style={{
+                      position: "absolute",
+                      left: `${sr.x}%`, top: `${sr.y}%`,
+                      width: `${sr.w}%`, height: `${sr.h}%`,
+                      background: hc.bg, cursor: "pointer",
+                      display: "flex", flexDirection: "column",
+                      justifyContent: "center", alignItems: "center",
+                      boxSizing: "border-box", border: "1px solid rgba(0,0,0,.25)",
+                      overflow: "hidden", padding: 1, transition: "filter .1s",
+                    }}
+                    onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
+                    onMouseOut={e => (e.currentTarget.style.filter = "")}
+                  >
+                    <span style={{
+                      fontFamily: "var(--f-mono)", fontWeight: 700,
+                      color: hc.fg, fontSize: `${fs}rem`,
+                      lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
+                    }}>+{moreStocks.length} more</span>
+                    {showChange && (
+                      <span style={{
+                        fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
+                        fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 2,
+                      }}>{sign(moreAvgChg)}</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
-        })}
+        })()}
       </div>
 
       {/* ── Hover tooltip ── */}
@@ -350,9 +460,9 @@ function HeatmapInner() {
             {/* Same-sector stock list */}
             {hover.peers.length > 0 && (
               <>
-                <div className="hpop-label" onClick={() => { setHover(null); openSector(hover.sector); }}>
+                <div className="hpop-label" onClick={() => { setHover(null); setSelectedSector(hover.sector); }}>
                   <span>{hover.sector}</span>
-                  <span className="link" style={{ fontSize: ".62rem" }}>View sector →</span>
+                  <span className="link" style={{ fontSize: ".62rem" }}>Open sector heatmap →</span>
                 </div>
                 {hover.peers.map(([psym, pmcap, pchg]) => (
                   <div key={psym}
@@ -371,6 +481,161 @@ function HeatmapInner() {
           </div>
         );
       })()}
+
+      {/* Bundled small-cap stocks modal */}
+      {moreModal && (
+        <>
+          <div className="scrim" onClick={() => setMoreModal(null)} />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 101,
+              width: "min(560px, 92vw)",
+              maxHeight: "80vh",
+              background: "var(--surface-1, #0B0D10)",
+              border: "1px solid var(--border-soft, rgba(255,255,255,0.12))",
+              borderRadius: 14,
+              boxShadow: "0 24px 60px -10px rgba(0,0,0,0.75)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              fontFamily: "var(--f-body, sans-serif)",
+              color: "var(--text-hi, #F4F6F5)",
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "14px 18px",
+                borderBottom: "1px solid var(--border-soft, rgba(255,255,255,0.08))",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "var(--surface-2, rgba(255,255,255,0.02))",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--f-display, sans-serif)",
+                    fontWeight: 700,
+                    fontSize: "1.05rem",
+                    color: "var(--text-hi)",
+                  }}
+                >
+                  +{moreModal.length} More {activeSectorName ? `${activeSectorName} ` : ""}Stocks
+                </div>
+                <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                  Smaller market-cap constituents bundled for readability · Click to view stock details
+                </div>
+              </div>
+              <button
+                className="closebtn"
+                onClick={() => setMoreModal(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-dim-solid)",
+                  fontSize: "1.2rem",
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Stock List */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "10px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              {[...moreModal].sort((a, b) => b[1] - a[1]).map(([sym, mcap, chg]) => {
+                const comp = companies.find((x) => x.ticker === sym);
+                return (
+                  <div
+                    key={sym}
+                    onClick={() => {
+                      setMoreModal(null);
+                      setSelectedSym(sym);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      background: "var(--surface-2, rgba(255,255,255,0.03))",
+                      border: "1px solid var(--border-soft, rgba(255,255,255,0.06))",
+                      cursor: "pointer",
+                      transition: "all .12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--surface-3, rgba(255,255,255,0.07))";
+                      e.currentTarget.style.borderColor = "var(--border-strong, rgba(255,255,255,0.18))";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "var(--surface-2, rgba(255,255,255,0.03))";
+                      e.currentTarget.style.borderColor = "var(--border-soft, rgba(255,255,255,0.06))";
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                      <StockLogo sym={sym} size={24} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span
+                            style={{
+                              fontFamily: "var(--f-mono, monospace)",
+                              fontWeight: 700,
+                              fontSize: ".88rem",
+                              color: "var(--text-hi)",
+                            }}
+                          >
+                            {sym}
+                          </span>
+                          {comp?.name && (
+                            <span
+                              style={{
+                                fontSize: ".75rem",
+                                color: "var(--text-dim-solid)",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                maxWidth: 220,
+                              }}
+                            >
+                              {comp.name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                      <span style={{ fontSize: ".76rem", color: "var(--text-dim-solid)", fontFamily: "var(--f-mono)" }}>
+                        {capFmt(mcap)}
+                      </span>
+                      <span className={`pill ${chg >= 0 ? "up" : "dn"}`} style={{ minWidth: 54, textAlign: "center" }}>
+                        {sign(chg)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Sliding stock detail drawer (same pattern as Movers) */}
       {selectedSym && (

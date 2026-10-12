@@ -1,5 +1,5 @@
 import type { PulseItem, SectorRow } from "./data";
-import type { TapeItem } from "./types/tape";
+import type { TapeItem, TapeSource } from "./types/tape";
 import type { CompanyDoc } from "./types/companies";
 import type { SectorApiDoc } from "./types/sectors";
 
@@ -66,7 +66,16 @@ export interface IndexDoc {
   // IndexDoc just never declared them, so the S&P/index detail drawer only
   // ever showed Open/Prev close.
   dayHigh?: number; dayLow?: number;
+  // Vendor the backend actually used for this tile — drives the source badge.
+  source?: TapeSource;
 }
+
+/** Display names for the tape's vendor, e.g. the "live · Polygon" pill. */
+export const TAPE_SOURCE_NAME: Record<TapeSource, string> = {
+  fmp: "FMP",
+  polygon: "Polygon",
+  fred: "FRED",
+};
 
 /**
  * Maps the backend tape's items onto IndexDoc — items without a price are
@@ -89,6 +98,7 @@ export function tapeItemsToIndexDocs(items: TapeItem[]): IndexDoc[] {
       prevClose: i.prevClose ?? undefined,
       dayHigh: i.dayHigh ?? undefined,
       dayLow: i.dayLow ?? undefined,
+      source: i.source,
     }));
 }
 

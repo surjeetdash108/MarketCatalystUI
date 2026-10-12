@@ -61,3 +61,43 @@ export function getMarketStatus(now: Date = new Date()): MarketStatus {
   if (minutes >= CLOSE && minutes < AFTER_END) return { phase: "after", label: "After Hours" };
   return { phase: "closed", label: "Markets Closed" };
 }
+
+/** Shift a YYYY-MM-DD date by whole days (noon UTC keeps it clear of DST edges). */
+function addDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** True for a weekday that is not a full-closure holiday. */
+function isTradingDay(iso: string): boolean {
+  const wd = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  return wd !== 0 && wd !== 6 && !MARKET_HOLIDAYS.has(iso);
+}
+
+/**
+ * ET date (YYYY-MM-DD) of the regular session the latest price belongs to:
+ * today once the 09:30 open has passed on a trading day, otherwise the
+ * previous trading day. Pre-market belongs to the previous session — the
+ * screens show the last close then, not the pre-market print.
+ */
+export function latestSessionDate(now: Date = new Date()): string {
+  const { isoDate, minutes } = etParts(now);
+  if (isTradingDay(isoDate) && minutes >= OPEN) return isoDate;
+  let d = addDays(isoDate, -1);
+  while (!isTradingDay(d)) d = addDays(d, -1);
+  return d;
+}
+
+/**
+ * Trading sessions after `from`, up to and including `to` — 0 when `to` is not
+ * later. Bounded so a malformed date cannot spin.
+ */
+export function sessionsBetween(from: string, to: string): number {
+  let n = 0;
+  for (let d = from, i = 0; d < to && i < 60; i++) {
+    d = addDays(d, 1);
+    if (isTradingDay(d)) n++;
+  }
+  return n;
+}

@@ -38,10 +38,13 @@ export function showError(message: string) {
 }
 
 export function shouldUseGoogleRedirect(): boolean {
-  const userAgent = window.navigator.userAgent.toLowerCase();
-  const isMobile = /android|iphone|ipad|ipod|mobile/.test(userAgent);
-  const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
-  return isMobile || isStandalone;
+  if (typeof window === "undefined") return false;
+  // Only standalone installed PWAs (e.g. iOS WebClip added to Home Screen)
+  // strictly cannot open browser popups and must use redirect.
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+  return isStandalone;
 }
 
 export async function completeGoogleLogin(userCredential: UserCredential) {

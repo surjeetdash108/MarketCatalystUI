@@ -26,6 +26,7 @@ export interface MoverCatalystDoc {
   catalyst: string;
   headline: string | null;
   summary: string | null;
+  bulletPoints?: string[];
   source: "benzinga_wiim" | "ai_synthesis" | "sec_filing" | "news_headline";
   vendor: "benzinga" | "polygon" | "fmp" | "sec" | "llm";
   newsUrl: string | null;

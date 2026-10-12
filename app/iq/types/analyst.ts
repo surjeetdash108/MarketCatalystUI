@@ -8,6 +8,14 @@ export interface AnalystRatingChange {
   /** This firm's own price target (FMP price-target-news). null when the firm
    * posted none — NOT the ticker consensus, so rows aren't all identical. */
   priceTarget?: number | null;
+  /** Date (YYYY-MM-DD) the firm posted `priceTarget`. */
+  priceTargetDate?: string | null;
+  /** The target this firm held immediately BEFORE this action, when the action
+   * itself moved the target ($92 → $83). null/absent when the action carried no
+   * new target or the prior one is unknown — and on docs written before the
+   * backend began storing it, so absent must read as "unknown", never 0%. */
+  previousPriceTarget?: number | null;
+  previousPriceTargetDate?: string | null;
 }
 
 /** Mirrors backend's `analyst_actions` collection (src/market-data/analyst-actions.controller.ts) — GET /market-data/analyst-actions. */

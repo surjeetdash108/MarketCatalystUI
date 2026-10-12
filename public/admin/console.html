@@ -409,6 +409,22 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .bzone .zh h4{font-family:var(--f-disp);font-size:14px;font-weight:600;margin:0;color:var(--hi)}
 .bzone .zh .zpos{font:600 9px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim2)}
 .bzone .zh .zn{margin-left:auto;font:600 11px var(--f-mono);color:var(--dim2)}
+.bzone .zh h4{flex:none}
+.bzone .zh .zpos{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Per-column sort: Rank (the live order, reorderable) or by date. */
+.zsort{position:relative;flex:none;display:inline-flex;align-items:center;gap:5px;height:22px;margin-left:auto;padding:0 6px 0 7px;
+  border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--dim);cursor:pointer;transition:border-color .12s,color .12s,background .12s}
+.zsort:hover{border-color:var(--brand);color:var(--hi)}
+.zsort.on{border-color:#4ADE8055;background:#4ADE8012;color:var(--brand2)}
+.zsort svg{width:12px;height:12px;flex:none;display:block}
+.zsort select{appearance:none;-webkit-appearance:none;border:0;background:transparent;color:inherit;cursor:pointer;
+  font:600 9.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;padding:0 13px 0 0;outline:none}
+.zsort select:focus-visible{text-decoration:underline}
+.zsort option{background:var(--surface);color:var(--hi);text-transform:none}
+.zsort::after{content:"";position:absolute;right:7px;top:50%;width:5px;height:5px;margin-top:-4px;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg);pointer-events:none;opacity:.8}
+.bzone .zh .zsort + .zn{margin-left:0}
+.zsort-note{margin:-4px 0 10px;font:500 10.5px var(--f-mono);color:var(--dim2)}
+.zcard .zdt{font:600 9px var(--f-mono);color:var(--dim);margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
 .zdrop{border:1.5px dashed var(--border2);border-radius:10px;background:var(--surface2);padding:13px;text-align:center;color:var(--dim2);cursor:pointer;font-size:12px;transition:.15s;margin-bottom:11px}
 .zdrop:hover,.zdrop.drag{border-color:var(--brand);color:var(--brand2);background:#4ADE800e}
 .zdrop svg{display:block;margin:0 auto 5px;color:var(--brand2)}
@@ -667,6 +683,30 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .zcard .zst{position:absolute;top:7px;right:59px;border:1px solid transparent;border-radius:6px;padding:2px 7px;font:600 8.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;background:#4ADE8018;color:#4ADE80;border-color:#4ADE8033;transition:.12s}
 .zcard .zst.draft{background:#F5B54418;color:#F5B544;border-color:#F5B54433}
 .zcard .zst:hover{filter:brightness(1.15)}
+/* Editor's choice: one post at a time, featured at the top of the public blog. */
+.zcard.ec{border-color:#F5B54466;box-shadow:inset 0 0 0 1px #F5B54422}
+.zcard .zec{display:inline-block;margin-right:6px;padding:1px 6px;border-radius:5px;background:#F5B5441c;color:#F5B544;font:600 8.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;vertical-align:1px}
+/* Modal row: star tile · title over a one-line note · switch. The real checkbox
+   stays in the label (visually hidden) so keyboard and screen readers work. */
+.ec-row{position:relative;display:flex;align-items:center;gap:12px;margin-top:16px;padding:11px 14px 11px 11px;
+  border:1px solid var(--border);border-radius:12px;background:var(--surface2);cursor:pointer;
+  transition:border-color .15s,background .15s,box-shadow .15s}
+.ec-row:hover{border-color:#F5B54455}
+.ec-row.on{border-color:#F5B54480;background:linear-gradient(90deg,#F5B54414,#F5B54405 70%);box-shadow:0 0 0 3px #F5B5440d}
+.ec-row input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.ec-ic{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:9px;
+  background:#F5B54412;border:1px solid #F5B54426;color:#F5B544;transition:background .15s,border-color .15s,box-shadow .15s}
+.ec-ic svg{width:16px;height:16px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;transition:fill .15s}
+.ec-row.on .ec-ic{background:#F5B54424;border-color:#F5B54455;box-shadow:0 0 14px -4px #F5B54480}
+.ec-row.on .ec-ic svg{fill:currentColor}
+.ec-tx{flex:1;min-width:0}
+.ec-t{display:block;font-size:13px;font-weight:600;color:var(--hi);letter-spacing:.005em}
+.ec-n{display:block;margin-top:2px;font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ec-row.on .ec-n{color:#F5B544cc}
+.ec-row .sw{pointer-events:none}
+.ec-row.on .sw{background:#F5B544;border-color:#F5B544}
+.ec-row.on .sw i{transform:translateX(17px)}
+.ec-row input:focus-visible ~ .sw{outline:2px solid #F5B544;outline-offset:2px}
 /* staged-changes bar */
 .pubbar{position:sticky;bottom:16px;z-index:15;display:none;align-items:center;gap:13px;margin-top:18px;
   background:linear-gradient(180deg,var(--surface),var(--surface2));border:1px solid var(--brand);
@@ -1099,6 +1139,17 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
       <div><label class="fl">Read time</label><input id="bRead" autocomplete="off" class="inp" placeholder="4 min"></div>
       <div><label class="fl">Rank</label><input id="bRank" autocomplete="off" class="inp" type="number" min="1" step="1" placeholder="1"></div>
     </div>
+    <!-- One post at a time: ticking this on a post moves the choice here from
+         wherever it was. The note names the post it would replace. -->
+    <label class="ec-row" id="bECRow">
+      <span class="ec-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></svg></span>
+      <span class="ec-tx">
+        <span class="ec-t">Editor's choice</span>
+        <span class="ec-n" id="bECNote"></span>
+      </span>
+      <input type="checkbox" id="bEC" role="switch" aria-describedby="bECNote" onchange="renderECNote()">
+      <span class="sw" aria-hidden="true"><i></i></span>
+    </label>
     <!-- The daily recap job writes a four-line summary here, and the article
          page and board card both show it. Editable so it can be corrected
          before publishing; optional, because a manually uploaded document
@@ -2037,10 +2088,16 @@ const ZORDER=['edu','recap','research','news'];
 /* Normalises a raw blog row (staged snapshot OR a refreshed list posted back
    after a write) into the shape the board renders. Missing fields default so a
    partial row never breaks a render. */
-function normalizeBlog(p){
+function normalizeBlog(p,seq){
   p=p||{};
   return {
     id:p.id,
+    /* Sortable timestamps behind `date` (which is display-only, no year), and
+       the row's position in the backend list (newest created first) — the
+       date-sort fallback when an older backend sends no timestamps. */
+    publishedAt:p.publishedAt||null,
+    createdAt:p.createdAt||null,
+    seq:(typeof seq==='number')?seq:0,
     zone:p.zone||'edu',
     rank:(typeof p.rank==='number')?p.rank:999,
     kick:p.kick||'',
@@ -2060,7 +2117,8 @@ function normalizeBlog(p){
        deploy answering. */
     format:p.format||(p.pdfUrl?((p.sourceKind==='docx')?'doc':'pdf'):'text'),
     css:Array.isArray(p.css)?p.css:[],
-    heroImageUrl:p.heroImageUrl||null
+    heroImageUrl:p.heroImageUrl||null,
+    editorsChoice:p.editorsChoice===true
   };
 }
 /* The live working set. Seeded from the staged dataset; replaced wholesale by
@@ -2073,6 +2131,10 @@ const BLOG_BRIDGE=!IS_DEMO;
 function blogPost(msg){ try{ parent.postMessage(msg,'*'); }catch(e){} }
 const bEl=id=>document.getElementById(id);
 let _targetZone='edu', _editId=null;
+/* The Editor's choice state the open post had when the modal opened. The save
+   sends editorsChoice only when the tick differs from this, so re-saving a post
+   never re-asserts a value another admin may have changed since. */
+let _ecWas=false;
 /* Source PDF awaiting upload with the next save — set by a PDF import, cleared
    when the modal closes. */
 /* Largest file that can be imported.
@@ -2168,6 +2230,42 @@ async function convertFile(file){
 function zoneposts(z){
   return BLOGS.filter(p=>p.zone===z).sort((a,b)=>(a.rank??999)-(b.rank??999));
 }
+/* ---- per-column sort ----
+   'rank' is the live order on the site and the only mode that can be
+   rearranged. 'new'/'old' order by publish date (created date for drafts) and
+   are view-only: dragging inside a date-sorted column would rewrite the live
+   ranks to match the dates. The choice is a per-viewer convenience, so it is
+   kept in localStorage and the board works the same without it. */
+const ZSORT_KEY='admin:blogSort';
+const ZSORT=(()=>{ try{ const v=JSON.parse(localStorage.getItem(ZSORT_KEY)||'{}'); return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; } })();
+function zsortOf(z){ const m=ZSORT[z]; return (m==='new'||m==='old')?m:'rank'; }
+function setZSort(z,m){
+  ZSORT[z]=m;
+  try{ localStorage.setItem(ZSORT_KEY,JSON.stringify(ZSORT)); }catch(e){}
+  renderBoard();
+}
+function blogTime(p){ const t=Date.parse(p.publishedAt||p.createdAt||''); return Number.isFinite(t)?t:null; }
+/* What a column shows, in the order it shows it. zoneposts() stays the rank
+   order every write is computed from. */
+function zoneview(z){
+  const posts=zoneposts(z), mode=zsortOf(z);
+  if(mode==='rank')return posts;
+  const dir=(mode==='new')?-1:1;
+  return posts.slice().sort((a,b)=>{
+    const ta=blogTime(a), tb=blogTime(b);
+    if(ta!==null&&tb!==null&&ta!==tb)return (ta-tb)*dir;
+    if(ta===null&&tb!==null)return 1;            // undated rows sink, either way
+    if(tb===null&&ta!==null)return -1;
+    return (a.seq-b.seq)*-dir;                   // backend order: lower seq = newer
+  });
+}
+const BLOG_DATE_FMT=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+function blogDateLabel(p){
+  const iso=p.publishedAt||p.createdAt; const t=Date.parse(iso||'');
+  if(!Number.isFinite(t))return 'No date';
+  return (p.publishedAt?'':'Created ')+BLOG_DATE_FMT.format(new Date(t))+' ET';
+}
+function zsortSVG(){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M14 6h7M14 12h5M14 18h3"/></svg>';}
 function nextRank(z,exceptId){
   const n=BLOGS.filter(p=>p.zone===z&&p.id!==exceptId).length;
   return n+1;
@@ -2199,25 +2297,31 @@ function zdropSVG(){return '<svg width="18" viewBox="0 0 24 24" fill="none" stro
 function renderBoard(){
   const board=bEl('blogboard');if(!board)return;
   board.innerHTML=ZORDER.map(z=>{
-    const m=ZONES[z], posts=zoneposts(z);
-    const cards=posts.length?posts.map((p,i)=>`<div class="zcard ${z==='recap'&&i===0?'lead':''}" draggable="true" data-id="${p.id}" onclick="openBlogModal('${z}','${p.id}')">
-        <span class="zrk">${i+1}</span>
+    const m=ZONES[z], posts=zoneview(z), mode=zsortOf(z), byRank=mode==='rank';
+    /* Date-sorted columns are view-only: no rank badge, no drag, no arrows —
+       position there is not rank, so reordering would publish the wrong order. */
+    const cards=posts.length?posts.map((p,i)=>`<div class="zcard ${byRank&&z==='recap'&&i===0?'lead':''} ${p.editorsChoice?'ec':''}" ${byRank?'draggable="true"':''} data-id="${p.id}" onclick="openBlogModal('${z}','${p.id}')">
+        ${byRank?`<span class="zrk">${i+1}</span>`:''}
         <button class="zst ${p.status==='Draft'?'draft':''}" title="${p.status==='Draft'?'Draft — click to publish':'Live — click to unpublish'}" onclick="event.stopPropagation();togglePublish('${p.id}')">${p.status==='Draft'?'Draft':'Live'}</button>
         <!-- Preview sits beside Delete so an article can be checked — at every
              device width — from the board, without opening the editor first.
              stopPropagation, or the card's own click opens the editor behind it. -->
         <button class="zpv" title="Preview at mobile / tablet / laptop / desktop" onclick="event.stopPropagation();previewBlog('${p.id}')">${zeyeSVG()}</button>
         <button class="zx" title="Remove" onclick="event.stopPropagation();deleteBlog('${p.id}')">×</button>
-        <div class="zk">${xesc(p.kick||'')}</div><h5>${xesc(p.title||'Untitled')}</h5>
+        <div class="zk">${p.editorsChoice?'<span class="zec" title="Featured as Editor\'s choice on the blog">★ Editor\'s choice</span>':''}${xesc(p.kick||'')}</div><h5>${xesc(p.title||'Untitled')}</h5>
         ${p.dek?`<div class="zd">${xesc(p.dek)}</div>`:''}
         <div class="zby">${xesc(p.author||'Desk')} · ${xesc(p.read||'')}</div>
-        <div class="zmove">
+        ${byRank?`<div class="zmove">
           <button title="Move up" ${i===0?'disabled':''} onclick="event.stopPropagation();moveBlog('${p.id}',-1)">↑</button>
           <button title="Move down" ${i===posts.length-1?'disabled':''} onclick="event.stopPropagation();moveBlog('${p.id}',1)">↓</button>
-        </div></div>`).join('')
+        </div>`:`<div class="zdt">${xesc(blogDateLabel(p))}</div>`}</div>`).join('')
       :`<div class="zempty">No articles here yet</div>`;
+    const opt=(v,l)=>`<option value="${v}" ${mode===v?'selected':''}>${l}</option>`;
     return `<div class="bzone ${m.area}" data-zone="${z}">
-      <div class="zh"><span class="zdot" style="background:${m.dot}"></span><h4>${m.label}</h4><span class="zpos">${m.pos}</span><span class="zn">${posts.length}</span></div>
+      <div class="zh"><span class="zdot" style="background:${m.dot}"></span><h4>${m.label}</h4><span class="zpos">${m.pos}</span>
+        <label class="zsort ${byRank?'':'on'}" title="Sort this column">${zsortSVG()}<select aria-label="Sort ${xesc(m.label)}" onchange="setZSort('${z}',this.value)">${opt('rank','Rank')}${opt('new','Newest')}${opt('old','Oldest')}</select></label>
+        <span class="zn">${posts.length}</span></div>
+      ${byRank?'':`<div class="zsort-note">Sorted by date · switch to Rank to reorder</div>`}
       <div class="zdrop" data-zone="${z}">${zdropSVG()}<b>Drop .docx / .pdf</b> anywhere here, or click<span class="zdrop-limit">up to ${MAX_UPLOAD_MB} MB</span></div>
       <div class="zlist">${cards}</div></div>`;
   }).join('');
@@ -3197,6 +3301,9 @@ function openBlogModal(zone,editId,draft,format){
   renderHeroPrev();
 
   bEl('bRank').value=p.rank||nextRank(z,editId);
+  _ecWas=!!p.editorsChoice;
+  bEl('bEC').checked=_ecWas;
+  renderECNote();
   applyFormatUI(p.html||'');
   renderDocView(p);
   updatePlaceChip();updateBlogWords();
@@ -3206,6 +3313,19 @@ function openBlogModal(zone,editId,draft,format){
   // Delete only makes sense for something already saved.
   bEl('bDelete').style.display=editId?'':'none';
   bEl('blogModal').classList.add('on');bEl('blogScrim').classList.add('on');
+}
+/* Editor's choice row: highlights when ticked, and says what ticking it does —
+   in particular which post it would take the spot from, since there is one. */
+function renderECNote(){
+  const on=bEl('bEC').checked;
+  bEl('bECRow').classList.toggle('on',on);
+  const holder=BLOGS.find(x=>x.editorsChoice&&x.id!==_editId);
+  let note;
+  if(on) note=holder?'Will replace “'+holder.title+'”':'Featured at the top of the blog';
+  else note=_ecWas?'Will be removed from the top of the blog':(holder?'Currently featuring “'+holder.title+'”':'Feature this post at the top of the blog');
+  const n=bEl('bECNote');
+  n.textContent=note;
+  n.title=note;                                   // full text when the title is ellipsised
 }
 /* Shows the source document in place of the body editor.
    The PDF is embedded straight from its Storage URL — the browser's own viewer
@@ -3397,6 +3517,8 @@ function savePublish(){
      was loaded, a bare fragment when the markup was typed in. The server splits
      design from body by the same rule either way, and leaves the saved design
      alone when the markup carries none. */
+  const ec=bEl('bEC').checked;
+  if(ec!==_ecWas)msg.editorsChoice=ec;
   if(_pendingPdf){msg.pdfDataUri=_pendingPdf.dataUri;msg.pdfName=_pendingPdf.name;msg.pdfPages=_pendingPdf.pages;msg.pdfAspect=_pendingPdf.aspect;}
   if(_editId)msg.id=_editId;
   const editing=!!_editId;

@@ -94,9 +94,7 @@ export function SignupForm() {
   async function handleGoogle() {
     setError(""); setIsSubmitting(true);
 
-    // Mobile browsers / standalone PWAs: popups are dismissed by Safari ITP
-    // (auth/popup-closed-by-user) or blocked entirely — use the redirect flow,
-    // completed by getRedirectResult() in the mount effect above.
+    // Standalone PWA environment cannot open popup windows — use redirect flow there
     if (shouldUseGoogleRedirect()) {
       try {
         await signInWithRedirect(firebaseAuth, googleAuthProvider);
@@ -109,11 +107,13 @@ export function SignupForm() {
     }
 
     try {
+      // Direct user gesture allows popup on modern desktop and mobile browsers (iOS Safari & Chrome Android)
       const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
       await completeGoogleLogin(result);
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+        // Fall back to redirect if popup was explicitly blocked by browser
         try {
           await signInWithRedirect(firebaseAuth, googleAuthProvider);
         } catch (redirectErr) {

@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { StockScreenEmbed } from "../shell";
-import { StockLogo, VendorTag, DataState } from "../utils";
+import { StockLogo, VendorTag, DataState, cls, sign, arr, fmtPrice } from "../utils";
 import { useApiResource } from "../hooks/useApiResource";
+import { useLiveQuotes } from "../live-quotes-context";
 
 // Hardcoded original 16 Popular ETFs
 const POPULAR_ETFS = [
@@ -60,6 +61,41 @@ export interface EtfMarketResponse {
 }
 
 const PAGE_SIZE = 100;
+const ETF_CACHE_KEY = "mc_etf_market_weekly_cache";
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function getCachedEtfData(): EtfMarketResponse | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(ETF_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.savedAt && Date.now() - parsed.savedAt < ONE_WEEK_MS && parsed.data) {
+      const data = parsed.data as EtfMarketResponse;
+      const totalFunds = data?.categories?.reduce((acc, c) => acc + (c.funds?.length || 0), 0) || 0;
+      // Full ETF universe contains > 5,000 funds; purge legacy 150-capped cache (<= 1500 funds)
+      if (totalFunds > 1500) {
+        return data;
+      }
+      // Purge poisoned or old capped cache
+      localStorage.removeItem(ETF_CACHE_KEY);
+    }
+  } catch {
+    // Ignore localStorage parse errors
+  }
+  return null;
+}
+
+function setCachedEtfData(data: EtfMarketResponse) {
+  if (typeof window === "undefined" || !data) return;
+  const totalFunds = data?.categories?.reduce((acc, c) => acc + (c.funds?.length || 0), 0) || 0;
+  if (totalFunds === 0) return; // Do not store empty payloads
+  try {
+    localStorage.setItem(ETF_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+  } catch {
+    // Ignore quota errors
+  }
+}
 
 export function EtfMarketFunds() {
   const [query, setQuery] = useState("");
@@ -70,11 +106,28 @@ export function EtfMarketFunds() {
   const [popularOpen, setPopularOpen] = useState<boolean>(true);
   const [otherOpen, setOtherOpen] = useState<boolean>(true);
 
-  // Dynamic API-driven ETF Discovery & Classification dataset
-  const { data: etfData, loading, error } = useApiResource<EtfMarketResponse>(
+  // Read 7-day cached ETF list so 4,500+ items render immediately without waiting
+  const [cachedData, setCachedData] = useState<EtfMarketResponse | null>(() => getCachedEtfData());
+
+  // Dynamic API-driven ETF Discovery & Classification dataset polled once weekly
+  const { data: apiData, loading: apiLoading, error } = useApiResource<EtfMarketResponse>(
     "/live/etf-market",
-    60_000
+    ONE_WEEK_MS
   );
+
+  useEffect(() => {
+    if (apiData) {
+      setCachedData(apiData);
+      setCachedEtfData(apiData);
+    }
+  }, [apiData]);
+
+  const etfData = cachedData || apiData;
+  const loading = !etfData && apiLoading;
+
+  // Real-time live quotes for the 16 popular ETFs
+  const popularTickers = useMemo(() => POPULAR_ETFS.map(e => e.symbol), []);
+  const liveQuotes = useLiveQuotes(popularTickers);
 
   // Dynamic category buckets directly from backend classification engine
   const sections: EtfSection[] = useMemo(() => {
@@ -200,7 +253,7 @@ export function EtfMarketFunds() {
               <StockScreenEmbed
                 key={selectedEtf}
                 initialSym={selectedEtf}
-                visibleTabs={["chart", "overview", "holdings", "news"]}
+                visibleTabs={["overview", "holdings", "news"]}
               />
             </div>
           </div>
@@ -297,45 +350,37 @@ export function EtfMarketFunds() {
                     No ETFs match “{query}”.
                   </div>
                 ) : (
-                  <div className="etf-top-grid" style={{ paddingTop: 4 }}>
-                    {filteredPopular.map(c => (
-                      <button
-                        key={c.symbol}
-                        type="button"
-                        onClick={() => setSelectedEtf(c.symbol)}
-                        className="card etf-card"
-                      >
-                        <div className="card-b">
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                              marginBottom: 4,
-                            }}
-                          >
-                            <StockLogo sym={c.symbol} size={20} />
-                            <h3
-                              style={{
-                                margin: 0,
-                                fontSize: ".88rem",
-                                fontWeight: 700,
-                                color: "var(--text-hi)",
-                              }}
-                            >
-                              {c.symbol}
-                            </h3>
-                          </div>
+                  <div className="etf-top-grid" style={{ padding: "6px 2px" }}>
+                    {filteredPopular.map(c => {
+                      const q = liveQuotes.get(c.symbol);
+                      const pct = q?.pctChange;
+                      return (
+                        <button
+                          key={c.symbol}
+                          type="button"
+                          onClick={() => setSelectedEtf(c.symbol)}
+                          className="p etf-card"
+                        >
+                          <div className="card-b">
+                            <div className="etf-card-head">
+                              <StockLogo sym={c.symbol} size={20} />
+                              <h3>{c.symbol}</h3>
+                            </div>
 
-                          <p
-                            title={c.name}
-                            className="etf-card-title"
-                          >
-                            {c.name}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
+                            <div className="val">{fmtPrice(q?.price)}</div>
+                            {pct != null && (
+                              <div className={`chg ${cls(pct)}`}>
+                                {arr(pct)} {sign(pct)}
+                              </div>
+                            )}
+
+                            <p title={c.name} className="etf-card-title">
+                              {c.name}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -874,7 +919,7 @@ export function EtfMarketFunds() {
                   <StockScreenEmbed
                     key={selectedFundTicker}
                     initialSym={selectedFundTicker}
-                    visibleTabs={["chart", "overview", "holdings", "news"]}
+                    visibleTabs={["overview", "holdings", "news"]}
                   />
                 </div>
               </div>
