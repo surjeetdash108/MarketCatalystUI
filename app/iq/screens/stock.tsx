@@ -785,6 +785,33 @@ export function StockScreen({
     : [];
 
   const isLiveStock = !!liveCompany && liveCompany.price != null;
+  const isEtf = useMemo(() => {
+    const s = sym.toUpperCase();
+    if (POPULAR_16_ETFS.has(s)) return true;
+    if (visibleTabs && visibleTabs.includes("holdings") && !visibleTabs.includes("financials")) return true;
+    if (liveCompany?.exchange === "ETF" || liveCompany?.sector === "ETF" || liveCompany?.industry === "ETF") return true;
+    const name = liveCompany?.name ?? "";
+    if (/\betf\b|\bindex fund\b/i.test(name)) return true;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("mc_etf_market_weekly_cache");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const categories = parsed?.data?.categories;
+          if (Array.isArray(categories)) {
+            for (const cat of categories) {
+              if (Array.isArray(cat?.funds) && cat.funds.some((f: any) => f.symbol === s)) {
+                return true;
+              }
+            }
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+    return false;
+  }, [sym, visibleTabs, liveCompany?.exchange, liveCompany?.sector, liveCompany?.industry, liveCompany?.name]);
   // No usable market data for the searched ticker (delisted, brand-new, or
   // non-US listing) — nothing priced came back after the fetch settled.
   const noData = !liveCompanyLoading && !!liveCompany && liveCompany.price == null && liveCompany.marketCap == null;
@@ -2656,7 +2683,7 @@ export function StockScreen({
           </>)}
 
           {activeTab === "holdings" && (
-            POPULAR_16_ETFS.has(sym.toUpperCase()) ? (
+            isEtf ? (
               <EtfHoldingsView symbol={sym} />
             ) : (<>
               <div className="sd-hold">
