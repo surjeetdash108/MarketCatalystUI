@@ -14,8 +14,11 @@ import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
 import { useBackendBars, useIntervalBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
+import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
+import { useLiveQuotes, extendedSession } from "../live-quotes-context";
+import { EarningsPlaybook, playbookReports } from "./EarningsPlaybook";
 import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
-import { useLiveQuotes } from "../live-quotes-context";
+// import { useLiveQuotes } from "../live-quotes-context";
 import { EarningsPlaybook } from "./EarningsPlaybook";
 import { EtfHoldingsView } from "../etf-holdings-view";
 
@@ -1647,9 +1650,7 @@ export function StockScreen({
                     </div>
                     <EarningsPlaybook
                       sym={sym}
-                      reports={(financialsDoc?.quarters ?? [])
-                        .filter((q) => q.filingDate)
-                        .map((q) => ({ date: q.filingDate as string, epsActual: q.epsActual, epsEstimate: q.epsEstimate, epsReported: q.epsActualReported ?? null, epsEstimateReported: q.epsEstimateReported ?? null }))}
+                      reports={playbookReports(financialsDoc)}
                     />
                   </div>
                 </div>
@@ -2359,9 +2360,7 @@ export function StockScreen({
               <div className="card-b">
                 <EarningsPlaybook
                   sym={sym}
-                  reports={(financialsDoc?.quarters ?? [])
-                    .filter((q) => q.filingDate)
-                    .map((q) => ({ date: q.filingDate as string, epsActual: q.epsActual, epsEstimate: q.epsEstimate, epsReported: q.epsActualReported ?? null, epsEstimateReported: q.epsEstimateReported ?? null }))}
+                  reports={playbookReports(financialsDoc)}
                 />
               </div>
             </div>
