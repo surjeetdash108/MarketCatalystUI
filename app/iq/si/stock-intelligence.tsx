@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSI } from "./si-context";
 import { SITab, StockItem, DetailStock } from "./types";
 import {
@@ -364,7 +365,8 @@ function SixMonthAreaChart({
 }
 
 export function StockIntelligenceScreen() {
-  const { siTicker, setSiTicker, activeTab, setActiveTab, enterSI, exitToMC, goToSearch } = useSI();
+  const router = useRouter();
+  const { setSiTicker, activeTab, setActiveTab, goToSearch } = useSI();
 
   // Search input state
   const [searchQuery, setSearchQuery] = useState("");
@@ -380,8 +382,18 @@ export function StockIntelligenceScreen() {
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
   const [showEarnings, setShowEarnings] = useState(true);
 
-  // Active stock data
-  const currentTicker = siTicker ? siTicker.toUpperCase().trim() : null;
+  // Active stock — the URL (?sym=) is the single source of truth on /si, so
+  // /si is always the home view and /si?sym=X is always that stock. Reading it
+  // through useSearchParams keeps it correct on the first render after a
+  // router.push and on back/forward, with no stale copy to fall out of sync.
+  const searchParams = useSearchParams();
+  const currentTicker = searchParams?.get("sym")?.toUpperCase().trim() || null;
+
+  // Mirror it into the SI context so the switcher knows which stock to carry
+  // back to Market Catalyst.
+  useEffect(() => {
+    setSiTicker(currentTicker);
+  }, [currentTicker, setSiTicker]);
 
   // Live quotes for accurate price sync
   const liveQuotesMap = useLiveQuotes(currentTicker ? [currentTicker] : []);
@@ -526,7 +538,7 @@ export function StockIntelligenceScreen() {
     setSiTicker(clean);
     setSearchQuery("");
     setSearchFocused(false);
-    enterSI(clean);
+    router.push(`/si?sym=${clean}`);
   };
 
   // Ask AI copilot function
@@ -554,6 +566,41 @@ export function StockIntelligenceScreen() {
       setAiBusy(false);
     }, 600);
   };
+
+  // These two memos must stay ABOVE the empty-state return below: a hook placed
+  // after it runs only when a stock is open, so going from the home view to a
+  // stock changed the hook count and React threw "Rendered more hooks than
+  // during the previous render".
+
+  // Check if we have real revenue and EPS growth from financialsDoc (FMP)
+  const realFundGrowth = useMemo(() => {
+    if (!financialsDoc?.quarters || financialsDoc.quarters.length < 5) return null;
+    const latest = financialsDoc.quarters[0];
+    const yearAgo = financialsDoc.quarters[4];
+    let revYoy: number | null = null;
+    let epsYoy: number | null = null;
+    if (latest.revenue != null && yearAgo.revenue != null && yearAgo.revenue > 0) {
+      revYoy = ((latest.revenue - yearAgo.revenue) / yearAgo.revenue) * 100;
+    }
+    const latestEps = reportedQuarterEps(latest) ?? latest.epsActual;
+    const yearAgoEps = reportedQuarterEps(yearAgo) ?? yearAgo.epsActual;
+    if (latestEps != null && yearAgoEps != null && Math.abs(yearAgoEps) > 0.05) {
+      epsYoy = ((latestEps - yearAgoEps) / Math.abs(yearAgoEps)) * 100;
+    }
+    return { revYoy, epsYoy };
+  }, [financialsDoc]);
+
+  // Real market cap format
+  const stockMcap = stock?.mcap ?? "";
+  const realMcap = useMemo(() => {
+    if (liveCompany?.marketCap) {
+      const mc = liveCompany.marketCap;
+      if (mc >= 1e12) return `$${(mc / 1e12).toFixed(2)}T`;
+      if (mc >= 1e9) return `$${(mc / 1e9).toFixed(1)}B`;
+      if (mc >= 1e6) return `$${(mc / 1e6).toFixed(0)}M`;
+    }
+    return stockMcap;
+  }, [liveCompany, stockMcap]);
 
   // ----------------------------------------------------
   // EMPTY STATE (NO STOCK SELECTED YET)
@@ -643,6 +690,12 @@ export function StockIntelligenceScreen() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && searchQuery.trim()) {
+                    e.preventDefault();
+                    handleSelectStock(searchQuery.trim());
+                  }
+                }}
                 placeholder="Search tickers (e.g. NVDA, AAPL, MSFT, META, TSLA, STRL)…"
                 style={{
                   flex: 1,
@@ -738,11 +791,16 @@ export function StockIntelligenceScreen() {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
               {ORDER.map((sym) => {
-                const s = STK[sym];
+                const s = STK[sym] || getStock(sym);
+                const chg = s?.c ?? 0;
                 return (
                   <button
                     key={sym}
-                    onClick={() => handleSelectStock(sym)}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleSelectStock(sym);
+                    }}
                     style={{
                       height: 36,
                       padding: "0 14px",
@@ -761,7 +819,7 @@ export function StockIntelligenceScreen() {
                   >
                     <StockLogo sym={sym} size={18} />
                     <span>{sym}</span>
-                    <span style={{ fontSize: 11, color: s.c >= 0 ? UP : DN }}>{pct(s.c)}</span>
+                    <span style={{ fontSize: 11, color: chg >= 0 ? UP : DN }}>{pct(chg)}</span>
                   </button>
                 );
               })}
@@ -870,35 +928,6 @@ export function StockIntelligenceScreen() {
     };
   }
 
-  // Check if we have real revenue and EPS growth from financialsDoc (FMP)
-  const realFundGrowth = useMemo(() => {
-    if (!financialsDoc?.quarters || financialsDoc.quarters.length < 5) return null;
-    const latest = financialsDoc.quarters[0];
-    const yearAgo = financialsDoc.quarters[4];
-    let revYoy: number | null = null;
-    let epsYoy: number | null = null;
-    if (latest.revenue != null && yearAgo.revenue != null && yearAgo.revenue > 0) {
-      revYoy = ((latest.revenue - yearAgo.revenue) / yearAgo.revenue) * 100;
-    }
-    const latestEps = reportedQuarterEps(latest) ?? latest.epsActual;
-    const yearAgoEps = reportedQuarterEps(yearAgo) ?? yearAgo.epsActual;
-    if (latestEps != null && yearAgoEps != null && Math.abs(yearAgoEps) > 0.05) {
-      epsYoy = ((latestEps - yearAgoEps) / Math.abs(yearAgoEps)) * 100;
-    }
-    return { revYoy, epsYoy };
-  }, [financialsDoc]);
-
-  // Real market cap format
-  const realMcap = useMemo(() => {
-    if (liveCompany?.marketCap) {
-      const mc = liveCompany.marketCap;
-      if (mc >= 1e12) return `$${(mc / 1e12).toFixed(2)}T`;
-      if (mc >= 1e9) return `$${(mc / 1e9).toFixed(1)}B`;
-      if (mc >= 1e6) return `$${(mc / 1e6).toFixed(0)}M`;
-    }
-    return stock.mcap;
-  }, [liveCompany, stock.mcap]);
-
   // Stats definition for Overview header
   const statsRow = [
     { k: "MARKET CAP", v: realMcap, sub: liveCompany?.sector || stock.sector },
@@ -959,35 +988,15 @@ export function StockIntelligenceScreen() {
             flexWrap: "wrap",
           }}
         >
-          {/* Logo & Subtitle (Click to return to Search Bar page) */}
+          {/* Logo & Subtitle: unclickable brand text */}
           <div
-            onClick={goToSearch}
-            role="button"
-            tabIndex={0}
-            title="Go to Search"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                goToSearch();
-              }
-            }}
             style={{
               display: "flex",
               flexDirection: "column",
               flex: "none",
               borderRight: "1px solid #1c2733",
               paddingRight: 16,
-              cursor: "pointer",
               userSelect: "none",
-              transition: "opacity 160ms ease, transform 160ms ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.opacity = "0.8";
-              e.currentTarget.style.transform = "translateY(-1px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = "1";
-              e.currentTarget.style.transform = "none";
             }}
           >
             <span
@@ -1016,26 +1025,44 @@ export function StockIntelligenceScreen() {
             </span>
           </div>
 
-          {/* Quick Readme Button */}
+          {/* Home Button -> returns to search bar page (/si) */}
           <button
-            onClick={() => setShowReadme(!showReadme)}
+            type="button"
+            onClick={goToSearch}
+            title="Return to Stock Intelligence Search (/si)"
             style={{
               display: "flex",
               alignItems: "center",
               gap: 6,
               height: 32,
-              padding: "0 10px",
+              padding: "0 11px",
               border: "1px solid #2a3a4a",
-              background: "transparent",
+              borderRadius: 6,
+              background: "rgba(12, 17, 24, 0.8)",
               color: "#a9c6e3",
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: "0.14em",
+              fontWeight: 700,
+              letterSpacing: "0.12em",
               cursor: "pointer",
+              transition: "all 150ms ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(89, 128, 166, 0.22)";
+              e.currentTarget.style.borderColor = "#7fa8d0";
+              e.currentTarget.style.color = "#ffffff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(12, 17, 24, 0.8)";
+              e.currentTarget.style.borderColor = "#2a3a4a";
+              e.currentTarget.style.color = "#a9c6e3";
             }}
           >
-            README
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+            HOME
           </button>
 
           {/* Search Bar */}
@@ -1059,6 +1086,12 @@ export function StockIntelligenceScreen() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && searchQuery.trim()) {
+                    e.preventDefault();
+                    handleSelectStock(searchQuery.trim());
+                  }
+                }}
                 placeholder="Search tickers…"
                 style={{
                   flex: 1,
@@ -2306,8 +2339,8 @@ export function StockIntelligenceScreen() {
           };
 
           // 1. EARNINGS (FMP Live Earnings Feed & Financials)
-          const tickerEarnings = (liveEarningsList || []).filter(
-            (e) => e.ticker.toUpperCase() === stock.t
+          const tickerEarnings = (Array.isArray(liveEarningsList) ? liveEarningsList : []).filter(
+            (e) => e?.ticker && e.ticker.toUpperCase() === stock.t
           );
           tickerEarnings.forEach((e) => {
             const dd = calcDd(e.date);
@@ -2332,10 +2365,10 @@ export function StockIntelligenceScreen() {
           });
 
           // 2. ANALYST ACTIONS (FMP & Polygon Analyst Consensus)
-          const tickerConsensus = (liveConsensusList || []).find(
-            (c) => c.ticker.toUpperCase() === stock.t
+          const tickerConsensus = (Array.isArray(liveConsensusList) ? liveConsensusList : []).find(
+            (c) => c?.ticker && c.ticker.toUpperCase() === stock.t
           );
-          if (tickerConsensus?.recentGrades && tickerConsensus.recentGrades.length > 0) {
+          if (tickerConsensus?.recentGrades && Array.isArray(tickerConsensus.recentGrades) && tickerConsensus.recentGrades.length > 0) {
             tickerConsensus.recentGrades.slice(0, 8).forEach((g) => {
               const dd = calcDd(g.date);
               const dir = g.action === "upgrade" || (g.priceTarget && g.previousPriceTarget && g.priceTarget > g.previousPriceTarget)
@@ -2347,7 +2380,7 @@ export function StockIntelligenceScreen() {
                 date: fmtDateShort(g.date),
                 cat: "Analyst actions",
                 ev: `${g.firm || "Analyst"} ${g.action || "rates"} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
-                note: `${g.previousGrade ? `Prior: ${g.previousGrade}. ` : ""}${g.previousPriceTarget ? `Prior target: $${g.previousPriceTarget}. ` : ""}Consensus: ${tickerConsensus.consensus || "Hold"} (${tickerConsensus.buy + tickerConsensus.strongBuy} Buys).`,
+                note: `${g.previousGrade ? `Prior: ${g.previousGrade}. ` : ""}${g.previousPriceTarget ? `Prior target: $${g.previousPriceTarget}. ` : ""}Consensus: ${tickerConsensus.consensus || "Hold"} (${(tickerConsensus.buy ?? 0) + (tickerConsensus.strongBuy ?? 0)} Buys).`,
                 imp: "MED",
                 dir,
                 dd,
@@ -2357,8 +2390,8 @@ export function StockIntelligenceScreen() {
           }
 
           // 3. INSIDER ACTIVITY (FMP SEC Form 4 Filings)
-          const tickerInsiders = (liveInsiderList || []).filter(
-            (i) => i.ticker.toUpperCase() === stock.t
+          const tickerInsiders = (Array.isArray(liveInsiderList) ? liveInsiderList : []).filter(
+            (i) => i?.ticker && i.ticker.toUpperCase() === stock.t
           );
           tickerInsiders.slice(0, 8).forEach((ins) => {
             const dd = calcDd(ins.transactionDate);
@@ -2377,15 +2410,22 @@ export function StockIntelligenceScreen() {
           });
 
           // 4. 13F FILINGS (FMP SEC Form 13F Institutional Ownership)
-          if (inst13FData?.holders && inst13FData.holders.length > 0) {
+          if (Array.isArray(inst13FData?.holders) && inst13FData.holders.length > 0) {
             const topDate = inst13FData.holders[0]?.filingDate || inst13FData.holders[0]?.reportDate || "2024-11-14";
+            const sum = inst13FData.summary || {
+              totalHolders: inst13FData.holders.length,
+              increasedPositions: 0,
+              reducedPositions: 0,
+              newPositions: 0,
+              totalMarketValue: 0,
+            };
             liveCatalystItems.push({
               date: fmtDateShort(topDate),
               cat: "13F filings",
-              ev: `${inst13FData.selectedQuarter || "Quarterly"} 13F Institutional Filing Sweep: ${inst13FData.summary.totalHolders} Filers`,
-              note: `${inst13FData.summary.increasedPositions} increased, ${inst13FData.summary.reducedPositions} reduced, ${inst13FData.summary.newPositions} opened new positions ($${(inst13FData.summary.totalMarketValue / 1e9).toFixed(1)}B total institutional value).`,
+              ev: `${inst13FData.selectedQuarter || "Quarterly"} 13F Institutional Filing Sweep: ${sum.totalHolders ?? inst13FData.holders.length} Filers`,
+              note: `${sum.increasedPositions ?? 0} increased, ${sum.reducedPositions ?? 0} reduced, ${sum.newPositions ?? 0} opened new positions (${sum.totalMarketValue ? '$' + (sum.totalMarketValue / 1e9).toFixed(1) + 'B total institutional value' : 'institutional position flow'}).`,
               imp: "HIGH",
-              dir: inst13FData.summary.increasedPositions >= inst13FData.summary.reducedPositions ? "Positive" : "Neutral",
+              dir: (sum.increasedPositions ?? 0) >= (sum.reducedPositions ?? 0) ? "Positive" : "Neutral",
               dd: calcDd(topDate),
               sourceBadge: "13F FMP",
             });
@@ -2394,8 +2434,8 @@ export function StockIntelligenceScreen() {
               liveCatalystItems.push({
                 date: fmtDateShort(hDate),
                 cat: "13F filings",
-                ev: `${h.investorName} ${h.activityStatus} ${Math.abs(h.changeInShares).toLocaleString()} shares`,
-                note: `Holds ${h.sharesNumber.toLocaleString()} shares (${h.marketValue ? '$' + (h.marketValue / 1e6).toFixed(1) + 'M' : '—'}) · ${h.ownershipPct ? h.ownershipPct.toFixed(2) + '% of company' : 'Institutional position'}`,
+                ev: `${h.investorName || "Institutional Investor"} ${h.activityStatus || "Position"} ${Math.abs(h.changeInShares || 0).toLocaleString()} shares`,
+                note: `Holds ${(h.sharesNumber || 0).toLocaleString()} shares (${h.marketValue ? '$' + (h.marketValue / 1e6).toFixed(1) + 'M' : '—'}) · ${h.ownershipPct ? h.ownershipPct.toFixed(2) + '% of company' : 'Institutional position'}`,
                 imp: "MED",
                 dir: h.activityStatus === "Increased" || h.activityStatus === "New" ? "Positive" : h.activityStatus === "Reduced" ? "Risk" : "Neutral",
                 dd: calcDd(hDate),
@@ -2405,12 +2445,14 @@ export function StockIntelligenceScreen() {
           }
 
           // 5. NEWS, PRODUCT LAUNCHES, REGULATORY (Polygon / Finnhub / FMP)
-          (tickerNews || []).slice(0, 12).forEach((art) => {
+          (Array.isArray(tickerNews) ? tickerNews : []).slice(0, 12).forEach((art) => {
             const dd = calcDd(art.publishedAt);
             let cat = "News";
-            if (art.tag === "product" || art.headline.toLowerCase().includes("launch") || art.headline.toLowerCase().includes("unveil")) {
+            const headline = art?.headline || "";
+            const hLower = headline.toLowerCase();
+            if (art.tag === "product" || hLower.includes("launch") || hLower.includes("unveil")) {
               cat = "Product launches";
-            } else if (art.tag === "legal" || art.headline.toLowerCase().includes("fda") || art.headline.toLowerCase().includes("sec") || art.headline.toLowerCase().includes("antitrust")) {
+            } else if (art.tag === "legal" || hLower.includes("fda") || hLower.includes("sec") || hLower.includes("antitrust")) {
               cat = "Regulatory";
             } else if (art.tag === "earnings") {
               cat = "Earnings";

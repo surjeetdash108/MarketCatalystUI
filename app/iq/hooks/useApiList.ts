@@ -9,5 +9,5 @@ import { useApiResource } from "./useApiResource";
  */
 export function useApiList<T>(path: string | null, refetchMs?: number) {
   const { data, loading, error } = useApiResource<T[]>(path, refetchMs);
-  return { data: data ?? [], loading, error };
+  return { data: (Array.isArray(data) ? data : []) as T[], loading, error };
 }

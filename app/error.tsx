@@ -60,6 +60,25 @@ export default function Error({
           The rest of the app is unaffected. Try again, or head back to the dashboard.
           {error?.digest ? ` (ref: ${error.digest})` : ""}
         </p>
+        {error?.message && (
+          <div
+            style={{
+              fontFamily: "monospace",
+              fontSize: "0.78rem",
+              color: "#f87171",
+              background: "rgba(248, 113, 113, 0.08)",
+              border: "1px solid rgba(248, 113, 113, 0.25)",
+              borderRadius: 6,
+              padding: "8px 12px",
+              marginBottom: 16,
+              textAlign: "left",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {error.message}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button
             onClick={reset}

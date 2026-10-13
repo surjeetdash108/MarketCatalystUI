@@ -14,9 +14,10 @@ type BarsResult = { bars: OHLCBar[] | undefined; loading: boolean; asOf?: string
 
 function useBarsResource(url: string | null): BarsResult {
   const { data, loading } = useApiResource<BarsResponse>(url);
-  const bars = !data || data.bars.length < 2
+  const rawBars = data?.bars;
+  const bars = !Array.isArray(rawBars) || rawBars.length < 2
     ? undefined
-    : data.bars.map((b) => ({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
+    : rawBars.map((b) => ({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
   // Surface the backend's freshness stamp (createdAt) and serving tier additively
   // (BUG-DATA-008); existing call sites destructure only { bars, loading } and
   // are unaffected.

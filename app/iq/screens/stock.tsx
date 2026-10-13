@@ -833,8 +833,6 @@ export function StockScreen({
 
   type InnerDrawer = "techrating" | "peers" | "industry" | "insider" | "keylevels" | "earnings" | "financials" | "dividend" | null;
   const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
-  // Company blurb in the quote strip: two lines, expanded in place by "More".
-  const [aboutOpen,   setAboutOpen]   = useState(false);
   // Peers list sort by session % change; default desc (best performers first).
   const [peerSort, setPeerSort] = useState<"desc" | "asc">("desc");
   const [peerSortBy, setPeerSortBy] = useState<"c" | "mcap" | "rs" | "sym">("c");
@@ -1552,31 +1550,21 @@ export function StockScreen({
               place. It replaces the tall header + separate scrolling About box,
               which pushed the tabs and chart well down the page. */}
           <section className="sd-snap">
-            {/* StockLogo scales by TICKER_LOGO_SCALE (1.5), so 23 renders ~34px. */}
-            <StockLogo sym={sym} size={23} />
-            <div className="sd-snap-id">
-              <h1>{sym}</h1>
-              <div className="ex" title={[data.name, ex, group].filter(Boolean).join(" · ")}>
-                {[ex, group].filter(Boolean).join(" · ") || data.name}
+            {/* Centred like the price column beside it, so the SI button stays
+                right under the exchange line instead of dropping to the bottom
+                edge when the About box makes the strip taller. */}
+            <div className="sd-snap-id" style={{ justifyContent: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, height: 34 }}>
+                {/* StockLogo matches the height of NVDA + NASDAQ ET perfectly */}
+                <StockLogo sym={sym} size={23} style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0 }} />
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+                  <h1 style={{ lineHeight: 1.25 }}>{sym}</h1>
+                  <div className="ex" style={{ lineHeight: 1.25 }} title={[data.name, ex, group].filter(Boolean).join(" · ")}>
+                    {[ex, group].filter(Boolean).join(" · ") || data.name}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="sd-snap-px">
-              <QuoteHeadline q={hq} />
-              <div className="sd-snap-meta">
-                <span>Vol <b>{sessionVol != null ? fmt(sessionVol) : "—"}</b></span>
-                {mc != null && <span>Mkt cap <b>{cap(mc)}</b></span>}
-                {inSectorRank != null && inSectorTotal != null && (
-                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".52rem", padding: "1px 5px" }}>
-                    #{inSectorRank} of {inSectorTotal} in sector
-                  </span>
-                )}
-                {isLiveStock && (
-                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".52rem", padding: "1px 5px" }}>
-                    live quote · {vendorLabel(liveCompany?.source)}
-                  </span>
-                )}
-              </div>
-              <div style={{ marginTop: 6, display: "flex", alignItems: "center" }}>
+              <div style={{ marginTop: 10, display: "flex", alignItems: "center" }}>
                 <button
                   type="button"
                   onClick={() => enterSI(sym)}
@@ -1611,15 +1599,37 @@ export function StockScreen({
                   }}
                   title={`Open Stock Intelligence for ${sym}`}
                 >
-                  <span style={{ color: "#7fa8d0", fontSize: "0.75rem", lineHeight: 1 }}>✦</span>
-                  <span>Stock Intelligence for this stock</span>
+                  <span style={{ color: "#7fa8d0", fontSize: "0.70rem", lineHeight: 1 }}>✦</span>
+                  <span>Open Stock Intelligence</span>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.8 }}>
                     <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
                 </button>
               </div>
             </div>
-            <div className={`sd-snap-about${aboutOpen ? " open" : ""}`}>
+            {/* Price and its meta row sit together, centred in the strip: the
+                class default (space-between) pushed the meta row to the bottom
+                edge whenever the About box made the strip taller. */}
+            <div className="sd-snap-px" style={{ justifyContent: "center" }}>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <QuoteHeadline q={hq} />
+              </div>
+              <div className="sd-snap-meta" style={{ marginTop: 14, display: "flex", alignItems: "center" }}>
+                <span>Vol <b>{sessionVol != null ? fmt(sessionVol) : "—"}</b></span>
+                {mc != null && <span>Mkt cap <b>{cap(mc)}</b></span>}
+                {inSectorRank != null && inSectorTotal != null && (
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".52rem", padding: "1px 5px" }}>
+                    #{inSectorRank} of {inSectorTotal} in sector
+                  </span>
+                )}
+                {isLiveStock && (
+                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".52rem", padding: "1px 5px" }}>
+                    live quote · {vendorLabel(liveCompany?.source)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="sd-snap-about">
               {data.description ? (
                 <p>
                   {data.description}
@@ -1631,12 +1641,7 @@ export function StockScreen({
                 <p className="dim">{data.name}</p>
               )}
             </div>
-            {data.description && (
-              <button type="button" className="sd-snap-more" aria-expanded={aboutOpen} onClick={() => setAboutOpen(o => !o)}>
-                {aboutOpen ? "Less" : "More"}
-              </button>
-            )}
-            <span className="sd-snap-src"><VendorTag v="polygon" /></span>
+            {/* <span className="sd-snap-src"><VendorTag v="polygon" /></span> */}
             {headerActions && <div className="sd-snap-actions">{headerActions}</div>}
           </section>
         </div>

@@ -8,7 +8,7 @@ import {
   ReactNode,
   useEffect,
 } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { SITab } from "./types";
 
 interface SIContextType {
@@ -35,75 +35,73 @@ export function SIProvider({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
-  const isSiRoute = pathname?.startsWith("/si");
-  const symParam = searchParams?.get("sym")?.toUpperCase() || null;
+  const isSiRoute = pathname ? pathname.startsWith("/si") : false;
 
   const [isSI, setIsSI] = useState<boolean>(isSiRoute);
-  const [siTicker, setSiTicker] = useState<string | null>(symParam);
+  const [siTicker, setSiTicker] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const sym = new URLSearchParams(window.location.search).get("sym");
+      if (sym) return sym.toUpperCase().trim();
+    }
+    return null;
+  });
   const [activeTab, setActiveTab] = useState<SITab>("overview");
   const [sweep, setSweep] = useState<{ active: boolean; to: "SI" | "MC"; key: number } | null>(null);
 
   // Sync if URL query param or path changes
   useEffect(() => {
-    if (isSiRoute) {
-      setIsSI(true);
-      if (symParam) {
-        if (symParam !== siTicker) {
-          setSiTicker(symParam);
-        }
-      } else {
-        setSiTicker(null);
+    const isSi = pathname ? pathname.startsWith("/si") : false;
+    setIsSI(isSi);
+    if (isSi) {
+      if (typeof window !== "undefined") {
+        const sym = new URLSearchParams(window.location.search).get("sym");
+        setSiTicker(sym ? sym.toUpperCase().trim() : null);
       }
     } else {
-      setIsSI(false);
-      // When navigating in MC: if not on the stock detail page, clear active SI stock
       if (pathname && !pathname.startsWith("/menu/stock")) {
         setSiTicker(null);
       }
     }
-  }, [isSiRoute, symParam, pathname]);
+  }, [pathname]);
+
+  // Also listen for popstate (browser back/forward button)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handlePopState = () => {
+      const isSi = window.location.pathname.startsWith("/si");
+      setIsSI(isSi);
+      if (isSi) {
+        const sym = new URLSearchParams(window.location.search).get("sym");
+        setSiTicker(sym ? sym.toUpperCase().trim() : null);
+      } else {
+        if (!window.location.pathname.startsWith("/menu/stock")) {
+          setSiTicker(null);
+        }
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const triggerSweep = useCallback((to: "SI" | "MC") => {
     const key = Date.now();
     setSweep({ active: true, to, key });
     if (typeof window !== "undefined") {
       try {
-        sessionStorage.setItem("mc_sweep_info", JSON.stringify({ to, time: key }));
         window.dispatchEvent(new CustomEvent("mc-sweep-start", { detail: { to, key } }));
       } catch {}
     }
     setTimeout(() => {
       setSweep(null);
-    }, 600);
-  }, []);
-
-  // Check on mount if a sweep was recently triggered across page load
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const raw = sessionStorage.getItem("mc_sweep_info");
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const age = Date.now() - (parsed.time || 0);
-          if (age < 600) {
-            setSweep({ active: true, to: parsed.to, key: parsed.time });
-            setTimeout(() => {
-              setSweep(null);
-              sessionStorage.removeItem("mc_sweep_info");
-            }, 600 - age);
-          } else {
-            sessionStorage.removeItem("mc_sweep_info");
-          }
-        }
-      } catch {}
-    }
+    }, 700);
   }, []);
 
   const goToSearch = useCallback(() => {
     setSiTicker(null);
-    router.push("/si");
+    if (typeof window !== "undefined") {
+      router.push("/si");
+    }
   }, [router]);
 
   const enterSI = useCallback(
@@ -118,8 +116,9 @@ export function SIProvider({
       if (ticker) {
         targetSym = ticker.toUpperCase().trim();
       } else if (isOnStockPage) {
-        const candidate = siTicker || stored;
-        if (candidate) targetSym = candidate.toUpperCase().trim();
+        // The stock page shows localStorage "iq-stock", or NVDA when nothing is
+        // stored (see StockScreen), so carry over exactly what is on screen.
+        targetSym = (stored || "NVDA").toUpperCase().trim();
       }
 
       if (targetSym) {
@@ -130,44 +129,53 @@ export function SIProvider({
         setTimeout(() => {
           setIsSI(true);
           router.push(`/si?sym=${targetSym}`);
-        }, 70);
+        }, 160);
       } else {
         setSiTicker(null);
         setTimeout(() => {
           setIsSI(true);
           router.push("/si");
-        }, 70);
+        }, 160);
       }
       if (tab) setActiveTab(tab);
     },
-    [router, triggerSweep, pathname, siTicker]
+    [router, triggerSweep, pathname]
   );
 
   const exitToMC = useCallback(
     (ticker?: string) => {
       triggerSweep("MC");
-      const targetSym = ticker || siTicker;
+      // On /si the URL decides: /si?sym=X carries X back to Market Catalyst, and
+      // plain /si (the SI home view) goes to the dashboard. Read at click time so
+      // a stale siTicker can never send the SI home view to a stock page.
+      const onSiPage =
+        typeof window !== "undefined" && window.location.pathname.startsWith("/si");
+      const urlSym = onSiPage
+        ? new URLSearchParams(window.location.search).get("sym")
+        : null;
+      const targetSym = ticker || (onSiPage ? urlSym : siTicker);
       if (targetSym) {
         const clean = targetSym.toUpperCase().trim();
         if (typeof window !== "undefined") {
+          // Same steps the global search takes in goToStock (shell.tsx).
           localStorage.setItem("iq-stock", clean);
           localStorage.setItem("iq-nav-collapsed", "0");
           window.dispatchEvent(
             new CustomEvent("iq-stock-change", { detail: clean })
           );
         }
-        if (onOpenStockInMC) {
-          onOpenStockInMC(clean);
-        }
         setTimeout(() => {
           setIsSI(false);
-          router.push("/menu/stock");
-        }, 70);
+          // One navigation only: onOpenStockInMC (openStockFull) already pushes
+          // /menu/stock, so pushing again here added a duplicate history entry.
+          if (onOpenStockInMC) onOpenStockInMC(clean);
+          else router.push("/menu/stock");
+        }, 160);
       } else {
         setTimeout(() => {
           setIsSI(false);
-          router.push("/menu/dashboard");
-        }, 70);
+          router.push("/dashboard");
+        }, 160);
       }
     },
     [siTicker, router, onOpenStockInMC, triggerSweep]
