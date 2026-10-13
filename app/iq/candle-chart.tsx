@@ -223,7 +223,7 @@ const CAT: CatEntry[] = [
   { k: "bb", name: "BB", alias: "Bollinger Bands", type: "overlay", col: "#8b7ef0", param: { label: "Length", def: 20, opts: [10, 20, 50] }, suffix: ", 2" },
   { k: "ema", name: "EMA", alias: "Exponential Moving Average", type: "overlay", col: "#2fd9d0", param: { label: "Length", def: 21, opts: [9, 21, 50, 100, 200] } },
   { k: "macd", name: "MACD", alias: "Moving Average Convergence Divergence", type: "pane", col: "#4a67d8", fixed: "12, 26, 9" },
-  { k: "rsi", name: "RSI", alias: "Relative Strength Index", type: "pane", col: "#e07be0", param: { label: "Length", def: 14, opts: [7, 14, 21] } },
+  { k: "rsi", name: "RSI", alias: "Relative Strength Index", type: "overlay", col: "#e07be0", param: { label: "Length", def: 14, opts: [7, 14, 21] } },
   { k: "sma", name: "SMA", alias: "Simple Moving Average", type: "overlay", col: "#f3b24a", param: { label: "Length", def: 50, opts: [9, 21, 50, 100, 200] } },
   { k: "stoch", name: "Stoch", alias: "Stochastic", type: "pane", col: "#4bd99a", param: { label: "Length", def: 14, opts: [5, 9, 14, 21] }, suffix: ", 3, 3" },
   { k: "vol", name: "Volume", type: "pane", col: "#6b7688" },
@@ -460,7 +460,7 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
     for (const s of overlays) {
       const d = computed.get(s.id);
       if (d?.kind === "bb") { bump(at(d.u, i)); bump(at(d.lo, i)); }
-      else if (d?.kind === "line") bump(at(d.v, i));
+      else if (d?.kind === "line" && s.k !== "rsi") bump(at(d.v, i)); // RSI rides its own 0-100 scale
     }
   }
   if (!isFinite(hi)) { hi = 1; lo = 0; }
@@ -591,9 +591,19 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
     }
     ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
   };
+  // RSI is drawn over the price area on a fixed 0-100 scale of its own, not the price axis.
+  const rsiY = (v: number) => g.top + ((100 - v) / 100) * ph;
   for (const s of overlays) {
     const d = computed.get(s.id);
     if (d?.kind === "bb") { line(d.u, s.col, yOf, 1); line(d.lo, s.col, yOf, 1); line(d.mid, s.col, yOf, 1, [4, 4]); }
+    else if (d?.kind === "line" && s.k === "rsi") {
+      ctx.setLineDash([3, 4]); ctx.strokeStyle = pal.band;
+      for (const v of [30, 70]) { ctx.beginPath(); ctx.moveTo(g.l, rsiY(v)); ctx.lineTo(g.r, rsiY(v)); ctx.stroke(); }
+      ctx.setLineDash([]);
+      ctx.fillStyle = pal.text; ctx.textAlign = "left";
+      for (const v of [30, 70]) ctx.fillText(String(v), g.l + 5, rsiY(v) - 8);
+      line(d.v, s.col, rsiY, 1.5);
+    }
     else if (d?.kind === "line") line(d.v, s.col, yOf, 1.6, s.k === "vwap" ? [6, 3] : null);
   }
 
@@ -718,13 +728,12 @@ function drawPane(
       ctx.fillText(`avg vol ${bigVol(avg)}`, g.r - 6, Math.max(p.top + 8, ay - 6));
       ctx.font = `12px ${pal.font}`;
     }
-  } else if ((st.k === "rsi" && d?.kind === "line") || (st.k === "stoch" && d?.kind === "stoch")) {
-    const bands: [number, number] = st.k === "rsi" ? [30, 70] : [20, 80];
+  } else if (st.k === "stoch" && d?.kind === "stoch") {
+    const bands: [number, number] = [20, 80];
     ctx.setLineDash([3, 4]); ctx.strokeStyle = pal.band;
     for (const v of bands) { ctx.beginPath(); ctx.moveTo(g.l, band(v)); ctx.lineTo(g.r, band(v)); ctx.stroke(); }
     ctx.setLineDash([]);
-    if (d.kind === "line") line(d.v, st.col, band, 1.5);
-    else { line(d.k, st.col, band, 1.5); line(d.d, "#f3b24a", band, 1.2); }
+    line(d.k, st.col, band, 1.5); line(d.d, "#f3b24a", band, 1.2);
     bandLabels.push([bands[1], band(bands[1])], [bands[0], band(bands[0])]);
   } else if (st.k === "macd" && d?.kind === "macd") {
     const y = auto([d.m, d.s, d.h]), zero = y(0);
