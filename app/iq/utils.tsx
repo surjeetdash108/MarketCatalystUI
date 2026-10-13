@@ -599,3 +599,15 @@ export function cleanCatalystText(raw: string | null | undefined): string {
   }
   return trimmed;
 }
+
+/**
+ * True when a headline already opens with its own ticker ("TLT's Yield Edge…",
+ * "NVDA: Q3 beat…"), so a feed row can drop its "TLT:" prefix instead of
+ * printing the symbol twice. Word-boundary match: "XLEI…" does not count as
+ * opening with "XLE".
+ */
+export function headlineLeadsWithTicker(headline: string | null | undefined, ticker: string | null | undefined): boolean {
+  if (!headline || !ticker) return false;
+  const t = ticker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^\\$?${t}\\b`, "i").test(headline.trim());
+}

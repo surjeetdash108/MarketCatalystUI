@@ -5,7 +5,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, chartAsOfLabel, fmtFetchedAt, intervalLabel, CHART_TYPE_OPTIONS, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
+import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, chartAsOfLabel, fmtFetchedAt, intervalLabel, CHART_TYPE_OPTIONS, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
@@ -16,7 +16,7 @@ import { useBackendBars, useIntervalBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useLiveQuotes, extendedSession } from "../live-quotes-context";
-import { EarningsPlaybook, playbookReports } from "./EarningsPlaybook";
+import { EarningsPlaybook, EarningsPlaybookCards, playbookReports } from "./EarningsPlaybook";
 import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
 // import { useLiveQuotes } from "../live-quotes-context";
 // import { EarningsPlaybook } from "./EarningsPlaybook";
@@ -34,7 +34,7 @@ import type {
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, type EpsSalesPt } from "../eps-sales-data";
-import { surprisePct } from "../types";
+import { surprisePct, estimatedAnnualEps } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
@@ -248,8 +248,13 @@ function incRowsFromFinancials(
     const opex = period === "Q"
       ? (r as QuarterFinancials).operatingExpenses ?? Math.max(0, grossProfit - operatingIncome)
       : Math.max(0, grossProfit - operatingIncome);
+    // Quarters are labelled by period end ("Jul-26"), the same as the Sales
+    // chart and table beside this one, so the three line up column for column.
+    const end = period === "Q" ? (r as QuarterFinancials).endDate : null;
     const label = period === "Q"
-      ? `${(r as QuarterFinancials).fiscalPeriod ?? "?"} '${(r.fiscalYear ?? "").slice(-2)}`
+      ? end
+        ? fmtDate(end, { month: "short", year: "2-digit" }).replace(" ", "-")
+        : `${(r as QuarterFinancials).fiscalPeriod ?? "?"} '${(r.fiscalYear ?? "").slice(-2)}`
       : `FY ${r.fiscalYear ?? "?"}`;
     return {
       c: label,
@@ -376,6 +381,85 @@ function EpsSalesBars({ data }: { data: EpsSalesPt[] }) {
   );
 }
 
+/** Segmented toggle (Quarterly / Annual, news periods) — the reference's pill row. */
+function SegToggle<T extends string>({ label, value, options, onChange }: {
+  label: string;
+  value: T;
+  options: Array<[T, ReactNode]>;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="sd-seg" role="group" aria-label={label}>
+      {options.map(([v, l]) => (
+        <button key={v} type="button" aria-pressed={value === v} onClick={() => onChange(v)}>{l}</button>
+      ))}
+    </div>
+  );
+}
+
+/** Tracks an element's rendered width so a chart's viewBox can match it 1:1. */
+function useMeasuredWidth(initial: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(initial);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => { const cw = el.clientWidth; if (cw > 0) setW(cw); };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w] as const;
+}
+
+/**
+ * Financials "Sales $B": one bar per period, value on top, period angled
+ * underneath. A trailing `est` bar is the next period's consensus estimate,
+ * drawn grey — present only when the earnings calendar actually has one.
+ */
+function SalesBars({ data }: { data: Array<{ label: string; v: number; est?: boolean }> }) {
+  const [wrapRef, W] = useMeasuredWidth(560);
+  // PADL leaves room for the first angled label, which runs down-left of its bar.
+  const H = 250, PADT = 22, PADB = 50, PADL = 22, PADR = 4;
+  const ih = H - PADT - PADB;
+  const gw = (W - PADL - PADR) / Math.max(1, data.length);
+  const bw = Math.min(28, gw * 0.62);
+  const max = Math.max(0, ...data.map(d => d.v)) || 1;
+  const baseY = PADT + ih;
+  return (
+    <div ref={wrapRef}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
+        {data.map((d, i) => {
+          const cx = PADL + gw * i + gw / 2;
+          const h = Math.max(3, (d.v / max) * ih * 0.92);
+          const ly = baseY + 14;
+          return (
+            <g key={d.label + i}>
+              <rect x={(cx - bw / 2).toFixed(1)} y={(baseY - h).toFixed(1)} width={bw.toFixed(1)} height={h.toFixed(1)}
+                rx="3" style={{ fill: d.est ? "var(--border-strong)" : "var(--brand)" }} />
+              <text x={cx.toFixed(1)} y={(baseY - h - 6).toFixed(1)} textAnchor="middle"
+                style={{ fill: d.est ? "var(--text-dim-solid)" : "var(--text)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
+                {Math.round(d.v).toLocaleString()}
+              </text>
+              <text x={cx.toFixed(1)} y={ly.toFixed(1)} textAnchor="end"
+                transform={`rotate(-40 ${cx.toFixed(1)} ${ly.toFixed(1)})`}
+                style={{ fill: "var(--text-dim-solid)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
+                {d.est ? "*" : ""}{d.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/** Series colours for the grouped income chart. Distinct hues on purpose: the
+ *  app's --brand / --ai / --up are all the same green, which made revenue,
+ *  gross profit and net income indistinguishable. */
+const INC_COLORS = { rev: "#4a67d8", gp: "#c084fc", ni: "var(--up)", loss: "var(--down)" } as const;
+
 // EPS estimate-vs-actual bars. No live source exists for post-earnings price
 // reaction across history, so (unlike the old mock version) this never draws
 // a "stock move" line — only the two numbers the live earnings feed actually has.
@@ -410,51 +494,39 @@ function EarnEpsChart({ hist }: { hist: EarnQ[] }) {
 }
 
 function EarnIncChart({ inc }: { inc: IncRow[] }) {
-  // Fill the card's full width instead of capping at a fixed 380px. The viewBox
-  // width tracks the measured container width so the chart stretches edge to
-  // edge at a fixed height — bars spread out, and text/bar sizes stay natural
-  // (a plain maxWidth removal would scale the whole SVG up and distort both).
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [W, setW] = useState(760);
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const measure = () => { const cw = el.clientWidth; if (cw > 0) setW(cw); };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  // The viewBox width tracks the measured container width so the chart fills
+  // the card edge to edge at a fixed height, with text at its natural size.
+  const [wrapRef, W] = useMeasuredWidth(760);
   const d = [...inc].reverse();
-  const H = 200, PADL = 8, PADR = 8, PADT = 14, PADB = 26;
-  const iw = W - PADL - PADR, ih = H - PADT - PADB;
-  const max = Math.max(...d.map(x => x.rev)) * 1.12 || 1;
-  const gw = iw / d.length, bw = Math.min(gw * 0.2, 26);
-  const series: Array<{ key: "rev" | "gp" | "ni"; color: string }> = [
-    { key: "rev", color: "var(--brand)" },
-    { key: "gp",  color: "var(--ai)" },
-    { key: "ni",  color: "var(--up)" },
-  ];
+  const H = 250, PADL = 22, PADR = 4, PADT = 14, PADB = 50;
+  const ih = H - PADT - PADB, baseY = PADT + ih;
+  const max = Math.max(...d.map(x => Math.max(x.rev, Math.abs(x.ni)))) || 1;
+  const gw = (W - PADL - PADR) / Math.max(1, d.length);
+  const groupW = Math.min(40, gw * 0.7), gap = 2, bw = (groupW - gap * 2) / 3;
   return (
     <div ref={wrapRef} style={{ width: "100%" }}>
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
       {d.map((x, i) => {
-        const gx = PADL + gw * i;
+        const cx = PADL + gw * i + gw / 2;
+        const x0 = cx - groupW / 2;
+        const vals: Array<[number, string]> = [
+          [x.rev, INC_COLORS.rev],
+          [x.gp, INC_COLORS.gp],
+          [x.ni, x.ni < 0 ? INC_COLORS.loss : INC_COLORS.ni],
+        ];
+        const ly = baseY + 14;
         return (
-          <g key={x.c}>
-            {series.map((se, si) => {
-              const v = x[se.key];
-              const h = Math.max(2, v / max * ih);
-              const bx = gx + gw * 0.16 + si * (bw + 5);
+          <g key={x.c + i}>
+            {vals.map(([v, col], si) => {
+              const h = Math.max(2, (Math.abs(v) / max) * ih);
               return (
-                <rect key={se.key}
-                  x={bx.toFixed(1)} y={(PADT + ih - h).toFixed(1)}
-                  width={bw.toFixed(1)} height={h.toFixed(1)} rx="2"
-                  style={{ fill: se.color }} />
+                <rect key={si} x={(x0 + si * (bw + gap)).toFixed(1)} y={(baseY - h).toFixed(1)}
+                  width={bw.toFixed(1)} height={h.toFixed(1)} rx="2" style={{ fill: col }} />
               );
             })}
-            <text x={(gx + gw / 2).toFixed(1)} y={H - 8} textAnchor="middle"
-              style={{ fill: "var(--text-dim-solid)", fontSize: "0.5625rem" }}>
+            <text x={cx.toFixed(1)} y={ly.toFixed(1)} textAnchor="end"
+              transform={`rotate(-40 ${cx.toFixed(1)} ${ly.toFixed(1)})`}
+              style={{ fill: "var(--text-dim-solid)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
               {x.c}
             </text>
           </g>
@@ -465,60 +537,144 @@ function EarnIncChart({ inc }: { inc: IncRow[] }) {
   );
 }
 
-function EarnPane({ hist10 }: { hist10: EarnQ[] }) {
-  const hist = hist10.slice(0, 8).reverse();
-  const W = 720, H = 80, PADL = 40, PADR = 20, PADT = 10, PADB = 18;
-  const iw = W - PADL - PADR;
-  const ih = H - PADT - PADB;
-  const mid = PADT + ih / 2;
-  const gw = iw / hist.length;
-  // Same bar width as the EPS history / Earnings-Growth charts (gw * 0.28) so
-  // every earnings histogram reads consistently across the app.
-  const bw = gw * 0.28;
-  const maxS = Math.max(8, ...hist.map(x => Math.abs(x.surp)));
-
+/** Legend for EarnIncChart, shown in the card footer as in the reference. */
+function IncLegend() {
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
-      {/* Zero line */}
-      <line x1={PADL} y1={mid} x2={W - PADR} y2={mid}
-        stroke="var(--border)" strokeDasharray="3 3" strokeWidth="1" />
+    <span className="sd-keys">
+      <span><i className="sd-key" style={{ background: INC_COLORS.rev }} />Revenue</span>
+      <span><i className="sd-key" style={{ background: INC_COLORS.gp }} />Gross profit</span>
+      <span><i className="sd-key" style={{ background: INC_COLORS.ni }} />Net income</span>
+      <span><i className="sd-key" style={{ background: INC_COLORS.loss }} />Net loss</span>
+    </span>
+  );
+}
 
-      {hist.map((q, i) => {
-        const beat = q.surp >= 0;
-        const cx = PADL + gw * i + gw / 2;
-        const barH = Math.max(4, (Math.abs(q.surp) / maxS) * (ih / 2 - 4));
-        const rx = (cx - bw / 2).toFixed(1);
-        const ry = beat ? (mid - barH).toFixed(1) : mid.toFixed(1);
-        const color = beat ? "var(--up)" : "var(--down)";
-        const labelY = beat
-          ? (mid - barH - 4).toFixed(1)
-          : (mid + barH + 9).toFixed(1);
+const MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Jul 26" → the label `months` later ("Oct 26"); null for any other shape. */
+function shiftMonthLabel(label: string, months: number): string | null {
+  const m = label.match(/^([A-Za-z]{3})[ -](\d{2})$/);
+  const mi = m ? MON3.indexOf(m[1]) : -1;
+  if (!m || mi < 0) return null;
+  const t = Number(m[2]) * 12 + mi + months;
+  return `${MON3[((t % 12) + 12) % 12]} ${String(Math.floor(t / 12)).padStart(2, "0")}`;
+}
+/** YoY % for a growth bar; null on a ~0 base or an absurd jump (spin-offs). */
+function yoyPct(cur: number | null | undefined, prev: number | null | undefined): number | null {
+  if (cur == null || prev == null || Math.abs(prev) < 0.05) return null;
+  const v = ((cur - prev) / Math.abs(prev)) * 100;
+  return Math.abs(v) <= 1000 ? v : null;
+}
 
+/** One period on the EPS-surprise strip. `surp` null = no matched estimate;
+ *  `est` marks the upcoming period, drawn as a grey placeholder bar. */
+type SurpPt = { label: string; surp: number | null; est?: boolean };
+
+/**
+ * EPS surprise strip: beats rise above a dashed baseline, misses hang below,
+ * with BEAT / MISS in their own gutter on the left. Fixed 560x260 geometry
+ * scaled to the card, matching the Earnings-growth chart beside it.
+ */
+function EpsSurpriseChart({ data }: { data: SurpPt[] }) {
+  const W = 560, H = 260, PADL = 64, PADR = 12, BASE = 140, BW = 22;
+  const step = (W - PADL - PADR) / Math.max(1, data.length);
+  const max = Math.max(1, ...data.map(d => (d.surp != null ? Math.abs(d.surp) : 0)));
+  const scale = 84 / max;
+  const mono = { fontFamily: "var(--f-mono)", fontSize: "11px" };
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }} role="img" aria-label="EPS surprise by period">
+      <line x1={PADL - 8} x2={W - PADR} y1={BASE} y2={BASE} stroke="var(--border-strong)" strokeDasharray="5 5" />
+      <text x={PADL - 14} y={BASE - 16} textAnchor="end" style={{ ...mono, fill: "var(--text-dim-solid)" }}>BEAT</text>
+      <text x={PADL - 14} y={BASE + 22} textAnchor="end" style={{ ...mono, fill: "var(--text-dim-solid)" }}>MISS</text>
+      {data.map((d, i) => {
+        const x = PADL + step * i + step / 2;
+        const label = (
+          <text x={x} y={H - 14} textAnchor="middle" style={{ ...mono, fontSize: "10px", fill: "var(--text-dim-solid)" }}>
+            {d.est ? "*" : ""}{d.label}
+          </text>
+        );
+        if (d.est || d.surp == null) {
+          const bh = d.est ? 40 : 4;
+          return (
+            <g key={d.label + i}>
+              <rect x={x - BW / 2} y={BASE - bh} width={BW} height={bh} rx="3" style={{ fill: "var(--border-strong)" }} />
+              <text x={x} y={BASE - bh - 10} textAnchor="middle" style={{ ...mono, fill: "var(--text-dim-solid)" }}>{d.est ? "est" : "—"}</text>
+              {label}
+            </g>
+          );
+        }
+        const beat = d.surp >= 0, bh = Math.max(3, Math.abs(d.surp) * scale);
+        const y = beat ? BASE - bh : BASE;
         return (
-          <g key={q.q}>
-            <rect x={rx} y={ry} width={bw.toFixed(1)} height={barH.toFixed(1)}
-              rx="2" fill={color} opacity="0.88" />
-            <text x={cx.toFixed(1)} y={labelY} textAnchor="middle"
-              fill={color} fontSize="7.5" fontFamily="JetBrains Mono,monospace">
-              {beat ? "+" : ""}{q.surp.toFixed(1)}%
+          <g key={d.label + i}>
+            <rect x={x - BW / 2} y={y} width={BW} height={bh} rx="3" style={{ fill: beat ? "var(--brand)" : "var(--down)" }} />
+            <text x={x} y={beat ? y - 10 : y + bh + 18} textAnchor="middle"
+              style={{ ...mono, fill: beat ? "var(--text)" : "var(--down)" }}>
+              {beat ? "+" : ""}{d.surp.toFixed(1)}%
             </text>
-            <text x={cx.toFixed(1)} y={(H - 3).toFixed(1)} textAnchor="middle"
-              fill="var(--text-dim-solid)" fontSize="7.5" fontFamily="JetBrains Mono,monospace">
-              {q.q.replace(" ", "'")}
-            </text>
+            {label}
           </g>
         );
       })}
-
-      {/* Beat/miss labels on Y axis */}
-      <text x={PADL - 4} y={(mid - 2).toFixed(1)} textAnchor="end"
-        fill="var(--text-dim-solid)" fontSize="7" fontFamily="JetBrains Mono,monospace">BEAT</text>
-      <text x={PADL - 4} y={(mid + 10).toFixed(1)} textAnchor="end"
-        fill="var(--text-dim-solid)" fontSize="7" fontFamily="JetBrains Mono,monospace">MISS</text>
     </svg>
   );
 }
 
+/** One period on the EPS-growth chart. `est` = upcoming consensus, drawn grey. */
+type GrowthPt = { label: string; v: number; yoy: number | null; est?: boolean };
+
+/**
+ * Earnings growth (EPS): bars per period with the value on top and YoY above
+ * that, a dashed trend line through the bar tops, and three $ gridlines.
+ */
+function EpsGrowthBars({ data }: { data: GrowthPt[] }) {
+  const W = 560, H = 260, PT = 44, PB = 34, PL = 46, PR = 12, BW = 22;
+  const vals = data.map(d => d.v);
+  const top = Math.max(0.5, Math.ceil(Math.max(...vals, 0) * 1.25 * 2) / 2);
+  const bot = Math.min(0, ...vals);
+  const ph = H - PT - PB, step = (W - PL - PR) / Math.max(1, data.length);
+  const y = (v: number) => PT + ((top - v) / (top - bot || 1)) * ph;
+  const zero = y(0);
+  const mono = { fontFamily: "var(--f-mono)", fontSize: "11px" };
+  const pts = data.map((d, i) => [PL + step * i + step / 2, y(d.v)] as const);
+  const ticks = bot < 0 ? [bot, 0, top] : [0, top / 2, top];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }} role="img" aria-label="EPS by period">
+      {ticks.map(v => (
+        <g key={v}>
+          <line x1={PL} x2={W - PR} y1={y(v)} y2={y(v)} stroke="var(--border-soft)" strokeDasharray="4 6" />
+          <text x={PL - 10} y={y(v) + 4} textAnchor="end" style={{ ...mono, fill: "var(--text-dim-solid)" }}>
+            {v < 0 ? "-" : ""}${Math.abs(v).toFixed(2)}
+          </text>
+        </g>
+      ))}
+      <polyline points={pts.map(p => p.join(",")).join(" ")} fill="none" stroke="var(--text-dim-solid)" strokeWidth="1.5" strokeDasharray="4 4" />
+      {data.map((d, i) => {
+        const x = pts[i][0], yv = y(d.v);
+        const by = Math.min(yv, zero), bh = Math.max(2, Math.abs(zero - yv));
+        const labY = d.v >= 0 ? yv - 8 : yv + 16;
+        return (
+          <g key={d.label + i}>
+            <rect x={x - BW / 2} y={by} width={BW} height={bh} rx="3"
+              style={{ fill: d.est ? "var(--border-strong)" : d.v < 0 ? "var(--down)" : "var(--brand)" }} />
+            <text x={x} y={labY} textAnchor="middle"
+              style={{ ...mono, fontSize: "12px", fontWeight: 500, fill: d.est ? "var(--text-dim-solid)" : "var(--text-hi)" }}>
+              {d.v.toFixed(2)}
+            </text>
+            {d.yoy != null && d.v >= 0 && (
+              <text x={x} y={labY - 14} textAnchor="middle" style={{ ...mono, fill: d.yoy < 0 ? "var(--down)" : "var(--brand)" }}>
+                {d.yoy > 0 ? "+" : ""}{Math.round(d.yoy)}%
+              </text>
+            )}
+            <text x={x} y={H - 12} textAnchor="middle" style={{ ...mono, fontSize: "10px", fill: "var(--text-dim-solid)" }}>
+              {d.est ? "*" : ""}{d.label}
+            </text>
+          </g>
+        );
+      })}
+      {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="3" style={{ fill: "var(--text-dim-solid)" }} />)}
+    </svg>
+  );
+}
 
 export type StockTab =
   | "overview"
@@ -658,11 +814,14 @@ export function StockScreen({
 
   type InnerDrawer = "techrating" | "peers" | "industry" | "insider" | "keylevels" | "earnings" | "financials" | "dividend" | null;
   const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
+  // Company blurb in the quote strip: two lines, expanded in place by "More".
+  const [aboutOpen,   setAboutOpen]   = useState(false);
   // Peers list sort by session % change; default desc (best performers first).
   const [peerSort, setPeerSort] = useState<"desc" | "asc">("desc");
   const [peerSortBy, setPeerSortBy] = useState<"c" | "mcap" | "rs" | "sym">("c");
   const [peerQuery, setPeerQuery] = useState<string>("");
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
+  const [erMode,      setErMode]      = useState<"Q" | "A">("Q");
 
   // Tab shown below the persistent header + chart, in the full (non-embedded)
   // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
@@ -981,6 +1140,22 @@ export function StockScreen({
   // financials doc this screen already fetched, rather than via
   // useChartEarnings, to avoid fetching it a second time.
   const chartEarnings: ChartEarnings[] = buildChartEarnings(financialsDoc, symEvents, todayStr);
+
+  // The next report on the earnings calendar — the only feed carrying a SALES
+  // estimate, and a fallback for the next EPS estimate. Null when none is listed.
+  const upcomingEr = symEvents.find(e => e.date >= todayStr) ?? null;
+  // Sales surprise for the quarter ending `end`: the calendar row reported
+  // within ~100 days after that quarter end, when it has both revenue numbers.
+  // The calendar holds only a few rows per ticker, so most quarters stay null.
+  const salesSurpriseFor = (end: string | undefined): number | null => {
+    if (!end) return null;
+    const endMs = Date.parse(end);
+    const ev = symEvents.find(e => {
+      const lag = Date.parse(e.date) - endMs;
+      return lag > 0 && lag <= 100 * 86_400_000 && e.revenueActual != null && e.revenueEstimate != null && e.revenueEstimate !== 0;
+    });
+    return ev ? ((ev.revenueActual as number) - (ev.revenueEstimate as number)) / Math.abs(ev.revenueEstimate as number) * 100 : null;
+  };
 
   // EPS (TTM): the stored trailing-twelve-month EPS from the company doc, shown
   // as-is — NOT reconstructed as price ÷ P/E (circular: the sync-time P/E was
@@ -1351,96 +1526,29 @@ export function StockScreen({
 
       {!hideHeader && !hideIdentity && (
         <div style={{ padding: "14px 18px 0" }}>
-          {/* Header row: identity/quote on the left, the About blurb in the dead
-              space to its right. The blurb used to sit on its own line BELOW the
-              header, pushing the chart ~90px down the page for no informational
-              gain — the header never used its right half. */}
-          <div className="sd-headwrap">
-          <div className="sd-head">
-            <StockLogo sym={sym} size={38} />
-            <div className="sd-name">
-              {/* ONE line for the whole identity: symbol, quote, market cap,
-                  then name / exchange / sector and the pills. Name-and-sector
-                  used to be a second line under the price; folding it up here
-                  makes the header a single line, which is what lets the chart
-                  start higher. It still wraps rather than clips on a narrow
-                  window — flex-wrap with a small row-gap, so a wrapped header
-                  degrades to the old two-line look instead of losing text. */}
-              <div
-                className="sd-headline"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  flexWrap: "nowrap",
-                }}
-              >
-                <h1 style={{ margin: 0, flexShrink: 0, fontSize: "0.95rem" }}>{sym}</h1>
-
-                <QuoteHeadline q={hq} />
+          {/* Quote strip, as in the stock-detail reference: ONE card with the
+              identity, the quote and a two-line company blurb that expands in
+              place. It replaces the tall header + separate scrolling About box,
+              which pushed the tabs and chart well down the page. */}
+          <section className="sd-snap">
+            {/* StockLogo scales by TICKER_LOGO_SCALE (1.5), so 23 renders ~34px. */}
+            <StockLogo sym={sym} size={23} />
+            <div className="sd-snap-id">
+              <h1>{sym}</h1>
+              <div className="ex" title={[data.name, ex, group].filter(Boolean).join(" · ")}>
+                {[ex, group].filter(Boolean).join(" · ") || data.name}
               </div>
-              {/* Volume line: under NVDA text beside logo, above Mkt cap */}
-              <div
-                className="sd-vol"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginTop: 2,
-                  lineHeight: 1.2,
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--f-mono)",
-                    fontSize: ".58rem",
-                    fontWeight: 600,
-                    color: "var(--text-dim-solid)",
-                    letterSpacing: ".02em",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Volume <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{sessionVol != null ? fmt(sessionVol) : "—"}</span>
-                </span>
-              </div>
-              {/* Second line, under the price: market cap, exchange/sector and
-                  the provenance pills. These used to share the identity line
-                  with the symbol and quote, which left the header wide and the
-                  About box squeezed into a 30% column. Dropping them one row
-                  narrows what the header needs and lets About take the width. */}
-              <div className="sd-meta" style={{ marginTop: 3, columnGap: 8 }}>
-                {mc != null && (
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: ".58rem", fontWeight: 600,
-                    color: "var(--text-dim-solid)", letterSpacing: ".02em", whiteSpace: "nowrap" }}>
-                    Mkt cap {cap(mc)}
-                  </span>
-                )}
-                {/* The company name is dropped here only when the About box is
-                    showing, because its own heading already reads "About <full
-                    name>" to the right — repeating it is pure duplication. With
-                    no About box the name has nowhere else to appear, so it stays. */}
-                <span className="sub" title={[data.name, ex, group].filter(Boolean).join(" · ")} style={{ fontSize: ".64rem" }}>
-                  {[data.description ? null : data.name, ex, group].filter(Boolean).join(" · ")}
-                </span>
+            </div>
+            <div className="sd-snap-px">
+              <QuoteHeadline q={hq} />
+              <div className="sd-snap-meta">
+                <span>Vol <b>{sessionVol != null ? fmt(sessionVol) : "—"}</b></span>
+                {mc != null && <span>Mkt cap <b>{cap(mc)}</b></span>}
                 {inSectorRank != null && inSectorTotal != null && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".52rem", padding: "1px 5px" }}>
                     #{inSectorRank} of {inSectorTotal} in sector
                   </span>
                 )}
-                {/* Deliberately on the META row, not beside the price. The
-                    .sd-head min-width floor in iq.css is measured to fit
-                    exactly h1 + price + change on one line; a pill up there
-                    overflows that budget and wraps the change under a clipped
-                    price. This row already wraps by design. */}
-                {/* {extLabel && (
-                  <span
-                    className="pill"
-                    title={`This move happened outside regular trading hours. The last regular session closed at $${fmt(atClose ?? 0, 2)} — that close is what the chart's final candle shows.`}
-                    style={{ background: "var(--surface-3)", color: "var(--warn)", fontSize: ".62rem", whiteSpace: "nowrap" }}
-                  >
-                    {extLabel}{atClose != null ? ` · at close $${fmt(atClose, 2)}` : ""}
-                  </span>
-                )} */}
                 {isLiveStock && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".52rem", padding: "1px 5px" }}>
                     live quote · {vendorLabel(liveCompany?.source)}
@@ -1448,57 +1556,32 @@ export function StockScreen({
                 )}
               </div>
             </div>
-            {/* The About box now sits 16px to the right and carries its own
-                Polygon tag, so a second identical badge here is just noise.
-                Without a description there is no neighbouring tag, and the
-                header keeps its own — attribution is never dropped. */}
-            {!data.description && (
-              <span style={{ alignSelf: "flex-start" }}>
-                <VendorTag v="polygon" />
-              </span>
-            )}
-            {headerActions && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginLeft: "auto",
-                  flex: "none",
-                }}
-              >
-                {headerActions}
-              </div>
-            )}
-          </div>
-
-          {/* About the company — Polygon /v3/reference/tickers description, wired
-              via /live/company. Shown in full (no clamp / no toggle); it scrolls
-              inside its box, which is now the header's right-hand half. */}
-          {data.description && (
-            <div className="sd-about" style={{ flex: "1 1 auto", width: "auto", maxWidth: "none" }}>
-              {/* <div className="sd-about-lbl" style={{ display: "flex", alignItems: "center", gap: 8 }}>About {data.name} <VendorTag v="polygon" /></div> */}
-              <div className="sd-about-lbl"style={{display: "flex",alignItems: "center",justifyContent: "flex-end",gap: 8,}}><VendorTag v="polygon" /></div>
-              <p style={{ margin: "4px 0 0", fontSize: ".82rem", lineHeight: 1.6,  color: "var(--text-primary)" }}>
-                {data.description}
-              </p>
-              {data.homepageUrl && (
-                <div style={{ marginTop: 6 }}>
-                  <a href={data.homepageUrl} target="_blank" rel="noreferrer"
-                    style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--brand-2)", textDecoration: "none" }}>
-                    Company website ↗
-                  </a>
-                </div>
+            <div className={`sd-snap-about${aboutOpen ? " open" : ""}`}>
+              {data.description ? (
+                <p>
+                  {data.description}
+                  {data.homepageUrl && (
+                    <> <a href={data.homepageUrl} target="_blank" rel="noreferrer">Company website ↗</a></>
+                  )}
+                </p>
+              ) : (
+                <p className="dim">{data.name}</p>
               )}
             </div>
-          )}
-          </div>
+            {data.description && (
+              <button type="button" className="sd-snap-more" aria-expanded={aboutOpen} onClick={() => setAboutOpen(o => !o)}>
+                {aboutOpen ? "Less" : "More"}
+              </button>
+            )}
+            <span className="sd-snap-src"><VendorTag v="polygon" /></span>
+            {headerActions && <div className="sd-snap-actions">{headerActions}</div>}
+          </section>
         </div>
       )}
 
       <div
         className="sd-grid"
-        style={hideHeader ? { paddingTop: 0 } : (showRail ? undefined : { gridTemplateColumns: "1fr" })}
+        style={hideHeader ? { paddingTop: 0 } : (showRail ? undefined : { gridTemplateColumns: "minmax(0, 1fr)" })}
       >
 
         {/* ── Tab bar — Chart / Overview / Analysis / Earnings / Financials / Holdings /
@@ -1725,9 +1808,9 @@ export function StockScreen({
                   ) : (
                     <>
                       <div className="ec-legend">
-                        <span><i style={{ background: "var(--brand)" }} />Revenue</span>
-                        <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
-                        <span><i style={{ background: "var(--up)" }} />Net income</span>
+                        <span><i style={{ background: INC_COLORS.rev }} />Revenue</span>
+                        <span><i style={{ background: INC_COLORS.gp }} />Gross profit</span>
+                        <span><i style={{ background: INC_COLORS.ni }} />Net income</span>
                       </div>
                       <EarnIncChart inc={inc} />
                       <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
@@ -2292,8 +2375,11 @@ export function StockScreen({
 
           {activeTab === "overview" && (
             <div className="card">
-              <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 12px 0" }}><VendorTag v="polygon" /></div>
-              <div className="keystats">
+              <div className="card-h">
+                <h3>Key statistics</h3>
+                <VendorTag v="polygon" />
+              </div>
+              <div className="keystats sd-stats">
                 {([
                   ["Mkt Cap",        mc != null ? cap(mc) : null],
                   ["P/E",            data.peRatio != null ? data.peRatio.toFixed(1) : null],
@@ -2318,9 +2404,9 @@ export function StockScreen({
           )}
 
           {activeTab === "analysis" && (<>
-            <div className="ai-block">
+            <div className="ai-block sd-ai">
               <div className="card-h">
-                <h3 className="ai-c">◆ AI Technical Analysis</h3>
+                <h3 className="ai-c">◆ AI technical analysis</h3>
                 <VendorTag v="polygon" />
               </div>
               <div className="card-b" style={{ maxHeight: "none" }}>
@@ -2341,13 +2427,13 @@ export function StockScreen({
                     <span className="v">{l[1]}</span>
                   </div>
                 ))}
-                <div style={{ marginTop: 10, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                  Source: rs-rating.job, technical-indicators.job, a year of daily bars · informational purposes only, not investment advice.
-                </div>
+              </div>
+              <div className="sd-foot">
+                Source: rs-rating.job, technical-indicators.job, a year of daily bars · informational only, not investment advice.
               </div>
             </div>
 
-            <div className="ai-block">
+            <div className="ai-block sd-ai">
               <div className="card-h">
                 <h3 className="ai-c">◆ AI read · {sym}</h3>
                 {aiAnalysis?.ok && (
@@ -2366,7 +2452,7 @@ export function StockScreen({
                     const a = aiAnalysis.analysis!;
                     return (
                       <>
-                        {a.headline && <div style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--text-hi)", marginBottom: 8 }}>{a.headline}</div>}
+                        {a.headline && <div style={{ fontSize: ".86rem", fontWeight: 500, color: "var(--text-hi)", margin: "2px 0 8px" }}>{a.headline}</div>}
                         {a.volatility && (
                           <div className="ai-line"><span className="k">Volatility</span><span className="v"><b style={{ color: "var(--text-hi)", textTransform: "capitalize" }}>{a.volatility.flag}</b> — {a.volatility.note}</span></div>
                         )}
@@ -2379,344 +2465,338 @@ export function StockScreen({
                         {a.technicalSummary && (
                           <div className="ai-line"><span className="k">Setup</span><span className="v">{a.technicalSummary}</span></div>
                         )}
-                        <div style={{ marginTop: 8, fontSize: ".64rem", color: "var(--text-dim-solid)" }}>
-                          AI-generated · informational only, not investment advice.
-                        </div>
                       </>
                     );
                   })()}
                 </div>
               </div>
+              {aiAnalysis?.ok && <div className="sd-foot">AI-generated · informational only, not investment advice.</div>}
             </div>
 
-            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+            <div className="card sd-card">
               <div className="card-h">
-                <h3>Industry Group rank</h3>
+                <h3>Industry group rank</h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <VendorTag v="polygon" />
                   <span className="link" onClick={() => setInnerDrawer("industry")}>View all →</span>
                 </div>
               </div>
-              <div className="card-b" style={{ flex: 1 }}>
-                {topSectors.length === 0 ? (
-                  <DataState loading={sectorsLoading} label="No live sector performance data yet." />
-                ) : (
-                  <>
-                    {topSectors.map((s, i) => (
-                      <div key={s.sector} className="grouprow" style={s.sector === group ? { color: "var(--brand-2)" } : undefined}>
-                        <span className="rk">{i + 1}</span>
-                        <span className="gn">{s.sector}</span>
-                        <div className="bar"><i style={{ width: Math.max(8, (s.pctChange - pmnSector) / (pmxSector - pmnSector || 1) * 100) + "%" }} /></div>
-                        <span className="mono" style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{sign(s.pctChange)}</span>
+              {topSectors.length === 0 ? (
+                <div className="card-b"><DataState loading={sectorsLoading} label="No live sector performance data yet." /></div>
+              ) : (() => {
+                const maxAbs = Math.max(0.01, ...topSectors.map(x => Math.abs(x.pctChange)));
+                return (<>
+                  {topSectors.map((x, i) => {
+                    const mine = x.sector === group;
+                    return (
+                      <div key={x.sector} className={`sd-row${mine ? " mine" : ""}`}>
+                        <span className="sd-dot">{i + 1}</span>
+                        <span className="grow">
+                          {x.sector}
+                          {mine && <span className="pill" style={{ marginLeft: 6, background: "var(--brand-dim)", color: "var(--brand)" }}>{sym}</span>}
+                        </span>
+                        <span className="sd-bar-track">
+                          <span className={`sd-bar${x.pctChange < 0 ? " neg" : ""}`} style={{ width: `${(Math.abs(x.pctChange) / maxAbs) * 100}%` }} />
+                        </span>
+                        <span className={`num ${x.pctChange >= 0 ? "up" : "down"}`} style={{ width: 56, textAlign: "right" }}>{sign(x.pctChange)}</span>
                       </div>
-                    ))}
-                    <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                      {group ? <>{group} ranks <b style={{ color: grank <= 10 ? "var(--up)" : "var(--text-hi)" }}>#{grank || "—"} of {rankedSectors.length}</b> sectors by today&apos;s performance.</>
-                        : "This ticker has no sector on record."}
-                    </div>
-                  </>
-                )}
-              </div>
+                    );
+                  })}
+                  <div className="sd-foot">
+                    {group
+                      ? <>{group} ranks <strong>#{grank || "—"} of {rankedSectors.length}</strong> sectors by today&apos;s performance.</>
+                      : "This ticker has no sector on record."}
+                  </div>
+                </>);
+              })()}
             </div>
           </>)}
 
-          {activeTab === "earnings" && (<>
-            <div className="sd-two">
-            <div className="card">
-              <div className="card-h">
-                <h3>Earnings · EPS Surprise</h3>
-                <span className="mono" style={{ fontSize: ".7rem" }}>
-                  <span style={{ color: "var(--text-dim-solid)" }}>Next: </span>
-                  <span style={{ color: "var(--warn)", fontWeight: 600 }}>{erDate}</span>
-                </span>
-              </div>
+          {activeTab === "earnings" && (() => {
+            const isQ = erMode === "Q";
+            const hist = financialsDoc?.epsHistory ?? [];
+            let surpData: SurpPt[] = [];
+            let growthData: GrowthPt[] = [];
+            let summary: ReactNode = null;
+            if (isQ) {
+              // Last 8 reported quarters, oldest → newest, as in the reference.
+              const qs = hist10.slice(0, 8).reverse();
+              const byLabel = new Map(hist10.map(h => [h.q, h.a]));
+              const lastLbl = hist10[0]?.q;
+              const nextLbl = lastLbl ? shiftMonthLabel(lastLbl, 3) : null;
+              // Upcoming consensus: an unreported epsHistory row, else the calendar.
+              const nextEst = hist
+                .filter(h => h.epsActual == null && h.epsEstimate != null && h.date >= todayStr)
+                .sort((x, y) => x.date.localeCompare(y.date))[0]?.epsEstimate
+                ?? upcomingEr?.epsEstimate ?? null;
+              const dash = (l: string) => l.replace(" ", "-");
+              surpData = qs.map(h => ({ label: dash(h.q), surp: h.e !== 0 ? h.surp : null }));
+              growthData = qs.map(h => {
+                const ago = shiftMonthLabel(h.q, -12);
+                return { label: dash(h.q), v: h.a, yoy: yoyPct(h.a, ago ? byLabel.get(ago) : undefined) };
+              });
+              if (nextLbl && nextEst != null) {
+                const ago = shiftMonthLabel(nextLbl, -12);
+                surpData.push({ label: dash(nextLbl), surp: null, est: true });
+                growthData.push({ label: dash(nextLbl), v: nextEst, yoy: yoyPct(nextEst, ago ? byLabel.get(ago) : undefined), est: true });
+              }
+              const paired = qs.filter(h => h.e !== 0);
+              const last = qs[qs.length - 1];
+              const lastYoy = growthData[qs.length - 1]?.yoy ?? null;
+              summary = last ? (<>
+                {paired.length > 0 && <>{paired.filter(h => h.surp >= 0).length}/{paired.length} beats · </>}
+                {dash(last.q)} ${last.a.toFixed(2)}
+                {lastYoy != null && <> · <span style={{ color: lastYoy < 0 ? "var(--down)" : "var(--up)" }}>{lastYoy > 0 ? "+" : ""}{lastYoy.toFixed(1)}% YoY</span></>}
+              </>) : null;
+            } else {
+              const rows = financialsDoc ? annualEpsSalesRows(financialsDoc.annual, hist).filter(r => r.eps != null).slice(-5) : [];
+              surpData = rows.map(r => ({ label: `FY${r.year}`, surp: surprisePct(r.eps, r.epsEst) }));
+              growthData = rows.map((r, i) => ({ label: `FY${r.year}`, v: r.eps as number, yoy: yoyPct(r.eps, rows[i - 1]?.eps) }));
+              const lastYear = rows[rows.length - 1]?.year;
+              const nextFy = lastYear ? String(Number(lastYear) + 1) : null;
+              const nextEst = nextFy ? estimatedAnnualEps(nextFy, hist) : null;
+              if (nextFy && nextEst != null) {
+                surpData.push({ label: `FY${nextFy}`, surp: null, est: true });
+                growthData.push({ label: `FY${nextFy}`, v: nextEst, yoy: yoyPct(nextEst, rows[rows.length - 1]?.eps), est: true });
+              }
+              const paired = surpData.filter(d => !d.est && d.surp != null);
+              const last = rows[rows.length - 1];
+              const lastYoy = growthData[rows.length - 1]?.yoy ?? null;
+              summary = last ? (<>
+                {paired.length > 0 && <>{paired.filter(d => (d.surp as number) >= 0).length}/{paired.length} beats · </>}
+                FY{last.year} ${(last.eps as number).toFixed(2)}
+                {lastYoy != null && <> · <span style={{ color: lastYoy < 0 ? "var(--down)" : "var(--up)" }}>{lastYoy > 0 ? "+" : ""}{Math.round(lastYoy)}% YoY</span></>}
+              </>) : null;
+            }
+            const hasEst = surpData.some(d => d.est);
+            const empty = (
               <div className="card-b">
-                {hist10.length === 0
-                  ? <DataState loading={earningsLoading} label={`No live earnings history synced for ${sym} yet.`} />
-                  : <EarnPane hist10={hist10} />}
+                <DataState loading={earningsLoading || financialsLoading} label={`No ${isQ ? "quarterly" : "annual"} earnings history synced for ${sym} yet.`} />
               </div>
-            </div>
-
-            {(() => {
-              const histEps = hist10.slice(0, 10);
-              const beatsOf = histEps.filter(h => h.surp >= 0).length;
-              const latestA = histEps[0]?.a ?? 0;
-              const prevA   = histEps[4]?.a;
-              const yoyRaw  = prevA != null && Math.abs(prevA) >= 0.05 ? ((latestA - prevA) / Math.abs(prevA)) * 100 : null;
-              const yoy     = yoyRaw != null && Math.abs(yoyRaw) <= 1000 ? yoyRaw : null;
-              return (
-                <div className="card">
+            );
+            return (<>
+              <SegToggle label="Period" value={erMode} onChange={setErMode}
+                options={[["Q", "Quarterly"], ["A", "Annual"]]} />
+              <div className="sd-two">
+                <div className="card sd-card">
                   <div className="card-h">
-                    <h3>Earnings Growth (EPS)</h3>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <VendorTag v="polygon" />
-                      {histEps.length > 0 && (
-                        <span className="ec-legend" style={{ margin: 0 }}>
-                          <span><i style={{ background: "var(--up)" }} />Beat</span>
-                          <span><i style={{ background: "var(--down)" }} />Miss</span>
-                          <span><i className="ln" style={{ background: "var(--brand-2)" }} />Trend</span>
-                        </span>
-                      )}
-                      {histEps.length > 0 && <ExpandBtn title={`${sym} · Earnings Growth (EPS)`} node={<EarningsGrowthChart hist={histEps} />} />}
+                    <h3>EPS surprise</h3>
+                    <span className="mono" style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
+                      Next: <span style={{ color: "var(--up)", fontWeight: 600 }}>{erDate}</span>
+                    </span>
+                  </div>
+                  {surpData.length === 0 ? empty : (<>
+                    <EpsSurpriseChart data={surpData} />
+                    <div className="sd-foot">
+                      <span className="sd-keys">
+                        <span><i className="sd-key" />Beat</span>
+                        <span><i className="sd-key" style={{ background: "var(--down)" }} />Miss</span>
+                        {hasEst && <span><i className="sd-key est" />Estimate</span>}
+                      </span>
+                    </div>
+                  </>)}
+                </div>
+
+                <div className="card sd-card">
+                  <div className="card-h">
+                    <h3>Earnings growth (EPS)</h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {summary && <span className="mono" style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{summary}</span>}
+                      {growthData.length > 0 && <ExpandBtn title={`${sym} · Earnings growth (EPS)`} node={<EpsGrowthBars data={growthData} />} />}
                     </div>
                   </div>
-                  <div className="card-b" style={{ paddingTop: 8 }}>
-                    {histEps.length === 0 ? (
-                      <DataState loading={earningsLoading} label={`No live earnings history synced for ${sym} yet.`} />
-                    ) : (
-                      <>
-                        <EarningsGrowthChart hist={histEps} />
-                        <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap" }}>
-                          <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                            <b style={{ color: "var(--text-hi)" }}>{beatsOf}/{histEps.length}</b> beats
-                          </div>
-                          <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                            Latest qtr EPS <b style={{ color: "var(--text-hi)" }}>${latestA.toFixed(2)}</b>
-                          </div>
-                          {yoy !== null && (
-                            <div style={{ fontSize: ".7rem" }}>
-                              YoY <b style={{ color: yoy >= 0 ? "var(--up)" : "var(--down)" }}>{yoy >= 0 ? "+" : ""}{yoy.toFixed(1)}%</b>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-            </div>
-
-            <div className="card">
-              <div className="card-h">
-                <h3>Earnings Playbook</h3>
-                <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>how {sym} trades when it reports</span>
-              </div>
-              <div className="card-b">
-                <EarningsPlaybook
-                  sym={sym}
-                  reports={playbookReports(financialsDoc)}
-                />
-              </div>
-            </div>
-
-            <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-              <div className="card-h">
-                <h3>Earnings history</h3>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <VendorTag v={["polygon", "fmp"]} />
-                  {hist10.length > 0 && (
-                    <span className={`pill ${beatStreak >= 0 ? "up" : "dn"}`}>{Math.abs(beatStreak)}-qtr {beatStreak >= 0 ? "beat" : "miss"} streak</span>
-                  )}
-                  <span className="link" onClick={() => setInnerDrawer("earnings")}>View all →</span>
+                  {growthData.length === 0 ? empty : (<>
+                    <EpsGrowthBars data={growthData} />
+                    <div className="sd-foot">
+                      <span className="sd-keys">
+                        <span><i className="sd-key" />Reported</span>
+                        {hasEst && <span><i className="sd-key est" />Estimate</span>}
+                      </span>
+                    </div>
+                  </>)}
                 </div>
               </div>
-              <div className="card-b" style={{ paddingTop: 6, flex: 1, display: "flex", flexDirection: "column" }}>
-                {hist10.length === 0 ? (
-                  <DataState loading={earningsLoading} label={`No live earnings-estimate history synced for ${sym} yet.`} height="100%" />
-                ) : (
-                  <>
-                    <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 8 }}>Next report: {erDate}</div>
-                    {hist10.slice(0, 5).map(q => (
-                      <div key={q.q} className="minirow">
-                        <span className="tkr" style={{ width: 60 }}>{q.q}</span>
-                        <span className="mid mono">
-                          {q.e !== 0 && <span style={{ color: "var(--text-dim-solid)" }}>est ${fmt(q.e, 2)} → </span>}
-                          ${fmt(q.a, 2)} act
-                        </span>
-                        {q.e !== 0
-                          ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "beat" : "miss"} {Math.abs(q.surp)}%</span>
-                          : <span className="r" style={{ color: "var(--text-dim-solid)" }}>—</span>}
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
-            </div>
-          </>)}
+
+              <EarningsPlaybookCards
+                sym={sym}
+                reports={playbookReports(financialsDoc)}
+                onViewAll={() => setInnerDrawer("earnings")}
+              />
+            </>);
+          })()}
 
           {activeTab === "financials" && (<>
-            <div className="tf-pills" style={{ alignSelf: "flex-start" }} role="group" aria-label="Period">
-              <button className={`rng${finPeriod === "Q" ? " on" : ""}`} aria-pressed={finPeriod === "Q"} onClick={() => setFinPeriod("Q")}>Quarterly</button>
-              <button className={`rng${finPeriod === "A" ? " on" : ""}`} aria-pressed={finPeriod === "A"} onClick={() => setFinPeriod("A")}>Annual</button>
-            </div>
+            <SegToggle label="Period" value={finPeriod} onChange={setFinPeriod}
+              options={[["Q", "Quarterly"], ["A", "Annual"]]} />
             {(() => {
+              const isQ = finPeriod === "Q";
               const inc = incRowsFromFinancials(finPeriod, financialsDoc, () => []);
-              const epsSales = epsSalesSeries(finPeriod, financialsDoc);
-              return (
+              // Oldest → newest, sales in $M.
+              const series = epsSalesSeries(finPeriod, financialsDoc);
+              const reported = series.filter(r => r.sales != null);
+              const last = reported[reported.length - 1];
+              // Next quarter's consensus sales, labelled by the quarter end that
+              // follows the last reported one. Quarterly only — no annual feed.
+              const est = isQ && last?.end && upcomingEr?.revenueEstimate != null && upcomingEr.date > last.end
+                ? (() => {
+                    const d = new Date(`${last.end}T00:00:00Z`);
+                    const nextEnd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 4, 0)).toISOString().slice(0, 10);
+                    return { label: fmtDate(nextEnd, { month: "short", year: "2-digit" }).replace(" ", "-"), v: (upcomingEr.revenueEstimate as number) / 1e9 };
+                  })()
+                : null;
+              const back = isQ ? 4 : 1;
+              const pctCell = (v: number | null) => v == null
+                ? <span className="dim">—</span>
+                : <span className={v < 0 ? "down" : "up"}>{v > 0 ? "+" : ""}{Math.round(v)}%</span>;
+              const chgVs = (cur: number | null, prior: number | null | undefined) =>
+                cur != null && prior != null && prior !== 0 ? ((cur - prior) / Math.abs(prior)) * 100 : null;
+              const tbl = series.map((r, i) => ({
+                ...r,
+                chg: chgVs(r.sales, series[i - back]?.sales),
+                surp: isQ ? salesSurpriseFor(r.end) : null,
+              }));
+              const estChg = est ? chgVs(est.v * 1e3, series[series.length - back]?.sales) : null;
+
+              return (<>
                 <div className="sd-two">
-                  <div className="card">
+                  <div className="card sd-card">
                     <div className="card-h">
-                      <h3>EPS &amp; Sales</h3>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <VendorTag v="polygon" />
-                        {financialsDoc && (
-                          <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>
-                        )}
+                      <h3>Sales<span className="sd-unit">$B</span></h3>
+                      <VendorTag v="polygon" />
+                    </div>
+                    {reported.length > 0 ? (<>
+                      <div className="sd-chart">
+                        <SalesBars data={[
+                          ...reported.map(r => ({ label: r.label, v: (r.sales as number) / 1e3 })),
+                          ...(est ? [{ label: est.label, v: est.v, est: true }] : []),
+                        ]} />
                       </div>
-                    </div>
-                    <div className="card-b" style={{ paddingTop: 8 }}>
-                      {epsSales.length > 0 ? (
-                        <>
-                          <EpsSalesBars data={epsSales} />
-                          <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                            {finPeriod === "Q" ? "Reported quarters" : "Reported fiscal years"} · actuals only
-                          </div>
-                        </>
-                      ) : (
-                        <DataState loading={financialsLoading} label={`No reported ${finPeriod === "Q" ? "quarterly" : "annual"} EPS or sales on file for ${sym}.`} />
-                      )}
-                    </div>
+                      <div className="sd-foot">
+                        <span className="sd-keys">
+                          <span><i className="sd-key" />Reported</span>
+                          {est && <span><i className="sd-key est" />Estimate</span>}
+                        </span>
+                      </div>
+                    </>) : (
+                      <div className="card-b">
+                        <DataState loading={financialsLoading} label={`No reported ${isQ ? "quarterly" : "annual"} sales on file for ${sym}.`} />
+                      </div>
+                    )}
                   </div>
 
-                  <div className="card">
+                  <div className="card sd-card">
                     <div className="card-h">
-                      <h3>{finPeriod === "Q" ? "Quarterly" : "Annual"} income</h3>
+                      <h3>{isQ ? "Quarterly" : "Annual"} income<span className="sd-unit">$B</span></h3>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <VendorTag v="polygon" />
                         <span className="link" onClick={() => setInnerDrawer("financials")}>View all →</span>
-                        <ExpandBtn title={`${sym} · Financials (${finPeriod === "Q" ? "Quarterly" : "Annual"})`} node={<EarnIncChart inc={inc} />} />
+                        <ExpandBtn title={`${sym} · Financials (${isQ ? "Quarterly" : "Annual"})`} node={<EarnIncChart inc={inc} />} />
                       </div>
                     </div>
-                    <div className="card-b" style={{ paddingTop: 8 }}>
-                      {inc.length === 0 ? (
+                    {inc.length === 0 ? (
+                      <div className="card-b">
                         <DataState loading={financialsLoading} label={
                           financialsDoc && (financialsDoc.epsHistory?.length ?? 0) > 0
-                            ? `No ${finPeriod === "Q" ? "quarterly" : "annual"} income statement is published for ${sym} — reported EPS is shown alongside where available.`
-                            : `No ${finPeriod === "Q" ? "quarterly" : "annual"} financials on file for ${sym}.`
+                            ? `No ${isQ ? "quarterly" : "annual"} income statement is published for ${sym} — reported EPS is on the Earnings tab.`
+                            : `No ${isQ ? "quarterly" : "annual"} financials on file for ${sym}.`
                         } />
-                      ) : (
-                        <>
-                          <div className="ec-legend">
-                            <span><i style={{ background: "var(--brand)" }} />Revenue</span>
-                            <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
-                            <span><i style={{ background: "var(--up)" }} />Net income</span>
-                          </div>
-                          <EarnIncChart inc={inc} />
-                          <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                            {finPeriod === "Q"
-                              ? "Last 10 quarters · revenue, gross profit & net income"
-                              : "Last 10 fiscal years · revenue, gross profit & net income"}
-                            {" · tap "}&#8220;View all&#8221; for the full statement.
-                          </div>
-                        </>
-                      )}
-                    </div>
+                      </div>
+                    ) : (<>
+                      <div className="sd-chart"><EarnIncChart inc={inc} /></div>
+                      <div className="sd-foot"><IncLegend /></div>
+                    </>)}
                   </div>
                 </div>
-              );
-            })()}
 
-            <div className="sd-two" style={{ alignItems: "start" }}>
-            {(() => {
-              // Newest first; %Chg is vs the same period a year earlier.
-              const rows = epsSalesSeries(finPeriod, financialsDoc);
-              const back = finPeriod === "Q" ? 4 : 1;
-              const tbl = rows.map((r, i) => {
-                const prior = rows[i - back]?.sales;
-                const chg = r.sales != null && prior != null && prior !== 0 ? ((r.sales - prior) / Math.abs(prior)) * 100 : null;
-                return { ...r, chg };
-              }).reverse();
-              return (
-                <div className="card">
-                  <div className="card-h">
-                    <h3>{finPeriod === "Q" ? "Quarterly" : "Annual"} sales</h3>
-                    <VendorTag v="polygon" />
-                  </div>
-                  <div className="card-b" style={{ paddingTop: 4, overflowX: "auto" }}>
+                <div className="sd-two" style={{ alignItems: "start" }}>
+                  <div className="card">
                     {tbl.length === 0 ? (
-                      <DataState loading={financialsLoading} label={`No reported sales on file for ${sym}.`} />
+                      <div className="card-b">
+                        <DataState loading={financialsLoading} label={`No reported sales on file for ${sym}.`} />
+                      </div>
                     ) : (
-                      <table className="ind-tbl">
-                        <thead>
-                          <tr>
-                            <th style={{ textAlign: "left" }}>{finPeriod === "Q" ? "Quarter" : "Fiscal year"}</th>
-                            <th>Sales ($B)</th><th>%Chg</th><th>EPS</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {tbl.map(r => (
-                            <tr key={r.label}>
-                              <td>{r.label}</td>
-                              <td className="v">{r.sales != null ? (r.sales / 1e3).toFixed(2) : "—"}</td>
-                              <td className="v" style={{ color: r.chg == null ? undefined : r.chg >= 0 ? "var(--up)" : "var(--down)" }}>
-                                {r.chg != null ? `${r.chg >= 0 ? "+" : ""}${r.chg.toFixed(1)}%` : "—"}
-                              </td>
-                              <td className="v">{r.eps != null ? `$${r.eps.toFixed(2)}` : "—"}</td>
+                      <div style={{ overflowX: "auto" }}>
+                        <table className="sd-ftab">
+                          <thead>
+                            <tr>
+                              <th>{isQ ? "Quarter" : "Fiscal year"}</th>
+                              <th>Sales (B)</th>
+                              <th>%Chg</th>
+                              {isQ && <th>Surp</th>}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {tbl.map((r, i) => (
+                              <tr key={r.label} className={i === tbl.length - 1 ? "latest" : undefined}>
+                                <td>{r.label}</td>
+                                <td>{r.sales != null ? (r.sales / 1e3).toFixed(2) : <span className="dim">—</span>}</td>
+                                <td>{pctCell(r.chg)}</td>
+                                {isQ && <td>{pctCell(r.surp)}</td>}
+                              </tr>
+                            ))}
+                            {est && (
+                              <tr className="est">
+                                <td>*{est.label}</td>
+                                <td>{est.v.toFixed(2)}</td>
+                                <td>{pctCell(estChg)}</td>
+                                <td>•••</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
-                </div>
-              );
-            })()}
 
-            {(() => {
-              const dh = dividendHistory;
-              const hasReal = !!dh && dh.isPayer;
-              const yieldPct = hasReal ? dh!.yieldPct : null;
-              const annualDiv = hasReal ? (dh!.ttmTotal ?? 0) : 0;
-              const payoutRatio = eps != null && eps > 0 && yieldPct != null && yieldPct > 0
-                ? Math.min(99, Math.round((annualDiv / eps) * 100)) : null;
-              const growthLabel = hasReal && dh!.cagr5yPct != null
-                ? `${dh!.cagr5yPct >= 0 ? "+" : ""}${dh!.cagr5yPct.toFixed(1)}% / yr`
-                : null;
-              const streakLabel = hasReal && dh!.increaseStreakYears > 0 ? ` · ${dh!.increaseStreakYears}-yr streak` : "";
-              const divRows = hasReal
-                ? dh!.history.slice(0, 5).map(h => ({
-                    label: h.exDividendDate ?? "—",
-                    perShare: h.amount,
-                    note: h.exDividendDate ? `ex ${h.exDividendDate.slice(5)}` : "",
-                  }))
-                : [];
-              return (
-                <div className="card">
-                  <div className="card-h">
-                    <h3>Dividend history</h3>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <VendorTag v="polygon" />
-                      {dh && (yieldPct != null
-                        ? <span className="pill up">{yieldPct.toFixed(2)}% yield</span>
-                        : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>)}
-                      {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>}
-                      <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
-                    </div>
-                  </div>
-                  <div className="card-b" style={{ paddingTop: 6 }}>
-                    {!dh ? (
-                      <DataState loading={dividendLoading} label={`Dividend data not synced for ${sym} yet.`} />
-                    ) : !hasReal ? (
-                      <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "8px 0" }}>{sym} does not currently pay a dividend.</div>
-                    ) : (
-                      <>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                          <div>
-                            <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 4 }}>5-yr dividend growth</div>
-                            <div style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>
-                              {growthLabel ?? "—"}{payoutRatio != null ? ` · payout ${payoutRatio}%` : ""}{streakLabel}
+                  {(() => {
+                    const dh = dividendHistory;
+                    const hasReal = !!dh && dh.isPayer;
+                    const yieldPct = hasReal ? dh!.yieldPct : null;
+                    const annualDiv = hasReal ? (dh!.ttmTotal ?? 0) : 0;
+                    const payoutRatio = eps != null && eps > 0 && yieldPct != null && yieldPct > 0
+                      ? Math.min(99, Math.round((annualDiv / eps) * 100)) : null;
+                    const cagr = hasReal ? dh!.cagr5yPct : null;
+                    return (
+                      <div className="card">
+                        <div className="card-h">
+                          <h3>Dividend history</h3>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <VendorTag v="polygon" />
+                            {yieldPct != null && <span className="pill up">{yieldPct.toFixed(2)}% yield</span>}
+                            <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
+                          </div>
+                        </div>
+                        {!dh ? (
+                          <div className="card-b"><DataState loading={dividendLoading} label={`Dividend data not synced for ${sym} yet.`} /></div>
+                        ) : !hasReal ? (
+                          <div className="sd-note" style={{ paddingBottom: 14 }}>{sym} does not currently pay a dividend.</div>
+                        ) : (<>
+                          <div className="sd-note">
+                            5-yr dividend growth{" "}
+                            {cagr != null
+                              ? <span style={{ color: cagr < 0 ? "var(--down)" : "var(--up)" }}>{cagr >= 0 ? "+" : "−"}{Math.abs(cagr).toFixed(1)}%/yr</span>
+                              : "—"}
+                            {payoutRatio != null && <> · payout {payoutRatio}%</>}
+                            {dh!.increaseStreakYears > 0 && <> · {dh!.increaseStreakYears}-yr streak</>}
+                          </div>
+                          {dh!.history.slice(0, 5).map((h, i) => (
+                            <div key={(h.exDividendDate ?? "") + i} className="sd-row">
+                              <span className="grow num">{h.exDividendDate ?? "—"}</span>
+                              <span className="num">{h.amount != null ? `$${h.amount.toFixed(4)}/sh` : "—"}</span>
+                              <span className="num dim" style={{ width: 64, textAlign: "right" }}>{h.exDividendDate ? `ex ${h.exDividendDate.slice(5)}` : ""}</span>
                             </div>
+                          ))}
+                          <div className="sd-row">
+                            <span className="grow">Annual ({dh!.ttmPayments} payments)</span>
+                            <span className="num">${annualDiv.toFixed(2)}/sh</span>
                           </div>
-                        </div>
-                        {divRows.map(q => (
-                          <div key={q.label} className="minirow">
-                            <span className="tkr" style={{ width: 82, flexShrink: 0, whiteSpace: "nowrap" }}>{q.label}</span>
-                            <span className="mid mono">{q.perShare != null ? `$${q.perShare.toFixed(4)}/sh` : "—"}</span>
-                            <span className="r" style={{ color: "var(--text-dim-solid)", fontSize: ".72rem" }}>{q.note}</span>
-                          </div>
-                        ))}
-                        <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
-                          <span className="mid">Annual ({dh!.ttmPayments} payments)</span>
-                          <span className="r" style={{ color: "var(--text-hi)" }}>${annualDiv.toFixed(2)}/sh</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                        </>)}
+                      </div>
+                    );
+                  })()}
                 </div>
-              );
+              </>);
             })()}
-            </div>
           </>)}
 
           {activeTab === "holdings" && (
@@ -3070,43 +3150,44 @@ export function StockScreen({
             {activeTab === "analysis" && (
               <div className="card sd-rail-full">
                 <div className="card-h">
-                  <h3>Technical Rating</h3>
+                  <h3>Technical rating</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <VendorTag v={["polygon", "fmp"]} />
                     <span className="link" onClick={() => setInnerDrawer("techrating")}>View all →</span>
                   </div>
                 </div>
-                <div className="card-b">
-                  <div className="trgroup" style={{ borderColor: "var(--ai-dim)", marginBottom: 10 }}>
-                    <div className="gl ai-c">Summary · {ratingBasis}</div>
-                    <TrGauge val={gv} label={rating} />
-                    {techRating && <RatingTally t={techRating.all} />}
+                <div className="sd-gauge">
+                  <div className="cap">Summary · {ratingBasis}</div>
+                  <TrGauge val={gv} label={rating} />
+                  {techRating && <RatingTally t={techRating.all} />}
+                </div>
+                {consensusDoc && (<>
+                  <div className="sd-consensus">
+                    <div className="cap">Analyst consensus</div>
+                    <div className="big" style={{ color: consensusTone(consensusDoc.consensus) }}>{consensusDoc.consensus}</div>
+                    <div className="split">
+                      <span style={{ color: "var(--down)" }}><i>Sell</i>{consensusDoc.sell + consensusDoc.strongSell}</span>
+                      <span style={{ color: "var(--text-dim-solid)" }}><i>Hold</i>{consensusDoc.hold}</span>
+                      <span style={{ color: "var(--up)" }}><i>Buy</i>{consensusDoc.strongBuy + consensusDoc.buy}</span>
+                    </div>
                   </div>
-                  {consensusDoc && (
-                    <div className="trgroup">
-                      <div className="gl">Analyst Consensus</div>
-                      <div className="rate" style={{ color: consensusTone(consensusDoc.consensus) }}>{consensusDoc.consensus}</div>
-                      <div className="counts">
-                        <span style={{ color: "var(--down)" }}>Sell<b>{consensusDoc.sell + consensusDoc.strongSell}</b></span>
-                        <span style={{ color: "var(--text-dim-solid)" }}>Hold<b>{consensusDoc.hold}</b></span>
-                        <span style={{ color: "var(--up)" }}>Buy<b>{consensusDoc.strongBuy + consensusDoc.buy}</b></span>
-                      </div>
-                      {consensusDoc.priceTargetConsensus != null && (
-                        <div className="counts" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 8 }}>
-                          <span style={{ color: "var(--text-dim-solid)" }}>Target<b style={{ color: "var(--text-hi)" }}>${consensusDoc.priceTargetConsensus.toFixed(0)}</b></span>
-                          {dispPrice != null && dispPrice > 0 && (
-                            <span style={{ color: consensusDoc.priceTargetConsensus >= dispPrice ? "var(--up)" : "var(--down)" }}>
-                              Upside<b>{consensusDoc.priceTargetConsensus >= dispPrice ? "+" : ""}{(((consensusDoc.priceTargetConsensus - dispPrice) / dispPrice) * 100).toFixed(1)}%</b>
-                            </span>
-                          )}
-                          {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetHigh != null && (
-                            <span style={{ color: "var(--text-dim-solid)" }}>Range<b>${consensusDoc.priceTargetLow.toFixed(0)}–${consensusDoc.priceTargetHigh.toFixed(0)}</b></span>
-                          )}
+                  {consensusDoc.priceTargetConsensus != null && (
+                    <div className="sd-target">
+                      <div><span>Target</span>${consensusDoc.priceTargetConsensus.toFixed(0)}</div>
+                      {dispPrice != null && dispPrice > 0 && (
+                        <div>
+                          <span>Upside</span>
+                          <b style={{ color: consensusDoc.priceTargetConsensus >= dispPrice ? "var(--up)" : "var(--down)" }}>
+                            {consensusDoc.priceTargetConsensus >= dispPrice ? "+" : ""}{(((consensusDoc.priceTargetConsensus - dispPrice) / dispPrice) * 100).toFixed(1)}%
+                          </b>
                         </div>
+                      )}
+                      {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetHigh != null && (
+                        <div><span>Range</span>${consensusDoc.priceTargetLow.toFixed(0)}–${consensusDoc.priceTargetHigh.toFixed(0)}</div>
                       )}
                     </div>
                   )}
-                </div>
+                </>)}
               </div>
             )}
 
@@ -3116,37 +3197,31 @@ export function StockScreen({
                   <h3>Indicators</h3>
                   <VendorTag v="polygon" />
                 </div>
-                <div className="card-b">
-                  <table className="ind-tbl">
-                    <tbody>
-                      {indRows.map(r => (
-                        <tr key={r[0]}>
-                          <td>
-                            {r[0]}
-                            {r[0] === "RSI (14)" && rsiSeries && rsiSeries.length > 1 && (() => {
-                              const pts = rsiSeries.slice(-40);
-                              const W = 62, H = 16;
-                              const d = pts
-                                .map((v, i) => `${(i / (pts.length - 1)) * W},${H - (Math.min(100, Math.max(0, v)) / 100) * H}`)
-                                .join(" ");
-                              return (
-                                <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginLeft: 8, verticalAlign: "middle", overflow: "visible" }} aria-hidden="true">
-                                  <line x1="0" y1={H - 0.7 * H} x2={W} y2={H - 0.7 * H} stroke="var(--border-soft)" strokeWidth="1" />
-                                  <line x1="0" y1={H - 0.3 * H} x2={W} y2={H - 0.3 * H} stroke="var(--border-soft)" strokeWidth="1" />
-                                  <polyline points={d} fill="none" stroke="var(--ai)" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
-                                </svg>
-                              );
-                            })()}
-                          </td>
-                          <td className="v">{r[1] ?? <NotAvailable />}</td>
-                          <td className="a" style={{ color: ac(r[2]) }}>{r[2]}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                    RSI/MACD/Stoch %K/ADX from technical-indicators.job · RSI sparkline is the last 40 sessions on a 0-100 scale with the 30/70 bands marked · EMA/SMA computed from a year of daily bars. Indicators only — not investment advice.
+                {indRows.map(r => (
+                  <div key={r[0]} className="sd-ind">
+                    <span className="name">
+                      {r[0]}
+                      {r[0] === "RSI (14)" && rsiSeries && rsiSeries.length > 1 && (() => {
+                        const pts = rsiSeries.slice(-40);
+                        const W = 62, H = 16;
+                        const d = pts
+                          .map((v, i) => `${(i / (pts.length - 1)) * W},${H - (Math.min(100, Math.max(0, v)) / 100) * H}`)
+                          .join(" ");
+                        return (
+                          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginLeft: 8, verticalAlign: "middle", overflow: "visible" }} aria-hidden="true">
+                            <line x1="0" y1={H - 0.7 * H} x2={W} y2={H - 0.7 * H} stroke="var(--border-soft)" strokeWidth="1" />
+                            <line x1="0" y1={H - 0.3 * H} x2={W} y2={H - 0.3 * H} stroke="var(--border-soft)" strokeWidth="1" />
+                            <polyline points={d} fill="none" stroke="var(--ai)" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
+                          </svg>
+                        );
+                      })()}
+                    </span>
+                    <span className="val">{r[1] ?? <NotAvailable />}</span>
+                    <span className="verdict" style={{ color: ac(r[2]) }}>{r[2]}</span>
                   </div>
+                ))}
+                <div className="sd-foot">
+                  RSI/MACD/Stoch %K/ADX from technical-indicators.job · RSI sparkline is the last 40 sessions on a 0-100 scale with the 30/70 bands marked · EMA/SMA computed from a year of daily bars. Indicators only — not investment advice.
                 </div>
               </div>
             )}
@@ -3154,29 +3229,27 @@ export function StockScreen({
             {activeTab === "analysis" && consensusDoc?.recentGrades && consensusDoc.recentGrades.length > 0 && (
               <div className="card">
                 <div className="card-h"><h3>Recent analyst actions</h3></div>
-                <div className="card-b">
-                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                    {consensusDoc.recentGrades.slice(0, 6).map((g, i) => {
-                      const a = (g.action ?? "").toLowerCase();
-                      const col = a.includes("upgrade") ? "var(--up)" : a.includes("downgrade") ? "var(--down)" : "var(--text-dim-solid)";
-                      return (
-                        <div key={i} style={{ display: "grid", gridTemplateColumns: "60px minmax(0, 1fr) minmax(0, 1.15fr) 46px", alignItems: "center", gap: 8, fontSize: ".72rem", textAlign: "left" }}>
-                          <span style={{ color: col, fontWeight: 700, textTransform: "capitalize" }}>{g.action ?? "—"}</span>
-                          <span style={{ color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.firm ?? "—"}</span>
-                          <span style={{ color: "var(--text-dim-solid)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {(g.previousGrade || g.newGrade) ? `${g.previousGrade ?? "—"} → ${g.newGrade ?? "—"}` : ""}
+                {consensusDoc.recentGrades.slice(0, 6).map((g, i) => {
+                  const a = (g.action ?? "").toLowerCase();
+                  const col = a.includes("upgrade") ? "var(--up)" : a.includes("downgrade") ? "var(--down)" : "var(--text-dim-solid)";
+                  return (
+                    <div key={i} className="sd-row">
+                      <span className="num" style={{ width: 62, flex: "none", fontSize: ".66rem", color: col, textTransform: "capitalize" }}>{g.action ?? "—"}</span>
+                      <span className="grow" style={{ overflow: "hidden" }}>
+                        <span style={{ display: "block", color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.firm ?? "—"}</span>
+                        {(g.previousGrade || g.newGrade) && (
+                          <span className="num dim" style={{ display: "block", fontSize: ".66rem", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {g.previousGrade ?? "—"} → {g.newGrade ?? "—"}
                           </span>
-                          <span
-                            title={g.priceTarget != null ? `${g.firm ?? "This firm"}'s price target` : "No price target posted with this action"}
-                            style={{ color: g.priceTarget != null ? "var(--text-hi)" : "var(--text-dim-solid)", fontFamily: "var(--f-mono)", fontWeight: 600, textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                          >
-                            {g.priceTarget != null ? `$${Math.round(g.priceTarget)}` : "—"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                        )}
+                      </span>
+                      <span className={`num${g.priceTarget != null ? "" : " dim"}`}
+                        title={g.priceTarget != null ? `${g.firm ?? "This firm"}'s price target` : "No price target posted with this action"}>
+                        {g.priceTarget != null ? `$${Math.round(g.priceTarget)}` : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -3189,45 +3262,36 @@ export function StockScreen({
                     <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
                   </div>
                 </div>
-                <div className="card-b" style={{ paddingTop: 6 }}>
-                  <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
-                    Weekly pivots
-                  </div>
-                  {(["R2", "R1", "Pivot", "S1", "S2"] as const).map(label => {
-                    const wk = klWeekly;
-                    const v = wk ? ({ R2: wk.r2, R1: wk.r1, Pivot: wk.pivot, S1: wk.s1, S2: wk.s2 } as Record<string, number | null>)[label] : null;
-                    const tone = label.startsWith("R") ? "var(--down)" : label.startsWith("S") ? "var(--up)" : "var(--text-hi)";
-                    return (
-                      <div key={label} className="minirow">
-                        <span className="tkr" style={{ width: 50, color: tone }}>{label}</span>
-                        <span className="mid" />
-                        <span className="r mono">{v != null ? `$${v.toFixed(2)}` : <NotAvailable />}</span>
-                      </div>
-                    );
-                  })}
-                  <div style={{ height: 1, background: "var(--border-soft)", margin: "12px 0 8px" }} />
-                  <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
-                    Moving averages &amp; range
-                  </div>
-                  {hi == null && lo == null && ema50 == null && sma200 == null ? (
-                    <DataState loading={liveCompanyLoading || yearBarsLoading} label="No historical price data synced for this ticker yet." />
-                  ) : (
-                    ([
-                      ["52W High", hi,     isUp ? "up"   : "dim"],
-                      ["EMA 50",   ema50,  isUp ? "up"   : "down"],
-                      ["SMA 200",  sma200, sma200 != null && p > sma200 ? "up" : "down"],
-                      ["52W Low",  lo,     isUp ? "dim"  : "down"],
-                    ] as [string, number | null, string][]).map(x => (
-                      <div key={x[0]} className="minirow">
-                        <span className="tkr" style={{ width: 70 }}>{x[0]}</span>
-                        <span className="mid" />
-                        <span className="r mono" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
-                          {x[1] != null ? `$${nf(x[1])}` : <NotAvailable />}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <h6 className="sd-sec">Weekly pivots</h6>
+                {(["R2", "R1", "Pivot", "S1", "S2"] as const).map(label => {
+                  const wk = klWeekly;
+                  const v = wk ? ({ R2: wk.r2, R1: wk.r1, Pivot: wk.pivot, S1: wk.s1, S2: wk.s2 } as Record<string, number | null>)[label] : null;
+                  const tone = label.startsWith("R") ? "var(--down)" : label.startsWith("S") ? "var(--up)" : "var(--text-hi)";
+                  return (
+                    <div key={label} className="sd-row">
+                      <span className="grow num" style={{ color: tone }}>{label}</span>
+                      <span className="num">{v != null ? `$${v.toFixed(2)}` : <NotAvailable />}</span>
+                    </div>
+                  );
+                })}
+                <h6 className="sd-sec">Moving averages &amp; range</h6>
+                {hi == null && lo == null && ema50 == null && sma200 == null ? (
+                  <div className="card-b"><DataState loading={liveCompanyLoading || yearBarsLoading} label="No historical price data synced for this ticker yet." /></div>
+                ) : (
+                  ([
+                    ["52W High", hi,     isUp ? "up"   : "dim"],
+                    ["EMA 50",   ema50,  isUp ? "up"   : "down"],
+                    ["SMA 200",  sma200, sma200 != null && p > sma200 ? "up" : "down"],
+                    ["52W Low",  lo,     isUp ? "dim"  : "down"],
+                  ] as [string, number | null, string][]).map(x => (
+                    <div key={x[0]} className="sd-row">
+                      <span className="grow num">{x[0]}</span>
+                      <span className="num" style={{ color: x[2] === "dim" ? "var(--text-hi)" : `var(--${x[2]})` }}>
+                        {x[1] != null ? `$${nf(x[1])}` : <NotAvailable />}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             )}
 
@@ -3683,9 +3747,9 @@ export function StockScreen({
                       {inc.length === 0 ? <DataState loading={financialsLoading} label={`No live financials synced for ${sym} yet.`} /> : (
                         <>
                           <div className="ec-legend">
-                            <span><i style={{ background: "var(--brand)" }} />Revenue</span>
-                            <span><i style={{ background: "var(--ai)" }} />Gross profit</span>
-                            <span><i style={{ background: "var(--up)" }} />Net income</span>
+                            <span><i style={{ background: INC_COLORS.rev }} />Revenue</span>
+                            <span><i style={{ background: INC_COLORS.gp }} />Gross profit</span>
+                            <span><i style={{ background: INC_COLORS.ni }} />Net income</span>
                           </div>
                           <EarnIncChart inc={inc} />
                           <div style={{ overflowX: "auto", marginTop: 12 }}>

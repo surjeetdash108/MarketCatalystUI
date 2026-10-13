@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StockLogo, DataState, VendorTag, cls, sign, fmt, titleCaseLabel} from "../utils";
+import { StockLogo, DataState, VendorTag, cls, sign, fmt, titleCaseLabel, headlineLeadsWithTicker } from "../utils";
 import { useIQActions } from "../shell";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useApiList } from "../hooks/useApiList";
@@ -14,6 +14,7 @@ import { NEWS_TAGS } from "../types/news";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { TickerAnalysisDrawer } from "../ticker-analysis-drawer";
 import { StockScreenEmbed } from "../stock-panel";
+import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel } from "../news-feed";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
@@ -173,12 +174,6 @@ function catCol(c: string | null): string {
   if (c === "company") return "var(--brand-2)";
   return "var(--text-dim-solid)";
 }
-function catLabel(c: string | null): string {
-  if (c === "earnings") return "Earnings";
-  if (c === "merger") return "M&A";
-  if (c === "company") return "Company";
-  return "Macro";
-}
 
 /**
  * The story-type chip's own filter key.
@@ -206,16 +201,6 @@ function etHour(iso: string): number {
   const m = Number(parts.find(p => p.type === "minute")?.value ?? 0);
   return h + m / 60;
 }
-function etTimeLabel(iso: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true,
-  }).formatToParts(new Date(iso));
-  const hour = parts.find(p => p.type === "hour")?.value ?? "12";
-  const minute = parts.find(p => p.type === "minute")?.value ?? "00";
-  const dayPeriod = (parts.find(p => p.type === "dayPeriod")?.value ?? "AM").toLowerCase()[0];
-  return `${hour}:${minute}${dayPeriod}`;
-}
-
 /** Splits `text` on every case-insensitive occurrence of `q` and wraps the
  *  matches in <mark>, so a search hit is visible even when it's buried in the
  *  description rather than the headline. Returns the plain string when there's
@@ -368,21 +353,25 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
             // maxWidth: "42ch",
           }}
         >
-          <span
-            onClick={(e) => {
-              e.stopPropagation();
-              onTicker(item.ticker);
-              onStockOpen(item.ticker);
-            }}
-            style={{
-              cursor: "pointer",
-              // color: "var(--text)",
-            }}
-            title={`Filter the feed by ${item.ticker}`}
-          >
-            {item.ticker}
-          </span>
-          {": "}
+          {/* Skip the "TLT:" prefix when the headline already opens with
+              the ticker ("TLT's Yield Edge…"), so it isn't printed twice. */}
+          {!headlineLeadsWithTicker(item.headline, item.ticker) && (<>
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                onTicker(item.ticker);
+                onStockOpen(item.ticker);
+              }}
+              style={{
+                cursor: "pointer",
+                // color: "var(--text)",
+              }}
+              title={`Filter the feed by ${item.ticker}`}
+            >
+              {item.ticker}
+            </span>
+            {": "}
+          </>)}
           {highlightMatch(item.headline, highlight)}
         </div>
 
@@ -730,7 +719,7 @@ export function CommentaryScreen() {
   /* Plain free-text search — matches anywhere in the message (ticker / headline / summary). */
   const q = search.trim().toLowerCase();
 
-  const sorted = [...liveNews].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  const sorted = sortNewsDesc(liveNews);
   const premarket  = sorted.filter(n => etHour(n.publishedAt) < 9.5);
   const afterHours = sorted.filter(n => etHour(n.publishedAt) >= 16);
   const macro      = sorted.filter(n => n.category !== "company");
@@ -800,26 +789,9 @@ export function CommentaryScreen() {
     return [tags, cats] as const;
   })();
 
-  /* Collapse multi-ticker duplicates. Polygon tags one article to EVERY ticker
-     it mentions, so the same story arrives once per ticker (an Alphabet piece
-     gets tagged both GOOG and MSFT). In this aggregated feed we show it ONCE,
-     keeping the ticker whose company name actually appears in the headline
-     (so the Alphabet story keeps GOOG, not the incidental MSFT mention). */
-  const feed = (() => {
-    const byKey = new Map<string, NewsArticleDoc>();
-    const order: string[] = [];
-    const relevance = (n: NewsArticleDoc) => {
-      const nm = companyByTicker.get(n.ticker)?.name?.split(/[\s,.]/)[0]?.toLowerCase();
-      return nm && nm.length > 2 && (n.headline ?? "").toLowerCase().includes(nm) ? 1 : 0;
-    };
-    for (const n of displayFeed) {
-      const key = n.url || n.id;
-      const cur = byKey.get(key);
-      if (!cur) { byKey.set(key, n); order.push(key); }
-      else if (relevance(n) > relevance(cur)) byKey.set(key, n);
-    }
-    return order.map(k => byKey.get(k) as NewsArticleDoc);
-  })();
+  /* One story per article, under its most relevant ticker — shared with the
+     dashboard card (see news-feed.ts) so both pick the same ticker. */
+  const feed = dedupeNews(displayFeed, companyByTicker);
 
   // LIVE %change for the tickers actually rendered in the feed, via the app-wide
   // shared poll — one timer for the whole app, so a story's %change here matches

@@ -6,9 +6,10 @@ import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
 import { useIQActions, ExpandBtn } from "../shell";
 import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem, maPostureLabel, isLeveragedProduct } from "../data";
-import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, cleanCatalystText } from "../utils";
+import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, cleanCatalystText, headlineLeadsWithTicker } from "../utils";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
+import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel } from "../news-feed";
 import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-context";
@@ -1141,10 +1142,10 @@ export function DashboardScreen() {
           <div className="card" style={{ height: "100%" }}>
             <div className="card-h">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Live Market Feed</h3><VendorTag v={["polygon", "fmp"]} /></div>
-              <Link className="link" href="/menu/commentary">Commentary →</Link>
+              <Link className="link" href="/menu/commentary">Live Feed →</Link>
             </div>
             <div className="card-b" style={{ paddingTop: 2 }}>
-              <LiveFeedList />
+              <LiveFeedList companyByTicker={companyByTicker} />
             </div>
           </div>
         </div>
@@ -1398,15 +1399,11 @@ export function DashboardScreen() {
 }
 
 /** Live Market Feed — real synced news only; honest empty state when none are synced. */
-function LiveFeedList() {
+function LiveFeedList({ companyByTicker }: { companyByTicker: Map<string, CompanyDoc> }) {
   const { data: news, loading } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
-  // Dedupe by article URL: Polygon tags one story to every ticker it mentions,
-  // so the same article arrives once per ticker — show each story once.
-  const seenUrl = new Set<string>();
-  const recent = [...news]
-    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-    .filter(n => { const k = n.url || n.id; if (seenUrl.has(k)) return false; seenUrl.add(k); return true; })
-    .slice(0, 4);
+  // Same sort + dedupe as the Live Feed screen (news-feed.ts), so these four
+  // rows are exactly the top four there, under the same ticker.
+  const recent = dedupeNews(sortNewsDesc(news), companyByTicker).slice(0, 4);
 
   // No mock fallback: when there's no live news, show an honest empty state
   // rather than fabricated headlines that read as real market events.
@@ -1423,11 +1420,11 @@ function LiveFeedList() {
         <StockLogo sym={f.ticker} size={28} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: ".8rem", color: "var(--text)", lineHeight: 1.4 }}>
-            <b style={{ color: "var(--text-hi)" }}>{f.ticker}</b> · {f.headline}
+            {!headlineLeadsWithTicker(f.headline, f.ticker) && <><b style={{ color: "var(--text-hi)" }}>{f.ticker}</b> · </>}{f.headline}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: ".66rem", color: "var(--text-dim-solid)", flexWrap: "wrap" }}>
-            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{f.category}</span>
-            <span className="mono">{new Date(f.publishedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{catLabel(f.category)}</span>
+            <span className="mono">{etTimeLabel(f.publishedAt)} ET</span>
             <span>· {f.source}</span>
           </div>
         </div>
