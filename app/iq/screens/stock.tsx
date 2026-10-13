@@ -22,6 +22,7 @@ import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
 // import { EarningsPlaybook } from "./EarningsPlaybook";
 import { EtfHoldingsView } from "../etf-holdings-view";
 import { Stock13FFilingsView } from "../stock-13f-view";
+import { useSI } from "../si/si-context";
 
 const POPULAR_16_ETFS = new Set([
   "CIBR", "DIA", "GLD", "HACK", "HYG", "IBIT", "IWM", "QQEW",
@@ -727,6 +728,7 @@ export function StockScreen({
   barInterval?: BarInterval;
 } = {}) {
   const { openStock, openStockDetail, openSector } = useIQActions();
+  const { enterSI } = useSI();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
     if (typeof window !== "undefined") return localStorage.getItem("iq-stock") || "NVDA";
@@ -1573,6 +1575,48 @@ export function StockScreen({
                     live quote · {vendorLabel(liveCompany?.source)}
                   </span>
                 )}
+              </div>
+              <div style={{ marginTop: 6, display: "flex", alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => enterSI(sym)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    height: 24,
+                    padding: "0 10px",
+                    background: "rgba(89, 128, 166, 0.14)",
+                    border: "1px solid rgba(127, 168, 208, 0.35)",
+                    borderRadius: 99,
+                    color: "#a9c6e3",
+                    fontFamily: "var(--f-sans, -apple-system, sans-serif)",
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.02em",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(89, 128, 166, 0.28)";
+                    e.currentTarget.style.borderColor = "#7fa8d0";
+                    e.currentTarget.style.color = "#ffffff";
+                    e.currentTarget.style.boxShadow = "0 0 12px rgba(127, 168, 208, 0.35)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(89, 128, 166, 0.14)";
+                    e.currentTarget.style.borderColor = "rgba(127, 168, 208, 0.35)";
+                    e.currentTarget.style.color = "#a9c6e3";
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                  title={`Open Stock Intelligence for ${sym}`}
+                >
+                  <span style={{ color: "#7fa8d0", fontSize: "0.75rem", lineHeight: 1 }}>✦</span>
+                  <span>Stock Intelligence for this stock</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.8 }}>
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             </div>
             <div className={`sd-snap-about${aboutOpen ? " open" : ""}`}>

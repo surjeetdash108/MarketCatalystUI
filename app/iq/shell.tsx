@@ -61,6 +61,8 @@ import { pulseFromLive, tapeItemsToIndexDocs } from "./live-market-indices";
 import type { CompanyDoc, SectorApiDoc, LiveEarningsDoc } from "./types";
 import { surprisePct } from "./types";
 import { LiveQuotesProvider, QUOTE_DELAY_LABEL } from "./live-quotes-context";
+import { SIProvider } from "./si/si-context";
+import { SISwitcher, SISweepOverlay } from "./si/si-switcher";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -1277,14 +1279,47 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     window.location.href = "/";
   }
 
+  const isSiPage = pathname?.startsWith("/si");
+
   return (
     <AuthGuard>
       <IQActionsContext.Provider value={actions}>
        <WatchlistsContext.Provider value={wl}>
         <LiveQuotesProvider>
-        <div className="iq-root" data-theme={theme} data-font={font}>
-          <div className={`app${navCollapsed ? " nav-collapsed" : ""}`}>
-            {/* Brand cell */}
+         <SIProvider onOpenStockInMC={(sym) => actions.openStockFull(sym)}>
+          <div className="iq-root" data-theme={theme} data-font={font}>
+            <SISweepOverlay />
+            {isSiPage ? (
+              <main
+                style={{
+                  height: "100vh",
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                  background: "#080b10",
+                  width: "100%",
+                }}
+                className="si-main-scroll"
+              >
+                <style>{`
+                  .si-main-scroll::-webkit-scrollbar {
+                    width: 8px !important;
+                  }
+                  .si-main-scroll::-webkit-scrollbar-track {
+                    background: #080b10 !important;
+                  }
+                  .si-main-scroll::-webkit-scrollbar-thumb {
+                    background: #2a3a4a !important;
+                    border-radius: 4px !important;
+                  }
+                  .si-main-scroll::-webkit-scrollbar-thumb:hover {
+                    background: #5980a6 !important;
+                  }
+                `}</style>
+                {children}
+              </main>
+            ) : (
+              <div className={`app${navCollapsed ? " nav-collapsed" : ""}`}>
+                {/* Brand cell */}
             <div className="brandcell">
               <div className="brand-top">
                 <BrandLogo height={28} />
@@ -1378,6 +1413,12 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
               </div>
+
+              {/* Integrated Centered Switcher */}
+              <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 240, padding: "0 12px" }}>
+                <SISwitcher />
+              </div>
+
               {/* Session ET clock — sits immediately to the right of the search box. */}
               <div className="topbar-clock">
                 {navTime.day} · <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{navTime.time} ET</span>
@@ -1548,6 +1589,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               </footer>
             </main>
           </div>
+          )}
 
           {/* Drawers */}
           {drawer?.type === "stock" && (
@@ -1610,6 +1652,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             />
           )}
         </div>
+         </SIProvider>
         </LiveQuotesProvider>
        </WatchlistsContext.Provider>
       </IQActionsContext.Provider>
