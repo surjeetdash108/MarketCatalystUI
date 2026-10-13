@@ -1415,7 +1415,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               </div>
 
               {/* Integrated Centered Switcher */}
-              <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 240, padding: "0 12px" }}>
+              <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290, padding: "0 12px" }}>
                 <SISwitcher />
               </div>
 

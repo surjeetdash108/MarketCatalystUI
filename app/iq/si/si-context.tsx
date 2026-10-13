@@ -18,6 +18,7 @@ interface SIContextType {
   setActiveTab: (tab: SITab) => void;
   enterSI: (ticker?: string, tab?: SITab) => void;
   exitToMC: (ticker?: string) => void;
+  goToSearch: () => void;
   toggleSI: () => void;
   sweep: { active: boolean; to: "SI" | "MC"; key: number } | null;
   setSiTicker: (ticker: string | null) => void;
@@ -48,13 +49,21 @@ export function SIProvider({
   useEffect(() => {
     if (isSiRoute) {
       setIsSI(true);
-      if (symParam && symParam !== siTicker) {
-        setSiTicker(symParam);
+      if (symParam) {
+        if (symParam !== siTicker) {
+          setSiTicker(symParam);
+        }
+      } else {
+        setSiTicker(null);
       }
     } else {
       setIsSI(false);
+      // When navigating in MC: if not on the stock detail page, clear active SI stock
+      if (pathname && !pathname.startsWith("/menu/stock")) {
+        setSiTicker(null);
+      }
     }
-  }, [isSiRoute, symParam]);
+  }, [isSiRoute, symParam, pathname]);
 
   const triggerSweep = useCallback((to: "SI" | "MC") => {
     const key = Date.now();
@@ -92,22 +101,38 @@ export function SIProvider({
     }
   }, []);
 
+  const goToSearch = useCallback(() => {
+    setSiTicker(null);
+    router.push("/si");
+  }, [router]);
+
   const enterSI = useCallback(
     (ticker?: string, tab?: SITab) => {
       triggerSweep("SI");
+      const currentPath = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+      const isOnStockPage = currentPath.startsWith("/menu/stock");
+
       const stored = typeof window !== "undefined" ? localStorage.getItem("iq-stock") : null;
-      const targetSym = ticker || siTicker || stored || "NVDA";
+      let targetSym: string | null = null;
+
+      if (ticker) {
+        targetSym = ticker.toUpperCase().trim();
+      } else if (isOnStockPage) {
+        const candidate = siTicker || stored;
+        if (candidate) targetSym = candidate.toUpperCase().trim();
+      }
+
       if (targetSym) {
-        const clean = targetSym.toUpperCase().trim();
-        setSiTicker(clean);
+        setSiTicker(targetSym);
         if (typeof window !== "undefined") {
-          localStorage.setItem("iq-stock", clean);
+          localStorage.setItem("iq-stock", targetSym);
         }
         setTimeout(() => {
           setIsSI(true);
-          router.push(`/si?sym=${clean}`);
+          router.push(`/si?sym=${targetSym}`);
         }, 70);
       } else {
+        setSiTicker(null);
         setTimeout(() => {
           setIsSI(true);
           router.push("/si");
@@ -115,14 +140,13 @@ export function SIProvider({
       }
       if (tab) setActiveTab(tab);
     },
-    [router, triggerSweep, siTicker]
+    [router, triggerSweep, pathname, siTicker]
   );
 
   const exitToMC = useCallback(
     (ticker?: string) => {
       triggerSweep("MC");
-      const stored = typeof window !== "undefined" ? localStorage.getItem("iq-stock") : null;
-      const targetSym = ticker || siTicker || stored || "NVDA";
+      const targetSym = ticker || siTicker;
       if (targetSym) {
         const clean = targetSym.toUpperCase().trim();
         if (typeof window !== "undefined") {
@@ -142,7 +166,7 @@ export function SIProvider({
       } else {
         setTimeout(() => {
           setIsSI(false);
-          router.push("/dashboard");
+          router.push("/menu/dashboard");
         }, 70);
       }
     },
@@ -153,9 +177,9 @@ export function SIProvider({
     if (isSI) {
       exitToMC();
     } else {
-      enterSI(siTicker || undefined);
+      enterSI();
     }
-  }, [isSI, exitToMC, enterSI, siTicker]);
+  }, [isSI, exitToMC, enterSI]);
 
   return (
     <SIContext.Provider
@@ -166,6 +190,7 @@ export function SIProvider({
         setActiveTab,
         enterSI,
         exitToMC,
+        goToSearch,
         toggleSI,
         sweep,
         setSiTicker,
@@ -186,6 +211,7 @@ export function useSI() {
       setActiveTab: () => {},
       enterSI: () => {},
       exitToMC: () => {},
+      goToSearch: () => {},
       toggleSI: () => {},
       sweep: null,
       setSiTicker: () => {},

@@ -1,4 +1,5 @@
-import { StockItem, DetailStock, SITab, UpcomingEvent } from "./types";
+import { StockItem, DetailStock, SITab, UpcomingEvent, MajorSixMonthEvent } from "./types";
+export type { MajorSixMonthEvent };
 
 export const UP = "#4ade80";
 export const DN = "#f05656";
@@ -730,10 +731,13 @@ export function detail(t: string, live?: any): DetailStock {
     { time: "16:00", label: `Regular session close · ${pct(s.c)} total`, kind: "CLOSE", fr: 1.0, mv: s.c },
   ];
 
+  const sixMonthEvents = getSixMonthMajorEvents(sym, s);
+
   return {
     sv,
     ev,
     events,
+    sixMonthEvents,
     assess,
     assessEv,
     att,
@@ -767,3 +771,253 @@ export function detail(t: string, live?: any): DetailStock {
     },
   };
 }
+
+export function getSixMonthMajorEvents(sym: string, s: StockItem): MajorSixMonthEvent[] {
+  const t = (sym || "").toUpperCase();
+  if (t === "NVDA") {
+    return [
+      {
+        num: 1,
+        date: "May 22",
+        label: "Q1 FY25 Earnings Beat & 10-for-1 Stock Split",
+        category: "Earnings",
+        mv: 9.32,
+        details: "Data Center revenue surged 427% y/y to $22.6B, smashing Wall Street estimates and triggering a 10-for-1 stock split.",
+        fr: 0.18,
+      },
+      {
+        num: 2,
+        date: "Jun 02",
+        label: "Computex Keynote: Blackwell & Rubin Roadmap",
+        category: "Product",
+        mv: 4.85,
+        details: "Jensen Huang introduced an annual architecture cadence with Blackwell Ultra (2025) and Vera Rubin platform (2026).",
+        fr: 0.32,
+      },
+      {
+        num: 3,
+        date: "Jul 15",
+        label: "Sovereign AI Infrastructure Mega-Contracts",
+        category: "Corporate",
+        mv: 3.60,
+        details: "Government cloud pacts across Europe and Japan expanded sovereign AI pipeline to exceed $10B run-rate.",
+        fr: 0.52,
+      },
+      {
+        num: 4,
+        date: "Aug 28",
+        label: "Q2 FY25 Earnings: $30.04B Revenue Landmark",
+        category: "Earnings",
+        mv: 2.10,
+        details: "Record quarterly revenue (+122% y/y) and $50B share buyback approval quelled packaging delay fears.",
+        fr: 0.74,
+      },
+      {
+        num: 5,
+        date: "Oct 02",
+        label: "Blackwell Full-Volume Mass Production Ramp",
+        category: "Product",
+        mv: 4.15,
+        details: "Confirmed Blackwell B200 GPUs in full mass production with entire 12-month capacity pre-sold to hyperscalers.",
+        fr: 0.94,
+      },
+    ];
+  }
+  if (t === "AAPL") {
+    return [
+      {
+        num: 1,
+        date: "May 02",
+        label: "Q2 Earnings & Historic $110B Share Repurchase",
+        category: "Earnings",
+        mv: 5.98,
+        details: "Authorized the largest stock buyback in U.S. history alongside record Services revenue acceleration.",
+        fr: 0.16,
+      },
+      {
+        num: 2,
+        date: "Jun 10",
+        label: "WWDC24: Apple Intelligence & OpenAI Siri Integration",
+        category: "Product",
+        mv: 7.26,
+        details: "Unveiled personal intelligence system across iOS 18 with on-device silicon compute and private cloud AI.",
+        fr: 0.36,
+      },
+      {
+        num: 3,
+        date: "Aug 01",
+        label: "Q3 Earnings: Greater China Sales Stabilization",
+        category: "Earnings",
+        mv: 2.85,
+        details: "Revenue rose 5% to $85.78B, topping expectations with all-time high active device installed base.",
+        fr: 0.62,
+      },
+      {
+        num: 4,
+        date: "Sep 09",
+        label: "Glowtime Keynote: iPhone 16 & A18 Pro Unpacked",
+        category: "Product",
+        mv: 1.90,
+        details: "Introduced first hardware engineered from the ground up for generative AI with 2nd-gen 3nm architecture.",
+        fr: 0.82,
+      },
+      {
+        num: 5,
+        date: "Oct 08",
+        label: "Wall Street AI Supercycle Price Target Hikes",
+        category: "Analyst",
+        mv: 2.45,
+        details: "Morgan Stanley and BofA reiterated Top Pick status, raising price targets citing multi-year device refresh cycle.",
+        fr: 0.96,
+      },
+    ];
+  }
+  if (t === "TSLA") {
+    return [
+      {
+        num: 1,
+        date: "Apr 23",
+        label: "Q1 Earnings: Next-Gen Affordable EV Timeline Accelerated",
+        category: "Earnings",
+        mv: 12.08,
+        details: "Pledged new affordable vehicle platforms for early 2025 production and highlighted energy storage margin inflection.",
+        fr: 0.12,
+      },
+      {
+        num: 2,
+        date: "Jun 13",
+        label: "Shareholder Meeting: Musk Comp Ratified & Texas Move",
+        category: "Corporate",
+        mv: 5.15,
+        details: "Shareholders overwhelmingly voted to ratify CEO performance award and reincorporate in Texas.",
+        fr: 0.38,
+      },
+      {
+        num: 3,
+        date: "Jul 23",
+        label: "Q2 Earnings: Record 9.4 GWh Megapack Energy Storage",
+        category: "Earnings",
+        mv: -3.40,
+        details: "Energy storage gross margins hit record highs while automotive deliveries felt temporary margin compression.",
+        fr: 0.58,
+      },
+      {
+        num: 4,
+        date: "Aug 26",
+        label: "FSD v12.5 Wide Deployment & Hardware 4 Optimization",
+        category: "Product",
+        mv: 3.80,
+        details: "Wide customer deployment of end-to-end neural network driving stack with 5x model parameter scaling.",
+        fr: 0.76,
+      },
+      {
+        num: 5,
+        date: "Oct 10",
+        label: "'We, Robot': Cybercab Autonomous Robotaxi & Robovan Reveal",
+        category: "Product",
+        mv: 5.40,
+        details: "Unveiled steering-wheel-free Cybercab, 20-passenger Robovan, and autonomous inductive fleet charging ecosystem.",
+        fr: 0.98,
+      },
+    ];
+  }
+  if (t === "MSFT") {
+    return [
+      {
+        num: 1,
+        date: "Apr 25",
+        label: "Q3 FY24 Earnings: Azure Growth Re-Accelerates to 31%",
+        category: "Earnings",
+        mv: 4.20,
+        details: "AI services contributed 7 points of Azure growth, solidifying cloud market share expansion.",
+        fr: 0.14,
+      },
+      {
+        num: 2,
+        date: "May 20",
+        label: "Microsoft Build: Copilot+ PCs & Arm Silicon Architecture",
+        category: "Product",
+        mv: 3.65,
+        details: "Launched new category of Windows AI PCs with 40+ TOPS NPU silicon and recall feature platform.",
+        fr: 0.28,
+      },
+      {
+        num: 3,
+        date: "Jul 30",
+        label: "Q4 FY24 Earnings: Commercial Cloud Run-Rate Tops $140B",
+        category: "Earnings",
+        mv: -1.80,
+        details: "Record enterprise cloud demand met temporary capacity constraints on accelerated data center buildout.",
+        fr: 0.64,
+      },
+      {
+        num: 4,
+        date: "Sep 16",
+        label: "Wave 2 Microsoft 365 Copilot Agents & $60B Buyback",
+        category: "Corporate",
+        mv: 2.15,
+        details: "Announced autonomous agent studio in Copilot, 10% dividend hike, and $60 billion share repurchase program.",
+        fr: 0.84,
+      },
+      {
+        num: 5,
+        date: "Oct 07",
+        label: "Three Mile Island Nuclear Power Contract for AI Cloud",
+        category: "Macro",
+        mv: 3.10,
+        details: "Signed 20-year clean energy agreement with Constellation Energy to power AI hyperscale data centers.",
+        fr: 0.95,
+      },
+    ];
+  }
+  // Generic intelligent fallback for ANY stock
+  const sign = s.c >= 0 ? 1 : -1;
+  return [
+    {
+      num: 1,
+      date: "May 08",
+      label: `${s.name} Q1 Earnings Beat & Margin Expansion`,
+      category: "Earnings",
+      mv: +(sign * 4.85).toFixed(2),
+      details: "Reported top-line outperformance and raised full-year operating margin guidance.",
+      fr: 0.15,
+    },
+    {
+      num: 2,
+      date: "Jun 14",
+      label: `${s.sector} Sector Momentum Surge & Institutional Inflows`,
+      category: "Corporate",
+      mv: +(sign * 3.40).toFixed(2),
+      details: "Heavy institutional block accumulation amid sector-wide relative strength breakout.",
+      fr: 0.35,
+    },
+    {
+      num: 3,
+      date: "Jul 25",
+      label: "Q2 Mid-Year Financial Results & Strategic Update",
+      category: "Earnings",
+      mv: +(sign * 2.90).toFixed(2),
+      details: "Quarterly results confirmed resilient backlog and expanding free cash flow conversion.",
+      fr: 0.58,
+    },
+    {
+      num: 4,
+      date: "Aug 29",
+      label: "Wall Street Analyst Rating Upgrade & Target Hike",
+      category: "Analyst",
+      mv: +(sign * 3.15).toFixed(2),
+      details: "Top-tier brokerages upgraded rating to Overweight citing accelerating market share.",
+      fr: 0.78,
+    },
+    {
+      num: 5,
+      date: "Oct 04",
+      label: "Enterprise Product Milestone & Volume Breakout",
+      category: "Product",
+      mv: +(sign * 4.20).toFixed(2),
+      details: "Commercial rollout milestone drove breakout above multi-month technical resistance.",
+      fr: 0.95,
+    },
+  ];
+}
+

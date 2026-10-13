@@ -28,6 +28,16 @@ export interface UpcomingEvent {
   col: string;
 }
 
+export interface MajorSixMonthEvent {
+  num: number;
+  date: string;
+  label: string;
+  category: "Earnings" | "Product" | "Analyst" | "Macro" | "Corporate";
+  mv: number;
+  details: string;
+  fr: number;
+}
+
 export interface DetailStock {
   sv: number[];
   ev?: Record<string, string[]>;
@@ -38,6 +48,7 @@ export interface DetailStock {
   attCalc?: any;
   movedEv: string[];
   events?: Array<{ time: string; kind: string; label: string; fr: number; mv: number }>;
+  sixMonthEvents?: MajorSixMonthEvent[];
   upcoming: UpcomingEvent[];
   fwd?: any;
   invalid: [string, string][];

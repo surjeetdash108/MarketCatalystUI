@@ -29,10 +29,12 @@ import {
   CAT_KINDS,
   getTP,
   normW,
+  MajorSixMonthEvent,
+  getSixMonthMajorEvents,
 } from "./data";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { CandleChart, BarInterval } from "../candle-chart";
-import { useIntervalBars } from "../hooks/useBackendBars";
+import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { StockLogo, IntervalMenu, ChartSelect, CHART_TYPE_OPTIONS, VendorTag } from "../utils";
 import { SISwitcher } from "./si-switcher";
@@ -51,8 +53,318 @@ import type {
 import { reportedQuarterEps } from "../types";
 import type { Stock13FResponse } from "../stock-13f-view";
 
+function SixMonthAreaChart({
+  ticker,
+  stock,
+  bars,
+  events,
+}: {
+  ticker: string;
+  stock: StockItem;
+  bars?: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }>;
+  events: MajorSixMonthEvent[];
+}) {
+  const [hoveredEventId, setHoveredEventId] = useState<number | null>(null);
+
+  // Normalize or fallback generate 126 daily bars (~6 months)
+  const chartBars = useMemo(() => {
+    if (bars && bars.length >= 10) return bars;
+    const now = Date.now();
+    const dayMs = 86_400_000;
+    const totalBars = 126;
+    const result: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }> = [];
+    const seed = ticker.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    const startPrice = stock.p * (stock.c >= 0 ? 0.72 : 1.25);
+    let curPrice = startPrice;
+
+    for (let i = 0; i < totalBars; i++) {
+      const frac = i / (totalBars - 1);
+      const rand = Math.sin(seed + i * 0.42) * 0.024 + Math.cos(i * 0.17) * 0.015;
+      const target = startPrice + (stock.p - startPrice) * Math.pow(frac, 1.2);
+      curPrice = curPrice * 0.92 + target * 0.08 + curPrice * rand;
+      if (i === totalBars - 1) curPrice = stock.p;
+      const t = now - (totalBars - 1 - i) * dayMs;
+      result.push({
+        t,
+        o: curPrice * 0.995,
+        h: curPrice * 1.015,
+        l: curPrice * 0.985,
+        c: curPrice,
+        v: 1_000_000,
+      });
+    }
+    return result;
+  }, [bars, ticker, stock.p, stock.c]);
+
+  const n = chartBars.length;
+  const pValues = chartBars.map((b) => b.c);
+  const minP = Math.min(...pValues);
+  const maxP = Math.max(...pValues);
+  const pad = Math.max((maxP - minP) * 0.08, 1);
+  const pLo = Math.max(0.1, minP - pad);
+  const pHi = maxP + pad;
+
+  const plotLeft = 14;
+  const plotRight = 920;
+  const plotTop = 24;
+  const plotBottom = 296;
+  const plotW = plotRight - plotLeft;
+  const plotH = plotBottom - plotTop;
+
+  const xOf = (i: number) => plotLeft + (i / Math.max(1, n - 1)) * plotW;
+  const yOf = (price: number) => plotTop + ((pHi - price) / (pHi - pLo)) * plotH;
+
+  // Build SVG path
+  let pathD = "";
+  chartBars.forEach((b, i) => {
+    const x = xOf(i);
+    const y = yOf(b.c);
+    if (i === 0) pathD += `M ${x.toFixed(1)},${y.toFixed(1)}`;
+    else pathD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const areaD = `${pathD} L ${xOf(n - 1).toFixed(1)},${plotBottom} L ${plotLeft},${plotBottom} Z`;
+
+  // 4 Horizontal Gridlines & Price Labels
+  const gridSteps = 4;
+  const gridTicks = useMemo(() => {
+    const ticks: number[] = [];
+    const step = (pHi - pLo) / (gridSteps + 1);
+    for (let i = 1; i <= gridSteps; i++) {
+      ticks.push(pLo + i * step);
+    }
+    return ticks;
+  }, [pLo, pHi]);
+
+  // Current Price line and badge
+  const curY = yOf(stock.p);
+
+  // 8-10 Dates on X Axis
+  const dateTicks = useMemo(() => {
+    if (n < 2) return [];
+    const count = 9;
+    const ticks: Array<{ x: number; label: string }> = [];
+    for (let k = 0; k < count; k++) {
+      const idx = Math.min(n - 1, Math.round((k / (count - 1)) * (n - 1)));
+      const b = chartBars[idx];
+      const d = new Date(b.t);
+      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+      ticks.push({ x: xOf(idx), label });
+    }
+    return ticks;
+  }, [chartBars, n]);
+
+  // Map 5 Major Events to coordinates on the chart
+  const mappedEvents = useMemo(() => {
+    return events.map((ev) => {
+      const targetIdx = Math.min(n - 1, Math.max(0, Math.round(ev.fr * (n - 1))));
+      const bar = chartBars[targetIdx];
+      const x = xOf(targetIdx);
+      const y = yOf(bar.c);
+      return {
+        ...ev,
+        targetIdx,
+        x,
+        y,
+        priceAtEvent: bar.c,
+      };
+    });
+  }, [events, chartBars, n]);
+
+  const activeHover = mappedEvents.find((e) => e.num === hoveredEventId);
+
+  return (
+    <div style={{ border: "1px solid #1c2733", background: "rgba(10,14,20,0.96)", padding: "18px 20px" }}>
+      {/* Header bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+          6-MONTH TRAJECTORY & 5 MAJOR CATALYSTS
+        </span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#93a1af" }}>
+          Last 6 Months · Area Chart · 0 Volume
+        </span>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: UP }}>
+            {usd(stock.p)}
+          </span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: stock.c >= 0 ? UP : DN }}>
+            {pct(stock.c)} Today
+          </span>
+        </div>
+      </div>
+
+      {/* Area Chart Container */}
+      <div style={{ position: "relative", width: "100%", height: 340, background: "#06080c", borderRadius: 4, overflow: "visible" }}>
+        <svg width="100%" height="100%" viewBox="0 0 1000 340" preserveAspectRatio="none" style={{ display: "block" }}>
+          <defs>
+            <linearGradient id="siSixMonthAreaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#4ade80" stopOpacity="0.28" />
+              <stop offset="50%" stopColor="#4ade80" stopOpacity="0.09" />
+              <stop offset="90%" stopColor="#4ade80" stopOpacity="0.02" />
+              <stop offset="100%" stopColor="#4ade80" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {/* Horizontal Gridlines & Price Readouts on Right Y-Axis */}
+          {gridTicks.map((pVal, idx) => {
+            const y = yOf(pVal);
+            return (
+              <g key={idx}>
+                <line x1={plotLeft} y1={y} x2={plotRight} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                <text x={plotRight + 8} y={y + 4} fill="#64748b" fontSize="11" fontFamily="'JetBrains Mono', monospace">
+                  ${pVal.toFixed(2)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Area under the curve */}
+          <path d={areaD} fill="url(#siSixMonthAreaGrad)" />
+
+          {/* Neon Green Price Line */}
+          <path d={pathD} fill="none" stroke="#4ade80" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+
+          {/* Horizontal Purple Dashed Reference Line for Current Price */}
+          <line x1={plotLeft} y1={curY} x2={plotRight} y2={curY} stroke="#818cf8" strokeDasharray="4 4" strokeWidth="1.5" opacity="0.85" />
+          
+          {/* Purple Pill Tag on Right Axis matching user image */}
+          <g>
+            <rect x={plotRight + 4} y={curY - 10} width={68} height={20} rx={4} fill="#6366f1" />
+            <text x={plotRight + 38} y={curY + 4} textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
+              ${stock.p.toFixed(2)}
+            </text>
+          </g>
+
+          {/* Bottom X-Axis Date Ticks */}
+          {dateTicks.map((dt, idx) => (
+            <text key={idx} x={dt.x} y={328} textAnchor="middle" fill="#64748b" fontSize="10.5" fontFamily="'JetBrains Mono', monospace">
+              {dt.label}
+            </text>
+          ))}
+
+          {/* 5 Major Event Drop Lines & Markers */}
+          {mappedEvents.map((ev) => {
+            const isHover = hoveredEventId === ev.num;
+            return (
+              <g key={ev.num}>
+                {/* Vertical guide line */}
+                <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={isHover ? "#7fa8d0" : "rgba(127,168,208,0.22)"} strokeDasharray="3 3" strokeWidth={isHover ? 1.5 : 1} />
+                {/* Glow ring */}
+                <circle cx={ev.x} cy={ev.y} r={isHover ? 16 : 11} fill={isHover ? "rgba(127,168,208,0.3)" : "rgba(74,222,128,0.18)"} stroke={isHover ? "#a9c6e3" : "#4ade80"} strokeWidth="1" />
+                {/* Center pin circle */}
+                <circle
+                  cx={ev.x}
+                  cy={ev.y}
+                  r="9"
+                  fill="#080b10"
+                  stroke={isHover ? "#ffffff" : "#7fa8d0"}
+                  strokeWidth="2"
+                  style={{ cursor: "pointer" }}
+                  onMouseEnter={() => setHoveredEventId(ev.num)}
+                  onMouseLeave={() => setHoveredEventId(null)}
+                />
+                {/* Number inside pin */}
+                <text
+                  x={ev.x}
+                  y={ev.y + 3.5}
+                  textAnchor="middle"
+                  fill={isHover ? "#ffffff" : "#a9c6e3"}
+                  fontSize="10"
+                  fontWeight="800"
+                  fontFamily="'JetBrains Mono', monospace"
+                  style={{ pointerEvents: "none" }}
+                >
+                  {ev.num}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Floating Tooltip when Event Point is Hovered */}
+        {activeHover && (
+          <div
+            style={{
+              position: "absolute",
+              left: `${Math.min(84, Math.max(16, (activeHover.x / 1000) * 100))}%`,
+              top: `${Math.max(12, (activeHover.y / 340) * 100 - 24)}%`,
+              transform: "translate(-50%, -100%)",
+              background: "#0c1118",
+              border: "1px solid #7fa8d0",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.8)",
+              padding: "10px 14px",
+              borderRadius: 4,
+              pointerEvents: "none",
+              zIndex: 30,
+              minWidth: 220,
+              maxWidth: 320,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#7fa8d0" }}>
+                #{activeHover.num} · {activeHover.date}
+              </span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: activeHover.mv >= 0 ? UP : DN }}>
+                {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
+              </span>
+            </div>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 4 }}>
+              {activeHover.label}
+            </div>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "#93a1af", lineHeight: 1.35 }}>
+              {activeHover.details}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 5 Major Event Cards Below */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 18 }}>
+        {mappedEvents.map((ev) => {
+          const isHover = hoveredEventId === ev.num;
+          return (
+            <div
+              key={ev.num}
+              onMouseEnter={() => setHoveredEventId(ev.num)}
+              onMouseLeave={() => setHoveredEventId(null)}
+              style={{
+                border: isHover ? "1px solid #7fa8d0" : "1px solid #1c2733",
+                borderTop: `2px solid ${isHover ? "#ffffff" : "#5980a6"}`,
+                background: isHover ? "rgba(89,128,166,0.12)" : "rgba(12,17,24,0.6)",
+                padding: "12px 14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                cursor: "pointer",
+                transition: "border 180ms, background 180ms",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: isHover ? "#ffffff" : "#a9c6e3" }}>
+                  #{ev.num} · {ev.date}
+                </span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: ev.mv >= 0 ? UP : DN }}>
+                  {ev.mv >= 0 ? "+" : ""}{ev.mv.toFixed(2)}%
+                </span>
+              </div>
+              <div style={{ display: "inline-block", alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 6px", background: "rgba(89,128,166,0.2)", color: "#93a1af", borderRadius: 2 }}>
+                {ev.category.toUpperCase()}
+              </div>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "#e8eef4", lineHeight: 1.35 }}>
+                {ev.label}
+              </div>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "#93a1af", lineHeight: 1.35, marginTop: 2 }}>
+                {ev.details}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function StockIntelligenceScreen() {
-  const { siTicker, setSiTicker, activeTab, setActiveTab, enterSI, exitToMC } = useSI();
+  const { siTicker, setSiTicker, activeTab, setActiveTab, enterSI, exitToMC, goToSearch } = useSI();
 
   // Search input state
   const [searchQuery, setSearchQuery] = useState("");
@@ -113,6 +425,12 @@ export function StockIntelligenceScreen() {
   const { bars: realBars, asOf: barsAsOf, loading: barsLoading } = useIntervalBars(
     currentTicker || "NVDA",
     barInterval
+  );
+
+  // 6-Month bars for Why It Moved tab (matches stock function 6M area chart)
+  const { bars: sixMonthBars, loading: sixMonthLoading } = useBackendBars(
+    currentTicker || "NVDA",
+    "6M"
   );
 
   const stock: StockItem | null = useMemo(() => {
@@ -274,7 +592,7 @@ export function StockIntelligenceScreen() {
               textTransform: "uppercase",
             }}
           >
-            Stock Intelligence
+            STOCK INTELLIGENCE
           </div>
           <div
             style={{
@@ -641,14 +959,35 @@ export function StockIntelligenceScreen() {
             flexWrap: "wrap",
           }}
         >
-          {/* Logo & Subtitle */}
+          {/* Logo & Subtitle (Click to return to Search Bar page) */}
           <div
+            onClick={goToSearch}
+            role="button"
+            tabIndex={0}
+            title="Go to Search"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                goToSearch();
+              }
+            }}
             style={{
               display: "flex",
               flexDirection: "column",
               flex: "none",
               borderRight: "1px solid #1c2733",
               paddingRight: 16,
+              cursor: "pointer",
+              userSelect: "none",
+              transition: "opacity 160ms ease, transform 160ms ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = "0.8";
+              e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = "1";
+              e.currentTarget.style.transform = "none";
             }}
           >
             <span
@@ -780,7 +1119,7 @@ export function StockIntelligenceScreen() {
           </div>
 
           {/* Issue 5 Fix: Centered SISwitcher inside the header bar */}
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 240 }}>
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290 }}>
             <SISwitcher />
           </div>
 
@@ -1271,54 +1610,13 @@ export function StockIntelligenceScreen() {
             ==================================================== */}
         {activeTab === "moved" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Intraday Timeline with Numbered Markers */}
-            <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
-                  INTRADAY TIMELINE
-                </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#93a1af" }}>Today · 5-min</span>
-                <span style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color }}>
-                  {pct(stock.c)}
-                </span>
-              </div>
-              <div style={{ position: "relative", height: 220 }}>
-                <svg width="100%" height="220" viewBox="0 0 1000 220" preserveAspectRatio="none" style={{ display: "block" }}>
-                  <path d={areaD} fill={color} opacity="0.08" />
-                  <path d={pathD} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-                </svg>
-                {(stockDetail.events || []).map((ev, i) => {
-                  const xPct = (ev.fr * 100).toFixed(1);
-                  return (
-                    <div key={i} style={{ position: "absolute", left: `${xPct}%`, top: "35%", transform: "translateX(-50%)" }}>
-                      <div style={{ width: 14, height: 14, borderRadius: 99, background: "#080b10", border: "2px solid #7fa8d0" }} />
-                      <div style={{ marginTop: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#a9c6e3", background: "#0c1118", border: "1px solid #1c2733", padding: "1px 5px" }}>
-                        {i + 1}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Event Cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 16 }}>
-                {(stockDetail.events || []).map((ev, i) => (
-                  <div key={i} style={{ border: "1px solid #1c2733", borderTop: "2px solid #5980a6", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "#a9c6e3" }}>
-                        #{i + 1} · {ev.time}
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: (typeof ev.mv === "number" ? ev.mv >= 0 : String(ev.mv).startsWith("+")) ? UP : DN }}>
-                        {typeof ev.mv === "number" ? (ev.mv >= 0 ? "+" : "−") + Math.abs(ev.mv).toFixed(2) + "%" : ev.mv}
-                      </span>
-                    </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "#e8eef4", lineHeight: 1.35 }}>
-                      {ev.label}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* 6-Month Area Chart from stock function with 5 Major Events Markers & Cards */}
+            <SixMonthAreaChart
+              ticker={stock.t}
+              stock={stock}
+              bars={sixMonthBars}
+              events={stockDetail.sixMonthEvents || getSixMonthMajorEvents(stock.t, stock)}
+            />
 
             {/* Attribution Breakdown & AI Explanation */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>

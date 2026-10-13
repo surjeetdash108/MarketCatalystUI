@@ -14,11 +14,11 @@ export function SISwitcher({
   const { isSI, enterSI, exitToMC } = useSI();
   const [hoverSide, setHoverSide] = useState<"mc" | "si" | null>(null);
 
-  // Exact styling from MCSI.html template
+  // Proportional pill geometry for MarketCatalyst (14 chars) vs StockIntelligence (17 chars)
   const tg = isSI
     ? {
-        left: "calc(64.3% + 1px)",
-        w: "calc(35.7% - 4px)",
+        left: "calc(46.5% + 2px)",
+        w: "calc(53.5% - 5px)",
         bg: "#5980a6",
         glow: "0 0 18px rgba(127,168,208,0.45)",
         mcFg: "#93a1af",
@@ -26,7 +26,7 @@ export function SISwitcher({
       }
     : {
         left: "3px",
-        w: "calc(64.3% - 4px)",
+        w: "calc(46.5% - 4px)",
         bg: "#4ade80",
         glow: "0 0 18px rgba(74,222,128,0.35)",
         mcFg: "#05210f",
@@ -71,10 +71,10 @@ export function SISwitcher({
       >
         <div
           role="group"
-          title="Switch between Market Catalyst and Stock Intelligence"
+          title="Switch between MarketCatalyst and StockIntelligence"
           style={{
             position: "relative",
-            width: 236,
+            width: 284,
             height: 34,
             borderRadius: 99,
             border: "1px solid #2a3a4a",
@@ -104,7 +104,7 @@ export function SISwitcher({
             }}
           />
 
-          {/* Market Catalyst Label */}
+          {/* MarketCatalyst Label */}
           <span
             onClick={(e) => {
               e.stopPropagation();
@@ -114,7 +114,7 @@ export function SISwitcher({
             onMouseLeave={() => setHoverSide(null)}
             style={{
               position: "relative",
-              flex: 1.8,
+              flex: 1,
               alignSelf: "stretch",
               margin: "3px 0 3px 3px",
               borderRadius: 99,
@@ -123,8 +123,8 @@ export function SISwitcher({
               justifyContent: "center",
               fontFamily: "'Manrope', -apple-system, sans-serif",
               fontSize: 12,
-              fontWeight: 800,
-              letterSpacing: "0.08em",
+              fontWeight: 700,
+              letterSpacing: "0.01em",
               color: tg.mcFg,
               background:
                 hoverSide === "mc" && isSI
@@ -135,10 +135,10 @@ export function SISwitcher({
               zIndex: 2,
             }}
           >
-            MARKETCATALYST
+            MarketCatalyst
           </span>
 
-          {/* Stock Intelligence Label */}
+          {/* StockIntelligence Label */}
           <span
             onClick={(e) => {
               e.stopPropagation();
@@ -148,17 +148,17 @@ export function SISwitcher({
             onMouseLeave={() => setHoverSide(null)}
             style={{
               position: "relative",
-              flex: 1,
+              flex: 1.15,
               alignSelf: "stretch",
               margin: "3px 3px 3px 0",
               borderRadius: 99,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: 14,
+              fontFamily: "'Manrope', -apple-system, sans-serif",
+              fontSize: 12,
               fontWeight: 700,
-              letterSpacing: "0.18em",
+              letterSpacing: "0.01em",
               color: tg.siFg,
               background:
                 hoverSide === "si" && !isSI
@@ -169,7 +169,7 @@ export function SISwitcher({
               zIndex: 2,
             }}
           >
-            SI
+            StockIntelligence
           </span>
         </div>
       </div>
