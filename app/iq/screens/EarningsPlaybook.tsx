@@ -17,6 +17,9 @@ export type PlaybookReport = {
    * as opposed to `date`, the 10-Q filing that follows days-to-weeks later.
    * When present it pins the reaction day; null falls back to the volume search. */
   announceDate?: string | null;
+  /** Fiscal period end (ISO). Labels the row by quarter, matching Earnings
+   * History, so the two tables line up row for row. */
+  period?: string | null;
   epsActual: number | null;
   epsEstimate: number | null;
   /** FMP's reported (consensus-basis) EPS actual. Beat/miss = THIS vs
@@ -89,6 +92,7 @@ export function playbookReports(doc: FinancialsDoc | null | undefined): Playbook
     .map((q) => ({
       date: q.filingDate as string,
       announceDate: announceFor(q.endDate),
+      period: q.endDate ?? null,
       epsActual: q.epsActual,
       epsEstimate: q.epsEstimate,
       epsReported: q.epsActualReported ?? null,
@@ -99,13 +103,22 @@ export function playbookReports(doc: FinancialsDoc | null | undefined): Playbook
 type Row = {
   date: string;
   label: string;
+  /** Fiscal quarter label (e.g. "Jul 26"), same format as Earnings History. */
+  quarter: string | null;
   beat: boolean | null;
   surprisePct: number | null;
   epsAct: number | null;
   epsEst: number | null;
   gap: number | null;
+  /** Reaction-day close vs the close before the report (Finviz "Close"). */
   day1: number | null;
+  /** Each session's own close-to-close move after the reaction day — Finviz's
+   * "+1 / +2 / +3 Days", so the numbers can be checked against it one for one. */
+  day2: number | null;
   day3: number | null;
+  day4: number | null;
+  /** Cumulative close 4 sessions after the reaction vs the pre-report close;
+   * feeds the drift summary only, not shown as a column. */
   day5: number | null;
   openToClose: number | null;
   volRatio: number | null;
@@ -157,22 +170,45 @@ function buildModel(reports: PlaybookReport[], bars: OHLCBar[] | undefined, maxR
    *
    * With an announcement date: results come out before the open (that session
    * reacts) or after the close (the next one does), and the vendor feed does
-   * not say which. The reacting session trades the heavier volume of the two.
-   * Raw volumes are compared directly — the same baseline for both — because
-   * the opening gap is NOT a reliable tie-break: DELL's muted May 2025
-   * reaction gapped 1.0% on 3.4x volume after a 1.2% gap on the announcement
-   * day itself. An announcement on a non-trading day can only be reacted to
-   * by the next session.
+   * not say which — so it is voted once per ticker (afterCloseVotes above).
+   * Neither volume nor gap alone settles a single quarter: DELL's muted May
+   * 2025 reaction gapped 1.0% on 3.4x volume after a 1.2% gap on the
+   * announcement day itself. An announcement on a non-trading day can only be
+   * reacted to by the next session.
    *
    * Without one: searches back from the filing date (the announcement always
    * precedes the filing) with a small forward margin, and takes the heaviest
    * relative volume. Can latch onto an unrelated heavy session — fallback only.
    */
+  // Session index of each announcement that fell on a trading day with a
+  // following session — the only ones where before-open vs after-close matters.
+  const announceIdx = (report: PlaybookReport): number => {
+    if (!report.announceDate) return -1;
+    const at = dates.findIndex((d) => d === report.announceDate);
+    return at > 0 && at + 1 < sorted.length ? at : -1;
+  };
+  // Companies report at the same time every quarter, so the timing is decided
+  // once per ticker by majority vote, not per report. A single quarter's
+  // volume misleads: JPM's 13 Jan 2026 before-open report (-4.2%) was outtraded
+  // the next day by the other banks' reports, and AAPL's 30 Apr 2026 after-close
+  // session (+0.4%) outtraded its real reaction on 1 May (+3.2%). Each votes
+  // with the heavier volume AND the bigger opening gap; a tie falls back to
+  // that report's own volume.
+  const gapAbs = (i: number) => (sorted[i - 1].c > 0 ? Math.abs(sorted[i].o / sorted[i - 1].c - 1) : 0);
+  let afterCloseVotes = 0;
+  for (const r of reports) {
+    const at = announceIdx(r);
+    if (at < 0 || r.date > today) continue;
+    afterCloseVotes += sorted[at + 1].v > sorted[at].v ? 1 : -1;
+    afterCloseVotes += gapAbs(at + 1) > gapAbs(at) ? 1 : -1;
+  }
+
   const findReactionIdx = (report: PlaybookReport): number => {
     if (report.announceDate) {
       const at = dates.findIndex((d) => d >= report.announceDate!);
       if (at > 0) {
-        if (dates[at] !== report.announceDate || at + 1 >= sorted.length) return at;
+        if (announceIdx(report) < 0) return at;
+        if (afterCloseVotes !== 0) return afterCloseVotes > 0 ? at + 1 : at;
         return sorted[at + 1].v > sorted[at].v ? at + 1 : at;
       }
     }
@@ -215,7 +251,11 @@ function buildModel(reports: PlaybookReport[], bars: OHLCBar[] | undefined, maxR
     const rel = (c: number) => ((c - pre) / pre) * 100;
     const gap = rel(b0.o);
     const day1 = rel(b0.c);
-    const day3 = d0 + 2 < sorted.length ? rel(sorted[d0 + 2].c) : null;
+    const dayMove = (i: number) =>
+      i < sorted.length && sorted[i - 1].c > 0 ? ((sorted[i].c - sorted[i - 1].c) / sorted[i - 1].c) * 100 : null;
+    const day2 = dayMove(d0 + 1);
+    const day3 = dayMove(d0 + 2);
+    const day4 = dayMove(d0 + 3);
     const day5 = d0 + 4 < sorted.length ? rel(sorted[d0 + 4].c) : null;
     const openToClose = b0.o > 0 ? ((b0.c - b0.o) / b0.o) * 100 : null;
     const priorVols = sorted.slice(Math.max(0, d0 - 20), d0).map((b) => b.v).filter((v) => v > 0);
@@ -233,13 +273,16 @@ function buildModel(reports: PlaybookReport[], bars: OHLCBar[] | undefined, maxR
       // describing 29 May would be its own small lie.
       date: dates[d0] ?? e.date,
       label: fmtLabel(dates[d0] ?? e.date),
+      quarter: e.period ? fmtDate(e.period, { month: "short", year: "2-digit" }) : null,
       beat: surprisePct == null ? null : surprisePct >= 0,
       surprisePct,
       epsAct: reported ?? null,
       epsEst: estReported ?? null,
       gap,
       day1,
+      day2,
       day3,
+      day4,
       day5,
       openToClose,
       volRatio,
@@ -375,21 +418,27 @@ export function EarningsPlaybook({ sym, reports }: { sym: string; reports: Playb
           <table className="tbl">
             <thead>
               <tr>
-                <th>Report</th>
+                <th>Quarter</th>
                 {hasBeatMiss && <th>Result</th>}
                 {hasBeatMiss && <th className="num">EPS act</th>}
                 {hasBeatMiss && <th className="num">EPS est</th>}
                 <th className="num">Gap</th>
                 <th className="num">Day 1</th>
+                <th className="num">Day 2</th>
                 <th className="num">Day 3</th>
-                <th className="num">Day 5</th>
+                <th className="num">Day 4</th>
                 <th className="num">Volume</th>
               </tr>
             </thead>
             <tbody>
               {[...rows].reverse().map((r) => (
                 <tr key={r.date}>
-                  <td style={{ fontWeight: 700, color: "var(--text-hi)", whiteSpace: "nowrap" }}>{r.label}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <div style={{ fontWeight: 700, color: "var(--text-hi)" }}>{r.quarter ?? r.label}</div>
+                    {r.quarter && (
+                      <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>reacted {r.label}</div>
+                    )}
+                  </td>
                   {hasBeatMiss && (
                     <td style={{ whiteSpace: "nowrap", color: r.beat == null ? "var(--text-dim-solid)" : r.beat ? "var(--up)" : "var(--down)" }}>
                       {r.beat == null ? "—" : `${r.beat ? "Beat" : "Miss"} ${pct(r.surprisePct)}`}
@@ -399,17 +448,141 @@ export function EarningsPlaybook({ sym, reports }: { sym: string; reports: Playb
                   {hasBeatMiss && <td className="num" style={{ color: "var(--text-dim-solid)" }}>{r.epsEst != null ? `$${r.epsEst.toFixed(2)}` : "—"}</td>}
                   <td className="num" style={{ color: colorOf(r.gap) }}>{pct(r.gap)}</td>
                   <td className="num" style={{ color: colorOf(r.day1) }}>{pct(r.day1)}</td>
+                  <td className="num" style={{ color: colorOf(r.day2) }}>{pct(r.day2)}</td>
                   <td className="num" style={{ color: colorOf(r.day3) }}>{pct(r.day3)}</td>
-                  <td className="num" style={{ color: colorOf(r.day5) }}>{pct(r.day5)}</td>
+                  <td className="num" style={{ color: colorOf(r.day4) }}>{pct(r.day4)}</td>
                   <td className="num" style={{ color: "var(--text-dim-solid)" }}>{r.volRatio != null ? `${r.volRatio.toFixed(1)}x` : "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-            Gap is the open vs the prior close. Day 1, Day 3 and Day 5 are closing prices vs the close before the report.
+            Quarter is the fiscal period end; &quot;reacted&quot; is the trading session that moved on the report. Gap is the open vs the prior close. Day 1 is the reaction day&apos;s close vs the close before the report; Day 2, 3 and 4 are each that session&apos;s own move.
           </div>
         </div>
     </div>
   );
+}
+
+/**
+ * The stock-detail layout of the same model: an "Earnings playbook" card with
+ * the four headline reads, then a separate "Reaction history" card holding the
+ * per-report table — as in the stock-detail reference. The Earnings Hub keeps
+ * the single combined `EarningsPlaybook` above.
+ */
+export function EarningsPlaybookCards({ sym, reports, onViewAll }: {
+  sym: string;
+  reports: PlaybookReport[];
+  /** Opens the full earnings history; adds a "View all →" link when given. */
+  onViewAll?: () => void;
+}) {
+  const { bars, loading } = useBackendBars(sym, "5Y");
+  const model = useMemo(() => buildModel(reports, bars), [reports, bars]);
+
+  const head = (
+    <div className="card-h">
+      <h3>Earnings playbook<span className="sd-unit">how {sym} trades when it reports</span></h3>
+      <VendorTag v="polygon" />
+    </div>
+  );
+  if (!model) {
+    return (
+      <div className="card">
+        {head}
+        <div className="card-b">
+          {loading && !bars
+            ? <DataState loading label={`Loading ${sym} earnings-reaction history…`} />
+            : <DataState label={`No earnings-reaction history for ${sym} yet.`} />}
+        </div>
+      </div>
+    );
+  }
+
+  const { rows, typicalMove, normalDayX, beatAvg, beatCount, missAvg, missCount, gapHolds, gapTotal, driftAvg } = model;
+  const hasBeatMiss = beatCount + missCount > 0;
+  const big = (v: number | null) => <b style={{ color: colorOf(v) }}>{pct(v)}</b>;
+
+  return (<>
+    <div className="card sd-card">
+      {head}
+      <div className="sd-pb">
+        <div>
+          <span>Typical move</span>
+          <b>±{typicalMove != null ? typicalMove.toFixed(1) : "—"}%</b>
+          <small>median 1-day move, close to close{normalDayX != null ? ` ≈ ${normalDayX.toFixed(1)}× a normal day` : ""}</small>
+        </div>
+        <div>
+          <span>On a beat</span>
+          {hasBeatMiss ? big(beatAvg) : <b className="dim">—</b>}
+          <small>{beatCount} beat{beatCount === 1 ? "" : "s"}</small>
+        </div>
+        <div>
+          <span>On a miss</span>
+          {missCount > 0 ? big(missAvg) : <b className="dim">—</b>}
+          <small>{missCount} miss{missCount === 1 ? "" : "es"}</small>
+        </div>
+        <div>
+          <span>Gap holds</span>
+          <b>{gapTotal > 0 ? `${gapHolds} of ${gapTotal}` : "—"}</b>
+          <small>closed the way it gapped</small>
+        </div>
+      </div>
+      {driftAvg != null && Math.abs(driftAvg) >= 0.1 && (
+        <div className="sd-foot">
+          After the first day, it tends to keep {driftAvg >= 0 ? "moving the same way" : "fading back"} ({pct(driftAvg)} by day 5).
+        </div>
+      )}
+    </div>
+
+    <div className="card sd-card">
+      <div className="card-h">
+        <h3>Reaction history</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <VendorTag v={hasBeatMiss ? ["polygon", "fmp"] : "polygon"} />
+          {onViewAll && <span className="link" onClick={onViewAll}>View all →</span>}
+        </div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table className="sd-ftab">
+          <thead>
+            <tr>
+              <th>Quarter</th>
+              {hasBeatMiss && <th>Result</th>}
+              {hasBeatMiss && <th>EPS act</th>}
+              {hasBeatMiss && <th>EPS est</th>}
+              <th>Gap</th>
+              <th>Day 1</th>
+              <th>Day 2</th>
+              <th>Day 3</th>
+              <th>Day 4</th>
+              <th>Volume</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...rows].reverse().map((r) => (
+              <tr key={r.date}>
+                <td title={r.quarter ? `reacted ${r.label}` : undefined}>{r.quarter ? r.quarter.replace(" ", "-") : r.label}</td>
+                {hasBeatMiss && (
+                  <td style={{ color: r.beat == null ? "var(--text-dim-solid)" : r.beat ? "var(--up)" : "var(--down)" }}>
+                    {r.beat == null ? "—" : `${r.beat ? "Beat" : "Miss"} ${pct(r.surprisePct)}`}
+                  </td>
+                )}
+                {hasBeatMiss && <td>{r.epsAct != null ? `$${r.epsAct.toFixed(2)}` : "—"}</td>}
+                {hasBeatMiss && <td className="dim">{r.epsEst != null ? `$${r.epsEst.toFixed(2)}` : "—"}</td>}
+                <td style={{ color: colorOf(r.gap) }}>{pct(r.gap)}</td>
+                <td style={{ color: colorOf(r.day1) }}>{pct(r.day1)}</td>
+                <td style={{ color: colorOf(r.day2) }}>{pct(r.day2)}</td>
+                <td style={{ color: colorOf(r.day3) }}>{pct(r.day3)}</td>
+                <td style={{ color: colorOf(r.day4) }}>{pct(r.day4)}</td>
+                <td className="dim">{r.volRatio != null ? `${r.volRatio.toFixed(1)}x` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="sd-foot">
+        Gap is the open vs the prior close. Day 1 is the reaction day&apos;s close vs the close before the report; Day 2, 3 and 4 are each that session&apos;s own move. Hover a quarter for the session that reacted.
+      </div>
+    </div>
+  </>);
 }

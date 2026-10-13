@@ -44,7 +44,9 @@ function pctCell(v: number | null): string {
   return v == null ? "—" : `${v >= 0 ? "+" : ""}${Math.round(v)}%`;
 }
 
-export type EpsSalesPt = { label: string; eps: number | null; sales: number | null };
+/** `end` is the period-end date (quarterly only) — lets a caller join other
+ *  per-quarter data, e.g. a revenue estimate, onto the right row. */
+export type EpsSalesPt = { label: string; eps: number | null; sales: number | null; end?: string };
 
 export type AnnualRow = {
   year: string;
@@ -135,6 +137,7 @@ export function epsSalesSeries(
         label: fmtDate(r.endDate, { month: "short", year: "2-digit" }).replace(" ", "-"),
         eps: reportedQuarterEps(r),
         sales: r.revenue != null ? r.revenue / 1e6 : null,
+        end: r.endDate as string,
       }));
   }
   return [...doc.annual]
