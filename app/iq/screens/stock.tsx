@@ -381,6 +381,23 @@ function EpsSalesBars({ data }: { data: EpsSalesPt[] }) {
   );
 }
 
+type NewsPeriod = "w" | "pw" | "m" | "q" | "y";
+const NEWS_PERIODS: Array<[NewsPeriod, string]> = [
+  ["w", "This week"], ["pw", "Prev week"], ["m", "This month"], ["q", "This quarter"], ["y", "This year"],
+];
+/** Whether a story published at `ms` falls in period `p`, relative to `now`. */
+function inNewsPeriod(p: NewsPeriod, ms: number, now: Date): boolean {
+  const DAY = 86_400_000, age = now.getTime() - ms;
+  const d = new Date(ms);
+  switch (p) {
+    case "w": return age < 7 * DAY;
+    case "pw": return age >= 7 * DAY && age < 14 * DAY;
+    case "m": return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    case "q": return d.getFullYear() === now.getFullYear() && Math.floor(d.getMonth() / 3) === Math.floor(now.getMonth() / 3);
+    case "y": return d.getFullYear() === now.getFullYear();
+  }
+}
+
 /** Segmented toggle (Quarterly / Annual, news periods) — the reference's pill row. */
 function SegToggle<T extends string>({ label, value, options, onChange }: {
   label: string;
@@ -820,6 +837,8 @@ export function StockScreen({
   const [peerSort, setPeerSort] = useState<"desc" | "asc">("desc");
   const [peerSortBy, setPeerSortBy] = useState<"c" | "mcap" | "rs" | "sym">("c");
   const [peerQuery, setPeerQuery] = useState<string>("");
+  // News tab period; null = the first period that has any stories.
+  const [newsPeriod, setNewsPeriod] = useState<NewsPeriod | null>(null);
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
   const [erMode,      setErMode]      = useState<"Q" | "A">("Q");
 
@@ -1882,7 +1901,7 @@ export function StockScreen({
             overflow hidden, so Peers flex-fills/scrolls and Key levels sits at
             the base, level with Financials' bottom. Falls back to natural height
             (undefined) when stacked on narrow screens. */}
-        <div className="sd-rail" style={{ height: rightColH, minHeight: 0, overflow: rightColH ? "hidden" : undefined }}>
+        <div className="sd-rail" style={{ height: rightColH, minHeight: 0, overflow: rightColH ? "auto" : undefined }}>
 
           {/* Technical Rating */}
           <div className="card sd-rail-full">
@@ -2803,20 +2822,11 @@ export function StockScreen({
             isEtf ? (
               <EtfHoldingsView symbol={sym} />
             ) : (
+              <div className="sd-hold">
               <div className="card">
-                <div className="card-h" style={{ flexWrap: "wrap", gap: 10, padding: "12px 16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <h3 style={{ margin: 0 }}>Insider Transactions ({allSymInsiderTxns.length})</h3>
-                    <VendorTag v="sec" />
-                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".64rem" }}>
-                      SEC EDGAR Form 4
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-                    <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                      All recorded transactions for {sym}
-                    </span>
-                  </div>
+                <div className="card-h">
+                  <h3>Insider transactions<span className="sd-unit">{allSymInsiderTxns.length} Form 4 filings</span></h3>
+                  <VendorTag v="sec" />
                 </div>
 
                 <div className="card-b" style={{ padding: 0 }}>
@@ -2925,6 +2935,46 @@ export function StockScreen({
                   )}
                 </div>
               </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+                <div className="card">
+                  <div className="card-h"><h3>Institutional</h3><VendorTag v="fmp" /></div>
+                  {(() => {
+                    const io = liveCompany?.instOwnershipPct;
+                    const holders = liveCompany?.inst13FHolders;
+                    const chg = liveCompany?.inst13FHoldersChange;
+                    return (<>
+                      <div className="sd-row"><span className="grow">Institutional ownership</span><span className="num">{io != null ? `${io.toFixed(1)}%` : <NotAvailable />}</span></div>
+                      {/* No Polygon (404) or FMP source for short interest — needs FINRA. */}
+                      <div className="sd-row"><span className="grow">Short interest</span><span className="num dim"><NotAvailable /></span></div>
+                      {/* "filers", not "funds": FMP counts 13F FILERS, and one filer can cover hundreds of funds. */}
+                      <div className="sd-row">
+                        <span className="grow">13F filers holding</span>
+                        <span className="num">
+                          {holders != null ? holders.toLocaleString() : <NotAvailable />}
+                          {holders != null && chg != null && chg !== 0 && (
+                            <span className={chg > 0 ? "up" : "down"} style={{ marginLeft: 6 }}>{chg > 0 ? "+" : ""}{chg} QoQ</span>
+                          )}
+                        </span>
+                      </div>
+                      {liveCompany?.instAsOf && <div className="sd-foot">13F rollup · {liveCompany.instAsOf}</div>}
+                    </>);
+                  })()}
+                </div>
+
+                <div className="card">
+                  <div className="card-h"><h3>Stock splits</h3><VendorTag v="polygon" /></div>
+                  {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 5).map(x => (
+                    <div key={x.executionDate} className="sd-row">
+                      <span className="grow num">{x.executionDate}</span>
+                      <span className="num">{x.splitFrom}:{x.splitTo}</span>
+                    </div>
+                  )) : (
+                    <div className="sd-note" style={{ paddingBottom: 14 }}>No splits on record.</div>
+                  )}
+                </div>
+              </div>
+              </div>
             )
           )}
 
@@ -2932,48 +2982,58 @@ export function StockScreen({
             <Stock13FFilingsView symbol={sym} />
           )}
 
-          {activeTab === "news" && (
-            <div className="card">
-              <div className="card-h">
-                <h3>News</h3>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <VendorTag v={["polygon", "fmp"]} />
-                  {tickerNews && tickerNews.length > 0 && (
-                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live</span>
-                  )}
-                </div>
-              </div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                {tickerNews && tickerNews.length > 0 ? (
-                  tickerNews.slice(0, 6).map(n => (
-                    <a key={n.id} href={n.url} target="_blank" rel="noreferrer"
-                      className="minirow" style={{ alignItems: "flex-start", gap: 10, textDecoration: "none", cursor: "pointer" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: ".8rem", color: "var(--text)" }}>{n.headline}</div>
-                        <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 3, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                          <span>{n.source} · {new Date(n.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                          {n.vendor && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
-                          {n.sentiment && <span className="pill" style={{ fontSize: ".54rem", textTransform: "capitalize", background: "var(--surface-3)", color: n.sentiment === "positive" ? "var(--up)" : n.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>{n.sentiment}</span>}
-                        </div>
-                      </div>
-                    </a>
-                  ))
-                ) : (
-                  <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "4px 0" }}>
-                    No recent news synced for {sym} yet.
+          {activeTab === "news" && (() => {
+            const now = new Date();
+            const items = (tickerNews ?? []).map(n => ({ n, ms: Date.parse(n.publishedAt) })).filter(x => Number.isFinite(x.ms));
+            const counts = Object.fromEntries(
+              NEWS_PERIODS.map(([k]) => [k, items.filter(x => inNewsPeriod(k, x.ms, now)).length]),
+            ) as Record<NewsPeriod, number>;
+            const period = newsPeriod ?? NEWS_PERIODS.find(([k]) => counts[k] > 0)?.[0] ?? "w";
+            const list = items.filter(x => inNewsPeriod(period, x.ms, now)).sort((a, b) => b.ms - a.ms);
+            const CAP = 40;
+            return (
+              <div className="card">
+                <div className="card-h">
+                  <h3>News</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <VendorTag v={["polygon", "fmp"]} />
+                    {items.length > 0 && (
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live</span>
+                    )}
                   </div>
-                )}
+                </div>
+                {items.length === 0 ? (
+                  <div className="sd-note" style={{ paddingBottom: 14 }}>No recent news synced for {sym} yet.</div>
+                ) : (<>
+                  <div className="sd-newsbar">
+                    <SegToggle label="News period" value={period} onChange={setNewsPeriod}
+                      options={NEWS_PERIODS.map(([k, l]) => [k, <>{l}<span className="n">{counts[k]}</span></>] as [NewsPeriod, ReactNode])} />
+                  </div>
+                  {list.length === 0 ? (
+                    <div className="sd-note" style={{ padding: "26px 16px", textAlign: "center" }}>No stories in this period.</div>
+                  ) : list.slice(0, CAP).map(({ n, ms }) => (
+                    <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="sd-news">
+                      <h4>{n.headline}</h4>
+                      <p>
+                        <span>{n.source} · {new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                        {n.vendor && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
+                        {n.sentiment && <span className="pill" style={{ fontSize: ".54rem", textTransform: "capitalize", background: "var(--surface-3)", color: n.sentiment === "positive" ? "var(--up)" : n.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>{n.sentiment}</span>}
+                      </p>
+                    </a>
+                  ))}
+                  {list.length > CAP && <div className="sd-foot">Showing the latest {CAP} of {list.length} stories in this period.</div>}
+                </>)}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {activeTab === "peers" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {/* Peer Comparison Table Card */}
               <div className="card">
-                <div className="card-h" style={{ flexWrap: "wrap", gap: 10, padding: "12px 16px" }}>
+                <div className="card-h" style={{ flexWrap: "wrap", gap: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                    <h3 style={{ margin: 0 }}>Peer Constituent Breakdown ({displayPeers.length})</h3>
+                    <h3 style={{ margin: 0 }}>Peers<span className="sd-unit">{displayPeers.length} companies</span></h3>
                     <VendorTag v="polygon" />
                     {/* Search box */}
                     <input
@@ -2981,60 +3041,22 @@ export function StockScreen({
                       placeholder="Filter by symbol or name..."
                       value={peerQuery}
                       onChange={e => setPeerQuery(e.target.value)}
-                      style={{
-                        background: "var(--surface-1)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "var(--r-sm)",
-                        padding: "4px 8px",
-                        fontSize: ".75rem",
-                        color: "var(--text-hi)",
-                        outline: "none",
-                        width: 190,
-                      }}
+                      className="sd-search"
                     />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Sort:</span>
-                    <button
-                      className={`btn ${peerSortBy === "c" ? "on" : ""}`}
-                      onClick={() => {
-                        if (peerSortBy === "c") setPeerSort(s => (s === "desc" ? "asc" : "desc"));
-                        else { setPeerSortBy("c"); setPeerSort("desc"); }
-                      }}
-                      style={{ padding: "3px 8px", fontSize: ".68rem", borderRadius: 6 }}
-                    >
-                      % Change {peerSortBy === "c" ? (peerSort === "desc" ? "▼" : "▲") : ""}
-                    </button>
-                    <button
-                      className={`btn ${peerSortBy === "mcap" ? "on" : ""}`}
-                      onClick={() => {
-                        if (peerSortBy === "mcap") setPeerSort(s => (s === "desc" ? "asc" : "desc"));
-                        else { setPeerSortBy("mcap"); setPeerSort("desc"); }
-                      }}
-                      style={{ padding: "3px 8px", fontSize: ".68rem", borderRadius: 6 }}
-                    >
-                      Market Cap {peerSortBy === "mcap" ? (peerSort === "desc" ? "▼" : "▲") : ""}
-                    </button>
-                    <button
-                      className={`btn ${peerSortBy === "rs" ? "on" : ""}`}
-                      onClick={() => {
-                        if (peerSortBy === "rs") setPeerSort(s => (s === "desc" ? "asc" : "desc"));
-                        else { setPeerSortBy("rs"); setPeerSort("desc"); }
-                      }}
-                      style={{ padding: "3px 8px", fontSize: ".68rem", borderRadius: 6 }}
-                    >
-                      RS Rating {peerSortBy === "rs" ? (peerSort === "desc" ? "▼" : "▲") : ""}
-                    </button>
-                    <button
-                      className={`btn ${peerSortBy === "sym" ? "on" : ""}`}
-                      onClick={() => {
-                        if (peerSortBy === "sym") setPeerSort(s => (s === "desc" ? "asc" : "desc"));
-                        else { setPeerSortBy("sym"); setPeerSort("asc"); }
-                      }}
-                      style={{ padding: "3px 8px", fontSize: ".68rem", borderRadius: 6 }}
-                    >
-                      Ticker {peerSortBy === "sym" ? (peerSort === "desc" ? "▼" : "▲") : ""}
-                    </button>
+                    <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Sort</span>
+                    <div className="sd-seg" role="group" aria-label="Sort peers">
+                      {([["c", "% Change", "desc"], ["mcap", "Market cap", "desc"], ["rs", "RS rating", "desc"], ["sym", "Ticker", "asc"]] as const).map(([k, l, first]) => (
+                        <button key={k} type="button" aria-pressed={peerSortBy === k}
+                          onClick={() => {
+                            if (peerSortBy === k) setPeerSort(x => (x === "desc" ? "asc" : "desc"));
+                            else { setPeerSortBy(k); setPeerSort(first); }
+                          }}>
+                          {l}{peerSortBy === k ? (peerSort === "desc" ? " ▼" : " ▲") : ""}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -3062,15 +3084,9 @@ export function StockScreen({
                             return (
                               <tr
                                 key={peer.t}
+                                className={isCurrent ? "mine" : undefined}
                                 onClick={() => openStockDetail(peer.t, displayPeers.map(x => x.t))}
-                                style={{
-                                  cursor: "pointer",
-                                  borderBottom: "1px solid var(--border-soft)",
-                                  background: isCurrent ? "rgba(0,180,216,0.06)" : undefined,
-                                  transition: "background .12s ease",
-                                }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isCurrent ? "rgba(0,180,216,0.12)" : "var(--surface-1)"; }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isCurrent ? "rgba(0,180,216,0.06)" : ""; }}
+                                style={{ cursor: "pointer" }}
                               >
                                 <td style={{ padding: "10px 14px" }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -3080,8 +3096,8 @@ export function StockScreen({
                                         <span className="mono" style={{ fontWeight: 700, color: isCurrent ? "var(--brand-2)" : "var(--text-hi)" }}>
                                           {peer.t}
                                         </span>
-                                        {isCurrent && <span className="pill" style={{ fontSize: ".58rem", background: "var(--brand-2)", color: "#000" }}>CURRENT</span>}
-                                        {tag && <span className={`pill ${tag === "Leader" ? "up" : "dn"}`} style={{ fontSize: ".58rem" }}>{tag}</span>}
+                                        {isCurrent && <span className="sd-rs cur">Current</span>}
+                                        {tag && <span className={`sd-rs ${tag === "Leader" ? "lead" : "lag"}`}>{tag}</span>}
                                       </div>
                                       <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                         {peer.name || "—"}
@@ -3093,9 +3109,7 @@ export function StockScreen({
                                   {peer.price != null ? "$" + (peer.price >= 10 ? peer.price.toFixed(2) : peer.price.toFixed(3)) : "—"}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
-                                  <span className={`pill ${cls(peer.c)}`} style={{ fontWeight: 700, padding: "3px 8px" }}>
-                                    {sign(peer.c)}
-                                  </span>
+                                  <span className={cls(peer.c)} style={{ fontWeight: 600 }}>{sign(peer.c)}</span>
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
                                   {peer.marketCap != null ? cap(peer.marketCap) : "—"}
@@ -3105,14 +3119,7 @@ export function StockScreen({
                                 </td>
                                 <td style={{ textAlign: "center", padding: "10px 14px" }}>
                                   {peer.rsRating != null ? (
-                                    <span className="pill" style={{
-                                      background: peer.rsRating >= 70 ? "rgba(34,197,94,.15)" : peer.rsRating < 40 ? "rgba(239,68,68,.15)" : "var(--surface-3)",
-                                      color: peer.rsRating >= 70 ? "var(--up)" : peer.rsRating < 40 ? "var(--down)" : "var(--text-dim-solid)",
-                                      fontWeight: 700,
-                                      fontSize: ".66rem",
-                                    }}>
-                                      RS {peer.rsRating}
-                                    </span>
+                                    <span className={`sd-rs${peer.rsRating >= 70 ? " lead" : peer.rsRating < 40 ? " lag" : ""}`}>RS {peer.rsRating}</span>
                                   ) : "—"}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", fontSize: ".75rem" }}>
@@ -3144,7 +3151,7 @@ export function StockScreen({
           // Pinned to the left column's height on Analysis (so Key levels sits
           // level with its last card); Overview's column is short, so its
           // rail keeps its natural height and Peers scrolls inside its card.
-          <div className="sd-rail" style={{ height: rightColH, minHeight: 0, overflow: rightColH ? "hidden" : undefined }}>
+          <div className="sd-rail" style={{ height: rightColH, minHeight: 0, overflow: rightColH ? "auto" : undefined }}>
 
 
             {activeTab === "analysis" && (
