@@ -33,7 +33,7 @@ import type {
   CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc,
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps } from "../types";
+import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, form4Url } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct, estimatedAnnualEps } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
@@ -768,7 +768,11 @@ export function StockScreen({
   // endpoints. Nothing here falls back to mock data; a ticker with no live
   // match for a given panel just shows that panel as not available.
   const { data: liveConsensus } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
-  const { data: liveInsider, loading: insiderLoading } = useApiList<InsiderTxDoc>("/market-data/insider-transactions");
+  // Scoped to this ticker server-side: unscoped, the endpoint returns only the
+  // latest page across ALL tickers, so most symbols got few or no rows.
+  const { data: liveInsider, loading: insiderLoading } = useApiList<InsiderTxDoc>(
+    `/market-data/insider-transactions?ticker=${encodeURIComponent(sym)}`,
+  );
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: sectorsLive, loading: sectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
   const { data: liveEarningsEvents, loading: earningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
@@ -2928,7 +2932,14 @@ export function StockScreen({
                           {sortedSymInsiderTxns.map((tx, idx) => {
                             const isBuy = tx.acquiredOrDisposed === "A";
                             const isSell = tx.acquiredOrDisposed === "D";
-                            const valUsd = tx.pricePerShare != null && tx.shares > 0 ? tx.shares * tx.pricePerShare : null;
+                            // SEC reports no market price for grants, gifts, RSU/option
+                            // exercises and conversions (price absent or $0) — say what
+                            // the row is rather than leaving a bare dash.
+                            const price = tx.pricePerShare != null && tx.pricePerShare > 0 ? tx.pricePerShare : null;
+                            const valUsd = price != null && tx.shares > 0 ? tx.shares * price : null;
+                            const codeLabel = TX_CODE_LABEL[tx.transactionCode] ?? `Code ${tx.transactionCode}`;
+                            const noPriceTip = `${codeLabel} (code ${tx.transactionCode}) — no market price reported on the Form 4`;
+                            const filingUrl = form4Url(tx.id);
                             return (
                               <tr key={`${tx.id || idx}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
                                 <td className="mono" style={{ padding: "10px 14px", color: "var(--text-dim-solid)", fontSize: ".76rem" }}>
@@ -2959,7 +2970,9 @@ export function StockScreen({
                                   {Math.round(tx.shares ?? 0).toLocaleString("en-US")}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
-                                  {tx.pricePerShare != null ? `$${tx.pricePerShare.toFixed(2)}` : "—"}
+                                  {price != null ? `$${price.toFixed(2)}` : (
+                                    <span title={noPriceTip} style={{ fontSize: ".7rem", fontFamily: "var(--f-sans, inherit)" }}>{codeLabel}</span>
+                                  )}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
                                   {valUsd != null ? (
@@ -2967,13 +2980,21 @@ export function StockScreen({
                                       {isBuy ? "+" : "−"}${Math.abs(valUsd) >= 1e6 ? `${(Math.abs(valUsd) / 1e6).toFixed(1)}M` : Math.round(Math.abs(valUsd)).toLocaleString("en-US")}
                                     </span>
                                   ) : (
-                                    <NotAvailable />
+                                    <span title={noPriceTip} style={{ color: "var(--text-dim-solid)" }}>—</span>
                                   )}
                                 </td>
                                 <td style={{ textAlign: "center", padding: "10px 14px" }}>
-                                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".62rem" }}>
-                                    Form 4
-                                  </span>
+                                  {filingUrl ? (
+                                    <a className="pill" href={filingUrl} target="_blank" rel="noopener noreferrer"
+                                      title="Open this Form 4 on SEC EDGAR"
+                                      style={{ background: "var(--surface-3)", color: "var(--brand)", fontSize: ".62rem", textDecoration: "none", cursor: "pointer" }}>
+                                      Form 4 ↗
+                                    </a>
+                                  ) : (
+                                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".62rem" }}>
+                                      Form 4
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             );
