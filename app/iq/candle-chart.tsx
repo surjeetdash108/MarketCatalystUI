@@ -260,6 +260,10 @@ const studyLabel = (s: Pick<Study, "k" | "len">): string => {
   return c.fixed ? `${c.name} ${c.fixed}` : c.param ? `${c.name} ${s.len}${c.suffix ?? ""}` : c.name;
 };
 
+/** Overlay line dash: EMA dashed, VWAP dash-dot-ish, SMA and the rest solid. */
+const lineDash = (k: StudyKind): number[] | null =>
+  k === "ema" ? [6, 4] : k === "vwap" ? [6, 3] : null;
+
 type StudyData =
   | { kind: "line"; v: Num[] }
   | { kind: "bb"; u: Num[]; mid: Num[]; lo: Num[] }
@@ -604,7 +608,7 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
       for (const v of [30, 70]) ctx.fillText(String(v), g.l + 5, rsiY(v) - 8);
       line(d.v, s.col, rsiY, 1.5);
     }
-    else if (d?.kind === "line") line(d.v, s.col, yOf, 1.6, s.k === "vwap" ? [6, 3] : null);
+    else if (d?.kind === "line") line(d.v, s.col, yOf, 1.6, lineDash(s.k));
   }
 
   // ── earnings markers (daily-and-up only; dropped where too dense to read) ──
@@ -1188,7 +1192,6 @@ function CandleChartInner({
   const erCardRef = useRef<HTMLDivElement>(null);
   const erOpen = erSel && erSel.view === view && erSel.marks === erMarks && erSel.size === size && erMarks[erSel.hit.k]
     ? erSel.hit : null;
-  const [folded, setFolded] = useState(false);
   const [full, setFull] = useState(false);
 
   useLayoutEffect(() => {
@@ -1543,15 +1546,9 @@ function CandleChartInner({
 
       <div className={`cc-stage${height == null ? " responsive" : ""}`}
         style={height != null && !full ? { height } : undefined}>
-        <div className={`cc-hud${folded ? " folded" : ""}`}>
+        <div className="cc-hud">
           <div className="cc-lg-hd">
-            <span className="cc-lg-id">
-              {studies.length > 0 && (
-                <button type="button" className="cc-lg-fold" aria-expanded={!folded}
-                  title={folded ? "Show indicators" : "Hide indicators"} aria-label={folded ? "Show indicators" : "Hide indicators"}
-                  onClick={() => setFolded(f => !f)}>{folded ? "▲" : "▼"}</button>
-              )}
-            </span>
+            <span className="cc-lg-id" />
             {!hideHudOhlc && (
               <span className="cc-lg-q">
                 <span><s>O</s><b>{bar.o.toFixed(2)}</b></span>
@@ -1564,13 +1561,39 @@ function CandleChartInner({
               </span>
             )}
           </div>
+        </div>
+        <canvas
+          ref={cvRef}
+          tabIndex={0}
+          aria-label={`${sym} price chart. Use arrow keys to pan, plus and minus to zoom, F for full screen.`}
+          style={{ cursor: dragging ? "grabbing" : erHover != null ? "pointer" : "crosshair" }}
+          onMouseDown={e => {
+            if (e.button !== 0) return;
+            downRef.current = { x: e.clientX, y: e.clientY };
+            dragRef.current = { x: e.clientX, view }; setDragging(true);
+          }}
+          onMouseMove={onCanvasMove}
+          onClick={onCanvasClick}
+          onMouseLeave={() => { setHover(null); setErHover(null); }}
+          onDoubleClick={resetView}
+          onKeyDown={onCanvasKey}
+        />
+        {erCard}
+      </div>
+
+      {studies.length > 0 && (
+        <div className="cc-legend" role="list" aria-label="Indicators on chart">
           {studies.map(s => {
             const v = s.on ? studyVal(s) : null;
             const label = studyLabel(s);
             const editable = !!cat(s.k).param;
+            const dash = lineDash(s.k);
             return (
-              <div key={s.id} className={`cc-lg-row${s.on ? "" : " hidden"}`}>
-                <i style={{ background: s.col }} />
+              <div key={s.id} role="listitem" className={`cc-lg-row${s.on ? "" : " hidden"}`}>
+                <svg className="sw" width="18" height="8" viewBox="0 0 18 8" aria-hidden="true">
+                  <line x1="0" y1="4" x2="18" y2="4" stroke={s.col} strokeWidth="2"
+                    strokeDasharray={dash ? dash.map(x => x * 0.6).join(" ") : undefined} />
+                </svg>
                 <span className={`n${editable ? " edit" : ""}`} role={editable ? "button" : undefined} tabIndex={editable ? 0 : undefined}
                   title={editable ? "Settings" : undefined}
                   onClick={editable ? () => openSettings(s.k, s) : undefined}
@@ -1591,24 +1614,7 @@ function CandleChartInner({
             );
           })}
         </div>
-        <canvas
-          ref={cvRef}
-          tabIndex={0}
-          aria-label={`${sym} price chart. Use arrow keys to pan, plus and minus to zoom, F for full screen.`}
-          style={{ cursor: dragging ? "grabbing" : erHover != null ? "pointer" : "crosshair" }}
-          onMouseDown={e => {
-            if (e.button !== 0) return;
-            downRef.current = { x: e.clientX, y: e.clientY };
-            dragRef.current = { x: e.clientX, view }; setDragging(true);
-          }}
-          onMouseMove={onCanvasMove}
-          onClick={onCanvasClick}
-          onMouseLeave={() => { setHover(null); setErHover(null); }}
-          onDoubleClick={resetView}
-          onKeyDown={onCanvasKey}
-        />
-        {erCard}
-      </div>
+      )}
 
       {modalHost && browserOpen && createPortal(
         <IndicatorBrowser prefs={prefs} onPick={pickStudy} onClose={closeBrowser} />, modalHost)}
