@@ -604,7 +604,11 @@ type SurpPt = { label: string; surp: number | null; est?: boolean };
  * scaled to the card, matching the Earnings-growth chart beside it.
  */
 function EpsSurpriseChart({ data }: { data: SurpPt[] }) {
-  const W = 560, H = 260, PADL = 64, PADR = 12, BASE = 140, BW = 22;
+  // BASE sits above centre: a beat's label goes over its bar into the empty
+  // top margin, but a miss's label goes UNDER its bar, toward the period
+  // labels at H - 14. With BASE at 140 the largest miss (84px) put its label
+  // at 242 — on top of the period label at 246. At 128 it ends at 227.
+  const W = 560, H = 260, PADL = 64, PADR = 12, BASE = 128, BW = 22;
   const step = (W - PADL - PADR) / Math.max(1, data.length);
   const max = Math.max(1, ...data.map(d => (d.surp != null ? Math.abs(d.surp) : 0)));
   const scale = 84 / max;
@@ -636,7 +640,7 @@ function EpsSurpriseChart({ data }: { data: SurpPt[] }) {
         return (
           <g key={d.label + i}>
             <rect x={x - BW / 2} y={y} width={BW} height={bh} rx="3" style={{ fill: beat ? "var(--brand)" : "var(--down)" }} />
-            <text x={x} y={beat ? y - 10 : y + bh + 18} textAnchor="middle"
+            <text x={x} y={beat ? y - 10 : y + bh + 15} textAnchor="middle"
               style={{ ...mono, fill: beat ? "var(--text)" : "var(--down)" }}>
               {beat ? "+" : ""}{d.surp.toFixed(1)}%
             </text>
