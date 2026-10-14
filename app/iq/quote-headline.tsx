@@ -10,7 +10,7 @@
 import { fmt, cls, arr } from "./utils";
 import { useBackendMarketStatus } from "./hooks/useBackendMarketStatus";
 import { useLiveQuotes } from "./live-quotes-context";
-import { useBackendBars } from "./hooks/useBackendBars";
+import { useApiResource } from "./hooks/useApiResource";
 import type { UseLiveTickResult } from "./hooks/useLiveTick";
 import type { OHLCBar } from "./candle-chart";
 
@@ -110,7 +110,14 @@ export function useHeadlineQuote(
   const noSessionSplit =
     sharedQuote?.price != null && sharedQuote.regularClose == null && sharedQuote.marketStatus == null;
   const barsFallback = isExtended && noSessionSplit;
-  const { bars: dayBars } = useBackendBars(sym, "1D", barsFallback);
+  // Polled, not fetched once: a page opened before the first pre-market print
+  // (or before the close) would otherwise keep yesterday's last bar forever
+  // and never show the block.
+  const { data: dayBarsDoc } = useApiResource<{ bars?: OHLCBar[] }>(
+    barsFallback && sym ? `/live/bars?ticker=${encodeURIComponent(sym)}&tf=1D` : null,
+    60_000,
+  );
+  const dayBars = dayBarsDoc?.bars;
 
   /*
    * The close the extended move is measured from: pre-market follows the
@@ -135,7 +142,14 @@ export function useHeadlineQuote(
     sharedQuote?.regularClose != null && sharedQuote.previousClose != null && sharedQuote.previousClose > 0
       ? ((sharedQuote.regularClose - sharedQuote.previousClose) / sharedQuote.previousClose) * 100
       : null;
-  const regPct = isExtended
+  // Pre-market belongs to a NEW trading day whose regular session has not
+  // started: the headline is the prior close and its own move is 0.00. The
+  // quote's change % at this hour is still yesterday's session (AAPL showed
+  // +0.30 at 08:47 ET = 341.27 vs 340.97, the 13 Oct move); today's
+  // pre-market move is the PRE-MARKET block beside it.
+  const regPct = isPre
+    ? 0
+    : isExtended
     ? (closesMove ?? (barsFallback ? sharedQuote?.pctChange : null) ?? snapshot.pctChange ?? 0)
     : (sharedQuote?.regularPct ?? dispPct ?? snapshot.pctChange ?? 0);
 
@@ -203,7 +217,7 @@ export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
                 whiteSpace: "nowrap",
               }}
             >
-              <span style={{ fontSize: "0.68rem" }}>{arr(regPct)}</span>
+              {regPct !== 0 && <span style={{ fontSize: "0.68rem" }}>{arr(regPct)}</span>}
               <span>{fmt(Math.abs(regDollar ?? 0), 2)}</span>
               <span>({regPct >= 0 ? "" : "-"}{fmt(Math.abs(regPct), 2)}%)</span>
             </span>
