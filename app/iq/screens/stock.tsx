@@ -437,6 +437,16 @@ function useMeasuredWidth(initial: number) {
  * underneath. A trailing `est` bar is the next period's consensus estimate,
  * drawn grey — present only when the earnings calendar actually has one.
  */
+/**
+ * A $B figure with precision that scales with its size. Rounding to whole
+ * billions printed "0" on every bar for a ~$0.4B-a-quarter company (JJSF) and
+ * flattened JNJ's 25.4 to 25.
+ */
+function fmtBillions(v: number): string {
+  const a = Math.abs(v);
+  return v.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : a >= 0.1 ? 2 : 3);
+}
+
 function SalesBars({ data }: { data: Array<{ label: string; v: number; est?: boolean }> }) {
   const [wrapRef, W] = useMeasuredWidth(560);
   // PADL leaves room for the first angled label, which runs down-left of its bar.
@@ -459,7 +469,7 @@ function SalesBars({ data }: { data: Array<{ label: string; v: number; est?: boo
                 rx="3" style={{ fill: d.est ? "var(--border-strong)" : "var(--brand)" }} />
               <text x={cx.toFixed(1)} y={(baseY - h - 6).toFixed(1)} textAnchor="middle"
                 style={{ fill: d.est ? "var(--text-dim-solid)" : "var(--text)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
-                {Math.round(d.v).toLocaleString()}
+                {fmtBillions(d.v)}
               </text>
               <text x={cx.toFixed(1)} y={ly.toFixed(1)} textAnchor="end"
                 transform={`rotate(-40 ${cx.toFixed(1)} ${ly.toFixed(1)})`}
