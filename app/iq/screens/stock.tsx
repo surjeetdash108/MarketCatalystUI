@@ -7,6 +7,7 @@ import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
 import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, chartAsOfLabel, fmtFetchedAt, intervalLabel, CHART_TYPE_OPTIONS, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
+import { useKeyMoments } from "../key-moments";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
 import { apiPost } from "../backend";
@@ -759,6 +760,7 @@ export function StockScreen({
   // default-off toggle they were invisible unless you knew to look for the
   // button. The toggle still turns them off for a clean price-only chart.
   const [showEarnings, setShowEarnings] = useState(true);
+  const [showMoments, setShowMoments] = useState(true);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
 
 
@@ -1163,6 +1165,12 @@ export function StockScreen({
   // financials doc this screen already fetched, rather than via
   // useChartEarnings, to avoid fetching it a second time.
   const chartEarnings: ChartEarnings[] = buildChartEarnings(financialsDoc, symEvents, todayStr);
+
+  // Key moments: the year's unusually large moves for this stock, each with the
+  // news that best explains it and the S&P 500's move that session.
+  const keyMoments = useKeyMoments(showMoments, {
+    sym, name: data.name, bars: yearBars, news: tickerNews, earningsDates: chartEarnings.map(e => e.date),
+  });
 
   // The next report on the earnings calendar — the only feed carrying a SALES
   // estimate, and a fallback for the next EPS estimate. Null when none is listed.
@@ -1693,10 +1701,13 @@ export function StockScreen({
                   loading={barsLoading}
                   live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low, at: live.tick.at } : null}
                   earnings={showEarnings ? chartEarnings : []}
+                  moments={keyMoments}
                   toolbarStart={<>
                     <IntervalMenu value={barInterval} onChange={setBarInterval} />
                     <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
                     <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
+                    <button className={`rng indbtn${showMoments ? " on" : ""}`} onClick={() => setShowMoments(v => !v)}
+                      title="Mark unusually large moves and the news behind them">Key moments</button>
                   </>}
                   toolbarEnd={<>
                     <VendorTag v="polygon" />
