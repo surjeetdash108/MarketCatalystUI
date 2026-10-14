@@ -35,8 +35,10 @@ function niceTicks(min: number, max: number, target = 5): { ticks: number[]; lo:
   return { ticks, lo, hi };
 }
 
-function MetricBars({ title, data, fmt }: {
+function MetricBars({ title, data, fmt, valueFmt = fmt }: {
   title: string; data: Array<{ label: string; v: number | null }>; fmt: (v: number) => string;
+  /** Shorter form printed on top of each bar (the axis and tooltip keep `fmt`). */
+  valueFmt?: (v: number) => string;
 }) {
   const gid = "esw-" + title.replace(/\W/g, "");
   const vals = data.map(d => d.v).filter((v): v is number => v != null);
@@ -57,13 +59,16 @@ function MetricBars({ title, data, fmt }: {
   const bw = Math.min(gw * 0.56, 26);
 
   // Print the value on each bar only when every one of them fits its slot.
-  // Five-digit revenue in an 11-bar quarter view does not — the labels ran into
-  // each other and read as "12,79112,702". Showing only some would look
-  // arbitrary, so it is all or nothing, and the Y axis carries the magnitude
-  // when they are dropped. 0.6em per glyph approximates the mono advance width.
-  const VAL_FONT = 9.5;
-  const widest = Math.max(0, ...vals.map(v => fmt(v).length)) * VAL_FONT * 0.6;
-  const showValues = widest <= gw - 3;
+  // Five-digit revenue in an 11-bar quarter view did not — the labels ran into
+  // each other and read as "12,79112,702" — so Sales showed no values at all.
+  // Bars now take the compact `valueFmt` (25.4B) and the font steps down to
+  // VAL_FONT_MIN to fit; only if even that is too wide are they dropped (all
+  // or nothing — some-but-not-all would look arbitrary). 0.6em per glyph
+  // approximates the mono advance width.
+  const VAL_FONT_MAX = 9.5, VAL_FONT_MIN = 7.5;
+  const widestChars = Math.max(0, ...vals.map(v => valueFmt(v).length));
+  const VAL_FONT = widestChars ? Math.min(VAL_FONT_MAX, (gw - 3) / (widestChars * 0.6)) : VAL_FONT_MAX;
+  const showValues = VAL_FONT >= VAL_FONT_MIN;
 
   return (
     <div>
@@ -108,7 +113,7 @@ function MetricBars({ title, data, fmt }: {
               </rect>
               {showValues && (
                 <text x={cx.toFixed(1)} y={(above ? y - 5 : y + h + 11).toFixed(1)} textAnchor="middle" fontSize={VAL_FONT}
-                  fontFamily="JetBrains Mono,monospace" fill="var(--text-hi)">{fmt(d.v)}</text>
+                  fontFamily="JetBrains Mono,monospace" fill="var(--text-hi)">{valueFmt(d.v)}</text>
               )}
               <text x={cx.toFixed(1)} y={LABEL_Y.toFixed(1)} textAnchor="end" fontSize="9" fill="var(--text-dim-solid)"
                 transform={`rotate(-45 ${cx.toFixed(1)} ${LABEL_Y.toFixed(1)})`}>{d.label}</text>
@@ -213,7 +218,8 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
             {seg}
           </div>
           <div className="card-b" style={{ paddingTop: 8 }}>
-            <MetricBars title="Sales ($Mil)" data={series.map(d => ({ label: d.label, v: d.sales }))} fmt={v => Math.round(v).toLocaleString()} />
+            <MetricBars title="Sales ($Mil)" data={series.map(d => ({ label: d.label, v: d.sales }))} fmt={v => Math.round(v).toLocaleString()}
+              valueFmt={v => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}B` : `${Math.round(v)}M`)} />
           </div>
         </div>
       </div>

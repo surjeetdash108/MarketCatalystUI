@@ -11,6 +11,7 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> },
 );
 import { useApiList } from "../hooks/useApiList";
+import { useLiveQuotes } from "../live-quotes-context";
 import type { IpoEventDoc, IpoPipelineDoc, CompanyDoc } from "../types";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { fmtMonthDay } from "../calendar-range";
@@ -40,10 +41,11 @@ interface IpoRow {
   exch?: string | null;
 }
 
-/** Compact magnitude label (12.5M, 1.2B) for share counts and deal sizes. */
+/** Compact magnitude label (3.75M, 1.25B) for share counts and deal sizes —
+ *  two decimals, since one rounded RTSN's 3,750,000-share offer to "3.8M". */
 function compactNum(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e3) return `${(n / 1e3).toFixed(0)}K`;
   return `${n}`;
 }
@@ -120,6 +122,9 @@ export function IPOsScreen() {
       return true;
     });
   })();
+  // Live quotes for names that have listed (an aftermarket price exists).
+  const listedSyms = liveIposSorted.filter(e => e.symbol && e.currentPrice != null).map(e => e.symbol as string);
+  const liveQuotes = useLiveQuotes(listedSyms);
   // Prefer the IPO doc's own (SIC-derived) sector; fall back to the companies
   // universe. The dropdown is built from the sectors actually present.
   const secForIpo = (e: IpoEventDoc): string => e.sector ?? sectorOf(e.symbol);
@@ -128,21 +133,35 @@ export function IPOsScreen() {
   // Aftermarket performance (current price, day-1 pop %, return since offer) is
   // computed by the backend ipos job from Polygon daily bars for already-listed
   // names; it's null only when the name hasn't listed yet or has no series.
-  const liveRows: IpoRow[] = liveIposSorted.map(e => ({
+  //
+  // That job runs once a day (08:00 ET), so its currentPrice is the PREVIOUS
+  // session's close — RTSN read $11.32 (12 Oct close) through 13 Oct while it
+  // traded at $11.63, and on its first morning it equalled the day-1 close.
+  // Listed names therefore take the shared live quote, which is the same price
+  // the stock drawer shows; currentPrice is only the fallback. "Since IPO" is
+  // then re-derived from that price so the two columns cannot disagree.
+  const offerOf = (e: IpoEventDoc) =>
+    e.offerPrice ?? (e.priceLow != null && e.priceHigh != null ? (e.priceLow + e.priceHigh) / 2 : e.priceLow ?? e.priceHigh);
+  const liveRows: IpoRow[] = liveIposSorted.map(e => {
+    const offer = offerOf(e);
+    const q = e.symbol && e.currentPrice != null ? liveQuotes.get(e.symbol) : undefined;
+    const livePx = q?.price != null && q.price > 0 ? q.price : null;
+    return {
     id: e.id,
     s: e.symbol ?? "—",
     n: e.name,
     date: e.date,
-    offer: e.offerPrice ?? (e.priceLow != null && e.priceHigh != null ? (e.priceLow + e.priceHigh) / 2 : e.priceLow ?? e.priceHigh),
-    cur: e.currentPrice,
+    offer,
+    cur: livePx ?? e.currentPrice,
     day1: e.day1PopPct,
-    since: e.returnSinceIpoPct,
+    since: livePx != null && offer ? ((livePx - offer) / offer) * 100 : e.returnSinceIpoPct,
     shares: e.numberOfShares,
     deal: e.totalSharesValue,
     sec: secForIpo(e),
     live: true,
     exch: e.exchange ?? null,
-  }));
+    };
+  });
   const filtered = liveRows
     .filter(r => matchesSector(sector, r.s, r.sec))
     .filter(r => {

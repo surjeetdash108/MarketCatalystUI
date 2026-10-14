@@ -21,6 +21,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { mapEarningsToBars, type ChartEarnings } from "./chart-earnings";
+import type { KeyMoment } from "./key-moments";
 import { useBackendBars } from "./hooks/useBackendBars";
 import { DataState } from "./utils";
 import { atr, boll, ema, etSessionDate, macd, rsi, sma, stoch, vwap, type Num } from "./indicators";
@@ -260,6 +261,10 @@ const studyLabel = (s: Pick<Study, "k" | "len">): string => {
   return c.fixed ? `${c.name} ${c.fixed}` : c.param ? `${c.name} ${s.len}${c.suffix ?? ""}` : c.name;
 };
 
+/** Overlay line dash: EMA dashed, VWAP dash-dot-ish, SMA and the rest solid. */
+const lineDash = (k: StudyKind): number[] | null =>
+  k === "ema" ? [6, 4] : k === "vwap" ? [6, 3] : null;
+
 type StudyData =
   | { kind: "line"; v: Num[] }
   | { kind: "bb"; u: Num[]; mid: Num[]; lo: Num[] }
@@ -375,7 +380,7 @@ const PAD = { t: 14, r: 70, b: 28, l: 8 };
 /** Colours resolved from CSS (see `.cc` in iq.css) so the canvas follows the theme. */
 interface Palette {
   up: string; down: string; grid: string; text: string; cross: string; last: string; lastInk: string;
-  er: string; erInk: string; tag: string; tagInk: string; paneLabel: string; band: string; avg: string; bg: string; font: string;
+  er: string; erInk: string; km: string; kmInk: string; tag: string; tagInk: string; paneLabel: string; band: string; avg: string; bg: string; font: string;
 }
 
 function readPalette(el: Element): Palette {
@@ -385,6 +390,7 @@ function readPalette(el: Element): Palette {
     up: v("--cc-up", "#4bd99a"), down: v("--cc-down", "#f2555f"), grid: v("--cc-grid", "#151c27"),
     text: v("--cc-text", "#8b94a7"), cross: v("--cc-cross", "#4a5567"), last: v("--cc-last", "#8b7ef0"),
     lastInk: v("--cc-last-ink", "#0b0713"), er: v("--cc-er", "#7fd8ff"), erInk: v("--cc-er-ink", "#06131c"),
+    km: v("--cc-km", "#f5a524"), kmInk: v("--cc-km-ink", "#1a1204"),
     tag: v("--cc-tag", "#2a3346"), tagInk: v("--cc-tag-ink", "#e7ecf4"), paneLabel: v("--cc-pane-label", "#4b5566"),
     band: v("--cc-band", "#2a3346"), avg: v("--cc-avg", "rgba(150,160,180,.55)"), bg: v("--cc-bg", "#0b0d10"),
     font: v("--f-mono", "ui-monospace, monospace"),
@@ -398,6 +404,11 @@ interface ErHit { k: number; x: number; y: number }
 /** Earnings "E" marker radius, and how far from its centre a click still lands on it (CSS px). */
 const ER_R = 10;
 const ER_HIT_R = ER_R + 4;
+/** Key-moment marker radius and click tolerance (CSS px). */
+const KM_R = 7;
+const KM_HIT_R = KM_R + 5;
+/** Price-area headroom (px) kept clear above the candles while key moments show. */
+const KM_HEAD = 30;
 
 interface DrawModel {
   W: number; H: number;
@@ -414,8 +425,15 @@ interface DrawModel {
   erMarks: Array<{ i: number; e: ChartEarnings }>;
   /** Index into erMarks of the hovered / opened marker, drawn with a halo. */
   erActive: number | null;
+  kmMarks: Array<{ i: number; km: KeyMoment }>;
+  /** Index into kmMarks of the hovered / opened key moment. */
+  kmActive: number | null;
   pal: Palette;
 }
+
+interface Hits { er: ErHit[]; km: ErHit[] }
+
+const NO_MOMENTS: KeyMoment[] = [];
 
 interface Geo { l: number; r: number; w: number; top: number; priceB: number; bottom: number; panes: Array<{ s: Study; top: number; bot: number }> }
 
@@ -433,12 +451,12 @@ function geometry(W: number, H: number, panes: Study[]): Geo {
 const isOverlay = (s: Study) => cat(s.k).type === "overlay";
 const isPane = (s: Study) => cat(s.k).type === "pane";
 
-/** Draws one frame and returns the earnings-marker hit targets. */
-function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
+/** Draws one frame and returns the earnings / key-moment marker hit targets. */
+function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
   const { W, H, data, seed, studies, computed, view, hover, pal } = m;
   const n = data.length;
   ctx.clearRect(0, 0, W, H);
-  if (n === 0 || W < PAD.l + PAD.r + 20) return [];
+  if (n === 0 || W < PAD.l + PAD.r + 20) return { er: [], km: [] };
   const font = `12px ${pal.font}`;
   ctx.font = font; ctx.textBaseline = "middle"; ctx.lineWidth = 1;
 
@@ -448,7 +466,7 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
   const span = view.to - view.from;
   const xOf = (i: number) => g.l + (i + 0.5 - view.from) * (g.w / span);
   const i0 = Math.max(0, Math.floor(view.from)), i1 = Math.min(n - 1, Math.ceil(view.to));
-  if (i1 < i0) return [];
+  if (i1 < i0) return { er: [], km: [] };
   const at = (arr: Num[], i: number) => arr[i + seed];
 
   // ── price range over the visible bars + overlays ──
@@ -469,6 +487,14 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
   if (useLog) { const k = Math.pow(hi / lo, 0.05); hi *= k; lo = Math.max(lo / k, 1e-4); }
   else { const p = (hi - lo) * 0.07 || 1; hi += p; lo -= p; }
   const ph = g.priceB - g.top;
+  // Key-moment dots sit above the candle's high; reserve headroom so the one
+  // on the highest bar clears the legend's OHLC readout instead of hiding
+  // under it.
+  if (m.kmMarks.some(({ i }) => i >= i0 && i <= i1) && ph > KM_HEAD * 3) {
+    const f = KM_HEAD / (ph - KM_HEAD);
+    if (useLog) hi = Math.exp(Math.log(hi) + (Math.log(hi) - Math.log(lo)) * f);
+    else hi += (hi - lo) * f;
+  }
   const lgHi = Math.log(hi), lgLo = Math.log(Math.max(lo, 1e-4));
   const yOf = useLog
     ? (p: number) => g.top + ((lgHi - Math.log(Math.max(p, 1e-4))) / (lgHi - lgLo)) * ph
@@ -604,7 +630,7 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
       for (const v of [30, 70]) ctx.fillText(String(v), g.l + 5, rsiY(v) - 8);
       line(d.v, s.col, rsiY, 1.5);
     }
-    else if (d?.kind === "line") line(d.v, s.col, yOf, 1.6, s.k === "vwap" ? [6, 3] : null);
+    else if (d?.kind === "line") line(d.v, s.col, yOf, 1.6, lineDash(s.k));
   }
 
   // ── earnings markers (daily-and-up only; dropped where too dense to read) ──
@@ -625,6 +651,28 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
     ctx.fillStyle = pal.erInk; ctx.font = `bold 12px ${pal.font}`; ctx.textAlign = "center";
     ctx.fillText("E", x, y + 0.5); ctx.font = font;
     hits.push({ k, x, y });
+  });
+
+  // ── key moments: a dot above the bar, arrow showing the direction ──
+  const kmHits: ErHit[] = [];
+  let lastKm = -1e9;
+  m.kmMarks.forEach(({ i, km }, k) => {
+    if (i < i0 || i > i1) return;
+    const x = xOf(i);
+    if (x < g.l || x > g.r || x - lastKm < KM_R * 2 + 4) return;
+    lastKm = x;
+    const y = Math.max(yOf(data[i].h) - KM_R - 9, g.top + KM_R + 2);
+    if (k === m.kmActive) {
+      ctx.globalAlpha = 0.3; ctx.fillStyle = pal.km;
+      ctx.beginPath(); ctx.arc(x, y, KM_R + 5, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = pal.km; ctx.beginPath(); ctx.arc(x, y, KM_R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = pal.bg; ctx.lineWidth = 1.5; ctx.stroke(); ctx.lineWidth = 1;
+    const a = 3.2, d = km.pct >= 0 ? -1 : 1;
+    ctx.fillStyle = pal.kmInk; ctx.beginPath();
+    ctx.moveTo(x, y + d * a); ctx.lineTo(x + a, y - d * a * 0.6); ctx.lineTo(x - a, y - d * a * 0.6);
+    ctx.closePath(); ctx.fill();
+    kmHits.push({ k, x, y });
   });
   ctx.restore();
 
@@ -669,7 +717,7 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): ErHit[] {
     ctx.fillStyle = pal.tag; ctx.fillRect(tx - tw / 2, g.bottom + 4, tw, 18);
     ctx.fillStyle = pal.tagInk; ctx.textAlign = "center"; ctx.fillText(lbl, tx, g.bottom + 13);
   }
-  return hits;
+  return { er: hits, km: kmHits };
 }
 
 function tag(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, bg: string, fg: string) {
@@ -1029,6 +1077,8 @@ type CandleChartProps = {
   live?: { price: number; high: number | null; low: number | null; at?: number | null } | null;
   /** Reported quarters to mark on the chart. Omit (or pass []) to hide them. */
   earnings?: ChartEarnings[];
+  /** Unusual moves to mark (daily-and-up bars only), each with its explaining news. */
+  moments?: KeyMoment[];
   /** Hide the legend's OHLC readout (e.g. when the caller shows it elsewhere). */
   hideHudOhlc?: boolean;
   /** Fired whenever the hovered bar (or, with no hover, the latest bar) changes. */
@@ -1061,7 +1111,7 @@ export function CandleChart(props: CandleChartProps) {
 }
 
 function CandleChartInner({
-  sym, tf, interval, chartType = "candles", realBars, live, earnings = [], hideHudOhlc, onBarHover,
+  sym, tf, interval, chartType = "candles", realBars, live, earnings = [], moments = NO_MOMENTS, hideHudOhlc, onBarHover,
   height, toolbarStart, toolbarEnd,
 }: CandleChartProps) {
   const prefs = useChartPrefs();
@@ -1140,6 +1190,24 @@ function CandleChartInner({
     [intraday, data, earnings],
   );
 
+  // Key moments are dated by session, so — like earnings — daily-and-up only.
+  // Each lands on the bar holding its session (a week / month bar on wider
+  // candles); two on one bar keep the bigger move.
+  const kmMarks = useMemo(() => {
+    if (intraday || !moments.length || n === 0) return [];
+    const dates = data.map(b => etSessionDate(b.t));
+    const byBar = new Map<number, KeyMoment>();
+    for (const km of moments) {
+      if (km.date < dates[0]) continue;
+      let i = -1;
+      for (let j = dates.length - 1; j >= 0; j--) if (dates[j] <= km.date) { i = j; break; }
+      if (i < 0) continue;
+      const had = byBar.get(i);
+      if (!had || Math.abs(km.pct) > Math.abs(had.pct)) byBar.set(i, km);
+    }
+    return [...byBar.entries()].sort((a, b) => a[0] - b[0]).map(([i, km]) => ({ i, km }));
+  }, [intraday, moments, data, n]);
+
   /* ── view (zoom / pan window, in bar indices) ─────────────────────── */
   const initialSpan = interval
     ? Math.min(n, INTERVAL_INITIAL_LEN)
@@ -1188,7 +1256,15 @@ function CandleChartInner({
   const erCardRef = useRef<HTMLDivElement>(null);
   const erOpen = erSel && erSel.view === view && erSel.marks === erMarks && erSel.size === size && erMarks[erSel.hit.k]
     ? erSel.hit : null;
-  const [folded, setFolded] = useState(false);
+  // Same pattern for key-moment markers.
+  const [kmHover, setKmHover] = useState<number | null>(null);
+  // Pinned by session date, not by array identity: the moments are rebuilt
+  // whenever the news feed refetches (every 30s), which must not close a card.
+  const [kmSel, setKmSel] = useState<{ hit: ErHit; view: View; date: string; size: unknown } | null>(null);
+  const kmHitsRef = useRef<ErHit[]>([]);
+  const kmCardRef = useRef<HTMLDivElement>(null);
+  const kmOpen = kmSel && kmSel.view === view && kmSel.size === size && kmMarks[kmSel.hit.k]?.km.date === kmSel.date
+    ? kmSel.hit : null;
   const [full, setFull] = useState(false);
 
   useLayoutEffect(() => {
@@ -1210,11 +1286,13 @@ function CandleChartInner({
     const pw = Math.round(size.w * dpr), ph = Math.round(size.h * dpr);
     if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    erHitsRef.current = drawChart(ctx, {
+    const hits = drawChart(ctx, {
       W: size.w, H: size.h, data, seed: series.seed, studies, computed, view, hover,
       chartType: chartType.toLowerCase(), log: prefs.log, intraday, monthly, erMarks,
-      erActive: erOpen?.k ?? erHover, pal: readPalette(cv),
+      erActive: erOpen?.k ?? erHover, kmMarks, kmActive: kmOpen?.k ?? kmHover, pal: readPalette(cv),
     });
+    erHitsRef.current = hits.er;
+    kmHitsRef.current = hits.km;
   });
 
   /* ── geometry helpers for pointer math (CSS px) ───────────────────── */
@@ -1278,11 +1356,15 @@ function CandleChartInner({
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const i = Math.min(n - 1, Math.max(0, idxAt(mx)));
     setHover(h => (h && h.i === i && h.y === my ? h : { i, y: my }));
-    setErHover(erHitAt(mx, my)?.k ?? null);
+    const km = kmHitAt(mx, my);
+    setKmHover(km?.k ?? null);
+    setErHover(km ? null : (erHitAt(mx, my)?.k ?? null));
   };
 
   const erHitAt = (mx: number, my: number) =>
     erHitsRef.current.find(p => Math.hypot(p.x - mx, p.y - my) <= ER_HIT_R);
+  const kmHitAt = (mx: number, my: number) =>
+    kmHitsRef.current.find(p => Math.hypot(p.x - mx, p.y - my) <= KM_HIT_R);
 
   // A click (not the end of a drag) on an "E" opens its card; anywhere else closes it.
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1290,7 +1372,10 @@ function CandleChartInner({
     downRef.current = null;
     if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
     const r = e.currentTarget.getBoundingClientRect();
-    const hit = erHitAt(e.clientX - r.left, e.clientY - r.top);
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const km = kmHitAt(mx, my);
+    const hit = km ? undefined : erHitAt(mx, my);
+    setKmSel(!km || kmOpen?.k === km.k ? null : { hit: km, view, date: kmMarks[km.k].km.date, size });
     setErSel(!hit || erOpen?.k === hit.k ? null : { hit, view, marks: erMarks, size });
   };
 
@@ -1306,6 +1391,17 @@ function CandleChartInner({
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, [erOpen]);
+  useEffect(() => {
+    if (!kmOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!kmCardRef.current?.contains(t) && t !== cvRef.current) setKmSel(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setKmSel(null); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [kmOpen]);
 
   // Touch: one finger pans, two pinch-zoom.
   const touchRef = useRef<{ x: number; view: View; pinch: number | null } | null>(null);
@@ -1508,6 +1604,54 @@ function CandleChartInner({
     );
   })() : null;
 
+  /* ── key-moment card (opened by clicking a key-moment dot) ─────────── */
+  const kmCard = kmOpen ? (() => {
+    const { km } = kmMarks[kmOpen.k];
+    const sgn = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+    const dt = new Date(`${km.date}T12:00:00Z`);
+    const sources = [...new Set(km.articles.map(a => a.source).filter(Boolean))];
+    const CARD_W = 300, CARD_H = 300;
+    const left = Math.max(CARD_W / 2 + 4, Math.min(size.w - CARD_W / 2 - 4, kmOpen.x));
+    const below = kmOpen.y + KM_R + 8;
+    const top = below + CARD_H > size.h ? Math.max(4, kmOpen.y - KM_R - 8 - CARD_H) : below;
+    return (
+      <div ref={kmCardRef} className="cc-er-card cc-km-card" style={{ left, top, width: CARD_W }} role="dialog" aria-label="Key moment">
+        <div className="cc-er-hd">
+          <span className="d">
+            {dt.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
+            <small>Key moment{km.earnings ? " · earnings" : ""}</small>
+          </span>
+          <b className={km.pct >= 0 ? "up" : "down"} style={{ fontSize: 13 }}>{km.pct >= 0 ? "▲" : "▼"} {sgn(km.pct)}</b>
+          <button type="button" className="cc-x" aria-label="Close key moment" onClick={() => setKmSel(null)}>✕</button>
+        </div>
+        <div className="cc-km-title">{km.title}</div>
+        {km.summary
+          ? <p className="cc-km-sum">{km.summary}</p>
+          : <p className="cc-km-sum dim">
+              {km.newsSince
+                ? `No news on file this far back (coverage starts ${km.newsSince}).`
+                : km.articles.length
+                  ? "No headline on file explains this move — passing mentions below."
+                  : "No news naming the company on file for this session."}
+            </p>}
+        <div className="cc-km-ctx">
+          {km.marketPct != null && (
+            <span>S&amp;P 500 <b className={km.marketPct >= 0 ? "up" : "down"}>{sgn(km.marketPct)}</b> same day</span>
+          )}
+          {km.volRatio != null && <span><b>{km.volRatio.toFixed(1)}×</b> avg volume</span>}
+        </div>
+        {km.articles.length > 0 && (
+          <div className="cc-km-src">
+            <small>{sources.length} source{sources.length === 1 ? "" : "s"} · {sources.slice(0, 3).join(" · ")}</small>
+            {km.articles.slice(0, 3).map(a => (
+              <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer" title={a.headline}>{a.headline}</a>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  })() : null;
+
   return (
     <div ref={rootRef} className={`cc${full ? " is-full" : ""}`}>
       <div className="cc-tools">
@@ -1543,15 +1687,9 @@ function CandleChartInner({
 
       <div className={`cc-stage${height == null ? " responsive" : ""}`}
         style={height != null && !full ? { height } : undefined}>
-        <div className={`cc-hud${folded ? " folded" : ""}`}>
+        <div className="cc-hud">
           <div className="cc-lg-hd">
-            <span className="cc-lg-id">
-              {studies.length > 0 && (
-                <button type="button" className="cc-lg-fold" aria-expanded={!folded}
-                  title={folded ? "Show indicators" : "Hide indicators"} aria-label={folded ? "Show indicators" : "Hide indicators"}
-                  onClick={() => setFolded(f => !f)}>{folded ? "▲" : "▼"}</button>
-              )}
-            </span>
+            <span className="cc-lg-id" />
             {!hideHudOhlc && (
               <span className="cc-lg-q">
                 <span><s>O</s><b>{bar.o.toFixed(2)}</b></span>
@@ -1564,13 +1702,40 @@ function CandleChartInner({
               </span>
             )}
           </div>
+        </div>
+        <canvas
+          ref={cvRef}
+          tabIndex={0}
+          aria-label={`${sym} price chart. Use arrow keys to pan, plus and minus to zoom, F for full screen.`}
+          style={{ cursor: dragging ? "grabbing" : erHover != null || kmHover != null ? "pointer" : "crosshair" }}
+          onMouseDown={e => {
+            if (e.button !== 0) return;
+            downRef.current = { x: e.clientX, y: e.clientY };
+            dragRef.current = { x: e.clientX, view }; setDragging(true);
+          }}
+          onMouseMove={onCanvasMove}
+          onClick={onCanvasClick}
+          onMouseLeave={() => { setHover(null); setErHover(null); setKmHover(null); }}
+          onDoubleClick={resetView}
+          onKeyDown={onCanvasKey}
+        />
+        {erCard}
+        {kmCard}
+      </div>
+
+      {studies.length > 0 && (
+        <div className="cc-legend" role="list" aria-label="Indicators on chart">
           {studies.map(s => {
             const v = s.on ? studyVal(s) : null;
             const label = studyLabel(s);
             const editable = !!cat(s.k).param;
+            const dash = lineDash(s.k);
             return (
-              <div key={s.id} className={`cc-lg-row${s.on ? "" : " hidden"}`}>
-                <i style={{ background: s.col }} />
+              <div key={s.id} role="listitem" className={`cc-lg-row${s.on ? "" : " hidden"}`}>
+                <svg className="sw" width="18" height="8" viewBox="0 0 18 8" aria-hidden="true">
+                  <line x1="0" y1="4" x2="18" y2="4" stroke={s.col} strokeWidth="2"
+                    strokeDasharray={dash ? dash.map(x => x * 0.6).join(" ") : undefined} />
+                </svg>
                 <span className={`n${editable ? " edit" : ""}`} role={editable ? "button" : undefined} tabIndex={editable ? 0 : undefined}
                   title={editable ? "Settings" : undefined}
                   onClick={editable ? () => openSettings(s.k, s) : undefined}
@@ -1591,24 +1756,7 @@ function CandleChartInner({
             );
           })}
         </div>
-        <canvas
-          ref={cvRef}
-          tabIndex={0}
-          aria-label={`${sym} price chart. Use arrow keys to pan, plus and minus to zoom, F for full screen.`}
-          style={{ cursor: dragging ? "grabbing" : erHover != null ? "pointer" : "crosshair" }}
-          onMouseDown={e => {
-            if (e.button !== 0) return;
-            downRef.current = { x: e.clientX, y: e.clientY };
-            dragRef.current = { x: e.clientX, view }; setDragging(true);
-          }}
-          onMouseMove={onCanvasMove}
-          onClick={onCanvasClick}
-          onMouseLeave={() => { setHover(null); setErHover(null); }}
-          onDoubleClick={resetView}
-          onKeyDown={onCanvasKey}
-        />
-        {erCard}
-      </div>
+      )}
 
       {modalHost && browserOpen && createPortal(
         <IndicatorBrowser prefs={prefs} onPick={pickStudy} onClose={closeBrowser} />, modalHost)}

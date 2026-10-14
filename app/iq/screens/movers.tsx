@@ -114,7 +114,8 @@ function ScanSection({
   resolvePriceAndChange,
   resolveRvolAndVolume,
 }: {
-  title: string;
+  /** Omitted when the caller already labels the list (e.g. with tabs). */
+  title?: string;
   color: string;
   groups: SectorGroup[];
   onSelect: (sym: string) => void;
@@ -131,21 +132,23 @@ function ScanSection({
 }) {
   return (
     <div style={{ marginBottom: 22 }}>
-      <div
-        style={{
-          fontWeight: 700,
-          fontSize: ".82rem",
-          color,
-          marginBottom: 10,
-          textTransform: "uppercase",
-          letterSpacing: ".04em",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
-        <span>{title}</span>
-      </div>
+      {title && (
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: ".82rem",
+            color,
+            marginBottom: 10,
+            textTransform: "uppercase",
+            letterSpacing: ".04em",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span>{title}</span>
+        </div>
+      )}
 
       {(!groups || groups.length === 0) ? (
         <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)", padding: "14px 0" }}>
@@ -591,6 +594,8 @@ export function MoversScreen() {
 
 
   const [tab,          setTab]          = useState<TabKey>("win");
+  // Biggest-movers tab: which half of the top-20% scan is showing.
+  const [biggestSide,  setBiggestSide]  = useState<"gainers" | "losers">("gainers");
   /** The row set the active tab draws from — declared AFTER `tab` so it can
    *  read it (a `const` referenced above its declaration is a TDZ crash). */
   const [sector,       setSector]       = useState("All");
@@ -1431,7 +1436,7 @@ export function MoversScreen() {
             <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: ".9rem", fontWeight: 700, color: "var(--text-hi)" }}>
-                  Today&apos;s Biggest Gainers and Losers
+                  Today&apos;s Top 20 %
                 </h3>
                 <VendorTag v="polygon" />
               </div>
@@ -1446,18 +1451,27 @@ export function MoversScreen() {
                 <DataState loading={biggestLoading} label="Generating scan…" />
               ) : (
                 <>
+                  <div className="tabs" role="tablist" aria-label="Gainers or losers"
+                    style={{ display: "inline-flex", marginBottom: 14 }}>
+                    {([
+                      ["gainers", "Gainers", filteredBiggest.gainers, "var(--up)"],
+                      ["losers", "Losers", filteredBiggest.losers, "var(--down)"],
+                    ] as const).map(([k, label, groups, col]) => {
+                      const n = (groups ?? []).reduce((a, g) => a + g.items.length, 0);
+                      const on = biggestSide === k;
+                      return (
+                        <button key={k} type="button" role="tab" aria-selected={on}
+                          className={`tab${on ? " on" : ""}`} onClick={() => setBiggestSide(k)}
+                          style={on ? { color: col, fontWeight: 700 } : undefined}>
+                          {label} <span style={{ opacity: .6, fontWeight: 500 }}>{n}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <ScanSection
-                    title="Today's top 20 % gainers"
-                    color="var(--up)"
-                    groups={filteredBiggest.gainers}
-                    onSelect={setSelectedSym}
-                    resolvePriceAndChange={resolvePriceAndChange}
-                    resolveRvolAndVolume={resolveRvolAndVolume}
-                  />
-                  <ScanSection
-                    title="Today's top 20 % losers"
-                    color="var(--down)"
-                    groups={filteredBiggest.losers}
+                    key={biggestSide}
+                    color={biggestSide === "gainers" ? "var(--up)" : "var(--down)"}
+                    groups={biggestSide === "gainers" ? filteredBiggest.gainers : filteredBiggest.losers}
                     onSelect={setSelectedSym}
                     resolvePriceAndChange={resolvePriceAndChange}
                     resolveRvolAndVolume={resolveRvolAndVolume}

@@ -105,6 +105,10 @@ type Row = {
   label: string;
   /** Fiscal quarter label (e.g. "Jul 26"), same format as Earnings History. */
   quarter: string | null;
+  /** FMP announcement date — null when epsHistory has no match for the quarter. */
+  announced: string | null;
+  /** SEC 10-Q filing date, shown as a fallback hint when `announced` is null. */
+  filed: string;
   beat: boolean | null;
   surprisePct: number | null;
   epsAct: number | null;
@@ -274,6 +278,8 @@ function buildModel(reports: PlaybookReport[], bars: OHLCBar[] | undefined, maxR
       date: dates[d0] ?? e.date,
       label: fmtLabel(dates[d0] ?? e.date),
       quarter: e.period ? fmtDate(e.period, { month: "short", year: "2-digit" }) : null,
+      announced: e.announceDate ?? null,
+      filed: e.date,
       beat: surprisePct == null ? null : surprisePct >= 0,
       surprisePct,
       epsAct: reported ?? null,
@@ -419,6 +425,7 @@ export function EarningsPlaybook({ sym, reports }: { sym: string; reports: Playb
             <thead>
               <tr>
                 <th>Quarter</th>
+                <th>Announced</th>
                 {hasBeatMiss && <th>Result</th>}
                 {hasBeatMiss && <th className="num">EPS act</th>}
                 {hasBeatMiss && <th className="num">EPS est</th>}
@@ -439,6 +446,10 @@ export function EarningsPlaybook({ sym, reports }: { sym: string; reports: Playb
                       <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>reacted {r.label}</div>
                     )}
                   </td>
+                  <td style={{ whiteSpace: "nowrap", color: r.announced ? "var(--text)" : "var(--text-dim-solid)" }}
+                    title={r.announced ? undefined : `Announcement date unavailable — 10-Q filed ${fmtLabel(r.filed)}`}>
+                    {r.announced ? fmtLabel(r.announced) : "—"}
+                  </td>
                   {hasBeatMiss && (
                     <td style={{ whiteSpace: "nowrap", color: r.beat == null ? "var(--text-dim-solid)" : r.beat ? "var(--up)" : "var(--down)" }}>
                       {r.beat == null ? "—" : `${r.beat ? "Beat" : "Miss"} ${pct(r.surprisePct)}`}
@@ -457,7 +468,7 @@ export function EarningsPlaybook({ sym, reports }: { sym: string; reports: Playb
             </tbody>
           </table>
           <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-            Quarter is the fiscal period end; &quot;reacted&quot; is the trading session that moved on the report. Gap is the open vs the prior close. Day 1 is the reaction day&apos;s close vs the close before the report; Day 2, 3 and 4 are each that session&apos;s own move.
+            Quarter is the fiscal period end; &quot;reacted&quot; is the trading session that moved on the report. Announced is when results were released. Gap is the open vs the prior close. Day 1 is the reaction day&apos;s close vs the close before the report; Day 2, 3 and 4 are each that session&apos;s own move.
           </div>
         </div>
     </div>
@@ -547,6 +558,7 @@ export function EarningsPlaybookCards({ sym, reports, onViewAll }: {
           <thead>
             <tr>
               <th>Quarter</th>
+              <th>Announced</th>
               {hasBeatMiss && <th>Result</th>}
               {hasBeatMiss && <th>EPS act</th>}
               {hasBeatMiss && <th>EPS est</th>}
@@ -562,6 +574,10 @@ export function EarningsPlaybookCards({ sym, reports, onViewAll }: {
             {[...rows].reverse().map((r) => (
               <tr key={r.date}>
                 <td title={r.quarter ? `reacted ${r.label}` : undefined}>{r.quarter ? r.quarter.replace(" ", "-") : r.label}</td>
+                <td className={r.announced ? undefined : "dim"}
+                  title={r.announced ? `reacted ${r.label}` : `Announcement date unavailable — 10-Q filed ${fmtLabel(r.filed)}`}>
+                  {r.announced ? fmtLabel(r.announced) : "—"}
+                </td>
                 {hasBeatMiss && (
                   <td style={{ color: r.beat == null ? "var(--text-dim-solid)" : r.beat ? "var(--up)" : "var(--down)" }}>
                     {r.beat == null ? "—" : `${r.beat ? "Beat" : "Miss"} ${pct(r.surprisePct)}`}
@@ -581,7 +597,7 @@ export function EarningsPlaybookCards({ sym, reports, onViewAll }: {
         </table>
       </div>
       <div className="sd-foot">
-        Gap is the open vs the prior close. Day 1 is the reaction day&apos;s close vs the close before the report; Day 2, 3 and 4 are each that session&apos;s own move. Hover a quarter for the session that reacted.
+        Announced is when results were released. Gap is the open vs the prior close. Day 1 is the reaction day&apos;s close vs the close before the report; Day 2, 3 and 4 are each that session&apos;s own move. Hover a quarter for the session that reacted.
       </div>
     </div>
   </>);

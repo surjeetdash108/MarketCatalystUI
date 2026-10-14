@@ -7,6 +7,7 @@ import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
 import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, chartAsOfLabel, fmtFetchedAt, intervalLabel, CHART_TYPE_OPTIONS, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
+import { useKeyMoments } from "../key-moments";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
 import { apiPost } from "../backend";
@@ -33,7 +34,7 @@ import type {
   CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc,
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps } from "../types";
+import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, form4Url } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct, estimatedAnnualEps } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
@@ -436,6 +437,16 @@ function useMeasuredWidth(initial: number) {
  * underneath. A trailing `est` bar is the next period's consensus estimate,
  * drawn grey — present only when the earnings calendar actually has one.
  */
+/**
+ * A $B figure with precision that scales with its size. Rounding to whole
+ * billions printed "0" on every bar for a ~$0.4B-a-quarter company (JJSF) and
+ * flattened JNJ's 25.4 to 25.
+ */
+function fmtBillions(v: number): string {
+  const a = Math.abs(v);
+  return v.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : a >= 0.1 ? 2 : 3);
+}
+
 function SalesBars({ data }: { data: Array<{ label: string; v: number; est?: boolean }> }) {
   const [wrapRef, W] = useMeasuredWidth(560);
   // PADL leaves room for the first angled label, which runs down-left of its bar.
@@ -458,7 +469,7 @@ function SalesBars({ data }: { data: Array<{ label: string; v: number; est?: boo
                 rx="3" style={{ fill: d.est ? "var(--border-strong)" : "var(--brand)" }} />
               <text x={cx.toFixed(1)} y={(baseY - h - 6).toFixed(1)} textAnchor="middle"
                 style={{ fill: d.est ? "var(--text-dim-solid)" : "var(--text)", fontSize: "10.5px", fontFamily: "var(--f-mono)" }}>
-                {Math.round(d.v).toLocaleString()}
+                {fmtBillions(d.v)}
               </text>
               <text x={cx.toFixed(1)} y={ly.toFixed(1)} textAnchor="end"
                 transform={`rotate(-40 ${cx.toFixed(1)} ${ly.toFixed(1)})`}
@@ -593,7 +604,11 @@ type SurpPt = { label: string; surp: number | null; est?: boolean };
  * scaled to the card, matching the Earnings-growth chart beside it.
  */
 function EpsSurpriseChart({ data }: { data: SurpPt[] }) {
-  const W = 560, H = 260, PADL = 64, PADR = 12, BASE = 140, BW = 22;
+  // BASE sits above centre: a beat's label goes over its bar into the empty
+  // top margin, but a miss's label goes UNDER its bar, toward the period
+  // labels at H - 14. With BASE at 140 the largest miss (84px) put its label
+  // at 242 — on top of the period label at 246. At 128 it ends at 227.
+  const W = 560, H = 260, PADL = 64, PADR = 12, BASE = 128, BW = 22;
   const step = (W - PADL - PADR) / Math.max(1, data.length);
   const max = Math.max(1, ...data.map(d => (d.surp != null ? Math.abs(d.surp) : 0)));
   const scale = 84 / max;
@@ -625,7 +640,7 @@ function EpsSurpriseChart({ data }: { data: SurpPt[] }) {
         return (
           <g key={d.label + i}>
             <rect x={x - BW / 2} y={y} width={BW} height={bh} rx="3" style={{ fill: beat ? "var(--brand)" : "var(--down)" }} />
-            <text x={x} y={beat ? y - 10 : y + bh + 18} textAnchor="middle"
+            <text x={x} y={beat ? y - 10 : y + bh + 15} textAnchor="middle"
               style={{ ...mono, fill: beat ? "var(--text)" : "var(--down)" }}>
               {beat ? "+" : ""}{d.surp.toFixed(1)}%
             </text>
@@ -759,6 +774,7 @@ export function StockScreen({
   // default-off toggle they were invisible unless you knew to look for the
   // button. The toggle still turns them off for a clean price-only chart.
   const [showEarnings, setShowEarnings] = useState(true);
+  const [showMoments, setShowMoments] = useState(true);
   const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
 
 
@@ -768,7 +784,11 @@ export function StockScreen({
   // endpoints. Nothing here falls back to mock data; a ticker with no live
   // match for a given panel just shows that panel as not available.
   const { data: liveConsensus } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
-  const { data: liveInsider, loading: insiderLoading } = useApiList<InsiderTxDoc>("/market-data/insider-transactions");
+  // Scoped to this ticker server-side: unscoped, the endpoint returns only the
+  // latest page across ALL tickers, so most symbols got few or no rows.
+  const { data: liveInsider, loading: insiderLoading } = useApiList<InsiderTxDoc>(
+    `/market-data/insider-transactions?ticker=${encodeURIComponent(sym)}`,
+  );
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: sectorsLive, loading: sectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
   const { data: liveEarningsEvents, loading: earningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
@@ -1159,6 +1179,12 @@ export function StockScreen({
   // financials doc this screen already fetched, rather than via
   // useChartEarnings, to avoid fetching it a second time.
   const chartEarnings: ChartEarnings[] = buildChartEarnings(financialsDoc, symEvents, todayStr);
+
+  // Key moments: the year's unusually large moves for this stock, each with the
+  // news that best explains it and the S&P 500's move that session.
+  const keyMoments = useKeyMoments(showMoments, {
+    sym, name: data.name, bars: yearBars, news: tickerNews, earningsDates: chartEarnings.map(e => e.date),
+  });
 
   // The next report on the earnings calendar — the only feed carrying a SALES
   // estimate, and a fallback for the next EPS estimate. Null when none is listed.
@@ -1689,10 +1715,13 @@ export function StockScreen({
                   loading={barsLoading}
                   live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low, at: live.tick.at } : null}
                   earnings={showEarnings ? chartEarnings : []}
+                  moments={keyMoments}
                   toolbarStart={<>
                     <IntervalMenu value={barInterval} onChange={setBarInterval} />
                     <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
                     <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
+                    <button className={`rng indbtn${showMoments ? " on" : ""}`} onClick={() => setShowMoments(v => !v)}
+                      title="Mark unusually large moves and the news behind them">Key moments</button>
                   </>}
                   toolbarEnd={<>
                     <VendorTag v="polygon" />
@@ -2928,7 +2957,14 @@ export function StockScreen({
                           {sortedSymInsiderTxns.map((tx, idx) => {
                             const isBuy = tx.acquiredOrDisposed === "A";
                             const isSell = tx.acquiredOrDisposed === "D";
-                            const valUsd = tx.pricePerShare != null && tx.shares > 0 ? tx.shares * tx.pricePerShare : null;
+                            // SEC reports no market price for grants, gifts, RSU/option
+                            // exercises and conversions (price absent or $0) — say what
+                            // the row is rather than leaving a bare dash.
+                            const price = tx.pricePerShare != null && tx.pricePerShare > 0 ? tx.pricePerShare : null;
+                            const valUsd = price != null && tx.shares > 0 ? tx.shares * price : null;
+                            const codeLabel = TX_CODE_LABEL[tx.transactionCode] ?? `Code ${tx.transactionCode}`;
+                            const noPriceTip = `${codeLabel} (code ${tx.transactionCode}) — no market price reported on the Form 4`;
+                            const filingUrl = form4Url(tx.id);
                             return (
                               <tr key={`${tx.id || idx}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
                                 <td className="mono" style={{ padding: "10px 14px", color: "var(--text-dim-solid)", fontSize: ".76rem" }}>
@@ -2959,7 +2995,9 @@ export function StockScreen({
                                   {Math.round(tx.shares ?? 0).toLocaleString("en-US")}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
-                                  {tx.pricePerShare != null ? `$${tx.pricePerShare.toFixed(2)}` : "—"}
+                                  {price != null ? `$${price.toFixed(2)}` : (
+                                    <span title={noPriceTip} style={{ fontSize: ".7rem", fontFamily: "var(--f-sans, inherit)" }}>{codeLabel}</span>
+                                  )}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
                                   {valUsd != null ? (
@@ -2967,13 +3005,21 @@ export function StockScreen({
                                       {isBuy ? "+" : "−"}${Math.abs(valUsd) >= 1e6 ? `${(Math.abs(valUsd) / 1e6).toFixed(1)}M` : Math.round(Math.abs(valUsd)).toLocaleString("en-US")}
                                     </span>
                                   ) : (
-                                    <NotAvailable />
+                                    <span title={noPriceTip} style={{ color: "var(--text-dim-solid)" }}>—</span>
                                   )}
                                 </td>
                                 <td style={{ textAlign: "center", padding: "10px 14px" }}>
-                                  <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".62rem" }}>
-                                    Form 4
-                                  </span>
+                                  {filingUrl ? (
+                                    <a className="pill" href={filingUrl} target="_blank" rel="noopener noreferrer"
+                                      title="Open this Form 4 on SEC EDGAR"
+                                      style={{ background: "var(--surface-3)", color: "var(--brand)", fontSize: ".62rem", textDecoration: "none", cursor: "pointer" }}>
+                                      Form 4 ↗
+                                    </a>
+                                  ) : (
+                                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".62rem" }}>
+                                      Form 4
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             );
