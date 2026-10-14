@@ -59,6 +59,16 @@ export interface LiveQuote {
    * update this note and the column's tooltip together.
    */
   latePct: number | null;
+  /** Close of the session BEFORE the latest one — the pre-market move's base. */
+  previousClose: number | null;
+  /**
+   * Latest regular-session (16:00 ET) close — the after-hours move's base.
+   * `price` off-hours is the last extended-hours trade, so the two differ by
+   * exactly the after-hours move. Null when the feed (FMP) has no session split.
+   */
+  regularClose: number | null;
+  /** When the vendor last updated this quote (epoch ms); null when unknown. */
+  updatedAt: number | null;
 }
 
 /** Matches MAX_TICKERS on /live/snapshot (the vendor's per-call ceiling). */
@@ -169,6 +179,9 @@ interface SnapshotRow {
   regularTradingChangePct?: number | null;
   /** Vendor session state: "open" | "closed" | "early_trading" | "late_trading". */
   marketStatus?: string | null;
+  previousClose?: number | null;
+  regularClose?: number | null;
+  vendorUpdatedAt?: number | null;
 }
 interface SnapshotResponse {
   quotes?: SnapshotRow[];
@@ -260,6 +273,9 @@ export function LiveQuotesProvider({ children }: { children: ReactNode }) {
               latePct: q.lateTradingChangePct ?? null,
               regularPct: q.regularTradingChangePct ?? null,
               marketStatus: q.marketStatus ?? null,
+              previousClose: q.previousClose ?? null,
+              regularClose: q.regularClose ?? null,
+              updatedAt: q.vendorUpdatedAt ?? null,
             });
           }
         }

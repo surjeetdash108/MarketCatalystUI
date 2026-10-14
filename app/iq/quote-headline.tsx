@@ -1,16 +1,18 @@
 "use client";
 
 /**
- * The stock-detail headline quote — regular-session price and move, plus an
- * AFTER HOURS block once the regular session has closed. Shared by the stock
+ * The stock-detail headline quote — regular-session price and move, plus a
+ * PRE-MARKET or AFTER HOURS block outside regular hours. Shared by the stock
  * page header and the list+chart panels so both always print the same number
  * for the same ticker.
  */
 
 import { fmt, cls, arr } from "./utils";
 import { useBackendMarketStatus } from "./hooks/useBackendMarketStatus";
-import { useLiveQuotes, extendedSession } from "./live-quotes-context";
+import { useLiveQuotes } from "./live-quotes-context";
+import { useBackendBars } from "./hooks/useBackendBars";
 import type { UseLiveTickResult } from "./hooks/useLiveTick";
+import type { OHLCBar } from "./candle-chart";
 
 export type HeadlineQuote = {
   /** Best current price (shared quote → live tick → snapshot); null when none. */
@@ -22,7 +24,43 @@ export type HeadlineQuote = {
   ahPct: number | null;
   ahDollar: number | null;
   showAfterHours: boolean;
+  /** Which extended session the ah* figures belong to. */
+  extLabel: "PRE-MARKET" | "AFTER HOURS";
 };
+
+/** ET calendar date and minutes past midnight for an epoch-ms instant. */
+function etParts(ms: number): { date: string; min: number } {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(new Date(ms)).map((x) => [x.type, x.value]),
+  );
+  return { date: `${p.year}-${p.month}-${p.day}`, min: (parseInt(p.hour, 10) % 24) * 60 + parseInt(p.minute, 10) };
+}
+
+/** True when `ms` falls on today's ET date at or after 04:00 ET (pre-market open). */
+function isTodayAfter4amET(ms: number | null): boolean {
+  if (ms == null) return false;
+  const at = etParts(ms);
+  return at.date === etParts(Date.now()).date && at.min >= 4 * 60;
+}
+
+/**
+ * Last extended-hours trade in the 1D intraday bars (Polygon, which carries
+ * pre- and post-market prints). Pre-market: today's 04:00–09:30 ET bars; else
+ * after hours: bars starting 16:00 ET or later on the last session's date.
+ */
+function lastExtendedClose(bars: OHLCBar[] | undefined, pre: boolean): number | null {
+  const last = bars?.[bars.length - 1];
+  if (!last) return null;
+  const at = etParts(last.t);
+  const ok = pre
+    ? at.date === etParts(Date.now()).date && at.min >= 4 * 60 && at.min < 9 * 60 + 30
+    : at.min >= 16 * 60;
+  return ok && last.c > 0 ? last.c : null;
+}
 
 /**
  * @param live     the caller's useLiveTick(sym) result (it already holds one
@@ -54,66 +92,84 @@ export function useHeadlineQuote(
   const dispDollar = sharedDollar ?? (live.change != null ? Math.abs(live.change) : dollar);
 
   const isMarketOpen = mkt.phase === "open";
+  const isPre = mkt.phase === "pre";
+  // Outside regular hours the headline is the last regular close, with the
+  // extended move made since beside it. 20:00–04:00 and weekends ("closed")
+  // still belong to the last session's after-hours.
+  const isExtended = !isMarketOpen;
 
   /*
-   * Extended-session detection. Only active after regular hours have closed:
-   * market status is after/closed, or the Polygon snapshot reports late
-   * trading / a non-zero lateTradingChangePct.
+   * A quote with no session split — /live/snapshot served from FMP
+   * (refreshedFrom "fmp-quote"): regularClose, marketStatus and the late/early
+   * percentages all come back null, and `price` is the last REGULAR close (GS
+   * 13 Oct: 891.91 stamped 16:00:03 ET, while Polygon bars ran on to 892.84 at
+   * 19:55). Comparing that price with itself gave a $0 move and hid the block
+   * for every ticker. Here the quote price is the base and the extended price
+   * comes from the 1D intraday bars instead.
    */
-  const isAfterHours =
-    !isMarketOpen &&
-    (mkt.phase === "after" ||
-      mkt.phase === "closed" ||
-      sharedQuote?.marketStatus === "late_trading" ||
-      (sharedQuote?.latePct != null && sharedQuote.latePct !== 0) ||
-      extendedSession(sharedQuote) === "after hours");
+  const noSessionSplit =
+    sharedQuote?.price != null && sharedQuote.regularClose == null && sharedQuote.marketStatus == null;
+  const barsFallback = isExtended && noSessionSplit;
+  const { bars: dayBars } = useBackendBars(sym, "1D", barsFallback);
 
   /*
-   * Regular-session price and move. After hours the snapshot price is the
-   * regular close; without one, reconstruct it from the after-hours quote.
+   * The close the extended move is measured from: pre-market follows the
+   * PREVIOUS session's close, after hours follows today's. Both come straight
+   * from the quote. The vendor's late/early percentages are deliberately NOT
+   * used — in pre-market the late figure still holds the prior evening's move
+   * (GS on 13 Oct showed 12 Oct's +0.48% beside a 13 Oct pre-market price,
+   * next to a +$36.85 that was really +4.12%), and outside its window it tracks
+   * something else entirely (see LiveQuote.latePct).
    */
-  const regPrice =
-    isAfterHours && snapshot.price != null && snapshot.price > 0
-      ? snapshot.price
-      : isAfterHours && sharedQuote?.latePct != null && sharedQuote?.price != null
-        ? sharedQuote.price / (1 + sharedQuote.latePct / 100)
-        : (dispPrice ?? snapshot.price ?? 0);
+  const quoteClose = barsFallback
+    ? sharedQuote?.price
+    : isPre ? sharedQuote?.previousClose : sharedQuote?.regularClose;
+  const regPrice = isExtended
+    ? (quoteClose ?? (snapshot.price != null && snapshot.price > 0 ? snapshot.price : null) ?? dispPrice ?? 0)
+    : (dispPrice ?? snapshot.price ?? 0);
 
-  const regPct =
-    isAfterHours && snapshot.pctChange != null
-      ? snapshot.pctChange
-      : (sharedQuote?.regularPct ?? dispPct ?? snapshot.pctChange ?? 0);
+  // After hours the day's move is exact from the two closes; otherwise fall
+  // back to the company snapshot's stored move.
+  const closesMove =
+    isExtended && !isPre &&
+    sharedQuote?.regularClose != null && sharedQuote.previousClose != null && sharedQuote.previousClose > 0
+      ? ((sharedQuote.regularClose - sharedQuote.previousClose) / sharedQuote.previousClose) * 100
+      : null;
+  const regPct = isExtended
+    ? (closesMove ?? (barsFallback ? sharedQuote?.pctChange : null) ?? snapshot.pctChange ?? 0)
+    : (sharedQuote?.regularPct ?? dispPct ?? snapshot.pctChange ?? 0);
 
   const regDollar =
     regPrice > 0 && regPct != null && regPct !== -100
       ? Math.abs(regPrice - regPrice / (1 + regPct / 100))
       : (dispDollar ?? 0);
 
-  /* After-hours price and move. */
-  const ahPct =
-    sharedQuote?.latePct ??
-    (isAfterHours && sharedQuote?.pctChange != null && sharedQuote.pctChange !== regPct
-      ? sharedQuote.pctChange
-      : null);
+  /*
+   * Extended price and move. The % is derived from the same price and base as
+   * the $ figure, so the two can never disagree. In pre-market the quote must
+   * be from TODAY's pre-market — before the first pre-market print the vendor
+   * still carries last evening's after-hours trade.
+   */
+  const preMarketQuote = !isPre || isTodayAfter4amET(sharedQuote?.updatedAt ?? null);
+  const extPrice = barsFallback
+    ? lastExtendedClose(dayBars, isPre)
+    : isExtended && preMarketQuote ? (sharedQuote?.price ?? live.tick?.price ?? null) : null;
+  const extMove = extPrice != null && regPrice > 0 ? extPrice - regPrice : null;
+  const ahPrice = extPrice;
+  const ahPct = extMove != null ? (extMove / regPrice) * 100 : null;
+  const ahDollar = extMove != null ? Math.abs(extMove) : null;
 
-  const ahPrice =
-    isAfterHours && sharedQuote?.price != null && (sharedQuote.latePct != null || sharedQuote.price !== regPrice)
-      ? sharedQuote.price
-      : (ahPct != null && regPrice > 0 ? regPrice * (1 + ahPct / 100) : null);
+  // No extended trade since the close — or a feed with no session split, whose
+  // price IS the close — shows no block rather than a "+0.00" one.
+  const showAfterHours = isExtended && extMove != null && Math.abs(extMove) >= 0.005;
+  const extLabel = isPre ? "PRE-MARKET" : "AFTER HOURS";
 
-  const ahDollar =
-    ahPrice != null && regPrice > 0
-      ? Math.abs(ahPrice - regPrice)
-      : (ahPct != null && regPrice > 0 ? Math.abs((ahPct / 100) * regPrice) : null);
-
-  const showAfterHours = !isMarketOpen && isAfterHours && ahPrice != null && ahPct != null;
-
-  return { dispPrice, regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours };
+  return { dispPrice, regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours, extLabel };
 }
 
 /** Regular-session quote and, after the close, the AFTER HOURS block beside it. */
 export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
-  const { regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours } = q;
+  const { regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours, extLabel } = q;
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "nowrap", flexShrink: 0 }}>
       {/* REGULAR MARKET CLOSE */}
@@ -155,7 +211,7 @@ export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
         </div>
       </div>
 
-      {/* AFTER HOURS — ONLY SHOWN AFTER REGULAR MARKET CLOSE */}
+      {/* PRE-MARKET / AFTER HOURS — only outside regular hours */}
       {showAfterHours && ahPrice != null && ahPct != null && (
         <div
           style={{
@@ -180,7 +236,7 @@ export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
               whiteSpace: "nowrap",
             }}
           >
-            AFTER HOURS
+            {extLabel}
           </div>
 
           <div style={{ display: "flex", alignItems: "baseline", gap: 4, lineHeight: 1.1, whiteSpace: "nowrap" }}>
