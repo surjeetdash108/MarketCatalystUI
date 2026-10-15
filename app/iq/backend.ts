@@ -1,4 +1,5 @@
 import { firebaseAuth } from "../firebase";
+import { normalizeSector } from "./sector-filter";
 
 /**
  * Base URL for the MarketCatalystBackEnd REST/SSE surface, resolved at RUNTIME
@@ -118,7 +119,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const text = await res.text();
   if (!text.trim()) return undefined as T;
-  return JSON.parse(text) as T;
+  return JSON.parse(text, sectorReviver) as T;
+}
+
+/** Renames backend sector labels (see normalizeSector) wherever a response carries one. */
+function sectorReviver(key: string, value: unknown): unknown {
+  return key === "sector" && typeof value === "string" ? normalizeSector(value) : value;
 }
 
 export function apiGet<T>(path: string): Promise<T> {

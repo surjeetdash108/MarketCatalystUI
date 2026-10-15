@@ -7,6 +7,24 @@
 // by that theme's ticker membership. Use matchesSector() everywhere so behaviour
 // is uniform.
 
+/**
+ * Sector names we show under a different label than the backend's
+ * TradingView/FactSet taxonomy uses. Keyed lower-case so "CONSUMER NON-DURABLES"
+ * and "Consumer Non-Durables" both match.
+ */
+const SECTOR_ALIASES: Record<string, string> = {
+  "consumer non-durables": "Consumer Defensive",
+};
+
+/**
+ * The label to use for a backend sector name. Applied to every `sector` field as
+ * API responses are parsed (backend.ts), so companies, the sectors list, movers
+ * and the filters all carry the same renamed value and still match each other.
+ */
+export function normalizeSector(name: string): string {
+  return SECTOR_ALIASES[name.trim().toLowerCase()] ?? name;
+}
+
 /** Curated theme basket — editorial ticker list (there is no live "theme" feed). */
 export interface Theme {
   id: string;
