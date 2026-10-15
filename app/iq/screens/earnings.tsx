@@ -552,6 +552,28 @@ function extractTranscriptSummary(content: string, _sym: string): TranscriptSumm
   return selected.slice(0, 8);
 }
 
+/**
+ * Groups transcript paragraphs into speaker turns. FMP prefixes each turn with
+ * "Name[, Title, Firm]: " — that prefix becomes the bold heading and the rest
+ * the remarks. Paragraphs without a prefix continue the previous speaker.
+ */
+function groupTranscriptTurns(content: string): { speaker: string; paras: string[] }[] {
+  const turns: { speaker: string; paras: string[] }[] = [];
+  for (const para of content.split(/\n+/).map(p => p.trim()).filter(Boolean)) {
+    const m = para.match(/^([^:.!?\n]{2,90}):\s*([\s\S]*)$/);
+    // A real speaker label is name-like: starts with a capital, few words, no digits.
+    const isSpeaker = !!m && /^[A-Z]/.test(m[1]) && !/\d/.test(m[1]) && m[1].split(/\s+/).length <= 12;
+    if (isSpeaker && m) {
+      turns.push({ speaker: m[1].trim(), paras: m[2].trim() ? [m[2].trim()] : [] });
+    } else if (turns.length) {
+      turns[turns.length - 1].paras.push(para);
+    } else {
+      turns.push({ speaker: "", paras: [para] });
+    }
+  }
+  return turns;
+}
+
 function CallDrawer({
   sym,
   onClose,
@@ -570,13 +592,16 @@ function CallDrawer({
 
   const content = data?.content ?? "";
   const hasTx = !!data?.hasTranscript && content.trim().length > 0;
-  const paras = hasTx ? content.split(/\n+/).map(p => p.trim()).filter(Boolean) : [];
+  const transcriptTurns = useMemo(() => (hasTx ? groupTranscriptTurns(content) : []), [hasTx, content]);
 
   // Active insights: Real server-side LLM synthesized insights (8-12 points),
   // falling back gracefully to client-side rule extractor if LLM is unavailable or unconfigured.
   const activeInsights: TranscriptInsight[] = useMemo(() => {
     if (aiSummaryDoc?.insights && Array.isArray(aiSummaryDoc.insights) && aiSummaryDoc.insights.length >= 4) {
-      return aiSummaryDoc.insights;
+      // Older cached summaries carry 8-12 points; show only the top 8 by impact.
+      return [...aiSummaryDoc.insights]
+        .sort((a, b) => (a.importance ?? 99) - (b.importance ?? 99))
+        .slice(0, 8);
     }
     if (hasTx && content) {
       return extractTranscriptSummary(content, sym).map((pt, i) => ({
@@ -735,6 +760,13 @@ function CallDrawer({
                         const sentimentColor = isBull ? "var(--up)" : isBear ? "var(--down)" : "var(--text-dim-solid)";
                         const sentimentBg = isBull ? "rgba(16, 185, 129, 0.12)" : isBear ? "rgba(239, 68, 68, 0.12)" : "var(--surface-3)";
 
+                        const text = ins.summary || ins.headline;
+                        // Fallback insights use the sentence's first 60 chars (or the
+                        // category) as the headline — only show a real takeaway.
+                        const showHeadline = !!ins.headline && !!ins.summary
+                          && ins.headline !== ins.category
+                          && !ins.summary.startsWith(ins.headline);
+
                         return (
                           <li
                             key={idx}
@@ -745,8 +777,6 @@ function CallDrawer({
                               fontSize: ".84rem",
                               lineHeight: 1.55,
                               color: "var(--text)",
-                              paddingBottom: idx < activeInsights.length - 1 ? 12 : 0,
-                              borderBottom: idx < activeInsights.length - 1 ? "1px solid var(--border-soft)" : "none",
                             }}
                           >
                             <span
@@ -761,68 +791,32 @@ function CallDrawer({
                               •
                             </span>
                             <div style={{ flex: 1 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                                <span
-                                  style={{
-                                    fontFamily: "var(--f-mono)",
-                                    fontSize: ".7rem",
-                                    fontWeight: 700,
-                                    color: "var(--text-hi)",
-                                    background: "var(--surface-2)",
-                                    padding: "1px 6px",
-                                    borderRadius: 4,
-                                    border: "1px solid var(--border-soft)",
-                                  }}
-                                >
-                                  {ins.category}
-                                </span>
-                                {ins.sentiment && (
-                                  <span
-                                    style={{
-                                      fontSize: ".68rem",
-                                      fontWeight: 700,
-                                      textTransform: "uppercase",
-                                      letterSpacing: ".04em",
-                                      color: sentimentColor,
-                                      background: sentimentBg,
-                                      padding: "1px 6px",
-                                      borderRadius: 4,
-                                    }}
-                                  >
-                                    {ins.sentiment}
-                                  </span>
-                                )}
-                                {ins.headline && (
-                                  <span style={{ fontWeight: 650, color: "var(--text-hi)", fontSize: ".86rem" }}>
-                                    {ins.headline}
-                                  </span>
-                                )}
+                              <div style={{ color: "var(--text)", fontSize: ".84rem", lineHeight: 1.55 }}>
+                                {text}
                               </div>
-                              <div style={{ color: "var(--text)", fontSize: ".83rem", lineHeight: 1.55 }}>
-                                {ins.summary}
-                              </div>
-                              {ins.speaker && (
-                                <div style={{ marginTop: 4 }}>
-                                  <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
-                                    — {ins.speaker}
-                                  </span>
-                                </div>
-                              )}
-                              {ins.evidence && (
-                                <div
-                                  style={{
-                                    marginTop: 6,
-                                    padding: "6px 10px",
-                                    background: "var(--surface-2)",
-                                    borderRadius: 6,
-                                    borderLeft: "2px solid var(--ai)",
-                                    fontSize: ".75rem",
-                                    color: "var(--text-dim-solid)",
-                                    fontStyle: "italic",
-                                    lineHeight: 1.45,
-                                  }}
-                                >
-                                  "{ins.evidence}"
+                              {(ins.sentiment || showHeadline) && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                                  {ins.sentiment && (
+                                    <span
+                                      style={{
+                                        fontSize: ".66rem",
+                                        fontWeight: 700,
+                                        textTransform: "uppercase",
+                                        letterSpacing: ".04em",
+                                        color: sentimentColor,
+                                        background: sentimentBg,
+                                        padding: "1px 6px",
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      {ins.sentiment}
+                                    </span>
+                                  )}
+                                  {showHeadline && (
+                                    <span style={{ fontWeight: 650, color: "var(--text-hi)", fontSize: ".78rem" }}>
+                                      {ins.headline}
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -881,9 +875,18 @@ function CallDrawer({
                   live · FMP transcript
                 </span>
               </div>
-              <div style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
-                {paras.map((p, i) => (
-                  <p key={i} style={{ marginBottom: 10, whiteSpace: "pre-wrap" }}>{p}</p>
+              <div style={{ fontSize: ".86rem", lineHeight: 1.7, color: "var(--text)" }}>
+                {transcriptTurns.map((turn, i) => (
+                  <div key={i} style={{ marginBottom: 18 }}>
+                    {turn.speaker && (
+                      <div style={{ fontWeight: 700, color: "var(--text-hi)", marginBottom: 6 }}>
+                        {turn.speaker}
+                      </div>
+                    )}
+                    {turn.paras.map((p, j) => (
+                      <p key={j} style={{ margin: j < turn.paras.length - 1 ? "0 0 10px" : 0, whiteSpace: "pre-wrap" }}>{p}</p>
+                    ))}
+                  </div>
                 ))}
               </div>
             </>

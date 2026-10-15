@@ -378,13 +378,8 @@ const rangesDef: Record<string, [number, number, number]> = {
 export function StockIntelligenceScreen() {
   const { theme, setTheme } = useIQActions();
   const isLight = theme === "light";
-  const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    try {
-      localStorage.setItem("iq-theme", next);
-    } catch { }
-    setTheme(next);
-  };
+  // The shell's setTheme persists to localStorage + backend, keeping MC in sync.
+  const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
   const router = useRouter();
   const { setSiTicker, activeTab, setActiveTab, goToSearch } = useSI();
 
