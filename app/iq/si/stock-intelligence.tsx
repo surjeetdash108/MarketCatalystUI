@@ -365,6 +365,16 @@ function SixMonthAreaChart({
   );
 }
 
+const rangesDef: Record<string, [number, number, number]> = {
+  "1D": [78, 0.003, 0.005],
+  "5D": [39, 0.008, 0.015],
+  "1M": [30, 0.012, 0.04],
+  "3M": [60, 0.016, 0.10],
+  "6M": [120, 0.018, 0.20],
+  "1Y": [250, 0.020, 0.35],
+  "5Y": [350, 0.024, 0.80],
+};
+
 export function StockIntelligenceScreen() {
   const { theme, setTheme } = useIQActions();
   const isLight = theme === "light";
@@ -453,6 +463,12 @@ export function StockIntelligenceScreen() {
   const { bars: sixMonthBars, loading: sixMonthLoading } = useBackendBars(
     currentTicker || "NVDA",
     "6M"
+  );
+
+  // Real bars for Overview Price History chart across selected timeframe (1D, 5D, 1M, 3M, 6M, 1Y, 5Y)
+  const { bars: overviewBars, loading: overviewBarsLoading } = useBackendBars(
+    currentTicker || "NVDA",
+    range
   );
 
   const stock: StockItem | null = useMemo(() => {
@@ -963,23 +979,58 @@ export function StockIntelligenceScreen() {
   const color = stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
 
   // Overview Price History chart calculations
-  const rangesDef: Record<string, [number, number, number]> = {
-    "1D": [78, 0.003, stock.c / 100 / 78],
-    "5D": [39, 0.008, 0.0004],
-    "1M": [30, 0.015, 0.0008],
-    "3M": [60, 0.018, 0.001],
-    "6M": [120, 0.02, 0.0012],
-    "1Y": [250, 0.022, 0.0015],
-    "5Y": [350, 0.025, 0.0018],
-  };
-  const [numPts, volFactor, driftFactor] = rangesDef[range] || rangesDef["6M"];
-  const priceSeries = series(stock.t + range, numPts, stock.p, volFactor, driftFactor);
+  const priceSeries = useMemo(() => {
+    if (overviewBars && overviewBars.length >= 2) {
+      const closes = overviewBars.map((b) => b.c);
+      if (stock?.p != null && stock.p > 0 && closes.length > 0) {
+        closes[closes.length - 1] = stock.p;
+      }
+      return closes;
+    }
+
+    // Fallback if real bars are loading or unavailable
+    // The chart MUST END at current price stock.p, and never exceed 52W high stock.hi
+    const rangesDef: Record<string, [number, number, number]> = {
+      "1D": [78, 0.003, (stock?.c ?? 0) / 100],
+      "5D": [39, 0.008, 0.015],
+      "1M": [30, 0.012, 0.04],
+      "3M": [60, 0.016, 0.10],
+      "6M": [120, 0.018, 0.20],
+      "1Y": [250, 0.020, 0.35],
+      "5Y": [350, 0.024, 0.80],
+    };
+    const [numPts, volFactor, totalDrift] = rangesDef[range] || rangesDef["6M"];
+    const curP = stock?.p ?? 217.26;
+    const isUp = (stock?.c ?? 0) >= 0;
+    const startP = isUp ? curP / (1 + totalDrift) : curP * (1 + totalDrift);
+    const hiCap = stock?.hi ? Math.max(stock.hi, curP) : curP * 1.12;
+    const loFloor = stock?.lo ? Math.min(stock.lo, curP * 0.7) : curP * 0.7;
+
+    const seed = (stock?.t || "NVDA").split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) + (range.length * 17);
+    const result: number[] = [];
+    let p = startP;
+
+    for (let i = 0; i < numPts; i++) {
+      if (i === numPts - 1) {
+        result.push(curP);
+      } else {
+        const frac = i / (numPts - 1);
+        const wave = Math.sin(seed + i * 0.35) * volFactor * 1.2 + Math.cos(i * 0.19) * volFactor * 0.8;
+        const target = startP + (curP - startP) * Math.pow(frac, 1.1);
+        p = p * 0.88 + target * 0.12 + p * wave;
+        p = Math.max(loFloor, Math.min(hiCap, p));
+        result.push(+p.toFixed(2));
+      }
+    }
+    return result;
+  }, [overviewBars, stock?.p, stock?.c, stock?.hi, stock?.lo, stock?.t, range]);
+
   const minP = Math.min(...priceSeries);
   const maxP = Math.max(...priceSeries);
   const rangeDiff = maxP - minP || 1;
   const pStart = priceSeries[0];
   const pEnd = priceSeries[priceSeries.length - 1];
-  const chartCol = pEnd >= pStart ? UP : DN;
+  const chartCol = pEnd >= pStart ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
 
   // SVG path coordinates
   const svgW = 1000;
@@ -995,7 +1046,23 @@ export function StockIntelligenceScreen() {
 
   // Dynamic X-axis & Tooltip generation (Issue 1 fix: Month + Year on 5Y hover)
   const getLabelAtFrac = (f: number, isHover = false) => {
-    const now = new Date(2026, 9, 13); // Fixed reference date
+    if (overviewBars && overviewBars.length >= 2) {
+      const idx = Math.max(0, Math.min(overviewBars.length - 1, Math.round(f * (overviewBars.length - 1))));
+      const bar = overviewBars[idx];
+      const d = new Date(bar.t);
+      if (range === "1D") {
+        return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+      }
+      if (range === "5D" || range === "1M" || range === "3M" || range === "6M") {
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+      }
+      if (range === "1Y") {
+        return d.toLocaleDateString("en-US", { month: "short", year: isHover ? "numeric" : "2-digit", timeZone: "America/New_York" });
+      }
+      return d.toLocaleDateString("en-US", { month: isHover ? "short" : undefined, year: "numeric", timeZone: "America/New_York" });
+    }
+
+    const now = new Date();
     if (range === "1D") {
       const totalMinutes = Math.round(f * 390); // 9:30 AM to 4:00 PM = 390 mins
       const h = 9 + Math.floor((30 + totalMinutes) / 60);
@@ -1022,7 +1089,7 @@ export function StockIntelligenceScreen() {
     if (range === "6M") {
       const d = new Date(now);
       d.setDate(d.getDate() - Math.round((1 - f) * 180));
-      return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     }
     if (range === "1Y") {
       const d = new Date(now);
@@ -1066,19 +1133,30 @@ export function StockIntelligenceScreen() {
 
   // Confluence dots
   const confluenceDots = [0, 1, 2, 3, 4, 5, 6].map((i) => ({
-    c: i < stock.cf ? "#7fa8d0" : "#1c2733",
+    c: i < stock.cf ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border, #1c2733)",
   }));
 
-  // Signal scores mapping
-  const signalScores = KEYS.map((k, idx) => {
-    const val = stockDetail.sv[idx] || 70;
-    return {
-      name: k,
-      val,
-      color: sc(val),
-      widthPct: `${val}%`,
-    };
-  });
+  type SignalScoreItem = { name: string; val: number; color: string; widthPct: string };
+  // Signal scores mapping - strictly synchronized with the 7 forward signal categories
+  const signalScores: SignalScoreItem[] = (stockDetail.fwd?.cats && stockDetail.fwd.cats.length === 7)
+    ? stockDetail.fwd.cats.map((cat: any) => {
+      const val = Math.round(cat.score);
+      return {
+        name: cat.label,
+        val,
+        color: sc(val),
+        widthPct: `${val}%`,
+      };
+    })
+    : [
+      { name: "BUSINESS", val: 88, color: sc(88), widthPct: "88%" },
+      { name: "EARNINGS", val: 87, color: sc(87), widthPct: "87%" },
+      { name: "TECHNICALS", val: 80, color: sc(80), widthPct: "80%" },
+      { name: "CATALYSTS", val: 71, color: sc(71), widthPct: "71%" },
+      { name: "VALUATION", val: 70, color: sc(70), widthPct: "70%" },
+      { name: "FLOWS", val: 71, color: sc(71), widthPct: "71%" },
+      { name: "MACRO", val: 67, color: sc(67), widthPct: "67%" },
+    ];
 
   return (
     <div
@@ -1462,7 +1540,7 @@ export function StockIntelligenceScreen() {
                 cursor: "pointer",
               }}
             >
-              Monitor Thesis
+              Monitor Strategy
             </button>
           </div>
         </div>
@@ -1806,31 +1884,33 @@ export function StockIntelligenceScreen() {
 
                 {/* How It Works Explanatory Modal */}
                 {showSigHow && (
-                  <div style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", background: "#0b1016", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card-sec, #0b1016)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                       HOW EACH SCORE IS CALCULATED
                     </div>
                     <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, margin: "4px 0" }}>
-                      Every score runs 0–100, where 50 is neutral. Inputs are ranked against the stock’s history and sector peers, then blended.
+                      Every signal score runs 0–100, where 50 is neutral. Scores above 60 indicate positive alignment with the forward thesis.
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>Momentum</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-body, #c9d4de)" }}>1M, 3M, 6M returns + distance above 50 & 200 DMA.</span>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>Volume</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-body, #c9d4de)" }}>Relative volume vs 20-day average and accumulation vs distribution days.</span>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "8px 0" }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>Market Regime</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-body, #c9d4de)" }}>S&P 500 trend, VIX level, market breadth, and rate volatility.</span>
-                    </div>
+                    {[
+                      ["Business", "Revenue growth in key segments, gross and operating margin trend, and forward guidance."],
+                      ["Earnings", "EPS and revenue estimate revisions over 30 and 90 days, beat rate, and surprise magnitude."],
+                      ["Technicals", "Trend vs. 50- and 200-day moving averages, relative strength vs. S&P 500, and volume confirmation."],
+                      ["Catalysts", "Upcoming dated events (earnings, product launches, conferences) weighted by historical volatility impact."],
+                      ["Valuation", "Forward P/E and EV/EBITDA vs. 5-year history and peers, adjusted for growth (PEG ratio)."],
+                      ["Flows", "Call/put skew, short interest, days to cover, plus institutional ownership change from latest 13F filings."],
+                      ["Macro", "Market trend, VIX level, interest rate volatility, and sector sensitivity to broader liquidity."],
+                    ].map(([sName, sDesc], idx) => (
+                      <div key={idx} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</span>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-body, #c9d4de)" }}>{sDesc}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
 
                 {/* 7 Interactive Score Buttons */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8 }}>
-                  {signalScores.map((scItem) => {
+                  {signalScores.map((scItem: SignalScoreItem) => {
                     const isSelected = selectedSignal === scItem.name;
                     return (
                       <button
@@ -1838,13 +1918,14 @@ export function StockIntelligenceScreen() {
                         onClick={() => setSelectedSignal(isSelected ? null : scItem.name)}
                         style={{
                           textAlign: "left",
-                          border: `1px solid ${isSelected ? STEEL : "#1c2733"}`,
-                          background: isSelected ? "rgba(89,128,166,0.18)" : "transparent",
+                          border: `1px solid ${isSelected ? "var(--si-accent, #5980a6)" : "var(--si-border, #1c2733)"}`,
+                          background: isSelected ? "var(--si-accent-bg, rgba(89,128,166,0.18))" : "var(--si-card-sec, transparent)",
                           padding: 12,
                           cursor: "pointer",
                           display: "flex",
                           flexDirection: "column",
                           gap: 8,
+                          transition: "border 150ms, background 150ms",
                         }}
                       >
                         <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>
@@ -1853,7 +1934,7 @@ export function StockIntelligenceScreen() {
                         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: scItem.color, lineHeight: 1 }}>
                           {scItem.val}
                         </span>
-                        <span style={{ height: 3, background: "#1c2733", display: "block" }}>
+                        <span style={{ height: 3, background: "var(--si-card-tert, #1c2733)", display: "block" }}>
                           <span style={{ display: "block", height: 3, width: scItem.widthPct, background: scItem.color }} />
                         </span>
                       </button>
@@ -1905,7 +1986,7 @@ export function StockIntelligenceScreen() {
                         ✕
                       </button>
                     </div>
-                    {((stockDetail.ev && selectedSignal ? stockDetail.ev[selectedSignal] : null) || [
+                    {((stockDetail.ev && selectedSignal ? (stockDetail.ev[selectedSignal] || stockDetail.ev[selectedSignal.toUpperCase()]) : null) || [
                       "Leading relative strength rank across sector peers",
                       "Institutional accumulation detected over last 10 sessions",
                       "Options skew shows calls priced at premium over puts",
@@ -2626,16 +2707,46 @@ export function StockIntelligenceScreen() {
             sourceBadge?: string;
           }> = [];
 
-          const now = Date.now();
-          const calcDd = (dateStr: string) => {
-            const t = new Date(dateStr).getTime();
-            if (isNaN(t)) return 0;
-            return Math.round((t - now) / (1000 * 60 * 60 * 24));
+          const usNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+          const usYear = usNow.getFullYear();
+          const usMonth = usNow.getMonth();
+          const usDay = usNow.getDate();
+          const usTodayStart = new Date(usYear, usMonth, usDay).getTime();
+
+          const calcDd = (dateInput: string | number | Date): number => {
+            if (!dateInput) return 0;
+            if (typeof dateInput === "string") {
+              const trimmed = dateInput.trim();
+              const parts = trimmed.split(/\s+/);
+              if (parts.length === 2 && isNaN(new Date(trimmed).getTime())) {
+                const mStr = parts[0].toLowerCase().slice(0, 3);
+                const dNum = parseInt(parts[1], 10);
+                const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+                const mIdx = months.indexOf(mStr);
+                if (mIdx >= 0 && !isNaN(dNum)) {
+                  const targetDate = new Date(usYear, mIdx, dNum);
+                  return Math.round((targetDate.getTime() - usTodayStart) / (1000 * 60 * 60 * 24));
+                }
+              }
+            }
+            const d = new Date(dateInput);
+            if (isNaN(d.getTime())) return 0;
+            const targetUS = new Date(d.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const targetStart = new Date(targetUS.getFullYear(), targetUS.getMonth(), targetUS.getDate()).getTime();
+            return Math.round((targetStart - usTodayStart) / (1000 * 60 * 60 * 24));
           };
 
-          const fmtDateShort = (dateStr: string) => {
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime())) return dateStr;
+          const fmtDateShort = (dateInput: string | number | Date): string => {
+            if (!dateInput) return "";
+            if (typeof dateInput === "string") {
+              const trimmed = dateInput.trim();
+              const parts = trimmed.split(/\s+/);
+              if (parts.length === 2 && isNaN(new Date(trimmed).getTime())) {
+                return trimmed;
+              }
+            }
+            const d = new Date(dateInput);
+            if (isNaN(d.getTime())) return String(dateInput);
             return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
           };
 
@@ -2776,24 +2887,26 @@ export function StockIntelligenceScreen() {
 
           // 6. MACRO & SCHEDULED CORPORATE EVENTS (Calendar baseline)
           const baseEvents: typeof liveCatalystItems = [
-            { date: "Oct 2", cat: "Macro", ev: "Weak September payrolls ease rate-hike fears", note: "29K jobs vs 85K expected; growth stocks rallied.", imp: "MED", dir: "Positive", dd: -5, sourceBadge: "MACRO" },
-            { date: "Oct 25", cat: "Macro", ev: "Monthly options expiration (OpEx)", note: `Open interest clustered near ${usd(Math.round(stock.p * 1.04))}.`, imp: "LOW", dir: "Neutral", dd: 18, sourceBadge: "CALENDAR" },
-            { date: "Oct 29", cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Rate-sensitive growth names most exposed.", imp: "HIGH", dir: "Risk", dd: 22, sourceBadge: "FED" },
-            { date: "Oct 12", cat: "Industry events", ev: semi || stock.t === "PLTR" ? "AI Infrastructure Global Keynote" : `${stock.t} Investor Day & Tech Showcase`, note: "Product roadmap and partner announcements expected.", imp: "MED", dir: "Positive", dd: 5, sourceBadge: "EVENTS" },
-            { date: "Oct 14", cat: "Product launches", ev: `${stock.t} Next-Gen Platform Delivery & Ramp Update`, note: "Commercial shipping timeline and capacity availability.", imp: "MED", dir: "Positive", dd: 7, sourceBadge: "IR" },
-            { date: "Oct 9", cat: "Regulatory", ev: semi ? "Commerce Dept. export control assessment update" : "Global regulatory compliance review milestone", note: "Regional trade rules and cross-border operational oversight.", imp: "HIGH", dir: "Risk", dd: 2, sourceBadge: "REGULATORY" },
+            { date: "Oct 2", cat: "Macro", ev: "Weak September payrolls ease rate-hike fears", note: "29K jobs vs 85K expected; growth stocks rallied.", imp: "MED", dir: "Positive", dd: calcDd("Oct 2"), sourceBadge: "MACRO" },
+            { date: "Oct 9", cat: "Regulatory", ev: semi ? "Commerce Dept. export control assessment update" : "Global regulatory compliance review milestone", note: "Regional trade rules and cross-border operational oversight.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 9"), sourceBadge: "REGULATORY" },
+            { date: "Oct 12", cat: "Industry events", ev: semi || stock.t === "PLTR" ? "AI Infrastructure Global Keynote" : `${stock.t} Investor Day & Tech Showcase`, note: "Product roadmap and partner announcements expected.", imp: "MED", dir: "Positive", dd: calcDd("Oct 12"), sourceBadge: "EVENTS" },
+            { date: "Oct 14", cat: "Product launches", ev: `${stock.t} Next-Gen Platform Delivery & Ramp Update`, note: "Commercial shipping timeline and capacity availability.", imp: "MED", dir: "Positive", dd: calcDd("Oct 14"), sourceBadge: "IR" },
+            { date: "Oct 25", cat: "Macro", ev: "Monthly options expiration (OpEx)", note: `Open interest clustered near ${usd(Math.round(stock.p * 1.04))}.`, imp: "LOW", dir: "Neutral", dd: calcDd("Oct 25"), sourceBadge: "CALENDAR" },
+            { date: "Oct 29", cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Rate-sensitive growth names most exposed.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 29"), sourceBadge: "FED" },
           ];
 
           // Supplement with baseline items if no specific live rows are loaded
           if (!tickerEarnings.length) {
+            const P = getTP(stock.t);
+            const earnDateStr = P.cat ? P.cat.split("·")[1]?.trim() || "Nov 18" : "Nov 18";
             baseEvents.push({
-              date: "Oct 21",
+              date: earnDateStr,
               cat: "Earnings",
-              ev: `Q3 earnings · consensus EPS $${(stock.p / stock.fpe / 4).toFixed(2)}`,
+              ev: `Q3 earnings · consensus EPS $${(stock.p / Math.max(10, stock.fpe) / 4).toFixed(2)}`,
               note: `Implied move ±${(5 + stock.conf / 20).toFixed(1)}%; guidance matters more than the print.`,
               imp: "HIGH",
               dir: "Binary",
-              dd: 14,
+              dd: calcDd(earnDateStr),
               sourceBadge: "CALENDAR",
             });
           }
@@ -2805,7 +2918,7 @@ export function StockIntelligenceScreen() {
               note: "Overweight reiterated; cites demand visibility into 2027.",
               imp: "MED",
               dir: "Positive",
-              dd: -13,
+              dd: calcDd("Sep 24"),
               sourceBadge: "CONSENSUS",
             });
           }
@@ -2817,19 +2930,25 @@ export function StockIntelligenceScreen() {
               note: "Pre-scheduled sale; < 0.1% of holdings.",
               imp: "LOW",
               dir: "Neutral",
-              dd: -7,
+              dd: calcDd("Sep 30"),
               sourceBadge: "SEC FORM 4",
             });
           }
           if (!inst13FData?.holders?.length) {
             baseEvents.push(
-              { date: "Aug 14", cat: "13F filings", ev: `Q2 13F: institutions added ${stock.t} on net`, note: "Top filers increased stakes; ownership concentration rose.", imp: "MED", dir: "Positive", dd: -54, sourceBadge: "13F SEC" },
-              { date: "Nov 14", cat: "13F filings", ev: "Q3 13F filing deadline", note: `First look at how funds positioned in ${stock.t} through September.`, imp: "MED", dir: "Neutral", dd: 38, sourceBadge: "SEC DEADLINE" }
+              { date: "Aug 14", cat: "13F filings", ev: `Q2 13F: institutions added ${stock.t} on net`, note: "Top filers increased stakes; ownership concentration rose.", imp: "MED", dir: "Positive", dd: calcDd("Aug 14"), sourceBadge: "13F SEC" },
+              { date: "Nov 14", cat: "13F filings", ev: "Q3 13F filing deadline", note: `First look at how funds positioned in ${stock.t} through September.`, imp: "MED", dir: "Neutral", dd: calcDd("Nov 14"), sourceBadge: "SEC DEADLINE" }
             );
           }
 
-          const combined = [...liveCatalystItems, ...baseEvents];
-          combined.sort((a, b) => a.dd - b.dd);
+
+          const MAX_DAYS = 365;
+
+          const combined = [...liveCatalystItems, ...baseEvents].filter(
+            (c) => c.dd >= -MAX_DAYS && c.dd <= MAX_DAYS
+          );
+
+          combined.sort((a, b) => b.dd - a.dd);
 
           // Category count breakdown
           const countMap: Record<string, number> = { All: combined.length };
@@ -3195,10 +3314,10 @@ export function StockIntelligenceScreen() {
               >
                 <div style={{ minWidth: 230 }}>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                    THESIS LAB · {stock.t}
+                    STRATEGY LAB · {stock.t}
                   </div>
                   <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
-                    {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} THESIS
+                    {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} STRATEGY
                   </div>
                 </div>
 
@@ -3972,7 +4091,7 @@ export function StockIntelligenceScreen() {
                     transition: "background 160ms",
                   }}
                 >
-                  Save & Monitor Thesis →
+                  Save & Monitor Strategy →
                 </button>
               </div>
             </div>
@@ -3980,7 +4099,7 @@ export function StockIntelligenceScreen() {
         })()}
 
         {/* ====================================================
-            TAB 9: THESIS MONITOR (Issue 7: Full Monitored View)
+            TAB 9: STRATEGY MONITOR (Issue 7: Full Monitored View)
             ==================================================== */}
         {activeTab === "mon" && (() => {
           if (!savedThesis) {
@@ -4028,7 +4147,7 @@ export function StockIntelligenceScreen() {
                     color: "var(--si-text-hi, #e8eef4)",
                   }}
                 >
-                  NO THESIS MONITORED FOR {stock.t}
+                  NO STRATEGY MONITORED FOR {stock.t}
                 </span>
                 <span
                   style={{
@@ -4039,7 +4158,7 @@ export function StockIntelligenceScreen() {
                     lineHeight: 1.55,
                   }}
                 >
-                  Save information in Thesis Lab to monitor your thesis. Configure your direction, target price, invalidation stop, and key driver weights to activate real-time tracking.
+                  Save information in Strategy Lab to monitor your strategy. Configure your direction, target price, invalidation stop, and key driver weights to activate real-time tracking.
                 </span>
                 <button
                   type="button"
@@ -4063,7 +4182,7 @@ export function StockIntelligenceScreen() {
                     transition: "all 150ms ease",
                   }}
                 >
-                  Save Information in Thesis Lab →
+                  Save Information in Strategy Lab →
                 </button>
               </div>
             );
@@ -4130,7 +4249,7 @@ export function StockIntelligenceScreen() {
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 22, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 280 }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                      MONITORED THESIS · SAVED {savedThesis.savedDate.toUpperCase()}
+                      MONITORED STRATEGY · SAVED {savedThesis.savedDate.toUpperCase()}
                     </div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>
                       {savedThesis.title}
@@ -4148,13 +4267,13 @@ export function StockIntelligenceScreen() {
                         }}
                         style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                       >
-                        Edit in Thesis Lab
+                        Edit in Strategy Lab
                       </button>
 
                       {confirmDeleteThesis ? (
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffd2d2" }}>
-                            Delete thesis?
+                            Delete strategy?
                           </span>
                           <button
                             onClick={() => {

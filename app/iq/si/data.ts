@@ -13,8 +13,8 @@ export const TABS: [SITab, string][] = [
   ["tech", "TECHNICALS"],
   ["cat", "CATALYSTS"],
   ["ai", "AI RESEARCH"],
-  ["lab", "THESIS LAB"],
-  ["mon", "THESIS MONITOR"],
+  ["lab", "STRATEGY LAB"],
+  ["mon", "STRATEGY MONITOR"],
 ];
 
 export const LG_COL: Record<string, [string, string]> = {
@@ -60,18 +60,18 @@ export const KEYS = [
 ];
 
 export const STK: Record<string, StockItem> = {
-  NVDA: { t: "NVDA", name: "NVIDIA Corporation", p: 183.42, c: 3.21, setup: "AI Momentum", cf: 4, conf: 87, sig: ["Unusual volume", "Semiconductor strength", "Breakout", "Positive catalyst"], mcap: "$4.47T", pe: 52.4, fpe: 33.1, rev: 62.4, eps: 59.1, hi: 195.62, lo: 108.13, sector: "Semiconductor", lbg: "#76b900", lfg: "#fff" },
-  AMD: { t: "AMD", name: "Advanced Micro Devices", p: 168.30, c: 2.84, setup: "Breakout", cf: 4, conf: 81, sig: ["Range breakout", "Volume expansion", "Sector tailwind", "Analyst upgrade"], mcap: "$272B", pe: 98.6, fpe: 31.2, rev: 31.7, eps: 42.0, hi: 186.65, lo: 76.48, sector: "Semiconductor", lbg: "#141414", lfg: "#fff" },
-  MU: { t: "MU", name: "Micron Technology", p: 132.75, c: 4.12, setup: "Earnings Run-up", cf: 4, conf: 79, sig: ["HBM demand", "Unusual volume", "Estimate revisions ↑", "Sector strength"], mcap: "$148B", pe: 24.1, fpe: 9.8, rev: 61.6, eps: 84.2, hi: 157.50, lo: 65.20, sector: "Semiconductor", lbg: "#0b3d91", lfg: "#fff" },
-  AAPL: { t: "AAPL", name: "Apple Inc.", p: 246.80, c: -0.42, setup: "Range Consolidation", cf: 3, conf: 72, sig: ["Support hold", "Hardware upgrade cycle", "Low volatility", "Services growth"], mcap: "$3.74T", pe: 34.8, fpe: 31.5, rev: 6.8, eps: 12.4, hi: 250.00, lo: 164.08, sector: "Hardware / Tech", lbg: "#f4f4f4", lfg: "#111" },
-  MSFT: { t: "MSFT", name: "Microsoft Corporation", p: 494.20, c: 0.61, setup: "Cloud Compounder", cf: 3, conf: 76, sig: ["Azure acceleration", "Copilot adoption", "Stable free cash flow", "Margin resilience"], mcap: "$3.67T", pe: 36.2, fpe: 30.8, rev: 15.3, eps: 17.8, hi: 512.40, lo: 388.00, sector: "Software / Cloud", lbg: "#f4f4f4", lfg: "#f25022" },
-  META: { t: "META", name: "Meta Platforms, Inc.", p: 712.50, c: 1.42, setup: "Ad-Tech Leader", cf: 4, conf: 84, sig: ["Ad spend strength", "AI recommendation lift", "Reels monetization", "Buyback support"], mcap: "$1.81T", pe: 28.4, fpe: 23.6, rev: 22.1, eps: 29.4, hi: 738.00, lo: 450.00, sector: "Internet / Social", lbg: "#0866ff", lfg: "#fff" },
-  GOOGL: { t: "GOOGL", name: "Alphabet Inc.", p: 202.10, c: 0.84, setup: "Search & Cloud", cf: 3, conf: 74, sig: ["Cloud profitability", "Search volume stable", "YouTube ad lift", "Hardware integration"], mcap: "$2.48T", pe: 24.6, fpe: 20.8, rev: 14.1, eps: 21.2, hi: 208.50, lo: 145.20, sector: "Internet / Search", lbg: "#f4f4f4", lfg: "#4285f4" },
-  AMZN: { t: "AMZN", name: "Amazon.com, Inc.", p: 216.40, c: 0.92, setup: "Retail Margin Lift", cf: 4, conf: 80, sig: ["AWS growth re-acceleration", "Retail efficiency", "Advertising expansion", "North America profit jump"], mcap: "$2.28T", pe: 42.1, fpe: 32.4, rev: 11.8, eps: 38.6, hi: 232.00, lo: 166.00, sector: "E-Commerce / Cloud", lbg: "#ff9900", lfg: "#111" },
-  TSLA: { t: "TSLA", name: "Tesla, Inc.", p: 238.60, c: -1.12, setup: "Volatile Pivot", cf: 2, conf: 58, sig: ["Support test ($225)", "Energy storage growth", "FSD progress", "Delivery estimate risk"], mcap: "$762B", pe: 72.8, fpe: 54.2, rev: 8.4, eps: -2.1, hi: 271.00, lo: 138.80, sector: "Automotive / Clean Energy", lbg: "#e31937", lfg: "#fff" },
-  PLTR: { t: "PLTR", name: "Palantir Technologies", p: 134.10, c: 1.95, setup: "AIP Hyper-growth", cf: 4, conf: 82, sig: ["Commercial AIP demand", "Government contract pipeline", "Margin expansion", "S&P 500 inclusion"], mcap: "$302B", pe: 112.0, fpe: 86.4, rev: 41.2, eps: 52.8, hi: 145.00, lo: 21.00, sector: "Enterprise Software", lbg: "#141414", lfg: "#fff" },
-  AVGO: { t: "AVGO", name: "Broadcom Inc.", p: 342.10, c: 2.06, setup: "Custom Silicon Leader", cf: 4, conf: 83, sig: ["Hyperscaler XPU ramps", "Tomahawk networking", "VMware synergy", "High dividend growth"], mcap: "$1.62T", pe: 38.4, fpe: 26.5, rev: 44.8, eps: 31.2, hi: 360.00, lo: 128.50, sector: "Semiconductor", lbg: "#f4f4f4", lfg: "#cc092f" },
-  STRL: { t: "STRL", name: "Sterling Infrastructure", p: 501.19, c: -2.30, setup: "Data Center Infrastructure", cf: 4, conf: 78, sig: ["E-Infrastructure demand", "Data Center build-out", "Record backlog", "Margin expansion"], mcap: "$15.6B", pe: 31.4, fpe: 24.2, rev: 23.5, eps: 34.8, hi: 515.48, lo: 210.00, sector: "Industrial / Infrastructure", lbg: "#1e3a8a", lfg: "#fff" },
+  NVDA: { t: "NVDA", name: "NVIDIA Corporation", p: 183.42, c: 3.21, setup: "AI Momentum", cf: 7, conf: 80, sig: ["Unusual volume", "Semiconductor strength", "Breakout", "Positive catalyst"], mcap: "$4.47T", pe: 52.4, fpe: 33.1, rev: 62.4, eps: 59.1, hi: 195.62, lo: 108.13, sector: "Semiconductor", lbg: "#76b900", lfg: "#fff" },
+  AMD: { t: "AMD", name: "Advanced Micro Devices", p: 168.30, c: 2.84, setup: "Breakout", cf: 6, conf: 73, sig: ["Range breakout", "Volume expansion", "Sector tailwind", "Analyst upgrade"], mcap: "$272B", pe: 98.6, fpe: 31.2, rev: 31.7, eps: 42.0, hi: 186.65, lo: 76.48, sector: "Semiconductor", lbg: "#141414", lfg: "#fff" },
+  MU: { t: "MU", name: "Micron Technology", p: 132.75, c: 4.12, setup: "Earnings Run-up", cf: 7, conf: 78, sig: ["HBM demand", "Unusual volume", "Estimate revisions ↑", "Sector strength"], mcap: "$148B", pe: 24.1, fpe: 9.8, rev: 61.6, eps: 84.2, hi: 157.50, lo: 65.20, sector: "Semiconductor", lbg: "#0b3d91", lfg: "#fff" },
+  AAPL: { t: "AAPL", name: "Apple Inc.", p: 246.80, c: -0.42, setup: "Range Consolidation", cf: 7, conf: 72, sig: ["Support hold", "Hardware upgrade cycle", "Low volatility", "Services growth"], mcap: "$3.74T", pe: 34.8, fpe: 31.5, rev: 6.8, eps: 12.4, hi: 250.00, lo: 164.08, sector: "Hardware / Tech", lbg: "#f4f4f4", lfg: "#111" },
+  MSFT: { t: "MSFT", name: "Microsoft Corporation", p: 494.20, c: 0.61, setup: "Cloud Compounder", cf: 7, conf: 76, sig: ["Azure acceleration", "Copilot adoption", "Stable free cash flow", "Margin resilience"], mcap: "$3.67T", pe: 36.2, fpe: 30.8, rev: 15.3, eps: 17.8, hi: 512.40, lo: 388.00, sector: "Software / Cloud", lbg: "#f4f4f4", lfg: "#f25022" },
+  META: { t: "META", name: "Meta Platforms, Inc.", p: 712.50, c: 1.42, setup: "Ad-Tech Leader", cf: 7, conf: 81, sig: ["Ad spend strength", "AI recommendation lift", "Reels monetization", "Buyback support"], mcap: "$1.81T", pe: 28.4, fpe: 23.6, rev: 22.1, eps: 29.4, hi: 738.00, lo: 450.00, sector: "Internet / Social", lbg: "#0866ff", lfg: "#fff" },
+  GOOGL: { t: "GOOGL", name: "Alphabet Inc.", p: 202.10, c: 0.84, setup: "Search & Cloud", cf: 7, conf: 76, sig: ["Cloud profitability", "Search volume stable", "YouTube ad lift", "Hardware integration"], mcap: "$2.48T", pe: 24.6, fpe: 20.8, rev: 14.1, eps: 21.2, hi: 208.50, lo: 145.20, sector: "Internet / Search", lbg: "#f4f4f4", lfg: "#4285f4" },
+  AMZN: { t: "AMZN", name: "Amazon.com, Inc.", p: 216.40, c: 0.92, setup: "Retail Margin Lift", cf: 7, conf: 78, sig: ["AWS growth re-acceleration", "Retail efficiency", "Advertising expansion", "North America profit jump"], mcap: "$2.28T", pe: 42.1, fpe: 32.4, rev: 11.8, eps: 38.6, hi: 232.00, lo: 166.00, sector: "E-Commerce / Cloud", lbg: "#ff9900", lfg: "#111" },
+  TSLA: { t: "TSLA", name: "Tesla, Inc.", p: 238.60, c: -1.12, setup: "Volatile Pivot", cf: 1, conf: 41, sig: ["Support test ($225)", "Energy storage growth", "FSD progress", "Delivery estimate risk"], mcap: "$762B", pe: 72.8, fpe: 54.2, rev: 8.4, eps: -2.1, hi: 271.00, lo: 138.80, sector: "Automotive / Clean Energy", lbg: "#e31937", lfg: "#fff" },
+  PLTR: { t: "PLTR", name: "Palantir Technologies", p: 134.10, c: 1.95, setup: "AIP Hyper-growth", cf: 5, conf: 67, sig: ["Commercial AIP demand", "Government contract pipeline", "Margin expansion", "S&P 500 inclusion"], mcap: "$302B", pe: 112.0, fpe: 86.4, rev: 41.2, eps: 52.8, hi: 145.00, lo: 21.00, sector: "Enterprise Software", lbg: "#141414", lfg: "#fff" },
+  AVGO: { t: "AVGO", name: "Broadcom Inc.", p: 342.10, c: 2.06, setup: "Custom Silicon Leader", cf: 6, conf: 76, sig: ["Hyperscaler XPU ramps", "Tomahawk networking", "VMware synergy", "High dividend growth"], mcap: "$1.62T", pe: 38.4, fpe: 26.5, rev: 44.8, eps: 31.2, hi: 360.00, lo: 128.50, sector: "Semiconductor", lbg: "#f4f4f4", lfg: "#cc092f" },
+  STRL: { t: "STRL", name: "Sterling Infrastructure", p: 501.19, c: -2.30, setup: "Data Center Infrastructure", cf: 7, conf: 83, sig: ["E-Infrastructure demand", "Data Center build-out", "Record backlog", "Margin expansion"], mcap: "$15.6B", pe: 31.4, fpe: 24.2, rev: 23.5, eps: 34.8, hi: 515.48, lo: 210.00, sector: "Industrial / Infrastructure", lbg: "#1e3a8a", lfg: "#fff" },
 };
 
 export const ORDER = Object.keys(STK);
@@ -370,12 +370,141 @@ export const TP: Record<string, any> = {
       ["MAC", "Infrastructure Bill / Onshoring", "Strong public & private demand", 78, "", 1],
     ],
   },
+  AAPL: {
+    eps: [6.8, 7.8, 8.9],
+    pe: [27, 33, 38],
+    cons: 265,
+    res: 250.0,
+    sup: 230.0,
+    sup2: 218.0,
+    cat: "Q4 earnings · Oct 31",
+    risk: "Slower iPhone replacement cycle and China regulatory headwinds",
+    fi: ["Services growth drops below 8% y/y", "Greater China sales decline >10%", "Gross margin guidance falls below 45%"],
+    fiB: ["iPhone 16 AI cycle drives >10% revenue acceleration", "Services gross margin expands >75%"],
+    d: [
+      ["BUS", "Services revenue trajectory", "+12% y/y · $25B quarterly run-rate", 86, "CK", 2],
+      ["BUS", "Apple Intelligence rollout", "Staggered global features release", 78, "C", 1],
+      ["BUS", "Gross margin stability", "46.2% · high Services mix", 82, "", 1],
+      ["EARN", "Forward EPS revisions (90d)", "+4% steady upward trend", 74, "CK", 2],
+      ["EARN", "Beat rate consistency", "7 of last 8 quarters", 80, "C", 1],
+      ["TECH", "Price vs 50- & 200-DMA", "Consolidating near 52W highs", 76, "@trend", 1],
+      ["TECH", "Relative strength vs Nasdaq", "RS rank 78", 74, "C", 1],
+      ["TECH", "RSI (14)", "54 · balanced momentum", 66, "@mom", 0],
+      ["CAT", "Q4 earnings · Oct 31", "High volatility catalyst", 72, "", 0],
+      ["VAL", "Forward P/E vs 5-yr", "31× vs 28× (Services premium)", 62, "", 0],
+      ["POS", "Institutional ownership", "Top core holding across mega-cap funds", 84, "", 1],
+      ["MAC", "Consumer tech spending", "Resilient high-end consumer demand", 70, "", 1],
+    ],
+  },
+  MSFT: {
+    eps: [13.2, 15.5, 17.8],
+    pe: [28, 34, 40],
+    cons: 520,
+    res: 512.4,
+    sup: 475.0,
+    sup2: 450.0,
+    cat: "Q1 FY26 earnings · Oct 30",
+    risk: "Azure capacity constraints and Copilot monetization pacing",
+    fi: ["Azure cloud growth falls below 28% cc", "Capex increases >20% without revenue acceleration", "Commercial bookings growth turns negative"],
+    fiB: ["Azure growth accelerates >35% cc driven by AI", "M365 Copilot ARPU expansion beats estimates"],
+    d: [
+      ["BUS", "Azure Cloud & AI growth", "+30% cc growth · $15B quarterly AI run-rate", 88, "CK", 3],
+      ["BUS", "Commercial cloud gross margin", "71% gross margin", 82, "C", 1],
+      ["BUS", "M365 Copilot enterprise seats", "Paid enterprise expansion", 80, "", 1],
+      ["EARN", "Forward EPS revisions (90d)", "+6% upward revisions", 80, "CK", 2],
+      ["EARN", "Cloud bookings backlog", "$260B+ commercial backlog", 84, "C", 2],
+      ["TECH", "Price vs 50- & 200-DMA", "Above both moving averages", 78, "@trend", 1],
+      ["TECH", "Relative strength vs S&P", "RS rank 84", 80, "C", 1],
+      ["TECH", "Volume confirmation", "Healthy institutional volume", 72, "", 2],
+      ["CAT", "Q1 FY26 earnings · Oct 30", "high market impact", 76, "", 0],
+      ["VAL", "Forward P/E vs growth", "30.8× forward P/E", 64, "", 0],
+      ["POS", "Institutional accumulation", "92% institutional ownership base", 82, "", 1],
+      ["MAC", "Enterprise IT capex cycle", "Secular cloud migration & AI prioritization", 80, "", 1],
+    ],
+  },
+  META: {
+    eps: [22.0, 26.5, 31.0],
+    pe: [20, 26, 32],
+    cons: 760,
+    res: 738.0,
+    sup: 670.0,
+    sup2: 630.0,
+    cat: "Q3 earnings · Oct 30",
+    risk: "Accelerating AI infrastructure capex outpacing ad revenue returns",
+    fi: ["Ad impressions / pricing growth decelerates below 5%", "2025 Capex guide raised above $45B without revenue offset", "Family of Apps operating margin drops below 40%"],
+    fiB: ["AI recommendation ad conversion rates increase >20%", "WhatsApp monetization expands globally"],
+    d: [
+      ["BUS", "Ad revenue & pricing growth", "+22% y/y · AI recommendation engine lift", 90, "CK", 3],
+      ["BUS", "Family of Apps operating margin", "48% operating margin", 86, "C", 2],
+      ["BUS", "Llama AI open-source adoption", "Industry standard foundation models", 80, "", 1],
+      ["EARN", "Forward EPS revisions (90d)", "+12% upward revisions", 88, "CK", 3],
+      ["EARN", "Beat / raise track record", "Strong multi-quarter beat momentum", 86, "C", 2],
+      ["TECH", "Price vs 50- & 200-DMA", "Trading near all-time highs", 88, "@trend", 2],
+      ["TECH", "Relative strength", "RS rank 95 vs market", 92, "C", 2],
+      ["TECH", "Volume accumulation", "Persistent accumulation volume", 78, "", 3],
+      ["CAT", "Q3 earnings · Oct 30", "high impact", 76, "", 0],
+      ["VAL", "Forward P/E", "23.6× forward P/E (attractive vs peers)", 74, "", 0],
+      ["POS", "Institutional positioning", "Net accumulation across long-only funds", 80, "", 1],
+      ["MAC", "Digital advertising cycle", "Strong e-commerce & retail ad spend", 78, "", 1],
+    ],
+  },
+  GOOGL: {
+    eps: [8.5, 10.2, 12.0],
+    pe: [18, 22, 27],
+    cons: 220,
+    res: 208.5,
+    sup: 190.0,
+    sup2: 178.0,
+    cat: "Q3 earnings · Oct 29",
+    risk: "DOJ antitrust remedy uncertainties and search margin dilution from AI Overviews",
+    fi: ["Search revenue growth slows below 8% y/y", "DOJ breakup order or search exclusivity ban imposed", "Cloud operating margin expansion halts"],
+    fiB: ["AI Overviews increase monetizable search queries", "Google Cloud AI revenue accelerates >40%"],
+    d: [
+      ["BUS", "Search & AI Overviews query volume", "Search stable + AI Overviews engagement up", 82, "CK", 2],
+      ["BUS", "Google Cloud profitability", "+29% y/y growth · operating margin 11%+", 86, "C", 2],
+      ["BUS", "YouTube advertising & subscriptions", "$10B+ quarterly run-rate", 80, "", 1],
+      ["EARN", "Forward EPS revisions (90d)", "+7% upward revisions", 80, "CK", 2],
+      ["EARN", "Cloud backlog & enterprise deals", "Accelerating multi-year commitments", 82, "C", 1],
+      ["TECH", "Price vs 50- & 200-DMA", "Above key support levels", 76, "@trend", 1],
+      ["TECH", "Relative strength", "RS rank 80", 78, "C", 1],
+      ["CAT", "Q3 earnings · Oct 29", "high impact", 74, "", 0],
+      ["VAL", "Forward P/E", "20.8× forward P/E (discount to mega-caps)", 82, "", 0],
+      ["POS", "Institutional positioning", "Core institutional holding", 78, "", 1],
+      ["MAC", "Antitrust / Regulatory overhang", "Litigation discount priced in", 52, "", -2],
+      ["MAC", "Market regime", "Constructive secular tech backdrop", 72, "", 1],
+    ],
+  },
+  AMZN: {
+    eps: [5.4, 6.8, 8.2],
+    pe: [26, 34, 42],
+    cons: 245,
+    res: 232.0,
+    sup: 205.0,
+    sup2: 190.0,
+    cat: "Q3 earnings · Oct 31",
+    risk: "AWS growth deceleration relative to Azure or consumer retail margin compression",
+    fi: ["AWS revenue growth falls below 15% y/y", "North America retail operating income drops >15%", "International retail turns back to operating loss"],
+    fiB: ["AWS re-accelerates above 22% y/y", "Advertising business reaches $60B annual run-rate"],
+    d: [
+      ["BUS", "AWS cloud revenue & AI backlog", "+19% y/y · multi-billion AI run rate", 86, "CK", 3],
+      ["BUS", "North America retail efficiency", "Regional fulfillment driving margin records", 84, "C", 2],
+      ["BUS", "Advertising services growth", "+20% y/y · prime video ad expansion", 88, "", 2],
+      ["EARN", "Forward EPS revisions (90d)", "+14% upward revisions", 86, "CK", 3],
+      ["EARN", "Operating cash flow generation", "$110B+ trailing twelve month OCF", 88, "C", 2],
+      ["TECH", "Price vs 50- & 200-DMA", "Consolidating above $210 pivot", 80, "@trend", 1],
+      ["TECH", "Relative strength vs S&P", "RS rank 86", 82, "C", 1],
+      ["CAT", "Q3 earnings · Oct 31", "high impact", 76, "", 0],
+      ["VAL", "EV / EBITDA & forward P/E", "Cash flow multiple compressing rapidly", 70, "", 0],
+      ["POS", "Institutional ownership trend", "Broad institutional net accumulation", 80, "", 1],
+      ["MAC", "Consumer discretionary & retail", "Resilient Prime member engagement", 74, "", 1],
+    ],
+  },
 };
 
 export function getTP(t: string): any {
   const sym = t.toUpperCase().trim();
   if (TP[sym]) return TP[sym];
-  const s = getStock(sym);
+  const s = getStock(sym, undefined, true);
   const p = s.p;
   const res = +(p * 1.08).toFixed(2);
   const sup = +(p * 0.94).toFixed(2);
@@ -409,38 +538,54 @@ export function getTP(t: string): any {
   };
 }
 
-export function getStock(t: string, live?: { price?: number; change?: number; name?: string; sector?: string; mcap?: number }): StockItem {
+export function getStock(t: string, live?: { price?: number; change?: number; name?: string; sector?: string; mcap?: number }, skipThesis = false): StockItem {
   const sym = t.toUpperCase().trim();
+  let item: StockItem;
   if (STK[sym]) {
-    const item = { ...STK[sym], t: sym };
-    if (live?.price != null && live.price > 0) item.p = live.price;
-    if (live?.change != null) item.c = live.change;
-    return item;
+    item = { ...STK[sym], t: sym };
+  } else {
+    const r = rng(hash(sym));
+    const p = live?.price ?? +(80 + r() * 150).toFixed(2);
+    const c = live?.change ?? +((r() - 0.48) * 5).toFixed(2);
+    const up = c >= 0;
+    item = {
+      t: sym,
+      name: live?.name || `${sym} Corporation`,
+      p,
+      c,
+      setup: up ? "Bullish Trend" : "Mean Reversion",
+      cf: up ? 6 : 3,
+      conf: up ? Math.round(75 + r() * 15) : Math.round(55 + r() * 15),
+      sig: up ? ["Unusual volume", "Sector momentum", "Trend continuation"] : ["Support test", "Consolidation", "Oversold bounce"],
+      mcap: live?.mcap ? `$${(live.mcap / 1e9).toFixed(1)}B` : `$${Math.round(15 + r() * 120)}B`,
+      pe: +(20 + r() * 40).toFixed(1),
+      fpe: +(16 + r() * 30).toFixed(1),
+      rev: +(10 + r() * 35).toFixed(1),
+      eps: +(12 + r() * 40).toFixed(1),
+      hi: +(p * (1.1 + r() * 0.25)).toFixed(2),
+      lo: +(p * (0.7 + r() * 0.15)).toFixed(2),
+      sector: live?.sector || "Technology",
+      lbg: LG_COL[sym]?.[0] || "#1e3a8a",
+      lfg: LG_COL[sym]?.[1] || "#ffffff",
+    };
   }
-  const r = rng(hash(sym));
-  const p = live?.price ?? +(80 + r() * 150).toFixed(2);
-  const c = live?.change ?? +((r() - 0.48) * 5).toFixed(2);
-  const up = c >= 0;
-  return {
-    t: sym,
-    name: live?.name || `${sym} Corporation`,
-    p,
-    c,
-    setup: up ? "Bullish Trend" : "Mean Reversion",
-    cf: up ? 4 : 2,
-    conf: up ? Math.round(75 + r() * 15) : Math.round(55 + r() * 15),
-    sig: up ? ["Unusual volume", "Sector momentum", "Trend continuation"] : ["Support test", "Consolidation", "Oversold bounce"],
-    mcap: live?.mcap ? `$${(live.mcap / 1e9).toFixed(1)}B` : `$${Math.round(15 + r() * 120)}B`,
-    pe: +(20 + r() * 40).toFixed(1),
-    fpe: +(16 + r() * 30).toFixed(1),
-    rev: +(10 + r() * 35).toFixed(1),
-    eps: +(12 + r() * 40).toFixed(1),
-    hi: +(p * (1.1 + r() * 0.25)).toFixed(2),
-    lo: +(p * (0.7 + r() * 0.15)).toFixed(2),
-    sector: live?.sector || "Technology",
-    lbg: LG_COL[sym]?.[0] || "#1e3a8a",
-    lfg: LG_COL[sym]?.[1] || "#ffffff",
-  };
+
+  if (live?.price != null && live.price > 0) item.p = live.price;
+  if (live?.change != null) item.c = live.change;
+
+  if (!skipThesis) {
+    try {
+      const tr = thesisRun(sym, "Bull", "6M");
+      if (tr && tr.cats && tr.cats.length === 7) {
+        item.conf = Math.round(tr.conf);
+        item.cf = tr.cats.filter((c: any) => Math.round(c.score) >= 60).length;
+      }
+    } catch {
+      // Keep baseline item.conf and item.cf
+    }
+  }
+
+  return item;
 }
 
 export function thesisWeights(dir: "Bull" | "Bear", hz: string) {
@@ -609,8 +754,15 @@ export function fundSeries(t: string): number[][] {
 export function detail(t: string, live?: any): DetailStock {
   const sym = t.toUpperCase().trim();
   const s = getStock(sym, live);
-  const sv = scoresFor(sym);
   const up = s.c >= 0;
+
+  // Run the unified forward thesis engine for the baseline 6M bullish view
+  const tr = thesisRun(sym, "Bull", "6M");
+  const cats = tr.cats;
+  const sv = cats.map((c: any) => Math.round(c.score));
+  const catNames = cats.map((c: any) => SHORT[c.k] || c.label);
+  const maxIdx = sv.indexOf(Math.max(...sv));
+  const minIdx = sv.indexOf(Math.min(...sv));
 
   const assess =
     sym === "NVDA"
@@ -618,9 +770,9 @@ export function detail(t: string, live?: any): DetailStock {
       : `${sym} is showing a ${s.conf >= 80 ? "high-conviction" : s.conf >= 70 ? "moderate-conviction" : "low-conviction"} ${up ? "bullish" : "tentative"} setup driven primarily by ${s.sig[0].toLowerCase()} and ${s.sig[1].toLowerCase()}. ${s.fpe > 60 ? "An elevated forward multiple is the principal counterweight." : !up ? "The broader trend remains the principal counterweight." : "Macro sensitivity is the principal counterweight."}`;
 
   const assessEv = [
-    `${s.cf} of 7 signal categories aligned (business, earnings, technical, catalysts, valuation, positioning, macro)`,
-    `Strongest input: ${KEYS[sv.indexOf(Math.max(...sv))]} (${Math.max(...sv)}/100)`,
-    `Weakest input: ${KEYS[sv.indexOf(Math.min(...sv))]} (${Math.min(...sv)}/100) · forward P/E ${s.fpe}×`,
+    `${s.cf} of 7 signal categories aligned (business, earnings, technical, catalysts, valuation, flows, macro)`,
+    `Strongest input: ${catNames[maxIdx]} (${sv[maxIdx]}/100)`,
+    `Weakest input: ${catNames[minIdx]} (${sv[minIdx]}/100) · forward P/E ${s.fpe}×`,
   ];
 
   const att = sym === "NVDA"
@@ -668,19 +820,61 @@ export function detail(t: string, live?: any): DetailStock {
     ["BEAR CASE", usd(s.p * 0.85), "−15.0%", "15%", "Macro pullback + multiple compression", DN],
   ];
 
+  const P = getTP(sym);
+  const primaryCat = P.cat || `Next earnings report · ${sym}`;
+  const usNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const usYear = usNow.getFullYear();
+  const usMonth = usNow.getMonth();
+  const usDay = usNow.getDate();
+  const usTodayStart = new Date(usYear, usMonth, usDay).getTime();
+
+  const getUpcomingDaysStr = (d: Date) => {
+    const diff = Math.max(1, Math.round((d.getTime() - usTodayStart) / (1000 * 60 * 60 * 24)));
+    return diff === 1 ? "in 1 day" : `in ${diff} days`;
+  };
+
+  const getFmtShort = (d: Date) => {
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const d1 = new Date(usYear, usMonth, usDay + 8);
+  const d2 = new Date(usYear, usMonth, usDay + 22);
+  const d3 = new Date(usYear, usMonth, usDay + 36);
+
   const upcoming: UpcomingEvent[] = [
-    { date: "Oct 22", days: "in 9 days", n: "Q3 Earnings Release", txt: "Consensus revenue and EPS print; historic average move ±6.4%", imp: "HIGH", col: "#f5b031" },
-    { date: "Nov 05", days: "in 23 days", n: "Product Roadmap Day", txt: "Keynote announcements and new customer contract milestones", imp: "MED", col: STEEL },
-    { date: "Nov 19", days: "in 37 days", n: "Monthly Options Expiry", txt: "Pinning pressure expected around key open interest strikes", imp: "LOW", col: "#93a1af" },
+    {
+      date: getFmtShort(d1),
+      days: getUpcomingDaysStr(d1),
+      n: primaryCat.split("·")[0]?.trim() || "Earnings Release",
+      txt: `Consensus revenue and EPS print for ${sym}; historic average move ±${(Math.abs(s.c) * 1.8 + 3.2).toFixed(1)}%`,
+      imp: "HIGH",
+      col: "#f5b031"
+    },
+    {
+      date: getFmtShort(d2),
+      days: getUpcomingDaysStr(d2),
+      n: "Product Roadmap Day",
+      txt: `${sym} ecosystem update and enterprise customer contract milestones`,
+      imp: "MED",
+      col: STEEL
+    },
+    {
+      date: getFmtShort(d3),
+      days: getUpcomingDaysStr(d3),
+      n: "Monthly Options Expiry",
+      txt: "Pinning pressure expected around key open interest strikes",
+      imp: "LOW",
+      col: "#93a1af"
+    },
   ];
 
   const fwd = {
-    cats: [
-      { k: "BUS", label: "Business Momentum", score: sv[0], cells: [["Top-line acceleration", 85, UP], ["Market share gains", 80, UP]] as [string, number, string][] },
-      { k: "EARN", label: "Estimate Revisions", score: sv[1], cells: [["EPS revisions", 88, UP], ["Revenue revisions", 82, UP]] as [string, number, string][] },
-      { k: "TECH", label: "Technical Setup", score: sv[2], cells: [["Moving average alignment", 84, UP], ["Volume confirmation", 76, UP]] as [string, number, string][] },
-      { k: "VAL", label: "Valuation Attractiveness", score: sv[4], cells: [["Forward P/E", 48, STEEL], ["PEG ratio", 62, STEEL]] as [string, number, string][] },
-    ],
+    cats: cats.map((c: any) => ({
+      k: c.k,
+      label: SHORT[c.k] || c.label,
+      score: Math.round(c.score),
+      cells: (c.ds || []).slice(0, 3).map((d: any) => [d.name, Math.round(d.sc), sc(Math.round(d.sc))]) as [string, number, string][],
+    })),
   };
 
   const invalid: [string, string][] = [
@@ -714,6 +908,13 @@ export function detail(t: string, live?: any): DetailStock {
   ];
 
   const ev: Record<string, string[]> = {
+    BUSINESS: [`Top-line revenue accelerating across enterprise and hyperscaler customers`, `Operating margins resilient at high cash-conversion efficiency`, `Industry market leadership preserved with high moat`],
+    EARNINGS: [`Street EPS revisions revised upward over last 90 days`, `Consistent beat / raise execution across recent quarters`, `Forward revenue revisions outperforming sector average`],
+    TECHNICALS: [`Price sits above key 50-day and 200-day moving averages`, `Top-decile relative strength rank vs broader market indices`, `Volume expansion confirms institutional accumulation`],
+    CATALYSTS: [`Major upcoming dated event with high market impact expected`, `Product roadmap execution on schedule into 2026/2027`, `Key commercial milestone tracking ahead of schedule`],
+    VALUATION: [`Trading at ${s.fpe}× forward P/E multiple`, `PEG ratio supported by projected forward EPS growth`, `Free cash flow yield provides valuation support on pullbacks`],
+    FLOWS: [`Options positioning demonstrates constructive call-side sentiment`, `Institutional 13F filings show net accumulation`, `Short interest remains low with no structural borrow pressure`],
+    MACRO: [`Constructive equity market liquidity regime`, `Interest rate volatility stabilizing relative to equities`, `Broad market breadth supporting sector leaders`],
     Momentum: [`${sym} is ${pct1(s.c * 4.1)} over 20 sessions vs +2.3% for the S&P 500`, `Price sits ${up ? "above" : "below"} its 20-, 50- and 200-day averages`, `RSI(14) at ${up ? 66 : 38} — ${up ? "strong, not yet overbought" : "approaching oversold"}`],
     Volume: [`Session volume ${(1.1 + sv[1] / 120).toFixed(1)}× the 20-day average`, `3 of the last 5 sessions closed on above-average volume`, `Accumulation/distribution line at a 3-month ${up ? "high" : "low"}`],
     "Relative Strength": [`Top ${Math.max(3, 100 - sv[2])}% of the S&P 500 by 3-month relative strength`, `${up ? "Outperforming" : "Lagging"} its sector ETF by ${Math.abs(s.c * 1.3).toFixed(1)}% over 1 month`, `RS line made a new 52-week ${up ? "high" : "low"} this week`],
@@ -722,6 +923,16 @@ export function detail(t: string, live?: any): DetailStock {
     Options: [`Call volume ${up ? "1.6" : "0.8"}× put volume today`, `Implied volatility ${up ? 41 : 56}% — ${up ? "below" : "above"} its 30-day average`, `Largest open-interest strike ${usd(Math.round(s.p * 1.04))}`],
     "Market Regime": ["S&P 500 above its 50-day average; VIX 15.3", "Breadth constructive — mega-caps supported", "Rates volatile after jobs and CPI data"],
   };
+
+  // Populate category evidence with actual driver scores
+  cats.forEach((c: any) => {
+    const key = SHORT[c.k] || c.label;
+    if (c.ds && c.ds.length > 0) {
+      ev[key] = c.ds.map((d: any) => `${d.name}: ${d.val} (${Math.round(d.sc)}/100)`);
+      ev[key.toUpperCase()] = ev[key];
+      ev[c.label] = ev[key];
+    }
+  });
 
   const events = [
     { time: "09:30", label: "Market open · gap detected", kind: "OPEN", fr: 0.05, mv: +(s.c * 0.15).toFixed(2) },
