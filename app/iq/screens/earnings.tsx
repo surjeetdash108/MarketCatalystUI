@@ -4,9 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
 import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
-import { ChartCard } from "../stock-panel";
-import { EpsSalesWidget } from "../eps-sales-widget";
-import { EarningsPlaybook, playbookReports } from "./EarningsPlaybook";
+import { StockScreenEmbed } from "../stock-panel";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
@@ -1352,7 +1350,6 @@ export function EarningsScreen() {
   // Detail mode: clicking a stock opens a split view (weekly picker + details)
   // that replaces the calendar; the ✕ in the weekly panel closes back to it.
   const [detailOpen, setDetailOpen] = useState(false);
-  const [chartOpen, setChartOpen] = useState(true);
   // The two legacy inline company-detail blocks that used to render at the bottom
   // of the calendar view (a duplicate header + EPS metrics, and an earnings-
   // history / income-statement / AI-read stack) are superseded by the full detail
@@ -2010,36 +2007,11 @@ export function EarningsScreen() {
               </div>
             </div>
 
-            {/* Price chart (full width) — collapsible (show/hide). */}
-            <div style={{ marginBottom: 14 }}>
-              <button
-                onClick={() => setChartOpen(o => !o)}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "var(--surface-1)", border: "1px solid var(--border-soft)", borderRadius: 12, padding: "10px 14px", cursor: "pointer", color: "var(--text-hi)", fontWeight: 700, fontSize: ".85rem", marginBottom: chartOpen ? 8 : 0 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>{sel} · Chart <VendorTag v="polygon" /></span>
-                <span style={{ color: "var(--text-dim-solid)", fontSize: ".75rem", fontWeight: 600 }}>{chartOpen ? "▲ Hide" : "▼ Show"}</span>
-              </button>
-              {chartOpen && <ChartCard sym={sel} px={liveCompanySel?.price ?? 0} />}
-            </div>
-
-            {/* Sales & EPS — bar charts (Quarterly/Annual) + fiscal-year and
-                quarterly tables, per the reference layout. */}
-            <div style={{ marginBottom: 14 }}>
-              <EpsSalesWidget financialsDoc={financialsDoc} />
-            </div>
-
-            {/* Reports — how the stock trades when it reports (bottom). */}
-            <div className="card">
-              <div className="card-h">
-                <h3>Earnings Playbook <VendorTag v={["polygon", "fmp"]} /></h3>
-                <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>how {sel} trades when it reports</span>
-              </div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                <EarningsPlaybook
-                  sym={sel}
-                  reports={playbookReports(financialsDoc)}
-                />
-              </div>
-            </div>
+            {/* Same tabbed sections as the stock page (Overview / Analysis / Peers /
+                Earnings / Financials / Insider Transactions / 13F / News), with the
+                chart shown the stock-page way. The header card above already
+                carries the ticker and quote. */}
+            <StockScreenEmbed initialSym={sel} hideIdentity />
           </div>
         </div>
       )}
