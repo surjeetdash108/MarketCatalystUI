@@ -26,7 +26,28 @@ export type HeadlineQuote = {
   showAfterHours: boolean;
   /** Which extended session the ah* figures belong to. */
   extLabel: "PRE-MARKET" | "AFTER HOURS";
+  /** Caption under the regular price: when that price was set ("As of 10:32 AM ET", "At close: Oct 14, 4:00 PM ET"). */
+  regAsOf: string | null;
+  /** Caption under the extended price: the time of that trade. */
+  ahAsOf: string | null;
 };
+
+/** "10:32 AM ET" for today (ET), "Oct 14, 4:00 PM ET" for any other day. */
+function fmtAsOf(ms: number): string {
+  const sameDay = etParts(ms).date === etParts(Date.now()).date;
+  const s = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    ...(sameDay ? {} : { month: "short", day: "numeric" }),
+    hour: "numeric", minute: "2-digit",
+  }).format(new Date(ms));
+  return `${s} ET`;
+}
+
+/** 16:00 ET on the ET calendar date of `ms` — the regular close of that session. */
+function closeOf(ms: number): number {
+  // Floor to the minute, then shift by the minutes between that and 16:00 ET.
+  return ms - (ms % 60_000) + (16 * 60 - etParts(ms).min) * 60_000;
+}
 
 /** ET calendar date and minutes past midnight for an epoch-ms instant. */
 function etParts(ms: number): { date: string; min: number } {
@@ -52,14 +73,14 @@ function isTodayAfter4amET(ms: number | null): boolean {
  * pre- and post-market prints). Pre-market: today's 04:00–09:30 ET bars; else
  * after hours: bars starting 16:00 ET or later on the last session's date.
  */
-function lastExtendedClose(bars: OHLCBar[] | undefined, pre: boolean): number | null {
+function lastExtendedClose(bars: OHLCBar[] | undefined, pre: boolean): { price: number; at: number } | null {
   const last = bars?.[bars.length - 1];
   if (!last) return null;
   const at = etParts(last.t);
   const ok = pre
     ? at.date === etParts(Date.now()).date && at.min >= 4 * 60 && at.min < 9 * 60 + 30
     : at.min >= 16 * 60;
-  return ok && last.c > 0 ? last.c : null;
+  return ok && last.c > 0 ? { price: last.c, at: last.t } : null;
 }
 
 /**
@@ -165,8 +186,9 @@ export function useHeadlineQuote(
    * still carries last evening's after-hours trade.
    */
   const preMarketQuote = !isPre || isTodayAfter4amET(sharedQuote?.updatedAt ?? null);
+  const barExt = barsFallback ? lastExtendedClose(dayBars, isPre) : null;
   const extPrice = barsFallback
-    ? lastExtendedClose(dayBars, isPre)
+    ? (barExt?.price ?? null)
     : isExtended && preMarketQuote ? (sharedQuote?.price ?? live.tick?.price ?? null) : null;
   const extMove = extPrice != null && regPrice > 0 ? extPrice - regPrice : null;
   const ahPrice = extPrice;
@@ -178,12 +200,36 @@ export function useHeadlineQuote(
   const showAfterHours = isExtended && extMove != null && Math.abs(extMove) >= 0.005;
   const extLabel = isPre ? "PRE-MARKET" : "AFTER HOURS";
 
-  return { dispPrice, regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours, extLabel };
+  /*
+   * When each price was set. The quote's vendor timestamp is the trade time
+   * (≈15 min behind on Polygon), not when we fetched it. Outside hours the
+   * headline is a close, so it reads as that session's 4:00 PM; pre-market it
+   * is the prior session's close, whose date the quote does not carry.
+   */
+  const quoteAt = sharedQuote?.updatedAt ?? live.tick?.at ?? null;
+  const regAsOf = !isExtended
+    ? (quoteAt != null ? `As of ${fmtAsOf(quoteAt)}` : null)
+    : isPre
+    ? "At prev. close"
+    : quoteAt != null ? `At close: ${fmtAsOf(closeOf(quoteAt))}` : "At close";
+  const ahAt = barsFallback ? (barExt?.at ?? null) : quoteAt;
+  const ahAsOf = showAfterHours && ahAt != null ? fmtAsOf(ahAt) : null;
+
+  return { dispPrice, regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours, extLabel, regAsOf, ahAsOf };
 }
+
+const AS_OF_STYLE = {
+  fontFamily: "var(--f-mono)",
+  fontSize: ".56rem",
+  color: "var(--text-dim-solid)",
+  lineHeight: 1.1,
+  marginTop: 3,
+  whiteSpace: "nowrap",
+} as const;
 
 /** Regular-session quote and, after the close, the AFTER HOURS block beside it. */
 export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
-  const { regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours, extLabel } = q;
+  const { regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours, extLabel, regAsOf, ahAsOf } = q;
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "nowrap", flexShrink: 0 }}>
       {/* REGULAR MARKET CLOSE */}
@@ -223,6 +269,7 @@ export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
             </span>
           )}
         </div>
+        {regAsOf && <div style={AS_OF_STYLE}>{regAsOf}</div>}
       </div>
 
       {/* PRE-MARKET / AFTER HOURS — only outside regular hours */}
@@ -275,6 +322,7 @@ export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
               <span>{ahPct >= 0 ? `+${fmt(ahPct, 2)}%` : `${fmt(ahPct, 2)}%`}</span>
             </span>
           </div>
+          {ahAsOf && <div style={AS_OF_STYLE}>{ahAsOf}</div>}
         </div>
       )}
     </div>
