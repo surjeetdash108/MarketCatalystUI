@@ -553,18 +553,38 @@ function extractTranscriptSummary(content: string, _sym: string): TranscriptSumm
 }
 
 /**
- * Groups transcript paragraphs into speaker turns. FMP prefixes each turn with
- * "Name[, Title, Firm]: " — that prefix becomes the bold heading and the rest
- * the remarks. Paragraphs without a prefix continue the previous speaker.
+ * True for a speaker label like "Operator", "Christophe D. Fouquet" or
+ * "Joseph Moore, Analyst, Morgan Stanley": short, no digits or sentence
+ * punctuation, and every word capitalised apart from connectors ("of", "and").
+ */
+function isSpeakerLabel(s: string): boolean {
+  const t = s.trim();
+  if (t.length < 2 || t.length > 90 || /\d|[!?;:"]/.test(t)) return false;
+  const words = t.replace(/,/g, " ").split(/\s+/).filter(Boolean);
+  if (words.length > 12) return false;
+  return words.every(w =>
+    /^[A-Z(&]/.test(w) || /^(of|and|the|for|de|da|del|der|van|von|la|le|du|bin|al|y)$/i.test(w),
+  );
+}
+
+/**
+ * Groups transcript paragraphs into speaker turns. FMP marks a turn either as
+ * "Name[, Title, Firm]: remarks" or with the name alone on its own line — both
+ * become the bold heading. Paragraphs without a label continue the previous speaker.
  */
 function groupTranscriptTurns(content: string): { speaker: string; paras: string[] }[] {
   const turns: { speaker: string; paras: string[] }[] = [];
   for (const para of content.split(/\n+/).map(p => p.trim()).filter(Boolean)) {
-    const m = para.match(/^([^:.!?\n]{2,90}):\s*([\s\S]*)$/);
-    // A real speaker label is name-like: starts with a capital, few words, no digits.
-    const isSpeaker = !!m && /^[A-Z]/.test(m[1]) && !/\d/.test(m[1]) && m[1].split(/\s+/).length <= 12;
-    if (isSpeaker && m) {
-      turns.push({ speaker: m[1].trim(), paras: m[2].trim() ? [m[2].trim()] : [] });
+    // Name alone on its own line ("Operator", "Jim Kavanagh").
+    if (isSpeakerLabel(para) && !/[.,]$/.test(para)) {
+      turns.push({ speaker: para, paras: [] });
+      continue;
+    }
+    // "Name: remarks" — split at the first colon only if what precedes it is a name.
+    const colonIdx = para.indexOf(":");
+    if (colonIdx > 0 && isSpeakerLabel(para.slice(0, colonIdx))) {
+      const body = para.slice(colonIdx + 1).trim();
+      turns.push({ speaker: para.slice(0, colonIdx).trim(), paras: body ? [body] : [] });
     } else if (turns.length) {
       turns[turns.length - 1].paras.push(para);
     } else {
