@@ -613,6 +613,54 @@ export function StockIntelligenceScreen() {
     return stockMcap;
   }, [liveCompany, stockMcap]);
 
+  // Overview Price History chart calculations. Kept above the early return
+  // below so the hook order is the same with or without a loaded stock.
+  const priceSeries = useMemo(() => {
+    if (overviewBars && overviewBars.length >= 2) {
+      const closes = overviewBars.map((b) => b.c);
+      if (stock?.p != null && stock.p > 0 && closes.length > 0) {
+        closes[closes.length - 1] = stock.p;
+      }
+      return closes;
+    }
+
+    // Fallback if real bars are loading or unavailable
+    // The chart MUST END at current price stock.p, and never exceed 52W high stock.hi
+    const rangesDef: Record<string, [number, number, number]> = {
+      "1D": [78, 0.003, (stock?.c ?? 0) / 100],
+      "5D": [39, 0.008, 0.015],
+      "1M": [30, 0.012, 0.04],
+      "3M": [60, 0.016, 0.10],
+      "6M": [120, 0.018, 0.20],
+      "1Y": [250, 0.020, 0.35],
+      "5Y": [350, 0.024, 0.80],
+    };
+    const [numPts, volFactor, totalDrift] = rangesDef[range] || rangesDef["6M"];
+    const curP = stock?.p ?? 217.26;
+    const isUp = (stock?.c ?? 0) >= 0;
+    const startP = isUp ? curP / (1 + totalDrift) : curP * (1 + totalDrift);
+    const hiCap = stock?.hi ? Math.max(stock.hi, curP) : curP * 1.12;
+    const loFloor = stock?.lo ? Math.min(stock.lo, curP * 0.7) : curP * 0.7;
+
+    const seed = (stock?.t || "NVDA").split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) + (range.length * 17);
+    const result: number[] = [];
+    let p = startP;
+
+    for (let i = 0; i < numPts; i++) {
+      if (i === numPts - 1) {
+        result.push(curP);
+      } else {
+        const frac = i / (numPts - 1);
+        const wave = Math.sin(seed + i * 0.35) * volFactor * 1.2 + Math.cos(i * 0.19) * volFactor * 0.8;
+        const target = startP + (curP - startP) * Math.pow(frac, 1.1);
+        p = p * 0.88 + target * 0.12 + p * wave;
+        p = Math.max(loFloor, Math.min(hiCap, p));
+        result.push(+p.toFixed(2));
+      }
+    }
+    return result;
+  }, [overviewBars, stock?.p, stock?.c, stock?.hi, stock?.lo, stock?.t, range]);
+
   // ----------------------------------------------------
   // EMPTY STATE (NO STOCK SELECTED YET)
   // ----------------------------------------------------
@@ -972,53 +1020,6 @@ export function StockIntelligenceScreen() {
   // LOADED STOCK INTELLIGENCE DASHBOARD
   // ----------------------------------------------------
   const color = stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
-
-  // Overview Price History chart calculations
-  const priceSeries = useMemo(() => {
-    if (overviewBars && overviewBars.length >= 2) {
-      const closes = overviewBars.map((b) => b.c);
-      if (stock?.p != null && stock.p > 0 && closes.length > 0) {
-        closes[closes.length - 1] = stock.p;
-      }
-      return closes;
-    }
-
-    // Fallback if real bars are loading or unavailable
-    // The chart MUST END at current price stock.p, and never exceed 52W high stock.hi
-    const rangesDef: Record<string, [number, number, number]> = {
-      "1D": [78, 0.003, (stock?.c ?? 0) / 100],
-      "5D": [39, 0.008, 0.015],
-      "1M": [30, 0.012, 0.04],
-      "3M": [60, 0.016, 0.10],
-      "6M": [120, 0.018, 0.20],
-      "1Y": [250, 0.020, 0.35],
-      "5Y": [350, 0.024, 0.80],
-    };
-    const [numPts, volFactor, totalDrift] = rangesDef[range] || rangesDef["6M"];
-    const curP = stock?.p ?? 217.26;
-    const isUp = (stock?.c ?? 0) >= 0;
-    const startP = isUp ? curP / (1 + totalDrift) : curP * (1 + totalDrift);
-    const hiCap = stock?.hi ? Math.max(stock.hi, curP) : curP * 1.12;
-    const loFloor = stock?.lo ? Math.min(stock.lo, curP * 0.7) : curP * 0.7;
-
-    const seed = (stock?.t || "NVDA").split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) + (range.length * 17);
-    const result: number[] = [];
-    let p = startP;
-
-    for (let i = 0; i < numPts; i++) {
-      if (i === numPts - 1) {
-        result.push(curP);
-      } else {
-        const frac = i / (numPts - 1);
-        const wave = Math.sin(seed + i * 0.35) * volFactor * 1.2 + Math.cos(i * 0.19) * volFactor * 0.8;
-        const target = startP + (curP - startP) * Math.pow(frac, 1.1);
-        p = p * 0.88 + target * 0.12 + p * wave;
-        p = Math.max(loFloor, Math.min(hiCap, p));
-        result.push(+p.toFixed(2));
-      }
-    }
-    return result;
-  }, [overviewBars, stock?.p, stock?.c, stock?.hi, stock?.lo, stock?.t, range]);
 
   const minP = Math.min(...priceSeries);
   const maxP = Math.max(...priceSeries);
