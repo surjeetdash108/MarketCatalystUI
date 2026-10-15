@@ -21,7 +21,7 @@ export function SISwitcher({
         w: "calc(53% - 5px)",
         bg: "#5980a6",
         glow: "0 0 18px rgba(127,168,208,0.45)",
-        mcFg: "#93a1af",
+        mcFg: "var(--si-text-dim, #93a1af)",
         siFg: "#ffffff",
       }
     : {
@@ -30,7 +30,7 @@ export function SISwitcher({
         bg: "#4ade80",
         glow: "0 0 18px rgba(74,222,128,0.35)",
         mcFg: "#05210f",
-        siFg: "#9aa3a8",
+        siFg: "var(--si-text-dim, #9aa3a8)",
       };
 
   return (
@@ -77,13 +77,13 @@ export function SISwitcher({
             width: 296,
             height: 34,
             borderRadius: 99,
-            border: "1px solid #2a3a4a",
-            background: "#0c1118",
+            border: "1px solid var(--si-border-sec, #2a3a4a)",
+            background: "var(--si-card-solid, #0c1118)",
             padding: 0,
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+            boxShadow: "var(--si-shadow, 0 4px 16px rgba(0,0,0,0.5))",
             userSelect: "none",
           }}
         >
