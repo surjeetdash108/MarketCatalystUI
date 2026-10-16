@@ -961,6 +961,12 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
 }
 
 
+// The last theme write still in flight to /api/settings. Module-level so it
+// survives the IQShell remount when switching between MC (/menu/*) and SI
+// (/si): the new shell waits for it before reading settings back, otherwise
+// a stale darkMode from the backend would flip the theme on every switch.
+let pendingThemeWrite: Promise<unknown> | null = null;
+
 // ---- Main IQ Shell ----
 export function IQShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -983,10 +989,23 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const { data: shellSectors, loading: shellSectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
   const { data: shellEarnings, loading: shellEarningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
 
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
+  const [theme, setThemeState] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark";
     return (localStorage.getItem("iq-theme") as "dark" | "light") || "dark";
   });
+  // Every theme change (MC toggle, SI toggle, Settings) goes through here so
+  // localStorage and the backend always agree and MC/SI stay in sync.
+  const themeTouchedRef = useRef(false);
+  const setTheme = useCallback((next: "dark" | "light") => {
+    themeTouchedRef.current = true;
+    try { localStorage.setItem("iq-theme", next); } catch { /* storage unavailable */ }
+    setThemeState(next);
+    if (user?.uid) {
+      const write = apiPatch("/api/settings", { darkMode: next === "dark" }).catch(() => {});
+      pendingThemeWrite = write;
+      void write.finally(() => { if (pendingThemeWrite === write) pendingThemeWrite = null; });
+    }
+  }, [user?.uid]);
   const [font, setFont] = useState<FontKey>(() => {
     if (typeof window === "undefined") return "dm-sans";
     return (localStorage.getItem("iq-font") as FontKey) || "dm-sans";
@@ -1154,11 +1173,13 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     if (!user?.uid) return;
     void (async () => {
       try {
+        if (pendingThemeWrite) await pendingThemeWrite;
         const data = await apiGet<{ darkMode?: boolean; font?: string }>("/api/settings");
-        if (typeof data.darkMode === "boolean") {
+        // Skip if the user toggled while this was loading — their choice wins.
+        if (typeof data.darkMode === "boolean" && !themeTouchedRef.current) {
           const resolved = data.darkMode ? "dark" : "light";
           localStorage.setItem("iq-theme", resolved);
-          setTheme(resolved);
+          setThemeState(resolved);
         }
         if (typeof data.font === "string") {
           localStorage.setItem("iq-font", data.font);
@@ -1430,14 +1451,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               <button
                 className="iconbtn"
                 title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                onClick={() => {
-                  const next = theme === "dark" ? "light" : "dark";
-                  localStorage.setItem("iq-theme", next);
-                  setTheme(next);
-                  if (user?.uid) {
-                    void apiPatch("/api/settings", { darkMode: next === "dark" });
-                  }
-                }}
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               >
                 {theme === "dark"
                   ? <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>

@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
-import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE, type BarInterval } from "../utils";
+import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
-import { ChartCard, StockScreenEmbed } from "../stock-panel";
+import { StockScreenEmbed } from "../stock-panel";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
@@ -616,6 +616,48 @@ function extractTranscriptSummary(content: string, _sym: string): TranscriptSumm
   return selected.slice(0, 8);
 }
 
+/**
+ * True for a speaker label like "Operator", "Christophe D. Fouquet" or
+ * "Joseph Moore, Analyst, Morgan Stanley": short, no digits or sentence
+ * punctuation, and every word capitalised apart from connectors ("of", "and").
+ */
+function isSpeakerLabel(s: string): boolean {
+  const t = s.trim();
+  if (t.length < 2 || t.length > 90 || /\d|[!?;:"]/.test(t)) return false;
+  const words = t.replace(/,/g, " ").split(/\s+/).filter(Boolean);
+  if (words.length > 12) return false;
+  return words.every(w =>
+    /^[A-Z(&]/.test(w) || /^(of|and|the|for|de|da|del|der|van|von|la|le|du|bin|al|y)$/i.test(w),
+  );
+}
+
+/**
+ * Groups transcript paragraphs into speaker turns. FMP marks a turn either as
+ * "Name[, Title, Firm]: remarks" or with the name alone on its own line — both
+ * become the bold heading. Paragraphs without a label continue the previous speaker.
+ */
+function groupTranscriptTurns(content: string): { speaker: string; paras: string[] }[] {
+  const turns: { speaker: string; paras: string[] }[] = [];
+  for (const para of content.split(/\n+/).map(p => p.trim()).filter(Boolean)) {
+    // Name alone on its own line ("Operator", "Jim Kavanagh").
+    if (isSpeakerLabel(para) && !/[.,]$/.test(para)) {
+      turns.push({ speaker: para, paras: [] });
+      continue;
+    }
+    // "Name: remarks" — split at the first colon only if what precedes it is a name.
+    const colonIdx = para.indexOf(":");
+    if (colonIdx > 0 && isSpeakerLabel(para.slice(0, colonIdx))) {
+      const body = para.slice(colonIdx + 1).trim();
+      turns.push({ speaker: para.slice(0, colonIdx).trim(), paras: body ? [body] : [] });
+    } else if (turns.length) {
+      turns[turns.length - 1].paras.push(para);
+    } else {
+      turns.push({ speaker: "", paras: [para] });
+    }
+  }
+  return turns;
+}
+
 function CallDrawer({
   sym,
   onClose,
@@ -634,13 +676,16 @@ function CallDrawer({
 
   const content = data?.content ?? "";
   const hasTx = !!data?.hasTranscript && content.trim().length > 0;
-  const paras = hasTx ? content.split(/\n+/).map(p => p.trim()).filter(Boolean) : [];
+  const transcriptTurns = useMemo(() => (hasTx ? groupTranscriptTurns(content) : []), [hasTx, content]);
 
   // Active insights: Real server-side LLM synthesized insights (8-12 points),
   // falling back gracefully to client-side rule extractor if LLM is unavailable or unconfigured.
   const activeInsights: TranscriptInsight[] = useMemo(() => {
     if (aiSummaryDoc?.insights && Array.isArray(aiSummaryDoc.insights) && aiSummaryDoc.insights.length >= 4) {
-      return aiSummaryDoc.insights;
+      // Older cached summaries carry 8-12 points; show only the top 8 by impact.
+      return [...aiSummaryDoc.insights]
+        .sort((a, b) => (a.importance ?? 99) - (b.importance ?? 99))
+        .slice(0, 8);
     }
     if (hasTx && content) {
       return extractTranscriptSummary(content, sym).map((pt, i) => ({
@@ -799,6 +844,13 @@ function CallDrawer({
                         const sentimentColor = isBull ? "var(--up)" : isBear ? "var(--down)" : "var(--text-dim-solid)";
                         const sentimentBg = isBull ? "rgba(16, 185, 129, 0.12)" : isBear ? "rgba(239, 68, 68, 0.12)" : "var(--surface-3)";
 
+                        const text = ins.summary || ins.headline;
+                        // Fallback insights use the sentence's first 60 chars (or the
+                        // category) as the headline — only show a real takeaway.
+                        const showHeadline = !!ins.headline && !!ins.summary
+                          && ins.headline !== ins.category
+                          && !ins.summary.startsWith(ins.headline);
+
                         return (
                           <li
                             key={idx}
@@ -809,8 +861,6 @@ function CallDrawer({
                               fontSize: ".84rem",
                               lineHeight: 1.55,
                               color: "var(--text)",
-                              paddingBottom: idx < activeInsights.length - 1 ? 12 : 0,
-                              borderBottom: idx < activeInsights.length - 1 ? "1px solid var(--border-soft)" : "none",
                             }}
                           >
                             <span
@@ -825,68 +875,32 @@ function CallDrawer({
                               •
                             </span>
                             <div style={{ flex: 1 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                                <span
-                                  style={{
-                                    fontFamily: "var(--f-mono)",
-                                    fontSize: ".7rem",
-                                    fontWeight: 700,
-                                    color: "var(--text-hi)",
-                                    background: "var(--surface-2)",
-                                    padding: "1px 6px",
-                                    borderRadius: 4,
-                                    border: "1px solid var(--border-soft)",
-                                  }}
-                                >
-                                  {ins.category}
-                                </span>
-                                {ins.sentiment && (
-                                  <span
-                                    style={{
-                                      fontSize: ".68rem",
-                                      fontWeight: 700,
-                                      textTransform: "uppercase",
-                                      letterSpacing: ".04em",
-                                      color: sentimentColor,
-                                      background: sentimentBg,
-                                      padding: "1px 6px",
-                                      borderRadius: 4,
-                                    }}
-                                  >
-                                    {ins.sentiment}
-                                  </span>
-                                )}
-                                {ins.headline && (
-                                  <span style={{ fontWeight: 650, color: "var(--text-hi)", fontSize: ".86rem" }}>
-                                    {ins.headline}
-                                  </span>
-                                )}
+                              <div style={{ color: "var(--text)", fontSize: ".84rem", lineHeight: 1.55 }}>
+                                {text}
                               </div>
-                              <div style={{ color: "var(--text)", fontSize: ".83rem", lineHeight: 1.55 }}>
-                                {ins.summary}
-                              </div>
-                              {ins.speaker && (
-                                <div style={{ marginTop: 4 }}>
-                                  <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
-                                    — {ins.speaker}
-                                  </span>
-                                </div>
-                              )}
-                              {ins.evidence && (
-                                <div
-                                  style={{
-                                    marginTop: 6,
-                                    padding: "6px 10px",
-                                    background: "var(--surface-2)",
-                                    borderRadius: 6,
-                                    borderLeft: "2px solid var(--ai)",
-                                    fontSize: ".75rem",
-                                    color: "var(--text-dim-solid)",
-                                    fontStyle: "italic",
-                                    lineHeight: 1.45,
-                                  }}
-                                >
-                                  "{ins.evidence}"
+                              {(ins.sentiment || showHeadline) && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                                  {ins.sentiment && (
+                                    <span
+                                      style={{
+                                        fontSize: ".66rem",
+                                        fontWeight: 700,
+                                        textTransform: "uppercase",
+                                        letterSpacing: ".04em",
+                                        color: sentimentColor,
+                                        background: sentimentBg,
+                                        padding: "1px 6px",
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      {ins.sentiment}
+                                    </span>
+                                  )}
+                                  {showHeadline && (
+                                    <span style={{ fontWeight: 650, color: "var(--text-hi)", fontSize: ".78rem" }}>
+                                      {ins.headline}
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -945,9 +959,18 @@ function CallDrawer({
                   live · FMP transcript
                 </span>
               </div>
-              <div style={{ fontSize: ".84rem", lineHeight: 1.6, color: "var(--text)" }}>
-                {paras.map((p, i) => (
-                  <p key={i} style={{ marginBottom: 10, whiteSpace: "pre-wrap" }}>{p}</p>
+              <div style={{ fontSize: ".86rem", lineHeight: 1.7, color: "var(--text)" }}>
+                {transcriptTurns.map((turn, i) => (
+                  <div key={i} style={{ marginBottom: 18 }}>
+                    {turn.speaker && (
+                      <div style={{ fontWeight: 700, color: "var(--text-hi)", marginBottom: 6 }}>
+                        {turn.speaker}
+                      </div>
+                    )}
+                    {turn.paras.map((p, j) => (
+                      <p key={j} style={{ margin: j < turn.paras.length - 1 ? "0 0 10px" : 0, whiteSpace: "pre-wrap" }}>{p}</p>
+                    ))}
+                  </div>
                 ))}
               </div>
             </>
@@ -1383,10 +1406,6 @@ export function EarningsScreen() {
   // Detail mode: clicking a stock opens a split view (weekly picker + details)
   // that replaces the calendar; the ✕ in the weekly panel closes back to it.
   const [detailOpen, setDetailOpen] = useState(false);
-  const [chartOpen, setChartOpen] = useState(true);
-  // One candle size for the chart AND the tabs' technical rating, as in the
-  // list+chart panels (StockPanelLayout).
-  const [barInterval, setBarInterval] = useState<BarInterval>("1D");
   // The two legacy inline company-detail blocks that used to render at the bottom
   // of the calendar view (a duplicate header + EPS metrics, and an earnings-
   // history / income-statement / AI-read stack) are superseded by the full detail
@@ -2014,27 +2033,11 @@ export function EarningsScreen() {
               </div>
             </div>
 
-            {/* Price chart (full width) — collapsible (show/hide). */}
-            <div style={{ marginBottom: 14 }}>
-              <button
-                onClick={() => setChartOpen(o => !o)}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "var(--surface-1)", border: "1px solid var(--border-soft)", borderRadius: 12, padding: "10px 14px", cursor: "pointer", color: "var(--text-hi)", fontWeight: 700, fontSize: ".85rem", marginBottom: chartOpen ? 8 : 0 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>{sel} · Chart <VendorTag v="polygon" /></span>
-                <span style={{ color: "var(--text-dim-solid)", fontSize: ".75rem", fontWeight: 600 }}>{chartOpen ? "▲ Hide" : "▼ Show"}</span>
-              </button>
-              {chartOpen && (
-                <ChartCard sym={sel} px={liveCompanySel?.price ?? 0}
-                  interval={barInterval} onIntervalChange={setBarInterval} />
-              )}
-            </div>
-
-            {/* The stock page's own tabs (Overview / Analysis / Earnings /
-                Financials / …), the same embed the watchlist and other panels
-                show — opened on Earnings here. Its Earnings tab carries the EPS
-                surprise, growth and playbook, and Financials the sales bars,
-                which this screen used to draw separately. */}
-            <StockScreenEmbed key={sel} initialSym={sel} hideIdentity hideChart
-              barInterval={barInterval} initialTab="earnings" />
+            {/* Same tabbed sections as the stock page (Overview / Analysis / Peers /
+                Earnings / Financials / Insider Transactions / 13F / News), with the
+                chart shown the stock-page way. The header card above already
+                carries the ticker and quote. */}
+            <StockScreenEmbed initialSym={sel} hideIdentity initialTab="earnings" />
           </div>
         </div>
       )}

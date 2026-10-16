@@ -52,6 +52,7 @@ import type {
   AiAnalysisDoc,
 } from "../types";
 import { reportedQuarterEps } from "../types";
+import { useIQActions } from "../shell";
 import type { Stock13FResponse } from "../stock-13f-view";
 
 function SixMonthAreaChart({
@@ -174,34 +175,34 @@ function SixMonthAreaChart({
   const activeHover = mappedEvents.find((e) => e.num === hoveredEventId);
 
   return (
-    <div style={{ border: "1px solid #1c2733", background: "rgba(10,14,20,0.96)", padding: "18px 20px" }}>
+    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px" }}>
       {/* Header bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
           6-MONTH TRAJECTORY & 5 MAJOR CATALYSTS
         </span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#93a1af" }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
           Last 6 Months · Area Chart · 0 Volume
         </span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: UP }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
             {usd(stock.p)}
           </span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: stock.c >= 0 ? UP : DN }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
             {pct(stock.c)} Today
           </span>
         </div>
       </div>
 
       {/* Area Chart Container */}
-      <div style={{ position: "relative", width: "100%", height: 340, background: "#06080c", borderRadius: 4, overflow: "visible" }}>
+      <div style={{ position: "relative", width: "100%", height: 340, background: "var(--si-card-sec, #06080c)", border: "1px solid var(--si-border, #1c2733)", borderRadius: 4, overflow: "visible" }}>
         <svg width="100%" height="100%" viewBox="0 0 1000 340" preserveAspectRatio="none" style={{ display: "block" }}>
           <defs>
             <linearGradient id="siSixMonthAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4ade80" stopOpacity="0.28" />
-              <stop offset="50%" stopColor="#4ade80" stopOpacity="0.09" />
-              <stop offset="90%" stopColor="#4ade80" stopOpacity="0.02" />
-              <stop offset="100%" stopColor="#4ade80" stopOpacity="0.0" />
+              <stop offset="0%" stopColor="var(--up, #22c55e)" stopOpacity="0.25" />
+              <stop offset="50%" stopColor="var(--up, #22c55e)" stopOpacity="0.08" />
+              <stop offset="90%" stopColor="var(--up, #22c55e)" stopOpacity="0.02" />
+              <stop offset="100%" stopColor="var(--up, #22c55e)" stopOpacity="0.0" />
             </linearGradient>
           </defs>
 
@@ -210,8 +211,8 @@ function SixMonthAreaChart({
             const y = yOf(pVal);
             return (
               <g key={idx}>
-                <line x1={plotLeft} y1={y} x2={plotRight} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-                <text x={plotRight + 8} y={y + 4} fill="#64748b" fontSize="11" fontFamily="'JetBrains Mono', monospace">
+                <line x1={plotLeft} y1={y} x2={plotRight} y2={y} stroke="var(--si-border, rgba(255,255,255,0.06))" strokeWidth="1" />
+                <text x={plotRight + 8} y={y + 4} fill="var(--si-text-dim, #64748b)" fontSize="11" fontFamily="'JetBrains Mono', monospace">
                   ${pVal.toFixed(2)}
                 </text>
               </g>
@@ -221,12 +222,12 @@ function SixMonthAreaChart({
           {/* Area under the curve */}
           <path d={areaD} fill="url(#siSixMonthAreaGrad)" />
 
-          {/* Neon Green Price Line */}
-          <path d={pathD} fill="none" stroke="#4ade80" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          {/* Price Line */}
+          <path d={pathD} fill="none" stroke="var(--up, #22c55e)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
 
           {/* Horizontal Purple Dashed Reference Line for Current Price */}
           <line x1={plotLeft} y1={curY} x2={plotRight} y2={curY} stroke="#818cf8" strokeDasharray="4 4" strokeWidth="1.5" opacity="0.85" />
-          
+
           {/* Purple Pill Tag on Right Axis matching user image */}
           <g>
             <rect x={plotRight + 4} y={curY - 10} width={68} height={20} rx={4} fill="#6366f1" />
@@ -237,7 +238,7 @@ function SixMonthAreaChart({
 
           {/* Bottom X-Axis Date Ticks */}
           {dateTicks.map((dt, idx) => (
-            <text key={idx} x={dt.x} y={328} textAnchor="middle" fill="#64748b" fontSize="10.5" fontFamily="'JetBrains Mono', monospace">
+            <text key={idx} x={dt.x} y={328} textAnchor="middle" fill="var(--si-text-dim, #64748b)" fontSize="10.5" fontFamily="'JetBrains Mono', monospace">
               {dt.label}
             </text>
           ))}
@@ -248,16 +249,16 @@ function SixMonthAreaChart({
             return (
               <g key={ev.num}>
                 {/* Vertical guide line */}
-                <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={isHover ? "#7fa8d0" : "rgba(127,168,208,0.22)"} strokeDasharray="3 3" strokeWidth={isHover ? 1.5 : 1} />
+                <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={isHover ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border-sec, rgba(127,168,208,0.22))"} strokeDasharray="3 3" strokeWidth={isHover ? 1.5 : 1} />
                 {/* Glow ring */}
-                <circle cx={ev.x} cy={ev.y} r={isHover ? 16 : 11} fill={isHover ? "rgba(127,168,208,0.3)" : "rgba(74,222,128,0.18)"} stroke={isHover ? "#a9c6e3" : "#4ade80"} strokeWidth="1" />
+                <circle cx={ev.x} cy={ev.y} r={isHover ? 16 : 11} fill={isHover ? "var(--si-accent-bg, rgba(127,168,208,0.3))" : "rgba(34,197,94,0.18)"} stroke={isHover ? "var(--si-accent, #a9c6e3)" : "var(--up, #22c55e)"} strokeWidth="1" />
                 {/* Center pin circle */}
                 <circle
                   cx={ev.x}
                   cy={ev.y}
                   r="9"
-                  fill="#080b10"
-                  stroke={isHover ? "#ffffff" : "#7fa8d0"}
+                  fill={isHover ? "var(--si-accent, #5980a6)" : "var(--si-card-solid, #080b10)"}
+                  stroke={isHover ? "var(--si-accent, #5980a6)" : "var(--si-accent-soft, #7fa8d0)"}
                   strokeWidth="2"
                   style={{ cursor: "pointer" }}
                   onMouseEnter={() => setHoveredEventId(ev.num)}
@@ -268,7 +269,7 @@ function SixMonthAreaChart({
                   x={ev.x}
                   y={ev.y + 3.5}
                   textAnchor="middle"
-                  fill={isHover ? "#ffffff" : "#a9c6e3"}
+                  fill={isHover ? "#ffffff" : "var(--si-accent-soft, #a9c6e3)"}
                   fontSize="10"
                   fontWeight="800"
                   fontFamily="'JetBrains Mono', monospace"
@@ -289,9 +290,9 @@ function SixMonthAreaChart({
               left: `${Math.min(84, Math.max(16, (activeHover.x / 1000) * 100))}%`,
               top: `${Math.max(12, (activeHover.y / 340) * 100 - 24)}%`,
               transform: "translate(-50%, -100%)",
-              background: "#0c1118",
-              border: "1px solid #7fa8d0",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.8)",
+              background: "var(--si-card-solid, #0c1118)",
+              border: "1px solid var(--si-border-sec, #7fa8d0)",
+              boxShadow: "var(--si-shadow, 0 8px 24px rgba(0,0,0,0.4))",
               padding: "10px 14px",
               borderRadius: 4,
               pointerEvents: "none",
@@ -301,17 +302,17 @@ function SixMonthAreaChart({
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#7fa8d0" }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "var(--si-accent-soft, #7fa8d0)" }}>
                 #{activeHover.num} · {activeHover.date}
               </span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: activeHover.mv >= 0 ? UP : DN }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: activeHover.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
                 {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
               </span>
             </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 4 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginBottom: 4 }}>
               {activeHover.label}
             </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "#93a1af", lineHeight: 1.35 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.35 }}>
               {activeHover.details}
             </div>
           </div>
@@ -328,9 +329,9 @@ function SixMonthAreaChart({
               onMouseEnter={() => setHoveredEventId(ev.num)}
               onMouseLeave={() => setHoveredEventId(null)}
               style={{
-                border: isHover ? "1px solid #7fa8d0" : "1px solid #1c2733",
-                borderTop: `2px solid ${isHover ? "#ffffff" : "#5980a6"}`,
-                background: isHover ? "rgba(89,128,166,0.12)" : "rgba(12,17,24,0.6)",
+                border: isHover ? "1px solid var(--si-accent-soft, #7fa8d0)" : "1px solid var(--si-border, #1c2733)",
+                borderTop: `2px solid ${isHover ? "var(--si-accent, #5980a6)" : "var(--si-accent-soft, #7fa8d0)"}`,
+                background: isHover ? "var(--si-accent-bg, rgba(89,128,166,0.12))" : "var(--si-card-sec, rgba(12,17,24,0.6))",
                 padding: "12px 14px",
                 display: "flex",
                 flexDirection: "column",
@@ -340,20 +341,20 @@ function SixMonthAreaChart({
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: isHover ? "#ffffff" : "#a9c6e3" }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: isHover ? "var(--si-accent, #5980a6)" : "var(--si-accent-soft, #a9c6e3)" }}>
                   #{ev.num} · {ev.date}
                 </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: ev.mv >= 0 ? UP : DN }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: ev.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
                   {ev.mv >= 0 ? "+" : ""}{ev.mv.toFixed(2)}%
                 </span>
               </div>
-              <div style={{ display: "inline-block", alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 6px", background: "rgba(89,128,166,0.2)", color: "#93a1af", borderRadius: 2 }}>
+              <div style={{ display: "inline-block", alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 6px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "var(--si-accent-light, #93a1af)", borderRadius: 2 }}>
                 {ev.category.toUpperCase()}
               </div>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "#e8eef4", lineHeight: 1.35 }}>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.35 }}>
                 {ev.label}
               </div>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "#93a1af", lineHeight: 1.35, marginTop: 2 }}>
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.35, marginTop: 2 }}>
                 {ev.details}
               </div>
             </div>
@@ -364,7 +365,21 @@ function SixMonthAreaChart({
   );
 }
 
+const rangesDef: Record<string, [number, number, number]> = {
+  "1D": [78, 0.003, 0.005],
+  "5D": [39, 0.008, 0.015],
+  "1M": [30, 0.012, 0.04],
+  "3M": [60, 0.016, 0.10],
+  "6M": [120, 0.018, 0.20],
+  "1Y": [250, 0.020, 0.35],
+  "5Y": [350, 0.024, 0.80],
+};
+
 export function StockIntelligenceScreen() {
+  const { theme, setTheme } = useIQActions();
+  const isLight = theme === "light";
+  // The shell's setTheme persists to localStorage + backend, keeping MC in sync.
+  const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
   const router = useRouter();
   const { setSiTicker, activeTab, setActiveTab, goToSearch } = useSI();
 
@@ -427,7 +442,7 @@ export function StockIntelligenceScreen() {
       .then((res) => {
         if (!cancelled) setInst13FData(res);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       cancelled = true;
     };
@@ -443,6 +458,12 @@ export function StockIntelligenceScreen() {
   const { bars: sixMonthBars, loading: sixMonthLoading } = useBackendBars(
     currentTicker || "NVDA",
     "6M"
+  );
+
+  // Real bars for Overview Price History chart across selected timeframe (1D, 5D, 1M, 3M, 6M, 1Y, 5Y)
+  const { bars: overviewBars, loading: overviewBarsLoading } = useBackendBars(
+    currentTicker || "NVDA",
+    range
   );
 
   const stock: StockItem | null = useMemo(() => {
@@ -514,19 +535,9 @@ export function StockIntelligenceScreen() {
       if (stored) {
         setSavedThesis(JSON.parse(stored));
       } else {
-        // Default sample thesis for immediate viewing if not saved yet
-        setSavedThesis({
-          ticker: currentTicker,
-          dir: "Bull",
-          hz: "6M",
-          title: `${currentTicker} Institutional Expansion Thesis`,
-          target: stock ? Math.round(stock.p * 1.25) : 225,
-          stop: stock ? Math.round(stock.p * 0.88) : 158,
-          confAtSave: stock ? stock.conf : 84,
-          savedDate: "Today · Active",
-        });
+        setSavedThesis(null);
       }
-    } catch {}
+    } catch { }
   }, [currentTicker, stock]);
 
   // Handle stock selection
@@ -602,19 +613,69 @@ export function StockIntelligenceScreen() {
     return stockMcap;
   }, [liveCompany, stockMcap]);
 
+  // Overview Price History chart calculations. Kept above the early return
+  // below so the hook order is the same with or without a loaded stock.
+  const priceSeries = useMemo(() => {
+    if (overviewBars && overviewBars.length >= 2) {
+      const closes = overviewBars.map((b) => b.c);
+      if (stock?.p != null && stock.p > 0 && closes.length > 0) {
+        closes[closes.length - 1] = stock.p;
+      }
+      return closes;
+    }
+
+    // Fallback if real bars are loading or unavailable
+    // The chart MUST END at current price stock.p, and never exceed 52W high stock.hi
+    const rangesDef: Record<string, [number, number, number]> = {
+      "1D": [78, 0.003, (stock?.c ?? 0) / 100],
+      "5D": [39, 0.008, 0.015],
+      "1M": [30, 0.012, 0.04],
+      "3M": [60, 0.016, 0.10],
+      "6M": [120, 0.018, 0.20],
+      "1Y": [250, 0.020, 0.35],
+      "5Y": [350, 0.024, 0.80],
+    };
+    const [numPts, volFactor, totalDrift] = rangesDef[range] || rangesDef["6M"];
+    const curP = stock?.p ?? 217.26;
+    const isUp = (stock?.c ?? 0) >= 0;
+    const startP = isUp ? curP / (1 + totalDrift) : curP * (1 + totalDrift);
+    const hiCap = stock?.hi ? Math.max(stock.hi, curP) : curP * 1.12;
+    const loFloor = stock?.lo ? Math.min(stock.lo, curP * 0.7) : curP * 0.7;
+
+    const seed = (stock?.t || "NVDA").split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) + (range.length * 17);
+    const result: number[] = [];
+    let p = startP;
+
+    for (let i = 0; i < numPts; i++) {
+      if (i === numPts - 1) {
+        result.push(curP);
+      } else {
+        const frac = i / (numPts - 1);
+        const wave = Math.sin(seed + i * 0.35) * volFactor * 1.2 + Math.cos(i * 0.19) * volFactor * 0.8;
+        const target = startP + (curP - startP) * Math.pow(frac, 1.1);
+        p = p * 0.88 + target * 0.12 + p * wave;
+        p = Math.max(loFloor, Math.min(hiCap, p));
+        result.push(+p.toFixed(2));
+      }
+    }
+    return result;
+  }, [overviewBars, stock?.p, stock?.c, stock?.hi, stock?.lo, stock?.t, range]);
+
   // ----------------------------------------------------
   // EMPTY STATE (NO STOCK SELECTED YET)
   // ----------------------------------------------------
   if (!stock || !stockDetail) {
     return (
       <div
+        className="si-screen"
+        data-theme={theme}
         style={{
           minHeight: "100vh",
-          background: "#080b10",
+          background: "var(--si-bg, #080b10)",
           backgroundImage:
-            "linear-gradient(rgba(127,168,208,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(127,168,208,0.045) 1px, transparent 1px)",
+            "linear-gradient(var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px), linear-gradient(90deg, var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px)",
           backgroundSize: "48px 48px",
-          color: "#e8eef4",
+          color: "var(--si-text-hi, #e8eef4)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -624,8 +685,133 @@ export function StockIntelligenceScreen() {
           position: "relative",
         }}
       >
-        <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", justifyContent: "center", zIndex: 10 }}>
+
+        <style>{`
+        .si-screen {
+          --si-bg: #080b10;
+          --si-bg-grid: rgba(127,168,208,0.045);
+          --si-topbar: rgba(8,11,16,0.96);
+          --si-card: rgba(12, 17, 24, 0.9);
+          --si-card-solid: #0c1118;
+          --si-card-sec: #0e151d;
+          --si-card-tert: #111822;
+          --si-card-tint: rgba(12, 17, 24, 0.8);
+          --si-border: #1c2733;
+          --si-border-sec: #2a3a4a;
+          --si-border-dashed: #2a3a4a;
+          --si-text-hi: #e8eef4;
+          --si-text-mid: #93a1af;
+          --si-text-dim: #7d8b99;
+          --si-text-sub: #5d6b79;
+          --si-accent: #5980a6;
+          --si-accent-soft: #7fa8d0;
+          --si-accent-light: #a9c6e3;
+          --si-accent-bg: rgba(89, 128, 166, 0.18);
+          --si-accent-btn: #5980a6;
+          --si-input-bg: #0c1118;
+          --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        .si-screen {
+          --si-bg: #080b10;
+          --si-bg-grid: rgba(127,168,208,0.045);
+          --si-topbar: rgba(8,11,16,0.96);
+          --si-card: rgba(12, 17, 24, 0.9);
+          --si-card-solid: #0c1118;
+          --si-card-sec: #0e151d;
+          --si-card-tert: #111822;
+          --si-card-tint: rgba(12, 17, 24, 0.8);
+          --si-border: #1c2733;
+          --si-border-sec: #2a3a4a;
+          --si-border-dashed: #2a3a4a;
+          --si-text-hi: #e8eef4;
+          --si-text-body: #d5dfe9;
+          --si-text-mid: #93a1af;
+          --si-text-dim: #7d8b99;
+          --si-text-sub: #5d6b79;
+          --si-accent: #5980a6;
+          --si-accent-soft: #7fa8d0;
+          --si-accent-light: #a9c6e3;
+          --si-accent-bg: rgba(89, 128, 166, 0.18);
+          --si-accent-btn: #5980a6;
+          --si-evidence-bg: rgba(89, 128, 166, 0.08);
+          --si-evidence-title: #a9c6e3;
+          --si-input-bg: #0c1118;
+          --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        .si-screen[data-theme="light"],
+        .iq-root[data-theme="light"] .si-screen {
+          --si-bg: #f4f6fa;
+          --si-bg-grid: rgba(15,23,42,0.035);
+          --si-topbar: rgba(255,255,255,0.96);
+          --si-card: #ffffff;
+          --si-card-solid: #ffffff;
+          --si-card-sec: #f8fafc;
+          --si-card-tert: #f1f5f9;
+          --si-card-tint: rgba(255, 255, 255, 0.95);
+          --si-border: #e2e8f0;
+          --si-border-sec: #cbd5e1;
+          --si-border-dashed: #94a3b8;
+          --si-text-hi: #07080a;
+          --si-text-body: #0f172a;
+          --si-text-mid: #1e293b;
+          --si-text-dim: #334155;
+          --si-text-sub: #475569;
+          --si-accent: #1d4ed8;
+          --si-accent-soft: #2563eb;
+          --si-accent-light: #07080a;
+          --si-accent-bg: rgba(37, 99, 235, 0.08);
+          --si-accent-btn: #1d4ed8;
+          --si-evidence-bg: #f1f5f9;
+          --si-evidence-title: #07080a;
+          --si-input-bg: #ffffff;
+          --si-shadow: 0 4px 16px rgba(0,0,0,0.06);
+        }
+        .si-screen[data-theme="light"] input,
+        .iq-root[data-theme="light"] .si-screen input {
+          color: #0f172a !important;
+        }
+        .si-screen[data-theme="light"] input::placeholder,
+        .iq-root[data-theme="light"] .si-screen input::placeholder {
+          color: #94a3b8 !important;
+        }
+      `}</style>
+
+        <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10, padding: "0 24px" }}>
           <SISwitcher />
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={isLight ? "Switch to dark mode" : "Switch to light mode"}
+            aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+            style={{
+              position: "absolute",
+              right: 24,
+              height: 34,
+              width: 34,
+              padding: 0,
+              border: "1px solid var(--si-border-sec, #2a3a4a)",
+              background: "var(--si-card-solid, #0c1118)",
+              color: "var(--si-text-hi, #e8eef4)",
+              fontFamily: "'Manrope', sans-serif",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 4,
+              transition: "all 150ms ease",
+            }}
+          >
+            {isLight ? (
+              <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+              </svg>
+            )}
+          </button>
         </div>
         <div style={{ maxWidth: 640, width: "100%", textAlign: "center", marginTop: 40 }}>
           <div
@@ -634,7 +820,7 @@ export function StockIntelligenceScreen() {
               fontSize: 48,
               fontWeight: 700,
               letterSpacing: "0.16em",
-              color: "#e8eef4",
+              color: "var(--si-text-hi, #e8eef4)",
               marginBottom: 8,
               textTransform: "uppercase",
             }}
@@ -647,7 +833,7 @@ export function StockIntelligenceScreen() {
               fontSize: 12,
               fontWeight: 500,
               letterSpacing: "0.22em",
-              color: "#5980a6",
+              color: "var(--si-accent, #5980a6)",
               marginBottom: 28,
             }}
           >
@@ -658,7 +844,7 @@ export function StockIntelligenceScreen() {
             style={{
               fontFamily: "'Manrope', sans-serif",
               fontSize: 15,
-              color: "#93a1af",
+              color: "var(--si-text-mid, #93a1af)",
               lineHeight: 1.6,
               marginBottom: 36,
             }}
@@ -671,8 +857,8 @@ export function StockIntelligenceScreen() {
             <div
               style={{
                 height: 52,
-                border: "1px solid #2a3a4a",
-                background: "#0c1118",
+                border: "1px solid var(--si-border-sec, #2a3a4a)",
+                background: "var(--si-card-solid, #0c1118)",
                 borderRadius: 8,
                 display: "flex",
                 alignItems: "center",
@@ -681,7 +867,7 @@ export function StockIntelligenceScreen() {
                 boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5980a6" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--si-accent, #5980a6)" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" />
                 <path d="M21 21l-4.3-4.3" />
               </svg>
@@ -702,7 +888,7 @@ export function StockIntelligenceScreen() {
                   background: "transparent",
                   border: "none",
                   outline: "none",
-                  color: "#e8eef4",
+                  color: "var(--si-text-hi, #e8eef4)",
                   fontFamily: "'Manrope', sans-serif",
                   fontSize: 15,
                 }}
@@ -717,7 +903,7 @@ export function StockIntelligenceScreen() {
                   top: 58,
                   left: 0,
                   right: 0,
-                  background: "#0c1118",
+                  background: "var(--si-card-solid, #0c1118)",
                   border: "1px solid #5980a6",
                   borderRadius: 8,
                   boxShadow: "0 20px 50px rgba(0,0,0,0.7)",
@@ -737,7 +923,7 @@ export function StockIntelligenceScreen() {
                       gap: 12,
                       padding: "0 16px",
                       cursor: "pointer",
-                      borderBottom: "1px solid #1c2733",
+                      borderBottom: "1px solid var(--si-border, #1c2733)",
                     }}
                   >
                     <StockLogo sym={r.ticker} size={24} />
@@ -746,7 +932,7 @@ export function StockIntelligenceScreen() {
                         fontFamily: "'JetBrains Mono', monospace",
                         fontWeight: 700,
                         fontSize: 14,
-                        color: "#e8eef4",
+                        color: "var(--si-text-hi, #e8eef4)",
                         width: 60,
                       }}
                     >
@@ -757,7 +943,7 @@ export function StockIntelligenceScreen() {
                         flex: 1,
                         fontFamily: "'Manrope', sans-serif",
                         fontSize: 13,
-                        color: "#93a1af",
+                        color: "var(--si-text-mid, #93a1af)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -766,7 +952,7 @@ export function StockIntelligenceScreen() {
                       {r.name || r.ticker}
                     </span>
                     {r.price != null && (
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "#e8eef4" }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-hi, #e8eef4)" }}>
                         {usd(r.price)}
                       </span>
                     )}
@@ -783,7 +969,7 @@ export function StockIntelligenceScreen() {
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 11,
                 letterSpacing: "0.14em",
-                color: "#5980a6",
+                color: "var(--si-accent, #5980a6)",
                 marginBottom: 12,
               }}
             >
@@ -804,10 +990,10 @@ export function StockIntelligenceScreen() {
                     style={{
                       height: 36,
                       padding: "0 14px",
-                      background: "rgba(12, 17, 24, 0.9)",
-                      border: "1px solid #2a3a4a",
+                      background: "var(--si-card, rgba(12, 17, 24, 0.9))",
+                      border: "1px solid var(--si-border-sec, #2a3a4a)",
                       borderRadius: 6,
-                      color: "#e8eef4",
+                      color: "var(--si-text-hi, #e8eef4)",
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: 13,
                       fontWeight: 600,
@@ -833,26 +1019,14 @@ export function StockIntelligenceScreen() {
   // ----------------------------------------------------
   // LOADED STOCK INTELLIGENCE DASHBOARD
   // ----------------------------------------------------
-  const color = stock.c >= 0 ? UP : DN;
+  const color = stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
 
-  // Overview Price History chart calculations
-  const rangesDef: Record<string, [number, number, number]> = {
-    "1D": [78, 0.003, stock.c / 100 / 78],
-    "5D": [39, 0.008, 0.0004],
-    "1M": [30, 0.015, 0.0008],
-    "3M": [60, 0.018, 0.001],
-    "6M": [120, 0.02, 0.0012],
-    "1Y": [250, 0.022, 0.0015],
-    "5Y": [350, 0.025, 0.0018],
-  };
-  const [numPts, volFactor, driftFactor] = rangesDef[range] || rangesDef["6M"];
-  const priceSeries = series(stock.t + range, numPts, stock.p, volFactor, driftFactor);
   const minP = Math.min(...priceSeries);
   const maxP = Math.max(...priceSeries);
   const rangeDiff = maxP - minP || 1;
   const pStart = priceSeries[0];
   const pEnd = priceSeries[priceSeries.length - 1];
-  const chartCol = pEnd >= pStart ? UP : DN;
+  const chartCol = pEnd >= pStart ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
 
   // SVG path coordinates
   const svgW = 1000;
@@ -868,7 +1042,23 @@ export function StockIntelligenceScreen() {
 
   // Dynamic X-axis & Tooltip generation (Issue 1 fix: Month + Year on 5Y hover)
   const getLabelAtFrac = (f: number, isHover = false) => {
-    const now = new Date(2026, 9, 13); // Fixed reference date
+    if (overviewBars && overviewBars.length >= 2) {
+      const idx = Math.max(0, Math.min(overviewBars.length - 1, Math.round(f * (overviewBars.length - 1))));
+      const bar = overviewBars[idx];
+      const d = new Date(bar.t);
+      if (range === "1D") {
+        return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+      }
+      if (range === "5D" || range === "1M" || range === "3M" || range === "6M") {
+        return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+      }
+      if (range === "1Y") {
+        return d.toLocaleDateString("en-US", { month: "short", year: isHover ? "numeric" : "2-digit", timeZone: "America/New_York" });
+      }
+      return d.toLocaleDateString("en-US", { month: isHover ? "short" : undefined, year: "numeric", timeZone: "America/New_York" });
+    }
+
+    const now = new Date();
     if (range === "1D") {
       const totalMinutes = Math.round(f * 390); // 9:30 AM to 4:00 PM = 390 mins
       const h = 9 + Math.floor((30 + totalMinutes) / 60);
@@ -895,7 +1085,7 @@ export function StockIntelligenceScreen() {
     if (range === "6M") {
       const d = new Date(now);
       d.setDate(d.getDate() - Math.round((1 - f) * 180));
-      return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     }
     if (range === "1Y") {
       const d = new Date(now);
@@ -939,32 +1129,136 @@ export function StockIntelligenceScreen() {
 
   // Confluence dots
   const confluenceDots = [0, 1, 2, 3, 4, 5, 6].map((i) => ({
-    c: i < stock.cf ? "#7fa8d0" : "#1c2733",
+    c: i < stock.cf ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border, #1c2733)",
   }));
 
-  // Signal scores mapping
-  const signalScores = KEYS.map((k, idx) => {
-    const val = stockDetail.sv[idx] || 70;
-    return {
-      name: k,
-      val,
-      color: sc(val),
-      widthPct: `${val}%`,
-    };
-  });
+  type SignalScoreItem = { name: string; val: number; color: string; widthPct: string };
+  // Signal scores mapping - strictly synchronized with the 7 forward signal categories
+  const signalScores: SignalScoreItem[] = (stockDetail.fwd?.cats && stockDetail.fwd.cats.length === 7)
+    ? stockDetail.fwd.cats.map((cat: any) => {
+      const val = Math.round(cat.score);
+      return {
+        name: cat.label,
+        val,
+        color: sc(val),
+        widthPct: `${val}%`,
+      };
+    })
+    : [
+      { name: "BUSINESS", val: 88, color: sc(88), widthPct: "88%" },
+      { name: "EARNINGS", val: 87, color: sc(87), widthPct: "87%" },
+      { name: "TECHNICALS", val: 80, color: sc(80), widthPct: "80%" },
+      { name: "CATALYSTS", val: 71, color: sc(71), widthPct: "71%" },
+      { name: "VALUATION", val: 70, color: sc(70), widthPct: "70%" },
+      { name: "FLOWS", val: 71, color: sc(71), widthPct: "71%" },
+      { name: "MACRO", val: 67, color: sc(67), widthPct: "67%" },
+    ];
 
   return (
     <div
+      className="si-screen"
+      data-theme={theme}
       style={{
         minHeight: "100vh",
-        background: "#080b10",
+        background: "var(--si-bg, #080b10)",
         backgroundImage:
-          "linear-gradient(rgba(127,168,208,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(127,168,208,0.045) 1px, transparent 1px)",
+          "linear-gradient(var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px), linear-gradient(90deg, var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px)",
         backgroundSize: "48px 48px",
-        color: "#e8eef4",
+        color: "var(--si-text-hi, #e8eef4)",
         paddingBottom: 120, // Issue 8 fix: generous padding at bottom
       }}
     >
+
+      <style>{`
+        .si-screen {
+          --si-bg: #080b10;
+          --si-bg-grid: rgba(127,168,208,0.045);
+          --si-topbar: rgba(8,11,16,0.96);
+          --si-card: rgba(12, 17, 24, 0.9);
+          --si-card-solid: #0c1118;
+          --si-card-sec: #0e151d;
+          --si-card-tert: #111822;
+          --si-card-tint: rgba(12, 17, 24, 0.8);
+          --si-border: #1c2733;
+          --si-border-sec: #2a3a4a;
+          --si-border-dashed: #2a3a4a;
+          --si-text-hi: #e8eef4;
+          --si-text-mid: #93a1af;
+          --si-text-dim: #7d8b99;
+          --si-text-sub: #5d6b79;
+          --si-accent: #5980a6;
+          --si-accent-soft: #7fa8d0;
+          --si-accent-light: #a9c6e3;
+          --si-accent-bg: rgba(89, 128, 166, 0.18);
+          --si-accent-btn: #5980a6;
+          --si-input-bg: #0c1118;
+          --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        .si-screen {
+          --si-bg: #080b10;
+          --si-bg-grid: rgba(127,168,208,0.045);
+          --si-topbar: rgba(8,11,16,0.96);
+          --si-card: rgba(12, 17, 24, 0.9);
+          --si-card-solid: #0c1118;
+          --si-card-sec: #0e151d;
+          --si-card-tert: #111822;
+          --si-card-tint: rgba(12, 17, 24, 0.8);
+          --si-border: #1c2733;
+          --si-border-sec: #2a3a4a;
+          --si-border-dashed: #2a3a4a;
+          --si-text-hi: #e8eef4;
+          --si-text-body: #d5dfe9;
+          --si-text-mid: #93a1af;
+          --si-text-dim: #7d8b99;
+          --si-text-sub: #5d6b79;
+          --si-accent: #5980a6;
+          --si-accent-soft: #7fa8d0;
+          --si-accent-light: #a9c6e3;
+          --si-accent-bg: rgba(89, 128, 166, 0.18);
+          --si-accent-btn: #5980a6;
+          --si-evidence-bg: rgba(89, 128, 166, 0.08);
+          --si-evidence-title: #a9c6e3;
+          --si-input-bg: #0c1118;
+          --si-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        .si-screen[data-theme="light"],
+        .iq-root[data-theme="light"] .si-screen {
+          --si-bg: #f4f6fa;
+          --si-bg-grid: rgba(15,23,42,0.035);
+          --si-topbar: rgba(255,255,255,0.96);
+          --si-card: #ffffff;
+          --si-card-solid: #ffffff;
+          --si-card-sec: #f8fafc;
+          --si-card-tert: #f1f5f9;
+          --si-card-tint: rgba(255, 255, 255, 0.95);
+          --si-border: #e2e8f0;
+          --si-border-sec: #cbd5e1;
+          --si-border-dashed: #94a3b8;
+          --si-text-hi: #07080a;
+          --si-text-body: #0f172a;
+          --si-text-mid: #1e293b;
+          --si-text-dim: #334155;
+          --si-text-sub: #475569;
+          --si-accent: #1d4ed8;
+          --si-accent-soft: #2563eb;
+          --si-accent-light: #07080a;
+          --si-accent-bg: rgba(37, 99, 235, 0.08);
+          --si-accent-btn: #1d4ed8;
+          --si-evidence-bg: #f1f5f9;
+          --si-evidence-title: #07080a;
+          --si-input-bg: #ffffff;
+          --si-shadow: 0 4px 16px rgba(0,0,0,0.06);
+        }
+        .si-screen[data-theme="light"] input,
+        .iq-root[data-theme="light"] .si-screen input {
+          color: #0f172a !important;
+        }
+        .si-screen[data-theme="light"] input::placeholder,
+        .iq-root[data-theme="light"] .si-screen input::placeholder {
+          color: #94a3b8 !important;
+        }
+      `}</style>
+
       {/* ====================================================
           STICKY TOP NAVIGATION BAR (Integrated SISwitcher)
           ==================================================== */}
@@ -973,9 +1267,9 @@ export function StockIntelligenceScreen() {
           position: "sticky",
           top: 0,
           zIndex: 40,
-          background: "rgba(8,11,16,0.96)",
+          background: "var(--si-topbar, rgba(8,11,16,0.96))",
           backdropFilter: "blur(12px)",
-          borderBottom: "1px solid #1c2733",
+          borderBottom: "1px solid var(--si-border, #1c2733)",
         }}
       >
         <div
@@ -994,7 +1288,7 @@ export function StockIntelligenceScreen() {
               display: "flex",
               flexDirection: "column",
               flex: "none",
-              borderRight: "1px solid #1c2733",
+              borderRight: "1px solid var(--si-border, #1c2733)",
               paddingRight: 16,
               userSelect: "none",
             }}
@@ -1005,7 +1299,7 @@ export function StockIntelligenceScreen() {
                 fontSize: 22,
                 fontWeight: 700,
                 letterSpacing: "0.16em",
-                color: "#e8eef4",
+                color: "var(--si-text-hi, #e8eef4)",
                 lineHeight: 1,
               }}
             >
@@ -1017,7 +1311,7 @@ export function StockIntelligenceScreen() {
                 fontSize: 10,
                 fontWeight: 500,
                 letterSpacing: "0.2em",
-                color: "#5980a6",
+                color: "var(--si-accent, #5980a6)",
                 marginTop: 3,
               }}
             >
@@ -1036,10 +1330,10 @@ export function StockIntelligenceScreen() {
               gap: 6,
               height: 32,
               padding: "0 11px",
-              border: "1px solid #2a3a4a",
+              border: "1px solid var(--si-border-sec, #2a3a4a)",
               borderRadius: 6,
-              background: "rgba(12, 17, 24, 0.8)",
-              color: "#a9c6e3",
+              background: "var(--si-card-tint, rgba(12, 17, 24, 0.8))",
+              color: "var(--si-accent-light, #a9c6e3)",
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 11,
               fontWeight: 700,
@@ -1070,15 +1364,15 @@ export function StockIntelligenceScreen() {
             <div
               style={{
                 height: 34,
-                border: "1px solid #1c2733",
-                background: "#0c1118",
+                border: "1px solid var(--si-border, #1c2733)",
+                background: "var(--si-card-solid, #0c1118)",
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
                 padding: "0 10px",
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5980a6" strokeWidth="1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--si-accent, #5980a6)" strokeWidth="1.5">
                 <circle cx="11" cy="11" r="8" />
                 <path d="M21 21l-4.3-4.3" />
               </svg>
@@ -1098,7 +1392,7 @@ export function StockIntelligenceScreen() {
                   background: "transparent",
                   border: "none",
                   outline: "none",
-                  color: "#e8eef4",
+                  color: "var(--si-text-hi, #e8eef4)",
                   fontFamily: "'Manrope', sans-serif",
                   fontSize: 13,
                 }}
@@ -1111,7 +1405,7 @@ export function StockIntelligenceScreen() {
                   top: 38,
                   left: 0,
                   right: 0,
-                  background: "#0c1118",
+                  background: "var(--si-card-solid, #0c1118)",
                   border: "1px solid #5980a6",
                   boxShadow: "0 20px 50px rgba(0,0,0,0.7)",
                   zIndex: 50,
@@ -1130,18 +1424,18 @@ export function StockIntelligenceScreen() {
                       gap: 10,
                       padding: "0 12px",
                       cursor: "pointer",
-                      borderBottom: "1px solid #1c2733",
+                      borderBottom: "1px solid var(--si-border, #1c2733)",
                     }}
                   >
                     <StockLogo sym={r.ticker} size={20} />
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: "#e8eef4", width: 50 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: "var(--si-text-hi, #e8eef4)", width: 50 }}>
                       {r.ticker}
                     </span>
-                    <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#93a1af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {r.name}
                     </span>
                     {r.price != null && (
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#e8eef4" }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-hi, #e8eef4)" }}>
                         {usd(r.price)}
                       </span>
                     )}
@@ -1164,7 +1458,7 @@ export function StockIntelligenceScreen() {
                 height: 34,
                 padding: "0 12px",
                 border: "none",
-                background: "#5980a6",
+                background: "var(--si-accent-btn, #5980a6)",
                 color: "#ffffff",
                 fontFamily: "'Manrope', sans-serif",
                 fontSize: 12,
@@ -1174,9 +1468,43 @@ export function StockIntelligenceScreen() {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
+                borderRadius: 4,
               }}
             >
               ✦ AI Research
+            </button>
+            {/* Theme Toggle Button right beside AI Research */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={isLight ? "Switch to dark mode" : "Switch to light mode"}
+              aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+              style={{
+                height: 34,
+                width: 34,
+                padding: 0,
+                border: "1px solid var(--si-border-sec, #2a3a4a)",
+                background: "var(--si-card-solid, #0c1118)",
+                color: "var(--si-text-hi, #e8eef4)",
+                fontFamily: "'Manrope', sans-serif",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 4,
+                transition: "all 150ms ease",
+              }}
+            >
+              {isLight ? (
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                </svg>
+              )}
             </button>
             <button
               onClick={() => setIsWatched(!isWatched)}
@@ -1185,7 +1513,7 @@ export function StockIntelligenceScreen() {
                 padding: "0 12px",
                 border: isWatched ? "1px solid #5980a6" : "1px solid #2a3a4a",
                 background: isWatched ? "rgba(89,128,166,0.18)" : "transparent",
-                color: isWatched ? "#a9c6e3" : "#e8eef4",
+                color: "var(--si-text-hi, #e8eef4)",
                 fontFamily: "'Manrope', sans-serif",
                 fontSize: 12,
                 fontWeight: 600,
@@ -1199,22 +1527,22 @@ export function StockIntelligenceScreen() {
               style={{
                 height: 34,
                 padding: "0 12px",
-                border: "1px solid #1c2733",
+                border: "1px solid var(--si-border, #1c2733)",
                 background: "transparent",
-                color: "#e8eef4",
+                color: "var(--si-text-hi, #e8eef4)",
                 fontFamily: "'Manrope', sans-serif",
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
               }}
             >
-              Monitor Thesis
+              Monitor Strategy
             </button>
           </div>
         </div>
 
         {/* 9 Tab Navigation Rail */}
-        <div style={{ display: "flex", gap: 0, padding: "0 24px", overflowX: "auto", borderTop: "1px solid #1c2733" }}>
+        <div style={{ display: "flex", gap: 0, padding: "0 24px", overflowX: "auto", borderTop: "1px solid var(--si-border, #1c2733)" }}>
           {TABS.map(([k, label]) => {
             const isActive = activeTab === k;
             return (
@@ -1227,7 +1555,7 @@ export function StockIntelligenceScreen() {
                   padding: "0 16px",
                   border: "none",
                   background: "transparent",
-                  color: isActive ? "#e8eef4" : "#7d8b99",
+                  color: "var(--si-text-hi, #e8eef4)",
                   fontFamily: "'Barlow Condensed', sans-serif",
                   fontSize: 15,
                   fontWeight: 600,
@@ -1255,8 +1583,8 @@ export function StockIntelligenceScreen() {
             <div
               style={{
                 position: "relative",
-                border: "1px solid #1c2733",
-                background: "rgba(12,17,24,0.9)",
+                border: "1px solid var(--si-border, #1c2733)",
+                background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                 display: "grid",
                 gridTemplateColumns: "auto repeat(5, minmax(0, 1fr))",
               }}
@@ -1268,20 +1596,20 @@ export function StockIntelligenceScreen() {
               <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
 
               {/* Identity Box with Logo */}
-              <div style={{ padding: "16px 18px", borderRight: "1px solid #1c2733", minWidth: 260 }}>
+              <div style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <StockLogo sym={stock.t} size={40} />
                   <div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "#e8eef4", lineHeight: 1 }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
                       {stock.t}
                     </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#93a1af", marginTop: 4 }}>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
                       {stock.name}
                     </div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 24, fontWeight: 600, color: "#e8eef4" }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 24, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                     {usd(stock.p)}
                   </span>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color }}>
@@ -1292,14 +1620,14 @@ export function StockIntelligenceScreen() {
 
               {/* Stats Items */}
               {statsRow.map((st) => (
-                <div key={st.k} style={{ padding: "16px 18px", borderRight: "1px solid #1c2733", minWidth: 0 }}>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", color: "#5980a6", whiteSpace: "nowrap" }}>
+                <div key={st.k} style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 0 }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
                     {st.k}
                   </div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: "#e8eef4", marginTop: 8, whiteSpace: "nowrap" }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 8, whiteSpace: "nowrap" }}>
                     {st.v}
                   </div>
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#93a1af", marginTop: 4 }}>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
                     {st.sub}
                   </div>
                 </div>
@@ -1307,12 +1635,12 @@ export function StockIntelligenceScreen() {
             </div>
 
             {/* Price History Chart Card with Interactive Crosshair & Detailed X-Axis */}
-            <div style={{ position: "relative", border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)" }}>
-              <div style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", borderBottom: "1px solid #1c2733" }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+            <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
+              <div style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                   PRICE HISTORY
                 </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#93a1af" }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
                   {range} ·
                 </span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: chartCol }}>
@@ -1328,7 +1656,7 @@ export function StockIntelligenceScreen() {
                         padding: "0 10px",
                         border: `1px solid ${range === r ? STEEL : "#1c2733"}`,
                         background: range === r ? "rgba(89,128,166,0.2)" : "transparent",
-                        color: range === r ? "#e8eef4" : "#93a1af",
+                        color: "var(--si-text-hi, #e8eef4)",
                         fontFamily: "'JetBrains Mono', monospace",
                         fontSize: 11,
                         fontWeight: 600,
@@ -1393,7 +1721,7 @@ export function StockIntelligenceScreen() {
                         left: `${hoverInfo.leftPct}%`,
                         top: 8,
                         transform: hoverInfo.leftPct > 70 ? "translateX(calc(-100% - 12px))" : "translateX(12px)",
-                        background: "#0c1118",
+                        background: "var(--si-card-solid, #0c1118)",
                         border: "1px solid #5980a6",
                         padding: "8px 12px",
                         pointerEvents: "none",
@@ -1402,10 +1730,10 @@ export function StockIntelligenceScreen() {
                         boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
                       }}
                     >
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#93a1af" }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-mid, #93a1af)" }}>
                         {hoverInfo.label}
                       </div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "#e8eef4", marginTop: 2 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 2 }}>
                         {usd(hoverInfo.priceVal)}
                       </div>
                     </div>
@@ -1421,7 +1749,7 @@ export function StockIntelligenceScreen() {
                   padding: "0 16px 14px",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 12,
-                  color: "#5d6b79",
+                  color: "var(--si-text-sub, #5d6b79)",
                 }}
               >
                 {axisLabels.map((lbl, idx) => (
@@ -1447,32 +1775,32 @@ export function StockIntelligenceScreen() {
                 <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid #7fa8d0", borderTop: "1px solid #7fa8d0" }} />
                 <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
 
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "#a9c6e3" }}>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
                   ✦ MARKETCATALYST INTELLIGENCE
                 </div>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "#e8eef4", lineHeight: 1.55 }}>
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
                   {stockDetail.assess}
                 </div>
 
-                <div style={{ display: "flex", gap: 28, flexWrap: "wrap", borderTop: "1px solid #1c2733", paddingTop: 16 }}>
+                <div style={{ display: "flex", gap: 28, flexWrap: "wrap", borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 16 }}>
                   <div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#5980a6" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                       CONFIDENCE
                     </div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "#e8eef4", lineHeight: 1, marginTop: 4 }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
                       {stock.conf}
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "#5d6b79" }}> / 100</span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#5980a6" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                       CONFLUENCE
                     </div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "#e8eef4", lineHeight: 1 }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
                         {stock.cf}
                       </span>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 600, color: "#93a1af" }}>/ 7</span>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>/ 7</span>
                     </div>
                     <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
                       {confluenceDots.map((cd, i) => (
@@ -1488,7 +1816,7 @@ export function StockIntelligenceScreen() {
                         padding: "0 12px",
                         border: "1px solid #5980a6",
                         background: "transparent",
-                        color: "#a9c6e3",
+                        color: "var(--si-accent-light, #a9c6e3)",
                         fontFamily: "'JetBrains Mono', monospace",
                         fontSize: 12,
                         fontWeight: 600,
@@ -1501,10 +1829,10 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 {showAssessEv && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid #1c2733", paddingTop: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
                     {(stockDetail.assessEv || []).map((ae, i) => (
-                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "#c4d0dc", display: "flex", gap: 8 }}>
-                        <span style={{ color: "#7fa8d0" }}>▸</span>
+                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8 }}>
+                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
                         <span>{ae}</span>
                       </div>
                     ))}
@@ -1515,8 +1843,8 @@ export function StockIntelligenceScreen() {
               {/* Card 2: Signal Scores */}
               <div
                 style={{
-                  border: "1px solid #1c2733",
-                  background: "rgba(12,17,24,0.9)",
+                  border: "1px solid var(--si-border, #1c2733)",
+                  background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                   padding: "18px 20px",
                   display: "flex",
                   flexDirection: "column",
@@ -1524,11 +1852,11 @@ export function StockIntelligenceScreen() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "#e8eef4" }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-text-hi, #e8eef4)" }}>
                     SIGNAL SCORES
                   </span>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#93a1af" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
                       Click a score for evidence
                     </span>
                     <button
@@ -1536,9 +1864,9 @@ export function StockIntelligenceScreen() {
                       style={{
                         height: 24,
                         padding: "0 9px",
-                        border: "1px solid #2a3a4a",
+                        border: "1px solid var(--si-border-sec, #2a3a4a)",
                         background: "transparent",
-                        color: "#a9c6e3",
+                        color: "var(--si-accent-light, #a9c6e3)",
                         fontFamily: "'JetBrains Mono', monospace",
                         fontSize: 10,
                         letterSpacing: "0.12em",
@@ -1552,31 +1880,33 @@ export function StockIntelligenceScreen() {
 
                 {/* How It Works Explanatory Modal */}
                 {showSigHow && (
-                  <div style={{ border: "1px solid #2a3a4a", background: "#0b1016", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#5980a6" }}>
+                  <div style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card-sec, #0b1016)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                       HOW EACH SCORE IS CALCULATED
                     </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#93a1af", lineHeight: 1.5, margin: "4px 0" }}>
-                      Every score runs 0–100, where 50 is neutral. Inputs are ranked against the stock’s history and sector peers, then blended.
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, margin: "4px 0" }}>
+                      Every signal score runs 0–100, where 50 is neutral. Scores above 60 indicate positive alignment with the forward thesis.
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid #1c2733" }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "#e8eef4" }}>Momentum</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "#c9d4de" }}>1M, 3M, 6M returns + distance above 50 & 200 DMA.</span>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid #1c2733" }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "#e8eef4" }}>Volume</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "#c9d4de" }}>Relative volume vs 20-day average and accumulation vs distribution days.</span>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "8px 0" }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "#e8eef4" }}>Market Regime</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "#c9d4de" }}>S&P 500 trend, VIX level, market breadth, and rate volatility.</span>
-                    </div>
+                    {[
+                      ["Business", "Revenue growth in key segments, gross and operating margin trend, and forward guidance."],
+                      ["Earnings", "EPS and revenue estimate revisions over 30 and 90 days, beat rate, and surprise magnitude."],
+                      ["Technicals", "Trend vs. 50- and 200-day moving averages, relative strength vs. S&P 500, and volume confirmation."],
+                      ["Catalysts", "Upcoming dated events (earnings, product launches, conferences) weighted by historical volatility impact."],
+                      ["Valuation", "Forward P/E and EV/EBITDA vs. 5-year history and peers, adjusted for growth (PEG ratio)."],
+                      ["Flows", "Call/put skew, short interest, days to cover, plus institutional ownership change from latest 13F filings."],
+                      ["Macro", "Market trend, VIX level, interest rate volatility, and sector sensitivity to broader liquidity."],
+                    ].map(([sName, sDesc], idx) => (
+                      <div key={idx} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</span>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-body, #c9d4de)" }}>{sDesc}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
 
                 {/* 7 Interactive Score Buttons */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8 }}>
-                  {signalScores.map((scItem) => {
+                  {signalScores.map((scItem: SignalScoreItem) => {
                     const isSelected = selectedSignal === scItem.name;
                     return (
                       <button
@@ -1584,22 +1914,23 @@ export function StockIntelligenceScreen() {
                         onClick={() => setSelectedSignal(isSelected ? null : scItem.name)}
                         style={{
                           textAlign: "left",
-                          border: `1px solid ${isSelected ? STEEL : "#1c2733"}`,
-                          background: isSelected ? "rgba(89,128,166,0.18)" : "transparent",
+                          border: `1px solid ${isSelected ? "var(--si-accent, #5980a6)" : "var(--si-border, #1c2733)"}`,
+                          background: isSelected ? "var(--si-accent-bg, rgba(89,128,166,0.18))" : "var(--si-card-sec, transparent)",
                           padding: 12,
                           cursor: "pointer",
                           display: "flex",
                           flexDirection: "column",
                           gap: 8,
+                          transition: "border 150ms, background 150ms",
                         }}
                       >
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "#93a1af" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>
                           {scItem.name}
                         </span>
                         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: scItem.color, lineHeight: 1 }}>
                           {scItem.val}
                         </span>
-                        <span style={{ height: 3, background: "#1c2733", display: "block" }}>
+                        <span style={{ height: 3, background: "var(--si-card-tert, #1c2733)", display: "block" }}>
                           <span style={{ display: "block", height: 3, width: scItem.widthPct, background: scItem.color }} />
                         </span>
                       </button>
@@ -1609,26 +1940,68 @@ export function StockIntelligenceScreen() {
 
                 {/* Expanded Signal Evidence Card */}
                 {selectedSignal && (
-                  <div style={{ border: "1px solid #5980a6", background: "rgba(89,128,166,0.08)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div
+                    className="si-evidence-card"
+                    style={{
+                      border: "1px solid var(--si-border-sec, #2a3a4a)",
+                      background: "var(--si-evidence-bg, rgba(89,128,166,0.08))",
+                      padding: "16px 18px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      borderRadius: 6,
+                    }}
+                  >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.14em", color: "#a9c6e3" }}>
+                      <span
+                        className="si-evidence-title"
+                        style={{
+                          fontFamily: "'Barlow Condensed', sans-serif",
+                          fontSize: 15,
+                          fontWeight: 700,
+                          letterSpacing: "0.14em",
+                          color: "var(--si-evidence-title, var(--si-text-hi, #07080a))",
+                        }}
+                      >
                         EVIDENCE · {selectedSignal.toUpperCase()}
                       </span>
                       <button
                         onClick={() => setSelectedSignal(null)}
-                        style={{ border: "none", background: "transparent", color: "#93a1af", cursor: "pointer", fontSize: 14 }}
+                        aria-label="Close evidence"
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: "var(--si-text-hi, #07080a)",
+                          cursor: "pointer",
+                          fontSize: 16,
+                          fontWeight: 700,
+                          padding: "2px 6px",
+                          lineHeight: 1,
+                        }}
                       >
                         ✕
                       </button>
                     </div>
-                    {((stockDetail.ev && selectedSignal ? stockDetail.ev[selectedSignal] : null) || [
+                    {((stockDetail.ev && selectedSignal ? (stockDetail.ev[selectedSignal] || stockDetail.ev[selectedSignal.toUpperCase()]) : null) || [
                       "Leading relative strength rank across sector peers",
                       "Institutional accumulation detected over last 10 sessions",
                       "Options skew shows calls priced at premium over puts",
                     ]).map((evItem, i) => (
-                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "#d5dfe9", display: "flex", gap: 8, lineHeight: 1.45 }}>
-                        <span style={{ color: "#7fa8d0" }}>▸</span>
-                        <span>{evItem}</span>
+                      <div
+                        key={i}
+                        className="si-evidence-text"
+                        style={{
+                          fontFamily: "'Manrope', sans-serif",
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: "var(--si-text-body, #0f172a)",
+                          display: "flex",
+                          gap: 9,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
+                        <span style={{ color: "var(--si-text-body, #0f172a)" }}>{evItem}</span>
                       </div>
                     ))}
                   </div>
@@ -1654,46 +2027,51 @@ export function StockIntelligenceScreen() {
             {/* Attribution Breakdown & AI Explanation */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
               {/* Attribution */}
-              <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                     MOVE ATTRIBUTION
                   </span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#93a1af" }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
                     of <b style={{ color }}>{pct(stock.c)}</b> today
                   </span>
                   <button
                     onClick={() => setShowAttHow(!showAttHow)}
-                    style={{ marginLeft: "auto", height: 24, padding: "0 9px", border: "1px solid #2a3a4a", background: "transparent", color: "#a9c6e3", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, cursor: "pointer" }}
+                    style={{ marginLeft: "auto", height: 24, padding: "0 9px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, cursor: "pointer" }}
                   >
                     HOW IT WORKS
                   </button>
                 </div>
+                {showAttHow && (
+                  <div style={{ padding: "10px 12px", background: "var(--si-evidence-bg, rgba(89,128,166,0.08))", border: "1px solid var(--si-border-sec, #2a3a4a)", borderRadius: 4, fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.45 }}>
+                    Attribution estimates the contribution of broad market regime, sector momentum, company-specific news events, and technical flows to today&apos;s price move using multi-factor regression models.
+                  </div>
+                )}
                 {/* Stacked Bar */}
-                <div style={{ display: "flex", height: 16, width: "100%" }}>
+                <div style={{ display: "flex", height: 16, width: "100%", borderRadius: 2, overflow: "hidden" }}>
                   {[
-                    { k: "Sector", p: stockDetail.att[0], c: "#7fa8d0" },
-                    { k: "News", p: stockDetail.att[1], c: "#4ade80" },
-                    { k: "Market", p: stockDetail.att[2], c: "#c4a6ff" },
-                    { k: "Technical", p: stockDetail.att[3], c: "#f5b031" },
+                    { k: "Sector", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
+                    { k: "News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
+                    { k: "Market", p: stockDetail.att[2], c: "#8b5cf6" },
+                    { k: "Technical", p: stockDetail.att[3], c: "#f59e0b" },
                   ].map((at, idx) => (
-                    <span key={idx} style={{ height: 16, width: `${at.p}%`, background: at.c, borderRight: "2px solid #080b10" }} />
+                    <span key={idx} style={{ height: 16, width: `${at.p}%`, background: at.c, borderRight: "2px solid var(--si-card-solid, #080b10)" }} />
                   ))}
                 </div>
                 {/* Factor rows */}
                 {[
-                  { k: "Sector Momentum", p: stockDetail.att[0], c: "#7fa8d0" },
-                  { k: "Company News", p: stockDetail.att[1], c: "#4ade80" },
-                  { k: "Market Regime", p: stockDetail.att[2], c: "#c4a6ff" },
-                  { k: "Technical Factors", p: stockDetail.att[3], c: "#f5b031" },
+                  { k: "Sector Momentum", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
+                  { k: "Company News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
+                  { k: "Market Regime", p: stockDetail.att[2], c: "#8b5cf6" },
+                  { k: "Technical Factors", p: stockDetail.att[3], c: "#f59e0b" },
                 ].map((at, idx) => (
                   <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <span style={{ width: 10, height: 10, background: at.c }} />
-                    <span style={{ width: 120, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "#e8eef4" }}>{at.k}</span>
-                    <div style={{ flex: 1, height: 6, background: "#1c2733" }}>
+                    <span style={{ width: 120, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{at.k}</span>
+                    <div style={{ flex: 1, height: 6, background: "var(--si-card-tert, #1c2733)" }}>
                       <div style={{ height: 6, width: `${at.p}%`, background: at.c }} />
                     </div>
-                    <span style={{ width: 44, textAlign: "right", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: "#e8eef4" }}>{at.p}%</span>
+                    <span style={{ width: 44, textAlign: "right", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{at.p}%</span>
                   </div>
                 ))}
               </div>
@@ -1702,28 +2080,28 @@ export function StockIntelligenceScreen() {
               <div
                 style={{
                   position: "relative",
-                  border: "1px solid #5980a6",
-                  background: "linear-gradient(180deg, rgba(89,128,166,0.14), rgba(12,17,24,0.92))",
+                  border: "1px solid var(--si-border-sec, #5980a6)",
+                  background: "var(--si-card, rgba(12,17,24,0.92))",
                   padding: "20px 22px",
                   display: "flex",
                   flexDirection: "column",
                   gap: 14,
                 }}
               >
-                <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid #7fa8d0", borderTop: "1px solid #7fa8d0" }} />
-                <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "#a9c6e3" }}>
+                <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+                <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                   ✦ AI EXPLANATION
                 </span>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "#e8eef4", lineHeight: 1.55 }}>
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
                   {stockDetail.movedTxt}
                 </div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", color: "#5980a6", borderTop: "1px solid #1c2733", paddingTop: 12 }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
                   SUPPORTING EVIDENCE
                 </div>
                 {stockDetail.movedEv.map((me, i) => (
-                  <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "#d5dfe9", display: "flex", gap: 8, lineHeight: 1.45 }}>
-                    <span style={{ color: "#7fa8d0" }}>▸</span>
+                  <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #d5dfe9)", display: "flex", gap: 8, lineHeight: 1.45 }}>
+                    <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
                     <span>{me}</span>
                   </div>
                 ))}
@@ -1745,22 +2123,22 @@ export function StockIntelligenceScreen() {
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Upcoming Catalysts Timeline */}
-              <div style={{ position: "relative", border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "22px 24px" }}>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4", marginBottom: 22 }}>
+              <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px" }}>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 22 }}>
                   UPCOMING CATALYSTS
                 </div>
                 <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
                   <div style={{ position: "absolute", left: 0, right: 0, top: 12, height: 2, background: "linear-gradient(90deg, #5980a6, rgba(89,128,166,0.2))", zIndex: 0 }} />
                   {stockDetail.upcoming.map((up, i) => (
                     <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, zIndex: 1 }}>
-                      <span style={{ width: 26, height: 26, borderRadius: 99, background: "#080b10", border: "2px solid #7fa8d0", boxShadow: "0 0 0 6px rgba(127,168,208,0.12)" }} />
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "#a9c6e3", marginTop: 4 }}>
+                      <span style={{ width: 26, height: 26, borderRadius: 99, background: "var(--si-bg, #080b10)", border: "2px solid #7fa8d0", boxShadow: "0 0 0 6px rgba(127,168,208,0.12)" }} />
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "var(--si-accent-light, #a9c6e3)", marginTop: 4 }}>
                         {up.date} · {up.days}
                       </span>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "#e8eef4", lineHeight: 1 }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
                         {up.n}
                       </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "#93a1af", lineHeight: 1.45 }}>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
                         {up.txt}
                       </span>
                       <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "2px 8px", marginTop: 4 }}>
@@ -1774,13 +2152,13 @@ export function StockIntelligenceScreen() {
               {/* Forward Signals & Confluence Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 540px), 1fr))", gap: 18, alignItems: "start" }}>
                 {/* Left: 7 Forward Signals */}
-                <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       FORWARD SIGNALS
                     </span>
                     <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#93a1af" }}>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
                         Click a signal to see what it’s made of
                       </span>
                       <button
@@ -1788,9 +2166,9 @@ export function StockIntelligenceScreen() {
                         style={{
                           height: 24,
                           padding: "0 9px",
-                          border: "1px solid #2a3a4a",
+                          border: "1px solid var(--si-border-sec, #2a3a4a)",
                           background: "transparent",
-                          color: "#a9c6e3",
+                          color: "var(--si-accent-light, #a9c6e3)",
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: 10,
                           letterSpacing: "0.12em",
@@ -1804,11 +2182,11 @@ export function StockIntelligenceScreen() {
 
                   {/* How It Works Explanatory Dropdown */}
                   {showFwdHow && (
-                    <div style={{ border: "1px solid #2a3a4a", background: "#0b1016", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#5980a6" }}>
+                    <div style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", background: "#0b1016", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                         HOW EACH FORWARD SIGNAL IS CALCULATED
                       </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#93a1af", lineHeight: 1.55, margin: "6px 0 4px" }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.55, margin: "6px 0 4px" }}>
                         Each signal runs 0–100, where 50 is neutral. It is built from the stock’s own drivers: each driver gets an evidence score from current data, and the signal is their weighted average. Scored for a 6-month bullish view. Above 70 points to upside, below 40 to downside.
                       </div>
                       {[
@@ -1820,12 +2198,12 @@ export function StockIntelligenceScreen() {
                         ["Positioning", "FLOWS", "Call/put skew, short interest, days to cover, plus institutional ownership change from latest 13F filings."],
                         ["Macro", "REGIME", "Market trend, VIX level, interest rate volatility, and sector sensitivity to broader liquidity."],
                       ].map(([sName, sSrc, sDesc], idx) => (
-                        <div key={idx} style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 14, padding: "10px 0", borderBottom: "1px solid #1c2733" }}>
+                        <div key={idx} style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                           <div>
-                            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "#e8eef4" }}>{sName}</div>
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em", color: "#5d6b79", marginTop: 3 }}>{sSrc}</div>
+                            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</div>
+                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em", color: "var(--si-text-sub, #5d6b79)", marginTop: 3 }}>{sSrc}</div>
                           </div>
-                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#c9d4de", lineHeight: 1.5 }}>{sDesc}</div>
+                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #c9d4de)", lineHeight: 1.5 }}>{sDesc}</div>
                         </div>
                       ))}
                     </div>
@@ -1844,7 +2222,7 @@ export function StockIntelligenceScreen() {
                           onClick={() => setExpandedFwd((prev) => ({ ...prev, [c.k]: !prev[c.k] }))}
                           style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", padding: "4px 0" }}
                         >
-                          <span style={{ width: 100, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "#e8eef4" }}>
+                          <span style={{ width: 100, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                             {shortName}
                           </span>
                           <div style={{ flex: 1, display: "flex", gap: 3 }}>
@@ -1863,29 +2241,29 @@ export function StockIntelligenceScreen() {
                           <span style={{ width: 36, textAlign: "right", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: col }}>
                             {score}
                           </span>
-                          <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "#5980a6", fontSize: 12, flex: "none" }}>
+                          <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "var(--si-accent, #5980a6)", fontSize: 12, flex: "none" }}>
                             ▼
                           </span>
                         </div>
 
                         {/* Expandable Driver Evidence List */}
                         {isOpen && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 0, margin: "6px 0 4px 0", borderLeft: "1px solid #2a3a4a", paddingLeft: 12 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 0, margin: "6px 0 4px 0", borderLeft: "1px solid var(--si-border-sec, #2a3a4a)", paddingLeft: 12 }}>
                             {c.ds.map((xd: any, xidx: number) => {
                               const evCol = sc(xd.ev);
                               return (
                                 <div key={xidx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid #141d27" }}>
-                                  <span style={{ width: 58, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, color: xd.core ? "#a9c6e3" : "#7d8b99", border: "1px solid #2a3a4a", padding: "2px 0" }}>
+                                  <span style={{ width: 58, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, color: xd.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
                                     {xd.core ? "CORE" : "CONFIRM"}
                                   </span>
                                   <div style={{ flex: 1, minWidth: 120 }}>
-                                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "#e8eef4", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                                       <span>{xd.name}</span>
                                       {xd.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: "#f5b031" }}>◆ CRITICAL</span>}
                                     </div>
-                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#7d8b99", marginTop: 1 }}>
+                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 1 }}>
                                       {xd.val}
-                                      {xd.shared && <span style={{ color: "#5980a6" }}> · ↔ counted once</span>}
+                                      {xd.shared && <span style={{ color: "var(--si-accent, #5980a6)" }}> · ↔ counted once</span>}
                                     </div>
                                   </div>
                                   <div style={{ width: "clamp(36px,18%,90px)", flex: "none", height: 4, background: "#1c2733" }}>
@@ -1938,10 +2316,10 @@ export function StockIntelligenceScreen() {
                       />
                     </svg>
                     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 46, fontWeight: 700, color: "#e8eef4", lineHeight: 1 }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 46, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
                         {fAl}/7
                       </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "2px", color: "#93a1af" }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "2px", color: "var(--si-text-mid, #93a1af)" }}>
                         ALIGNED
                       </span>
                     </div>
@@ -1950,20 +2328,20 @@ export function StockIntelligenceScreen() {
                   {/* Ring Details */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "#5980a6" }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                         CONFLUENCE
                       </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 600, color: "#e8eef4", marginTop: 4 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
                         {fAl} of 7 signals aligned
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "#5980a6" }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                         CONFIDENCE
                       </div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "#e8eef4", lineHeight: 1, marginTop: 4 }}>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
                         {fConf}
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "#5d6b79" }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                           {" "}/ 100
                         </span>
                       </div>
@@ -1973,15 +2351,15 @@ export function StockIntelligenceScreen() {
               </div>
 
               {/* Invalidation Conditions */}
-              <div style={{ border: "1px solid rgba(127,168,208,0.45)", background: "rgba(12,17,24,0.9)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "#7fa8d0" }}>
+              <div style={{ border: "1px solid rgba(127,168,208,0.45)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent-soft, #7fa8d0)" }}>
                   WHAT WOULD INVALIDATE THIS THESIS?
                 </span>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
                   {stockDetail.invalid.map((iv, i) => (
-                    <div key={i} style={{ border: "1px solid #1c2733", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "#e8eef4" }}>{iv[0]}</span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "#93a1af" }}>{iv[1]}</span>
+                    <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[0]}</span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{iv[1]}</span>
                     </div>
                   ))}
                 </div>
@@ -2074,16 +2452,16 @@ export function StockIntelligenceScreen() {
               {/* 6 Financial Metric Cards with 8-Quarter Mini-Bars */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
                 {fundMetrics.map((fm, idx) => (
-                  <div key={idx} style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.14em", color: "#a9c6e3" }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent-light, #a9c6e3)" }}>
                         {fm.k}
                       </span>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: fm.col }}>
                         {fm.yoy}
                       </span>
                     </div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 26, fontWeight: 600, color: "#e8eef4" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 26, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                       {fm.last}
                     </div>
                     <div style={{ height: 80, display: "flex", alignItems: "flex-end", gap: 5, padding: "4px 0" }}>
@@ -2091,7 +2469,7 @@ export function StockIntelligenceScreen() {
                         <div key={bIdx} style={{ flex: 1, height: br.h, background: br.c, transition: "height 300ms ease" }} />
                       ))}
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#5d6b79" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-sub, #5d6b79)" }}>
                       <span>{fm.q0}</span>
                       <span>{fm.q1}</span>
                     </div>
@@ -2102,28 +2480,28 @@ export function StockIntelligenceScreen() {
               {/* Valuation & Peer Comparison Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: 18, alignItems: "start" }}>
                 {/* Valuation Multiples vs Peer Median */}
-                <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       VALUATION MULTIPLES
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#93a1af" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
                       ▮ {stock.t} &nbsp; ┃ Peer median
                     </span>
                   </div>
                   {valRows.map((vl, idx) => (
                     <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 34 }}>
-                      <span style={{ width: 100, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "#e8eef4" }}>
+                      <span style={{ width: 100, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                         {vl.k}
                       </span>
                       <div style={{ position: "relative", flex: 1, height: 10, background: "#1c2733" }}>
                         <div style={{ height: 10, width: vl.w, background: "#5980a6" }} />
                         <div style={{ position: "absolute", top: -4, left: vl.m, width: 2, height: 18, background: "#e8eef4", boxShadow: "0 0 6px rgba(255,255,255,0.4)" }} />
                       </div>
-                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: "#e8eef4" }}>
+                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                         {vl.v}
                       </span>
-                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "#93a1af" }}>
+                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
                         {vl.med}
                       </span>
                     </div>
@@ -2131,11 +2509,11 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 {/* Peer Comparison Table */}
-                <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                     PEER COMPARISON
                   </span>
-                  <div style={{ display: "grid", gridTemplateColumns: "130px repeat(5, minmax(70px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#5980a6", padding: "6px 0", borderBottom: "1px solid #1c2733" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "130px repeat(5, minmax(70px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <span>TICKER</span>
                     <span style={{ textAlign: "right" }}>MKT CAP</span>
                     <span style={{ textAlign: "right" }}>FWD P/E</span>
@@ -2154,9 +2532,9 @@ export function StockIntelligenceScreen() {
                           gridTemplateColumns: "130px repeat(5, minmax(70px, 1fr))",
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: 13,
-                          color: "#e8eef4",
+                          color: "var(--si-text-hi, #e8eef4)",
                           padding: "9px 0",
-                          borderBottom: "1px solid #1c2733",
+                          borderBottom: "1px solid var(--si-border, #1c2733)",
                           background: isSelf ? "rgba(89,128,166,0.16)" : "transparent",
                           boxShadow: isSelf ? `inset 2px 0 0 ${STEEL}` : "none",
                         }}
@@ -2179,10 +2557,10 @@ export function StockIntelligenceScreen() {
               {/* AI Fundamental Read with Evidence Toggle */}
               <div style={{ position: "relative", border: "1px solid #5980a6", background: "linear-gradient(180deg, rgba(89,128,166,0.14), rgba(12,17,24,0.92))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "#a9c6e3" }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
                     ✦ AI FUNDAMENTALS READ
                   </span>
-                  <div style={{ flex: 1, minWidth: 260, fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 500, color: "#e8eef4", lineHeight: 1.55 }}>
+                  <div style={{ flex: 1, minWidth: 260, fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
                     {stockDetail.fundTxt}
                   </div>
                   <button
@@ -2192,7 +2570,7 @@ export function StockIntelligenceScreen() {
                       padding: "0 12px",
                       border: "1px solid #5980a6",
                       background: "transparent",
-                      color: "#a9c6e3",
+                      color: "var(--si-accent-light, #a9c6e3)",
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: 12,
                       fontWeight: 600,
@@ -2204,10 +2582,10 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 {showFundEv && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid #1c2733", paddingTop: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
                     {(stockDetail.fundEv || []).map((fe, i) => (
-                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "#c4d0dc", display: "flex", gap: 8, lineHeight: 1.45 }}>
-                        <span style={{ color: "#7fa8d0" }}>▸</span>
+                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8, lineHeight: 1.45 }}>
+                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
                         <span>{fe}</span>
                       </div>
                     ))}
@@ -2224,9 +2602,9 @@ export function StockIntelligenceScreen() {
         {activeTab === "tech" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             {/* Live Technical CandleChart Card (Matches MC Overview) */}
-            <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "14px 16px 8px" }}>
+            <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 16px 8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                   {stock.t} · LIVE TECHNICAL CHART
                 </span>
                 <VendorTag v="polygon" />
@@ -2250,7 +2628,7 @@ export function StockIntelligenceScreen() {
                       <button
                         className={`rng indbtn${showEarnings ? " on" : ""}`}
                         onClick={() => setShowEarnings((v) => !v)}
-                        style={{ height: 28, padding: "0 10px", background: showEarnings ? "rgba(89,128,166,0.2)" : "transparent", border: "1px solid #2a3a4a", color: "#e8eef4", cursor: "pointer", fontSize: 12 }}
+                        style={{ height: 28, padding: "0 10px", background: showEarnings ? "rgba(89,128,166,0.2)" : "transparent", border: "1px solid var(--si-border-sec, #2a3a4a)", color: "var(--si-text-hi, #e8eef4)", cursor: "pointer", fontSize: 12 }}
                       >
                         Earnings
                       </button>
@@ -2271,13 +2649,13 @@ export function StockIntelligenceScreen() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
               {/* Technical Read */}
               <div style={{ position: "relative", border: "1px solid #5980a6", background: "linear-gradient(180deg, rgba(89,128,166,0.14), rgba(12,17,24,0.92))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "#a9c6e3" }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
                   ✦ TECHNICAL READ
                 </span>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
                   {stockDetail.read.map((rd, i) => (
-                    <div key={i} style={{ border: "1px solid #1c2733", padding: 10 }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "#5980a6" }}>
+                    <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: 10 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-accent, #5980a6)" }}>
                         {rd.k}
                       </div>
                       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: rd.col, marginTop: 4 }}>
@@ -2286,19 +2664,19 @@ export function StockIntelligenceScreen() {
                     </div>
                   ))}
                 </div>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#d5dfe9", lineHeight: 1.55 }}>
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
                   Price trades above rising 50-day and 200-day moving averages with constructive consolidation following the last momentum breakout.
                 </div>
               </div>
 
               {/* Key Levels */}
-              <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4", marginBottom: 8 }}>
+              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
                   KEY SUPPORT & RESISTANCE LEVELS
                 </span>
                 {stockDetail.levels.map((lv, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #1c2733" }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#93a1af" }}>{lv.k}</span>
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>{lv.k}</span>
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: lv.col }}>{lv.v}</span>
                   </div>
                 ))}
@@ -2325,16 +2703,46 @@ export function StockIntelligenceScreen() {
             sourceBadge?: string;
           }> = [];
 
-          const now = Date.now();
-          const calcDd = (dateStr: string) => {
-            const t = new Date(dateStr).getTime();
-            if (isNaN(t)) return 0;
-            return Math.round((t - now) / (1000 * 60 * 60 * 24));
+          const usNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+          const usYear = usNow.getFullYear();
+          const usMonth = usNow.getMonth();
+          const usDay = usNow.getDate();
+          const usTodayStart = new Date(usYear, usMonth, usDay).getTime();
+
+          const calcDd = (dateInput: string | number | Date): number => {
+            if (!dateInput) return 0;
+            if (typeof dateInput === "string") {
+              const trimmed = dateInput.trim();
+              const parts = trimmed.split(/\s+/);
+              if (parts.length === 2 && isNaN(new Date(trimmed).getTime())) {
+                const mStr = parts[0].toLowerCase().slice(0, 3);
+                const dNum = parseInt(parts[1], 10);
+                const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+                const mIdx = months.indexOf(mStr);
+                if (mIdx >= 0 && !isNaN(dNum)) {
+                  const targetDate = new Date(usYear, mIdx, dNum);
+                  return Math.round((targetDate.getTime() - usTodayStart) / (1000 * 60 * 60 * 24));
+                }
+              }
+            }
+            const d = new Date(dateInput);
+            if (isNaN(d.getTime())) return 0;
+            const targetUS = new Date(d.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const targetStart = new Date(targetUS.getFullYear(), targetUS.getMonth(), targetUS.getDate()).getTime();
+            return Math.round((targetStart - usTodayStart) / (1000 * 60 * 60 * 24));
           };
 
-          const fmtDateShort = (dateStr: string) => {
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime())) return dateStr;
+          const fmtDateShort = (dateInput: string | number | Date): string => {
+            if (!dateInput) return "";
+            if (typeof dateInput === "string") {
+              const trimmed = dateInput.trim();
+              const parts = trimmed.split(/\s+/);
+              if (parts.length === 2 && isNaN(new Date(trimmed).getTime())) {
+                return trimmed;
+              }
+            }
+            const d = new Date(dateInput);
+            if (isNaN(d.getTime())) return String(dateInput);
             return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
           };
 
@@ -2374,8 +2782,8 @@ export function StockIntelligenceScreen() {
               const dir = g.action === "upgrade" || (g.priceTarget && g.previousPriceTarget && g.priceTarget > g.previousPriceTarget)
                 ? "Positive"
                 : g.action === "downgrade"
-                ? "Risk"
-                : "Neutral";
+                  ? "Risk"
+                  : "Neutral";
               liveCatalystItems.push({
                 date: fmtDateShort(g.date),
                 cat: "Analyst actions",
@@ -2475,24 +2883,26 @@ export function StockIntelligenceScreen() {
 
           // 6. MACRO & SCHEDULED CORPORATE EVENTS (Calendar baseline)
           const baseEvents: typeof liveCatalystItems = [
-            { date: "Oct 2", cat: "Macro", ev: "Weak September payrolls ease rate-hike fears", note: "29K jobs vs 85K expected; growth stocks rallied.", imp: "MED", dir: "Positive", dd: -5, sourceBadge: "MACRO" },
-            { date: "Oct 25", cat: "Macro", ev: "Monthly options expiration (OpEx)", note: `Open interest clustered near ${usd(Math.round(stock.p * 1.04))}.`, imp: "LOW", dir: "Neutral", dd: 18, sourceBadge: "CALENDAR" },
-            { date: "Oct 29", cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Rate-sensitive growth names most exposed.", imp: "HIGH", dir: "Risk", dd: 22, sourceBadge: "FED" },
-            { date: "Oct 12", cat: "Industry events", ev: semi || stock.t === "PLTR" ? "AI Infrastructure Global Keynote" : `${stock.t} Investor Day & Tech Showcase`, note: "Product roadmap and partner announcements expected.", imp: "MED", dir: "Positive", dd: 5, sourceBadge: "EVENTS" },
-            { date: "Oct 14", cat: "Product launches", ev: `${stock.t} Next-Gen Platform Delivery & Ramp Update`, note: "Commercial shipping timeline and capacity availability.", imp: "MED", dir: "Positive", dd: 7, sourceBadge: "IR" },
-            { date: "Oct 9", cat: "Regulatory", ev: semi ? "Commerce Dept. export control assessment update" : "Global regulatory compliance review milestone", note: "Regional trade rules and cross-border operational oversight.", imp: "HIGH", dir: "Risk", dd: 2, sourceBadge: "REGULATORY" },
+            { date: "Oct 2", cat: "Macro", ev: "Weak September payrolls ease rate-hike fears", note: "29K jobs vs 85K expected; growth stocks rallied.", imp: "MED", dir: "Positive", dd: calcDd("Oct 2"), sourceBadge: "MACRO" },
+            { date: "Oct 9", cat: "Regulatory", ev: semi ? "Commerce Dept. export control assessment update" : "Global regulatory compliance review milestone", note: "Regional trade rules and cross-border operational oversight.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 9"), sourceBadge: "REGULATORY" },
+            { date: "Oct 12", cat: "Industry events", ev: semi || stock.t === "PLTR" ? "AI Infrastructure Global Keynote" : `${stock.t} Investor Day & Tech Showcase`, note: "Product roadmap and partner announcements expected.", imp: "MED", dir: "Positive", dd: calcDd("Oct 12"), sourceBadge: "EVENTS" },
+            { date: "Oct 14", cat: "Product launches", ev: `${stock.t} Next-Gen Platform Delivery & Ramp Update`, note: "Commercial shipping timeline and capacity availability.", imp: "MED", dir: "Positive", dd: calcDd("Oct 14"), sourceBadge: "IR" },
+            { date: "Oct 25", cat: "Macro", ev: "Monthly options expiration (OpEx)", note: `Open interest clustered near ${usd(Math.round(stock.p * 1.04))}.`, imp: "LOW", dir: "Neutral", dd: calcDd("Oct 25"), sourceBadge: "CALENDAR" },
+            { date: "Oct 29", cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Rate-sensitive growth names most exposed.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 29"), sourceBadge: "FED" },
           ];
 
           // Supplement with baseline items if no specific live rows are loaded
           if (!tickerEarnings.length) {
+            const P = getTP(stock.t);
+            const earnDateStr = P.cat ? P.cat.split("·")[1]?.trim() || "Nov 18" : "Nov 18";
             baseEvents.push({
-              date: "Oct 21",
+              date: earnDateStr,
               cat: "Earnings",
-              ev: `Q3 earnings · consensus EPS $${(stock.p / stock.fpe / 4).toFixed(2)}`,
+              ev: `Q3 earnings · consensus EPS $${(stock.p / Math.max(10, stock.fpe) / 4).toFixed(2)}`,
               note: `Implied move ±${(5 + stock.conf / 20).toFixed(1)}%; guidance matters more than the print.`,
               imp: "HIGH",
               dir: "Binary",
-              dd: 14,
+              dd: calcDd(earnDateStr),
               sourceBadge: "CALENDAR",
             });
           }
@@ -2504,7 +2914,7 @@ export function StockIntelligenceScreen() {
               note: "Overweight reiterated; cites demand visibility into 2027.",
               imp: "MED",
               dir: "Positive",
-              dd: -13,
+              dd: calcDd("Sep 24"),
               sourceBadge: "CONSENSUS",
             });
           }
@@ -2516,19 +2926,25 @@ export function StockIntelligenceScreen() {
               note: "Pre-scheduled sale; < 0.1% of holdings.",
               imp: "LOW",
               dir: "Neutral",
-              dd: -7,
+              dd: calcDd("Sep 30"),
               sourceBadge: "SEC FORM 4",
             });
           }
           if (!inst13FData?.holders?.length) {
             baseEvents.push(
-              { date: "Aug 14", cat: "13F filings", ev: `Q2 13F: institutions added ${stock.t} on net`, note: "Top filers increased stakes; ownership concentration rose.", imp: "MED", dir: "Positive", dd: -54, sourceBadge: "13F SEC" },
-              { date: "Nov 14", cat: "13F filings", ev: "Q3 13F filing deadline", note: `First look at how funds positioned in ${stock.t} through September.`, imp: "MED", dir: "Neutral", dd: 38, sourceBadge: "SEC DEADLINE" }
+              { date: "Aug 14", cat: "13F filings", ev: `Q2 13F: institutions added ${stock.t} on net`, note: "Top filers increased stakes; ownership concentration rose.", imp: "MED", dir: "Positive", dd: calcDd("Aug 14"), sourceBadge: "13F SEC" },
+              { date: "Nov 14", cat: "13F filings", ev: "Q3 13F filing deadline", note: `First look at how funds positioned in ${stock.t} through September.`, imp: "MED", dir: "Neutral", dd: calcDd("Nov 14"), sourceBadge: "SEC DEADLINE" }
             );
           }
 
-          const combined = [...liveCatalystItems, ...baseEvents];
-          combined.sort((a, b) => a.dd - b.dd);
+
+          const MAX_DAYS = 365;
+
+          const combined = [...liveCatalystItems, ...baseEvents].filter(
+            (c) => c.dd >= -MAX_DAYS && c.dd <= MAX_DAYS
+          );
+
+          combined.sort((a, b) => b.dd - a.dd);
 
           // Category count breakdown
           const countMap: Record<string, number> = { All: combined.length };
@@ -2567,7 +2983,7 @@ export function StockIntelligenceScreen() {
                         padding: "0 14px",
                         border: `1px solid ${isSelected ? STEEL : "#2a3a4a"}`,
                         background: isSelected ? "rgba(89,128,166,0.22)" : "transparent",
-                        color: isSelected ? "#e8eef4" : "#93a1af",
+                        color: "var(--si-text-hi, #e8eef4)",
                         fontFamily: "'Manrope', sans-serif",
                         fontSize: 13,
                         fontWeight: 600,
@@ -2596,7 +3012,7 @@ export function StockIntelligenceScreen() {
                     key={i}
                     style={{
                       border: `1px solid ${cItem.bd}`,
-                      background: "rgba(12,17,24,0.9)",
+                      background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                       padding: "16px 20px",
                       display: "grid",
                       gridTemplateColumns: "140px 1fr auto",
@@ -2605,7 +3021,7 @@ export function StockIntelligenceScreen() {
                     }}
                   >
                     <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "#e8eef4" }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                         {cItem.date}
                       </div>
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: cItem.whenCol, marginTop: 2 }}>
@@ -2619,8 +3035,8 @@ export function StockIntelligenceScreen() {
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 10,
                             letterSpacing: "0.1em",
-                            color: "#a9c6e3",
-                            border: "1px solid #2a3a4a",
+                            color: "var(--si-accent-light, #a9c6e3)",
+                            border: "1px solid var(--si-border-sec, #2a3a4a)",
                             padding: "1px 6px",
                           }}
                         >
@@ -2641,11 +3057,11 @@ export function StockIntelligenceScreen() {
                             {cItem.sourceBadge}
                           </span>
                         )}
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "#e8eef4" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                           {cItem.ev}
                         </span>
                       </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "#93a1af", marginTop: 4 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
                         {cItem.note}
                       </div>
                     </div>
@@ -2660,7 +3076,7 @@ export function StockIntelligenceScreen() {
                   </div>
                 ))}
                 {cats.length === 0 && (
-                  <div style={{ padding: "40px 20px", textAlign: "center", border: "1px dashed #2a3a4a", color: "#93a1af", fontFamily: "'Manrope', sans-serif", fontSize: 14 }}>
+                  <div style={{ padding: "40px 20px", textAlign: "center", border: "1px dashed #2a3a4a", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 14 }}>
                     No catalysts found matching category “{selectedCatFilter}”
                   </div>
                 )}
@@ -2674,42 +3090,42 @@ export function StockIntelligenceScreen() {
             ==================================================== */}
         {activeTab === "ai" && (
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 18, alignItems: "start" }}>
-            <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", display: "flex", flexDirection: "column", minHeight: 560 }}>
-              <div style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid #1c2733" }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "#a9c6e3" }}>
+            <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", display: "flex", flexDirection: "column", minHeight: 560 }}>
+              <div style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 18px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
                   ✦ AI RESEARCH COPILOT
                 </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#93a1af", border: "1px solid #2a3a4a", padding: "2px 8px" }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-mid, #93a1af)", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 8px" }}>
                   CONTEXT · {stock.t} · {stock.setup}
                 </span>
               </div>
               <div style={{ flex: 1, padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
                 {aiAnalysisDoc?.analysis && (
-                  <div style={{ border: "1px solid rgba(127,168,208,0.25)", background: "rgba(12,17,24,0.6)", padding: "14px 16px", marginBottom: 8 }}>
+                  <div style={{ border: "1px solid rgba(127,168,208,0.25)", background: "var(--si-card-tint, rgba(12, 17, 24, 0.6))", padding: "14px 16px", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#4ade80", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.1)", padding: "1px 6px" }}>
                         MC AI SYNTHESIS · {aiAnalysisDoc.model || "GEMINI"}
                       </span>
                       {aiAnalysisDoc.analysis.headline && (
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "#e8eef4" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                           {aiAnalysisDoc.analysis.headline}
                         </span>
                       )}
                     </div>
                     {aiAnalysisDoc.analysis.newsSummary && (
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "#93a1af", lineHeight: 1.5, marginBottom: 6 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, marginBottom: 6 }}>
                         {aiAnalysisDoc.analysis.newsSummary}
                       </div>
                     )}
                     {aiAnalysisDoc.analysis.technicalSummary && (
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#7fa8d0", lineHeight: 1.4 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-accent-soft, #7fa8d0)", lineHeight: 1.4 }}>
                         {aiAnalysisDoc.analysis.technicalSummary}
                       </div>
                     )}
                   </div>
                 )}
                 {aiChat.length === 0 && !aiAnalysisDoc?.analysis && (
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#93a1af", lineHeight: 1.6 }}>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.6 }}>
                     Ask anything about {stock.t}. The assistant already has full knowledge of current signals, catalysts, valuation metrics, and intraday factor attribution.
                   </div>
                 )}
@@ -2724,7 +3140,7 @@ export function StockIntelligenceScreen() {
                       padding: "12px 16px",
                       fontFamily: "'Manrope', sans-serif",
                       fontSize: 14.5,
-                      color: "#e8eef4",
+                      color: "var(--si-text-hi, #e8eef4)",
                       lineHeight: 1.55,
                       whiteSpace: "pre-wrap",
                     }}
@@ -2733,12 +3149,12 @@ export function StockIntelligenceScreen() {
                   </div>
                 ))}
                 {aiBusy && (
-                  <div style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "#7fa8d0" }}>
+                  <div style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-accent-soft, #7fa8d0)" }}>
                     Synthesizing research on {stock.t}…
                   </div>
                 )}
               </div>
-              <div style={{ borderTop: "1px solid #1c2733", padding: 12, display: "flex", gap: 8 }}>
+              <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", padding: 12, display: "flex", gap: 8 }}>
                 <input
                   value={aiQuery}
                   onChange={(e) => setAiQuery(e.target.value)}
@@ -2747,9 +3163,9 @@ export function StockIntelligenceScreen() {
                   style={{
                     flex: 1,
                     height: 42,
-                    background: "#080b10",
-                    border: "1px solid #2a3a4a",
-                    color: "#e8eef4",
+                    background: "var(--si-bg, #080b10)",
+                    border: "1px solid var(--si-border-sec, #2a3a4a)",
+                    color: "var(--si-text-hi, #e8eef4)",
                     fontFamily: "'Manrope', sans-serif",
                     fontSize: 14,
                     padding: "0 14px",
@@ -2777,7 +3193,7 @@ export function StockIntelligenceScreen() {
 
             {/* Suggested Prompts */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", color: "#5980a6" }}>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                 SUGGESTED RESEARCH QUESTIONS
               </div>
               {[
@@ -2791,10 +3207,10 @@ export function StockIntelligenceScreen() {
                   onClick={() => handleAskAI(sq)}
                   style={{
                     textAlign: "left",
-                    border: "1px solid #1c2733",
-                    background: "rgba(12,17,24,0.9)",
+                    border: "1px solid var(--si-border, #1c2733)",
+                    background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                     padding: 14,
-                    color: "#e8eef4",
+                    color: "var(--si-text-hi, #e8eef4)",
                     fontFamily: "'Manrope', sans-serif",
                     fontSize: 13.5,
                     lineHeight: 1.4,
@@ -2830,12 +3246,12 @@ export function StockIntelligenceScreen() {
           const thBand: [string, string] = thAtRisk
             ? ["THESIS AT RISK", DN]
             : thConf >= 75
-            ? ["HIGH CONVICTION", UP]
-            : thConf >= 60
-            ? ["CONSTRUCTIVE", STEEL]
-            : thConf >= 45
-            ? ["MIXED", "#f5b031"]
-            : ["WEAK", DN];
+              ? ["HIGH CONVICTION", UP]
+              : thConf >= 60
+                ? ["CONSTRUCTIVE", STEEL]
+                : thConf >= 45
+                  ? ["MIXED", "#f5b031"]
+                  : ["WEAK", DN];
 
           const thStrong = thRun.drv.slice().sort((a: any, b: any) => b.pts - a.pts).slice(0, 3);
           const thWeak = thRun.drv.filter((d: any) => d.share >= 2).sort((a: any, b: any) => a.ev - b.ev).slice(0, 2);
@@ -2883,8 +3299,8 @@ export function StockIntelligenceScreen() {
               <div
                 style={{
                   position: "relative",
-                  border: "1px solid #1c2733",
-                  background: "rgba(12,17,24,0.9)",
+                  border: "1px solid var(--si-border, #1c2733)",
+                  background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                   padding: "16px 20px",
                   display: "flex",
                   alignItems: "center",
@@ -2893,20 +3309,20 @@ export function StockIntelligenceScreen() {
                 }}
               >
                 <div style={{ minWidth: 230 }}>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "#5980a6" }}>
-                    THESIS LAB · {stock.t}
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+                    STRATEGY LAB · {stock.t}
                   </div>
-                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: "#e8eef4", marginTop: 4 }}>
-                    {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} THESIS
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
+                    {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} STRATEGY
                   </div>
                 </div>
 
                 {/* Mode Toggle */}
                 <div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5980a6", marginBottom: 6 }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
                     MODE
                   </div>
-                  <div style={{ display: "flex", border: "1px solid #2a3a4a", padding: 3, gap: 3 }}>
+                  <div style={{ display: "flex", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: 3, gap: 3 }}>
                     {(["NORMAL", "ADVANCED"] as const).map((m) => (
                       <button
                         key={m}
@@ -2933,7 +3349,7 @@ export function StockIntelligenceScreen() {
 
                 {/* Direction Toggle */}
                 <div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5980a6", marginBottom: 6 }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
                     DIRECTION
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -2954,7 +3370,7 @@ export function StockIntelligenceScreen() {
                             height: 38,
                             border: `1px solid ${isActive ? col : "#1c2733"}`,
                             background: isActive ? (d === "Bull" ? "rgba(74,222,128,0.12)" : "rgba(240,86,86,0.12)") : "transparent",
-                            color: isActive ? "#e8eef4" : "#93a1af",
+                            color: "var(--si-text-hi, #e8eef4)",
                             fontFamily: "'Manrope', sans-serif",
                             fontSize: 14,
                             fontWeight: 700,
@@ -2971,7 +3387,7 @@ export function StockIntelligenceScreen() {
 
                 {/* Horizon Toggle */}
                 <div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5980a6", marginBottom: 6 }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
                     HORIZON
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -2991,7 +3407,7 @@ export function StockIntelligenceScreen() {
                             height: 38,
                             border: `1px solid ${isActive ? STEEL : "#1c2733"}`,
                             background: isActive ? "rgba(89,128,166,0.2)" : "transparent",
-                            color: isActive ? "#e8eef4" : "#93a1af",
+                            color: "var(--si-text-hi, #e8eef4)",
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 13,
                             fontWeight: 600,
@@ -3008,9 +3424,9 @@ export function StockIntelligenceScreen() {
 
                 {/* Driver Weights Strip */}
                 <div style={{ marginLeft: "auto", minWidth: 300, flex: 1, maxWidth: 520, paddingTop: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5980a6", marginBottom: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
                     <span>DRIVER WEIGHTS</span>
-                    <span style={{ color: "#93a1af", letterSpacing: "0.04em" }}>
+                    <span style={{ color: "var(--si-text-mid, #93a1af)", letterSpacing: "0.04em" }}>
                       {labHz === "1M" ? "1M tactical" : labHz === "12M" ? "12M fundamental" : "3–6M balanced"} · {thBull ? "bullish" : "bearish"}
                     </span>
                   </div>
@@ -3033,11 +3449,11 @@ export function StockIntelligenceScreen() {
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: 10,
                           fontWeight: 600,
-                          color: "#d5dfe9",
+                          color: "var(--si-text-body, #d5dfe9)",
                           transition: "flex-grow 300ms ease",
                         }}
                       >
-                        <span style={{ color: "#93a1af" }}>{c.k}</span>
+                        <span style={{ color: "var(--si-text-mid, #93a1af)" }}>{c.k}</span>
                         <span>{Math.round(c.w)}%</span>
                       </div>
                     ))}
@@ -3049,12 +3465,12 @@ export function StockIntelligenceScreen() {
               {labMode === "NORMAL" && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))", gap: 18, alignItems: "start" }}>
                   {/* Left Column: Market History */}
-                  <div style={{ position: "relative", border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                         MARKET HISTORY
                       </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.12em", color: "#93a1af" }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.12em", color: "var(--si-text-mid, #93a1af)" }}>
                         LAST {labHz === "12M" ? "12 MONTHS" : labHz}
                       </span>
                     </div>
@@ -3070,14 +3486,14 @@ export function StockIntelligenceScreen() {
 
                       {/* Target dashed line */}
                       <div style={{ position: "absolute", left: 0, right: 0, top: tgtYPct, borderTop: "1px dashed #4ade80" }}>
-                        <span style={{ position: "absolute", right: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#4ade80", background: "#0c1118", padding: "1px 6px" }}>
+                        <span style={{ position: "absolute", right: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#4ade80", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>
                           TARGET {usd(tgtV)}
                         </span>
                       </div>
 
                       {/* Invalidation dashed line */}
                       <div style={{ position: "absolute", left: 0, right: 0, top: stopYPct, borderTop: "1px dashed #f05656" }}>
-                        <span style={{ position: "absolute", left: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#f05656", background: "#0c1118", padding: "1px 6px" }}>
+                        <span style={{ position: "absolute", left: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#f05656", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>
                           INVALIDATION {usd(stopV)}
                         </span>
                       </div>
@@ -3087,7 +3503,7 @@ export function StockIntelligenceScreen() {
                     </div>
 
                     {/* Stats Grid */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", borderTop: "1px solid #1c2733", borderLeft: "1px solid #1c2733" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
                       {[
                         ["RETURN", pct1(hsRet), hsRet >= 0 ? UP : DN],
                         ["HIGH", usd(Math.max(...hs)), "#e8eef4"],
@@ -3095,8 +3511,8 @@ export function StockIntelligenceScreen() {
                         ["MAX DRAWDOWN", pct1(hsDD * 100), DN],
                         ["VOLATILITY", Math.round(hsVolA) + "% ann.", "#e8eef4"],
                       ].map(([k, v, c], idx) => (
-                        <div key={idx} style={{ padding: "10px 12px", borderRight: "1px solid #1c2733", borderBottom: "1px solid #1c2733" }}>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#5980a6" }}>
+                        <div key={idx} style={{ padding: "10px 12px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>
                             {k}
                           </div>
                           <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: c as string, marginTop: 2 }}>
@@ -3113,14 +3529,14 @@ export function StockIntelligenceScreen() {
                     <div style={{ position: "relative", border: "1px solid #5980a6", background: "linear-gradient(180deg, rgba(89,128,166,0.14), rgba(12,17,24,0.92))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
                       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
                         <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "#a9c6e3" }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
                             THESIS CONFIDENCE
                           </div>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 56, fontWeight: 700, lineHeight: 0.9, color: "#e8eef4" }}>
+                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 56, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
                               {thConf}
                             </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "#5d6b79" }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
                               / 100
                             </span>
                           </div>
@@ -3129,7 +3545,7 @@ export function StockIntelligenceScreen() {
                           <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.08em", color: thBand[1] }}>
                             {thBand[0]}
                           </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "#93a1af", marginTop: 4 }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
                             CORE INTACT <span style={{ color: thRun.coreOk === thRun.core.length ? UP : "#f5b031" }}>{thRun.coreOk} / {thRun.core.length}</span>
                           </div>
                         </div>
@@ -3145,15 +3561,15 @@ export function StockIntelligenceScreen() {
                         </div>
                       )}
 
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#d5dfe9", lineHeight: 1.55 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
                         {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
                       </div>
                     </div>
 
                     {/* Weights Breakdown Accordion */}
-                    <div style={{ position: "relative", border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                           WEIGHTS
                         </span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: labWeightsState ? "#f5b031" : STEEL, border: `1px solid ${labWeightsState ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
@@ -3161,7 +3577,7 @@ export function StockIntelligenceScreen() {
                         </span>
                       </div>
 
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#93a1af", lineHeight: 1.45 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
                         {labHz === "1M" ? "Short horizon — price action, catalysts and positioning carry the most weight." : labHz === "12M" ? "Long horizon — business quality and valuation carry the most weight." : "Balanced 3–6 month horizon — fundamentals and revisions lead, confirmed by price action."}
                       </div>
 
@@ -3169,46 +3585,46 @@ export function StockIntelligenceScreen() {
                         const isOpen = expandedLabDrivers[c.k];
                         const top = c.ds.slice().sort((a: any, b: any) => (b.share || 0) - (a.share || 0))[0];
                         return (
-                          <div key={c.k} style={{ borderBottom: "1px solid #1c2733" }}>
+                          <div key={c.k} style={{ borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                             <div
                               onClick={() => setExpandedLabDrivers((prev) => ({ ...prev, [c.k]: !prev[c.k] }))}
                               style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 44px 34px 14px", alignItems: "center", gap: 12, padding: "7px 0", cursor: "pointer" }}
                             >
                               <div style={{ minWidth: 0 }}>
-                                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "#e8eef4" }}>
+                                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                                   {c.label}
                                 </div>
-                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#7d8b99", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                   {top ? `${top.name} · ${top.val}` : "—"}
                                 </div>
                               </div>
                               <div style={{ height: 6, background: "#1c2733" }}>
                                 <div style={{ height: 6, width: `${(c.w / 30) * 100}%`, background: "#5980a6", transition: "width 300ms ease" }} />
                               </div>
-                              <span style={{ textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "#e8eef4" }}>
+                              <span style={{ textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                                 {Math.round(c.w)}%
                               </span>
                               <span style={{ textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: thEvCol(c.score) }}>
                                 {Math.round(c.score)}
                               </span>
-                              <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "#5980a6", fontSize: 12 }}>
+                              <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "var(--si-accent, #5980a6)", fontSize: 12 }}>
                                 ▼
                               </span>
                             </div>
 
                             {isOpen && (
-                              <div style={{ display: "flex", flexDirection: "column", gap: 0, margin: "6px 0 4px 0", borderLeft: "1px solid #2a3a4a", paddingLeft: 12 }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 0, margin: "6px 0 4px 0", borderLeft: "1px solid var(--si-border-sec, #2a3a4a)", paddingLeft: 12 }}>
                                 {c.ds.map((xd: any, xidx: number) => (
                                   <div key={xidx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid #141d27" }}>
-                                    <span style={{ width: 58, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, color: xd.core ? "#a9c6e3" : "#7d8b99", border: "1px solid #2a3a4a", padding: "2px 0" }}>
+                                    <span style={{ width: 58, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, color: xd.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
                                       {xd.core ? "CORE" : "CONFIRM"}
                                     </span>
                                     <div style={{ flex: 1, minWidth: 120 }}>
-                                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "#e8eef4", display: "flex", gap: 6, alignItems: "center" }}>
+                                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 6, alignItems: "center" }}>
                                         <span>{xd.name}</span>
                                         {xd.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: "#f5b031" }}>◆ CRITICAL</span>}
                                       </div>
-                                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#7d8b99", marginTop: 1 }}>
+                                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 1 }}>
                                         {xd.val}
                                       </div>
                                     </div>
@@ -3226,7 +3642,7 @@ export function StockIntelligenceScreen() {
                         );
                       })}
 
-                      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#5d6b79", marginTop: 4 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-sub, #5d6b79)", marginTop: 4 }}>
                         <span>WEIGHT · EVIDENCE · Click a row for its drivers</span>
                         <span>Advanced mode to edit weights</span>
                       </div>
@@ -3239,20 +3655,20 @@ export function StockIntelligenceScreen() {
               {labMode === "ADVANCED" && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))", gap: 18, alignItems: "start" }}>
                   {/* Edit Weights Panel */}
-                  <div style={{ position: "relative", border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, gridColumn: "1 / -1" }}>
+                  <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, gridColumn: "1 / -1" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                         EDIT WEIGHTS
                       </span>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: labWeightsState ? "#f5b031" : STEEL, border: `1px solid ${labWeightsState ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
                         {labWeightsState ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}
                       </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#93a1af" }}>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
                         Drag to set relative importance — automatically normalized to 100%.
                       </span>
                       <button
                         onClick={() => setLabWeightsState(null)}
-                        style={{ marginLeft: "auto", height: 28, padding: "0 10px", border: "1px solid #2a3a4a", background: "transparent", color: "#a9c6e3", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        style={{ marginLeft: "auto", height: 28, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                       >
                         Reset to engine weights
                       </button>
@@ -3264,9 +3680,9 @@ export function StockIntelligenceScreen() {
                         const pctVal = Math.round(thRun.W[k]);
                         return (
                           <div key={k}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "#d5dfe9", marginBottom: 4 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "var(--si-text-body, #d5dfe9)", marginBottom: 4 }}>
                               <span>{label}</span>
-                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "#e8eef4" }}>{pctVal}%</span>
+                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{pctVal}%</span>
                             </div>
                             <input
                               type="range"
@@ -3287,25 +3703,25 @@ export function StockIntelligenceScreen() {
                   </div>
 
                   {/* Left Column: Driver Evidence Table */}
-                  <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)" }}>
-                    <div style={{ height: 50, display: "flex", alignItems: "center", gap: 14, padding: "0 18px", borderBottom: "1px solid #1c2733" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                  <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
+                    <div style={{ height: 50, display: "flex", alignItems: "center", gap: 14, padding: "0 18px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                         THESIS ENGINE · DRIVER EVIDENCE
                       </span>
-                      <span style={{ marginLeft: "auto", display: "flex", gap: 12, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#7d8b99" }}>
-                        <span style={{ border: "1px solid #5980a6", color: "#a9c6e3", padding: "2px 6px" }}>CORE</span>
-                        <span style={{ border: "1px solid #2a3a4a", padding: "2px 6px" }}>CONFIRM</span>
+                      <span style={{ marginLeft: "auto", display: "flex", gap: 12, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-dim, #7d8b99)" }}>
+                        <span style={{ border: "1px solid #5980a6", color: "var(--si-accent-light, #a9c6e3)", padding: "2px 6px" }}>CORE</span>
+                        <span style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 6px" }}>CONFIRM</span>
                         <span style={{ color: "#f5b031" }}>◆ CRITICAL</span>
                       </span>
                     </div>
 
                     {thRun.cats.map((c: any) => (
-                      <div key={c.k} style={{ borderBottom: "1px solid #1c2733" }}>
+                      <div key={c.k} style={{ borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px 8px" }}>
-                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.12em", color: "#e8eef4", flex: 1 }}>
+                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #e8eef4)", flex: 1 }}>
                             {c.label}
                           </span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "#93a1af" }}>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>
                             WEIGHT {Math.round(c.w)}%
                           </span>
                           <div style={{ width: 120, height: 6, background: "#1c2733" }}>
@@ -3314,7 +3730,7 @@ export function StockIntelligenceScreen() {
                           <span style={{ width: 30, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: thEvCol(c.score) }}>
                             {Math.round(c.score)}
                           </span>
-                          <span style={{ width: 66, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "#a9c6e3" }}>
+                          <span style={{ width: 66, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
                             {c.pts.toFixed(1)} pts
                           </span>
                         </div>
@@ -3327,11 +3743,11 @@ export function StockIntelligenceScreen() {
                                 {dv.core ? "CORE" : "CONFIRM"}
                               </span>
                               <div style={{ flex: 1, minWidth: 140 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "#e8eef4" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
                                   <span>{dv.name}</span>
                                   {dv.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: bad ? DN : "#f5b031" }}>◆ CRITICAL</span>}
                                 </div>
-                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#7d8b99", marginTop: 2 }}>
+                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-dim, #7d8b99)", marginTop: 2 }}>
                                   {dv.val}
                                 </div>
                               </div>
@@ -3341,7 +3757,7 @@ export function StockIntelligenceScreen() {
                               <span style={{ width: 28, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: thEvCol(dv.ev) }}>
                                 {Math.round(dv.ev)}
                               </span>
-                              <span style={{ width: 52, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 500, color: "#93a1af" }}>
+                              <span style={{ width: 52, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 500, color: "var(--si-text-mid, #93a1af)" }}>
                                 +{dv.pts.toFixed(1)}
                               </span>
                             </div>
@@ -3358,14 +3774,14 @@ export function StockIntelligenceScreen() {
                     <div style={{ position: "relative", border: "1px solid #5980a6", background: "linear-gradient(180deg, rgba(89,128,166,0.14), rgba(12,17,24,0.92))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
                       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
                         <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "#a9c6e3" }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
                             THESIS CONFIDENCE
                           </div>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 64, fontWeight: 700, lineHeight: 0.9, color: "#e8eef4" }}>
+                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 64, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
                               {thConf}
                             </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "#5d6b79" }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
                               / 100
                             </span>
                           </div>
@@ -3374,7 +3790,7 @@ export function StockIntelligenceScreen() {
                           <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.08em", color: thBand[1] }}>
                             {thBand[0]}
                           </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "#93a1af", marginTop: 4 }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
                             CORE INTACT <span style={{ color: thRun.coreOk === thRun.core.length ? UP : "#f5b031" }}>{thRun.coreOk} / {thRun.core.length}</span>
                           </div>
                         </div>
@@ -3390,7 +3806,7 @@ export function StockIntelligenceScreen() {
                         </div>
                       )}
 
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#d5dfe9", lineHeight: 1.55 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
                         {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
                       </div>
 
@@ -3401,9 +3817,9 @@ export function StockIntelligenceScreen() {
                             STRONGEST
                           </div>
                           {thStrong.map((sg: any, idx: number) => (
-                            <div key={idx} style={{ padding: "5px 0", borderBottom: "1px solid #1c2733" }}>
-                              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "#e8eef4", lineHeight: 1.3 }}>{sg.name}</div>
-                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#93a1af" }}>{sg.val} · +{sg.pts.toFixed(1)} pts</div>
+                            <div key={idx} style={{ padding: "5px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.3 }}>{sg.name}</div>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-mid, #93a1af)" }}>{sg.val} · +{sg.pts.toFixed(1)} pts</div>
                             </div>
                           ))}
                         </div>
@@ -3413,8 +3829,8 @@ export function StockIntelligenceScreen() {
                             WEAKEST
                           </div>
                           {thWeak.map((wk: any, idx: number) => (
-                            <div key={idx} style={{ padding: "5px 0", borderBottom: "1px solid #1c2733" }}>
-                              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "#e8eef4", lineHeight: 1.3 }}>{wk.name}</div>
+                            <div key={idx} style={{ padding: "5px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.3 }}>{wk.name}</div>
                               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: thEvCol(wk.ev) }}>{wk.val} · ev {Math.round(wk.ev)}</div>
                             </div>
                           ))}
@@ -3422,23 +3838,23 @@ export function StockIntelligenceScreen() {
                       </div>
 
                       {/* What changed */}
-                      <div style={{ borderTop: "1px solid #1c2733", paddingTop: 10 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "#5980a6" }}>
+                      <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)" }}>
                           <span>WHAT CHANGED</span>
                           <span style={{ color: dConf > 0 ? UP : dConf < 0 ? "#f5b031" : "#93a1af" }}>
                             {dConf >= 0 ? "+" : ""}{dConf} vs last week
                           </span>
                         </div>
-                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#c5d0db", marginTop: 6, lineHeight: 1.45 }}>
+                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #c5d0db)", marginTop: 6, lineHeight: 1.45 }}>
                           {thMover.length > 0 ? thMover.map((d: any) => `${d.name} ${d.dd > 0 ? "strengthened" : "weakened"} (${d.dd > 0 ? "+" : ""}${d.dd})`).join(" · ") : "No material driver change this week."}
                         </div>
                       </div>
                     </div>
 
                     {/* Price Target & Overrides */}
-                    <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                           PRICE TARGET
                         </span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: targetOverride != null ? "#f5b031" : STEEL, border: `1px solid ${targetOverride != null ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
@@ -3446,13 +3862,13 @@ export function StockIntelligenceScreen() {
                         </span>
                         <button
                           onClick={() => setLabEditTargets(!labEditTargets)}
-                          style={{ marginLeft: "auto", height: 28, padding: "0 10px", border: "1px solid #2a3a4a", background: "transparent", color: "#a9c6e3", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                          style={{ marginLeft: "auto", height: 28, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                         >
                           {labEditTargets ? "Done" : "Edit / Override"}
                         </button>
                       </div>
 
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, color: "#e8eef4", lineHeight: 1 }}>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
                         {usd(tgtV)}
                       </div>
 
@@ -3460,7 +3876,7 @@ export function StockIntelligenceScreen() {
                       <div style={{ position: "relative", height: 56, margin: "4px 6px 0" }}>
                         <div style={{ position: "absolute", left: 0, right: 0, top: 26, height: 2, background: "#1c2733" }} />
                         <div style={{ position: "absolute", top: 18, left: thPos(stopV), width: 2, height: 18, background: "#f05656" }} />
-                        <div style={{ position: "absolute", top: 16, left: thPos(tgtV), width: 12, height: 12, marginLeft: -5, border: "2px solid #e8eef4", background: "#080b10", transform: "rotate(45deg)", transition: "left 300ms ease" }} />
+                        <div style={{ position: "absolute", top: 16, left: thPos(tgtV), width: 12, height: 12, marginLeft: -5, border: "2px solid #e8eef4", background: "var(--si-bg, #080b10)", transform: "rotate(45deg)", transition: "left 300ms ease" }} />
 
                         {[
                           ["BEAR", TT.dn, DN],
@@ -3471,42 +3887,42 @@ export function StockIntelligenceScreen() {
                           <div key={idx} style={{ position: "absolute", top: 0, left: thPos(v as number), transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
                             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", color: c as string }}>{k}</span>
                             <span style={{ width: 1, height: 14, background: c as string, marginTop: 2 }} />
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 500, color: "#93a1af", marginTop: 16 }}>{usd(v as number)}</span>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 500, color: "var(--si-text-mid, #93a1af)", marginTop: 16 }}>{usd(v as number)}</span>
                           </div>
                         ))}
                       </div>
 
                       {/* Evidence sources */}
                       <div style={{ marginTop: 8 }}>
-                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "#5980a6", marginBottom: 4 }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 4 }}>
                           EVIDENCE SOURCES
                         </div>
                         {TT.src.map((sr: any, idx: number) => (
-                          <div key={idx} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid #1c2733" }}>
-                            <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "#e8eef4" }}>
-                              {sr[0]} <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#7d8b99" }}>· {sr[1]}</span>
+                          <div key={idx} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                            <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
+                              {sr[0]} <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)" }}>· {sr[1]}</span>
                             </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "#a9c6e3" }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
                               {usd(sr[2])}
                             </span>
                           </div>
                         ))}
                         <div style={{ display: "flex", gap: 10, padding: "6px 0" }}>
-                          <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "#e8eef4" }}>
+                          <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
                             Estimate-revision adjustment
                           </span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "#a9c6e3" }}>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
                             {pct1(TT.revAdj * 100)}
                           </span>
                         </div>
                       </div>
 
                       {labEditTargets && (
-                        <div style={{ borderTop: "1px solid #1c2733", paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+                        <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
                           <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#5980a6", marginBottom: 6 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
                               <span>OVERRIDE TARGET · SUGGESTED {usd(TT.target)}</span>
-                              <span style={{ color: "#e8eef4" }}>{usd(tgtV)}</span>
+                              <span style={{ color: "var(--si-text-hi, #e8eef4)" }}>{usd(tgtV)}</span>
                             </div>
                             <input
                               type="range"
@@ -3520,7 +3936,7 @@ export function StockIntelligenceScreen() {
                           </div>
 
                           <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#5980a6", marginBottom: 6 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
                               <span>OVERRIDE INVALIDATION · SUGGESTED {usd(TT.stop)}</span>
                               <span style={{ color: "#f05656" }}>{usd(stopV)}</span>
                             </div>
@@ -3540,7 +3956,7 @@ export function StockIntelligenceScreen() {
                               setTargetOverride(null);
                               setStopOverride(null);
                             }}
-                            style={{ alignSelf: "flex-start", height: 28, padding: "0 10px", border: "1px solid #2a3a4a", background: "transparent", color: "#93a1af", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                            style={{ alignSelf: "flex-start", height: 28, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                           >
                             Reset to suggested
                           </button>
@@ -3549,9 +3965,9 @@ export function StockIntelligenceScreen() {
                     </div>
 
                     {/* Invalidation Rules */}
-                    <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4" }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                           INVALIDATION
                         </span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: stopOverride != null ? "#f5b031" : STEEL, border: `1px solid ${stopOverride != null ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
@@ -3559,15 +3975,15 @@ export function StockIntelligenceScreen() {
                         </span>
                       </div>
 
-                      <div style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: "1px solid #1c2733" }}>
+                      <div style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <span style={{ width: 84, flex: "none", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f05656", paddingTop: 3 }}>
                           PRICE
                         </span>
                         <div>
-                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "#e8eef4" }}>
+                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                             Daily close {thBull ? "below" : "above"} {usd(stopV)}
                           </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#7d8b99", marginTop: 2 }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-dim, #7d8b99)", marginTop: 2 }}>
                             {thBull ? `${labHz === "12M" ? "200-DMA" : "50-DMA / breakout shelf"} at ${usd(TT.lvl)}, less a 1.5% buffer` : `${usd(TPt.res)} resistance plus a 1.5% buffer`}
                           </div>
                         </div>
@@ -3579,7 +3995,7 @@ export function StockIntelligenceScreen() {
                         </span>
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {(thBull ? TPt.fi : TPt.fiB).map((rule: string, rIdx: number) => (
-                            <div key={rIdx} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "#e8eef4" }}>
+                            <div key={rIdx} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
                               {rule}
                             </div>
                           ))}
@@ -3595,7 +4011,7 @@ export function StockIntelligenceScreen() {
                 style={{
                   position: "relative",
                   border: "1px solid #5980a6",
-                  background: "rgba(12,17,24,0.95)",
+                  background: "var(--si-card, rgba(12, 17, 24, 0.95))",
                   padding: "20px 22px",
                   display: "flex",
                   flexDirection: "column",
@@ -3603,15 +4019,15 @@ export function StockIntelligenceScreen() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.16em", color: "#a9c6e3" }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
                     THESIS CARD
                   </span>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "#e8eef4" }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                     {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} THESIS
                   </span>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid #1c2733", borderLeft: "1px solid #1c2733" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
                   {[
                     ["TARGET", usd(tgtV), thBull ? UP : DN],
                     ["INVALIDATION", usd(stopV), DN],
@@ -3621,21 +4037,21 @@ export function StockIntelligenceScreen() {
                     ["THESIS CONFIDENCE", `${thConf} / 100`, thBand[1]],
                     ["CORE DRIVERS INTACT", `${thRun.coreOk} of ${thRun.core.length}`, thRun.coreOk === thRun.core.length ? UP : "#f5b031"],
                   ].map(([k, v, c], idx) => (
-                    <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid #1c2733", borderBottom: "1px solid #1c2733" }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#5980a6" }}>{k}</div>
+                    <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>{k}</div>
                       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, color: c as string, marginTop: 4 }}>{v}</div>
                     </div>
                   ))}
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-                  <div style={{ border: "1px solid #1c2733", padding: "12px 14px" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#5980a6" }}>KEY CATALYST</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "#e8eef4", marginTop: 6 }}>{TPt.cat}</div>
+                  <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>KEY CATALYST</div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.cat}</div>
                   </div>
-                  <div style={{ border: "1px solid #1c2733", padding: "12px 14px" }}>
+                  <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f5b031" }}>BIGGEST RISK</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "#e8eef4", marginTop: 6 }}>{TPt.risk}</div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.risk}</div>
                   </div>
                 </div>
 
@@ -3655,7 +4071,7 @@ export function StockIntelligenceScreen() {
                     setSavedThesis(newT);
                     try {
                       localStorage.setItem(`si_thesis_${stock.t}`, JSON.stringify(newT));
-                    } catch {}
+                    } catch { }
                     setActiveTab("mon");
                   }}
                   style={{
@@ -3671,7 +4087,7 @@ export function StockIntelligenceScreen() {
                     transition: "background 160ms",
                   }}
                 >
-                  Save & Monitor Thesis →
+                  Save & Monitor Strategy →
                 </button>
               </div>
             </div>
@@ -3679,23 +4095,90 @@ export function StockIntelligenceScreen() {
         })()}
 
         {/* ====================================================
-            TAB 9: THESIS MONITOR (Issue 7: Full Monitored View)
+            TAB 9: STRATEGY MONITOR (Issue 7: Full Monitored View)
             ==================================================== */}
         {activeTab === "mon" && (() => {
           if (!savedThesis) {
             return (
-              <div style={{ border: "1px dashed #2a3a4a", padding: 40, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, letterSpacing: "0.08em", color: "#e8eef4" }}>
-                  NO THESIS MONITORED FOR {stock.t}
+              <div
+                style={{
+                  border: "1px dashed var(--si-border-dashed, #2a3a4a)",
+                  borderRadius: 8,
+                  padding: "64px 24px",
+                  textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 16,
+                  background: "var(--si-card, rgba(12, 17, 24, 0.9))",
+                  maxWidth: 680,
+                  margin: "40px auto",
+                  boxShadow: "var(--si-shadow, 0 4px 16px rgba(0,0,0,0.5))",
+                }}
+              >
+                <div
+                  style={{
+                    width: 58,
+                    height: 58,
+                    borderRadius: "50%",
+                    background: "var(--si-accent-bg, rgba(89, 128, 166, 0.18))",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--si-accent-soft, #7fa8d0)",
+                    marginBottom: 4,
+                  }}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  </svg>
+                </div>
+                <span
+                  style={{
+                    fontFamily: "'Barlow Condensed', sans-serif",
+                    fontSize: 28,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    color: "var(--si-text-hi, #e8eef4)",
+                  }}
+                >
+                  NO STRATEGY MONITORED FOR {stock.t}
                 </span>
-                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#93a1af" }}>
-                  Build one in Thesis Lab and SI will track every driver for you.
+                <span
+                  style={{
+                    fontFamily: "'Manrope', sans-serif",
+                    fontSize: 15,
+                    color: "var(--si-text-mid, #93a1af)",
+                    maxWidth: 480,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  Save information in Strategy Lab to monitor your strategy. Configure your direction, target price, invalidation stop, and key driver weights to activate real-time tracking.
                 </span>
                 <button
+                  type="button"
                   onClick={() => setActiveTab("lab")}
-                  style={{ height: 42, padding: "0 18px", border: "none", background: "#5980a6", color: "#fff", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                  style={{
+                    height: 44,
+                    padding: "0 24px",
+                    border: "none",
+                    background: "var(--si-accent-btn, #5980a6)",
+                    color: "#ffffff",
+                    fontFamily: "'Manrope', sans-serif",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    letterSpacing: "0.02em",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginTop: 6,
+                    transition: "all 150ms ease",
+                  }}
                 >
-                  Open Thesis Lab
+                  Save Information in Strategy Lab →
                 </button>
               </div>
             );
@@ -3758,13 +4241,13 @@ export function StockIntelligenceScreen() {
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Monitored Summary Box */}
-              <div style={{ position: "relative", border: `1px solid ${monCol}`, background: "rgba(12,17,24,0.9)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16, transition: "border-color 300ms" }}>
+              <div style={{ position: "relative", border: `1px solid ${monCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16, transition: "border-color 300ms" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 22, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 280 }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "#5980a6" }}>
-                      MONITORED THESIS · SAVED {savedThesis.savedDate.toUpperCase()}
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+                      MONITORED STRATEGY · SAVED {savedThesis.savedDate.toUpperCase()}
                     </div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "#e8eef4", marginTop: 6 }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>
                       {savedThesis.title}
                     </div>
 
@@ -3778,22 +4261,22 @@ export function StockIntelligenceScreen() {
                           setStopOverride(savedThesis.stop);
                           setActiveTab("lab");
                         }}
-                        style={{ height: 30, padding: "0 12px", border: "1px solid #2a3a4a", background: "transparent", color: "#a9c6e3", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                        style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                       >
-                        Edit in Thesis Lab
+                        Edit in Strategy Lab
                       </button>
 
                       {confirmDeleteThesis ? (
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffd2d2" }}>
-                            Delete thesis?
+                            Delete strategy?
                           </span>
                           <button
                             onClick={() => {
                               setSavedThesis(null);
                               try {
                                 localStorage.removeItem(`si_thesis_${stock.t}`);
-                              } catch {}
+                              } catch { }
                               setConfirmDeleteThesis(false);
                             }}
                             style={{ height: 30, padding: "0 12px", border: "none", background: "#f05656", color: "#fff", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
@@ -3802,7 +4285,7 @@ export function StockIntelligenceScreen() {
                           </button>
                           <button
                             onClick={() => setConfirmDeleteThesis(false)}
-                            style={{ height: 30, padding: "0 12px", border: "1px solid #2a3a4a", background: "transparent", color: "#93a1af", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                            style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                           >
                             Cancel
                           </button>
@@ -3819,7 +4302,7 @@ export function StockIntelligenceScreen() {
                   </div>
 
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "#5980a6" }}>STATUS</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>STATUS</div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, letterSpacing: "0.04em", color: monCol, transition: "color 300ms" }}>
                       {monStatus}
                     </div>
@@ -3844,7 +4327,7 @@ export function StockIntelligenceScreen() {
                           fontSize: 11,
                           fontWeight: 600,
                           letterSpacing: "0.08em",
-                          color: isCurrent ? "#e8eef4" : "#5d6b79",
+                          color: "var(--si-text-hi, #e8eef4)",
                           transition: "all 250ms",
                         }}
                       >
@@ -3855,9 +4338,9 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5980a6" }}>CHANGED BY</span>
-                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 700, color: "#e8eef4" }}>{monBy}</span>
-                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#c5d0db" }}>{monCause}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)" }}>CHANGED BY</span>
+                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{monBy}</span>
+                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-body, #c5d0db)" }}>{monCause}</span>
                 </div>
 
                 {/* Progress bar between stop and target */}
@@ -3875,33 +4358,33 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 {/* Metrics Grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid #1c2733", borderLeft: "1px solid #1c2733" }}>
-                  <div style={{ padding: "10px 14px", borderRight: "1px solid #1c2733", borderBottom: "1px solid #1c2733" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#5980a6" }}>CONFIDENCE AT SAVE</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "#e8eef4" }}>{savedThesis.confAtSave}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
+                  <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CONFIDENCE AT SAVE</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{savedThesis.confAtSave}</div>
                   </div>
-                  <div style={{ padding: "10px 14px", borderRight: "1px solid #1c2733", borderBottom: "1px solid #1c2733" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#5980a6" }}>CONFIDENCE NOW</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "#e8eef4" }}>
+                  <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CONFIDENCE NOW</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                       {Math.round(monRun.conf)}{" "}
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: monDelta > 0 ? UP : monDelta < 0 ? "#f5b031" : "#93a1af" }}>
                         ({monDelta >= 0 ? "+" : ""}{Math.round(monDelta)})
                       </span>
                     </div>
                   </div>
-                  <div style={{ padding: "10px 14px", borderRight: "1px solid #1c2733", borderBottom: "1px solid #1c2733" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#5980a6" }}>CORE DRIVERS INTACT</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "#e8eef4" }}>{monRun.coreOk} / {monRun.core.length}</div>
+                  <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CORE DRIVERS INTACT</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{monRun.coreOk} / {monRun.core.length}</div>
                   </div>
-                  <div style={{ padding: "10px 14px", borderRight: "1px solid #1c2733", borderBottom: "1px solid #1c2733" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#5980a6" }}>PRICE</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "#e8eef4" }}>{usd(monPx)}</div>
+                  <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>PRICE</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{usd(monPx)}</div>
                   </div>
                 </div>
 
                 {/* Simulate Scenarios Bar */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5980a6", marginRight: 4 }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginRight: 4 }}>
                     SIMULATE
                   </span>
                   {[
@@ -3920,7 +4403,7 @@ export function StockIntelligenceScreen() {
                           padding: "0 12px",
                           border: `1px solid ${isCur ? STEEL : "#1c2733"}`,
                           background: isCur ? "rgba(89,128,166,0.22)" : "transparent",
-                          color: isCur ? "#e8eef4" : "#93a1af",
+                          color: "var(--si-text-hi, #e8eef4)",
                           fontFamily: "'Manrope', sans-serif",
                           fontSize: 12,
                           fontWeight: 600,
@@ -3938,14 +4421,14 @@ export function StockIntelligenceScreen() {
               {/* Driver Tracking Table & Invalidation Checks */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 18, alignItems: "start" }}>
                 {/* Driver Tracking Table */}
-                <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px" }}>
+                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px" }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4", flex: 1 }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", flex: 1 }}>
                       DRIVER TRACKING
                     </span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "#5d6b79", width: 46, textAlign: "right" }}>SAVED</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "#5d6b79", width: 46, textAlign: "right" }}>NOW</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "#5d6b79", width: 42, textAlign: "right" }}>Δ</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-text-sub, #5d6b79)", width: 46, textAlign: "right" }}>SAVED</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-text-sub, #5d6b79)", width: 46, textAlign: "right" }}>NOW</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-text-sub, #5d6b79)", width: 42, textAlign: "right" }}>Δ</span>
                     <span style={{ width: 92 }} />
                   </div>
 
@@ -3957,23 +4440,23 @@ export function StockIntelligenceScreen() {
                     const stt = isFail
                       ? ["FAILED", DN]
                       : dv <= -3
-                      ? ["SLIPPING", "#f5b031"]
-                      : dv >= 3
-                      ? ["IMPROVING", UP]
-                      : ["HOLDING", STEEL];
+                        ? ["SLIPPING", "#f5b031"]
+                        : dv >= 3
+                          ? ["IMPROVING", UP]
+                          : ["HOLDING", STEEL];
 
                     return (
-                      <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid #1c2733" }}>
-                        <span style={{ width: 62, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: d.core ? "#a9c6e3" : "#7d8b99", border: "1px solid #2a3a4a", padding: "2px 0" }}>
+                      <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                        <span style={{ width: 62, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: d.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
                           {d.core ? "CORE" : "CONFIRM"}
                         </span>
-                        <span style={{ flex: 1, minWidth: 0, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "#e8eef4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <span style={{ flex: 1, minWidth: 0, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {d.name}
                         </span>
-                        <span style={{ width: 36, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "#93a1af" }}>
+                        <span style={{ width: 36, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
                           {was}
                         </span>
-                        <span style={{ width: 36, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "#e8eef4" }}>
+                        <span style={{ width: 36, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                           {now}
                         </span>
                         <span style={{ width: 34, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: dv > 0 ? UP : dv < 0 ? "#f5b031" : "#93a1af" }}>
@@ -3990,8 +4473,8 @@ export function StockIntelligenceScreen() {
                 {/* Right Side: Invalidation Checks & Alert Log */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                   {/* Invalidation Checks */}
-                  <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px" }}>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4", marginBottom: 12 }}>
+                  <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px" }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 12 }}>
                       INVALIDATION CHECKS
                     </div>
                     {[
@@ -4010,9 +4493,9 @@ export function StockIntelligenceScreen() {
                         };
                       }),
                     ].map((fc, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #1c2733" }}>
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <span style={{ width: 9, height: 9, borderRadius: 99, background: fc.c, boxShadow: `0 0 8px ${fc.c}` }} />
-                        <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "#e8eef4" }}>
+                        <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
                           {fc.k}
                         </span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: fc.c }}>
@@ -4023,8 +4506,8 @@ export function StockIntelligenceScreen() {
                   </div>
 
                   {/* Alert Log */}
-                  <div style={{ border: "1px solid #1c2733", background: "rgba(12,17,24,0.9)", padding: "18px 20px" }}>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "#e8eef4", marginBottom: 12 }}>
+                  <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px" }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 12 }}>
                       ALERT LOG
                     </div>
                     {[
@@ -4033,11 +4516,11 @@ export function StockIntelligenceScreen() {
                       ["Today 10:15", `Market regime check: constructive liquidity environment.`],
                       [savedThesis.savedDate, `Thesis saved · confidence ${savedThesis.confAtSave} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
                     ].map(([tt, m], i) => (
-                      <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: "1px solid #1c2733" }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "#5980a6", width: 88, flex: "none" }}>
+                      <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", width: 88, flex: "none" }}>
                           {tt}
                         </span>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#d5dfe9", lineHeight: 1.45 }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.45 }}>
                           {m}
                         </span>
                       </div>
