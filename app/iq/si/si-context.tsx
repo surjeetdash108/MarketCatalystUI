@@ -216,12 +216,12 @@ export function useSI() {
       isSI: false,
       siTicker: null,
       activeTab: "overview" as SITab,
-      setActiveTab: () => {},
-      enterSI: () => {},
-      exitToMC: () => {},
-      goToSearch: () => {},
-      toggleSI: () => {},
-      setSiTicker: () => {},
+      setActiveTab: () => { },
+      enterSI: () => { },
+      exitToMC: () => { },
+      goToSearch: () => { },
+      toggleSI: () => { },
+      setSiTicker: () => { },
     };
   }
   return ctx;

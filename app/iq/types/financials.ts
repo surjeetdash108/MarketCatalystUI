@@ -95,6 +95,76 @@ export function estimatedAnnualEps(
   return null;
 }
 
+/**
+ * Calculates Free Cash Flow for a single quarter.
+ * Requires either a valid finite provider-sourced freeCashFlow, or both finite
+ * operatingCashFlow and capitalExpenditures (operating - abs(CapEx)).
+ * Returns null if required data is missing or non-finite.
+ */
+export function computeQuarterFcf(q: {
+  freeCashFlow?: number | null;
+  operatingCashFlow?: number | null;
+  capitalExpenditures?: number | null;
+}): number | null {
+  if (
+    q.freeCashFlow != null &&
+    typeof q.freeCashFlow === "number" &&
+    Number.isFinite(q.freeCashFlow)
+  ) {
+    return q.freeCashFlow;
+  }
+  if (
+    q.operatingCashFlow != null &&
+    typeof q.operatingCashFlow === "number" &&
+    Number.isFinite(q.operatingCashFlow) &&
+    q.capitalExpenditures != null &&
+    typeof q.capitalExpenditures === "number" &&
+    Number.isFinite(q.capitalExpenditures)
+  ) {
+    return q.operatingCashFlow - Math.abs(q.capitalExpenditures);
+  }
+  return null;
+}
+
+/**
+ * Calculates TTM Free Cash Flow over the most recent 4 quarters.
+ * Strictly requires 4 valid, distinct quarterly periods.
+ * If any quarter lacks sufficient data or is non-finite, returns null (unavailable)
+ * rather than silently substituting zero.
+ */
+export function computeTtmFcf(
+  quarters: Array<{
+    fiscalPeriod?: string | null;
+    fiscalYear?: string | null;
+    endDate?: string | null;
+    freeCashFlow?: number | null;
+    operatingCashFlow?: number | null;
+    capitalExpenditures?: number | null;
+  }> | null | undefined,
+): number | null {
+  if (!quarters || quarters.length < 4) return null;
+  const recent4 = quarters.slice(-4);
+  const periods = new Set<string>();
+  for (const q of recent4) {
+    const key = (q.fiscalYear && q.fiscalPeriod)
+      ? `${q.fiscalYear}-${q.fiscalPeriod}`
+      : (q.endDate || null);
+    if (!key) return null;
+    periods.add(key);
+  }
+  if (periods.size !== 4) return null;
+
+  let sum = 0;
+  for (const q of recent4) {
+    const f = computeQuarterFcf(q);
+    if (f == null || !Number.isFinite(f)) {
+      return null;
+    }
+    sum += f;
+  }
+  return Number.isFinite(sum) ? sum : null;
+}
+
 export interface QuarterFinancials {
   fiscalPeriod: string | null;
   fiscalYear: string | null;
@@ -125,10 +195,15 @@ export interface QuarterFinancials {
   equity: number | null;
   inventory: number | null;
   longTermDebt: number | null;
+  totalDebt?: number | null;
+  cashAndCashEquivalents?: number | null;
   netCashFlow: number | null;
   operatingCashFlow: number | null;
   investingCashFlow: number | null;
   financingCashFlow: number | null;
+  freeCashFlow?: number | null;
+  capitalExpenditures?: number | null;
+  ebitda?: number | null;
   grossMarginPct: number | null;
   operatingMarginPct: number | null;
   netMarginPct: number | null;

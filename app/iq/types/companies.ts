@@ -41,6 +41,7 @@ export interface CompanyDoc {
   marketCap: number | null;
   rvol?: number | null;
   peRatio: number | null;
+  forwardPe?: number | null;
   // Latest reported EPS (eps) and trailing-twelve-month EPS (epsTtm), written
   // by /live/company (ondemand.service). Absent on bulk-synced docs.
   eps?: number | null;

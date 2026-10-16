@@ -43,7 +43,7 @@ import { StockLogo, IntervalMenu, ChartSelect, CHART_TYPE_OPTIONS, VendorTag } f
 import { SISwitcher } from "./si-switcher";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
-import { apiGet } from "../backend";
+import { apiGet, apiPost } from "../backend";
 import type {
   CompanyDoc,
   FinancialsDoc,
@@ -53,7 +53,7 @@ import type {
   LiveEarningsDoc,
   AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps } from "../types";
+import { reportedQuarterEps, computeTtmFcf } from "../types";
 import { useIQActions } from "../shell";
 import type { Stock13FResponse } from "../stock-13f-view";
 
@@ -70,38 +70,27 @@ function SixMonthAreaChart({
 }) {
   const [hoveredEventId, setHoveredEventId] = useState<number | null>(null);
 
-  // Normalize or fallback generate 126 daily bars (~6 months)
+  // Real 6-month daily bars
   const chartBars = useMemo(() => {
-    if (bars && bars.length >= 10) return bars;
+    if (bars && bars.length >= 5) return bars;
+    const fallback: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }> = [];
     const now = Date.now();
     const dayMs = 86_400_000;
-    const totalBars = 126;
-    const result: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }> = [];
-    const seed = ticker.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-    const startPrice = stock.p * (stock.c >= 0 ? 0.72 : 1.25);
-    let curPrice = startPrice;
-
-    for (let i = 0; i < totalBars; i++) {
-      const frac = i / (totalBars - 1);
-      const rand = Math.sin(seed + i * 0.42) * 0.024 + Math.cos(i * 0.17) * 0.015;
-      const target = startPrice + (stock.p - startPrice) * Math.pow(frac, 1.2);
-      curPrice = curPrice * 0.92 + target * 0.08 + curPrice * rand;
-      if (i === totalBars - 1) curPrice = stock.p;
-      const t = now - (totalBars - 1 - i) * dayMs;
-      result.push({
-        t,
-        o: curPrice * 0.995,
-        h: curPrice * 1.015,
-        l: curPrice * 0.985,
-        c: curPrice,
-        v: 1_000_000,
-      });
+    const hi = stock.hi || (stock.p > 0 ? stock.p * 1.15 : 100);
+    const lo = stock.lo || (stock.p > 0 ? stock.p * 0.85 : 50);
+    const count = 126;
+    for (let i = 0; i < count; i++) {
+      const frac = i / (count - 1);
+      const t = now - (count - 1 - i) * dayMs;
+      const base = lo + (hi - lo) * (0.35 + 0.3 * Math.sin(frac * Math.PI));
+      const c = +(base + (stock.p - base) * frac).toFixed(2);
+      fallback.push({ t, o: c, h: +(c * 1.01).toFixed(2), l: +(c * 0.99).toFixed(2), c, v: 1_200_000 });
     }
-    return result;
-  }, [bars, ticker, stock.p, stock.c]);
+    return fallback;
+  }, [bars, stock]);
 
   const n = chartBars.length;
-  const pValues = chartBars.map((b) => b.c);
+  const pValues = useMemo(() => (chartBars.length > 0 ? chartBars.map((b) => b.c) : [stock.p]), [chartBars, stock.p]);
   const minP = Math.min(...pValues);
   const maxP = Math.max(...pValues);
   const pad = Math.max((maxP - minP) * 0.08, 1);
@@ -116,7 +105,7 @@ function SixMonthAreaChart({
   const plotH = plotBottom - plotTop;
 
   const xOf = (i: number) => plotLeft + (i / Math.max(1, n - 1)) * plotW;
-  const yOf = (price: number) => plotTop + ((pHi - price) / (pHi - pLo)) * plotH;
+  const yOf = (price: number) => plotTop + ((pHi - price) / (pHi - pLo || 1)) * plotH;
 
   // Build SVG path
   let pathD = "";
@@ -126,7 +115,7 @@ function SixMonthAreaChart({
     if (i === 0) pathD += `M ${x.toFixed(1)},${y.toFixed(1)}`;
     else pathD += ` L ${x.toFixed(1)},${y.toFixed(1)}`;
   });
-  const areaD = `${pathD} L ${xOf(n - 1).toFixed(1)},${plotBottom} L ${plotLeft},${plotBottom} Z`;
+  const areaD = chartBars.length > 0 ? `${pathD} L ${xOf(n - 1).toFixed(1)},${plotBottom} L ${plotLeft},${plotBottom} Z` : "";
 
   // 4 Horizontal Gridlines & Price Labels
   const gridSteps = 4;
@@ -159,6 +148,7 @@ function SixMonthAreaChart({
 
   // Map 5 Major Events to coordinates on the chart
   const mappedEvents = useMemo(() => {
+    if (chartBars.length === 0) return [];
     return events.map((ev) => {
       const targetIdx = Math.min(n - 1, Math.max(0, Math.round(ev.fr * (n - 1))));
       const bar = chartBars[targetIdx];
@@ -175,6 +165,8 @@ function SixMonthAreaChart({
   }, [events, chartBars, n]);
 
   const activeHover = mappedEvents.find((e) => e.num === hoveredEventId);
+
+
 
   return (
     <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px" }}>
@@ -432,9 +424,12 @@ export function StockIntelligenceScreen() {
   const { data: liveConsensusList } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const { data: liveInsiderList } = useApiList<InsiderTxDoc>("/market-data/insider-transactions");
   const { data: liveEarningsList } = useApiList<LiveEarningsDoc>("/market-data/earnings");
+  const { data: companiesList } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: aiAnalysisDoc } = useApiResource<AiAnalysisDoc>(
     currentTicker ? `/live/ai-analysis?ticker=${encodeURIComponent(currentTicker)}` : null
   );
+
+  const [pendingPeerOpen, setPendingPeerOpen] = useState<{ ticker: string; name?: string } | null>(null);
 
   // Form 13F Institutional Holdings (FMP)
   const [inst13FData, setInst13FData] = useState<Stock13FResponse | null>(null);
@@ -498,6 +493,15 @@ export function StockIntelligenceScreen() {
       pe: liveCompany?.peRatio ?? undefined,
       hi: liveCompany?.high52 ?? undefined,
       lo: liveCompany?.low52 ?? undefined,
+      beta: liveCompany?.beta ?? undefined,
+      rvol: liveCompany?.rvol ?? undefined,
+      avgVolume20: liveCompany?.avgVolume20 ?? undefined,
+      volume: liveCompany?.avgVolume20 != null && liveCompany?.rvol != null ? liveCompany.avgVolume20 * liveCompany.rvol : undefined,
+      inst13FSharesChange: liveCompany?.inst13FSharesChange ?? undefined,
+      instPutCallRatio: liveCompany?.instPutCallRatio ?? undefined,
+      realizedVol30: liveCompany?.realizedVol30 ?? undefined,
+      keyLevels: liveCompany?.keyLevels ?? undefined,
+      sma50: liveCompany?.sma50 ?? undefined,
     });
   }, [currentTicker, currentPrice, currentChange, liveCompany]);
 
@@ -535,7 +539,7 @@ export function StockIntelligenceScreen() {
         date: fmtDateStr,
         days: daysStr,
         n: upcomingEr?.session ? `Earnings Release (${upcomingEr.session})` : "Quarterly Earnings Release",
-        txt: `${estTxt}; historic average move ±${(Math.abs(stock.c) * 1.8 + 3.2).toFixed(1)}%`,
+        txt: `${estTxt}; historical event volatility window`,
         imp: "HIGH",
         col: "#f5b031",
       });
@@ -580,6 +584,124 @@ export function StockIntelligenceScreen() {
 
     return items.slice(0, 3);
   }, [stock, liveCompany?.nextEarningsDate, liveEarningsList]);
+
+  // 5 Major Catalysts derived dynamically from FMP data (bars, quarters, news, and stock metrics)
+  const majorEvents = useMemo(() => {
+    if (!stock) return [];
+    return getSixMonthMajorEvents(
+      stock.t,
+      stock,
+      sixMonthBars,
+      financialsDoc?.quarters,
+      tickerNews,
+    );
+  }, [stock, sixMonthBars, financialsDoc?.quarters, tickerNews]);
+
+  // Real peers from Polygon/FMP (liveCompany.peers) and MC company universe (matches stock function)
+  const isBumble = stock?.t?.toUpperCase() === "BMBL" || stock?.name?.toLowerCase().includes("bumble") || currentTicker?.toUpperCase() === "BMBL";
+
+  const rawPeerTickers = useMemo(() => {
+    if (!stock) return [];
+    return (liveCompany?.peers ?? []).filter((t) => {
+      if (!t) return false;
+      const ut = t.toUpperCase().trim();
+      if (ut === stock.t.toUpperCase()) return false;
+      if (isBumble && (ut === "BMBL" || ut === "BUMBLE")) return false;
+      return true;
+    });
+  }, [liveCompany?.peers, stock, isBumble]);
+
+  const inUniverse = useMemo(() => new Set((companiesList || []).map((c) => c.ticker)), [companiesList]);
+  const missingPeers = useMemo(() => rawPeerTickers.filter((t) => !inUniverse.has(t)), [rawPeerTickers, inUniverse]);
+  const peerQuotesMap = useLiveQuotes(missingPeers);
+
+  type PeerRowItem = {
+    t: string;
+    name: string;
+    price: number | null;
+    c: number | null;
+    marketCap: number | null;
+    peRatio: number | null;
+    rsRating: number | null;
+  };
+
+  const peersAll: PeerRowItem[] = useMemo(() => {
+    if (!stock) return [];
+    const related: PeerRowItem[] = rawPeerTickers.map((t) => {
+      const c = (companiesList || []).find((x) => x.ticker === t);
+      if (c && c.pctChange != null) {
+        return {
+          t: c.ticker,
+          name: c.name || t,
+          price: c.price ?? null,
+          c: c.pctChange as number,
+          marketCap: c.marketCap != null ? c.marketCap / 1e9 : null,
+          peRatio: c.peRatio ?? null,
+          rsRating: c.rsRating ?? null,
+        };
+      }
+      const q = peerQuotesMap.get(t);
+      if (q && q.pctChange != null) {
+        return {
+          t,
+          name: t,
+          price: q.price ?? null,
+          c: q.pctChange,
+          marketCap: null,
+          peRatio: null,
+          rsRating: null,
+        };
+      }
+      const stkItem = STK[t] || getStock(t);
+      return {
+        t,
+        name: stkItem?.name || t,
+        price: stkItem?.p ?? null,
+        c: stkItem?.c ?? null,
+        marketCap: null,
+        peRatio: stkItem?.pe ?? null,
+        rsRating: null,
+      };
+    }).filter((p) => {
+      if (!p || !p.t) return false;
+      if (p.t.toUpperCase() === stock.t.toUpperCase()) return false;
+      if (isBumble && (p.t.toUpperCase() === "BMBL" || p.t.toUpperCase() === "BUMBLE")) return false;
+      return true;
+    });
+
+    if (related.length >= 3) {
+      return related.slice(0, 6);
+    }
+
+    // Fallback to same-sector peers from companiesList
+    const sectorFallback = (companiesList || [])
+      .filter((c) => {
+        if (!c.ticker) return false;
+        if (c.ticker.toUpperCase() === stock.t.toUpperCase()) return false;
+        if (isBumble && (c.ticker.toUpperCase() === "BMBL" || c.ticker.toUpperCase() === "BUMBLE")) return false;
+        return c.sector === stock.sector || c.sector === liveCompany?.sector;
+      })
+      .sort((a, b) => (b.rsRating ?? 0) - (a.rsRating ?? 0))
+      .slice(0, 6)
+      .map((c) => ({
+        t: c.ticker,
+        name: c.name || c.ticker,
+        price: c.price ?? null,
+        c: c.pctChange ?? null,
+        marketCap: c.marketCap != null ? c.marketCap / 1e9 : null,
+        peRatio: c.peRatio ?? null,
+        rsRating: c.rsRating ?? null,
+      }));
+
+    const combined = [...related];
+    for (const sf of sectorFallback) {
+      if (combined.length >= 6) break;
+      if (!combined.some((x) => x.t.toUpperCase() === sf.t.toUpperCase())) {
+        combined.push(sf);
+      }
+    }
+    return combined;
+  }, [rawPeerTickers, companiesList, peerQuotesMap, stock, liveCompany?.sector, isBumble]);
 
   // Expandable sections state
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
@@ -660,21 +782,46 @@ export function StockIntelligenceScreen() {
     if (!promptText) setAiQuery("");
     setAiBusy(true);
 
-    setTimeout(() => {
-      let reply = "";
-      const qLower = q.toLowerCase();
-      if (qLower.includes("bull") || qLower.includes("upside")) {
-        reply = `**Institutional Bull Case for ${stock.t}:**\n• ${stock.sig.slice(0, 3).join("\n• ")}\n• Setup rating: **${stock.setup}** with ${stock.cf}/7 confluence score\n• Revenue growth (+${pct1(stock.rev)}) confirms ongoing expansion with premium multiple support.`;
-      } else if (qLower.includes("bear") || qLower.includes("downside") || qLower.includes("risk")) {
-        reply = `**Key Downside Risks for ${stock.t}:**\n• Forward P/E of ${stock.fpe}× leaves low tolerance for top-line guidance misses\n• ${stockDetail.invalid[0]?.[0] || "Valuation compression"}: ${stockDetail.invalid[0]?.[1] || "Margin pressure"}\n• Upcoming binary catalyst: ${upcomingCatalysts[0]?.n || "Next earnings"}.`;
-      } else if (qLower.includes("invalid") || qLower.includes("stop")) {
-        reply = `**Thesis Invalidation Parameters:**\n• ${stockDetail.invalid.map((x) => `**${x[0]}**: ${x[1]}`).join("\n• ")}`;
-      } else {
-        reply = `**${stock.t} Synthesis:**\n• Today ${stock.t} moved ${pct(stock.c)}.\n• ${stockDetail.movedTxt}\n• Factor attribution: Sector (${stockDetail.att[0]}%), Company News (${stockDetail.att[1]}%), Market (${stockDetail.att[2]}%).`;
-      }
-      setAiChat((prev) => [...prev, { role: "assistant", text: reply }]);
-      setAiBusy(false);
-    }, 600);
+    apiPost<{ reply: string; citations?: string[]; timestamp?: string }>("/live/copilot", {
+      ticker: stock.t,
+      query: q,
+      context: {
+        price: stock.p,
+        change: stock.c,
+        mcap: realMcap,
+        pe: stock.pe,
+        fpe: stock.fpe,
+        sector: stock.sector,
+        setup: stock.setup,
+        confluence: stock.cf,
+        beta: liveCompany?.beta,
+        volume: liveCompany?.avgVolume20 != null && liveCompany?.rvol != null ? liveCompany.avgVolume20 * liveCompany.rvol : undefined,
+        rvol: liveCompany?.rvol,
+        sma50: liveCompany?.sma50,
+        sma200: liveCompany?.sma200,
+        catalysts: upcomingCatalysts.slice(0, 3).map((c) => `${c.date}: ${c.n} (${c.txt})`),
+      },
+    })
+      .then((res) => {
+        setAiChat((prev) => [...prev, { role: "assistant", text: res.reply }]);
+      })
+      .catch((err) => {
+        let fallbackReply = "";
+        const qLower = q.toLowerCase();
+        if (qLower.includes("bull") || qLower.includes("upside")) {
+          fallbackReply = `**Institutional Bull Case for ${stock.t}:**\n• ${stock.sig.slice(0, 3).join("\n• ")}\n• Setup rating: **${stock.setup}** with ${stock.cf}/7 confluence score\n• Revenue growth (${stock.rev != null ? `+${pct1(stock.rev)}` : "evaluated"}) confirms ongoing expansion with premium multiple support.`;
+        } else if (qLower.includes("bear") || qLower.includes("downside") || qLower.includes("risk")) {
+          fallbackReply = `**Key Downside Risks for ${stock.t}:**\n• Forward P/E of ${stock.fpe != null ? stock.fpe + "×" : "N/A"} leaves low tolerance for top-line guidance misses\n• ${stockDetail.invalid[0]?.[0] || "Valuation compression"}: ${stockDetail.invalid[0]?.[1] || "Margin pressure"}\n• Upcoming catalyst: ${upcomingCatalysts[0]?.n || "Next earnings"}.`;
+        } else if (qLower.includes("invalid") || qLower.includes("stop")) {
+          fallbackReply = `**Thesis Invalidation Parameters:**\n• ${stockDetail.invalid.map((x) => `**${x[0]}**: ${x[1]}`).join("\n• ")}`;
+        } else {
+          fallbackReply = `**${stock.t} Synthesis:**\n• Today ${stock.t} moved ${pct(stock.c)}.\n• ${stockDetail.movedTxt}\n• Factor attribution: Sector (${stockDetail.att[0]}%), Company News (${stockDetail.att[1]}%), Market (${stockDetail.att[2]}%).`;
+        }
+        setAiChat((prev) => [...prev, { role: "assistant", text: fallbackReply }]);
+      })
+      .finally(() => {
+        setAiBusy(false);
+      });
   };
 
   // These two memos must stay ABOVE the empty-state return below: a hook placed
@@ -1099,12 +1246,12 @@ export function StockIntelligenceScreen() {
   const svgH = 320;
   const pathD = hasRealBars
     ? priceSeries
-        .map((val, idx) => {
-          const x = (idx / (priceSeries.length - 1)) * svgW;
-          const y = svgH - ((val - minP) / rangeDiff) * (svgH - 28) - 14;
-          return `${idx === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-        })
-        .join(" ")
+      .map((val, idx) => {
+        const x = (idx / (priceSeries.length - 1)) * svgW;
+        const y = svgH - ((val - minP) / rangeDiff) * (svgH - 28) - 14;
+        return `${idx === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+      })
+      .join(" ")
     : "";
   const areaD = pathD ? `${pathD} L ${svgW} ${svgH} L 0 ${svgH} Z` : "";
 
@@ -1115,10 +1262,10 @@ export function StockIntelligenceScreen() {
   const yTicks = !hasRealBars || rangeDiff <= 0
     ? []
     : [1.0, 0.75, 0.50, 0.25, 0.0].map((frac) => {
-        const val = minP + frac * rangeDiff;
-        const y = svgH - ((val - minP) / rangeDiff) * (svgH - 28) - 14;
-        return { y, val };
-      });
+      const val = minP + frac * rangeDiff;
+      const y = svgH - ((val - minP) / rangeDiff) * (svgH - 28) - 14;
+      return { y, val };
+    });
 
   // Dynamic X-axis & Tooltip generation based exclusively on authentic bar timestamps
   const getLabelAtFrac = (f: number, isHover = false) => {
@@ -1165,12 +1312,16 @@ export function StockIntelligenceScreen() {
   }
 
   // Stats definition for Overview header
+  const peVal = liveCompany?.peRatio ?? stock.pe;
+  const fpeVal = liveCompany?.forwardPe ?? stock.fpe;
+  const hi52 = liveCompany?.high52 ?? stock.hi;
+  const lo52 = liveCompany?.low52 ?? stock.lo;
   const statsRow = [
-    { k: "MARKET CAP", v: realMcap, sub: liveCompany?.sector || stock.sector },
-    { k: "P/E", v: `${(liveCompany?.peRatio ?? stock.pe).toFixed(1)}×`, sub: `fwd ${stock.fpe}×` },
-    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : pct1(stock.rev), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
-    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : pct1(stock.eps), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
-    { k: "52W HIGH / LOW", v: `${usd(liveCompany?.high52 ?? stock.hi)} / ${usd(liveCompany?.low52 ?? stock.lo)}`, sub: "Range" },
+    { k: "MARKET CAP", v: realMcap || "—", sub: liveCompany?.sector || stock.sector || "Equity" },
+    { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },
+    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
+    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
+    { k: "52W HIGH / LOW", v: `${hi52 != null ? usd(hi52) : "—"} / ${lo52 != null ? usd(lo52) : "—"}`, sub: "Range" },
   ];
 
   // Confluence dots
@@ -1665,16 +1816,45 @@ export function StockIntelligenceScreen() {
               </div>
 
               {/* Stats Items */}
-              {statsRow.map((st) => (
-                <div key={st.k} style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 0 }}>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
+              {statsRow.map((st, i) => (
+                <div
+                  key={st.k}
+                  style={{
+                    padding: "16px 18px",
+                    borderRight:
+                      i !== statsRow.length - 1
+                        ? "1px solid var(--si-border, #1c2733)"
+                        : "none",
+                    minWidth: 0,
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: "0.14em",
+                      color: "var(--si-accent, #5980a6)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {st.k}
                   </div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 8, whiteSpace: "nowrap" }}>
+
+                  <div
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 20,
+                      fontWeight: 600,
+                      color: "var(--si-text-hi, #e8eef4)",
+                      marginTop: 8,
+                      whiteSpace: "normal",
+                      overflowWrap: "anywhere",
+                      lineHeight: 1.4,
+                    }}
+                  >
                     {st.v}
-                  </div>
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
-                    {st.sub}
                   </div>
                 </div>
               ))}
@@ -2193,7 +2373,7 @@ export function StockIntelligenceScreen() {
               ticker={stock.t}
               stock={stock}
               bars={sixMonthBars}
-              events={stockDetail.sixMonthEvents || getSixMonthMajorEvents(stock.t, stock)}
+              events={majorEvents}
             />
 
             {/* Attribution Breakdown & AI Explanation */}
@@ -2202,7 +2382,7 @@ export function StockIntelligenceScreen() {
               <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    MOVE ATTRIBUTION
+                    ESTIMATED FACTOR ATTRIBUTION
                   </span>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
                     of <b style={{ color }}>{pct(stock.c)}</b> today
@@ -2216,7 +2396,7 @@ export function StockIntelligenceScreen() {
                 </div>
                 {showAttHow && (
                   <div style={{ padding: "10px 12px", background: "var(--si-evidence-bg, rgba(89,128,166,0.08))", border: "1px solid var(--si-border-sec, #2a3a4a)", borderRadius: 4, fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.45 }}>
-                    Attribution estimates the contribution of broad market regime, sector momentum, company-specific news events, and technical flows to today&apos;s price move using multi-factor regression models.
+                    Estimated Factor Attribution: Percentages are modeled estimates derived from sector beta and market regime heuristics, not empirically measured or causal contributions.
                   </div>
                 )}
                 {/* Stacked Bar */}
@@ -2556,7 +2736,13 @@ export function StockIntelligenceScreen() {
             const revSeries = fmpQ.map((q) => (q.revenue || 0) / 1e9);
             const epsSeries = fmpQ.map((q) => reportedQuarterEps(q) ?? q.epsActual ?? 0);
             const gmSeries = fmpQ.map((q) => q.grossMarginPct != null ? q.grossMarginPct : (q.revenue ? ((q.grossProfit || 0) / q.revenue) * 100 : 0));
-            const fcfSeries = fmpQ.map((q) => (q.operatingCashFlow ?? q.netIncome ?? 0) / 1e9);
+            const fcfSeries = fmpQ.map((q) => {
+              if (q.freeCashFlow != null) return q.freeCashFlow / 1e9;
+              if (q.operatingCashFlow != null && q.capitalExpenditures != null) {
+                return (q.operatingCashFlow - Math.abs(q.capitalExpenditures)) / 1e9;
+              }
+              return (q.operatingCashFlow ?? q.netIncome ?? 0) / 1e9;
+            });
             const opSeries = fmpQ.map((q) => (q.operatingIncome ?? q.netIncome ?? 0) / 1e9);
             const debtSeries = fmpQ.map((q) => (q.longTermDebt ?? 0) / 1e9);
             fsr = [revSeries, epsSeries, gmSeries, fcfSeries, opSeries, debtSeries];
@@ -2602,20 +2788,50 @@ export function StockIntelligenceScreen() {
 
           const semi = stock.sector === "Semiconductor" || stock.sector === "Semiconductors";
           const livePe = liveCompany?.peRatio ?? stock.pe;
-          const VV: [string, number, number, string][] = [
-            ["P/E", +livePe.toFixed(1), semi ? 38.0 : stock.t === "PLTR" ? 160 : 22, "×"],
-            ["Forward P/E", stock.fpe, semi ? 31.2 : stock.t === "PLTR" ? 128 : 16.8, "×"],
-            ["EV/EBITDA", +(livePe * 0.85).toFixed(1), semi ? 29.4 : stock.t === "PLTR" ? 120 : 14.2, "×"],
-            ["PEG", +(stock.fpe / Math.max(8, stock.eps)).toFixed(2), 1.45, ""],
-            ["FCF Yield", +((100 / (livePe || 1)) * 0.95).toFixed(1), 2.6, "%"],
+
+          const mcapNum = liveCompany?.marketCap ?? null;
+          const ttmEbitda = fmpQ && fmpQ.length >= 4
+            ? fmpQ.slice(-4).reduce((sum, q) => sum + (q.ebitda ?? q.operatingIncome ?? 0), 0)
+            : null;
+          const latestQ = fmpQ && fmpQ.length > 0 ? fmpQ[fmpQ.length - 1] : null;
+          const latestDebt = latestQ ? (latestQ.totalDebt ?? latestQ.longTermDebt ?? null) : null;
+          const hasTotalDebt = latestQ?.totalDebt != null;
+          const latestCash = latestQ ? (latestQ.cashAndCashEquivalents ?? null) : null;
+
+          // Enterprise Value = Market Capitalization + Debt - Cash and Cash Equivalents
+          // If required inputs (mcap, debt, or cash) are unavailable, do not assume zero.
+          const enterpriseVal = (mcapNum != null && latestDebt != null && latestCash != null)
+            ? mcapNum + latestDebt - latestCash
+            : null;
+          const realEvEbitda = (enterpriseVal != null && ttmEbitda != null && Number.isFinite(ttmEbitda) && ttmEbitda > 0)
+            ? enterpriseVal / ttmEbitda
+            : null;
+
+          const ttmFcf = computeTtmFcf(fmpQ);
+          const realFcfYield = (ttmFcf != null && mcapNum != null && Number.isFinite(mcapNum) && mcapNum > 0)
+            ? (ttmFcf / mcapNum) * 100
+            : null;
+
+          const realPeg = (stock.fpe != null && realFundGrowth?.epsYoy != null && Number.isFinite(realFundGrowth.epsYoy) && realFundGrowth.epsYoy > 0)
+            ? stock.fpe / realFundGrowth.epsYoy
+            : null;
+
+          const evLabel = latestQ && !hasTotalDebt && latestQ.longTermDebt != null ? "EV/EBITDA (LT Debt)" : "EV/EBITDA";
+
+          const VV: [string, string, number, string, number][] = [
+            ["P/E", livePe != null ? livePe.toFixed(1) : "—", semi ? 38.0 : stock.t === "PLTR" ? 160 : 22, "×", livePe ?? 0],
+            ["Forward P/E", stock.fpe != null ? stock.fpe.toFixed(1) : "—", semi ? 31.2 : stock.t === "PLTR" ? 128 : 16.8, "×", stock.fpe ?? 0],
+            [evLabel, realEvEbitda != null && Number.isFinite(realEvEbitda) && realEvEbitda > 0 ? realEvEbitda.toFixed(1) : "—", semi ? 29.4 : stock.t === "PLTR" ? 120 : 14.2, "×", realEvEbitda && realEvEbitda > 0 ? realEvEbitda : 0],
+            ["PEG", realPeg != null && Number.isFinite(realPeg) && realPeg > 0 ? realPeg.toFixed(2) : "—", 1.45, "", realPeg && realPeg > 0 ? realPeg : 0],
+            ["FCF Yield", realFcfYield != null && Number.isFinite(realFcfYield) ? realFcfYield.toFixed(1) : "—", 2.6, "%", realFcfYield && realFcfYield > 0 ? realFcfYield : 0],
           ];
-          const valRows = VV.map(([k, v, med, u]) => {
-            const top = Math.max(v, med) * 1.25 || 1;
+          const valRows = VV.map(([k, vStr, med, u, numVal]) => {
+            const top = Math.max(numVal, med) * 1.25 || 1;
             return {
               k,
-              v: v + u,
+              v: vStr !== "—" ? vStr + u : "—",
               med: med + u,
-              w: ((v / top) * 100).toFixed(1) + "%",
+              w: vStr !== "—" ? ((numVal / top) * 100).toFixed(1) + "%" : "0%",
               m: ((med / top) * 100).toFixed(1) + "%",
             };
           });
@@ -2652,15 +2868,18 @@ export function StockIntelligenceScreen() {
 
               {/* Valuation & Peer Comparison Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: 18, alignItems: "start" }}>
-                {/* Valuation Multiples vs Peer Median */}
+                {/* Valuation Multiples vs Reference Benchmark */}
                 <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       VALUATION MULTIPLES
                     </span>
                     <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                      ▮ {stock.t} &nbsp; ┃ Peer median
+                      ▮ {stock.t} &nbsp; ┃ Reference Benchmark
                     </span>
+                  </div>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.4 }}>
+                    Reference benchmarks (indicated by ┃ and right column) are static sector reference values, not live peer-company medians.
                   </div>
                   {valRows.map((vl, idx) => (
                     <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 34 }}>
@@ -2683,47 +2902,83 @@ export function StockIntelligenceScreen() {
 
                 {/* Peer Comparison Table */}
                 <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    PEER COMPARISON
-                  </span>
-                  <div style={{ display: "grid", gridTemplateColumns: "130px repeat(5, minmax(70px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span>TICKER</span>
-                    <span style={{ textAlign: "right" }}>MKT CAP</span>
-                    <span style={{ textAlign: "right" }}>FWD P/E</span>
-                    <span style={{ textAlign: "right" }}>REV GR</span>
-                    <span style={{ textAlign: "right" }}>GR MARGIN</span>
-                    <span style={{ textAlign: "right" }}>EPS GR</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                      PEER COMPARISON
+                    </span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-mid, #93a1af)" }}>
+                      Click any peer to open in SI
+                    </span>
                   </div>
-                  {ORDER.slice(0, 6).map((sym) => {
-                    const sItem = STK[sym];
-                    const isSelf = sym === stock.t;
-                    return (
-                      <div
-                        key={sym}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "130px repeat(5, minmax(70px, 1fr))",
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 13,
-                          color: "var(--si-text-hi, #e8eef4)",
-                          padding: "9px 0",
-                          borderBottom: "1px solid var(--si-border, #1c2733)",
-                          background: isSelf ? "rgba(89,128,166,0.16)" : "transparent",
-                          boxShadow: isSelf ? `inset 2px 0 0 ${STEEL}` : "none",
-                        }}
-                      >
-                        <span style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, paddingLeft: isSelf ? 6 : 0 }}>
-                          <StockLogo sym={sym} size={18} />
-                          {sym}
-                        </span>
-                        <span style={{ textAlign: "right" }}>{sItem.mcap}</span>
-                        <span style={{ textAlign: "right" }}>{sItem.fpe}×</span>
-                        <span style={{ textAlign: "right" }}>+{sItem.rev}%</span>
-                        <span style={{ textAlign: "right" }}>72%</span>
-                        <span style={{ textAlign: "right" }}>+{sItem.eps}%</span>
-                      </div>
-                    );
-                  })}
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(5, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                    <span>COMPANY</span>
+                    <span style={{ textAlign: "right" }}>PRICE</span>
+                    <span style={{ textAlign: "right" }}>CHANGE</span>
+                    <span style={{ textAlign: "right" }}>MKT CAP</span>
+                    <span style={{ textAlign: "right" }}>P/E</span>
+                    <span style={{ textAlign: "right" }}>RS RANK</span>
+                  </div>
+                  {peersAll.length === 0 ? (
+                    <div style={{ padding: "18px 0", textAlign: "center", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 13 }}>
+                      No peer companies reported for {stock.t}.
+                    </div>
+                  ) : (
+                    peersAll.map((peer) => {
+                      const chgCol = (peer.c ?? 0) >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
+                      const chgStr = peer.c != null ? `${peer.c >= 0 ? "+" : ""}${peer.c.toFixed(2)}%` : "—";
+                      const pStr = peer.price != null ? `$${peer.price >= 10 ? peer.price.toFixed(2) : peer.price.toFixed(3)}` : "—";
+                      const mcapStr = peer.marketCap != null ? `$${peer.marketCap >= 1000 ? (peer.marketCap / 1000).toFixed(2) + "T" : peer.marketCap.toFixed(1) + "B"}` : "—";
+                      const peStr = peer.peRatio != null && Number.isFinite(peer.peRatio) && peer.peRatio > 0 ? `${peer.peRatio.toFixed(1)}×` : "—";
+                      const rsStr = peer.rsRating != null ? String(peer.rsRating) : "—";
+
+                      return (
+                        <div
+                          key={peer.t}
+                          onClick={() => setPendingPeerOpen({ ticker: peer.t, name: peer.name })}
+                          role="button"
+                          tabIndex={0}
+                          title={`Click to open ${peer.t} in Stock Intelligence`}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setPendingPeerOpen({ ticker: peer.t, name: peer.name });
+                            }
+                          }}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "minmax(140px, 1.4fr) repeat(5, minmax(75px, 1fr))",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 13,
+                            color: "var(--si-text-hi, #e8eef4)",
+                            padding: "9px 8px",
+                            borderBottom: "1px solid var(--si-border, #1c2733)",
+                            cursor: "pointer",
+                            borderRadius: 4,
+                            transition: "background 150ms ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "rgba(89, 128, 166, 0.12)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          <span style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, minWidth: 0 }}>
+                            <StockLogo sym={peer.t} size={18} />
+                            <span style={{ color: "var(--si-accent-light, #a9c6e3)" }}>{peer.t}</span>
+                            <span style={{ fontSize: 11, color: "var(--si-text-dim, #64748b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {peer.name !== peer.t ? peer.name : ""}
+                            </span>
+                          </span>
+                          <span style={{ textAlign: "right" }}>{pStr}</span>
+                          <span style={{ textAlign: "right", color: chgCol, fontWeight: 600 }}>{chgStr}</span>
+                          <span style={{ textAlign: "right" }}>{mcapStr}</span>
+                          <span style={{ textAlign: "right" }}>{peStr}</span>
+                          <span style={{ textAlign: "right", color: "var(--si-text-mid, #93a1af)" }}>{rsStr}</span>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
@@ -3088,66 +3343,15 @@ export function StockIntelligenceScreen() {
             });
           });
 
-          // 6. MACRO & SCHEDULED CORPORATE EVENTS (Calendar baseline)
-          const baseEvents: typeof liveCatalystItems = [
-            { date: "Oct 2", cat: "Macro", ev: "Weak September payrolls ease rate-hike fears", note: "29K jobs vs 85K expected; growth stocks rallied.", imp: "MED", dir: "Positive", dd: calcDd("Oct 2"), sourceBadge: "MACRO" },
-            { date: "Oct 9", cat: "Regulatory", ev: semi ? "Commerce Dept. export control assessment update" : "Global regulatory compliance review milestone", note: "Regional trade rules and cross-border operational oversight.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 9"), sourceBadge: "REGULATORY" },
-            { date: "Oct 12", cat: "Industry events", ev: semi || stock.t === "PLTR" ? "AI Infrastructure Global Keynote" : `${stock.t} Investor Day & Tech Showcase`, note: "Product roadmap and partner announcements expected.", imp: "MED", dir: "Positive", dd: calcDd("Oct 12"), sourceBadge: "EVENTS" },
-            { date: "Oct 14", cat: "Product launches", ev: `${stock.t} Next-Gen Platform Delivery & Ramp Update`, note: "Commercial shipping timeline and capacity availability.", imp: "MED", dir: "Positive", dd: calcDd("Oct 14"), sourceBadge: "IR" },
-            { date: "Oct 25", cat: "Macro", ev: "Monthly options expiration (OpEx)", note: `Open interest clustered near ${usd(Math.round(stock.p * 1.04))}.`, imp: "LOW", dir: "Neutral", dd: calcDd("Oct 25"), sourceBadge: "CALENDAR" },
-            { date: "Oct 29", cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Rate-sensitive growth names most exposed.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 29"), sourceBadge: "FED" },
+          // 6. MARKET-WIDE CALENDAR SCHEDULE (Options expiration, FOMC rate decisions)
+          const marketScheduleEvents: typeof liveCatalystItems = [
+            { date: "Oct 25", cat: "Macro", ev: "Monthly options expiration (OpEx)", note: "Exchange-wide monthly options contract settlement session.", imp: "LOW", dir: "Neutral", dd: calcDd("Oct 25"), sourceBadge: "CALENDAR" },
+            { date: "Oct 29", cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Federal Open Market Committee policy announcement and press conference.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 29"), sourceBadge: "FED" },
           ];
-
-          // Supplement with baseline items if no specific live rows are loaded
-          if (!tickerEarnings.length) {
-            const P = getTP(stock.t);
-            const earnDateStr = P.cat ? P.cat.split("·")[1]?.trim() || "Nov 18" : "Nov 18";
-            baseEvents.push({
-              date: earnDateStr,
-              cat: "Earnings",
-              ev: `Q3 earnings · consensus EPS $${(stock.p / Math.max(10, stock.fpe) / 4).toFixed(2)}`,
-              note: `Implied move ±${(5 + stock.conf / 20).toFixed(1)}%; guidance matters more than the print.`,
-              imp: "HIGH",
-              dir: "Binary",
-              dd: calcDd(earnDateStr),
-              sourceBadge: "CALENDAR",
-            });
-          }
-          if (!tickerConsensus?.recentGrades?.length) {
-            baseEvents.push({
-              date: "Sep 24",
-              cat: "Analyst actions",
-              ev: `Wall Street raises ${stock.t} target to ${usd(Math.round(stock.p * 1.17))}`,
-              note: "Overweight reiterated; cites demand visibility into 2027.",
-              imp: "MED",
-              dir: "Positive",
-              dd: calcDd("Sep 24"),
-              sourceBadge: "CONSENSUS",
-            });
-          }
-          if (!tickerInsiders.length) {
-            baseEvents.push({
-              date: "Sep 30",
-              cat: "Insider activity",
-              ev: "Director sells shares (10b5-1 pre-scheduled plan)",
-              note: "Pre-scheduled sale; < 0.1% of holdings.",
-              imp: "LOW",
-              dir: "Neutral",
-              dd: calcDd("Sep 30"),
-              sourceBadge: "SEC FORM 4",
-            });
-          }
-          if (!inst13FData?.holders?.length) {
-            baseEvents.push(
-              { date: "Aug 14", cat: "13F filings", ev: `Q2 13F: institutions added ${stock.t} on net`, note: "Top filers increased stakes; ownership concentration rose.", imp: "MED", dir: "Positive", dd: calcDd("Aug 14"), sourceBadge: "13F SEC" },
-              { date: "Nov 14", cat: "13F filings", ev: "Q3 13F filing deadline", note: `First look at how funds positioned in ${stock.t} through September.`, imp: "MED", dir: "Neutral", dd: calcDd("Nov 14"), sourceBadge: "SEC DEADLINE" }
-            );
-          }
-
 
           const MAX_DAYS = 365;
 
-          const combined = [...liveCatalystItems, ...baseEvents].filter(
+          const combined = [...liveCatalystItems, ...marketScheduleEvents].filter(
             (c) => c.dd >= -MAX_DAYS && c.dd <= MAX_DAYS
           );
 
@@ -3468,9 +3672,11 @@ export function StockIntelligenceScreen() {
           const thHi = Math.max(TT.up, tgtV, stock.p) * 1.03;
           const thPos = (v: number) => (((v - thLo) / (thHi - thLo || 1)) * 100).toFixed(2) + "%";
 
-          // Market history chart for normal mode
-          const [hN, hV0, hD0] = rangesDef[thHz] || rangesDef["6M"];
-          const hs = series(stock.t + "hist" + thHz, hN, stock.p, hV0, hD0);
+          // Historical price series based on real market bars (replaces PRNG synthetic series)
+          const realBars = (sixMonthBars && sixMonthBars.length >= 10) ? sixMonthBars : (overviewBars && overviewBars.length >= 10) ? overviewBars : null;
+          const hs = realBars && realBars.length >= 5
+            ? realBars.map((b) => b.c)
+            : [stock.p * 0.95, stock.p * 0.98, stock.p];
           const hExt = hs.concat([tgtV, stopV]);
           const hsLo = Math.min(...hExt) * 0.97;
           const hsHi = Math.max(...hExt) * 1.03;
@@ -3680,6 +3886,10 @@ export function StockIntelligenceScreen() {
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.12em", color: "var(--si-text-mid, #93a1af)" }}>
                         LAST {labHz === "12M" ? "12 MONTHS" : labHz}
                       </span>
+                    </div>
+
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
+                      Historical Underlying Asset Benchmark Performance — buy-and-hold returns, drawdown and volatility; not an active strategy backtest.
                     </div>
 
                     <div style={{ position: "relative", height: 260 }}>
@@ -4384,18 +4594,18 @@ export function StockIntelligenceScreen() {
                     color: "var(--si-text-hi, #e8eef4)",
                   }}
                 >
-                  NO STRATEGY MONITORED FOR {stock.t}
+                  PAPER STRATEGY MONITOR — CLIENT-SIDE ONLY
                 </span>
                 <span
                   style={{
                     fontFamily: "'Manrope', sans-serif",
                     fontSize: 15,
                     color: "var(--si-text-mid, #93a1af)",
-                    maxWidth: 480,
+                    maxWidth: 520,
                     lineHeight: 1.55,
                   }}
                 >
-                  Save information in Strategy Lab to monitor your strategy. Configure your direction, target price, invalidation stop, and key driver weights to activate real-time tracking.
+                  No strategy monitored for {stock.t}. Save information in Strategy Lab to monitor your strategy. This thesis is stored in the current browser and is not broker-connected or guaranteed to synchronize across devices.
                 </span>
                 <button
                   type="button"
@@ -4485,8 +4695,12 @@ export function StockIntelligenceScreen() {
               <div style={{ position: "relative", border: `1px solid ${monCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16, transition: "border-color 300ms" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 22, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 280 }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                      MONITORED STRATEGY · SAVED {savedThesis.savedDate.toUpperCase()}
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span>PAPER STRATEGY MONITOR · CLIENT-SIDE ONLY</span>
+                      <span style={{ fontSize: 10, background: "rgba(89, 128, 166, 0.2)", padding: "2px 6px", borderRadius: 3, color: "var(--si-accent-light, #a9c6e3)" }}>CLIENT STORAGE · NOT BROKER-CONNECTED</span>
+                    </div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", marginTop: 4, lineHeight: 1.45 }}>
+                      Paper Strategy Monitor — client-side only. This thesis is stored in your current browser and is not broker-connected or guaranteed to synchronize across devices.
                     </div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>
                       {savedThesis.title}
@@ -4773,6 +4987,112 @@ export function StockIntelligenceScreen() {
           );
         })()}
       </div>
+
+      {/* Peer Switch Confirmation Modal */}
+      {pendingPeerOpen && stock && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.72)",
+            backdropFilter: "blur(5px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16,
+          }}
+          onClick={() => setPendingPeerOpen(null)}
+        >
+          <div
+            style={{
+              background: "var(--si-card-solid, #0c1118)",
+              border: "1px solid var(--si-border-sec, #2a3a4a)",
+              boxShadow: "0 20px 48px rgba(0, 0, 0, 0.7)",
+              borderRadius: 8,
+              maxWidth: 440,
+              width: "100%",
+              padding: "24px 26px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <StockLogo sym={pendingPeerOpen.ticker} size={40} />
+              <div>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", letterSpacing: "0.04em" }}>
+                  Open {pendingPeerOpen.ticker} in Stock Intelligence?
+                </div>
+                {pendingPeerOpen.name && (
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>
+                    {pendingPeerOpen.name}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.55 }}>
+              Switch from <b>{stock.t}</b> to <b>{pendingPeerOpen.ticker}</b> to analyze its 6-month trajectory, factor attribution, fundamentals, catalysts, and valuation in Stock Intelligence.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
+              <button
+                type="button"
+                onClick={() => setPendingPeerOpen(null)}
+                style={{
+                  padding: "9px 18px",
+                  border: "1px solid var(--si-border-sec, #2a3a4a)",
+                  background: "transparent",
+                  color: "var(--si-text-mid, #93a1af)",
+                  fontFamily: "'Manrope', sans-serif",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  borderRadius: 4,
+                  transition: "background 150ms",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const symToOpen = pendingPeerOpen.ticker;
+                  setPendingPeerOpen(null);
+                  handleSelectStock(symToOpen);
+                }}
+                style={{
+                  padding: "9px 20px",
+                  border: "none",
+                  background: "var(--si-accent, #5980a6)",
+                  color: "#ffffff",
+                  fontFamily: "'Manrope', sans-serif",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  borderRadius: 4,
+                  boxShadow: "0 2px 10px rgba(89, 128, 166, 0.4)",
+                  transition: "opacity 150ms",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = "0.9";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "1";
+                }}
+              >
+                Open in SI
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

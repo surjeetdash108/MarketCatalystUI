@@ -8,12 +8,12 @@ export interface StockItem {
   conf: number;
   sig: string[];
   mcap: string;
-  pe: number;
-  fpe: number;
-  rev: number;
-  eps: number;
-  hi: number;
-  lo: number;
+  pe: number | null;
+  fpe: number | null;
+  rev: number | null;
+  eps: number | null;
+  hi: number | null;
+  lo: number | null;
   sector: string;
   lbg: string;
   lfg: string;

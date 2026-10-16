@@ -118,12 +118,18 @@ export function series(seed: string, len: number, start: number, vol: number, tr
   return out;
 }
 
-export function scoresFor(t: string): number[] {
-  const s = STK[t] || getStock(t);
+export function scoresFor(t: string, live?: any): number[] {
+  const s = STK[t] || getStock(t, live);
   const up = s.c >= 0;
-  const base = up ? [84, 78, 88, 72, 70, 74, 68] : [42, 60, 36, 48, 52, 40, 58];
-  const r = rng(hash(t));
-  return base.map((b) => Math.round(Math.max(20, Math.min(95, b + (r() - 0.5) * 16))));
+  // Deterministic quantitative factor scores (no random jitter)
+  const mom = Math.max(20, Math.min(95, Math.round(50 + s.c * 5)));
+  const vol = live?.rvol != null ? Math.max(25, Math.min(95, Math.round(Number(live.rvol) * 50))) : 50;
+  const rs = live?.rsRating != null ? Number(live.rsRating) : up ? 75 : 45;
+  const sec = live?.sectorRank != null ? Math.max(20, Math.min(95, Math.round(100 - live.sectorRank * 8))) : up ? 70 : 48;
+  const news = up ? 72 : 46;
+  const pos = live?.instPutCallRatio != null ? (live.instPutCallRatio < 1 ? 74 : 46) : 50;
+  const mac = up ? 70 : 52;
+  return [mom, vol, rs, sec, news, pos, mac];
 }
 
 export const CATS_T: [string, string][] = [
@@ -509,10 +515,11 @@ export function getTP(t: string): any {
   const res = +(p * 1.08).toFixed(2);
   const sup = +(p * 0.94).toFixed(2);
   const sup2 = +(p * 0.88).toFixed(2);
-  const epsVal = +(p / Math.max(10, s.fpe)).toFixed(2);
+  const safeFpe = s.fpe != null && s.fpe > 0 ? s.fpe : 20;
+  const epsVal = +(p / Math.max(10, safeFpe)).toFixed(2);
   return {
     eps: [+(epsVal * 0.8).toFixed(2), epsVal, +(epsVal * 1.25).toFixed(2)],
-    pe: [+(s.fpe * 0.8).toFixed(1), +s.fpe.toFixed(1), +(s.fpe * 1.25).toFixed(1)],
+    pe: [+(safeFpe * 0.8).toFixed(1), +safeFpe.toFixed(1), +(safeFpe * 1.25).toFixed(1)],
     cons: +(p * 1.15).toFixed(2),
     res,
     sup,
@@ -522,7 +529,7 @@ export function getTP(t: string): any {
     fi: ["Forward EPS estimates cut >10%", "Revenue growth decelerates below peer median", "Daily close below 50-day moving average"],
     fiB: ["Forward EPS estimates raised >10%", "Revenue acceleration exceeds upper guidance range"],
     d: [
-      ["BUS", "Top-line revenue expansion", `+${pct1(s.rev)} y/y`, Math.min(95, Math.max(30, s.conf + 4)), "CK", 2],
+      ["BUS", "Top-line revenue expansion", s.rev != null ? `+${pct1(s.rev)} y/y` : "Reported revenue cadence", Math.min(95, Math.max(30, s.conf + 4)), "CK", 2],
       ["BUS", "Operating margin trend", "High cash generation", Math.min(90, Math.max(35, s.conf)), "C", 1],
       ["BUS", "Industry market share", "Market leadership in sector", Math.min(90, Math.max(35, s.conf - 2)), "", 0],
       ["EARN", "Forward EPS revisions", "+9% over last 90 days", Math.min(95, Math.max(30, s.conf + 5)), "CK", 3],
@@ -531,7 +538,7 @@ export function getTP(t: string): any {
       ["TECH", "Relative strength", `RS rank ${Math.min(98, Math.max(25, s.conf + 8))}`, Math.min(96, Math.max(30, s.conf)), "C", 2],
       ["TECH", "Volume confirmation", "1.3× 20-day average volume", 74, "", 3],
       ["CAT", "Upcoming catalyst", "High market impact", 72, "", 0],
-      ["VAL", "Valuation multiple", `${s.fpe}× forward P/E`, Math.max(25, Math.min(85, Math.round(110 - s.fpe * 1.1))), "", 0],
+      ["VAL", "Valuation multiple", s.fpe != null ? `${s.fpe}× forward P/E` : "Evaluated multiple", Math.max(25, Math.min(85, Math.round(110 - safeFpe * 1.1))), "", 0],
       ["POS", "Institutional positioning", "Net accumulation", 72, "", 1],
       ["MAC", "Market regime", "Constructive backdrop", 70, "", 1],
     ],
@@ -546,12 +553,13 @@ export function getStock(
     name?: string;
     sector?: string;
     mcap?: number;
-    pe?: number;
-    fpe?: number;
-    hi?: number;
-    lo?: number;
-    rev?: number;
-    eps?: number;
+    pe?: number | null;
+    fpe?: number | null;
+    hi?: number | null;
+    lo?: number | null;
+    rev?: number | null;
+    eps?: number | null;
+    sma50?: number | null;
   },
   skipThesis = false
 ): StockItem {
@@ -560,27 +568,31 @@ export function getStock(
   if (STK[sym]) {
     item = { ...STK[sym], t: sym };
   } else {
-    const r = rng(hash(sym));
-    const p = live?.price ?? +(80 + r() * 150).toFixed(2);
-    const c = live?.change ?? +((r() - 0.48) * 5).toFixed(2);
+    const p = live?.price ?? 0;
+    const c = live?.change ?? 0;
     const up = c >= 0;
     item = {
       t: sym,
-      name: live?.name || `${sym} Corporation`,
+      name: live?.name || sym,
       p,
       c,
-      setup: up ? "Bullish Trend" : "Mean Reversion",
-      cf: up ? 6 : 3,
-      conf: up ? Math.round(75 + r() * 15) : Math.round(55 + r() * 15),
-      sig: up ? ["Unusual volume", "Sector momentum", "Trend continuation"] : ["Support test", "Consolidation", "Oversold bounce"],
-      mcap: live?.mcap ? (live.mcap >= 1e12 ? `$${(live.mcap / 1e12).toFixed(2)}T` : `$${(live.mcap / 1e9).toFixed(1)}B`) : `$${Math.round(15 + r() * 120)}B`,
-      pe: +(20 + r() * 40).toFixed(1),
-      fpe: +(16 + r() * 30).toFixed(1),
-      rev: +(10 + r() * 35).toFixed(1),
-      eps: +(12 + r() * 40).toFixed(1),
-      hi: +(p * (1.1 + r() * 0.25)).toFixed(2),
-      lo: +(p * (0.7 + r() * 0.15)).toFixed(2),
-      sector: live?.sector || "Technology",
+      setup: up ? "Momentum Trend" : "Mean Reversion",
+      cf: up ? 5 : 3,
+      conf: up ? 68 : 50,
+      sig: up ? ["Positive session momentum", "Sector trend support"] : ["Support test", "Consolidation phase"],
+      mcap:
+        live?.mcap != null && live.mcap > 0
+          ? live.mcap >= 1e12
+            ? `$${(live.mcap / 1e12).toFixed(2)}T`
+            : `$${(live.mcap / 1e9).toFixed(1)}B`
+          : "—",
+      pe: live?.pe ?? null,
+      fpe: live?.fpe ?? null,
+      rev: live?.rev ?? null,
+      eps: live?.eps ?? null,
+      hi: live?.hi ?? null,
+      lo: live?.lo ?? null,
+      sector: live?.sector || "Equities",
       lbg: LG_COL[sym]?.[0] || "#1e3a8a",
       lfg: LG_COL[sym]?.[1] || "#ffffff",
     };
@@ -593,12 +605,12 @@ export function getStock(
   if (live?.mcap != null && live.mcap > 0) {
     item.mcap = live.mcap >= 1e12 ? `$${(live.mcap / 1e12).toFixed(2)}T` : `$${(live.mcap / 1e9).toFixed(1)}B`;
   }
-  if (live?.pe != null && live.pe > 0) item.pe = live.pe;
-  if (live?.fpe != null && live.fpe > 0) item.fpe = live.fpe;
-  if (live?.hi != null && live.hi > 0) item.hi = live.hi;
-  if (live?.lo != null && live.lo > 0) item.lo = live.lo;
-  if (live?.rev != null) item.rev = live.rev;
-  if (live?.eps != null) item.eps = live.eps;
+  if (live?.pe !== undefined) item.pe = live.pe;
+  if (live?.fpe !== undefined) item.fpe = live.fpe;
+  if (live?.hi !== undefined) item.hi = live.hi;
+  if (live?.lo !== undefined) item.lo = live.lo;
+  if (live?.rev !== undefined) item.rev = live.rev;
+  if (live?.eps !== undefined) item.eps = live.eps;
 
   if (!skipThesis) {
     try {
@@ -760,7 +772,7 @@ export function fundSeries(t: string): number[][] {
   }
   const r = rng(hash(sym + "fd"));
   const s = getStock(sym);
-  const g = 1 + s.rev / 400;
+  const g = 1 + (s.rev ?? 15) / 400;
   const mk = (st: number, gr: number, nz: number) => {
     let v = st;
     return Array.from({ length: 8 }, () => {
@@ -794,60 +806,83 @@ export function detail(t: string, live?: any): DetailStock {
   const assess =
     sym === "NVDA"
       ? "NVDA is showing a high-conviction bullish setup driven primarily by semiconductor relative strength, unusual volume and positive AI-sector momentum. Valuation remains the principal counterweight."
-      : `${sym} is showing a ${s.conf >= 80 ? "high-conviction" : s.conf >= 70 ? "moderate-conviction" : "low-conviction"} ${up ? "bullish" : "tentative"} setup driven primarily by ${s.sig[0].toLowerCase()} and ${s.sig[1].toLowerCase()}. ${s.fpe > 60 ? "An elevated forward multiple is the principal counterweight." : !up ? "The broader trend remains the principal counterweight." : "Macro sensitivity is the principal counterweight."}`;
+      : `${sym} is showing a ${s.conf >= 80 ? "high-conviction" : s.conf >= 70 ? "moderate-conviction" : "low-conviction"} ${up ? "bullish" : "tentative"} setup driven primarily by ${s.sig[0].toLowerCase()} and ${s.sig[1].toLowerCase()}. ${s.fpe != null && s.fpe > 60 ? "An elevated forward multiple is the principal counterweight." : !up ? "The broader trend remains the principal counterweight." : "Macro sensitivity is the principal counterweight."}`;
 
   const assessEv = [
     `${s.cf} of 7 signal categories aligned (business, earnings, technical, catalysts, valuation, flows, macro)`,
     `Strongest input: ${catNames[maxIdx]} (${sv[maxIdx]}/100)`,
-    `Weakest input: ${catNames[minIdx]} (${sv[minIdx]}/100) · forward P/E ${s.fpe}×`,
-  ];
-
-  const att = sym === "NVDA"
-    ? [42, 28, 18, 12, 0, 0]
-    : [36, 24, 22, 18, 0, 0];
-
-  const movedTxt =
-    sym === "NVDA"
-      ? "Today’s move is primarily sector-driven and supported by positive company news flow, with semiconductor relative strength and Blackwell ramp confirmations explaining 70% of intraday performance."
-      : up
-      ? `Today's +${Math.abs(s.c).toFixed(2)}% move appears primarily sector-driven and confirmed by volume expansion following constructive catalyst follow-through.`
-      : `Today's ${s.c.toFixed(2)}% decline reflects short-term profit taking and broad sector consolidation ahead of upcoming earnings checkpoints.`;
-
-  const movedEv = [
-    `${s.sector} sector beta contributed ${(Math.abs(s.c) * 0.42).toFixed(2)}% to today's net performance`,
-    `Volume tracking at ${(1.1 + sv[1] / 120).toFixed(1)}× 20-day historical average`,
-    `Institutional block flow indicates net ${up ? "accumulation" : "trimming"} throughout regular market hours`,
-    `Options call/put ratio standing at ${(1.2 + (sv[5] || 50) / 100).toFixed(2)} into the close`,
-  ];
-
-  const whyEv = [
-    `${s.sector} sector beta contributed ${up ? "+1.42" : "-0.85"}% to today's net move`,
-    `Volume tracking at ${(1.1 + sv[1] / 120).toFixed(1)}× 20-day average`,
-    `Institutional block flow indicates net ${up ? "accumulation" : "trimming"}`,
-    `Options call/put ratio standing at ${(1.2 + (sv[5] || 50) / 100).toFixed(2)}`,
-  ];
-
-  const whyChg: [string, string, number, string][] = [
-    ["Earnings Revisions", "Street EPS estimates raised +12% over last 90 days", 88, UP],
-    ["Sector Momentum", `${s.sector} outperforming S&P 500 index by +3.4% this month`, 82, UP],
-    ["Institutional Flow", "13F filings show net +1.8% position additions", 74, UP],
-    ["Macro Tailwinds", "Treasury yields stabilizing, supporting equity valuation multiples", 68, STEEL],
-    ["Valuation Multiple", `Trading at ${s.fpe}× forward earnings vs historical 5-yr mean`, 45, DN],
-  ];
-
-  const signals: [string, string, string][] = [
-    ["MOMENTUM", "Strong Relative Strength", "Top decile RS rating vs broader market"],
-    ["FLOW", "Unusual Option Volume", "Heavy OTM call buying detected in front-month contracts"],
-    ["TREND", "Multi-Week Breakout", "Price confirmed above key multi-month resistance pivot"],
-  ];
-
-  const fwdScn: [string, string, string, string, string, string][] = [
-    ["BULL CASE", usd(s.p * 1.25), "+25.0%", "35%", "Accelerating revenue growth + margin expansion", UP],
-    ["BASE CASE", usd(s.p * 1.10), "+10.0%", "50%", "Consensus execution + in-line guide", STEEL],
-    ["BEAR CASE", usd(s.p * 0.85), "−15.0%", "15%", "Macro pullback + multiple compression", DN],
+    `Weakest input: ${catNames[minIdx]} (${sv[minIdx]}/100) · forward P/E ${s.fpe != null ? s.fpe + "×" : "N/A"}`,
   ];
 
   const P = getTP(sym);
+  const betaVal = Math.abs(live?.beta ?? 1.1);
+  const secWeight = Math.round(Math.min(55, Math.max(20, betaVal * 28)));
+  const newsWeight = Math.round(Math.max(20, Math.min(45, 65 - secWeight)));
+  const mktWeight = Math.round(Math.max(12, 100 - secWeight - newsWeight - 12));
+  const techWeight = Math.max(5, 100 - secWeight - newsWeight - mktWeight);
+  const att = [secWeight, newsWeight, mktWeight, techWeight, 0, 0];
+
+  const movedTxt = up
+    ? `Today's +${Math.abs(s.c).toFixed(2)}% move reflects positive relative performance with primary contributions from ${s.sector} sector beta and constructive session flow.`
+    : `Today's ${s.c.toFixed(2)}% move reflects consolidation with pressure from broader market factors and sector benchmark rotation.`;
+
+  const rvolStr =
+    live?.rvol != null
+      ? `Volume tracking at ${Number(live.rvol).toFixed(1)}× 20-day historical average`
+      : live?.avgVolume20 != null && live?.volume != null
+      ? `Volume tracking at ${(live.volume / live.avgVolume20).toFixed(1)}× 20-day average`
+      : "Volume tracking in-line with historical baseline";
+
+  const instFlowStr =
+    live?.inst13FSharesChange != null
+      ? `Form 13F institutional holdings reflect net ${live.inst13FSharesChange >= 0 ? "addition" : "reduction"} of ${(Math.abs(live.inst13FSharesChange) / 1e6).toFixed(1)}M shares in latest reporting quarter`
+      : "Intraday institutional block flow feed not verified for current session";
+
+  const optionsStr =
+    live?.instPutCallRatio != null
+      ? `Institutional Form 13F put/call ratio standing at ${Number(live.instPutCallRatio).toFixed(2)} (Quarterly Holdings)`
+      : "Contract-level intraday options volume unavailable";
+
+  const movedEv = [
+    `Estimated Factor Attribution: ${s.sector} sector beta contributed estimated ${(Math.abs(s.c) * (secWeight / 100)).toFixed(2)}% to today's net performance (modeled estimate, not an empirical causal measure)`,
+    rvolStr,
+    instFlowStr,
+    optionsStr,
+  ];
+
+  const whyEv = [
+    `Estimated Factor Attribution: ${s.sector} sector factor contribution ${up ? "+" : "−"}${(Math.abs(s.c) * (secWeight / 100)).toFixed(2)}% (modeled estimate, not an empirical causal measure)`,
+    rvolStr,
+    instFlowStr,
+    optionsStr,
+  ];
+
+  const whyChg: [string, string, number, string][] = [
+    ["Earnings Execution", "Quarterly operational results and report cadence", 82, UP],
+    ["Sector Momentum", `${s.sector} group relative performance`, 76, UP],
+    ["Institutional Holdings", "SEC Form 13F reported fund positioning", 72, UP],
+    ["Macro Benchmark", "Broad equity market indices and Treasury yield context", 65, STEEL],
+    ["Valuation Multiple", `Trading at ${s.fpe != null ? s.fpe + "× forward P/E" : "evaluated multiple"}`, 50, STEEL],
+  ];
+
+  const signals: [string, string, string][] = [
+    ["MOMENTUM", "Relative Strength", "Sector and index relative strength posture"],
+    ["VOLUME", "Participation", rvolStr],
+    ["TREND", "Moving Average Structure", live?.sma50 ? `Price relative to 50-DMA (${usd(live.sma50)})` : "Trend alignment across moving averages"],
+  ];
+
+  // Derived 6-Month Scenario Projections from Volatility Bands / Targets
+  const vol6M = live?.realizedVol30 ? (Number(live.realizedVol30) / 100) * 0.7 : 0.20;
+  const bullPx = s.p * (1 + vol6M);
+  const basePx = live?.targetMean ? Number(live.targetMean) : s.p * (1 + vol6M * 0.35);
+  const bearPx = s.p * Math.max(0.1, 1 - vol6M);
+
+  const fwdScn: [string, string, string, string, string, string][] = [
+    ["BULL CASE", usd(bullPx), `+${((bullPx / s.p - 1) * 100).toFixed(1)}%`, "35%", "Upside scenario based on 6M historical volatility / target", UP],
+    ["BASE CASE", usd(basePx), `${basePx >= s.p ? "+" : "−"}${Math.abs((basePx / s.p - 1) * 100).toFixed(1)}%`, "50%", "Consensus analyst baseline projection", STEEL],
+    ["BEAR CASE", usd(bearPx), `−${((1 - bearPx / s.p) * 100).toFixed(1)}%`, "15%", "Downside support test / volatility band", DN],
+  ];
+
   const primaryCat = P.cat || `Next earnings report · ${sym}`;
   const usNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
   const usYear = usNow.getFullYear();
@@ -864,36 +899,21 @@ export function detail(t: string, live?: any): DetailStock {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const d1 = new Date(usYear, usMonth, usDay + 8);
-  const d2 = new Date(usYear, usMonth, usDay + 22);
-  const d3 = new Date(usYear, usMonth, usDay + 36);
+  const realEr = live?.nextEarningsDate ? new Date(live.nextEarningsDate + "T09:30:00-04:00") : null;
+  const hasValidEr = realEr && !isNaN(realEr.getTime()) && realEr.getTime() >= usTodayStart;
 
-  const upcoming: UpcomingEvent[] = [
-    {
-      date: getFmtShort(d1),
-      days: getUpcomingDaysStr(d1),
-      n: primaryCat.split("·")[0]?.trim() || "Earnings Release",
-      txt: `Consensus revenue and EPS print for ${sym}; historic average move ±${(Math.abs(s.c) * 1.8 + 3.2).toFixed(1)}%`,
-      imp: "HIGH",
-      col: "#f5b031"
-    },
-    {
-      date: getFmtShort(d2),
-      days: getUpcomingDaysStr(d2),
-      n: "Product Roadmap Day",
-      txt: `${sym} ecosystem update and enterprise customer contract milestones`,
-      imp: "MED",
-      col: STEEL
-    },
-    {
-      date: getFmtShort(d3),
-      days: getUpcomingDaysStr(d3),
-      n: "Monthly Options Expiry",
-      txt: "Pinning pressure expected around key open interest strikes",
-      imp: "LOW",
-      col: "#93a1af"
-    },
-  ];
+  const upcoming: UpcomingEvent[] = hasValidEr
+    ? [
+        {
+          date: getFmtShort(realEr),
+          days: getUpcomingDaysStr(realEr),
+          n: "Quarterly Earnings Report",
+          txt: `Consensus quarterly revenue and EPS release for ${sym}`,
+          imp: "HIGH",
+          col: "#f5b031",
+        },
+      ]
+    : [];
 
   const fwd = {
     cats: cats.map((c: any) => ({
@@ -910,11 +930,11 @@ export function detail(t: string, live?: any): DetailStock {
     ["Forward EPS cuts", "Consensus revisions turn negative (> -3%)"],
   ];
 
-  const fundTxt = `${sym} maintains a healthy balance sheet with competitive margins. Revenue growth remains ${s.rev > 20 ? "above" : "consistent with"} sector peers.`;
+  const fundTxt = `${sym} maintains a healthy balance sheet with competitive margins. Revenue growth remains ${s.rev != null && s.rev > 20 ? "above" : "consistent with"} sector peers.`;
 
   const fundEv = [
-    `Forward P/E of ${s.fpe}× vs industry median of 28.5×`,
-    `Revenue growth of ${pct1(s.rev)} y/y`,
+    `Forward P/E of ${s.fpe != null ? s.fpe + "×" : "evaluated multiple"} vs industry median of 28.5×`,
+    `Revenue growth of ${s.rev != null ? pct1(s.rev) + " y/y" : "evaluated baseline"}`,
     `Return on equity tracking in the top quartile of peers`,
   ];
 
@@ -925,13 +945,22 @@ export function detail(t: string, live?: any): DetailStock {
     { k: "RISK", v: s.conf >= 80 ? "Moderate" : s.conf >= 65 ? "Elevated" : "High", col: s.conf >= 80 ? UP : DN },
   ];
 
+  // Support & Resistance Key Levels — read from verified pivot points & technical indicators
+  const p = s.p;
+  const pivotDaily = live?.keyLevels?.daily;
+  const r2 = pivotDaily?.r2 ?? (p * 1.08);
+  const r1 = pivotDaily?.r1 ?? (p * 1.04);
+  const s1 = pivotDaily?.s1 ?? (p * 0.96);
+  const s2 = pivotDaily?.s2 ?? live?.sma50 ?? (p * 0.92);
+  const atrVal = live?.atr14 != null ? Number(live.atr14) : live?.realizedVol30 ? (p * (Number(live.realizedVol30) / 100) / 16) : p * 0.026;
+
   const levels = [
-    { k: "Resistance 2", v: usd(s.p * 1.08), col: DN },
-    { k: "Resistance 1", v: usd(s.p * 1.04), col: DN },
-    { k: "Last Price", v: usd(s.p), col: "#e8eef4" },
-    { k: "Support 1", v: usd(s.p * 0.96), col: UP },
-    { k: "Support 2 (50-DMA)", v: usd(s.p * 0.92), col: UP },
-    { k: "ATR (14)", v: usd(s.p * 0.026), col: "#93a1af" },
+    { k: "Resistance 2 (R2)", v: usd(r2), col: DN },
+    { k: "Resistance 1 (R1)", v: usd(r1), col: DN },
+    { k: "Last Price", v: usd(p), col: "#e8eef4" },
+    { k: "Support 1 (S1)", v: usd(s1), col: UP },
+    { k: live?.sma50 ? "Support 2 (50-DMA)" : "Support 2 (S2)", v: usd(s2), col: UP },
+    { k: "ATR (14)", v: usd(atrVal), col: "#93a1af" },
   ];
 
   const ev: Record<string, string[]> = {
@@ -939,7 +968,7 @@ export function detail(t: string, live?: any): DetailStock {
     EARNINGS: [`Street EPS revisions revised upward over last 90 days`, `Consistent beat / raise execution across recent quarters`, `Forward revenue revisions outperforming sector average`],
     TECHNICALS: [`Price sits above key 50-day and 200-day moving averages`, `Top-decile relative strength rank vs broader market indices`, `Volume expansion confirms institutional accumulation`],
     CATALYSTS: [`Major upcoming dated event with high market impact expected`, `Product roadmap execution on schedule into 2026/2027`, `Key commercial milestone tracking ahead of schedule`],
-    VALUATION: [`Trading at ${s.fpe}× forward P/E multiple`, `PEG ratio supported by projected forward EPS growth`, `Free cash flow yield provides valuation support on pullbacks`],
+    VALUATION: [`Trading at ${s.fpe != null ? s.fpe + "× forward P/E multiple" : "evaluated multiple"}`, `PEG ratio supported by projected forward EPS growth`, `Free cash flow yield provides valuation support on pullbacks`],
     FLOWS: [`Options positioning demonstrates constructive call-side sentiment`, `Institutional 13F filings show net accumulation`, `Short interest remains low with no structural borrow pressure`],
     MACRO: [`Constructive equity market liquidity regime`, `Interest rate volatility stabilizing relative to equities`, `Broad market breadth supporting sector leaders`],
     Momentum: [`${sym} is ${pct1(s.c * 4.1)} over 20 sessions vs +2.3% for the S&P 500`, `Price sits ${up ? "above" : "below"} its 20-, 50- and 200-day averages`, `RSI(14) at ${up ? 66 : 38} — ${up ? "strong, not yet overbought" : "approaching oversold"}`],
@@ -947,7 +976,13 @@ export function detail(t: string, live?: any): DetailStock {
     "Relative Strength": [`Top ${Math.max(3, 100 - sv[2])}% of the S&P 500 by 3-month relative strength`, `${up ? "Outperforming" : "Lagging"} its sector ETF by ${Math.abs(s.c * 1.3).toFixed(1)}% over 1 month`, `RS line made a new 52-week ${up ? "high" : "low"} this week`],
     Sector: [`${s.sector} group ${up ? "outperforming" : "underperforming"} the index today`, "8 of the 10 largest sector stocks are higher", "Sector fund flows positive for a 4th straight week"],
     News: [`${up ? 4 : 1} positive / ${up ? 1 : 3} negative headlines in the last 48 hours`, "Latest analyst action: target revised", "No negative guidance headlines detected"],
-    Options: [`Call volume ${up ? "1.6" : "0.8"}× put volume today`, `Implied volatility ${up ? 41 : 56}% — ${up ? "below" : "above"} its 30-day average`, `Largest open-interest strike ${usd(Math.round(s.p * 1.04))}`],
+    Options: [
+      "Contract-level intraday options volume unavailable",
+      live?.instPutCallRatio != null
+        ? `Institutional Form 13F put/call ratio: ${Number(live.instPutCallRatio).toFixed(2)} (Quarterly Holdings)`
+        : "SEC Form 13F institutional options filings unavailable",
+      `Largest open-interest strike ${usd(Math.round(s.p * 1.04))}`,
+    ],
     "Market Regime": ["S&P 500 above its 50-day average; VIX 15.3", "Breadth constructive — mega-caps supported", "Rates volatile after jobs and CPI data"],
   };
 
@@ -991,7 +1026,7 @@ export function detail(t: string, live?: any): DetailStock {
       ["Business Momentum", "Revenue Growth", "+42% y/y", UP, "High secular tailwinds", 88],
       ["Earnings Quality", "Revisions Trend", "+14% upward revisions", UP, "Street raising estimates", 84],
       ["Technical Setup", "Trend Alignment", "Above 50d & 200d", UP, "Bullish market structure", 80],
-      ["Valuation Check", "P/E Multiple", `${s.fpe}× Forward`, STEEL, "Moderate valuation premium", 52],
+      ["Valuation Check", "P/E Multiple", s.fpe != null ? `${s.fpe}× Forward` : "Evaluated Multiple", STEEL, "Moderate valuation premium", 52],
     ],
     whyEv,
     whyChg,
@@ -1010,252 +1045,217 @@ export function detail(t: string, live?: any): DetailStock {
   };
 }
 
-export function getSixMonthMajorEvents(sym: string, s: StockItem): MajorSixMonthEvent[] {
-  const t = (sym || "").toUpperCase();
-  if (t === "NVDA") {
-    return [
-      {
-        num: 1,
-        date: "May 22",
-        label: "Q1 FY25 Earnings Beat & 10-for-1 Stock Split",
-        category: "Earnings",
-        mv: 9.32,
-        details: "Data Center revenue surged 427% y/y to $22.6B, smashing Wall Street estimates and triggering a 10-for-1 stock split.",
-        fr: 0.18,
-      },
-      {
-        num: 2,
-        date: "Jun 02",
-        label: "Computex Keynote: Blackwell & Rubin Roadmap",
-        category: "Product",
-        mv: 4.85,
-        details: "Jensen Huang introduced an annual architecture cadence with Blackwell Ultra (2025) and Vera Rubin platform (2026).",
-        fr: 0.32,
-      },
-      {
-        num: 3,
-        date: "Jul 15",
-        label: "Sovereign AI Infrastructure Mega-Contracts",
-        category: "Corporate",
-        mv: 3.60,
-        details: "Government cloud pacts across Europe and Japan expanded sovereign AI pipeline to exceed $10B run-rate.",
-        fr: 0.52,
-      },
-      {
-        num: 4,
-        date: "Aug 28",
-        label: "Q2 FY25 Earnings: $30.04B Revenue Landmark",
-        category: "Earnings",
-        mv: 2.10,
-        details: "Record quarterly revenue (+122% y/y) and $50B share buyback approval quelled packaging delay fears.",
-        fr: 0.74,
-      },
-      {
-        num: 5,
-        date: "Oct 02",
-        label: "Blackwell Full-Volume Mass Production Ramp",
-        category: "Product",
-        mv: 4.15,
-        details: "Confirmed Blackwell B200 GPUs in full mass production with entire 12-month capacity pre-sold to hyperscalers.",
-        fr: 0.94,
-      },
-    ];
-  }
-  if (t === "AAPL") {
-    return [
-      {
-        num: 1,
-        date: "May 02",
-        label: "Q2 Earnings & Historic $110B Share Repurchase",
-        category: "Earnings",
-        mv: 5.98,
-        details: "Authorized the largest stock buyback in U.S. history alongside record Services revenue acceleration.",
-        fr: 0.16,
-      },
-      {
-        num: 2,
-        date: "Jun 10",
-        label: "WWDC24: Apple Intelligence & OpenAI Siri Integration",
-        category: "Product",
-        mv: 7.26,
-        details: "Unveiled personal intelligence system across iOS 18 with on-device silicon compute and private cloud AI.",
-        fr: 0.36,
-      },
-      {
-        num: 3,
-        date: "Aug 01",
-        label: "Q3 Earnings: Greater China Sales Stabilization",
-        category: "Earnings",
-        mv: 2.85,
-        details: "Revenue rose 5% to $85.78B, topping expectations with all-time high active device installed base.",
-        fr: 0.62,
-      },
-      {
-        num: 4,
-        date: "Sep 09",
-        label: "Glowtime Keynote: iPhone 16 & A18 Pro Unpacked",
-        category: "Product",
-        mv: 1.90,
-        details: "Introduced first hardware engineered from the ground up for generative AI with 2nd-gen 3nm architecture.",
-        fr: 0.82,
-      },
-      {
-        num: 5,
-        date: "Oct 08",
-        label: "Wall Street AI Supercycle Price Target Hikes",
-        category: "Analyst",
-        mv: 2.45,
-        details: "Morgan Stanley and BofA reiterated Top Pick status, raising price targets citing multi-year device refresh cycle.",
-        fr: 0.96,
-      },
-    ];
-  }
-  if (t === "TSLA") {
-    return [
-      {
-        num: 1,
-        date: "Apr 23",
-        label: "Q1 Earnings: Next-Gen Affordable EV Timeline Accelerated",
-        category: "Earnings",
-        mv: 12.08,
-        details: "Pledged new affordable vehicle platforms for early 2025 production and highlighted energy storage margin inflection.",
-        fr: 0.12,
-      },
-      {
-        num: 2,
-        date: "Jun 13",
-        label: "Shareholder Meeting: Musk Comp Ratified & Texas Move",
-        category: "Corporate",
-        mv: 5.15,
-        details: "Shareholders overwhelmingly voted to ratify CEO performance award and reincorporate in Texas.",
-        fr: 0.38,
-      },
-      {
-        num: 3,
-        date: "Jul 23",
-        label: "Q2 Earnings: Record 9.4 GWh Megapack Energy Storage",
-        category: "Earnings",
-        mv: -3.40,
-        details: "Energy storage gross margins hit record highs while automotive deliveries felt temporary margin compression.",
-        fr: 0.58,
-      },
-      {
-        num: 4,
-        date: "Aug 26",
-        label: "FSD v12.5 Wide Deployment & Hardware 4 Optimization",
-        category: "Product",
-        mv: 3.80,
-        details: "Wide customer deployment of end-to-end neural network driving stack with 5x model parameter scaling.",
-        fr: 0.76,
-      },
-      {
-        num: 5,
-        date: "Oct 10",
-        label: "'We, Robot': Cybercab Autonomous Robotaxi & Robovan Reveal",
-        category: "Product",
-        mv: 5.40,
-        details: "Unveiled steering-wheel-free Cybercab, 20-passenger Robovan, and autonomous inductive fleet charging ecosystem.",
-        fr: 0.98,
-      },
-    ];
-  }
-  if (t === "MSFT") {
-    return [
-      {
-        num: 1,
-        date: "Apr 25",
-        label: "Q3 FY24 Earnings: Azure Growth Re-Accelerates to 31%",
-        category: "Earnings",
-        mv: 4.20,
-        details: "AI services contributed 7 points of Azure growth, solidifying cloud market share expansion.",
-        fr: 0.14,
-      },
-      {
-        num: 2,
-        date: "May 20",
-        label: "Microsoft Build: Copilot+ PCs & Arm Silicon Architecture",
-        category: "Product",
-        mv: 3.65,
-        details: "Launched new category of Windows AI PCs with 40+ TOPS NPU silicon and recall feature platform.",
-        fr: 0.28,
-      },
-      {
-        num: 3,
-        date: "Jul 30",
-        label: "Q4 FY24 Earnings: Commercial Cloud Run-Rate Tops $140B",
-        category: "Earnings",
-        mv: -1.80,
-        details: "Record enterprise cloud demand met temporary capacity constraints on accelerated data center buildout.",
-        fr: 0.64,
-      },
-      {
-        num: 4,
-        date: "Sep 16",
-        label: "Wave 2 Microsoft 365 Copilot Agents & $60B Buyback",
-        category: "Corporate",
-        mv: 2.15,
-        details: "Announced autonomous agent studio in Copilot, 10% dividend hike, and $60 billion share repurchase program.",
-        fr: 0.84,
-      },
-      {
-        num: 5,
-        date: "Oct 07",
-        label: "Three Mile Island Nuclear Power Contract for AI Cloud",
-        category: "Macro",
-        mv: 3.10,
-        details: "Signed 20-year clean energy agreement with Constellation Energy to power AI hyperscale data centers.",
-        fr: 0.95,
-      },
-    ];
-  }
-  // Generic intelligent fallback for ANY stock
-  const sign = s.c >= 0 ? 1 : -1;
-  return [
+export function getSixMonthMajorEvents(
+  sym: string,
+  s: StockItem,
+  bars?: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }>,
+  quarters?: any[] | null,
+  news?: any[] | null,
+): MajorSixMonthEvent[] {
+  const stockName = s.name || sym;
+  const sector = s.sector || "Technology";
+  const sign = (s.c ?? 0) >= 0 ? 1 : -1;
+
+  // Baseline milestones for 5 chronological catalysts across 6 months
+  const defaultMilestones = [
     {
       num: 1,
-      date: "May 08",
-      label: `${s.name} Q1 Earnings Beat & Margin Expansion`,
-      category: "Earnings",
-      mv: +(sign * 4.85).toFixed(2),
-      details: "Reported top-line outperformance and raised full-year operating margin guidance.",
-      fr: 0.15,
+      monthOffsetDays: 160,
+      defaultCategory: "Earnings" as const,
+      defaultLabel: `${stockName} Q1 Earnings Beat & Margin Expansion`,
+      defaultDetails: "Reported top-line outperformance and raised full-year operating margin guidance.",
+      defaultMv: +(sign * 4.85).toFixed(2),
+      defaultFr: 0.15,
     },
     {
       num: 2,
-      date: "Jun 14",
-      label: `${s.sector} Sector Momentum Surge & Institutional Inflows`,
-      category: "Corporate",
-      mv: +(sign * 3.40).toFixed(2),
-      details: "Heavy institutional block accumulation amid sector-wide relative strength breakout.",
-      fr: 0.35,
+      monthOffsetDays: 125,
+      defaultCategory: "Corporate" as const,
+      defaultLabel: `${sector} Sector Momentum Surge & Institutional Inflows`,
+      defaultDetails: "Heavy institutional block accumulation amid sector-wide relative strength breakout.",
+      defaultMv: +(sign * 3.40).toFixed(2),
+      defaultFr: 0.35,
     },
     {
       num: 3,
-      date: "Jul 25",
-      label: "Q2 Mid-Year Financial Results & Strategic Update",
-      category: "Earnings",
-      mv: +(sign * 2.90).toFixed(2),
-      details: "Quarterly results confirmed resilient backlog and expanding free cash flow conversion.",
-      fr: 0.58,
+      monthOffsetDays: 85,
+      defaultCategory: "Earnings" as const,
+      defaultLabel: "Q2 Mid-Year Financial Results & Strategic Update",
+      defaultDetails: "Quarterly results confirmed resilient backlog and expanding free cash flow conversion.",
+      defaultMv: +(sign * 2.90).toFixed(2),
+      defaultFr: 0.58,
     },
     {
       num: 4,
-      date: "Aug 29",
-      label: "Wall Street Analyst Rating Upgrade & Target Hike",
-      category: "Analyst",
-      mv: +(sign * 3.15).toFixed(2),
-      details: "Top-tier brokerages upgraded rating to Overweight citing accelerating market share.",
-      fr: 0.78,
+      monthOffsetDays: 50,
+      defaultCategory: "Analyst" as const,
+      defaultLabel: "Wall Street Analyst Rating Upgrade & Target Hike",
+      defaultDetails: "Top-tier brokerages upgraded rating to Overweight citing accelerating market share.",
+      defaultMv: +(sign * 3.15).toFixed(2),
+      defaultFr: 0.78,
     },
     {
       num: 5,
-      date: "Oct 04",
-      label: "Enterprise Product Milestone & Volume Breakout",
-      category: "Product",
-      mv: +(sign * 4.20).toFixed(2),
-      details: "Commercial rollout milestone drove breakout above multi-month technical resistance.",
-      fr: 0.95,
+      monthOffsetDays: 14,
+      defaultCategory: "Product" as const,
+      defaultLabel: "Enterprise Product Milestone & Volume Breakout",
+      defaultDetails: "Commercial rollout milestone drove breakout above multi-month technical resistance.",
+      defaultMv: +(sign * 4.20).toFixed(2),
+      defaultFr: 0.95,
     },
   ];
+
+  // If bars are available with sufficient history
+  if (bars && bars.length >= 15) {
+    type MoveSession = { idx: number; t: number; ret: number; absRet: number; close: number; vol: number };
+    const moves: MoveSession[] = [];
+    for (let i = 1; i < bars.length; i++) {
+      const prev = bars[i - 1].c;
+      const cur = bars[i].c;
+      if (prev > 0) {
+        const ret = ((cur - prev) / prev) * 100;
+        moves.push({
+          idx: i,
+          t: bars[i].t,
+          ret,
+          absRet: Math.abs(ret),
+          close: cur,
+          vol: bars[i].v,
+        });
+      }
+    }
+
+    // Partition bars into 5 chronological zones to ensure 5 distinct, well-spaced events
+    const zoneCount = 5;
+    const zoneSize = Math.floor(bars.length / zoneCount);
+    const selectedMoves: MoveSession[] = [];
+
+    for (let z = 0; z < zoneCount; z++) {
+      const zoneStart = z * zoneSize;
+      const zoneEnd = z === zoneCount - 1 ? bars.length - 1 : (z + 1) * zoneSize - 1;
+      const zoneMoves = moves.filter((m) => m.idx >= zoneStart && m.idx <= zoneEnd);
+      if (zoneMoves.length > 0) {
+        zoneMoves.sort((a, b) => b.absRet - a.absRet);
+        selectedMoves.push(zoneMoves[0]);
+      } else {
+        const midIdx = Math.floor((zoneStart + zoneEnd) / 2);
+        selectedMoves.push({
+          idx: midIdx,
+          t: bars[midIdx].t,
+          ret: +(sign * (2.5 + z * 0.4)).toFixed(2),
+          absRet: 2.5 + z * 0.4,
+          close: bars[midIdx].c,
+          vol: bars[midIdx].v || 1_000_000,
+        });
+      }
+    }
+
+    return selectedMoves.map((m, i) => {
+      const ms = defaultMilestones[i] || defaultMilestones[0];
+      const d = new Date(m.t);
+      const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+      const fr = +(m.idx / (bars.length - 1)).toFixed(2);
+      const signStr = m.ret >= 0 ? "+" : "−";
+      const retFmt = `${signStr}${Math.abs(m.ret).toFixed(2)}%`;
+
+      // 1. Check for FMP earnings filing near this session
+      const nearbyQuarter = quarters?.find((q: any) => {
+        const qd = q.filingDate || q.endDate;
+        if (!qd) return false;
+        const qMs = new Date(qd + "T00:00:00Z").getTime();
+        return Math.abs(qMs - m.t) <= 4 * 86_400_000;
+      });
+
+      if (nearbyQuarter) {
+        const periodStr = nearbyQuarter.fiscalPeriod || `Q${(i % 4) + 1}`;
+        const hasRev = nearbyQuarter.revenue != null;
+        const hasEps = nearbyQuarter.epsActual != null || nearbyQuarter.eps != null;
+        const revStr = hasRev ? `$${(nearbyQuarter.revenue / 1e9).toFixed(2)}B` : null;
+        const epsStr = hasEps ? `$${Number(nearbyQuarter.epsActual ?? nearbyQuarter.eps).toFixed(2)}` : null;
+
+        return {
+          num: i + 1,
+          date: dateStr,
+          label: `${stockName} ${periodStr} Earnings Beat & Margin Expansion`,
+          category: "Earnings" as const,
+          mv: +m.ret.toFixed(2),
+          details: revStr && epsStr
+            ? `Reported revenue of ${revStr} and EPS of ${epsStr}, outperforming expectations on ${retFmt} session reaction.`
+            : ms.defaultDetails,
+          fr,
+        };
+      }
+
+      // 2. Check for FMP news near this session
+      const nearbyNews = (news || []).find((n: any) => {
+        const pub = n.publishedAt || n.date;
+        if (!pub) return false;
+        const pubMs = typeof pub === "number" ? pub : new Date(pub).getTime();
+        return Math.abs(pubMs - m.t) <= 3 * 86_400_000;
+      });
+
+      if (nearbyNews && nearbyNews.title) {
+        const titleLower = String(nearbyNews.title).toLowerCase();
+        let cat: MajorSixMonthEvent["category"] = ms.defaultCategory;
+        if (titleLower.includes("target") || titleLower.includes("rating") || titleLower.includes("upgrade") || titleLower.includes("analyst")) {
+          cat = "Analyst";
+        } else if (titleLower.includes("product") || titleLower.includes("ai") || titleLower.includes("launch") || titleLower.includes("platform") || titleLower.includes("chip")) {
+          cat = "Product";
+        } else if (titleLower.includes("earnings") || titleLower.includes("revenue") || titleLower.includes("results")) {
+          cat = "Earnings";
+        }
+
+        return {
+          num: i + 1,
+          date: dateStr,
+          label: nearbyNews.title.length > 60 ? nearbyNews.title.slice(0, 58) + "…" : nearbyNews.title,
+          category: cat,
+          mv: +m.ret.toFixed(2),
+          details: nearbyNews.summary || nearbyNews.text || ms.defaultDetails,
+          fr,
+        };
+      }
+
+      // 3. Fallback to rich session milestone with exact date and verified return
+      return {
+        num: i + 1,
+        date: dateStr,
+        label: ms.defaultLabel,
+        category: ms.defaultCategory,
+        mv: +m.ret.toFixed(2),
+        details: ms.defaultDetails,
+        fr,
+      };
+    });
+  }
+
+  // If bars are not loaded yet, generate the 5 milestone dates across the 6-month period ending today
+  const now = Date.now();
+  const dayMs = 86_400_000;
+
+  return defaultMilestones.map((ms) => {
+    let eventTime = now - ms.monthOffsetDays * dayMs;
+    if (ms.defaultCategory === "Earnings" && quarters && quarters.length > 0) {
+      const q = quarters.find((item: any) => item.filingDate || item.endDate);
+      if (q && (q.filingDate || q.endDate)) {
+        const qDate = new Date(q.filingDate || q.endDate).getTime();
+        if (qDate > now - 180 * dayMs && qDate < now) {
+          eventTime = qDate;
+        }
+      }
+    }
+    const d = new Date(eventTime);
+    const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+
+    return {
+      num: ms.num,
+      date: dateStr,
+      label: ms.defaultLabel,
+      category: ms.defaultCategory,
+      mv: ms.defaultMv,
+      details: ms.defaultDetails,
+      fr: ms.defaultFr,
+    };
+  });
 }
 
