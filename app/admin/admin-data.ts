@@ -374,7 +374,7 @@ export async function buildAdminDataset(): Promise<ConsoleDataset> {
   // UI → backend → Firebase → backend → UI. All three reads hit AdminGuard-
   // protected (or public, for /plans) backend routes; the browser touches no
   // Firestore. Payments may be empty → subscriptions falls back to [].
-  const [usersRes, subsRes, plansRes, adoptRes, apiHealthRes, blogs] = await Promise.all([
+  const [usersRes, subsRes, plansRes, adoptRes, apiHealthRes] = await Promise.all([
     apiGet<{ users: BackendUserRow[] }>("/api/admin/users?limit=500"),
     apiGet<{ subscriptions: BackendPaymentRow[] }>("/api/admin/subscriptions?limit=1000").catch(
       () => ({ subscriptions: [] as BackendPaymentRow[] }),
@@ -384,7 +384,6 @@ export async function buildAdminDataset(): Promise<ConsoleDataset> {
       () => ({ adoption: [] as BackendAdoptionRow[] }),
     ),
     apiGet<ApiHealthReport>("/api/admin/apihealth").catch(() => null),
-    fetchAdminBlogs(),
   ]);
 
   const backendUsers = usersRes.users ?? [];
@@ -462,7 +461,7 @@ export async function buildAdminDataset(): Promise<ConsoleDataset> {
   return {
     users,
     plans: planRows,
-    blogs,
+    blogs: [],
     entitlementCatalog: ENTITLEMENT_CATALOG,
     backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") ?? null,
     apiHealth,

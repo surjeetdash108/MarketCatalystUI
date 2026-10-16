@@ -136,16 +136,7 @@ export function AdminConsole() {
           ok = false;
           error = (err as Error).message;
         }
-        // Re-fetch independently of the write outcome. fetchAdminBlogs never
-        // throws (returns [] on failure); we only attach `blogs` when the read
-        // itself succeeded so a transient read failure doesn't blank the board.
-        let blogs: ConsoleBlogRow[] | null = null;
-        try {
-          blogs = await fetchAdminBlogs();
-        } catch {
-          blogs = null;
-        }
-        post({ ok, ...(error ? { error } : {}), ...(blogs ? { blogs } : {}) });
+        post({ ok, ...(error ? { error } : {}), blogs: [] });
       };
 
       if (d.type === "admin:blogSave") {
