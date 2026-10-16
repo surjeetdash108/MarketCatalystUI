@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "lint:hooks": "eslint -c eslint.hooks.config.mjs app",
+    "prebuild": "npm run lint:hooks",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
