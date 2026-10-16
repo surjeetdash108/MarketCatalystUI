@@ -1297,15 +1297,27 @@ function rel(d){const days=Math.round((Date.now()-d)/864e5);if(days<=0)return 't
 let IS_DEMO = true;
 let REAL = null;
 try {
-  const raw = sessionStorage.getItem('admin:data');
-  if (raw) {
-    const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.users)) {
-      REAL = parsed;
+  if (window.parent && window.parent !== window && window.parent.__ADMIN_DATA__) {
+    const parentData = window.parent.__ADMIN_DATA__;
+    if (parentData && Array.isArray(parentData.users)) {
+      REAL = parentData;
       IS_DEMO = false;
     }
   }
-} catch (e) { /* malformed or blocked storage → demo */ }
+} catch (e) { /* cross-origin or restricted parent */ }
+
+if (!REAL) {
+  try {
+    const raw = sessionStorage.getItem('admin:data');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.users)) {
+        REAL = parsed;
+        IS_DEMO = false;
+      }
+    }
+  } catch (e) { /* malformed or blocked storage → demo */ }
+}
 
 if (REAL && REAL.price) { for (const k in REAL.price) PRICE[k] = REAL.price[k]; }
 

@@ -37,9 +37,11 @@ export function useBackendBars(
    *  warm-up fetch, which is only needed while an MA/EMA overlay is on. */
   enabled = true,
 ): BarsResult {
+  // Normalize "5D" to "1W" so requests match the 5-session timeframe expected by backend
+  const normalizedTf = tf === "5D" ? "1W" : tf;
   // No ticker yet (e.g. an empty list's chart card) → no request; the
   // backend rejects an empty ticker with a 400.
-  return useBarsResource(enabled && sym ? `/live/bars?ticker=${encodeURIComponent(sym)}&tf=${tf}` : null);
+  return useBarsResource(enabled && sym ? `/live/bars?ticker=${encodeURIComponent(sym)}&tf=${encodeURIComponent(normalizedTf)}` : null);
 }
 
 /**

@@ -538,7 +538,23 @@ export function getTP(t: string): any {
   };
 }
 
-export function getStock(t: string, live?: { price?: number; change?: number; name?: string; sector?: string; mcap?: number }, skipThesis = false): StockItem {
+export function getStock(
+  t: string,
+  live?: {
+    price?: number;
+    change?: number;
+    name?: string;
+    sector?: string;
+    mcap?: number;
+    pe?: number;
+    fpe?: number;
+    hi?: number;
+    lo?: number;
+    rev?: number;
+    eps?: number;
+  },
+  skipThesis = false
+): StockItem {
   const sym = t.toUpperCase().trim();
   let item: StockItem;
   if (STK[sym]) {
@@ -557,7 +573,7 @@ export function getStock(t: string, live?: { price?: number; change?: number; na
       cf: up ? 6 : 3,
       conf: up ? Math.round(75 + r() * 15) : Math.round(55 + r() * 15),
       sig: up ? ["Unusual volume", "Sector momentum", "Trend continuation"] : ["Support test", "Consolidation", "Oversold bounce"],
-      mcap: live?.mcap ? `$${(live.mcap / 1e9).toFixed(1)}B` : `$${Math.round(15 + r() * 120)}B`,
+      mcap: live?.mcap ? (live.mcap >= 1e12 ? `$${(live.mcap / 1e12).toFixed(2)}T` : `$${(live.mcap / 1e9).toFixed(1)}B`) : `$${Math.round(15 + r() * 120)}B`,
       pe: +(20 + r() * 40).toFixed(1),
       fpe: +(16 + r() * 30).toFixed(1),
       rev: +(10 + r() * 35).toFixed(1),
@@ -572,6 +588,17 @@ export function getStock(t: string, live?: { price?: number; change?: number; na
 
   if (live?.price != null && live.price > 0) item.p = live.price;
   if (live?.change != null) item.c = live.change;
+  if (live?.name) item.name = live.name;
+  if (live?.sector) item.sector = live.sector;
+  if (live?.mcap != null && live.mcap > 0) {
+    item.mcap = live.mcap >= 1e12 ? `$${(live.mcap / 1e12).toFixed(2)}T` : `$${(live.mcap / 1e9).toFixed(1)}B`;
+  }
+  if (live?.pe != null && live.pe > 0) item.pe = live.pe;
+  if (live?.fpe != null && live.fpe > 0) item.fpe = live.fpe;
+  if (live?.hi != null && live.hi > 0) item.hi = live.hi;
+  if (live?.lo != null && live.lo > 0) item.lo = live.lo;
+  if (live?.rev != null) item.rev = live.rev;
+  if (live?.eps != null) item.eps = live.eps;
 
   if (!skipThesis) {
     try {

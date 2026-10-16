@@ -45,11 +45,26 @@ export function AdminConsole() {
         // Firestore rules never see these reads. The guard is the control.
         try {
           const dataset = await buildAdminDataset();
-          sessionStorage.setItem(ADMIN_DATA_KEY, JSON.stringify(dataset));
+          (window as unknown as { __ADMIN_DATA__?: typeof dataset }).__ADMIN_DATA__ = dataset;
+          try {
+            sessionStorage.setItem(ADMIN_DATA_KEY, JSON.stringify(dataset));
+          } catch (storageErr) {
+            console.warn("sessionStorage quota exceeded for admin:data, relying on in-memory handoff:", storageErr);
+            try {
+              const lightweight = {
+                ...dataset,
+                blogs: dataset.blogs?.map((b: ConsoleBlogRow) => ({ ...b, html: "" })) ?? [],
+              };
+              sessionStorage.setItem(ADMIN_DATA_KEY, JSON.stringify(lightweight));
+            } catch {
+              sessionStorage.removeItem(ADMIN_DATA_KEY);
+            }
+          }
         } catch (err) {
           // Leave the key unset so the console falls back to its demo data and
           // shows its own "sample data" banner, rather than rendering an empty
           // console that looks like a real business with no customers.
+          delete (window as unknown as { __ADMIN_DATA__?: unknown }).__ADMIN_DATA__;
           sessionStorage.removeItem(ADMIN_DATA_KEY);
           setDataError((err as Error).message);
         }
@@ -69,6 +84,8 @@ export function AdminConsole() {
     const onMsg = async (e: MessageEvent) => {
       const d = e.data || {};
       if (d.type === "admin:logout") {
+        delete (window as unknown as { __ADMIN_DATA__?: unknown }).__ADMIN_DATA__;
+        sessionStorage.removeItem(ADMIN_DATA_KEY);
         await signOut(firebaseAuth);
         window.location.replace("/auth/login");
       }
