@@ -1108,16 +1108,17 @@ export function StockIntelligenceScreen() {
     : "";
   const areaD = pathD ? `${pathD} L ${svgW} ${svgH} L 0 ${svgH} Z` : "";
 
-  // Y-axis price ticks (matching Technicals CandleChart price scale)
-  const yTicks = useMemo(() => {
-    if (!hasRealBars || rangeDiff <= 0) return [];
-    const fracs = [1.0, 0.75, 0.50, 0.25, 0.0];
-    return fracs.map((frac) => {
-      const val = minP + frac * rangeDiff;
-      const y = svgH - ((val - minP) / rangeDiff) * (svgH - 28) - 14;
-      return { y, val };
-    });
-  }, [hasRealBars, minP, rangeDiff, svgH]);
+  // Y-axis price ticks (matching Technicals CandleChart price scale).
+  // Plain computation, NOT a hook: this runs after the empty-state early
+  // return above, so a hook here would crash the SI home <-> stock switch
+  // (React error #310). Five ticks — nothing worth memoizing.
+  const yTicks = !hasRealBars || rangeDiff <= 0
+    ? []
+    : [1.0, 0.75, 0.50, 0.25, 0.0].map((frac) => {
+        const val = minP + frac * rangeDiff;
+        const y = svgH - ((val - minP) / rangeDiff) * (svgH - 28) - 14;
+        return { y, val };
+      });
 
   // Dynamic X-axis & Tooltip generation based exclusively on authentic bar timestamps
   const getLabelAtFrac = (f: number, isHover = false) => {
