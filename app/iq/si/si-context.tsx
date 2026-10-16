@@ -7,9 +7,71 @@ import {
   useCallback,
   ReactNode,
   useEffect,
+  useSyncExternalStore,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { SITab } from "./types";
+
+// ── MC ⇄ SI switch ────────────────────────────────────────────────────────────
+// MC (/menu/*, /dashboard) and SI (/si) each mount their own IQShell, so the
+// whole tree — this provider and the sweep overlay included — remounts on every
+// switch. The in-flight switch therefore lives at MODULE level: it survives the
+// remount, the new overlay resumes the animation where the old one left off,
+// and a stale per-instance flag can never leave the switcher "stuck".
+
+/** Total length of the switch transition. */
+export const SWITCH_MS = 1500;
+/** Navigate once the veil is fully opaque, so the remount happens behind it. */
+const NAV_AT_MS = 400;
+
+export interface ActiveSwitch {
+  to: "SI" | "MC";
+  key: number;
+  startedAt: number;
+}
+
+let activeSwitch: ActiveSwitch | null = null;
+const switchListeners = new Set<() => void>();
+
+function setActiveSwitch(v: ActiveSwitch | null) {
+  activeSwitch = v;
+  switchListeners.forEach((l) => l());
+}
+
+function subscribeSwitch(l: () => void) {
+  switchListeners.add(l);
+  return () => {
+    switchListeners.delete(l);
+  };
+}
+
+/** The switch transition currently running, or null. Shared across remounts. */
+export function useActiveSwitch(): ActiveSwitch | null {
+  return useSyncExternalStore(subscribeSwitch, () => activeSwitch, () => null);
+}
+
+const isSiPath = (p: string | null | undefined) => !!p && (p === "/si" || p.startsWith("/si/"));
+
+/**
+ * Runs one switch: overlay → navigate behind it → overlay fades out. Ignores
+ * clicks while a switch is already running. If the client-side navigation has
+ * not landed by the end of the transition, falls back to a full page load so a
+ * click always ends up on the other side.
+ */
+function runSwitch(to: "SI" | "MC", target: string, push: (url: string) => void) {
+  if (activeSwitch) return;
+  const key = Date.now();
+  setActiveSwitch({ to, key, startedAt: key });
+  const targetPath = target.split("?")[0];
+
+  setTimeout(() => push(target), NAV_AT_MS);
+  setTimeout(() => {
+    if (activeSwitch?.key === key) setActiveSwitch(null);
+    if (typeof window !== "undefined" && window.location.pathname !== targetPath) {
+      window.location.assign(target);
+    }
+  }, SWITCH_MS);
+}
 
 interface SIContextType {
   isSI: boolean;
@@ -20,25 +82,20 @@ interface SIContextType {
   exitToMC: (ticker?: string) => void;
   goToSearch: () => void;
   toggleSI: () => void;
-  sweep: { active: boolean; to: "SI" | "MC"; key: number } | null;
   setSiTicker: (ticker: string | null) => void;
 }
 
 const SIContext = createContext<SIContextType | null>(null);
 
-export function SIProvider({
-  children,
-  onOpenStockInMC,
-}: {
-  children: ReactNode;
-  onOpenStockInMC?: (ticker: string) => void;
-}) {
+export function SIProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const sw = useActiveSwitch();
 
-  const isSiRoute = pathname ? pathname.startsWith("/si") : false;
+  // The URL is the source of truth; while a switch runs, show where it's going
+  // so the pill slides immediately on click.
+  const isSI = sw ? sw.to === "SI" : isSiPath(pathname);
 
-  const [isSI, setIsSI] = useState<boolean>(isSiRoute);
   const [siTicker, setSiTicker] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       const sym = new URLSearchParams(window.location.search).get("sym");
@@ -47,21 +104,16 @@ export function SIProvider({
     return null;
   });
   const [activeTab, setActiveTab] = useState<SITab>("overview");
-  const [sweep, setSweep] = useState<{ active: boolean; to: "SI" | "MC"; key: number } | null>(null);
 
-  // Sync if URL query param or path changes
+  // Sync the ticker if the URL query param or path changes
   useEffect(() => {
-    const isSi = pathname ? pathname.startsWith("/si") : false;
-    setIsSI(isSi);
-    if (isSi) {
+    if (isSiPath(pathname)) {
       if (typeof window !== "undefined") {
         const sym = new URLSearchParams(window.location.search).get("sym");
         setSiTicker(sym ? sym.toUpperCase().trim() : null);
       }
-    } else {
-      if (pathname && !pathname.startsWith("/menu/stock")) {
-        setSiTicker(null);
-      }
+    } else if (pathname && !pathname.startsWith("/menu/stock")) {
+      setSiTicker(null);
     }
   }, [pathname]);
 
@@ -69,125 +121,74 @@ export function SIProvider({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handlePopState = () => {
-      const isSi = window.location.pathname.startsWith("/si");
-      setIsSI(isSi);
-      if (isSi) {
+      if (isSiPath(window.location.pathname)) {
         const sym = new URLSearchParams(window.location.search).get("sym");
         setSiTicker(sym ? sym.toUpperCase().trim() : null);
-      } else {
-        if (!window.location.pathname.startsWith("/menu/stock")) {
-          setSiTicker(null);
-        }
+      } else if (!window.location.pathname.startsWith("/menu/stock")) {
+        setSiTicker(null);
       }
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const triggerSweep = useCallback((to: "SI" | "MC") => {
-    const key = Date.now();
-    setSweep({ active: true, to, key });
-    if (typeof window !== "undefined") {
-      try {
-        window.dispatchEvent(new CustomEvent("mc-sweep-start", { detail: { to, key } }));
-      } catch {}
-    }
-    setTimeout(() => {
-      setSweep(null);
-    }, 700);
-  }, []);
-
   const goToSearch = useCallback(() => {
     setSiTicker(null);
-    if (typeof window !== "undefined") {
-      router.push("/si");
-    }
+    router.push("/si");
   }, [router]);
 
   const enterSI = useCallback(
     (ticker?: string, tab?: SITab) => {
-      triggerSweep("SI");
-      const currentPath = pathname || (typeof window !== "undefined" ? window.location.pathname : "");
-      const isOnStockPage = currentPath.startsWith("/menu/stock");
+      if (typeof window === "undefined") return;
+      // Read the URL at click time — never a cached flag.
+      if (isSiPath(window.location.pathname)) return;
+      const onStockPage = window.location.pathname.startsWith("/menu/stock");
+      const stored = localStorage.getItem("iq-stock");
 
-      const stored = typeof window !== "undefined" ? localStorage.getItem("iq-stock") : null;
       let targetSym: string | null = null;
-
       if (ticker) {
         targetSym = ticker.toUpperCase().trim();
-      } else if (isOnStockPage) {
+      } else if (onStockPage) {
         // The stock page shows localStorage "iq-stock", or NVDA when nothing is
         // stored (see StockScreen), so carry over exactly what is on screen.
         targetSym = (stored || "NVDA").toUpperCase().trim();
       }
 
-      if (targetSym) {
-        setSiTicker(targetSym);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("iq-stock", targetSym);
-        }
-        setTimeout(() => {
-          setIsSI(true);
-          router.push(`/si?sym=${targetSym}`);
-        }, 160);
-      } else {
-        setSiTicker(null);
-        setTimeout(() => {
-          setIsSI(true);
-          router.push("/si");
-        }, 160);
-      }
+      if (targetSym) localStorage.setItem("iq-stock", targetSym);
+      setSiTicker(targetSym);
       if (tab) setActiveTab(tab);
+      runSwitch("SI", targetSym ? `/si?sym=${encodeURIComponent(targetSym)}` : "/si", router.push);
     },
-    [router, triggerSweep, pathname]
+    [router]
   );
 
   const exitToMC = useCallback(
     (ticker?: string) => {
-      triggerSweep("MC");
+      if (typeof window === "undefined") return;
+      const onSiPage = isSiPath(window.location.pathname);
+      if (!onSiPage && !ticker) return;
       // On /si the URL decides: /si?sym=X carries X back to Market Catalyst, and
-      // plain /si (the SI home view) goes to the dashboard. Read at click time so
-      // a stale siTicker can never send the SI home view to a stock page.
-      const onSiPage =
-        typeof window !== "undefined" && window.location.pathname.startsWith("/si");
-      const urlSym = onSiPage
-        ? new URLSearchParams(window.location.search).get("sym")
-        : null;
-      const targetSym = ticker || (onSiPage ? urlSym : siTicker);
+      // plain /si (the SI home view) goes to the dashboard.
+      const urlSym = onSiPage ? new URLSearchParams(window.location.search).get("sym") : null;
+      const targetSym = ticker || urlSym;
       if (targetSym) {
         const clean = targetSym.toUpperCase().trim();
-        if (typeof window !== "undefined") {
-          // Same steps the global search takes in goToStock (shell.tsx).
-          localStorage.setItem("iq-stock", clean);
-          localStorage.setItem("iq-nav-collapsed", "0");
-          window.dispatchEvent(
-            new CustomEvent("iq-stock-change", { detail: clean })
-          );
-        }
-        setTimeout(() => {
-          setIsSI(false);
-          // One navigation only: onOpenStockInMC (openStockFull) already pushes
-          // /menu/stock, so pushing again here added a duplicate history entry.
-          if (onOpenStockInMC) onOpenStockInMC(clean);
-          else router.push("/menu/stock");
-        }, 160);
+        // Same steps the global search takes in goToStock (shell.tsx).
+        localStorage.setItem("iq-stock", clean);
+        localStorage.setItem("iq-nav-collapsed", "0");
+        window.dispatchEvent(new CustomEvent("iq-stock-change", { detail: clean }));
+        runSwitch("MC", "/menu/stock", router.push);
       } else {
-        setTimeout(() => {
-          setIsSI(false);
-          router.push("/dashboard");
-        }, 160);
+        runSwitch("MC", "/dashboard", router.push);
       }
     },
-    [siTicker, router, onOpenStockInMC, triggerSweep]
+    [router]
   );
 
   const toggleSI = useCallback(() => {
-    if (isSI) {
-      exitToMC();
-    } else {
-      enterSI();
-    }
-  }, [isSI, exitToMC, enterSI]);
+    if (typeof window !== "undefined" && isSiPath(window.location.pathname)) exitToMC();
+    else enterSI();
+  }, [exitToMC, enterSI]);
 
   return (
     <SIContext.Provider
@@ -200,7 +201,6 @@ export function SIProvider({
         exitToMC,
         goToSearch,
         toggleSI,
-        sweep,
         setSiTicker,
       }}
     >
@@ -221,7 +221,6 @@ export function useSI() {
       exitToMC: () => {},
       goToSearch: () => {},
       toggleSI: () => {},
-      sweep: null,
       setSiTicker: () => {},
     };
   }

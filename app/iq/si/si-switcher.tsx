@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { useSI } from "./si-context";
+import { useSI, useActiveSwitch, SWITCH_MS, type ActiveSwitch } from "./si-context";
 
 export function SISwitcher({
   style,
@@ -37,24 +37,6 @@ export function SISwitcher({
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
-        @keyframes mcSweep {
-          0% { transform: translate3d(-60vw, 0, 0); opacity: 0; }
-          22% { opacity: 0.9; }
-          65% { opacity: 0.9; }
-          100% { transform: translate3d(60vw, 0, 0); opacity: 0; }
-        }
-        @keyframes mcLbl {
-          0% { opacity: 0; transform: scale(0.96); }
-          20% { opacity: 1; transform: scale(1); }
-          65% { opacity: 1; transform: scale(1); }
-          100% { opacity: 0; transform: scale(1.02); }
-        }
-        @keyframes mcVeil {
-          0% { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
-          20% { opacity: 1; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-          65% { opacity: 1; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-          100% { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
-        }
       `}</style>
 
       {/* Switcher Pill Container */}
@@ -108,7 +90,7 @@ export function SISwitcher({
           <span
             onClick={(e) => {
               e.stopPropagation();
-              if (isSI) exitToMC();
+              exitToMC();
             }}
             onMouseEnter={() => setHoverSide("mc")}
             onMouseLeave={() => setHoverSide(null)}
@@ -142,7 +124,7 @@ export function SISwitcher({
           <span
             onClick={(e) => {
               e.stopPropagation();
-              if (!isSI) enterSI();
+              enterSI();
             }}
             onMouseEnter={() => setHoverSide("si")}
             onMouseLeave={() => setHoverSide(null)}
@@ -177,31 +159,46 @@ export function SISwitcher({
   );
 }
 
+const SWEEP_KEYFRAMES = `
+        /* MC <-> SI switch: SWITCH_MS total. The veil is opaque by ~27%
+           (when the route changes behind it); the label fades in, holds, and
+           fades out before the veil lifts. */
+        @keyframes mcSweep {
+          0% { transform: translate3d(-60vw, 0, 0); opacity: 0; }
+          15% { opacity: 0.9; }
+          75% { opacity: 0.9; }
+          100% { transform: translate3d(60vw, 0, 0); opacity: 0; }
+        }
+        @keyframes mcLbl {
+          0%, 14% { opacity: 0; }
+          34% { opacity: 1; }
+          66% { opacity: 1; }
+          84%, 100% { opacity: 0; }
+        }
+        @keyframes mcVeil {
+          0% { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+          26% { opacity: 1; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+          76% { opacity: 1; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+          100% { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+        }
+`;
+
 export function SISweepOverlay() {
-  const { sweep } = useSI();
-  const [activeSweep, setActiveSweep] = useState<{
-    to: "SI" | "MC";
-    key: number;
-  } | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const lastKeyRef = React.useRef<number | null>(null);
+  // useActiveSwitch's server snapshot is null, so this never renders during
+  // SSR/hydration — no separate "mounted" flag needed for the portal.
+  const sw = useActiveSwitch();
+  if (!sw || typeof document === "undefined") return null;
+  // Keyed by the switch so a remounted shell resumes the same run.
+  return <SweepLayer key={sw.key} sw={sw} />;
+}
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (sweep && sweep.key !== lastKeyRef.current) {
-      lastKeyRef.current = sweep.key;
-      setActiveSweep({ to: sweep.to, key: sweep.key });
-      const timer = setTimeout(() => {
-        setActiveSweep(null);
-      }, 700);
-      return () => clearTimeout(timer);
-    }
-  }, [sweep]);
-
-  if (!activeSweep || !mounted || typeof document === "undefined") return null;
+function SweepLayer({ sw }: { sw: ActiveSwitch }) {
+  // The route change remounts the whole shell mid-transition; a negative delay
+  // resumes the animation at the right point instead of restarting it.
+  const [elapsed] = useState(() => Math.min(SWITCH_MS, Math.max(0, Date.now() - sw.startedAt)));
+  const activeSweep = sw;
+  const anim = (name: string) =>
+    `${name} ${SWITCH_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1) -${elapsed}ms forwards`;
 
   return createPortal(
     <div
@@ -213,6 +210,7 @@ export function SISweepOverlay() {
         zIndex: 999999,
       }}
     >
+      <style>{SWEEP_KEYFRAMES}</style>
       {/* Backdrop Veil with Frosted Glass Shield */}
       <div
         style={{
@@ -224,7 +222,7 @@ export function SISweepOverlay() {
               : "rgba(6,8,9,0.92)",
           backdropFilter: "blur(16px)",
           WebkitBackdropFilter: "blur(16px)",
-          animation: "mcVeil 700ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
+          animation: anim("mcVeil"),
           opacity: 0,
           willChange: "opacity, backdrop-filter",
         }}
@@ -242,7 +240,7 @@ export function SISweepOverlay() {
               ? "rgba(127,168,208,0.12) 30%, rgba(127,168,208,0.48) 50%, rgba(127,168,208,0.12) 70%"
               : "rgba(74,222,128,0.12) 30%, rgba(74,222,128,0.42) 50%, rgba(74,222,128,0.12) 70%"
           }, transparent 100%)`,
-          animation: "mcSweep 700ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
+          animation: anim("mcSweep"),
           opacity: 0,
           willChange: "transform, opacity",
           transform: "translate3d(-60vw, 0, 0)",
@@ -273,7 +271,7 @@ export function SISweepOverlay() {
           alignItems: "center",
           justifyContent: "center",
           gap: 12,
-          animation: "mcLbl 700ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
+          animation: anim("mcLbl"),
           opacity: 0,
           willChange: "transform, opacity",
         }}
