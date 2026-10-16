@@ -1369,7 +1369,7 @@ export function DashboardScreen() {
             <button className="btn" onClick={() => { openSector(heatPop.sd.name); setHeatPop(null); }}>
               Open Sector
             </button>
-            <Link className="btn" href="/menu/heatmap" onClick={() => setHeatPop(null)}>
+            <Link className="btn cta" href="/menu/heatmap" onClick={() => setHeatPop(null)}>
               Full Heatmap →
             </Link>
           </div>

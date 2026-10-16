@@ -272,11 +272,11 @@ export function ScreenerScreen() {
           {hasActiveFilters ? `${filtered.length} match${filtered.length !== 1 ? "es" : ""}` : "Select a filter to begin"}
           <VendorTag v="polygon" />
         </span>
-        <button className="btn primary" onClick={exportPdf} disabled={!selStock}
+        <button className="btn cta" onClick={exportPdf} disabled={!selStock}
           title={selStock ? `Export ${selStock.ticker} data as PDF` : "Select a stock first"}
           style={{ opacity: selStock ? 1 : 0.5 }}>
           <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
-            <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Export PDF{selStock ? ` · ${selStock.ticker}` : ""}
         </button>

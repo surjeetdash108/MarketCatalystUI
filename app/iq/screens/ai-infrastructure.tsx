@@ -674,8 +674,18 @@ export function AiInfrastructureScreen() {
 
   return (
     <>
-      <div className="page-head">
-        <div style={{ position: "relative", flex: 1, maxWidth: 420 }}>
+      <div className="page-head" style={{ flexWrap: "wrap", gap: 12 }}>
+        <h2 style={{
+          fontSize: "1.15rem",
+          fontWeight: 700,
+          color: "var(--text-hi)",
+          margin: 0,
+          letterSpacing: "-0.01em",
+          fontFamily: "var(--f-display)",
+        }}>
+          Companies Shaping the AI Infrastructure Buildout
+        </h2>
+        <div style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 420, marginLeft: "auto" }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim-solid)", pointerEvents: "none", fontSize: ".9rem" }}>⌕</span>
           <input
             value={query}
@@ -700,17 +710,6 @@ export function AiInfrastructureScreen() {
         </div> */}
 
         <div className="col-12">
-          <h2 style={{
-            fontSize: "1.15rem",
-            fontWeight: 700,
-            color: "var(--text-hi)",
-            margin: "0 0 16px 0",
-            letterSpacing: "-0.01em",
-            fontFamily: "var(--f-display)",
-            paddingLeft:"10px"
-          }}>
-            Companies shaping up the AI Infrastructure buildout
-          </h2>
           {themes.length === 0 ? (
             <DataState
               loading={loading}

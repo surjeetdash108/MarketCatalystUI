@@ -343,6 +343,8 @@ function week5Base(closes: Week5Close[] | null | undefined, sessionDate: string)
 // otherwise sit there returning nothing; "Micro" (which the feed does produce)
 // was missing entirely before.
 const CAP_ORDER = ["Mega", "Large", "Mid", "Small", "Micro"];
+/** Movers' default market-cap floor (USD) — lifted by the "Show all" checkbox. */
+const MIN_DEFAULT_MCAP = 1e9;
 function uniqueByTicker<T extends { ticker: string }>(rows: T[]): T[] {
   const seen = new Set<string>();
 
@@ -600,6 +602,9 @@ export function MoversScreen() {
    *  read it (a `const` referenced above its declaration is a TDZ crash). */
   const [sector,       setSector]       = useState("All");
   const [cap,          setCap]          = useState("All");
+  // Default floor: only $1B-and-up names. "Show all" lifts it so micro- and
+  // small-caps (and tickers whose market cap has not synced) come back.
+  const [showAllCaps,  setShowAllCaps]  = useState(false);
   const [query,        setQuery]        = useState("");
 
   const { data: biggestPctData, loading: biggestLoading } = useApiResource<BiggestPctScan>(
@@ -778,11 +783,17 @@ export function MoversScreen() {
 
   // Only the cap tiers present in the current feed are selectable; if the chosen
   // tier is no longer present (data refreshed), behave as "All".
-  const availableCaps = ["All", ...CAP_ORDER.filter(c => sourceRows.some(m => m.cap === c))];
+  // The $1B floor belongs to the Market cap filter, so it only applies on the
+  // tabs that show that filter.
+  const capFloorOn = !showAllCaps && tab !== "biggest" && tab !== "active";
+  const flooredRows = capFloorOn
+    ? sourceRows.filter(m => m.marketCap != null && m.marketCap >= MIN_DEFAULT_MCAP)
+    : sourceRows;
+  const availableCaps = ["All", ...CAP_ORDER.filter(c => flooredRows.some(m => m.cap === c))];
   const effCap = availableCaps.includes(cap) ? cap : "All";
 
   // Rows matching the current tab + cap, before the sector filter is applied.
-  const tabCapRows = sourceRows.filter(m => {
+  const tabCapRows = flooredRows.filter(m => {
     if (effCap !== "All" && m.cap !== effCap) return false;
     if (tab === "win")  return m.pctChange > 0;
     if (tab === "lose") return m.pctChange < 0;
@@ -1203,8 +1214,14 @@ export function MoversScreen() {
           <>
             <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center", marginLeft: 10 }}>Market cap</span>
             <select className="mv-sel" value={effCap} onChange={e => setCap(e.target.value)}>
-              {availableCaps.map(c => <option key={c} value={c}>{c}</option>)}
+              {availableCaps.map(c => <option key={c} value={c}>{c === "All" && capFloorOn ? "$1B and above" : c}</option>)}
             </select>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "center", marginLeft: 10, fontSize: ".72rem", color: "var(--text-hi)", cursor: "pointer", userSelect: "none" }}
+              title="Include stocks under $1B market cap">
+              <input type="checkbox" checked={showAllCaps} onChange={e => setShowAllCaps(e.target.checked)}
+                style={{ accentColor: "var(--brand)", margin: 0, cursor: "pointer" }} />
+              Show all
+            </label>
           </>
         )}
         <input

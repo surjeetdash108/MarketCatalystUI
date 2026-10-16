@@ -281,12 +281,12 @@ function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
           {/* CTA buttons */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
             {sector && (
-              <button className="btn" style={{ width: "100%" }}
+              <button className="btn cta outline" style={{ width: "100%" }}
                 onClick={() => { onClose(); openSector(sector); }}>
                 View {titleCaseLabel(sector)} in heatmap →
               </button>
             )}
-            <button className="btn primary" style={{ width: "100%" }}
+            <button className="btn cta" style={{ width: "100%" }}
               onClick={() => { onClose(); openStockFull(sym); }}>
               Open full stock page →
             </button>
@@ -333,7 +333,7 @@ function EarningsDrawer({ sym, liveEarnings, loading, onClose }: { sym: string; 
           )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button className="btn primary" style={{ flex: 1 }} onClick={() => { onClose(); openStockFull(sym); }}>Open full stock page</button>
+            <button className="btn cta" style={{ flex: 1 }} onClick={() => { onClose(); openStockFull(sym); }}>Open full stock page</button>
           </div>
         </div>
       </div>
@@ -607,7 +607,7 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
           )}
 
           <button
-            className="btn primary"
+            className={`btn ${eq ? "cta" : "primary"}`}
             style={{ width: "100%", marginTop: 14 }}
             onClick={() => {
               onClose();

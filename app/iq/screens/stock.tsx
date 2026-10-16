@@ -5,9 +5,9 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, CandleChart, ChartSelect, IntervalMenu, chartAsOfLabel, fmtFetchedAt, intervalLabel, CHART_TYPE_OPTIONS, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
+import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
-import { useKeyMoments } from "../key-moments";
+import { StockChart } from "../stock-panel";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
 import { apiPost } from "../backend";
@@ -726,6 +726,7 @@ export function StockScreen({
   hideChart,
   headerActions,
   visibleTabs,
+  initialTab,
   barInterval: barIntervalProp,
 }: {
   initialSym?: string;
@@ -737,6 +738,8 @@ export function StockScreen({
   hideChart?: boolean;
   headerActions?: ReactNode;
   visibleTabs?: StockTab[];
+  /** Tab to open on (default Overview) — Earnings Hub opens on Earnings. */
+  initialTab?: StockTab;
   /** Candle size owned by a chart OUTSIDE this screen (the list+chart panels,
    *  which pass hideChart). Drives the technical rating so it re-rates when
    *  that chart's interval changes, exactly as it does on the full page. */
@@ -773,9 +776,6 @@ export function StockScreen({
   // Default ON: the earnings dots are the chart's main annotation, and behind a
   // default-off toggle they were invisible unless you knew to look for the
   // button. The toggle still turns them off for a clean price-only chart.
-  const [showEarnings, setShowEarnings] = useState(true);
-  const [showMoments, setShowMoments] = useState(true);
-  const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
 
 
   // Live overlays for the detail panels — analyst consensus, insider
@@ -793,7 +793,7 @@ export function StockScreen({
   const { data: sectorsLive, loading: sectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
   const { data: liveEarningsEvents, loading: earningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   const { bars: yearBars, loading: yearBarsLoading } = useBackendBars(sym, "1Y");
-  const { bars: realBars, asOf: barsAsOf, loading: barsLoading } = useIntervalBars(sym, barInterval);
+  const { bars: realBars, loading: barsLoading } = useIntervalBars(sym, barInterval);
   // Technical rating on the chart's own candles, so it re-rates whenever the
   // candle interval changes. Null until enough candles have loaded, when the
   // backend's daily rating stands in (see `rating` below).
@@ -866,6 +866,9 @@ export function StockScreen({
   // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
   // its original single stacked-card layout, so this state is unused there.
   const [activeTab, setActiveTab] = useState<StockTab>(() => {
+    if (initialTab && (!visibleTabs || visibleTabs.length === 0 || visibleTabs.includes(initialTab))) {
+      return initialTab;
+    }
     if (visibleTabs && visibleTabs.length > 0 && !visibleTabs.includes("overview")) {
       return visibleTabs[0];
     }
@@ -1066,6 +1069,8 @@ export function StockScreen({
 
 
   const ema50 = ema(yr, 50);
+  const sma20 = sma(yr, 20);
+  const sma50 = sma(yr, 50);
   const sma200 = sma(yr, 200);
 
   const [insTxSortCol, setInsTxSortCol] = useState<"date" | "shares">("date");
@@ -1180,12 +1185,6 @@ export function StockScreen({
   // useChartEarnings, to avoid fetching it a second time.
   const chartEarnings: ChartEarnings[] = buildChartEarnings(financialsDoc, symEvents, todayStr);
 
-  // Key moments: the year's unusually large moves for this stock, each with the
-  // news that best explains it and the S&P 500's move that session.
-  const keyMoments = useKeyMoments(showMoments, {
-    sym, name: data.name, bars: yearBars, news: tickerNews, earningsDates: chartEarnings.map(e => e.date),
-  });
-
   // The next report on the earnings calendar — the only feed carrying a SALES
   // estimate, and a fallback for the next EPS estimate. Null when none is listed.
   const upcomingEr = symEvents.find(e => e.date >= todayStr) ?? null;
@@ -1225,9 +1224,6 @@ export function StockScreen({
   // derived stats below (EPS, 52w positioning) stay pinned to the snapshot.
   const hq = useHeadlineQuote(sym, live, { price: data.price, pctChange: data.pctChange });
   const { dispPrice } = hq;
-  // "as of" stamp: when the newest price on the chart is from, in ET; the
-  // backend fetch time (createdAt, BUG-DATA-008) moves to its tooltip.
-  const barsAsOfLabel = chartAsOfLabel(realBars, barInterval, live.tick?.at);
 
   // v is in $B. Below $1B, show millions so micro-caps (e.g. GAUZ ≈ $9M) read
   // "$9.1M" rather than rounding to a meaningless "$0.0B".
@@ -1263,42 +1259,53 @@ export function StockScreen({
     if (lo == null && offLow52 != null && 1 + offLow52 / 100 > 0) lo = p / (1 + offLow52 / 100);
   }
 
-  // Trend / MA posture. When the ticker is ranked in the synced universe we use
-  // the RS-rank read; otherwise (on-demand tickers with no RS rank) we derive it
-  // from price vs its 50-day EMA and 200-day SMA — both computed client-side from
-  // the year of daily bars — so the read still shows for every stock, not just
-  // ranked ones.
-  const aboveEma50 = ema50 != null ? p > ema50 : null;
-  const above200   = sma200 != null ? p > sma200 : null;
-  const haveMA     = aboveEma50 != null || above200 != null;
+  // Trend / MA posture, from the price vs its 20/50/200-day SMAs computed
+  // client-side from the year of daily bars. These used to come from the RS
+  // rank whenever one existed, which read a 12-month relative-strength score as
+  // if it were a moving-average position: SNDK at RS 98 showed "Above the 20,
+  // 50 and 200-day" while trading below its 20 and 50-day. RS is now only the
+  // Trend fallback for tickers with no bar history; it says nothing about where
+  // price sits against an average, so MA posture has no RS fallback.
+  const vsMa = (ma: number | null) => (ma != null && p > 0 ? p > ma : null);
+  const maPos = ([["20", sma20], ["50", sma50], ["200", sma200]] as const)
+    .map(([label, ma]) => ({ label, above: vsMa(ma) }))
+    .filter((m): m is { label: "20" | "50" | "200"; above: boolean } => m.above != null);
+  const above50 = maPos.find(m => m.label === "50")?.above ?? null;
+  const above200 = maPos.find(m => m.label === "200")?.above ?? null;
+  const haveMA   = maPos.length > 0;
+  // ["20", "50", "200"] → "20, 50 and 200-day"
+  const maList = (ls: string[]) =>
+    `${ls.length > 1 ? `${ls.slice(0, -1).join(", ")} and ${ls[ls.length - 1]}` : ls[0]}-day`;
   // Built as JSX, not as a string containing <b> tags. These rows render through
   // {l[1]}, which escapes strings — so markup embedded in one reached the reader
   // as literal "<b>Range / consolidation.</b>" on the stock page.
   const lead = (bold: string, rest: string) => (<><b>{bold}</b> {rest}</>);
-  const trendTxt: ReactNode = rs != null
-    ? (isUp && rs >= 70
-        ? lead("Strong uptrend.", "Higher highs and higher lows; momentum confirmed by recent strength.")
-        : rs < 40
-        ? lead("Downtrend.", "Lower highs and lower lows; price is below key moving averages.")
-        : lead("Range / consolidation.", "Choppy two-way action with no decisive trend yet."))
-    : haveMA
-    ? (aboveEma50 && above200
-        ? lead("Uptrend.", "Price is trading above both its 50-day and 200-day moving averages.")
-        : aboveEma50 === false && above200 === false
+  const trendTxt: ReactNode = haveMA
+    ? (above50 && above200
+        ? lead("Uptrend.", "Price is trading above its 50-day and 200-day moving averages.")
+        : above50 === false && above200 === false
         ? lead("Downtrend.", "Price is below both its 50-day and 200-day moving averages.")
+        : above50 === false && above200
+        ? lead("Pullback.", "Price has slipped below its 50-day but holds above its 200-day.")
+        : above50 && above200 === false
+        ? lead("Recovering.", "Price has reclaimed its 50-day but is still below its 200-day.")
         : lead("Range / consolidation.", "Price is mixed around its moving averages."))
+    : rs != null
+    ? (isUp && rs >= 70
+        ? lead("Strong uptrend.", "Relative-strength leader; momentum confirmed by recent strength.")
+        : rs < 40
+        ? lead("Downtrend.", "Lagging the market on relative strength.")
+        : lead("Range / consolidation.", "Choppy two-way action with no decisive trend yet."))
     : "Trend read not available yet — no price history synced.";
-  const maTxt = rs != null
-    ? (rs >= 60 ? "Above the 20, 50 and 200-day — bullish alignment."
-        : rs < 40 ? "Below the 50 and 200-day — bearish alignment."
-        : "Mixed: hugging the 50-day with a flat 200-day.")
-    : haveMA
-    ? (aboveEma50 && above200
-        ? "Above the 50-day and 200-day — bullish alignment."
-        : aboveEma50 === false && above200 === false
-        ? "Below the 50-day and 200-day — bearish alignment."
-        : `${aboveEma50 ? "Above" : "Below"} the 50-day, ${above200 ? "above" : "below"} the 200-day — mixed.`)
-    : "Moving-average posture not available yet.";
+  const aboveLs = maPos.filter(m => m.above).map(m => m.label);
+  const belowLs = maPos.filter(m => !m.above).map(m => m.label);
+  const maTxt = !haveMA
+    ? "Moving-average posture not available yet."
+    : belowLs.length === 0
+    ? `Above the ${maList(aboveLs)} — bullish alignment.`
+    : aboveLs.length === 0
+    ? `Below the ${maList(belowLs)} — bearish alignment.`
+    : `Below the ${maList(belowLs)}, above the ${maList(aboveLs)} — mixed.`;
 
   const indRows: [string, string | null, string][] = [
     ["RSI (14)", rsi != null ? rsi.toFixed(2) : null, rsi == null ? "" : rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
@@ -1306,7 +1313,7 @@ export function StockScreen({
     // Stoch %K and Wilder ADX(14) now computed by technical-indicators.job.
     ["Stoch %K", stochKv != null ? stochKv.toFixed(1) : null, stochKv == null ? "" : stochKv > 80 ? "Sell" : stochKv < 20 ? "Buy" : "Neutral"],
     ["ADX (14)", adx14 != null ? adx14.toFixed(1) : null, adx14 == null ? "" : adx14 > 25 ? "Strong" : adx14 < 20 ? "Weak" : "Neutral"],
-    ["EMA 50", ema50 != null ? nf(ema50) : null, ema50 != null ? (isUp ? "Buy" : "Sell") : ""],
+    ["EMA 50", ema50 != null ? nf(ema50) : null, ema50 != null ? (p > ema50 ? "Buy" : "Sell") : ""],
     ["SMA 200", sma200 != null ? nf(sma200) : null, sma200 != null ? (p > sma200 ? "Buy" : "Sell") : ""],
   ];
 
@@ -1706,28 +1713,21 @@ export function StockScreen({
             {/* Chart card */}
             <div className="card">
               <div id="chartHost" ref={chartRef} onContextMenu={handleChartRightClick} style={{ padding: "0 14px 6px" }}>
-                <CandleChart
+                {/* The shared chart every panel uses (Earnings Hub, watchlist, …),
+                    handed the data this page already holds so nothing is
+                    fetched twice. */}
+                <StockChart
                   sym={sym}
-                  tf={barInterval}
+                  name={data.name}
                   interval={barInterval}
-                  chartType={chartType.toLowerCase()}
-                  realBars={realBars}
-                  loading={barsLoading}
-                  live={live.tick ? { price: live.tick.price, high: live.tick.high, low: live.tick.low, at: live.tick.at } : null}
-                  earnings={showEarnings ? chartEarnings : []}
-                  moments={keyMoments}
-                  toolbarStart={<>
-                    <IntervalMenu value={barInterval} onChange={setBarInterval} />
-                    <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as typeof chartType)} title="Chart type" />
-                    <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
-                    <button className={`rng indbtn${showMoments ? " on" : ""}`} onClick={() => setShowMoments(v => !v)}
-                      title="Mark unusually large moves and the news behind them">Key moments</button>
-                  </>}
-                  toolbarEnd={<>
-                    <VendorTag v="polygon" />
-                    {realBars && <span className="cc-chip live">live</span>}
-                    {barsAsOfLabel && <span className="cc-asof" title={fmtFetchedAt(barsAsOf)}>as of {barsAsOfLabel}</span>}
-                  </>}
+                  onIntervalChange={setBarInterval}
+                  data={{
+                    live,
+                    bars: { bars: realBars, loading: barsLoading },
+                    yearBars: yearBars ?? null,
+                    news: tickerNews,
+                    earnings: chartEarnings,
+                  }}
                 />
               </div>
 
@@ -2171,7 +2171,7 @@ export function StockScreen({
               ) : (
                 ([
                   ["52W High", hi,     isUp ? "up"   : "dim"],
-                  ["EMA 50",   ema50,  isUp ? "up"   : "down"],
+                  ["EMA 50",   ema50,  ema50 != null && p > ema50 ? "up" : "down"],
                   ["SMA 200",  sma200, sma200 != null && p > sma200 ? "up" : "down"],
                   ["52W Low",  lo,     isUp ? "dim"  : "down"],
                 ] as [string, number | null, string][]).map(x => (
@@ -2470,35 +2470,82 @@ export function StockScreen({
       {!hideHeader && (<>
         <div ref={leftColRef} style={{ display: "flex", flexDirection: "column", gap: 14, alignSelf: "start", gridColumn: showRail ? undefined : "1 / -1" }}>
 
-          {activeTab === "overview" && (
-            <div className="card">
-              <div className="card-h">
-                <h3>Key statistics</h3>
-                <VendorTag v="polygon" />
-              </div>
-              <div className="keystats sd-stats">
-                {([
-                  ["Mkt Cap",        mc != null ? cap(mc) : null],
-                  ["P/E",            data.peRatio != null ? data.peRatio.toFixed(1) : null],
-                  ["EPS (TTM)",      eps != null ? "$" + eps.toFixed(2) : null],
-                  ["Next ER",        erDate],
-                  ["52W Range",      hi != null && lo != null ? "$" + nf(lo) + " – $" + nf(hi) : null],
-                  ["Off 52W High",   offHigh52 != null ? offHigh52.toFixed(1) + "%" : null],
-                  ["Off 52W Low",    offLow52 != null ? "+" + offLow52.toFixed(1) + "%" : null],
-                  ["Avg Vol (20d)",  avgVol20 != null ? nf(avgVol20 / 1e6) + "M" : null],
-                  ["Sector",         titleCaseLabel(data.sector)],
-                  ["Industry",       titleCaseLabel(data.industry)],
-                  ["Div Yield",      data.dividendYield != null ? data.dividendYield.toFixed(2) + "% (fwd)" : null],
-                  ["Div / Share",    divPerShare != null ? "$" + divPerShare.toFixed(2) + " (fwd)" : null],
-                ] as [string, string | null][]).map(k => (
-                  <div key={k[0]} className="kstat">
-                    <div className="k">{k[0]}</div>
-                    <div className="v">{k[1] ?? <NotAvailable />}</div>
+          {activeTab === "overview" && (() => {
+            // Two label/value columns, one stat per row (quote-page style)
+            // instead of a 4-wide tile grid — each label sits on the same line
+            // as its value, so the card scans top to bottom.
+            // The latest session's daily bar gives Open / Day's range / Volume;
+            // the bar before it gives Previous close.
+            const dayBar = yr.length > 0 ? yr[yr.length - 1] : null;
+            const prevBar = yr.length > 1 ? yr[yr.length - 2] : null;
+            const prevClose = prevBar?.c ?? companySummary?.prevClose ?? null;
+            const px = (v: number) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const pct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+            const exDiv = (dividendHistory?.history ?? [])
+              .map(h => h.exDividendDate)
+              .filter((d): d is string => !!d)
+              .sort()
+              .pop() ?? null;
+            const target = consensusDoc?.priceTargetConsensus ?? null;
+            const targetUp = target != null && dispPrice != null && dispPrice > 0 ? (target - dispPrice) / dispPrice * 100 : null;
+            type Row = { k: string; v: ReactNode | null; delta?: { txt: string; up: boolean } | null };
+            const left: Row[] = [
+              { k: "Market cap",    v: mc != null ? cap(mc) : null },
+              { k: "P/E ratio",     v: data.peRatio != null ? data.peRatio.toFixed(2) : null },
+              { k: "EPS (TTM)",     v: eps != null ? "$" + eps.toFixed(2) : null },
+              // Forward-annualized (latest declared rate × frequency ÷ price).
+              { k: "Dividend (fwd)", v: divPerShare != null
+                  ? `$${divPerShare.toFixed(2)}${data.dividendYield != null ? ` (${data.dividendYield.toFixed(2)}%)` : ""}`
+                  : data.dividendYield != null ? data.dividendYield.toFixed(2) + "%" : null },
+              { k: "Ex-dividend date", v: exDiv ? fmtDate(exDiv) : null },
+              { k: "Beta",          v: data.beta != null ? data.beta.toFixed(2) : null },
+              { k: "Avg volume (20D)", v: avgVol20 != null ? Math.round(avgVol20).toLocaleString("en-US") : null },
+              { k: "Sector",        v: data.sector ? titleCaseLabel(data.sector) : null },
+              { k: "Industry",      v: data.industry ? titleCaseLabel(data.industry) : null },
+            ];
+            const right: Row[] = [
+              { k: "Volume",        v: sessionVol != null ? Math.round(sessionVol).toLocaleString("en-US") : null },
+              { k: "Open",          v: dayBar ? px(dayBar.o) : null },
+              { k: "Previous close", v: prevClose != null ? px(prevClose) : null },
+              { k: "Day's range",   v: dayBar ? `${px(dayBar.l)} – ${px(dayBar.h)}` : null },
+              { k: "52-week range", v: hi != null && lo != null ? `${px(lo)} – ${px(hi)}` : null },
+              { k: "Off 52W high / low", v: offHigh52 != null || offLow52 != null
+                  ? <><span className={offHigh52 != null && offHigh52 < 0 ? "down" : undefined}>{offHigh52 != null ? offHigh52.toFixed(1) + "%" : "—"}</span>
+                      {" / "}<span className="up">{offLow52 != null ? "+" + offLow52.toFixed(1) + "%" : "—"}</span></>
+                  : null },
+              { k: "Analysts",      v: consensusDoc?.consensus
+                  ? <span style={{ color: consensusTone(consensusDoc.consensus) }}>{consensusDoc.consensus}</span>
+                  : null },
+              { k: "Price target",  v: target != null ? px(target) : null,
+                delta: targetUp != null ? { txt: pct(targetUp), up: targetUp >= 0 } : null },
+              { k: "Earnings date", v: erDate !== "—" ? fmtDate(erDate) : null },
+            ];
+            const col = (rows: Row[]) => (
+              <dl className="sd-kv">
+                {rows.map(r => (
+                  <div key={r.k} className="sd-kv-row">
+                    <dt>{r.k}</dt>
+                    <dd>
+                      {r.v ?? <NotAvailable />}
+                      {r.v != null && r.delta && <span className={`sd-kv-delta ${r.delta.up ? "up" : "down"}`}>{r.delta.txt}</span>}
+                    </dd>
                   </div>
                 ))}
+              </dl>
+            );
+            return (
+              <div className="card">
+                <div className="card-h">
+                  <h3>Key statistics</h3>
+                  <VendorTag v="polygon" />
+                </div>
+                <div className="sd-kv-grid">
+                  {col(left)}
+                  {col(right)}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {activeTab === "analysis" && (<>
             <div className="ai-block sd-ai">
@@ -3382,7 +3429,7 @@ export function StockScreen({
                 ) : (
                   ([
                     ["52W High", hi,     isUp ? "up"   : "dim"],
-                    ["EMA 50",   ema50,  isUp ? "up"   : "down"],
+                    ["EMA 50",   ema50,  ema50 != null && p > ema50 ? "up" : "down"],
                     ["SMA 200",  sma200, sma200 != null && p > sma200 ? "up" : "down"],
                     ["52W Low",  lo,     isUp ? "dim"  : "down"],
                   ] as [string, number | null, string][]).map(x => (

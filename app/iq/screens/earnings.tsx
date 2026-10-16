@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
-import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE } from "../utils";
+import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE, type BarInterval } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
-import { ChartCard } from "../stock-panel";
-import { EpsSalesWidget } from "../eps-sales-widget";
-import { EarningsPlaybook, playbookReports } from "./EarningsPlaybook";
+import { ChartCard, StockScreenEmbed } from "../stock-panel";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
@@ -306,6 +304,72 @@ function EcChip({ sym, selected, onSelect }: { sym: string; selected: boolean; o
       </span>
       {sym}
     </button>
+  );
+}
+
+// ── Day popover ───────────────────────────────────────────────────────────────
+// Month/week "+N" or day-header click: every reporter for that day in a popover
+// anchored to the cell, so a company is one click away instead of detouring
+// through a separate day screen first.
+
+interface DayPopState { iso: string; left: number; top: number; }
+
+const DAY_POP_W = 340;
+
+function dayPopAt(iso: string, el: HTMLElement): DayPopState {
+  const r = el.getBoundingClientRect();
+  const left = Math.max(12, Math.min(r.left, window.innerWidth - DAY_POP_W - 12));
+  return { iso, left, top: r.bottom + 6 };
+}
+
+function DayPopover({ pop, items, selected, onSelect, onClose }: {
+  pop: DayPopState;
+  items: { s: string; n?: string }[];
+  selected: string;
+  onSelect: (s: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [q, setQ] = useState("");
+  // Flip above the anchor when there's no room below.
+  const [top, setTop] = useState(pop.top);
+  useEffect(() => {
+    const h = ref.current?.offsetHeight ?? 0;
+    setTop(pop.top + h > window.innerHeight - 12 ? Math.max(12, window.innerHeight - h - 12) : pop.top);
+  }, [pop.top, items.length, q]);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    const onKey  = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onScroll = (e: Event) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+  const d = new Date(`${pop.iso}T00:00:00Z`);
+  const label = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  const query = q.trim().toUpperCase();
+  const shown = query ? items.filter(r => r.s.includes(query) || (r.n ?? "").toUpperCase().includes(query)) : items;
+  return (
+    <div ref={ref} className="emc-pop" style={{ left: pop.left, top, width: DAY_POP_W }} role="dialog" aria-label={`Reporting ${label}`}>
+      <div className="emc-pop-h">
+        <span>{label} · {items.length} reporting</span>
+        <button className="emc-pop-x" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+      {items.length > 12 && (
+        <input className="emc-pop-q" autoFocus placeholder="Filter tickers…" value={q} onChange={e => setQ(e.target.value)} />
+      )}
+      <div className="emc-pop-list ec-sess">
+        {shown.map(r => <EcChip key={r.s} sym={r.s} selected={selected === r.s} onSelect={onSelect} />)}
+        {shown.length === 0 && <span className="ec-none">No match</span>}
+      </div>
+    </div>
   );
 }
 
@@ -1295,17 +1359,7 @@ export function EarningsScreen() {
   const { data: analystActions } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const liveEarningsData = liveEarnings;
 
-  const [mode, setMode]     = useState<"day" | "week" | "month">("month");
-  // Per-day expanded state for Day and Week views so +N expands inline.
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
-  const toggleDayExpanded = (iso: string) => {
-    setExpandedDays(prev => {
-      const next = new Set(prev);
-      if (next.has(iso)) next.delete(iso);
-      else next.add(iso);
-      return next;
-    });
-  };
+  const [mode, setMode]     = useState<"week" | "month">("month");
   const [anchor, setAnchor] = useState<string>(() => etTodayIso());
   // At-a-glance snapshot: a Nasdaq-style results table (actual vs consensus,
   // surprise, revenue, year-ago) for the selected day/week/month, toggled from
@@ -1330,6 +1384,9 @@ export function EarningsScreen() {
   // that replaces the calendar; the ✕ in the weekly panel closes back to it.
   const [detailOpen, setDetailOpen] = useState(false);
   const [chartOpen, setChartOpen] = useState(true);
+  // One candle size for the chart AND the tabs' technical rating, as in the
+  // list+chart panels (StockPanelLayout).
+  const [barInterval, setBarInterval] = useState<BarInterval>("1D");
   // The two legacy inline company-detail blocks that used to render at the bottom
   // of the calendar view (a duplicate header + EPS metrics, and an earnings-
   // history / income-statement / AI-read stack) are superseded by the full detail
@@ -1341,10 +1398,12 @@ export function EarningsScreen() {
   const { data: financialsDoc, loading: financialsLoading } = useApiResource<FinancialsDoc>(sel ? `/live/financials?ticker=${encodeURIComponent(sel)}` : null);
   const [selectedCall,   setSelectedCall]   = useState<string | null>(null);
   const [aiModalSym,      setAiModalSym]      = useState<string | null>(null);
+  const [dayPop, setDayPop] = useState<DayPopState | null>(null);
+  const closeDayPop = useCallback(() => setDayPop(null), []);
 
-  // Stepping to another day starts collapsed again — an expansion belongs to
-  // the day it was opened on, not to the view.
-  useEffect(() => { setExpandedDays(new Set()); }, [anchor, mode]);
+  // A day popover belongs to the cell it was opened from; stepping or switching
+  // views closes it.
+  useEffect(() => { setDayPop(null); }, [anchor, mode]);
 
   const weekMon   = mondayOf(new Date(`${anchor}T00:00:00Z`));
   const weekDays5 = [0, 1, 2, 3, 4].map(i => isoDay(addDays(weekMon, i)));
@@ -1394,7 +1453,7 @@ export function EarningsScreen() {
   const glanceRaw: EarnCalItem[] =
     mode === "month"
       ? liveEarningsData.filter(d => d.date.slice(0, 7) === anchor.slice(0, 7)).map(toEarnCalItem)
-      : (mode === "week" ? weekDays5 : [anchor]).flatMap(iso => rowsForDate(iso, liveEarningsData));
+      : weekDays5.flatMap(iso => rowsForDate(iso, liveEarningsData));
 
   // Quotes for every reporter ON SCREEN, so a row can be placed by where its
   // move landed.
@@ -1409,12 +1468,6 @@ export function EarningsScreen() {
     ...new Set([...dayRows.map(r => r.s), ...glanceRaw.map(r => r.s)]),
   ].slice(0, SESSION_QUOTE_CAP);
   const sessionQuotes = useLiveQuotes(sessionTickers);
-  // Honours the session chip. It was pinned to "both", so with at-a-glance off
-  // the day calendar ignored the filter completely — picking "pre-market" left
-  // the grid unchanged while the same choice visibly narrowed the glance view,
-  // which reads as the filter being broken in one mode. Week mode already
-  // passed `session`; only this call was hardcoded.
-  const visibleRows = filterSortRows(dayRows, { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: anchor, usual: annUsualSession });
   // Detail-mode side tray: the SELECTED DAY's reporting tickers (not the week),
   // narrowed live by the "Search earnings" box (symbol or company name).
   const trayBaseItems = filterSortRows(dayRows, { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: anchor, usual: annUsualSession });
@@ -1456,7 +1509,6 @@ export function EarningsScreen() {
   const glanceBmo = glanceItems.filter(it => it.sess === "BMO");
   const glanceAmc = glanceItems.filter(it => it.sess === "AMC");
   const glanceTbd = glanceItems.filter(it => it.sess !== "BMO" && it.sess !== "AMC");
-  const glanceShowDate = mode !== "day";
 
   const anchorDate = new Date(`${anchor}T00:00:00Z`);
   const DOW3 = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -1485,7 +1537,7 @@ export function EarningsScreen() {
     if (mode === "month") {
       goToDate(isoDay(new Date(Date.UTC(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth() + dir, 1))));
     } else {
-      goToDate(isoDay(addDays(anchorDate, mode === "day" ? dir : dir * 7)));
+      goToDate(isoDay(addDays(anchorDate, dir * 7)));
     }
   };
 
@@ -1494,67 +1546,27 @@ export function EarningsScreen() {
 
   let calNode: React.ReactNode;
 
-  if (mode === "day") {
-    // One column, built exactly like a day in the week view — same card, same
-    // two-up chips, same +N. Show 10 logos initially; +N expands inline.
-    const isExpanded = expandedDays.has(anchor);
-    const shown  = isExpanded ? visibleRows : visibleRows.slice(0, MAX_CAL_LOGOS);
-    const extra  = visibleRows.length - MAX_CAL_LOGOS;
-    const isToday = anchor === etTodayIso();
-    calNode = visibleRows.length > 0 ? (
-      <div className="ec-grid">
-        <div className={`ec-day ec-day-solo${isToday ? " is-today" : ""}`}>
-          <div className="ec-dh">
-            {DOW3[anchorDate.getUTCDay()]} {anchorDate.getUTCDate()}{isToday ? " · Today" : ""}
-          </div>
-          <div className="ec-sess">
-            {shown.map(r => (
-              <EcChip key={r.s} sym={r.s} selected={sel === r.s} onSelect={s => openStockDetail(s, anchor)} />
-            ))}
-          </div>
-          {visibleRows.length > MAX_CAL_LOGOS && (
-            <div className="ec-more-row" style={{ marginTop: 8, display: "flex", justifyContent: "center" }}>
-              {!isExpanded ? (
-                <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} title={`Show ${extra} more`} onClick={() => toggleDayExpanded(anchor)}>+{extra}</button>
-              ) : (
-                <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} onClick={() => toggleDayExpanded(anchor)}>Show less</button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    ) : (
-      <div className="ecal-empty">
-        <div className="ecal-empty-h">No companies reporting</div>
-        <div>Nothing scheduled for {dateLabel} in the synced calendar.</div>
-      </div>
-    );
-  } else if (mode === "week") {
+  if (mode === "week") {
     calNode = (
       <div className="ec-grid">
         {weekDays5.map((iso, di) => {
           const items = filterSortRows(rowsForDate(iso, liveEarningsData).map(toCalRow), { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: iso, usual: annUsualSession });
           const dn = ["Mon", "Tue", "Wed", "Thu", "Fri"][di];
           const isToday = iso === etTodayIso();
-          const isExpanded = expandedDays.has(iso);
-          const shown = isExpanded ? items : items.slice(0, MAX_CAL_LOGOS);
+          const shown = items.slice(0, MAX_CAL_LOGOS);
           const extra = items.length - MAX_CAL_LOGOS;
           return (
             <div key={iso} className={`ec-day${isToday ? " is-today" : ""}${iso === anchor && !isToday ? " is-sel" : ""}`}>
-              <div className="ec-dh" style={{ cursor: "pointer" }} onClick={() => { goToDate(iso); setMode("day"); }}>
+              <div className="ec-dh" style={{ cursor: items.length ? "pointer" : "default" }} title={items.length ? `${items.length} reporting` : undefined} onClick={e => { if (items.length) setDayPop(dayPopAt(iso, e.currentTarget)); }}>
                 {dn} {Number(iso.slice(8))}{isToday ? " · Today" : ""}
               </div>
               <div className="ec-sess">
                 {items.length ? (
                   <>
                     {shown.map(r => <EcChip key={r.s} sym={r.s} selected={sel === r.s} onSelect={s => openStockDetail(s, iso)} />)}
-                    {items.length > MAX_CAL_LOGOS && (
+                    {extra > 0 && (
                       <div style={{ gridColumn: "1 / -1", marginTop: 4, display: "flex", justifyContent: "center" }}>
-                        {!isExpanded ? (
-                          <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} title={`Show ${extra} more`} onClick={(e) => { e.stopPropagation(); toggleDayExpanded(iso); }}>+{extra}</button>
-                        ) : (
-                          <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} onClick={(e) => { e.stopPropagation(); toggleDayExpanded(iso); }}>Show less</button>
-                        )}
+                        <button className="emc-more" style={{ width: "100%", justifyContent: "center" }} title={`Show all ${items.length}`} onClick={e => setDayPop(dayPopAt(iso, e.currentTarget))}>+{extra}</button>
                       </div>
                     )}
                   </>
@@ -1596,7 +1608,7 @@ export function EarningsScreen() {
             const extra   = items.length - shown.length;
             return (
               <div key={iso} className={`emc-day${isToday ? " is-today" : ""}${isSel ? " is-sel" : ""}`}>
-                <div className="emc-dh" onClick={() => { goToDate(iso); setMode("day"); }} title="Open day view">
+                <div className="emc-dh" style={items.length ? undefined : { cursor: "default" }} onClick={e => { if (items.length) setDayPop(dayPopAt(iso, e.currentTarget)); }} title={items.length ? `${items.length} reporting` : undefined}>
                   {Number(iso.slice(8))}{isToday ? <span className="t">Today</span> : null}
                 </div>
                 {items.length === 0 ? (
@@ -1609,7 +1621,7 @@ export function EarningsScreen() {
                       </button>
                     ))}
                     {extra > 0 && (
-                      <button className="emc-more" title={`${extra} more — open day view`} onClick={() => { goToDate(iso); setMode("day"); }}>+{extra}</button>
+                      <button className="emc-more" title={`Show all ${items.length}`} onClick={e => setDayPop(dayPopAt(iso, e.currentTarget))}>+{extra}</button>
                     )}
                   </div>
                 )}
@@ -1617,6 +1629,22 @@ export function EarningsScreen() {
             );
           })}
         </div>
+      </>
+    );
+  }
+
+  if (dayPop) {
+    calNode = (
+      <>
+        {calNode}
+        <DayPopover
+          key={dayPop.iso}
+          pop={dayPop}
+          items={filterSortRows(rowsForDate(dayPop.iso, liveEarningsData).map(toCalRow), { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: dayPop.iso, usual: annUsualSession })}
+          selected={sel}
+          onSelect={s => { const iso = dayPop.iso; setDayPop(null); openStockDetail(s, iso); }}
+          onClose={closeDayPop}
+        />
       </>
     );
   }
@@ -1706,7 +1734,7 @@ export function EarningsScreen() {
               {pickerOpen && (
                 <MiniCalendar
                   value={anchor}
-                  onPick={iso => { goToDate(iso); setMode("day"); }}
+                  onPick={iso => { goToDate(iso); setMode("week"); }}
                   onClose={() => setPickerOpen(false)}
                 />
               )}
@@ -1716,7 +1744,6 @@ export function EarningsScreen() {
           <div className="ecal-seg">
             <button className={`ecal-segbtn${mode === "month" ? " on" : ""}`} onClick={() => setMode("month")}>Month</button>
             <button className={`ecal-segbtn${mode === "week" ? " on" : ""}`} onClick={() => setMode("week")}>Week</button>
-            <button className={`ecal-segbtn${mode === "day" ? " on" : ""}`} onClick={() => setMode("day")}>Day</button>
           </div>
           {/* Session filter — splits the day's reporters by WHERE THEIR MOVE
               LANDED, not by an announced schedule.
@@ -1761,9 +1788,9 @@ export function EarningsScreen() {
         {atGlance ? (
           glanceItems.length > 0 ? (
             <div>
-              <GlanceTable title="Moved pre-market" items={glanceBmo} showDate={glanceShowDate} onSelect={(s, d) => openStockDetail(s, d)} />
-              <GlanceTable title="Moved post-market" items={glanceAmc} showDate={glanceShowDate} onSelect={(s, d) => openStockDetail(s, d)} />
-              <GlanceTable title="Time not specified" items={glanceTbd} showDate={glanceShowDate} onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Moved pre-market" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Moved post-market" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Time not specified" items={glanceTbd} showDate onSelect={(s, d) => openStockDetail(s, d)} />
             </div>
           ) : (
             <div className="ecal-empty">
@@ -1995,28 +2022,19 @@ export function EarningsScreen() {
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>{sel} · Chart <VendorTag v="polygon" /></span>
                 <span style={{ color: "var(--text-dim-solid)", fontSize: ".75rem", fontWeight: 600 }}>{chartOpen ? "▲ Hide" : "▼ Show"}</span>
               </button>
-              {chartOpen && <ChartCard sym={sel} px={liveCompanySel?.price ?? 0} />}
+              {chartOpen && (
+                <ChartCard sym={sel} px={liveCompanySel?.price ?? 0}
+                  interval={barInterval} onIntervalChange={setBarInterval} />
+              )}
             </div>
 
-            {/* Sales & EPS — bar charts (Quarterly/Annual) + fiscal-year and
-                quarterly tables, per the reference layout. */}
-            <div style={{ marginBottom: 14 }}>
-              <EpsSalesWidget financialsDoc={financialsDoc} />
-            </div>
-
-            {/* Reports — how the stock trades when it reports (bottom). */}
-            <div className="card">
-              <div className="card-h">
-                <h3>Earnings Playbook <VendorTag v={["polygon", "fmp"]} /></h3>
-                <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>how {sel} trades when it reports</span>
-              </div>
-              <div className="card-b" style={{ paddingTop: 6 }}>
-                <EarningsPlaybook
-                  sym={sel}
-                  reports={playbookReports(financialsDoc)}
-                />
-              </div>
-            </div>
+            {/* The stock page's own tabs (Overview / Analysis / Earnings /
+                Financials / …), the same embed the watchlist and other panels
+                show — opened on Earnings here. Its Earnings tab carries the EPS
+                surprise, growth and playbook, and Financials the sales bars,
+                which this screen used to draw separately. */}
+            <StockScreenEmbed key={sel} initialSym={sel} hideIdentity hideChart
+              barInterval={barInterval} initialTab="earnings" />
           </div>
         </div>
       )}

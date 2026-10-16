@@ -149,9 +149,17 @@ export function useHeadlineQuote(
    * next to a +$36.85 that was really +4.12%), and outside its window it tracks
    * something else entirely (see LiveQuote.latePct).
    */
+  // Early pre-market, before today's first print, the vendor quote has not
+  // rolled to the new day yet: its "previous" close is the session BEFORE last
+  // and its regularClose is last session's — i.e. the close we want. ACN at
+  // 04:08 ET on 16 Oct read 214.96 (14 Oct) while the chart's last bar closed
+  // at 224.92 (15 Oct).
+  const quoteRolled = isTodayAfter4amET(sharedQuote?.updatedAt ?? null);
   const quoteClose = barsFallback
     ? sharedQuote?.price
-    : isPre ? sharedQuote?.previousClose : sharedQuote?.regularClose;
+    : isPre
+    ? (quoteRolled ? sharedQuote?.previousClose : (sharedQuote?.regularClose ?? sharedQuote?.previousClose))
+    : sharedQuote?.regularClose;
   const regPrice = isExtended
     ? (quoteClose ?? (snapshot.price != null && snapshot.price > 0 ? snapshot.price : null) ?? dispPrice ?? 0)
     : (dispPrice ?? snapshot.price ?? 0);
@@ -231,7 +239,7 @@ const AS_OF_STYLE = {
 export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
   const { regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours, extLabel, regAsOf, ahAsOf } = q;
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "nowrap", flexShrink: 0 }}>
+    <div className="qh" style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "nowrap", flexShrink: 0 }}>
       {/* REGULAR MARKET CLOSE */}
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", whiteSpace: "nowrap", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 5, whiteSpace: "nowrap" }}>
