@@ -231,10 +231,17 @@ export function IPOsScreen() {
     (r): r is IpoRow & { cur: number; offer: number } => r.cur != null && r.offer != null && r.offer !== 0 && !isOtc(r),
   );
   const perfSince = perf.reduce<string | null>((m, r) => (!m || r.date < m ? r.date : m), null);
-  const perfScope = perfSince ? `NYSE/Nasdaq IPOs since ${fmtMonthDay(perfSince)}` : "NYSE/Nasdaq IPOs";
+  // The vendor feed has no SPAC flag, so blank-check listings are in this set —
+  // the label says so rather than implying an operating-company-only figure.
+  const perfScope = perfSince ? `NYSE/Nasdaq IPOs incl. SPACs since ${fmtMonthDay(perfSince)}` : "NYSE/Nasdaq IPOs incl. SPACs";
   const winners = perf.filter(r => r.cur > r.offer).length;
   const returns = perf.map(r => (r.cur - r.offer) / r.offer * 100).sort((a, b) => a - b);
-  const median  = returns.length ? returns[Math.floor(returns.length / 2)] : null;
+  // True median: average the two middle values when the count is even
+  // (returns[n/2] alone picked the upper one and overstated it).
+  const mid     = Math.floor(returns.length / 2);
+  const median  = !returns.length ? null
+    : returns.length % 2 ? returns[mid]
+    : (returns[mid - 1] + returns[mid]) / 2;
   const best    = perf.length > 0 ? perf.reduce((a, b) => (b.cur - b.offer) / b.offer > (a.cur - a.offer) / a.offer ? b : a) : null;
   const bestRet = best ? ((best.cur - best.offer) / best.offer * 100).toFixed(0) : "—";
 

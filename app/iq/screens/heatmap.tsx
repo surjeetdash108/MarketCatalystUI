@@ -17,6 +17,48 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
 );
 
 const TABS = ["Stocks", "S&P 500", "Nasdaq", "Dow", "Russell 2000"];
+
+/**
+ * One fixed colour per sector (the backend's TradingView taxonomy), so a sector
+ * keeps its colour across index tabs and visits. Unknown sectors fall back to a
+ * hash into the same palette.
+ */
+const SECTOR_COLORS: Record<string, string> = {
+  "Electronic Technology":  "#3B82F6",
+  "Technology Services":    "#8B5CF6",
+  "Finance":                "#0D9488",
+  "Retail Trade":           "#F59E0B",
+  "Health Technology":      "#EC4899",
+  "Producer Manufacturing": "#64748B",
+  "Energy Minerals":        "#EA580C",
+  "Consumer Durables":      "#CA8A04",
+  "Consumer Defensive":     "#65A30D",
+  "Non-Energy Minerals":    "#A16207",
+  "Consumer Services":      "#E11D48",
+  "Utilities":              "#0891B2",
+  "Transportation":         "#0284C7",
+  "Health Services":        "#C026D3",
+  "Industrial Services":    "#78716C",
+  "Communications":         "#4F46E5",
+  "Process Industries":     "#16A34A",
+  "Distribution Services":  "#DB2777",
+  "Commercial Services":    "#059669",
+  "Miscellaneous":          "#94A3B8",
+};
+const SECTOR_FALLBACK = Object.values(SECTOR_COLORS);
+function sectorColor(name: string): string {
+  if (SECTOR_COLORS[name]) return SECTOR_COLORS[name];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return SECTOR_FALLBACK[h % SECTOR_FALLBACK.length];
+}
+/** Sector fill for a tile, with dark or light ink picked by the fill's luminance. */
+function sectorCol(name: string): { bg: string; fg: string } {
+  const hex = sectorColor(name);
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  return { bg: hex, fg: 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#0E1013" : "#ffffff" };
+}
+type ColorBy = "change" | "sector";
 const HEADER_H = 24;
 const APPROX_W = 1100;
 const APPROX_H = 620;
@@ -98,6 +140,15 @@ function HeatmapInner() {
   // Sector selection: "Overall" or null = All Sectors Heatmap; string = Dedicated Sector Heatmap Screen
   const [selectedSector, setSelectedSector] = useState<string | null>(urlSector || "Overall");
   const [moreModal, setMoreModal] = useState<[string, number, number][] | null>(null);
+  // Tile colour: the day's % change (default) or the stock's sector.
+  const [colorBy, setColorByState] = useState<ColorBy>(() => {
+    try { return localStorage.getItem("iq-heatmap-color") === "sector" ? "sector" : "change"; } catch { return "change"; }
+  });
+  const setColorBy = (c: ColorBy) => {
+    setColorByState(c);
+    try { localStorage.setItem("iq-heatmap-color", c); } catch { /* storage unavailable */ }
+  };
+  const tileCol = (chg: number, sector: string) => (colorBy === "sector" ? sectorCol(sector) : heatCol(chg));
 
   useEffect(() => {
     if (!moreModal) return;
@@ -213,7 +264,9 @@ function HeatmapInner() {
       </div>
 
       <div className="fbar">
-        <button className="chip on">Color: % change</button>
+        <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", alignSelf: "center" }}>Color:</span>
+        <button className={`chip${colorBy === "change" ? " on" : ""}`} onClick={() => setColorBy("change")}>% change</button>
+        <button className={`chip${colorBy === "sector" ? " on" : ""}`} onClick={() => setColorBy("sector")}>Sector</button>
         {isOverall ? (
           <span style={{ fontSize: ".72rem", color: "var(--text-hi)", transform: "translateY(10px)" }}>
             {`${membersShown} ${tab === 0 ? "stocks" : `${TABS[tab]} member${membersShown === 1 ? "" : "s"}`} in the live universe`}
@@ -232,14 +285,27 @@ function HeatmapInner() {
         >
           <VendorTag v="polygon" />
         </div>
-        <div className="legend" style={{ gap: 4 }}>
+        {colorBy === "change" && <div className="legend" style={{ gap: 4 }}>
           <span style={{ fontSize: ".66rem", color: "var(--down)" }}>−3%</span>
           {(["rgba(138,46,21,.85)", "rgba(138,46,21,.4)", "#2A3037", "rgba(31,122,70,.4)", "rgba(31,122,70,.85)"] as const).map((bg, i) => (
             <i key={i} style={{ width: 22, height: 12, display: "inline-block", borderRadius: 2, background: bg }} />
           ))}
           <span style={{ fontSize: ".66rem", color: "var(--up)" }}>+3%</span>
-        </div>
+        </div>}
       </div>
+
+      {/* Sector colour key — only while tiles are coloured by sector. */}
+      {colorBy === "sector" && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", margin: "0 0 10px" }}>
+          {(isOverall ? sorted : activeSector ? [activeSector] : []).map(g => (
+            <button key={g.name} onClick={() => setSelectedSector(g.name)} title={`Focus on ${g.name}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: 0, padding: 0, cursor: "pointer", fontSize: ".7rem", color: "var(--text-hi)" }}>
+              <i style={{ width: 10, height: 10, borderRadius: 2, background: sectorColor(g.name), display: "inline-block" }} />
+              {g.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Treemap ── */}
       <div style={{
@@ -307,6 +373,8 @@ function HeatmapInner() {
                           display: "flex", alignItems: "center", justifyContent: "space-between",
                           padding: "0 7px", cursor: "pointer",
                           background: "rgba(0,0,0,.35)", borderBottom: "1px solid rgba(255,255,255,.06)", gap: 4,
+                          // Sector colour key, in both colour modes.
+                          boxShadow: `inset 3px 0 0 ${sectorColor(g.name)}`,
                         }}
                       >
                         <span style={{
@@ -325,7 +393,7 @@ function HeatmapInner() {
                         {stocksSorted.map(([sym, mcap, chg]) => {
                           const sr = stockMap[sym];
                           if (!sr) return null;
-                          const hc      = heatCol(chg);
+                          const hc      = tileCol(chg, g.name);
                           const cellPxW = (sr.w / 100) * sectPxW;
                           const cellPxH = (sr.h / 100) * (sectPxH - HEADER_H);
                           const minDim  = Math.min(cellPxW, cellPxH);
@@ -453,7 +521,7 @@ function HeatmapInner() {
               {visibleStocks.map(([sym, mcap, chg]) => {
                 const sr = stockMap[sym];
                 if (!sr) return null;
-                const hc      = heatCol(chg);
+                const hc      = tileCol(chg, activeSector.name);
                 const cellPxW = (sr.w / 100) * (APPROX_W - 32);
                 const cellPxH = (sr.h / 100) * (APPROX_H - 24);
                 const showText   = cellPxW >= Math.max(13, sym.length * 4) && cellPxH >= 10;
@@ -501,7 +569,7 @@ function HeatmapInner() {
               {moreStocks.length > 0 && (() => {
                 const sr = stockMap["__more__"];
                 if (!sr) return null;
-                const hc      = heatCol(moreAvgChg);
+                const hc      = tileCol(moreAvgChg, activeSector.name);
                 const cellPxW = (sr.w / 100) * (APPROX_W - 32);
                 const cellPxH = (sr.h / 100) * (APPROX_H - 24);
                 const showChange = cellPxW >= 34 && cellPxH >= 24;

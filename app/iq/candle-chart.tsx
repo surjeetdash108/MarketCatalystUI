@@ -1250,7 +1250,10 @@ function CandleChartInner({
   // The opened card remembers the view and marks it was placed against, so a
   // pan / zoom / new series simply hides it instead of leaving it adrift.
   const [erHover, setErHover] = useState<number | null>(null);
-  const [erSel, setErSel] = useState<{ hit: ErHit; view: View; marks: unknown; size: unknown } | null>(null);
+  // `pinned`: opened by a click (stays until a click elsewhere / Escape);
+  // otherwise it is a hover preview that closes once the pointer leaves both
+  // the marker and the card.
+  const [erSel, setErSel] = useState<{ hit: ErHit; view: View; marks: unknown; size: unknown; pinned?: boolean } | null>(null);
   const erHitsRef = useRef<ErHit[]>([]);
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const erCardRef = useRef<HTMLDivElement>(null);
@@ -1260,7 +1263,7 @@ function CandleChartInner({
   const [kmHover, setKmHover] = useState<number | null>(null);
   // Pinned by session date, not by array identity: the moments are rebuilt
   // whenever the news feed refetches (every 30s), which must not close a card.
-  const [kmSel, setKmSel] = useState<{ hit: ErHit; view: View; date: string; size: unknown } | null>(null);
+  const [kmSel, setKmSel] = useState<{ hit: ErHit; view: View; date: string; size: unknown; pinned?: boolean } | null>(null);
   const kmHitsRef = useRef<ErHit[]>([]);
   const kmCardRef = useRef<HTMLDivElement>(null);
   const kmOpen = kmSel && kmSel.view === view && kmSel.size === size && kmMarks[kmSel.hit.k]?.km.date === kmSel.date
@@ -1357,8 +1360,40 @@ function CandleChartInner({
     const i = Math.min(n - 1, Math.max(0, idxAt(mx)));
     setHover(h => (h && h.i === i && h.y === my ? h : { i, y: my }));
     const km = kmHitAt(mx, my);
+    const er = km ? undefined : erHitAt(mx, my);
     setKmHover(km?.k ?? null);
-    setErHover(km ? null : (erHitAt(mx, my)?.k ?? null));
+    setErHover(er?.k ?? null);
+    previewAt(km, er);
+  };
+
+  // Hover preview: pointing at a marker opens its card; leaving the marker
+  // closes it after a short grace period, long enough to move the pointer onto
+  // the card (its news links stay clickable). A clicked-open (pinned) card is
+  // left alone, and while one is pinned hovering other markers does nothing.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelPreviewClose = () => {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+  };
+  const schedulePreviewClose = () => {
+    if (closeTimer.current) return;
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null;
+      setKmSel(sel => (sel && !sel.pinned ? null : sel));
+      setErSel(sel => (sel && !sel.pinned ? null : sel));
+    }, 250);
+  };
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+  const previewAt = (km: ErHit | undefined, er: ErHit | undefined) => {
+    if (kmSel?.pinned || erSel?.pinned) return;
+    if (!km && !er) { if (kmSel || erSel) schedulePreviewClose(); return; }
+    cancelPreviewClose();
+    if (km) {
+      if (kmOpen?.k !== km.k) setKmSel({ hit: km, view, date: kmMarks[km.k].km.date, size });
+      if (erSel) setErSel(null);
+    } else if (er) {
+      if (erOpen?.k !== er.k) setErSel({ hit: er, view, marks: erMarks, size });
+      if (kmSel) setKmSel(null);
+    }
   };
 
   const erHitAt = (mx: number, my: number) =>
@@ -1366,7 +1401,8 @@ function CandleChartInner({
   const kmHitAt = (mx: number, my: number) =>
     kmHitsRef.current.find(p => Math.hypot(p.x - mx, p.y - my) <= KM_HIT_R);
 
-  // A click (not the end of a drag) on an "E" opens its card; anywhere else closes it.
+  // A click (not the end of a drag) on a marker pins its card open (a second
+  // click on a pinned marker closes it); a click anywhere else closes it.
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const d = downRef.current;
     downRef.current = null;
@@ -1375,8 +1411,9 @@ function CandleChartInner({
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const km = kmHitAt(mx, my);
     const hit = km ? undefined : erHitAt(mx, my);
-    setKmSel(!km || kmOpen?.k === km.k ? null : { hit: km, view, date: kmMarks[km.k].km.date, size });
-    setErSel(!hit || erOpen?.k === hit.k ? null : { hit, view, marks: erMarks, size });
+    cancelPreviewClose();
+    setKmSel(!km || (kmOpen?.k === km.k && kmSel?.pinned) ? null : { hit: km, view, date: kmMarks[km.k].km.date, size, pinned: true });
+    setErSel(!hit || (erOpen?.k === hit.k && erSel?.pinned) ? null : { hit, view, marks: erMarks, size, pinned: true });
   };
 
   // The open card closes on Escape or a click outside it and the chart.
@@ -1571,7 +1608,8 @@ function CandleChartInner({
     const below = erOpen.y + ER_R + 8;
     const top = below + CARD_H > size.h ? Math.max(4, erOpen.y - ER_R - 8 - CARD_H) : below;
     return (
-      <div ref={erCardRef} className="cc-er-card" style={{ left, top, width: CARD_W }} role="dialog" aria-label="Earnings report">
+      <div ref={erCardRef} className="cc-er-card" style={{ left, top, width: CARD_W }} role="dialog" aria-label="Earnings report"
+        onMouseEnter={cancelPreviewClose} onMouseLeave={schedulePreviewClose}>
         <div className="cc-er-hd">
           <span className="cc-er-badge" aria-hidden="true">E</span>
           <span className="d">
@@ -1604,7 +1642,7 @@ function CandleChartInner({
     );
   })() : null;
 
-  /* ── key-moment card (opened by clicking a key-moment dot) ─────────── */
+  /* ── key-moment card (opened by hovering or clicking a key-moment dot) ── */
   const kmCard = kmOpen ? (() => {
     const { km } = kmMarks[kmOpen.k];
     const sgn = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
@@ -1615,7 +1653,8 @@ function CandleChartInner({
     const below = kmOpen.y + KM_R + 8;
     const top = below + CARD_H > size.h ? Math.max(4, kmOpen.y - KM_R - 8 - CARD_H) : below;
     return (
-      <div ref={kmCardRef} className="cc-er-card cc-km-card" style={{ left, top, width: CARD_W }} role="dialog" aria-label="Key moment">
+      <div ref={kmCardRef} className="cc-er-card cc-km-card" style={{ left, top, width: CARD_W }} role="dialog" aria-label="Key moment"
+        onMouseEnter={cancelPreviewClose} onMouseLeave={schedulePreviewClose}>
         <div className="cc-er-hd">
           <span className="d">
             {dt.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
@@ -1715,7 +1754,7 @@ function CandleChartInner({
           }}
           onMouseMove={onCanvasMove}
           onClick={onCanvasClick}
-          onMouseLeave={() => { setHover(null); setErHover(null); setKmHover(null); }}
+          onMouseLeave={() => { setHover(null); setErHover(null); setKmHover(null); schedulePreviewClose(); }}
           onDoubleClick={resetView}
           onKeyDown={onCanvasKey}
         />

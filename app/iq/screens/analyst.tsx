@@ -361,7 +361,7 @@ function AnalystActionDrawer({
           <div style={{ marginTop: 14 }}>
             <button
               type="button"
-              className="btn primary"
+              className="btn cta"
               style={{
                 width: "100%",
                 padding: "10px 16px",

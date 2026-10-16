@@ -17,8 +17,9 @@ export const menuItems = [
   { label: 'ETF Corner', slug: 'etf-corner', group: 'Research', icon: '🧺', badge: null },
   { label: 'AI Companies', slug: 'ai-infrastructure', group: 'Research', icon: '🧠', badge: null },
   // ---- Market Recaps ----
-  { label: 'Daily Recaps', slug: 'recap', group: 'Market Recaps', icon: '🔖', badge: null },
-  { label: 'Weekly Recaps', slug: 'weekly-recap', group: 'Market Recaps', icon: '🗓️', badge: null },
+  // One entry: the screen toggles Daily ↔ Weekly. /menu/weekly-recap still
+  // routes there (opening on Weekly) for existing links.
+  { label: 'Recaps', slug: 'recap', group: 'Market Recaps', icon: '🔖', badge: null },
   // ---- My Workspace ----
   { label: 'Portfolio', slug: 'portfolio', group: 'My Workspace', icon: '💼', badge: null },
   { label: 'Watchlist', slug: 'watchlist', group: 'My Workspace', icon: '⭐', badge: null },

@@ -90,9 +90,10 @@ function earnSurprises(events: LiveEarningsDoc[]): EarnSurprise[] {
 export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const router = useRouter();
   const { openStock, openSector } = useIQActions();
-  // Daily vs weekly is now chosen by the menu route (two separate options),
-  // not an in-screen tab.
-  const activeTab = mode === "weekly" ? 1 : 0;
+  // Daily vs weekly is a toggle on the page; `mode` (from the route — the old
+  // /menu/weekly-recap link passes "weekly") only picks where it starts.
+  const [period, setPeriod] = useState<"daily" | "weekly">(mode);
+  const activeTab = period === "weekly" ? 1 : 0;
   // Local stock-detail drawer for headline ticker icons — same self-contained
   // sliding drawer the IPO screen uses (StockScreenEmbed), independent of the
   // shell's openStock action.
@@ -595,10 +596,18 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
         <div>
           <h1 className="page-title">{activeTab === 1 ? "Weekly Recap" : "End-of-Day Recap"}</h1>
         </div>
+        <div className="sd-seg" role="group" aria-label="Recap period">
+          {(["daily", "weekly"] as const).map(p => (
+            <button key={p} type="button" aria-pressed={period === p}
+              onClick={() => { setPeriod(p); setRecapPage(0); }}>
+              {p === "daily" ? "Daily" : "Weekly"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Shared recap body (identical widget set for daily + weekly) ── */}
-      {RecapBody(mode)}
+      {RecapBody(period)}
 
       {/* ── Sliding drawer ── */}
       {drawer === "earn-movers" && (

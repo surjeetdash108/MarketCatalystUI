@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { apiGet } from "./backend";
-import { DataState, NotAvailable, VendorTag, StockLogo } from "./utils";
+import { DataState, NotAvailable, VendorTag } from "./utils";
 
 export interface Institutional13FRow {
   cik: string;
@@ -154,10 +154,6 @@ export function Stock13FFilingsView({ symbol }: { symbol: string }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <StockLogo sym={symbol} size={26} />
-              <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
-                13F Institutional Filings · {symbol}
-              </h2>
               <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)", fontSize: ".72rem", fontWeight: 700 }}>
                 {data?.selectedQuarter || "Quarterly 13F"}
               </span>
@@ -317,47 +313,46 @@ export function Stock13FFilingsView({ symbol }: { symbol: string }) {
             </div>
           ) : (
             <div className="table-wrap" style={{ overflowX: "auto" }}>
-              <table className="tbl" style={{ width: "100%", fontSize: ".8rem" }}>
+              {/* Fixed layout so the columns share the card's width instead of
+                  growing past it. Quarter (same for every row, shown in the pill
+                  above) and Activity Status (a badge under Change now; the tabs
+                  above filter by it) were dropped to make the table fit. */}
+              <table className="tbl f13-tbl" style={{ width: "100%", fontSize: ".8rem", tableLayout: "fixed" }}>
+                <colgroup>
+                  <col style={{ width: "40%" }} />
+                  <col style={{ width: "15%" }} />
+                  <col className="f13-prev" style={{ width: "15%" }} />
+                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "15%" }} />
+                </colgroup>
                 <thead>
                   <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
                     <th
-                      style={{ textAlign: "left", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
+                      style={{ textAlign: "left", padding: "10px", cursor: "pointer", userSelect: "none" }}
                       onClick={() => toggleSort("name")}
                     >
-                      Institutional Investor {sortBy === "name" && (sortDir === "desc" ? "▼" : "▲")}
-                    </th>
-                    <th style={{ textAlign: "center", padding: "10px 14px" }}>
-                      Quarter
+                      Investor {sortBy === "name" && (sortDir === "desc" ? "▼" : "▲")}
                     </th>
                     <th
-                      style={{ textAlign: "right", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
+                      style={{ textAlign: "right", padding: "10px", cursor: "pointer", userSelect: "none" }}
                       onClick={() => toggleSort("shares")}
                     >
-                      Latest Shares {sortBy === "shares" && (sortDir === "desc" ? "▼" : "▲")}
+                      Shares {sortBy === "shares" && (sortDir === "desc" ? "▼" : "▲")}
                     </th>
-                    <th style={{ textAlign: "right", padding: "10px 14px" }}>
-                      Previous Shares
+                    <th className="f13-prev" style={{ textAlign: "right", padding: "10px" }}>
+                      Prev.
                     </th>
                     <th
-                      style={{ textAlign: "right", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
+                      style={{ textAlign: "right", padding: "10px", cursor: "pointer", userSelect: "none" }}
                       onClick={() => toggleSort("change")}
                     >
-                      Change in Holdings {sortBy === "change" && (sortDir === "desc" ? "▼" : "▲")}
+                      Change {sortBy === "change" && (sortDir === "desc" ? "▼" : "▲")}
                     </th>
                     <th
-                      style={{ textAlign: "center", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
-                      onClick={() => toggleSort("status")}
-                    >
-                      Activity Status {sortBy === "status" && (sortDir === "desc" ? "▼" : "▲")}
-                    </th>
-                    <th
-                      style={{ textAlign: "right", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
+                      style={{ textAlign: "right", padding: "10px", cursor: "pointer", userSelect: "none" }}
                       onClick={() => toggleSort("value")}
                     >
-                      Market Value {sortBy === "value" && (sortDir === "desc" ? "▼" : "▲")}
-                    </th>
-                    <th style={{ textAlign: "center", padding: "10px 14px" }}>
-                      SEC Filing
+                      Value {sortBy === "value" && (sortDir === "desc" ? "▼" : "▲")}
                     </th>
                   </tr>
                 </thead>
@@ -397,12 +392,13 @@ export function Stock13FFilingsView({ symbol }: { symbol: string }) {
                         }}
                       >
                         {/* Investor Name */}
-                        <td style={{ padding: "10px 14px" }}>
+                        {/* Long names wrap (cells are nowrap by default) instead of widening the table. */}
+                        <td style={{ padding: "10px", whiteSpace: "normal", overflowWrap: "anywhere" }}>
                           <div>
-                            <div style={{ fontWeight: 700, color: "var(--text-hi)", fontSize: ".82rem" }}>
+                            <div style={{ fontWeight: 700, color: "var(--text-hi)", fontSize: ".82rem", lineHeight: 1.3 }}>
                               {holder.investorName}
                             </div>
-                            <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 2, display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 6 }}>
                               <span>CIK: {holder.cik || "—"}</span>
                               {holder.ownershipPct != null && (
                                 <span>· {holder.ownershipPct.toFixed(2)}% of outstanding</span>
@@ -411,23 +407,21 @@ export function Stock13FFilingsView({ symbol }: { symbol: string }) {
                           </div>
                         </td>
 
-                        {/* Quarter */}
-                        <td style={{ textAlign: "center", padding: "10px 14px", color: "var(--text-dim-solid)", fontSize: ".75rem" }}>
-                          <span className="mono">{holder.reportingQuarter}</span>
-                        </td>
-
-                        {/* Latest Shares */}
-                        <td className="mono" style={{ textAlign: "right", padding: "10px 14px", fontWeight: 600, color: "var(--text-hi)" }}>
+                        {/* Latest Shares (+ previous, inline, on narrow screens) */}
+                        <td className="mono" style={{ textAlign: "right", padding: "10px", fontWeight: 600, color: "var(--text-hi)" }}>
                           {holder.sharesNumber != null ? holder.sharesNumber.toLocaleString("en-US") : "—"}
+                          <div className="f13-prev-inline" style={{ fontSize: ".68rem", fontWeight: 400, color: "var(--text-dim-solid)", marginTop: 1 }}>
+                            prev {holder.lastSharesNumber != null ? holder.lastSharesNumber.toLocaleString("en-US") : "—"}
+                          </div>
                         </td>
 
                         {/* Previous Shares */}
-                        <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
+                        <td className="mono f13-prev" style={{ textAlign: "right", padding: "10px", color: "var(--text-dim-solid)" }}>
                           {holder.lastSharesNumber != null ? holder.lastSharesNumber.toLocaleString("en-US") : "—"}
                         </td>
 
-                        {/* Change in Holdings */}
-                        <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
+                        {/* Change in Holdings, with the activity badge under it */}
+                        <td className="mono" style={{ textAlign: "right", padding: "10px" }}>
                           <div>
                             <span style={{
                               fontWeight: 700,
@@ -444,50 +438,31 @@ export function Stock13FFilingsView({ symbol }: { symbol: string }) {
                                 {holder.changeInSharesPct > 0 ? `+${holder.changeInSharesPct.toFixed(2)}%` : `${holder.changeInSharesPct.toFixed(2)}%`}
                               </div>
                             )}
+                            {holder.activityStatus && (
+                              <span
+                                className="pill f13-badge"
+                                style={{
+                                  display: "inline-block",
+                                  marginTop: 4,
+                                  background: badgeBg,
+                                  color: badgeColor,
+                                  fontWeight: 700,
+                                  fontSize: ".58rem",
+                                  letterSpacing: ".02em",
+                                  textTransform: "uppercase",
+                                  padding: "2px 6px",
+                                  fontFamily: "var(--f-body)",
+                                }}
+                              >
+                                {holder.activityStatus}
+                              </span>
+                            )}
                           </div>
                         </td>
 
-                        {/* Activity Status */}
-                        <td style={{ textAlign: "center", padding: "10px 14px" }}>
-                          <span
-                            className="pill"
-                            style={{
-                              background: badgeBg,
-                              color: badgeColor,
-                              fontWeight: 700,
-                              fontSize: ".68rem",
-                              letterSpacing: ".02em",
-                              textTransform: "uppercase",
-                              padding: "3px 8px",
-                            }}
-                          >
-                            {holder.activityStatus}
-                          </span>
-                        </td>
-
                         {/* Market Value */}
-                        <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-hi)" }}>
+                        <td className="mono" style={{ textAlign: "right", padding: "10px", color: "var(--text-hi)" }}>
                           {holder.marketValue != null ? fmtCompact(holder.marketValue) : <NotAvailable />}
-                        </td>
-
-                        {/* SEC Filing Link */}
-                        <td style={{ textAlign: "center", padding: "10px 14px" }}>
-                          <a
-                            href={holder.secFilingUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="link"
-                            style={{
-                              fontSize: ".75rem",
-                              fontWeight: 600,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 3,
-                              textDecoration: "none",
-                            }}
-                          >
-                            SEC EDGAR ↗
-                          </a>
                         </td>
                       </tr>
                     );
