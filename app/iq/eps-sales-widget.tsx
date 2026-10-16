@@ -188,7 +188,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
     return (
       <div className="card">
         <div className="card-h">
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><h3>EPS &amp; Sales</h3><VendorTag v="polygon" /></span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><h3>EPS &amp; Sales</h3><VendorTag v={["fmp", "polygon"]} /></span>
         </div>
         <div className="card-b" style={{ paddingTop: 8 }}>
           <div style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", padding: "10px 0", lineHeight: 1.55 }}>
@@ -205,7 +205,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
         <div className="card">
           <div className="card-h">
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><h3>EPS</h3><VendorTag v="polygon" /></span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><h3>EPS</h3><VendorTag v={["fmp", "polygon"]} /></span>
             {seg}
           </div>
           <div className="card-b" style={{ paddingTop: 8 }}>
@@ -214,7 +214,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
         </div>
         <div className="card">
           <div className="card-h">
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><h3>Sales ($Mil)</h3><VendorTag v="polygon" /></span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><h3>Sales ($Mil)</h3><VendorTag v={["fmp", "polygon"]} /></span>
             {seg}
           </div>
           <div className="card-b" style={{ paddingTop: 8 }}>

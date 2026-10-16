@@ -1123,7 +1123,7 @@ function GlanceQuarters({ ticker, colSpan }: { ticker: string; colSpan: number }
         <div className="ecal-exp">
           <div className="ecal-exp-h">
             Last {GLANCE_HISTORY_QUARTERS} reported quarters · {ticker}
-            <VendorTag v={["polygon", "fmp"]} />
+            <VendorTag v={["fmp", "polygon"]} />
           </div>
           {rows.length === 0 ? (
             <DataState loading={loading} label={`No reported quarters on file for ${ticker}.`} />

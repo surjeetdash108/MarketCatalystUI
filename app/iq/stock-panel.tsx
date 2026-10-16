@@ -163,7 +163,7 @@ export function StockListCard({
                 }}
               >{titleCount}</span>
             )}
-            {showVendor && <VendorTag v="polygon" />}
+            {showVendor && <VendorTag v={["fmp", "polygon"]} />}
           </span>
           {headerRight}
         </div>
@@ -260,7 +260,7 @@ export function StockChart({
           title="Mark unusually large moves and the news behind them">Key moments</button>
       </>}
       toolbarEnd={<>
-        <VendorTag v="polygon" />
+        <VendorTag v={["fmp", "polygon"]} />
         {realBars && <span className="cc-chip live">live</span>}
         {expandable && (
           <ExpandBtn

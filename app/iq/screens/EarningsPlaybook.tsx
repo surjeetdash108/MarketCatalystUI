@@ -369,7 +369,7 @@ export function EarningsPlaybook({ sym, reports }: { sym: string; reports: Playb
     <div>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 10 }}>
         <span style={{ fontSize: ".62rem", color: "var(--text-dim-solid)" }}>Price reaction</span>
-        <VendorTag v="polygon" />
+        <VendorTag v={["fmp", "polygon"]} />
         {hasBeatMiss && (
           <>
             <span style={{ fontSize: ".62rem", color: "var(--text-dim-solid)", marginLeft: 6 }}>Beat / miss</span>
@@ -493,7 +493,7 @@ export function EarningsPlaybookCards({ sym, reports, onViewAll }: {
   const head = (
     <div className="card-h">
       <h3>Earnings playbook<span className="sd-unit">how {sym} trades when it reports</span></h3>
-      <VendorTag v="polygon" />
+      <VendorTag v={["fmp", "polygon"]} />
     </div>
   );
   if (!model) {

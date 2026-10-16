@@ -486,7 +486,7 @@ export function EtfMarketFunds() {
                       Click any fund to view live chart, technical indicators, and details
                     </div>
                   </div>
-                  <VendorTag v="polygon" />
+                  <VendorTag v={["fmp", "polygon"]} />
                 </div>
 
                 <div style={{ padding: 10 }}>
@@ -723,7 +723,7 @@ export function EtfMarketFunds() {
                           {currentSection?.label} ({totalFunds > 0 ? `${startIdx + 1}–${endIdx} of ${totalFunds}` : "0"})
                         </h3>
                       </div>
-                      <VendorTag v="polygon" />
+                      <VendorTag v={["fmp", "polygon"]} />
                     </div>
                   </div>
 

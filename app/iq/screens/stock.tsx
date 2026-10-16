@@ -1674,7 +1674,7 @@ export function StockScreen({
                 <p className="dim">{data.name}</p>
               )}
             </div>
-            {/* <span className="sd-snap-src"><VendorTag v="polygon" /></span> */}
+            {/* <span className="sd-snap-src"><VendorTag v={["fmp", "polygon"]} /></span> */}
             {headerActions && <div className="sd-snap-actions">{headerActions}</div>}
           </section>
         </div>
@@ -1745,7 +1745,7 @@ export function StockScreen({
 
           {/* Keystats */}
           <div className="card">
-            <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 12px 0" }}><VendorTag v="polygon" /></div>
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 12px 0" }}><VendorTag v={["fmp", "polygon"]} /></div>
             <div className="keystats">
               {([
                 ["Mkt Cap",        mc != null ? cap(mc) : null],
@@ -1779,7 +1779,7 @@ export function StockScreen({
           <div className="ai-block">
             <div className="card-h">
               <h3 className="ai-c">◆ AI Technical Analysis</h3>
-              <VendorTag v="polygon" />
+              <VendorTag v={["fmp", "polygon"]} />
             </div>
             <div className="card-b" style={{ maxHeight: "none" }}>
               {([
@@ -1866,7 +1866,7 @@ export function StockScreen({
                 <div className="card-h">
                   <h3>Financials</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <VendorTag v="polygon" />
+                    <VendorTag v={["fmp", "polygon"]} />
                     {financialsDoc && (
                       <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>
                     )}
@@ -1986,7 +1986,7 @@ export function StockScreen({
             <div className="card-h">
               <h3>Technical Rating</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <VendorTag v={["polygon", "fmp"]} />
+                <VendorTag v={["fmp", "polygon"]} />
                 <span className="link" onClick={() => setInnerDrawer("techrating")}>View all →</span>
               </div>
             </div>
@@ -2111,7 +2111,7 @@ export function StockScreen({
                     % <span style={{ color: "var(--brand-2)" }}>{peerSort === "desc" ? "▼" : "▲"}</span>
                   </button>
                 )}
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
                 {peersTotal > peers.length && <span className="link" onClick={() => setInnerDrawer("peers")}>View all →</span>}
               </div>
             </div>
@@ -2142,7 +2142,7 @@ export function StockScreen({
             <div className="card-h">
               <h3>Key levels (pivots)</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
                 <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
               </div>
             </div>
@@ -2217,7 +2217,7 @@ export function StockScreen({
                 <div className="card-h">
                   <h3>Dividend &amp; split history</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <VendorTag v="polygon" />
+                    <VendorTag v={["fmp", "polygon"]} />
                     {dh && (yieldPct != null
                       ? <span className="pill up">{yieldPct.toFixed(2)}% yield</span>
                       : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>)}
@@ -2360,7 +2360,7 @@ export function StockScreen({
             <div className="card-h">
               <h3>Industry Group rank</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
                 <span className="link" onClick={() => setInnerDrawer("industry")}>View all →</span>
               </div>
             </div>
@@ -2391,7 +2391,7 @@ export function StockScreen({
             <div className="card-h">
               <h3>Earnings history</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <VendorTag v={["polygon", "fmp"]} />
+                <VendorTag v={["fmp", "polygon"]} />
                 {hist10.length > 0 && (
                   <span className={`pill ${beatStreak >= 0 ? "up" : "dn"}`}>{Math.abs(beatStreak)}-qtr {beatStreak >= 0 ? "beat" : "miss"} streak</span>
                 )}
@@ -2429,7 +2429,7 @@ export function StockScreen({
           <div className="card-h">
             <h3>News</h3>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <VendorTag v={["polygon", "fmp"]} />
+              <VendorTag v={["fmp", "polygon"]} />
               {tickerNews && tickerNews.length > 0 && (
                 <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live</span>
               )}
@@ -2537,7 +2537,7 @@ export function StockScreen({
               <div className="card">
                 <div className="card-h">
                   <h3>Key statistics</h3>
-                  <VendorTag v="polygon" />
+                  <VendorTag v={["fmp", "polygon"]} />
                 </div>
                 <div className="sd-kv-grid">
                   {col(left)}
@@ -2551,7 +2551,7 @@ export function StockScreen({
             <div className="ai-block sd-ai">
               <div className="card-h">
                 <h3 className="ai-c">◆ AI technical analysis</h3>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
               </div>
               <div className="card-b" style={{ maxHeight: "none" }}>
                 {([
@@ -2621,7 +2621,7 @@ export function StockScreen({
               <div className="card-h">
                 <h3>Industry group rank</h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <VendorTag v="polygon" />
+                  <VendorTag v={["fmp", "polygon"]} />
                   <span className="link" onClick={() => setInnerDrawer("industry")}>View all →</span>
                 </div>
               </div>
@@ -2806,7 +2806,7 @@ export function StockScreen({
                   <div className="card sd-card">
                     <div className="card-h">
                       <h3>Sales<span className="sd-unit">$B</span></h3>
-                      <VendorTag v="polygon" />
+                      <VendorTag v={["fmp", "polygon"]} />
                     </div>
                     {reported.length > 0 ? (<>
                       <div className="sd-chart">
@@ -2832,7 +2832,7 @@ export function StockScreen({
                     <div className="card-h">
                       <h3>{isQ ? "Quarterly" : "Annual"} income<span className="sd-unit">$B</span></h3>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <VendorTag v="polygon" />
+                        <VendorTag v={["fmp", "polygon"]} />
                         <span className="link" onClick={() => setInnerDrawer("financials")}>View all →</span>
                         <ExpandBtn title={`${sym} · Financials (${isQ ? "Quarterly" : "Annual"})`} node={<EarnIncChart inc={inc} />} />
                       </div>
@@ -2905,7 +2905,7 @@ export function StockScreen({
                         <div className="card-h">
                           <h3>Dividend history</h3>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <VendorTag v="polygon" />
+                            <VendorTag v={["fmp", "polygon"]} />
                             {yieldPct != null && <span className="pill up">{yieldPct.toFixed(2)}% yield</span>}
                             <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                           </div>
@@ -3105,7 +3105,7 @@ export function StockScreen({
                 </div>
 
                 <div className="card">
-                  <div className="card-h"><h3>Stock splits</h3><VendorTag v="polygon" /></div>
+                  <div className="card-h"><h3>Stock splits</h3><VendorTag v={["fmp", "polygon"]} /></div>
                   {splitsDoc && splitsDoc.splits.length > 0 ? splitsDoc.splits.slice(0, 5).map(x => (
                     <div key={x.executionDate} className="sd-row">
                       <span className="grow num">{x.executionDate}</span>
@@ -3138,7 +3138,7 @@ export function StockScreen({
                 <div className="card-h">
                   <h3>News</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <VendorTag v={["polygon", "fmp"]} />
+                    <VendorTag v={["fmp", "polygon"]} />
                     {items.length > 0 && (
                       <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live</span>
                     )}
@@ -3176,7 +3176,7 @@ export function StockScreen({
                 <div className="card-h" style={{ flexWrap: "wrap", gap: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <h3 style={{ margin: 0 }}>Peers<span className="sd-unit">{displayPeers.length} companies</span></h3>
-                    <VendorTag v="polygon" />
+                    <VendorTag v={["fmp", "polygon"]} />
                     {/* Search box */}
                     <input
                       type="text"
@@ -3301,7 +3301,7 @@ export function StockScreen({
                 <div className="card-h">
                   <h3>Technical rating</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <VendorTag v={["polygon", "fmp"]} />
+                    <VendorTag v={["fmp", "polygon"]} />
                     <span className="link" onClick={() => setInnerDrawer("techrating")}>View all →</span>
                   </div>
                 </div>
@@ -3344,7 +3344,7 @@ export function StockScreen({
               <div className="card">
                 <div className="card-h">
                   <h3>Indicators</h3>
-                  <VendorTag v="polygon" />
+                  <VendorTag v={["fmp", "polygon"]} />
                 </div>
                 {indRows.map(r => (
                   <div key={r[0]} className="sd-ind">
@@ -3407,7 +3407,7 @@ export function StockScreen({
                 <div className="card-h">
                   <h3>Key levels (pivots)</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <VendorTag v="polygon" />
+                    <VendorTag v={["fmp", "polygon"]} />
                     <span className="link" onClick={() => setInnerDrawer("keylevels")}>View all →</span>
                   </div>
                 </div>
@@ -3488,7 +3488,7 @@ export function StockScreen({
                   <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Technical Rating · {sym}</div>
                   <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>8 oscillators · 12 moving averages · {ratingBasis} candles</div>
                 </div>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
@@ -3537,7 +3537,7 @@ export function StockScreen({
                     {rawPeerTickers.length > peersTotal ? ` · ${rawPeerTickers.length} returned by Polygon` : ""}
                   </div>
                 </div>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
@@ -3571,7 +3571,7 @@ export function StockScreen({
                   <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Industry Group Rank</div>
                   <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>All sectors by today&apos;s performance</div>
                 </div>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
@@ -3642,7 +3642,7 @@ export function StockScreen({
                   <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Key Levels · {sym}</div>
                   <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Pivot points · support &amp; resistance</div>
                 </div>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
@@ -3703,7 +3703,7 @@ export function StockScreen({
                   <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>{sym}</div>
                   <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Earnings history · last 10 quarters</div>
                 </div>
-                <VendorTag v={["polygon", "fmp"]} />
+                <VendorTag v={["fmp", "polygon"]} />
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
@@ -3767,7 +3767,7 @@ export function StockScreen({
                     <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>{sym}</div>
                     <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Financials · income statement</div>
                   </div>
-                  <VendorTag v={["polygon", "fmp"]} />
+                  <VendorTag v={["fmp", "polygon"]} />
                   <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
                 </div>
                 <div className="drawer-b">
@@ -3972,7 +3972,7 @@ export function StockScreen({
                       {yieldPct != null ? `${yieldPct.toFixed(2)}% yield · $${annualDiv.toFixed(2)}/yr` : dh ? "No dividend paid" : "Not synced yet"}
                     </div>
                   </div>
-                  <VendorTag v="polygon" />
+                  <VendorTag v={["fmp", "polygon"]} />
                   <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
                 </div>
                 <div className="drawer-b">

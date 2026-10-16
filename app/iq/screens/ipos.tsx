@@ -322,7 +322,7 @@ export function IPOsScreen() {
       {tab === "recent" && (<>
       {/* Stats strip */}
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>Aftermarket performance</span><VendorTag v="polygon" />
+        <span style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>Aftermarket performance</span><VendorTag v={["fmp", "polygon"]} />
       </div>
       <div className="dash" style={{ marginBottom: 14 }}>
         <div className="col-4">
@@ -363,7 +363,7 @@ export function IPOsScreen() {
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="card-h">
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Recent IPO performance</h3><VendorTag v="polygon" /></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Recent IPO performance</h3><VendorTag v={["fmp", "polygon"]} /></div>
           <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>click any row to open stock detail</span>
         </div>
         <div className="tbl-wrap">
@@ -482,7 +482,7 @@ export function IPOsScreen() {
       {tab === "calendar" && filteredCalendar.length > 0 && (
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Live IPO Calendar</h3><VendorTag v="polygon" /></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Live IPO Calendar</h3><VendorTag v={["fmp", "polygon"]} /></div>
             <span className="pill ai" style={{ fontSize: ".68rem" }}>live · Polygon</span>
           </div>
           <div className="tbl-wrap">

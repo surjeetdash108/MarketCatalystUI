@@ -207,7 +207,7 @@ export function WatchlistScreen() {
               {priced.length > 0 && <> · {up} up / {dn} down today</>}
               {watchlists.length > 1 && <> · {totalWatched} across {watchlists.length} lists</>}
             </span>
-            <VendorTag v="polygon" />
+            <VendorTag v={["fmp", "polygon"]} />
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

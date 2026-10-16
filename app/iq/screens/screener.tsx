@@ -270,7 +270,7 @@ export function ScreenerScreen() {
       <div className="page-head">
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
           {hasActiveFilters ? `${filtered.length} match${filtered.length !== 1 ? "es" : ""}` : "Select a filter to begin"}
-          <VendorTag v="polygon" />
+          <VendorTag v={["fmp", "polygon"]} />
         </span>
         <button className="btn cta" onClick={exportPdf} disabled={!selStock}
           title={selStock ? `Export ${selStock.ticker} data as PDF` : "Select a stock first"}

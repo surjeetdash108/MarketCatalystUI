@@ -337,7 +337,7 @@ function ThemeDetail({
                     }}
                   />
                 </div>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
               </div>
             </div>
 
@@ -504,7 +504,7 @@ function ThemeDetail({
                   </h3>
                 </div>
 
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
               </div>
             </div>
 
@@ -698,7 +698,7 @@ export function AiInfrastructureScreen() {
             }}
           />
         </div>
-        <VendorTag v="polygon" />
+        <VendorTag v={["fmp", "polygon"]} />
       </div>
 
       <div className="dash">

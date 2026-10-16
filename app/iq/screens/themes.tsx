@@ -113,7 +113,7 @@ export function ThemesScreen() {
               {leader  && <> · Leader: <b>{leader.s}</b> <span className="up">{sign(leader.c)}</span></>}
               {laggard && laggard.s !== leader?.s && <> · Laggard: <b>{laggard.s}</b> <span className="down">{sign(laggard.c)}</span></>}
             </span>
-            <VendorTag v="polygon" />
+            <VendorTag v={["fmp", "polygon"]} />
           </div>
         </div>
       </div>

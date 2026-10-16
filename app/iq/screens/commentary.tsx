@@ -79,7 +79,7 @@ function EarningsAnnouncementsTab() {
       <div className="card">
         <div className="card-h">
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <h3>Earnings Announcement</h3><VendorTag v={["polygon", "fmp"]} />
+            <h3>Earnings Announcement</h3><VendorTag v={["fmp", "polygon"]} />
           </div>
           <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
             {rows.length} AI {rows.length === 1 ? "analysis" : "analyses"}
@@ -919,7 +919,7 @@ export function CommentaryScreen() {
           {/* Quick filter commented out for now
           <div className="card" style={{ flexShrink: 0 }}>
             <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{activeTab === 3 ? "Tracked names" : "Quick filter"}</h3><VendorTag v="polygon" /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{activeTab === 3 ? "Tracked names" : "Quick filter"}</h3><VendorTag v={["fmp", "polygon"]} /></div>
             </div>
             <div className="card-b" style={{ paddingTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
               {(activeTab === 3 ? [...mySymbols] : topSymbols).length === 0 ? (
@@ -954,7 +954,7 @@ export function CommentaryScreen() {
                   {feedLabel.title}
                   {q ? ` · “${search.trim()}”` : ""}
                 </h3>
-                <VendorTag v={["polygon", "fmp"]} />
+                <VendorTag v={["fmp", "polygon"]} />
               </div>
 
               {feedLabel.badge}

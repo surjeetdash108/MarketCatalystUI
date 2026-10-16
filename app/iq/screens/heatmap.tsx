@@ -283,7 +283,7 @@ function HeatmapInner() {
             transformOrigin: "center",
           }}
         >
-          <VendorTag v="polygon" />
+          <VendorTag v={["fmp", "polygon"]} />
         </div>
         {colorBy === "change" && <div className="legend" style={{ gap: 4 }}>
           <span style={{ fontSize: ".66rem", color: "var(--down)" }}>−3%</span>
@@ -624,7 +624,7 @@ function HeatmapInner() {
             <div className="dp-head" style={{ cursor: "pointer" }} onClick={() => { setHover(null); setSelectedSym(hover.sym); }}>
               <StockLogo sym={hover.sym} size={28} />
               <span className="dp-sym">{hover.sym}</span>
-              <VendorTag v="polygon" />
+              <VendorTag v={["fmp", "polygon"]} />
               <span className={`pill ${hover.chg >= 0 ? "up" : "dn"}`}>{sign(hover.chg)}</span>
             </div>
             <div className="dp-row"><span>Mkt Cap</span><b>{capFmt(hover.mcap)}</b></div>

@@ -212,7 +212,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const SectorHeatCard = (
     <div className="card" style={{ marginTop: 14 }}>
       <div className="card-h">
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Sector heatmap</h3><VendorTag v="polygon" /></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Sector heatmap</h3><VendorTag v={["fmp", "polygon"]} /></div>
         <span className="link" onClick={() => router.push("/menu/heatmap")}>View all →</span>
       </div>
       <div className="card-b">
@@ -252,7 +252,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const EarningsMoversCard = (list: EarnSurprise[], title: string) => (
     <div className="card">
       <div className="card-h">
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{title}</h3><VendorTag v="polygon" /></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{title}</h3><VendorTag v={["fmp", "polygon"]} /></div>
         <button className="link" onClick={() => router.push("/menu/earnings")}>View all →</button>
       </div>
       <div className="card-b" style={{ paddingTop: 6 }}>
@@ -273,7 +273,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const NewsCard = (list: NewsArticleDoc[], title: string) => (
     <div className="card" style={{ marginTop: 14 }}>
       <div className="card-h">
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{title}</h3><VendorTag v="polygon" /></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{title}</h3><VendorTag v={["fmp", "polygon"]} /></div>
         <span className="link" onClick={() => router.push("/menu/commentary")}>View all →</span>
       </div>
       <div className="card-b" style={{ paddingTop: 6 }}>
@@ -364,7 +364,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   ) => (
     <div className="col-6">
       <div className="card">
-        <div className="card-h"><div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{title}</h3><VendorTag v="polygon" /></div><span className={`pill ${pillCls}`}>{pillText}</span></div>
+        <div className="card-h"><div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>{title}</h3><VendorTag v={["fmp", "polygon"]} /></div><span className={`pill ${pillCls}`}>{pillText}</span></div>
         <div className="card-b" style={{ paddingTop: 6 }}>
           {list.length === 0 ? (
             <DataState label={emptyLabel} />
@@ -383,7 +383,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const WeeklyHeatCard = (
     <div className="card" style={{ marginTop: 14 }}>
       <div className="card-h">
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Sector heatmap</h3><VendorTag v="polygon" /></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Sector heatmap</h3><VendorTag v={["fmp", "polygon"]} /></div>
         <span className="link" onClick={() => router.push("/menu/heatmap")}>View all →</span>
       </div>
       <div className="card-b">
@@ -400,7 +400,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
         <div className="dash" style={{ marginTop: 14, padding: "0 0 14px" }}>
           <div className="col-12">
             <div className="card">
-              <div className="card-h"><div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market internals</h3><VendorTag v="polygon" /></div></div>
+              <div className="card-h"><div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market internals</h3><VendorTag v={["fmp", "polygon"]} /></div></div>
               <div className="card-b">
                 <DataState label="Weekly market internals aren't aggregated yet — check back after the next daily run." />
               </div>
@@ -413,7 +413,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
       <div className="dash" style={{ marginTop: 14, padding: "0 0 14px" }}>
         <div className="col-12">
           <div className="card">
-            <div className="card-h"><div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market internals</h3><VendorTag v="polygon" /></div></div>
+            <div className="card-h"><div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market internals</h3><VendorTag v={["fmp", "polygon"]} /></div></div>
             <div className="card-b">
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".8rem", marginBottom: 6 }}>
@@ -498,7 +498,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>
               {heroTitle}
             </div>
-            <VendorTag v="polygon" />
+            <VendorTag v={["fmp", "polygon"]} />
           </div>
           {renderIndicesRow(indicesList, indicesEmpty, !tapeFrame)}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "12px 0 4px" }}>
@@ -616,7 +616,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
           <div className="side-drawer">
             <div className="drawer-h">
               <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div className="drawer-title">Biggest Earnings Surprises</div><VendorTag v="polygon" /></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div className="drawer-title">Biggest Earnings Surprises</div><VendorTag v={["fmp", "polygon"]} /></div>
                 <div className="drawer-sub">Ranked by EPS surprise magnitude</div>
               </div>
               <button className="closebtn" onClick={() => setDrawer(null)}>✕</button>

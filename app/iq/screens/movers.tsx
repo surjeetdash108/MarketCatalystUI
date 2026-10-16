@@ -1244,7 +1244,7 @@ export function MoversScreen() {
                 <h3 style={{ margin: 0, fontSize: ".9rem", fontWeight: 700, color: "var(--text-hi)" }}>
                   Today&apos;s Most Active Stocks by Sector
                 </h3>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
               </div>
               {filteredMostActive?.generatedAt && (
                 <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
@@ -1455,7 +1455,7 @@ export function MoversScreen() {
                 <h3 style={{ margin: 0, fontSize: ".9rem", fontWeight: 700, color: "var(--text-hi)" }}>
                   Today&apos;s Top 20 %
                 </h3>
-                <VendorTag v="polygon" />
+                <VendorTag v={["fmp", "polygon"]} />
               </div>
               {filteredBiggest?.generatedAt && (
                 <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
@@ -1500,7 +1500,7 @@ export function MoversScreen() {
         </div>
       ) : (
       <div className="card" style={{marginLeft: 16,marginRight: 20, marginTop:16}}>
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "8px 12px 0" }}><VendorTag v="polygon" /></div>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "8px 12px 0" }}><VendorTag v={["fmp", "polygon"]} /></div>
         <div className="tbl-wrap">
         <table className="tbl">
           <thead>

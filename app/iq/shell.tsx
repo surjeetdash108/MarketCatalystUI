@@ -627,7 +627,7 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
                     <span style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
                       {chartTitle}
                     </span>
-                    <VendorTag v="polygon" />
+                    <VendorTag v={["fmp", "polygon"]} />
                   </div>
                   <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", marginTop: 1 }}>
                     {chartSubtitle} · Price Chart
@@ -1307,7 +1307,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
       <IQActionsContext.Provider value={actions}>
        <WatchlistsContext.Provider value={wl}>
         <LiveQuotesProvider>
-         <SIProvider onOpenStockInMC={(sym) => actions.openStockFull(sym)}>
+         <SIProvider>
           <div className="iq-root" data-theme={theme} data-font={font}>
             <SISweepOverlay />
             {isSiPage ? (
@@ -1398,7 +1398,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   <div className="cmd-dropdown">
                     {displayMatches.length > 0 && (
                       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "6px 12px 2px", fontSize: ".6rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".04em" }}>
-                        Tickers <VendorTag v="polygon" />
+                        Tickers <VendorTag v={["fmp", "polygon"]} />
                       </div>
                     )}
                     {displayMatches.map(m => (

@@ -25,7 +25,7 @@ const VENDOR_META: Record<VendorKey, { label: string; bg: string; fg: string }> 
  * Temporary vendor-source badge. Pass one vendor or several (for a widget that
  * blends sources). Renders small uppercase pills, colour-coded per vendor.
  *   <VendorTag v="polygon" />
- *   <VendorTag v={["polygon", "fmp"]} />
+ *   <VendorTag v={["fmp", "polygon"]} />
  */
 export function VendorTag({ v }: { v: VendorKey | VendorKey[] }) {
   const list = Array.isArray(v) ? v : [v];

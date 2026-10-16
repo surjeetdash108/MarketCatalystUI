@@ -339,7 +339,7 @@ export function PortfolioScreen() {
                 <span className={cls(realizedTotal)}>{realizedTotal >= 0 ? "+" : "−"}{usd(Math.abs(realizedTotal))} realized</span>
               </>}
             </span>
-            <VendorTag v="polygon" />
+            <VendorTag v={["fmp", "polygon"]} />
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

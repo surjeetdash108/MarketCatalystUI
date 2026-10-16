@@ -163,7 +163,7 @@ function DividendDrawer({ stock, onClose }: { stock: DivStock; onClose: () => vo
               <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
                 {stock.sym} · Dividend History
               </div>
-              <VendorTag v="polygon" />
+              <VendorTag v={["fmp", "polygon"]} />
             </div>
             <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{stock.name}</div>
           </div>
@@ -335,7 +335,7 @@ export function MacroScreen() {
         <div ref={leftColRef} className="col-4" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div className="card">
             <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market holidays</h3><VendorTag v="polygon" /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market holidays</h3><VendorTag v={["fmp", "polygon"]} /></div>
               <button className="link" onClick={() => setHolidaysAllOpen(true)}>Show all →</button>
             </div>
             <div className="card-b" style={{ padding: "6px 13px 10px" }}>
@@ -439,7 +439,7 @@ export function MacroScreen() {
           <div className="card-h">
             {/* Search sits LEFT next to the title — filters this table by ticker. */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>VIX-sensitive stocks</h3><VendorTag v="polygon" /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>VIX-sensitive stocks</h3><VendorTag v={["fmp", "polygon"]} /></div>
               <input
                 value={vixQuery}
                 onChange={e => setVixQuery(e.target.value.toUpperCase())}
