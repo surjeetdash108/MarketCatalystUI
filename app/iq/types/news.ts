@@ -28,6 +28,8 @@ export interface NewsArticleDoc {
   imageUrl: string | null;
   publishedAt: string;
   updatedAt: string;
+  /** Live-wire rows only (GET /live/news-wire): which FMP feed delivered it. */
+  wireKind?: "news" | "press" | "analyst" | "filing" | "macro";
 }
 
 /**

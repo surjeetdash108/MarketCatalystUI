@@ -7,6 +7,8 @@ import { useApiList } from "../hooks/useApiList";
 import { apiGet } from "../backend";
 import { WatchlistsContext } from "../hooks/useWatchlists";
 import type { AnalystConsensusDoc, CompanyDoc } from "../types";
+import { useLiveQuotes } from "../live-quotes-context";
+import { etTodayIso } from "../calendar-range";
 
 // ============================================================================
 // Types & Constants
@@ -64,30 +66,26 @@ const FACTORS = [
   ["Context", 10, "Catalyst proximity: earnings within 14 days, FDA, or macro tailwind"],
 ] as const;
 
-const KNOWN_FIRMS: Record<string, { hit: number; ret: number; calls: number; bull: number }> = {
-  "Morgan Stanley": { hit: 78, ret: 4.2, calls: 142, bull: 68 },
-  "Goldman Sachs": { hit: 74, ret: 3.8, calls: 156, bull: 65 },
-  "Needham": { hit: 72, ret: 3.6, calls: 98, bull: 74 },
-  "JPMorgan": { hit: 71, ret: 3.2, calls: 164, bull: 62 },
-  "Evercore ISI": { hit: 71, ret: 3.1, calls: 110, bull: 58 },
-  "Evercore": { hit: 71, ret: 3.1, calls: 110, bull: 58 },
-  "B of A Securities": { hit: 69, ret: 2.8, calls: 148, bull: 61 },
-  "Bank of America": { hit: 69, ret: 2.8, calls: 148, bull: 61 },
-  "Citi": { hit: 68, ret: 2.5, calls: 132, bull: 59 },
-  "Jefferies": { hit: 67, ret: 2.4, calls: 124, bull: 66 },
-  "Barclays": { hit: 66, ret: 2.2, calls: 118, bull: 57 },
-  "UBS": { hit: 65, ret: 2.1, calls: 126, bull: 60 },
-  "Wells Fargo": { hit: 64, ret: 1.8, calls: 115, bull: 55 },
-  "Truist Securities": { hit: 64, ret: 1.7, calls: 86, bull: 62 },
-  "Mizuho": { hit: 63, ret: 1.6, calls: 92, bull: 64 },
-  "Piper Sandler": { hit: 62, ret: 1.5, calls: 84, bull: 63 },
-  "Wedbush": { hit: 61, ret: 1.4, calls: 78, bull: 70 },
-  "Oppenheimer": { hit: 60, ret: 1.2, calls: 72, bull: 65 },
-  "RBC Capital": { hit: 60, ret: 1.1, calls: 96, bull: 58 },
-  "Bernstein": { hit: 59, ret: 0.9, calls: 68, bull: 52 },
-  "KeyBanc": { hit: 58, ret: 0.8, calls: 74, bull: 60 },
-  "Stifel": { hit: 57, ret: 0.7, calls: 80, bull: 61 },
-};
+/** Measured firm track record (GET /market-data/analyst-firm-stats; analyst-firm-stats job). */
+interface FirmStat {
+  firmKey: string;
+  name: string;
+  ratingChanges: number;
+  avgMoveAfterCall: number | null;
+  avgMoveAfterUpgrade: number | null;
+  avgMoveAfterDowngrade: number | null;
+  targetsResolved: number;
+  hitRatePct: number | null;
+  bullishPct: number | null;
+  recentResolved?: Array<{ ticker: string; date: string; target: number; priceWhenPosted: number; hit: boolean }>;
+}
+/** "J.P. Morgan" / "JP Morgan" / "JPMorgan" → "jpmorgan" (matches the backend key). */
+const firmKey = (name: string) => name.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+/** Calls within this many days count as "recent" for the header and needle list. */
+const RECENT_DAYS = 7;
+const BULLISH_GRADE = /buy|outperform|overweight|positive|accumulate/i;
+const BEARISH_GRADE = /sell|underperform|underweight|negative|reduce/i;
+const pctTxt = (v: number | null) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`);
 
 const SECTORS_LIST = [
   "All",
@@ -135,8 +133,8 @@ interface ProcessedAction {
   cluster: number; // Number of firms acting on this ticker
   clusterFirms: string[];
   street: number[]; // All Street targets
-  hit: string; // Firm hit rate e.g. "78%"
-  move: string; // Avg 5-day move e.g. "+3.1%"
+  hit: string; // Firm's measured 12-month target hit rate, "—" when unmeasured
+  move: string; // Firm's measured avg 5-day move after calls like this one, "—" when unmeasured
   headline: string;
   why: string[];
   held: boolean;
@@ -150,13 +148,14 @@ interface ProcessedAction {
 interface ProcessedFirm {
   rank: number;
   name: string;
-  hit: number;
+  hit: number | null;
   hitTxt: string;
-  ret: number;
+  ret: number | null;
   retTxt: string;
-  calls: number;
-  bull: number;
+  calls: number | null;
+  bull: number | null;
   today: number;
+  resolved: number;
   recent: Array<{
     t: string;
     co: string;
@@ -164,9 +163,9 @@ interface ProcessedFirm {
     dir: number;
     when: string;
     res: string;
-    pxAt: number;
-    pxNow: number;
-    pt: number;
+    pxAt: number | null;
+    pxNow: number | null;
+    pt: number | null;
   }>;
 }
 
@@ -216,7 +215,7 @@ function resolveActionMeta(
 ) {
   const act = (actionRaw ?? "").toLowerCase().trim();
   const prev = (previousGrade ?? "").trim();
-  const next = (newGrade ?? "Buy").trim();
+  const next = (newGrade ?? "").trim();
 
   let shownAction = "Maintain";
   let dir = 0;
@@ -229,7 +228,7 @@ function resolveActionMeta(
     dir = -1;
   } else if (act.includes("init")) {
     shownAction = "Initiate";
-    dir = next.toLowerCase().includes("buy") || next.toLowerCase().includes("outperform") ? 1 : -1;
+    dir = BULLISH_GRADE.test(next) ? 1 : BEARISH_GRADE.test(next) ? -1 : 0;
   } else if (pt != null && prevPt != null && pt !== prevPt) {
     if (pt > prevPt) {
       shownAction = "PT Raise";
@@ -238,10 +237,10 @@ function resolveActionMeta(
       shownAction = "PT Cut";
       dir = -1;
     }
-  } else if (next.toLowerCase().includes("buy") || next.toLowerCase().includes("outperform")) {
+  } else if (BULLISH_GRADE.test(next)) {
     shownAction = "Reiterate";
     dir = 1;
-  } else if (next.toLowerCase().includes("sell") || next.toLowerCase().includes("underperform")) {
+  } else if (BEARISH_GRADE.test(next)) {
     shownAction = "Reiterate";
     dir = -1;
   }
@@ -249,13 +248,13 @@ function resolveActionMeta(
   return {
     shownAction,
     dir,
-    from: prev || "Neutral",
-    to: next || "Buy",
+    from: prev || "—",
+    to: next || "—",
   };
 }
 
 function capCategory(cap?: number | null): string {
-  if (cap == null || cap <= 0) return "Mid";
+  if (cap == null || cap <= 0) return "—";
   if (cap >= 200e9) return "Mega";
   if (cap >= 10e9) return "Large";
   if (cap >= 2e9) return "Mid";
@@ -405,108 +404,103 @@ export function AnalystScreen() {
   // --------------------------------------------------------------------------
   // Process All Live Analyst Actions
   // --------------------------------------------------------------------------
-  const allActions = useMemo<ProcessedAction[]>(() => {
-    const tickerFirmsMap = new Map<string, Set<string>>();
-    for (const c of liveConsensus) {
-      const sym = (c.ticker || "").trim().toUpperCase();
-      if (!tickerFirmsMap.has(sym)) tickerFirmsMap.set(sym, new Set());
-      for (const g of c.recentGrades ?? []) {
-        if (g.firm) tickerFirmsMap.get(sym)!.add(g.firm);
-      }
-    }
+  // Measured firm track records (FMP grades + targets scored against prices).
+  const { data: firmStatsList } = useApiList<FirmStat>("/market-data/analyst-firm-stats");
+  const firmStatsByKey = useMemo(
+    () => new Map(firmStatsList.map((f) => [f.firmKey, f] as const)),
+    [firmStatsList],
+  );
 
+  // Live prices for covered stocks the company list has no price for (e.g. a
+  // stock that entered the feed through FMP's market-wide rating changes).
+  const unpricedTickers = useMemo(
+    () =>
+      [...new Set(liveConsensus.map((c) => (c.ticker || "").trim().toUpperCase()))].filter(
+        (t) => t && !((companyMap.get(t)?.price ?? 0) > 0),
+      ),
+    [liveConsensus, companyMap],
+  );
+  const extraQuotes = useLiveQuotes(unpricedTickers);
+
+  const allActions = useMemo<ProcessedAction[]>(() => {
+    const DAY = 86_400_000;
+    const dayMs = (d: string) => Date.parse(`${d}T00:00:00Z`);
     const rows: ProcessedAction[] = [];
 
     liveConsensus.forEach((c, cIdx) => {
       const sym = (c.ticker || "").trim().toUpperCase();
+      // Only real rating changes; a stock with none contributes no actions.
+      const grades = (c.recentGrades ?? []).filter((g) => g.firm && g.date);
+      if (!sym || grades.length === 0) return;
       const comp = companyMap.get(sym);
+      const px = comp?.price && comp.price > 0 ? comp.price : extraQuotes.get(sym)?.price ?? null;
+      if (px == null || !(px > 0)) return; // no live price yet: upside/slider cannot be computed
       const coName = comp?.name || sym;
-      const px = comp?.price && comp.price > 0 ? comp.price : 100;
-      const sec = comp?.sector || "Technology";
+      const sec = comp?.sector || "—";
       const cap = capCategory(comp?.marketCap);
 
-      const allPtValues = (c.recentGrades ?? [])
-        .map(g => g.priceTarget)
-        .filter((v): v is number => v != null && v > 0);
-
+      // Every target the Street has posted for the stock (real values only).
+      const allPtValues = grades.map((g) => g.priceTarget).filter((v): v is number => v != null && v > 0);
       if (c.priceTargetConsensus) allPtValues.push(c.priceTargetConsensus);
       if (c.priceTargetHigh) allPtValues.push(c.priceTargetHigh);
       if (c.priceTargetLow) allPtValues.push(c.priceTargetLow);
+      const streetTargets = [...new Set(allPtValues)].sort((a, b) => a - b);
 
-      const streetTargets = allPtValues.length > 0 ? [...new Set(allPtValues)].sort((a, b) => a - b) : [px * 1.15];
-
-      const clusterCount = tickerFirmsMap.get(sym)?.size || 1;
-      const clusterFirmsList = Array.from(tickerFirmsMap.get(sym) || []);
-
-      const grades = c.recentGrades && c.recentGrades.length > 0 ? c.recentGrades : [
-        {
-          firm: "Morgan Stanley",
-          action: "Upgrade",
-          previousGrade: "Hold",
-          newGrade: "Buy",
-          priceTarget: c.priceTargetConsensus || px * 1.2,
-          previousPriceTarget: px * 1.05,
-          date: new Date().toISOString().slice(0, 10),
-        }
-      ];
+      const metas = grades.map((g) => resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget));
 
       grades.forEach((g, gIdx) => {
-        const firmName = g.firm?.trim() || "Wall Street Research";
-        const meta = resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget);
-        const targetPt = g.priceTarget != null && g.priceTarget > 0 ? g.priceTarget : (c.priceTargetConsensus || px * 1.15);
+        const firmName = (g.firm as string).trim();
+        const meta = metas[gIdx];
+        const targetPt = g.priceTarget != null && g.priceTarget > 0 ? g.priceTarget : (c.priceTargetConsensus ?? null);
+        if (targetPt == null) return; // nothing to place on the target map
         const prevPt = g.previousPriceTarget ?? null;
+        const upPct = ((targetPt - px) / px) * 100;
 
-        // Upside to this target
-        const upPct = px > 0 ? ((targetPt - px) / px) * 100 : null;
+        // Cluster: distinct firms making a same-direction call on this stock
+        // within 72 hours of this one.
+        const clusterFirmsList = [...new Set(
+          grades
+            .filter((o, oIdx) => metas[oIdx].dir === meta.dir && meta.dir !== 0 && Math.abs(dayMs(o.date as string) - dayMs(g.date as string)) <= 3 * DAY)
+            .map((o) => (o.firm as string).trim()),
+        )];
+        const clusterCount = Math.max(1, clusterFirmsList.length);
 
-        // Firm known stats
-        const firmData = KNOWN_FIRMS[firmName] || { hit: 64, ret: 2.1, calls: 80, bull: 62 };
+        const stat = firmStatsByKey.get(firmKey(firmName)) ?? null;
+        const hitRate = stat?.hitRatePct ?? null;
+        const movePct = meta.dir > 0 ? stat?.avgMoveAfterUpgrade ?? null : meta.dir < 0 ? stat?.avgMoveAfterDowngrade ?? null : null;
 
-        // Calculate Signal Score (0-100)
-        // 1. Firm Accuracy (0-35)
-        const firmAccScore = Math.min(35, Math.max(12, Math.round((firmData.hit / 100) * 35)));
-
-        // 2. Cluster (0-25)
+        // Signal Score (0-100). Firm accuracy uses the measured hit rate; a firm
+        // without enough resolved targets scores the neutral midpoint.
+        const firmAccScore = hitRate != null ? Math.min(35, Math.max(12, Math.round((hitRate / 100) * 35))) : 20;
         const clusterScore = clusterCount >= 4 ? 25 : clusterCount === 3 ? 21 : clusterCount === 2 ? 15 : 7;
-
-        // 3. Call Strength (0-20)
         const strengthScore = meta.shownAction === "Upgrade" || meta.shownAction === "Downgrade" ? 20 :
           meta.shownAction.includes("PT") ? 15 : meta.shownAction === "Initiate" ? 14 : 9;
-
-        // 4. Move Size (0-10)
-        const movePctVal = prevPt && prevPt > 0 ? Math.abs((targetPt - prevPt) / prevPt) * 100 : Math.abs(upPct || 10);
+        const movePctVal = prevPt && prevPt > 0 ? Math.abs((targetPt - prevPt) / prevPt) * 100 : Math.abs(upPct);
         const moveScore = movePctVal >= 20 ? 10 : movePctVal >= 12 ? 8 : movePctVal >= 5 ? 6 : 4;
-
-        // 5. Context (0-10)
         const isHeld = holdings.has(sym);
         const isWatched = watchedTickers.has(sym);
         const contextScore = isHeld ? 10 : isWatched ? 9 : clusterCount >= 2 ? 8 : 6;
-
         const totalScore = Math.min(100, Math.max(25, firmAccScore + clusterScore + strengthScore + moveScore + contextScore));
         const factorsComp: [number, number, number, number, number] = [firmAccScore, clusterScore, strengthScore, moveScore, contextScore];
 
-        // Headline synthesis
         const headline = clusterCount >= 2
-          ? `${clusterCount} ${meta.dir >= 0 ? "bullish" : "bearish"} calls in 72h: ${clusterFirmsList.slice(0, 3).join(", ")}${clusterFirmsList.length > 3 ? " and others" : ""}`
-          : `${firmName} ${meta.shownAction.toLowerCase()}s ${sym} to ${meta.to} with $${targetPt.toFixed(2)} target`;
+          ? `${clusterCount} ${meta.dir >= 0 ? "bullish" : "bearish"} calls within 72h: ${clusterFirmsList.slice(0, 3).join(", ")}${clusterFirmsList.length > 3 ? " and others" : ""}`
+          : `${firmName} ${meta.shownAction.toLowerCase()}s ${sym}${meta.to !== "—" ? ` to ${meta.to}` : ""} with $${targetPt.toFixed(2)} target`;
 
-        // Why it matters bullets
         const whyBullets: string[] = [];
         if (isHeld) whyBullets.push(`You hold this stock in your portfolio`);
         if (isWatched) whyBullets.push(`In your watchlist`);
-        if (clusterCount >= 2) {
-          whyBullets.push(`${clusterCount} firms made same-direction calls in the last 72 hours`);
-        } else {
-          whyBullets.push(`First major firm to revise target on ${sym} this week`);
-        }
-        if (targetPt >= Math.max(...streetTargets)) {
+        if (clusterCount >= 2) whyBullets.push(`${clusterCount} firms made same-direction calls within 72 hours`);
+        if (streetTargets.length >= 2 && targetPt >= streetTargets[streetTargets.length - 1]) {
           whyBullets.push(`New $${targetPt.toFixed(2)} PT is the highest on the Street`);
-        } else if (targetPt <= Math.min(...streetTargets)) {
+        } else if (streetTargets.length >= 2 && targetPt <= streetTargets[0]) {
           whyBullets.push(`New PT is the lowest on the Street`);
         } else {
-          whyBullets.push(`Target is ${upPct && upPct >= 0 ? "+" : ""}${upPct?.toFixed(1)}% vs current market price`);
+          whyBullets.push(`Target is ${upPct >= 0 ? "+" : ""}${upPct.toFixed(1)}% vs current market price`);
         }
-        whyBullets.push(`${firmName} hit target on ${firmData.hit}% of calls`);
+        if (hitRate != null && stat) {
+          whyBullets.push(`${firmName}'s price targets were hit within 12 months ${hitRate}% of the time (${stat.targetsResolved} resolved)`);
+        }
 
         const tags: string[] = [];
         if (isHeld) tags.push("HOLDING");
@@ -525,14 +519,14 @@ export function AnalystScreen() {
           pt1: targetPt,
           prevPt,
           px,
-          date: g.date || new Date().toISOString().slice(0, 10),
+          date: g.date as string,
           score: totalScore,
           comp: factorsComp,
           cluster: clusterCount,
           clusterFirms: clusterFirmsList,
-          street: streetTargets,
-          hit: `${firmData.hit}%`,
-          move: `${firmData.ret >= 0 ? "+" : "−"}${Math.abs(firmData.ret).toFixed(1)}%`,
+          street: streetTargets.length ? streetTargets : [targetPt],
+          hit: hitRate != null ? `${hitRate}%` : "—",
+          move: pctTxt(movePct),
           headline,
           why: whyBullets,
           held: isHeld,
@@ -546,7 +540,20 @@ export function AnalystScreen() {
     });
 
     return rows.sort((a, b) => b.score - a.score);
-  }, [liveConsensus, companyMap, holdings, watchlistKey]);
+  }, [liveConsensus, companyMap, holdings, watchlistKey, extraQuotes, firmStatsByKey, watchedTickers]);
+
+  // Calls made within the last RECENT_DAYS (ET calendar) — what the header and
+  // the "Moving the needle" list describe.
+  const recentCutoff = useMemo(() => {
+    const d = new Date(`${etTodayIso()}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - (RECENT_DAYS - 1));
+    return d.toISOString().slice(0, 10);
+  }, []);
+  const recentActions = useMemo(() => allActions.filter((a) => a.date >= recentCutoff), [allActions, recentCutoff]);
+  const todayCount = useMemo(() => {
+    const today = etTodayIso();
+    return allActions.filter((a) => a.date === today).length;
+  }, [allActions]);
 
   // Ensure default selected stock
   useEffect(() => {
@@ -573,7 +580,7 @@ export function AnalystScreen() {
     const sectorNet = new Map<string, number>();
     const clusterMap = new Map<string, { count: number; action: ProcessedAction }>();
 
-    for (const a of allActions) {
+    for (const a of recentActions) {
       if (a.dir > 0) {
         bullishCount++;
         if (a.act === "Upgrade") upgCount++;
@@ -601,15 +608,15 @@ export function AnalystScreen() {
     const bearPct = 100 - bullPct;
 
     // Top cluster
-    let topCluster = Array.from(clusterMap.values()).sort((a, b) => b.count - a.count)[0]?.action || allActions[0];
+    let topCluster = Array.from(clusterMap.values()).sort((a, b) => b.count - a.count)[0]?.action || recentActions[0] || null;
 
     // Top sector
     const sortedSectors = Array.from(sectorNet.entries()).sort((a, b) => b[1] - a[1]);
-    const topSector = sortedSectors[0] || ["Technology", 4];
+    const topSector: [string, number] = sortedSectors[0] ?? ["—", 0];
 
     // Portfolio & Watchlist calls
-    const portCalls = allActions.filter(a => a.held);
-    const watchCalls = allActions.filter(a => a.watched);
+    const portCalls = recentActions.filter(a => a.held);
+    const watchCalls = recentActions.filter(a => a.watched);
 
     return {
       bullPct,
@@ -626,79 +633,63 @@ export function AnalystScreen() {
       sortedSectors,
       portCalls,
       watchCalls,
-      highSignalCount: allActions.filter(a => a.score >= 75).length,
+      highSignalCount: recentActions.filter(a => a.score >= 75).length,
       touchMyStocksCount: portCalls.length + watchCalls.length,
     };
-  }, [allActions]);
+  }, [recentActions]);
 
   // --------------------------------------------------------------------------
   // Top Firms Aggregation
   // --------------------------------------------------------------------------
   const allFirms = useMemo<ProcessedFirm[]>(() => {
-    const firmMap = new Map<string, { calls: ProcessedAction[]; up: number; down: number }>();
-
+    // Live calls in the feed, grouped by firm (keyed like the backend stats).
+    const live = new Map<string, { name: string; calls: ProcessedAction[] }>();
     for (const a of allActions) {
-      if (!firmMap.has(a.firm)) {
-        firmMap.set(a.firm, { calls: [], up: 0, down: 0 });
-      }
-      const entry = firmMap.get(a.firm)!;
-      entry.calls.push(a);
-      if (a.dir > 0) entry.up++;
-      else if (a.dir < 0) entry.down++;
+      const k = firmKey(a.firm);
+      const e = live.get(k) ?? { name: a.firm, calls: [] };
+      e.calls.push(a);
+      live.set(k, e);
     }
-
-    // Include all known firms even if not in live snapshot
-    Object.keys(KNOWN_FIRMS).forEach(fn => {
-      if (!firmMap.has(fn)) {
-        firmMap.set(fn, { calls: [], up: 0, down: 0 });
-      }
-    });
-
+    const keys = new Set<string>([...live.keys(), ...firmStatsByKey.keys()]);
+    const today = etTodayIso();
     const list: ProcessedFirm[] = [];
-    firmMap.forEach((data, fn) => {
-      const known = KNOWN_FIRMS[fn] || { hit: 63, ret: 1.8, calls: 75, bull: 60 };
-      const liveCallsCount = data.calls.length;
-      const totalCalls = Math.max(known.calls, liveCallsCount * 6);
-      const hitVal = known.hit;
-      const retVal = known.ret;
-      const bullVal = known.bull;
-
-      const recentCalls = data.calls.slice(0, 6).map((c, i) => {
-        const isHit = i % 2 === 0;
-        return {
-          t: c.t,
-          co: c.co,
-          act: c.act,
-          dir: c.dir,
-          when: i === 0 ? "Today" : `${i + 1}d ago`,
-          res: isHit ? "✓ HIT" : i === 1 ? "OPEN" : `+${(i * 1.4 + 1.2).toFixed(1)}%`,
-          pxAt: c.px * 0.96,
-          pxNow: c.px,
-          pt: c.pt1,
-        };
-      });
-
+    keys.forEach((k) => {
+      const stat = firmStatsByKey.get(k) ?? null;
+      const liveCalls = (live.get(k)?.calls ?? []).slice().sort((x, y) => y.date.localeCompare(x.date));
+      const name = stat?.name ?? live.get(k)?.name ?? k;
+      // Recent calls: this feed's calls (targets still inside their 12-month
+      // window → OPEN), then the firm's latest RESOLVED targets (real HIT/MISS).
+      const open = liveCalls.slice(0, 8).map((c) => ({
+        t: c.t, co: c.co, act: c.act, dir: c.dir, when: c.date, res: "OPEN",
+        pxAt: null, pxNow: c.px, pt: c.pt1,
+      }));
+      const resolved = (stat?.recentResolved ?? []).map((r) => ({
+        t: r.ticker, co: r.ticker, act: "Price target", dir: r.target >= r.priceWhenPosted ? 1 : -1,
+        when: r.date, res: r.hit ? "✓ HIT" : "MISS",
+        pxAt: r.priceWhenPosted, pxNow: null, pt: r.target,
+      }));
       list.push({
         rank: 0,
-        name: fn,
-        hit: hitVal,
-        hitTxt: `${hitVal}%`,
-        ret: retVal,
-        retTxt: `${retVal >= 0 ? "+" : "−"}${Math.abs(retVal).toFixed(1)}%`,
-        calls: totalCalls,
-        bull: bullVal,
-        today: liveCallsCount,
-        recent: recentCalls,
+        name,
+        hit: stat?.hitRatePct ?? null,
+        hitTxt: stat?.hitRatePct != null ? `${stat.hitRatePct}%` : "—",
+        ret: stat?.avgMoveAfterCall ?? null,
+        retTxt: pctTxt(stat?.avgMoveAfterCall ?? null),
+        calls: stat?.ratingChanges ?? null,
+        bull: stat?.bullishPct ?? null,
+        today: liveCalls.filter((c) => c.date === today).length,
+        resolved: stat?.targetsResolved ?? 0,
+        recent: [...open, ...resolved],
       });
     });
-
-    list.sort((a, b) => b.hit - a.hit);
+    // Measured firms first (by hit rate), then unmeasured by today's activity.
+    list.sort((a, b) =>
+      (b.hit ?? -1) - (a.hit ?? -1) || b.today - a.today || a.name.localeCompare(b.name));
     list.forEach((f, idx) => {
       f.rank = idx + 1;
     });
-
     return list;
-  }, [allActions]);
+  }, [allActions, firmStatsByKey]);
 
   const selectedFirm = useMemo(() => {
     return allFirms.find(f => f.name === selectedFirmName) || allFirms[0] || null;
@@ -757,15 +748,15 @@ export function AnalystScreen() {
   const needleActions = useMemo(() => {
     const tickerMap = new Map<string, ProcessedAction>();
     for (const a of filteredActions) {
+      if (a.date < recentCutoff) continue;
       if (!tickerMap.has(a.t) || a.score > tickerMap.get(a.t)!.score) {
         tickerMap.set(a.t, a);
       }
     }
     const uniqueStocks = Array.from(tickerMap.values());
-    const highSignal = uniqueStocks.filter(a => a.score >= 70 || a.cluster >= 2 || a.held || a.watched);
-    const result = highSignal.length >= 6 ? highSignal : uniqueStocks;
-    return result.slice(0, 30);
-  }, [filteredActions]);
+    const highSignal = uniqueStocks.filter(a => a.score >= 75 || a.held || a.watched);
+    return (highSignal.length > 0 ? highSignal : uniqueStocks).sort((a, b) => b.score - a.score).slice(0, 30);
+  }, [filteredActions, recentCutoff]);
 
   // Watchlist Toggle Handler
   const handleToggleStar = (e: React.MouseEvent, sym: string) => {
@@ -954,7 +945,7 @@ export function AnalystScreen() {
         <div style={{ padding: "20px 24px 40px" }}>
           {/* Header Stats Banner */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap", fontSize: 14, color: TEXT_MUTED }}>
-            <span style={{ color: TEXT_HI, fontWeight: 700 }}>{allActions.length} total calls today</span>
+            <span style={{ color: TEXT_HI, fontWeight: 700 }}>{todayCount} calls today · {recentActions.length} in the last {RECENT_DAYS} days</span>
             <span>·</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ color: G, fontWeight: 700 }}>{summaryMetrics.highSignalCount} high signal (≥75)</span>
@@ -1177,7 +1168,7 @@ export function AnalystScreen() {
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "16px 18px 12px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em", color: TEXT_HI }}>Moving the needle today</span>
-                  <span style={{ fontSize: 12, color: TEXT_MUTED }}>Only calls made today · signal 75+</span>
+                  <span style={{ fontSize: 12, color: TEXT_MUTED }}>Calls in the last {RECENT_DAYS} days · signal 75+</span>
                 </div>
                 <span style={{ marginLeft: "auto", fontSize: 13, color: TEXT_MUTED, whiteSpace: "nowrap" }}>
                   {needleActions.length} stocks
@@ -1714,21 +1705,23 @@ export function AnalystScreen() {
                         </span>
                         <div>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 2 }}>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: f.hit >= 70 ? G : f.hit >= 55 ? A : DIM }}>{f.hitTxt}</span>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: f.hit == null ? DIM : f.hit >= 70 ? G : f.hit >= 55 ? A : DIM }}>{f.hitTxt}</span>
                           </div>
                           <div style={{ height: 4, borderRadius: 2, background: "#1b201e", overflow: "hidden" }}>
-                            <div style={{ height: 4, width: `${f.hit}%`, background: f.hit >= 70 ? G : f.hit >= 55 ? A : DIM }} />
+                            <div style={{ height: 4, width: `${f.hit ?? 0}%`, background: f.hit == null ? DIM : f.hit >= 70 ? G : f.hit >= 55 ? A : DIM }} />
                           </div>
                         </div>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", color: f.ret >= 0 ? G : R }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", color: f.ret == null ? DIM : f.ret >= 0 ? G : R }}>
                           {f.retTxt}
                         </span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_MUTED }}>
-                          {f.calls}
+                          {f.calls ?? "—"}
                         </span>
                         <div style={{ display: "flex", height: 5, borderRadius: 2, overflow: "hidden", background: "#1b201e" }}>
-                          <div style={{ width: `${f.bull}%`, background: G }} />
-                          <div style={{ width: `${100 - f.bull}%`, background: R }} />
+                          {f.bull != null && (<>
+                            <div style={{ width: `${f.bull}%`, background: G }} />
+                            <div style={{ width: `${100 - f.bull}%`, background: R }} />
+                          </>)}
                         </div>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", color: f.today > 0 ? TEXT_HI : DIM }}>
                           {f.today}
@@ -1785,23 +1778,23 @@ export function AnalystScreen() {
                 {/* 3 Stats */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${BORDER_DARK}`, borderRadius: 10 }}>
                   <div style={{ padding: "10px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                    <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>12M HIT RATE</div>
+                    <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>12M TARGET HIT RATE</div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: G }}>{selectedFirm.hitTxt}</div>
                   </div>
                   <div style={{ padding: "10px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                    <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>AVG 30D RETURN</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: selectedFirm.ret >= 0 ? G : R }}>{selectedFirm.retTxt}</div>
+                    <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>AVG 5D MOVE AFTER CALLS</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: selectedFirm.ret == null ? DIM : selectedFirm.ret >= 0 ? G : R }}>{selectedFirm.retTxt}</div>
                   </div>
                   <div style={{ padding: "10px" }}>
-                    <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>90D CALLS</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>{selectedFirm.calls}</div>
+                    <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>RATING CHANGES (3Y)</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>{selectedFirm.calls ?? "—"}</div>
                   </div>
                 </div>
 
                 {/* Recent Calls from This Firm */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED }}>RECENT CALLS (LAST WEEK)</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED }}>RECENT CALLS</span>
                     <button
                       onClick={() => setFirmHistModal(selectedFirm)}
                       style={{ background: "transparent", border: 0, color: G, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}

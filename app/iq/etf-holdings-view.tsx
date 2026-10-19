@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, type ReactNode } from "react";
+import { Fragment, useState, useMemo, type ReactNode } from "react";
 import { useApiResource } from "./hooks/useApiResource";
 import { useIQActions } from "./shell";
 import { StockLogo, VendorTag, DataState, NotAvailable } from "./utils";
@@ -187,7 +187,8 @@ export function EtfHoldingsView({ symbol }: EtfHoldingsViewProps) {
                   Expense Ratio
                 </div>
                 <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)", marginTop: 2 }}>
-                  {(data.expenseRatio * (data.expenseRatio < 1 ? 100 : 1)).toFixed(2)}%
+                  {/* FMP's expenseRatio is already a percent: SPY 0.09 = 0.09%. */}
+                  {data.expenseRatio.toFixed(2)}%
                 </div>
               </div>
             </>
@@ -207,19 +208,21 @@ export function EtfHoldingsView({ symbol }: EtfHoldingsViewProps) {
             </>
           )}
 
-          {(data.issuer || data.inceptionDate) && (
-            <>
-              <div style={{ width: 1, height: 28, background: "var(--border-soft, rgba(255,255,255,0.08))" }} />
-              <div>
-                <div style={{ fontSize: ".68rem", textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)" }}>
-                  {data.issuer ? "Issuer" : "Inception"}
+          {([["Issuer", data.issuer], ["Inception", data.inceptionDate], ["Asset class", data.assetClass]] as const)
+            .filter(([, v]) => !!v)
+            .map(([label, v]) => (
+              <Fragment key={label}>
+                <div style={{ width: 1, height: 28, background: "var(--border-soft, rgba(255,255,255,0.08))" }} />
+                <div>
+                  <div style={{ fontSize: ".68rem", textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)" }}>
+                    {label}
+                  </div>
+                  <div style={{ fontSize: "1.0rem", fontWeight: 600, color: "var(--text-mid, #94a3b8)", marginTop: 2 }}>
+                    {v}
+                  </div>
                 </div>
-                <div style={{ fontSize: "1.0rem", fontWeight: 600, color: "var(--text-mid, #94a3b8)", marginTop: 2 }}>
-                  {data.issuer ?? data.inceptionDate}
-                </div>
-              </div>
-            </>
-          )}
+              </Fragment>
+            ))}
         </div>
 
         {/* Sector chips for Stock ETFs */}

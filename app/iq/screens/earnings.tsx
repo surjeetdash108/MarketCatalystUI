@@ -1336,7 +1336,7 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
               {sortTh("consRev", "Cons. Rev")}
               {sortTh("yoyRev", "Yr/Yr Rev")}
               <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-market</th>
-              <th className="r" title="Post-market move as reported by the data vendor (~15 min delayed). Vendor-reported: the field's window and baseline are undocumented — see LiveQuote.latePct.">Post-market</th>
+              <th className="r" title="After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close.">Post-market</th>
               {sortTh("guidance", "Guidance")}
             </tr>
           </thead>

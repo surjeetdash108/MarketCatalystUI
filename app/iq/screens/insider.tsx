@@ -7,7 +7,8 @@ import { apiGet } from "../backend";
 import { useApiList } from "../hooks/useApiList";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useBackendBars } from "../hooks/useBackendBars";
-import type { InsiderTxDoc, CompanyDoc } from "../types";
+import type { InsiderTxDoc, CompanyDoc, OwnershipDoc } from "../types";
+import { useApiResource } from "../hooks/useApiResource";
 import type { Stock13FResponse } from "../stock-13f-view";
 
 // ---- Constants & Theme Colors (matches 13F & Insider standalone HTML) ----
@@ -17,43 +18,15 @@ const AMB = "var(--warn, #f3b24a)";
 const GR = "var(--text-dim, #7d8798)";
 const N_BARS = 180;
 
-// Curated 20 benchmark companies with established metadata
+// Display metadata per company. Price/change are null until a live quote or
+// the company doc supplies them — never a placeholder number.
 interface CompanyMeta {
   name: string;
-  price: number;
-  chg: number;
+  price: number | null;
+  chg: number | null;
   logoBg: string;
   logoFg: string;
 }
-
-const CURATED_COMPANIES: Record<string, CompanyMeta> = {
-  INTC: { name: "Intel Corp", price: 0, chg: 0, logoBg: "#0068b5", logoFg: "#fff" },
-  LULU: { name: "Lululemon Athletica", price: 0, chg: 0, logoBg: "#d22030", logoFg: "#fff" },
-  UNH:  { name: "UnitedHealth Group", price: 0, chg: 0, logoBg: "#002677", logoFg: "#fff" },
-  SOFI: { name: "SoFi Technologies", price: 0, chg: 0, logoBg: "#00a2c7", logoFg: "#fff" },
-  SMCI: { name: "Super Micro Computer", price: 0, chg: 0, logoBg: "#2b6cb0", logoFg: "#fff" },
-  AMZN: { name: "Amazon.com Inc", price: 0, chg: 0, logoBg: "#ff9900", logoFg: "#111" },
-  NVDA: { name: "Nvidia Corp", price: 0, chg: 0, logoBg: "#76b900", logoFg: "#0b1400" },
-  AVGO: { name: "Broadcom Inc", price: 0, chg: 0, logoBg: "#cc092f", logoFg: "#fff" },
-  META: { name: "Meta Platforms Inc", price: 0, chg: 0, logoBg: "#0866ff", logoFg: "#fff" },
-  PLTR: { name: "Palantir Technologies", price: 0, chg: 0, logoBg: "#e7ecf4", logoFg: "#111" },
-  HOOD: { name: "Robinhood Markets", price: 0, chg: 0, logoBg: "#c3f53c", logoFg: "#111" },
-  ORCL: { name: "Oracle Corp", price: 0, chg: 0, logoBg: "#c74634", logoFg: "#fff" },
-  MSFT: { name: "Microsoft Corp", price: 0, chg: 0, logoBg: "#00a4ef", logoFg: "#fff" },
-  TSLA: { name: "Tesla Inc", price: 0, chg: 0, logoBg: "#cc0000", logoFg: "#fff" },
-  SNOW: { name: "Snowflake Inc", price: 0, chg: 0, logoBg: "#29b5e8", logoFg: "#fff" },
-  CRWD: { name: "CrowdStrike Holdings", price: 0, chg: 0, logoBg: "#e01f26", logoFg: "#fff" },
-  BTSG: { name: "BrightSpring Health", price: 0, chg: 0, logoBg: "#e9ecef", logoFg: "#1a2b4a" },
-  AUR:  { name: "Aurora Innovation", price: 0, chg: 0, logoBg: "#1d2a44", logoFg: "#9fb4ff" },
-  CVX:  { name: "Chevron Corp", price: 0, chg: 0, logoBg: "#0054a4", logoFg: "#fff" },
-  AMD:  { name: "Advanced Micro Devices", price: 0, chg: 0, logoBg: "#1a1a1a", logoFg: "#e7ecf4" },
-};
-
-// Raw transactions baseline: populated solely from live SEC Form 4 and FMP market feeds
-type RawTxTuple = [string, string, string, number, string, number, number, number, number | null, number];
-
-const RAW_TRADES_DATA: RawTxTuple[] = [];
-
 
 interface TradeItem {
   t: string;
@@ -67,32 +40,23 @@ interface TradeItem {
   stake: number | null;
   ago: number;
   value: number;
-  since: number;
+  /** % move from the trade price to the current price; null without a live price. */
+  since: number | null;
+  /** Days between the trade and its Form 4 filing; null when the filing date is unknown. */
+  filedLag: number | null;
 }
 
-// 13F fund metrics benchmark
+// 13F rollup per ticker — FMP's institutional-ownership summary for the newest
+// fully-filed quarter (filer counts are filers, not funds).
 interface F13Tuple {
   add: number;
   trim: number;
   newPos: number;
   exits: number;
+  /** % change in total 13F shares held, quarter over quarter. */
   net: number;
   holders: number;
   own: string;
-  buyer: string;
-}
-
-const RAW_F13_DATA: Record<string, [number, number, number, number, number, number, string, string]> = {};
-
-
-// Formatter helpers
-function seed(s: string) {
-  let h = 7;
-  for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return () => {
-    h = (h * 1664525 + 1013904223) >>> 0;
-    return h / 4294967296;
-  };
 }
 
 const fm = (v: number) => {
@@ -124,7 +88,7 @@ const LISTS: ListDef[] = [
     label: "Most notable",
     dot: UP,
     src: "FORM 4",
-    hint: "Ranked by conviction: clusters, C-suite open-market buys and large off-plan sales. Routine 10b5-1 sales never rank.",
+    hint: "Ranked by conviction: clusters, C-suite open-market buys and large open-market sales.",
     pick: (S) => {
       const withSignals = S.filter(
         (s) => Math.abs(s.iS) >= 3 || s.buyV > 0 || s.offV > 0 || Math.abs(s.net) >= 1
@@ -156,7 +120,7 @@ const LISTS: ListDef[] = [
     label: "Insider selling",
     dot: DN,
     src: "FORM 4",
-    hint: "Discretionary sales outside 10b5-1 plans — the sales that carry information.",
+    hint: "Open-market sales (code S) by total $. The feed does not flag 10b5-1 plan sales, so pre-scheduled sales are included.",
     pick: (S) => S.filter((s) => s.offV > 0).sort((a, b) => b.offV - a.offV),
     m: "sell",
   },
@@ -177,8 +141,8 @@ const LISTS: ListDef[] = [
     label: "Funds accumulating",
     dot: "#4a67d8",
     src: "13F",
-    hint: "Largest net increase in shares held by 13F filers, Q2 vs Q1.",
-    pick: (S) => S.filter((s) => s.net > 0).sort((a, b) => b.net - a.net),
+    hint: "Largest net increase in shares held by 13F filers, latest fully-filed quarter vs the one before.",
+    pick: (S) => S.filter((s) => s.hasF13 && s.net > 0).sort((a, b) => b.net - a.net),
     m: "f13",
   },
   {
@@ -186,8 +150,8 @@ const LISTS: ListDef[] = [
     label: "Funds distributing",
     dot: "#c27b84",
     src: "13F",
-    hint: "Largest net decrease in institutional shares, Q2 vs Q1.",
-    pick: (S) => S.filter((s) => s.net < 0).sort((a, b) => a.net - b.net),
+    hint: "Largest net decrease in institutional shares, latest fully-filed quarter vs the one before.",
+    pick: (S) => S.filter((s) => s.hasF13 && s.net < 0).sort((a, b) => a.net - b.net),
     m: "f13",
   },
   {
@@ -195,8 +159,8 @@ const LISTS: ListDef[] = [
     label: "New fund positions",
     dot: "#4a67d8",
     src: "13F",
-    hint: "Most funds opening a brand-new stake this quarter.",
-    pick: (S) => [...S].sort((a, b) => b.newPos - a.newPos),
+    hint: "Most 13F filers opening a brand-new stake in the latest fully-filed quarter.",
+    pick: (S) => S.filter((s) => s.hasF13 && s.newPos > 0).sort((a, b) => b.newPos - a.newPos),
     m: "new",
   },
   {
@@ -207,7 +171,7 @@ const LISTS: ListDef[] = [
     hint: "Insiders and institutions moving the same direction — the highest-confluence setups.",
     pick: (S) =>
       S.filter(
-        (s) => (s.iS >= 3 && s.net > 0) || (s.iS <= -3 && s.net < 0)
+        (s) => s.hasF13 && ((s.iS >= 3 && s.net > 0) || (s.iS <= -3 && s.net < 0))
       ).sort((a, b) => Math.abs(b.iS) - Math.abs(a.iS)),
     m: "agree",
   },
@@ -232,7 +196,8 @@ interface CompanyStats {
   net: number;
   holders: number;
   own: string;
-  buyer: string;
+  /** False when FMP has no 13F rollup for the ticker — its fund fields are 0/"—", not data. */
+  hasF13: boolean;
   netFunds: number;
   iS: number;
 }
@@ -245,7 +210,7 @@ const tagOf = (s: CompanyStats): [string, string, string] =>
     : s.buys.length
     ? ["Insider buy", UP, "var(--up-dim, rgba(74,222,128,.12))"]
     : s.off.length
-    ? ["Off-plan sale", DN, "var(--down-dim, rgba(248,113,113,.12))"]
+    ? ["Insider sale", DN, "var(--down-dim, rgba(248,113,113,.12))"]
     : s.plan.length
     ? ["10b5-1 only", "var(--text-pure-dim)", "var(--surface-3)"]
     : ["Quiet", "var(--text-pure-dim)", "var(--surface-3)"];
@@ -257,10 +222,9 @@ export function InsiderScreen() {
   // Screen State
   const [activeListKey, setActiveListKey] = useState("notable");
   const [searchQuery, setSearchQuery] = useState("");
-  const [focusTicker, setFocusTicker] = useState<string>("INTC");
+  const [focusTicker, setFocusTicker] = useState<string>("");
   const [rangeDays, setRangeDays] = useState<number>(90);
-  const [hidePlans, setHidePlans] = useState(false);
-  const [hoverMarkerKey, setHoverMarkerKey] = useState<string | null>(null);
+    const [hoverMarkerKey, setHoverMarkerKey] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -276,121 +240,61 @@ export function InsiderScreen() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Live Backend Data
+  // Live Backend Data — FMP-first market-wide insider feed (SEC fallback) and
+  // FMP 13F rollups; no curated or synthetic rows.
   const { data: liveInsiderTxRaw } = useApiList<InsiderTxDoc>("/market-data/insider-transactions");
   const { data: instOwnRaw } = useApiList<{
     ticker: string;
     investorsHolding: number | null;
     investorsHoldingChange: number | null;
     ownershipPercent: number | null;
+    numberOf13Fshares: number | null;
+    lastNumberOf13Fshares: number | null;
+    numberOf13FsharesChange: number | null;
+    newPositions?: number | null;
+    increasedPositions?: number | null;
+    reducedPositions?: number | null;
+    closedPositions?: number | null;
   }>("/market-data/institutional-ownership");
   const { data: liveCompanies } = useApiList<CompanyDoc>("/market-data/companies");
 
-  // Tracked universe of tickers
+  // Tracked universe: tickers with insider trades or a 13F rollup.
   const allTickers = useMemo(() => {
-    const set = new Set(Object.keys(CURATED_COMPANIES));
+    const set = new Set<string>();
     liveInsiderTxRaw.forEach((tx) => {
       if (tx.ticker) set.add(tx.ticker.toUpperCase().trim());
     });
     instOwnRaw.forEach((io) => {
       if (io.ticker) set.add(io.ticker.toUpperCase().trim());
     });
-    (liveCompanies || []).forEach((c) => {
-      if (c.ticker) set.add(c.ticker.toUpperCase().trim());
-    });
     return Array.from(set);
-  }, [liveInsiderTxRaw, instOwnRaw, liveCompanies]);
+  }, [liveInsiderTxRaw, instOwnRaw]);
 
   // Live quotes for accurate live prices
   const liveQuotes = useLiveQuotes(allTickers);
 
-  // Live 6M bars for the focused ticker
-  const { bars: sixMonthBars } = useBackendBars(focusTicker || "INTC", "6M");
-
-  // Live 13F holders for focused ticker
-  const [liveHoldersDoc, setLiveHoldersDoc] = useState<Stock13FResponse | null>(null);
-  useEffect(() => {
-    if (!focusTicker) return;
-    let cancelled = false;
-    apiGet<Stock13FResponse>(`/live/13f-filings?ticker=${encodeURIComponent(focusTicker)}`)
-      .then((res) => {
-        if (!cancelled && res?.holders) setLiveHoldersDoc(res);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [focusTicker]);
-
-  // Combined Company Profiles (curated + live updates)
+  // Company metadata: live quote first, then the synced company doc; null price
+  // when neither has one.
   const companiesMap = useMemo(() => {
+    const byTicker = new Map((liveCompanies || []).filter((c) => c.ticker).map((c) => [c.ticker.toUpperCase().trim(), c]));
     const map = new Map<string, CompanyMeta>();
-    // Seed with curated
-    for (const [sym, c] of Object.entries(CURATED_COMPANIES)) {
-      const q = liveQuotes.get(sym);
-      map.set(sym, {
-        name: c.name,
-        price: q?.price != null && q.price > 0 ? q.price : c.price,
-        chg: q?.pctChange != null ? q.pctChange : c.chg,
-        logoBg: c.logoBg,
-        logoFg: c.logoFg,
-      });
-    }
-    // Overlay all live companies from backend database
-    for (const c of (liveCompanies || [])) {
-      if (!c.ticker) continue;
-      const sym = c.ticker.toUpperCase().trim();
-      const q = liveQuotes.get(sym);
-      const existing = map.get(sym);
-      map.set(sym, {
-        name: c.name || existing?.name || sym,
-        price: q?.price != null && q.price > 0 ? q.price : (c.price ?? existing?.price ?? 100.0),
-        chg: q?.pctChange != null ? q.pctChange : (c.pctChange ?? existing?.chg ?? 0.0),
-        logoBg: existing?.logoBg || "#1c2733",
-        logoFg: existing?.logoFg || "#e8eef4",
-      });
-    }
-    // Overlay any extra live tickers
     for (const sym of allTickers) {
-      if (!map.has(sym)) {
-        const q = liveQuotes.get(sym);
-        map.set(sym, {
-          name: sym,
-          price: q?.price ?? 100.0,
-          chg: q?.pctChange ?? 0.0,
-          logoBg: "#1c2733",
-          logoFg: "#e8eef4",
-        });
-      }
+      const q = liveQuotes.get(sym);
+      const c = byTicker.get(sym);
+      map.set(sym, {
+        name: c?.name || sym,
+        price: q?.price != null && q.price > 0 ? q.price : (c?.price ?? null),
+        chg: q?.pctChange ?? c?.pctChange ?? null,
+        logoBg: "#1c2733",
+        logoFg: "#e8eef4",
+      });
     }
     return map;
   }, [liveQuotes, allTickers, liveCompanies]);
 
-  // Combined Form 4 Trades (curated + live transactions)
+  // Form 4 trades — real filings only.
   const tradesList: TradeItem[] = useMemo(() => {
-    // Start with curated trades
-    const list: TradeItem[] = RAW_TRADES_DATA.map(
-      ([t, name, role, cs, code, plan, sh, px, stake, ago]) => {
-        const comp = companiesMap.get(t);
-        const curPx = comp ? comp.price : px;
-        return {
-          t,
-          name,
-          role,
-          cs,
-          code,
-          plan,
-          sh,
-          px,
-          stake,
-          ago,
-          value: sh * px,
-          since: px > 0 ? ((curPx / px) - 1) * 100 : 0,
-        };
-      }
-    );
-
-    // Overlay real live transactions from backend
+    const list: TradeItem[] = [];
     const now = Date.now();
     for (const tx of liveInsiderTxRaw) {
       if (!tx.ticker || !tx.shares || !tx.pricePerShare) continue;
@@ -400,12 +304,15 @@ export function InsiderScreen() {
       const ago = Math.max(0, Math.round((now - txTime) / 86400000));
       if (ago > 180) continue; // within 6M
 
-      const role = tx.officerTitle || (tx.isOfficer ? "Officer" : tx.ownerName || "Insider");
-      const isCs = /CEO|CFO|COO|CTO|PRESIDENT|EXECUTIVE/i.test(role) ? 1 : 0;
+      const role = tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% owner");
+      const isCs = /CEO|CFO|COO|CTO|PRESIDENT|EXECUTIVE|CHIEF/i.test(role) ? 1 : 0;
       const code = tx.transactionCode || (tx.acquiredOrDisposed === "A" ? "P" : "S");
-      const isPlan = 0; // standard Form 4 default
-      const comp = companiesMap.get(t);
-      const curPx = comp ? comp.price : tx.pricePerShare;
+      const curPx = companiesMap.get(t)?.price ?? null;
+      // Stake change from the filing: shares traded vs. holdings before the trade.
+      const after = tx.sharesOwnedAfter ?? null;
+      const before = after == null ? null : tx.acquiredOrDisposed === "D" ? after + tx.shares : after - tx.shares;
+      const stake = before == null ? null : before <= 0 ? null : ((tx.acquiredOrDisposed === "D" ? -1 : 1) * tx.shares / before) * 100;
+      const filedTime = tx.filingDate ? Date.parse(tx.filingDate) : NaN;
 
       list.push({
         t,
@@ -413,53 +320,35 @@ export function InsiderScreen() {
         role,
         cs: isCs,
         code,
-        plan: isPlan,
+        plan: 0, // the feed carries no 10b5-1 flag
         sh: tx.shares,
         px: tx.pricePerShare,
-        stake: null,
+        stake,
         ago,
         value: tx.shares * tx.pricePerShare,
-        since: tx.pricePerShare > 0 ? ((curPx / tx.pricePerShare) - 1) * 100 : 0,
+        since: curPx != null && tx.pricePerShare > 0 ? ((curPx / tx.pricePerShare) - 1) * 100 : null,
+        filedLag: Number.isFinite(filedTime) ? Math.max(0, Math.round((filedTime - txTime) / 86400000)) : null,
       });
     }
-
     return list;
   }, [companiesMap, liveInsiderTxRaw]);
 
-  // Combined 13F Ownership Stats (curated + live ownership docs)
-  // Combined 13F Ownership Stats (populated from live institutional ownership docs)
+  // 13F rollups — FMP's own counts; a ticker without one has no entry.
   const f13Map = useMemo(() => {
     const map = new Map<string, F13Tuple>();
-    for (const [sym, data] of Object.entries(RAW_F13_DATA)) {
-      map.set(sym, {
-        add: data[0],
-        trim: data[1],
-        newPos: data[2],
-        exits: data[3],
-        net: data[4],
-        holders: data[5],
-        own: data[6],
-        buyer: data[7],
-      });
-    }
-    // Overlay real FMP institutional-ownership data
     for (const io of instOwnRaw) {
-      if (!io.ticker) continue;
-      const sym = io.ticker.toUpperCase().trim();
-      const holders = io.investorsHolding || 0;
-      const own = io.ownershipPercent != null ? (io.ownershipPercent * 100).toFixed(1) + "%" : "—";
-      const net = io.investorsHoldingChange != null && holders > 0
-        ? +((io.investorsHoldingChange / holders) * 100).toFixed(1)
-        : 0;
-      map.set(sym, {
-        add: 0,
-        trim: 0,
-        newPos: 0,
-        exits: 0,
-        net,
-        holders,
-        own,
-        buyer: "Institutional",
+      if (!io.ticker || io.investorsHolding == null) continue;
+      const sharesNow = io.numberOf13Fshares;
+      const sharesPrev = io.lastNumberOf13Fshares;
+      map.set(io.ticker.toUpperCase().trim(), {
+        add: io.increasedPositions ?? 0,
+        trim: io.reducedPositions ?? 0,
+        newPos: io.newPositions ?? 0,
+        exits: io.closedPositions ?? 0,
+        net: sharesNow != null && sharesPrev ? +(((sharesNow - sharesPrev) / sharesPrev) * 100).toFixed(1) : 0,
+        holders: io.investorsHolding,
+        // FMP's ownershipPercent is already a percent (86.8 = 86.8%).
+        own: io.ownershipPercent != null ? io.ownershipPercent.toFixed(1) + "%" : "—",
       });
     }
     return map;
@@ -481,16 +370,7 @@ export function InsiderScreen() {
       const csBuy = buys.some((r) => r.cs === 1);
       const last = rs.length ? Math.min(...rs.map((r) => r.ago)) : null;
 
-      const f = f13Map.get(t) || {
-        add: 0,
-        trim: 0,
-        newPos: 0,
-        exits: 0,
-        net: 0,
-        holders: 0,
-        own: "—",
-        buyer: "—",
-      };
+      const f = f13Map.get(t);
 
       const iS =
         buyers >= 3
@@ -519,19 +399,42 @@ export function InsiderScreen() {
         buyers,
         csBuy,
         last,
-        add: f.add,
-        trim: f.trim,
-        newPos: f.newPos,
-        exits: f.exits,
-        net: f.net,
-        holders: f.holders,
-        own: f.own,
-        buyer: f.buyer,
-        netFunds: f.add - f.trim,
+        add: f?.add ?? 0,
+        trim: f?.trim ?? 0,
+        newPos: f?.newPos ?? 0,
+        exits: f?.exits ?? 0,
+        net: f?.net ?? 0,
+        holders: f?.holders ?? 0,
+        own: f?.own ?? "—",
+        hasF13: !!f,
+        netFunds: f ? f.add - f.trim : 0,
         iS,
       };
     });
   }, [companiesMap, tradesList, f13Map, rangeDays]);
+
+  // Focus: the user's pick, else the top of the "Most notable" list.
+  const effectiveFocus = focusTicker || (LISTS[0].pick(allStats)[0]?.t ?? "");
+
+  // Live 6M bars for the focused ticker
+  const { bars: sixMonthBars } = useBackendBars(effectiveFocus || "SPY", "6M");
+
+  // Live 13F holders for focused ticker
+  const [liveHoldersDoc, setLiveHoldersDoc] = useState<Stock13FResponse | null>(null);
+  useEffect(() => {
+    if (!effectiveFocus) return;
+    let cancelled = false;
+    apiGet<Stock13FResponse>(`/live/13f-filings?ticker=${encodeURIComponent(effectiveFocus)}`)
+      .then((res) => {
+        if (!cancelled) setLiveHoldersDoc(res?.holders ? res : null);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveHoldersDoc(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveFocus]);
 
   // Stats dictionary for fast lookup
   const statsMap = useMemo(() => {
@@ -577,13 +480,34 @@ export function InsiderScreen() {
   }, [filteredStatsList, focusTicker, searchQ]);
 
   // Active focus data
-  const focusStats = statsMap.get(focusTicker) || allStats[0] || null;
-  const focusCompany = companiesMap.get(focusTicker) || {
-    name: focusTicker,
-    price: 100.0,
-    chg: 0.0,
-    logoBg: "#0068b5",
-    logoFg: "#fff",
+  // The selected stock's 13F rollup straight from FMP (newest fully-filed
+  // quarter, fetched on demand) — authoritative over the cached collection,
+  // which only refreshes as its job reaches each ticker.
+  const { data: focusOwnership } = useApiResource<OwnershipDoc>(
+    effectiveFocus ? `/live/ownership?ticker=${encodeURIComponent(effectiveFocus)}` : null,
+  );
+  const focusBase = statsMap.get(effectiveFocus) || null;
+  const focusInst = focusOwnership?.ticker === effectiveFocus ? focusOwnership.institutional : null;
+  const focusStats: CompanyStats | null = focusBase && focusInst && focusInst.holders != null
+    ? {
+        ...focusBase,
+        hasF13: true,
+        holders: focusInst.holders,
+        own: focusInst.ownershipPct != null ? focusInst.ownershipPct.toFixed(1) + "%" : "—",
+        add: focusInst.increasedPositions ?? 0,
+        trim: focusInst.reducedPositions ?? 0,
+        newPos: focusInst.newPositions ?? 0,
+        exits: focusInst.closedPositions ?? 0,
+        net: focusInst.sharesChangePct ?? 0,
+        netFunds: (focusInst.increasedPositions ?? 0) - (focusInst.reducedPositions ?? 0),
+      }
+    : focusBase;
+  const focusCompany: CompanyMeta = companiesMap.get(effectiveFocus) || {
+    name: effectiveFocus,
+    price: null,
+    chg: null,
+    logoBg: "#1c2733",
+    logoFg: "#e8eef4",
   };
 
   // Generate 6M price series for chart
@@ -601,33 +525,9 @@ export function InsiderScreen() {
       return res;
     }
 
-    // Realistic seeded baseline price series
-    const R = seed(focusTicker);
-    const end = focusCompany.price;
-    const an: Record<number, number> = { 0: end * (0.82 + R() * 0.3) };
-    an[N_BARS - 1] = end;
-
-    const stockTrades = tradesList.filter((r) => r.t === focusTicker && r.code !== "M");
-    stockTrades.forEach((r) => {
-      const idx = Math.max(0, Math.min(N_BARS - 1, N_BARS - 1 - r.ago));
-      an[idx] = r.px;
-    });
-
-    const idxArr = Object.keys(an).map(Number).sort((a, b) => a - b);
-    const out = new Array<number>(N_BARS);
-    for (let k = 0; k < idxArr.length - 1; k++) {
-      const a = idxArr[k];
-      const b = idxArr[k + 1];
-      const L = b - a;
-      const w = [0];
-      for (let j = 1; j <= L; j++) w.push(w[j - 1] + (R() - 0.5) * 0.035);
-      for (let j = 0; j <= L; j++) {
-        const f = j / L;
-        out[a + j] = (an[a] + (an[b] - an[a]) * f) * (1 + w[j] - w[L] * f);
-      }
-    }
-    return out;
-  }, [sixMonthBars, focusTicker, focusCompany.price, tradesList]);
+    // No real bars yet: draw nothing rather than a synthetic series.
+    return [] as number[];
+  }, [sixMonthBars]);
 
   // Scaled SVG Path Points
   const { svgPoints, svgArea, minPrice, maxPrice, ret6M } = useMemo(() => {
@@ -668,7 +568,7 @@ export function InsiderScreen() {
         : s.iS === 3
         ? "Insider buying"
         : s.iS <= -3
-        ? "Discretionary selling"
+        ? "Insider selling"
         : s.plan.length
         ? "Routine selling only"
         : "No activity";
@@ -681,16 +581,23 @@ export function InsiderScreen() {
             s.csBuy ? ", including C-suite" : ""
           }. Buys are the cleaner signal — sales have many reasons.`
         : s.off.length
-        ? `${fm(s.offV)} sold outside 10b5-1 plans. Off-plan sales are discretionary — watch size vs. holdings and whether more insiders follow.`
+        ? `${fm(s.offV)} sold on the open market. Sales have many reasons (taxes, diversification, pre-set plans) — watch size vs. holdings and whether more insiders follow.`
         : s.plan.length
         ? `All ${fm(s.planV)} of sales were pre-scheduled 10b5-1 plans. Treat as routine liquidity, not a view on the stock.`
         : `No Form 4 filings in the last ${rangeDays} days.`;
 
     const fC = s.net >= 2 ? UP : s.net <= -2 ? DN : s.net > 0 ? "var(--brand)" : s.net < 0 ? "var(--down)" : GR;
-    const fVerdict =
-      s.net >= 2 ? "Accumulating" : s.net <= -2 ? "Distributing" : s.net > 0 ? "Slight net buying" : "Slight net selling";
+    const fVerdict = !s.hasF13
+      ? "No 13F data"
+      : s.net >= 2 ? "Accumulating" : s.net <= -2 ? "Distributing" : s.net > 0 ? "Slight net buying" : s.net < 0 ? "Slight net selling" : "Unchanged";
 
-    const fWhy = `${s.add.toLocaleString()} funds added vs ${s.trim.toLocaleString()} trimmed; ${s.newPos} opened new stakes, ${s.exits} sold out. Largest buyer: ${s.buyer}.`;
+    // Largest buyer from the focused ticker's real 13F holder list.
+    const topBuyer = (liveHoldersDoc?.holders ?? [])
+      .filter((h) => (h.changeInShares ?? 0) > 0)
+      .sort((a, b) => (b.changeInShares ?? 0) - (a.changeInShares ?? 0))[0]?.investorName ?? null;
+    const fWhy = s.hasF13
+      ? `${s.add.toLocaleString()} filers added vs ${s.trim.toLocaleString()} trimmed; ${s.newPos.toLocaleString()} opened new stakes, ${s.exits.toLocaleString()} sold out.${topBuyer ? ` Largest buyer: ${topBuyer}.` : ""}`
+      : "No 13F rollup is available for this ticker yet.";
 
     const agree =
       s.iS >= 3 && s.net > 0
@@ -715,7 +622,7 @@ export function InsiderScreen() {
 
       const i = Math.max(0, Math.min(N_BARS - 1, N_BARS - 1 - r.ago));
       const xp = (i / (N_BARS - 1)) * 100;
-      const currentBarPrice = priceSeries[i] || r.px;
+      const currentBarPrice = priceSeries[i] ?? r.px;
       const yp = getY(currentBarPrice);
 
       const mKey = `${t}_${j}`;
@@ -741,22 +648,21 @@ export function InsiderScreen() {
         tip: {
           name: r.name,
           role: r.role,
-          type: isBuy ? "Open-market buy" : isPln ? "10b5-1 plan sale" : "Discretionary sale",
+          type: isBuy ? "Open-market buy" : "Open-market sale",
           color: ring,
           value: (isBuy ? "+" : "−") + fm(r.value),
           date: tradeDate,
           shares: r.sh.toLocaleString("en-US") + " sh @ $" + r.px.toFixed(2),
-          stake: r.stake == null ? "New position" : r.stake === 0 ? "—" : fp(r.stake) + " of holdings",
-          since: fp(r.since),
-          sinceColor: r.since >= 0 ? UP : DN,
-          filed: "Form 4 · filed " + (r.ago <= 7 ? "1d" : "2d") + " after trade",
+          stake: r.stake == null ? "—" : fp(r.stake) + " of holdings",
+          since: r.since == null ? "—" : fp(r.since),
+          sinceColor: r.since == null ? GR : r.since >= 0 ? UP : DN,
+          filed: r.filedLag == null ? "Form 4" : `Form 4 · filed ${r.filedLag === 0 ? "same day" : `${r.filedLag}d after trade`}`,
         },
       };
     });
 
     // Form 4 filings list for bottom left panel
     const filteredFilings = s.rs
-      .filter((r) => !(hidePlans && r.plan))
       .sort((a, b) => a.ago - b.ago)
       .map((r) => {
         const isBuy = r.code === "P";
@@ -768,13 +674,7 @@ export function InsiderScreen() {
           : isEx
           ? "var(--surface-3)"
           : "var(--down-dim, rgba(248,113,113,.12))";
-        const typeLabel = isBuy
-          ? "Open-market buy"
-          : isEx
-          ? "Option exercise"
-          : isPln
-          ? "10b5-1 sale"
-          : "Discretionary sale";
+        const typeLabel = isBuy ? "Open-market buy" : isEx ? "Option exercise" : "Open-market sale";
         const filingDate = new Date(Date.now() - r.ago * 86400000).toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
@@ -788,43 +688,25 @@ export function InsiderScreen() {
           sharesStr: r.sh.toLocaleString("en-US"),
           priceStr: "$" + r.px.toFixed(2),
           valueStr: (isBuy ? "+" : isEx ? "" : "−") + fm(r.value),
-          sinceStr: fp(r.since),
-          sinceColor: r.since >= 0 ? UP : DN,
+          sinceStr: r.since == null ? "—" : fp(r.since),
+          sinceColor: r.since == null ? GR : r.since >= 0 ? UP : DN,
           dateStr: filingDate,
         };
       });
 
-    // Top 13F holders for bottom right panel
-    let topHolders: Array<{ name: string; pct: string; chg: string; color: string }> = [];
-    if (liveHoldersDoc?.holders && liveHoldersDoc.holders.length > 0) {
-      topHolders = liveHoldersDoc.holders.slice(0, 6).map((h) => {
+    // Top 13F holders — the focused ticker's real holder list; empty when FMP has none.
+    const topHolders: Array<{ name: string; pct: string; chg: string; color: string }> =
+      (liveHoldersDoc?.holders ?? []).slice(0, 6).map((h) => {
         const chgNum = h.changeInSharesPct ?? 0;
         const isNew = h.activityStatus === "New";
         return {
           name: h.investorName || "Institutional Investor",
-          pct: h.ownershipPct != null ? (h.ownershipPct * 100).toFixed(1) + "%" : "—",
+          // FMP's `ownership` is already a percent (10.54 = 10.54%).
+          pct: h.ownershipPct != null ? h.ownershipPct.toFixed(1) + "%" : "—",
           chg: isNew ? "New" : chgNum === 0 ? "—" : fp(chgNum),
           color: isNew || chgNum > 0 ? UP : chgNum < 0 ? DN : GR,
         };
       });
-    } else {
-      const R = seed(t + "h");
-      const pc = () => +(R() * 2.4 - 1.2).toFixed(1);
-      const mockTop = [
-        ["Vanguard Group", (7 + R() * 2.5).toFixed(1) + "%", pc()],
-        ["BlackRock", (6 + R() * 2).toFixed(1) + "%", pc()],
-        ["State Street", (3 + R() * 1.5).toFixed(1) + "%", pc()],
-        [s.buyer === "Vanguard Group" ? "FMR LLC" : s.buyer, (0.8 + R() * 2).toFixed(1) + "%", s.net > 0 ? +(8 + R() * 30).toFixed(1) : null],
-        ["Geode Capital", (1.6 + R() * 0.8).toFixed(1) + "%", pc()],
-        ["Morgan Stanley", (1 + R() * 1).toFixed(1) + "%", pc()],
-      ];
-      topHolders = mockTop.map(([hName, pct, cVal]) => ({
-        name: hName as string,
-        pct: pct as string,
-        chg: cVal == null ? "New" : cVal === 0 ? "—" : fp(cVal as number),
-        color: cVal == null || (cVal as number) > 0 ? UP : (cVal as number) < 0 ? DN : GR,
-      }));
-    }
 
     const tint = (color: string) =>
       color === UP
@@ -836,9 +718,9 @@ export function InsiderScreen() {
     return {
       t,
       name,
-      price: "$" + px.toFixed(2),
-      chg: fp(chg, 2),
-      chgColor: chg >= 0 ? UP : DN,
+      price: px != null ? "$" + px.toFixed(2) : "—",
+      chg: chg != null ? fp(chg, 2) : "—",
+      chgColor: chg == null ? GR : chg >= 0 ? UP : DN,
       iVerdict,
       iWhy,
       iColor: iC,
@@ -860,17 +742,16 @@ export function InsiderScreen() {
       trades: filteredFilings,
       nBuy: s.buys.length,
       nSell: s.off.length + s.plan.length,
-      emptyMsg: s.rs.length
-        ? "Only 10b5-1 plan sales — hidden."
-        : `No Form 4 filings in the last ${rangeDays} days.`,
-      holders: s.holders.toLocaleString("en-US"),
+      emptyMsg: `No open-market Form 4 trades in the last ${rangeDays} days.`,
+      holders: s.hasF13 ? s.holders.toLocaleString("en-US") : "—",
       own: s.own,
-      added: (s.add * 11).toLocaleString("en-US"),
-      cut: (s.trim * 11).toLocaleString("en-US"),
+      hasF13: s.hasF13,
+      added: s.add.toLocaleString("en-US"),
+      cut: s.trim.toLocaleString("en-US"),
       addedN: s.add,
       cutN: s.trim,
-      newPos: s.newPos * 5,
-      exits: s.exits * 5,
+      newPos: s.newPos.toLocaleString("en-US"),
+      exits: s.exits.toLocaleString("en-US"),
       topHolders,
     };
   }, [
@@ -880,7 +761,6 @@ export function InsiderScreen() {
     minPrice,
     rangeDays,
     hoverMarkerKey,
-    hidePlans,
     liveHoldersDoc,
     priceSeries,
   ]);
@@ -1170,19 +1050,19 @@ export function InsiderScreen() {
           {/* Scrollable Rows */}
           <div style={{ maxHeight: 720, overflowY: "auto" }}>
             {filteredStatsList.map((s, idx) => {
-              const comp = companiesMap.get(s.t) || {
+              const comp: CompanyMeta = companiesMap.get(s.t) || {
                 name: s.t,
-                price: 100.0,
-                chg: 0.0,
-                logoBg: "#0068b5",
-                logoFg: "#fff",
+                price: null,
+                chg: null,
+                logoBg: "#1c2733",
+                logoFg: "#e8eef4",
               };
               const [tag, tagColor, tagBg] = tagOf(s);
               const [metricText, metricSub, metricColor] = formatMetric(
                 s,
                 searchQ ? "ins" : currentListDef.m
               );
-              const isSelected = focusTicker === s.t;
+              const isSelected = effectiveFocus === s.t;
 
               return (
                 <div
@@ -1291,17 +1171,19 @@ export function InsiderScreen() {
                     </span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-pure)" }}>${comp.price.toFixed(2)}</span>
-                    <span
-                      style={{
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        color: comp.chg >= 0 ? UP : DN,
-                      }}
-                    >
-                      {comp.chg >= 0 ? "▲ " : "▼ "}
-                      {Math.abs(comp.chg).toFixed(2)}%
-                    </span>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-pure)" }}>{comp.price != null ? `$${comp.price.toFixed(2)}` : "—"}</span>
+                    {comp.chg != null && (
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: comp.chg >= 0 ? UP : DN,
+                        }}
+                      >
+                        {comp.chg >= 0 ? "▲ " : "▼ "}
+                        {Math.abs(comp.chg).toFixed(2)}%
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -1561,18 +1443,7 @@ export function InsiderScreen() {
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
                   <span style={{ width: 9, height: 9, borderRadius: "50%", background: DN }} />
-                  Off-plan sale
-                </span>
-                <span style={{ display: "flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
-                  <span
-                    style={{
-                      width: 9,
-                      height: 9,
-                      borderRadius: "50%",
-                      border: "1.5px solid var(--warn, #c27b84)",
-                    }}
-                  />
-                  10b5-1 sale
+                  Sale
                 </span>
                 <span
                   style={{
@@ -1815,22 +1686,6 @@ export function InsiderScreen() {
                   >
                     {deepDive.nSell} sells
                   </span>
-                  <button
-                    onClick={() => setHidePlans(!hidePlans)}
-                    style={{
-                      marginLeft: "auto",
-                      fontSize: 11.5,
-                      fontWeight: 600,
-                      padding: "3px 9px",
-                      borderRadius: 999,
-                      cursor: "pointer",
-                      border: `1px solid var(--border)`,
-                      color: hidePlans ? "var(--text-pure)" : "var(--text-pure-dim)",
-                      background: hidePlans ? "var(--surface-3)" : "transparent",
-                    }}
-                  >
-                    {hidePlans ? "✓ 10b5-1 hidden" : "Hide 10b5-1"}
-                  </button>
                 </div>
 
                 {deepDive.trades.map((tr, idx) => (
@@ -1924,7 +1779,7 @@ export function InsiderScreen() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 20px 10px" }}>
                   <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-pure)" }}>13F holders</span>
                   <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 600, color: "var(--text-pure-dim)" }}>
-                    {deepDive.holders} funds · {deepDive.own} inst.
+                    {deepDive.holders} filers · {deepDive.own} inst.
                   </span>
                 </div>
 

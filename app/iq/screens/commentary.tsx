@@ -7,6 +7,7 @@ import { useIQActions } from "../shell";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
+import { useNewsWire } from "../hooks/useNewsWire";
 import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
 import type { NewsArticleDoc, CompanyDoc, WatchlistDoc, HoldingDoc } from "../types";
@@ -232,8 +233,10 @@ function mkMark(s: string, key: number) {
 }
 
 /* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight}: {
+function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight, isNew = false }: {
   item: NewsArticleDoc;
+  /** Arrived on the live wire while the reader was watching — flagged NEW. */
+  isNew?: boolean;
   i: number;
   total: number;
   onTicker: (ticker: string) => void;
@@ -257,7 +260,9 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
           i < total - 1
             ? "1px solid var(--border-soft)"
             : "none",
-        // background: "var(--surface-1)",
+        background: isNew ? "color-mix(in srgb, var(--brand) 9%, transparent)" : undefined,
+        boxShadow: isNew ? "inset 3px 0 0 var(--brand)" : undefined,
+        transition: "background .6s ease",
         cursor: item.url ? "pointer" : "default",
       }}
     >
@@ -267,6 +272,8 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          flexDirection: "column",
+          gap: 3,
           fontFamily:
             "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
           fontSize: 18,
@@ -276,6 +283,11 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
         }}
       >
         {etTimeLabel(item.publishedAt)}
+        {isNew && (
+          <span className="pill" style={{ background: "var(--brand)", color: "#fff", fontSize: ".58rem", fontWeight: 800, padding: "1px 6px", letterSpacing: ".04em" }}>
+            NEW
+          </span>
+        )}
       </div>
 
       {/* COLUMN 2 — LOGO */}
@@ -286,6 +298,14 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
           justifyContent: "center",
         }}
       >
+        {!item.ticker ? (
+          <span
+            title="Market-wide story (no single ticker)"
+            style={{ width: 38, height: 38, borderRadius: 8, display: "grid", placeItems: "center", background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: 10, fontWeight: 800, letterSpacing: ".06em" }}
+          >
+            MKT
+          </span>
+        ) : (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -303,6 +323,7 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
         >
           <StockLogo sym={item.ticker} size={38} />
         </button>
+        )}
       </div>
 
       {/* COLUMN 3 — ALL OTHER CONTENT */}
@@ -355,7 +376,7 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
         >
           {/* Skip the "TLT:" prefix when the headline already opens with
               the ticker ("TLT's Yield Edge…"), so it isn't printed twice. */}
-          {!headlineLeadsWithTicker(item.headline, item.ticker) && (<>
+          {!!item.ticker && !headlineLeadsWithTicker(item.headline, item.ticker) && (<>
             <span
               onClick={(e) => {
                 e.stopPropagation();
@@ -409,6 +430,21 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
             fontSize: 12,
           }}
         >
+          {item.wireKind && WIRE_BADGE[item.wireKind] && (
+            <span
+              style={{
+                color: WIRE_BADGE[item.wireKind].color,
+                border: "1px solid currentColor",
+                borderRadius: 4,
+                padding: "0 5px",
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: ".05em",
+              }}
+            >
+              {WIRE_BADGE[item.wireKind].label}
+            </span>
+          )}
           <span
             style={{
               color: "var(--text-dim-solid)",
@@ -453,7 +489,7 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
             </>
           )}
 
-          <button
+          {!!item.ticker && <button
             className="feed-analysis-btn"
             onClick={(e) => {
               e.preventDefault();
@@ -463,12 +499,19 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
             title={`AI analysis for ${item.ticker}`}
           >
             ◆ Analysis
-          </button>
+          </button>}
         </div>
       </div>
     </article>
   );
 }
+/** Badge for live-wire rows by the FMP feed that delivered them (plain news needs none). */
+const WIRE_BADGE: Record<string, { label: string; color: string }> = {
+  press:   { label: "PRESS RELEASE", color: "var(--brand-2, var(--brand))" },
+  analyst: { label: "ANALYST",       color: "var(--warn)" },
+  filing:  { label: "SEC 8-K",       color: "var(--up)" },
+  macro:   { label: "MACRO",         color: "var(--text-dim-solid)" },
+};
 /* ── Main commentary / Live Feed screen ── */
 
 
@@ -673,7 +716,7 @@ export function CommentaryScreen() {
   const router = useRouter();
   const { openStockDetail } = useIQActions();
   const uid = firebaseAuth.currentUser?.uid ?? null;
-  const { data: liveNews, loading: liveNewsLoading } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
+  const { data: syncedNews, loading: liveNewsLoading } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   // /market-data/filings-wire and /market-data/macro-regime were fetched here
   // only to fill the Filings wire and Market regime rail cards. With the rail
@@ -681,6 +724,7 @@ export function CommentaryScreen() {
   // than loading data that is never rendered. The macro-regime read still has a
   // home on the Macro & VIX screen.
   const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Announcement
+  const wire = useNewsWire(mainTab === 0);
   const [activeTab,     setActiveTab]     = useState(0);
   const [search,        setSearch]        = useState("");
   const [secFilter,     setSecFilter]     = useState("All");
@@ -719,10 +763,21 @@ export function CommentaryScreen() {
   /* Plain free-text search — matches anywhere in the message (ticker / headline / summary). */
   const q = search.trim().toLowerCase();
 
+  /* Live wire (FMP latest news, ~15s) on top of the synced feed — new stories
+     appear as FMP publishes them instead of on the 30-min news sync. The
+     synced doc wins when both carry the same article. */
+  const syncedUrls = new Set(syncedNews.map(n => n.url));
+  const syncedTitles = new Set(syncedNews.map(n => `${n.ticker}|${(n.headline ?? "").toLowerCase()}`));
+  const liveNews = [
+    ...syncedNews,
+    ...wire.items.filter(n => !syncedUrls.has(n.url) && !syncedTitles.has(`${n.ticker}|${(n.headline ?? "").toLowerCase()}`)),
+  ];
   const sorted = sortNewsDesc(liveNews);
   const premarket  = sorted.filter(n => etHour(n.publishedAt) < 9.5);
   const afterHours = sorted.filter(n => etHour(n.publishedAt) >= 16);
-  const macro      = sorted.filter(n => n.category !== "company");
+  // Macro = market-wide stories (FMP general news on the live wire). Synced
+  // company news carries category null, which used to land every story here.
+  const macro      = sorted.filter(n => n.category === "macro" || !n.ticker);
   const myFeed     = sorted.filter(n => mySymbols.has(n.ticker));
 
   const tabFeed: NewsArticleDoc[] = (() => {
@@ -799,7 +854,12 @@ export function CommentaryScreen() {
   const feedQuotes = useLiveQuotes(feed.map(n => n.ticker).filter(Boolean));
 
   const feedLabel = (() => {
-    if (activeTab === 0) return { title: "Intraday commentary", badge: <span className="live"><span className="dot" />Live · streaming</span> };
+    if (activeTab === 0) return { title: "Intraday commentary", badge: (
+      <span className="live" title="Live from FMP: stock news and press releases every 15s; analyst calls, SEC 8-Ks and macro news every 30s">
+        <span className="dot" />Live · streaming{wire.polledAt ? ` · checked ${new Date(wire.polledAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", second: "2-digit" })} ET` : ""}
+        {wire.freshIds.size > 0 && <> · {wire.freshIds.size} new</>}
+      </span>
+    ) };
     if (activeTab === 1) return { title: "Pre-market · before 9:30a ET", badge: <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>Pre-market</span> };
     if (activeTab === 2) return { title: "After hours · post 4:00p ET", badge: <span className="pill amc">After hours</span> };
     if (activeTab === 3) return { title: `My names · ${mySymbols.size} tracked`, badge: <span className="pill ai">Portfolio + Watchlist</span> };
@@ -983,6 +1043,7 @@ export function CommentaryScreen() {
                     null
                   }
                   highlight={q}
+                  isNew={wire.freshIds.has(item.id)}
                 />
               ))}
             </div>

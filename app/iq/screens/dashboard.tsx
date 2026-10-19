@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
@@ -147,8 +147,10 @@ function pctBorderColor(pct: number | null | undefined): string {
 }
 
 function DashPopContent({
-  sym, block, movers, earnings, watchlist, portfolio, companies, consensus, insiderMini, announcements, news, onDemandNews, catalystCache, searchedQuote,
+  sym, block, movers, earnings, watchlist, portfolio, companies, consensus, insiderMini, announcements, news, onDemandNews, catalystCache, searchedQuote, nextErByTicker,
 }: {
+  /** Next scheduled report per ticker from the FMP earnings calendar. */
+  nextErByTicker: Map<string, string>;
   sym: string; block: PopBlock; movers: Mover[]; earnings: Earning[]; watchlist: WatchItem[]; portfolio: FolioItem[];
   companies: CompanyDoc[]; consensus: AnalystConsensusDoc[]; insiderMini: { key: string; s: string; role: string; dir: "buy" | "sell"; val: string }[];
   announcements: EarningsAnnouncementDoc[]; news: NewsArticleDoc[]; onDemandNews: Record<string, NewsArticleDoc | null>;
@@ -242,7 +244,9 @@ function DashPopContent({
       <DpRow label="P/E">{scr?.peRatio != null ? scr.peRatio.toFixed(1) : <NotAvailable />}</DpRow>
       <DpRow label="RS rank">{scr?.rsRating != null ? `${scr.rsRating}/99` : <NotAvailable />}</DpRow>
       <DpRow label="Sector">{scr?.sector ?? <NotAvailable />}</DpRow>
-      <DpRow label="Next ER">{scr?.nextEarningsDate ?? (w?.nextEarningsDate && w.nextEarningsDate !== "—" ? w.nextEarningsDate : null) ?? <NotAvailable />}</DpRow>
+      {/* Company doc first, then the FMP earnings calendar (only a few company
+          docs carry the date; the calendar covers every scheduled reporter). */}
+      <DpRow label="Next ER">{scr?.nextEarningsDate ?? nextErByTicker.get(sym) ?? <NotAvailable />}</DpRow>
       {an && <DpRow label="Consensus"><b style={{ color: "var(--text-hi)" }}>{an.consensus}</b></DpRow>}
     </>;
   } else if (block === "portfolio" && pf) {
@@ -327,9 +331,20 @@ export function DashboardScreen() {
   const liveIndices = tapeFrame ? tapeItemsToIndexDocs(tapeFrame.items) : [];
   const { data: liveMovers } = useApiList<LiveMoverDoc>("/market-data/movers");
   const { data: liveEarnings } = useApiList<LiveEarningsDoc>("/market-data/earnings");
+  // Next scheduled report per ticker (earliest calendar date from today on).
+  const nextErByTicker = useMemo(() => {
+    const today = etTodayIso();
+    const m = new Map<string, string>();
+    for (const e of liveEarnings) {
+      if (!e.ticker || !e.date || e.date < today) continue;
+      const cur = m.get(e.ticker);
+      if (!cur || e.date < cur) m.set(e.ticker, e.date);
+    }
+    return m;
+  }, [liveEarnings]);
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: sectorsLive } = useApiList<SectorApiDoc>("/market-data/sectors");
-  const { data: liveInsiderTx, loading: insiderLoading } = useApiList<InsiderTxDoc>("/market-data/insider-transactions");
+  const { data: liveInsiderTx, loading: insiderLoading } = useApiList<InsiderTxDoc>("/market-data/insider-transactions?limit=200");
   // Per-ticker news — powers the "why it moved" line in the hover popup AND the
   // latest-headlines list inside the "What Matters Now" card.
   // Still needed by the ticker popovers, but no longer for a loading state —
@@ -1403,7 +1418,7 @@ export function DashboardScreen() {
             else openStock(pop.sym);
           }}
         >
-          <DashPopContent sym={pop.sym} block={pop.block} movers={movers} earnings={earnings} watchlist={watchMini} portfolio={folioMini} companies={companies} consensus={consensusLive} insiderMini={INSIDER_MINI} announcements={earningsAnnouncements} news={dashNews} onDemandNews={popNewsCache} catalystCache={popCatalystCache} searchedQuote={pop.block === "searched" ? pairedQuote(searchedLive.get(pop.sym), companyByTicker.get(pop.sym)) : undefined} />
+          <DashPopContent sym={pop.sym} block={pop.block} movers={movers} earnings={earnings} watchlist={watchMini} portfolio={folioMini} companies={companies} consensus={consensusLive} insiderMini={INSIDER_MINI} announcements={earningsAnnouncements} news={dashNews} onDemandNews={popNewsCache} catalystCache={popCatalystCache} nextErByTicker={nextErByTicker} searchedQuote={pop.block === "searched" ? pairedQuote(searchedLive.get(pop.sym), companyByTicker.get(pop.sym)) : undefined} />
         </div>
       )}
     </div>

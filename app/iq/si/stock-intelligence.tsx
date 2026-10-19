@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSI } from "./si-context";
 import { SITab, StockItem, DetailStock, UpcomingEvent } from "./types";
 import {
-  STK,
+  POPULAR,
+  EMPTY_FACTS,
+  type SiFacts,
   LG,
   LG_COL,
   ORDER,
@@ -23,7 +25,6 @@ import {
   pct,
   pct1,
   sc,
-  series,
   CATS_T,
   SHORT,
   KEYS,
@@ -407,6 +408,8 @@ export function StockIntelligenceScreen() {
   // Live price stream via SSE + /live/quotes polling fallback (identical to MC StockScreen)
   const live = useLiveTick(currentTicker || "");
   const liveQuotesMap = useLiveQuotes(currentTicker ? [currentTicker] : []);
+  // Landing-page chips: live change for each popular ticker (no stored prices).
+  const popularQuotes = useLiveQuotes(ORDER);
   const sharedQuote = currentTicker ? liveQuotesMap.get(currentTicker) : undefined;
 
   // Live vendor & MC backend data
@@ -421,8 +424,14 @@ export function StockIntelligenceScreen() {
     currentTicker ? `/live/news?ticker=${encodeURIComponent(currentTicker)}` : null,
     30000
   );
-  const { data: liveConsensusList } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
-  const { data: liveInsiderList } = useApiList<InsiderTxDoc>("/market-data/insider-transactions");
+  // Scoped to this ticker: FMP on demand, so any stock has its own consensus
+  // and full insider history (not just tickers a nightly sweep covered).
+  const { data: liveConsensusList } = useApiList<AnalystConsensusDoc>(
+    currentTicker ? `/market-data/analyst-actions?ticker=${encodeURIComponent(currentTicker)}` : null,
+  );
+  const { data: liveInsiderList } = useApiList<InsiderTxDoc>(
+    currentTicker ? `/market-data/insider-transactions?ticker=${encodeURIComponent(currentTicker)}` : null,
+  );
   const { data: liveEarningsList } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   const { data: companiesList } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: aiAnalysisDoc } = useApiResource<AiAnalysisDoc>(
@@ -481,6 +490,83 @@ export function StockIntelligenceScreen() {
   const currentPrice = live.tick?.price ?? sharedQuote?.price ?? liveCompany?.price ?? undefined;
   const currentChange = live.pct ?? sharedQuote?.pctChange ?? liveCompany?.pctChange ?? undefined;
 
+  // Every input the Stock Intelligence engine reasons from — all real data
+  // loaded above. Missing inputs stay null; the engine drops what needs them.
+  const siFacts: SiFacts = useMemo(() => {
+    if (!currentTicker) return EMPTY_FACTS;
+    const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const qs = [...(financialsDoc?.quarters ?? [])]
+      .filter((q) => q.endDate)
+      .sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
+    const latest = qs[0];
+    const yearAgo = latest
+      ? qs.find((q) => q.fiscalPeriod === latest.fiscalPeriod && Number(q.fiscalYear) === Number(latest.fiscalYear) - 1) ?? qs[4]
+      : undefined;
+    const margin = (q: typeof latest | undefined, field: "grossProfit" | "operatingIncome") =>
+      q && q.revenue && q[field] != null ? ((q[field] as number) / q.revenue) * 100 : null;
+    const last4 = qs.slice(0, 4).filter((q) => q.epsActualReported != null && q.epsEstimateReported != null);
+    const est = [...(financialsDoc?.annualEstimates ?? [])].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
+    const thisYear = new Date().getFullYear();
+    const curEst = est.find((e) => Number(e.fiscalYear) >= thisYear && e.epsEstimate != null) ?? null;
+    const nextEst = curEst ? est.find((e) => Number(e.fiscalYear) === Number(curEst.fiscalYear) + 1 && e.epsEstimate != null) ?? null : null;
+    const cons = (Array.isArray(liveConsensusList) ? liveConsensusList : []).find((c) => c.ticker === currentTicker) ?? null;
+    // Windows anchored on today's ET date (render-pure, no clock read).
+    const todayMs = Date.parse(`${etTodayIso()}T00:00:00Z`);
+    const since90 = todayMs - 90 * 86_400_000;
+    const grades90 = (cons?.recentGrades ?? []).filter((g) => g.date && Date.parse(g.date) >= since90);
+    const insider90 = (Array.isArray(liveInsiderList) ? liveInsiderList : []).filter(
+      (x) => (x.transactionCode === "P" || x.transactionCode === "S") && x.pricePerShare && Date.parse(x.transactionDate) >= since90,
+    );
+    const insiderNet = insider90.reduce((a, x) => a + (x.transactionCode === "P" ? 1 : -1) * x.shares * (x.pricePerShare ?? 0), 0);
+    const news7 = (Array.isArray(tickerNews) ? tickerNews : []).filter((n) => n.publishedAt && Date.parse(n.publishedAt) >= todayMs - 7 * 86_400_000);
+    const erDate = liveCompany?.nextEarningsDate ?? null;
+    const erDays = erDate ? Math.round((Date.parse(erDate + "T00:00:00Z") - todayMs) / 86_400_000) : null;
+    const pivots = liveCompany?.keyLevels?.daily ?? null;
+    return {
+      price: num(currentPrice),
+      changePct: num(currentChange),
+      sector: liveCompany?.sector ?? null,
+      revGrowthYoY: latest?.revenue != null && yearAgo?.revenue ? ((latest.revenue - yearAgo.revenue) / Math.abs(yearAgo.revenue)) * 100 : null,
+      grossMargin: margin(latest, "grossProfit"),
+      opMargin: margin(latest, "operatingIncome"),
+      opMarginYearAgo: margin(yearAgo, "operatingIncome"),
+      epsBeats: last4.length ? last4.filter((q) => (q.epsActualReported as number) >= (q.epsEstimateReported as number)).length : null,
+      epsReports: last4.length || null,
+      fwdEps: curEst?.epsEstimate ?? null,
+      nextFyEps: nextEst?.epsEstimate ?? null,
+      trailingPe: num(liveCompany?.peRatio),
+      consensus: cons?.consensus ?? null,
+      buyCount: cons ? cons.strongBuy + cons.buy : null,
+      holdCount: cons ? cons.hold : null,
+      sellCount: cons ? cons.sell + cons.strongSell : null,
+      targetMean: num(cons?.priceTargetConsensus),
+      upgrades90: cons ? grades90.filter((g) => /upgrade/i.test(g.action ?? "")).length : null,
+      downgrades90: cons ? grades90.filter((g) => /downgrade/i.test(g.action ?? "")).length : null,
+      sma50: num(liveCompany?.sma50),
+      sma200: num(liveCompany?.sma200),
+      rsi14: num(liveCompany?.rsi14),
+      rvol: num(liveCompany?.rvol),
+      rsRating: num(liveCompany?.rsRating),
+      pctFromHigh52: num(liveCompany?.pctFromHigh52),
+      beta: num(liveCompany?.beta),
+      realizedVol30: num(liveCompany?.realizedVol30),
+      pivotR1: num(pivots?.r1),
+      pivotR2: num(pivots?.r2),
+      pivotS1: num(pivots?.s1),
+      pivotS2: num(pivots?.s2),
+      sectorRank: num(liveCompany?.sectorRank),
+      sectorRankTotal: num(liveCompany?.sectorRankTotal),
+      instOwnershipPct: num(liveCompany?.instOwnershipPct),
+      instHoldersChange: num(liveCompany?.inst13FHoldersChange),
+      instSharesChange: num(liveCompany?.inst13FSharesChange),
+      instPutCallRatio: num(liveCompany?.instPutCallRatio),
+      insiderNet90: insider90.length ? insiderNet : null,
+      daysToEarnings: erDays != null && erDays >= 0 ? erDays : null,
+      newsPos: news7.length ? news7.filter((n) => n.sentiment === "positive").length : null,
+      newsNeg: news7.length ? news7.filter((n) => n.sentiment === "negative").length : null,
+    };
+  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews]);
+
   const stock: StockItem | null = useMemo(() => {
     if (!currentTicker) return null;
     return getStock(currentTicker, {
@@ -492,8 +578,8 @@ export function StockIntelligenceScreen() {
       pe: liveCompany?.peRatio ?? undefined,
       hi: liveCompany?.high52 ?? undefined,
       lo: liveCompany?.low52 ?? undefined,
-    });
-  }, [currentTicker, currentPrice, currentChange, liveCompany]);
+    }, false, siFacts);
+  }, [currentTicker, currentPrice, currentChange, liveCompany, siFacts]);
 
   const stockDetail: DetailStock | null = useMemo(() => {
     if (!currentTicker) return null;
@@ -515,8 +601,9 @@ export function StockIntelligenceScreen() {
       realizedVol30: liveCompany?.realizedVol30 ?? undefined,
       keyLevels: liveCompany?.keyLevels ?? undefined,
       sma50: liveCompany?.sma50 ?? undefined,
+      facts: siFacts,
     });
-  }, [currentTicker, currentPrice, currentChange, liveCompany]);
+  }, [currentTicker, currentPrice, currentChange, liveCompany, siFacts]);
 
   // Real upcoming catalysts derived from actual exchange earnings calendar & corporate events (replaces hardcoded dates)
   const upcomingCatalysts = useMemo<UpcomingEvent[]>(() => {
@@ -665,14 +752,14 @@ export function StockIntelligenceScreen() {
           rsRating: null,
         };
       }
-      const stkItem = STK[t] || getStock(t);
+      // No live quote yet: list the peer without a price rather than a stale one.
       return {
         t,
-        name: stkItem?.name || t,
-        price: stkItem?.p ?? null,
-        c: stkItem?.c ?? null,
+        name: POPULAR[t] || t,
+        price: null,
+        c: null,
         marketCap: null,
-        peRatio: stkItem?.pe ?? null,
+        peRatio: null,
         rsRating: null,
       };
     }).filter((p) => {
@@ -1201,8 +1288,7 @@ export function StockIntelligenceScreen() {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
               {ORDER.map((sym) => {
-                const s = STK[sym] || getStock(sym);
-                const chg = s?.c ?? 0;
+                const chg = popularQuotes.get(sym)?.pctChange ?? null;
                 return (
                   <button
                     key={sym}
@@ -1229,7 +1315,7 @@ export function StockIntelligenceScreen() {
                   >
                     <StockLogo sym={sym} size={18} />
                     <span>{sym}</span>
-                    <span style={{ fontSize: 11, color: chg >= 0 ? UP : DN }}>{pct(chg)}</span>
+                    {chg != null && <span style={{ fontSize: 11, color: chg >= 0 ? UP : DN }}>{pct(chg)}</span>}
                   </button>
                 );
               })}
@@ -2348,9 +2434,7 @@ export function StockIntelligenceScreen() {
                       </button>
                     </div>
                     {((stockDetail.ev && selectedSignal ? (stockDetail.ev[selectedSignal] || stockDetail.ev[selectedSignal.toUpperCase()]) : null) || [
-                      "Leading relative strength rank across sector peers",
-                      "Institutional accumulation detected over last 10 sessions",
-                      "Options skew shows calls priced at premium over puts",
+                      "No live data for this signal yet.",
                     ]).map((evItem, i) => (
                       <div
                         key={i}
@@ -2479,7 +2563,7 @@ export function StockIntelligenceScreen() {
             TAB 3: WHY IT COULD MOVE (Complete Implementation)
             ==================================================== */}
         {activeTab === "could" && (() => {
-          const fRun = thesisRun(stock.t, "Bull", "6M");
+          const fRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
           const fAl = fRun.cats.filter((c: any) => Math.round(c.score) >= 60).length;
           const C = 2 * Math.PI * 70; // 439.82
           const ringDash = `${(C * fAl) / 7} ${C}`;
@@ -2765,7 +2849,7 @@ export function StockIntelligenceScreen() {
             ];
           } else {
             fsr = fundSeries(stock.t);
-            QL = ["Q2 '24", "Q1 '26"];
+            QL = ["", ""];
           }
 
           if (!hasFmp && (!fsr[0] || fsr[0].length === 0)) {
@@ -2790,7 +2874,11 @@ export function StockIntelligenceScreen() {
             ["TOTAL DEBT", (v) => "$" + v.toFixed(1) + "B"],
           ];
           const fundMetrics = FM.map(([k, f], i) => {
-            const a = fsr[i] || [10, 11, 12, 13, 14, 15, 16, 17];
+            const a = fsr[i] ?? [];
+            // No FMP quarters for this metric: show a dash, never a stand-in series.
+            if (a.length === 0) {
+              return { k, last: "—", yoy: "no data", col: STEEL, q0: QL[0], q1: QL[1], bars: [] as Array<{ h: string; c: string }> };
+            }
             const lastIdx = a.length - 1;
             const yoyBaseIdx = Math.max(0, lastIdx - 4);
             const mxv = Math.max(...a) || 1;
@@ -3668,10 +3756,10 @@ export function StockIntelligenceScreen() {
         {activeTab === "lab" && (() => {
           const thBull = labDir === "Bull";
           const thHz = labHz === "12M" ? "1Y" : labHz;
-          const thRun = thesisRun(stock.t, labDir, labHz, null, labWeightsState || undefined);
-          const thPrev = thesisRun(stock.t, labDir, labHz, (c: any, n: any, f: any, dd: number) => -dd, labWeightsState || undefined);
-          const TT = thesisTargets(stock.t, labDir, labHz, thRun, stock.p);
-          const TPt = getTP(stock.t);
+          const thRun = thesisRun(stock.t, labDir, labHz, null, labWeightsState || undefined, siFacts);
+          const thPrev = thesisRun(stock.t, labDir, labHz, (c: any, n: any, f: any, dd: number) => -dd, labWeightsState || undefined, siFacts);
+          const TT = thesisTargets(stock.t, labDir, labHz, thRun, stock.p, siFacts);
+          const TPt = getTP(stock.t, siFacts);
 
           const tgtV = targetOverride != null ? targetOverride : TT.target;
           const stopV = stopOverride != null ? stopOverride : TT.stop;
@@ -4462,7 +4550,7 @@ export function StockIntelligenceScreen() {
                             Daily close {thBull ? "below" : "above"} {usd(stopV)}
                           </div>
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-dim, #7d8b99)", marginTop: 2 }}>
-                            {thBull ? `${labHz === "12M" ? "200-DMA" : "50-DMA / breakout shelf"} at ${usd(TT.lvl)}, less a 1.5% buffer` : `${usd(TPt.res)} resistance plus a 1.5% buffer`}
+                            {thBull ? `${labHz === "12M" ? "200-DMA" : "50-DMA / breakout shelf"} at ${usd(TT.lvl)}, less a 1.5% buffer` : `${TPt.res != null ? usd(TPt.res) : "Resistance"} plus a 1.5% buffer`}
                           </div>
                         </div>
                       </div>
@@ -4663,7 +4751,7 @@ export function StockIntelligenceScreen() {
           }
 
           const b2 = savedThesis.dir === "Bull";
-          const TPt = getTP(stock.t);
+          const TPt = getTP(stock.t, siFacts);
           const monAdj = (cat: string, name: string, fl: string) => {
             let a = 0;
             if (monScenario === "cut" && cat === "EARN") a += fl.indexOf("K") >= 0 ? -60 : -28;
@@ -4673,7 +4761,7 @@ export function StockIntelligenceScreen() {
             return a;
           };
 
-          const monRun = thesisRun(stock.t, savedThesis.dir, savedThesis.hz, monAdj, savedThesis.wO || undefined);
+          const monRun = thesisRun(stock.t, savedThesis.dir, savedThesis.hz, monAdj, savedThesis.wO || undefined, siFacts);
           const monPx = monScenario === "break" ? (b2 ? savedThesis.stop * 0.985 : savedThesis.stop * 1.015) : stock.p;
           const monPriceBroken = b2 ? monPx <= savedThesis.stop : monPx >= savedThesis.stop;
           const monFundBroken = monRun.crit.filter((d: any) => d.ev < 25);

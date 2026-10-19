@@ -29,6 +29,13 @@ export interface OwnershipDoc {
     holders: number | null;
     holdersChange: number | null;
     shares: number | null;
+    /** % change in total 13F shares vs the prior quarter. */
+    sharesChangePct?: number | null;
+    /** Filer counts behind the change: opened, added to, trimmed, sold out. */
+    newPositions?: number | null;
+    increasedPositions?: number | null;
+    reducedPositions?: number | null;
+    closedPositions?: number | null;
   } | null;
   topHolders: Array<{
     name: string;
