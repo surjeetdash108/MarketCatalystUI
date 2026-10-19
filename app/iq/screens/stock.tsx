@@ -5,7 +5,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
+import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, type VendorKey, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
 import { StockChart } from "../stock-panel";
 import { exchangeLabel } from "../exchange";
@@ -31,7 +31,7 @@ const POPULAR_16_ETFS = new Set([
 ]);
 
 import type {
-  CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc,
+  CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc, OwnershipDoc,
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, form4Url } from "../types";
@@ -43,6 +43,44 @@ const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
 
 // Maps the numeric 1-99 tech rating onto the same string categories the
 // Screener/TrGauge use (Strong Buy / Buy / Neutral / Sell / Strong Sell).
+/** Short pill text per Form 4 transaction code — only P/S are open-market buys/sells. */
+const INSIDER_TAG: Record<string, string> = {
+  P: "BUY", S: "SELL", A: "AWARD", F: "TAX", G: "GIFT", M: "EXERCISE", X: "EXERCISE", C: "CONVERT", D: "TO ISSUER", W: "WILL",
+};
+
+/** Insider transactions shown per page (table and "View all" drawer). */
+const INSIDER_PAGE_SIZE = 20;
+
+/** "1–20 of 303 · ← Prev · Page 1 / 16 · Next →" — same look as ETF Corner's pager. */
+function Pager({ page, total, pageSize, onPage }: {
+  page: number; total: number; pageSize: number; onPage: (page: number) => void;
+}) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  if (total <= pageSize) return null;
+  const atStart = page === 0;
+  const atEnd = page >= pageCount - 1;
+  const btn = (disabled: boolean) => ({
+    padding: "4px 10px", fontSize: ".74rem", lineHeight: 1,
+    opacity: disabled ? 0.35 : 1, cursor: disabled ? "default" : "pointer",
+  });
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderTop: "1px solid var(--border-soft)", flexWrap: "wrap" }}>
+      <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", fontFamily: "var(--f-mono)" }}>
+        {page * pageSize + 1}–{Math.min(total, (page + 1) * pageSize)} of {total}
+      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button type="button" className="btn" disabled={atStart} onClick={() => onPage(page - 1)} style={btn(atStart)}>← Prev</button>
+        <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", minWidth: 84, textAlign: "center" }}>Page {page + 1} / {pageCount}</span>
+        <button type="button" className="btn" disabled={atEnd} onClick={() => onPage(page + 1)} style={btn(atEnd)}>Next →</button>
+      </div>
+    </div>
+  );
+}
+
+/** 1161560 → "1.16M" — share counts in the ownership panels. */
+const compactNum = (n: number) =>
+  new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(n);
+
 function ratingLabel(n: number | null): string {
   if (n == null) return "Neutral";
   if (n >= 90) return "Strong Buy";
@@ -783,7 +821,11 @@ export function StockScreen({
   // performance, and earnings events all come straight from the market-data
   // endpoints. Nothing here falls back to mock data; a ticker with no live
   // match for a given panel just shows that panel as not available.
-  const { data: liveConsensus } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
+  // Scoped to this ticker: the backend fills it from FMP on demand when the
+  // nightly sweep has no doc, so a stock outside that universe still gets one.
+  const { data: liveConsensus } = useApiList<AnalystConsensusDoc>(
+    `/market-data/analyst-actions?ticker=${encodeURIComponent(sym)}`,
+  );
   // Scoped to this ticker server-side: unscoped, the endpoint returns only the
   // latest page across ALL tickers, so most symbols got few or no rows.
   const { data: liveInsider, loading: insiderLoading } = useApiList<InsiderTxDoc>(
@@ -840,6 +882,8 @@ export function StockScreen({
   const [dismissedNoData, setDismissedNoData] = useState("");
   const { data: dividendHistory, loading: dividendLoading } = useApiResource<DividendHistoryDoc>(`/live/dividend-history?ticker=${encodeURIComponent(sym)}`);
   const { data: splitsDoc } = useApiResource<SplitsDoc>(`/live/splits?ticker=${encodeURIComponent(sym)}`);
+  // Institutional rollup + top 13F holders (FMP) and short interest (Polygon).
+  const { data: ownership, loading: ownershipLoading } = useApiResource<OwnershipDoc>(`/live/ownership?ticker=${encodeURIComponent(sym)}`);
   const { data: financialsDoc, loading: financialsLoading } = useApiResource<FinancialsDoc>(`/live/financials?ticker=${encodeURIComponent(sym)}`);
   const { data: tickerNews } = useApiResource<NewsArticleDoc[]>(`/live/news?ticker=${encodeURIComponent(sym)}`, 30000);
   // On-demand AI read (technicals + news synthesised by OpenRouter), cached 30
@@ -861,6 +905,7 @@ export function StockScreen({
   const [newsPeriod, setNewsPeriod] = useState<NewsPeriod | null>(null);
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
   const [erMode,      setErMode]      = useState<"Q" | "A">("Q");
+  const [insiderExpanded, setInsiderExpanded] = useState(false);
 
   // Tab shown below the persistent header + chart, in the full (non-embedded)
   // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
@@ -1100,14 +1145,51 @@ export function StockScreen({
     return list;
   }, [allSymInsiderTxns, insTxSortCol, insTxSortDir]);
 
-  const symInsider = allSymInsiderTxns
-    .slice(0, 8)
-    .map(x => ({
+  // 20 at a time. The page is keyed to the ticker + sort, so switching either
+  // lands back on page 1 without a reset effect.
+  const insTxPageKey = `${sym}|${insTxSortCol}|${insTxSortDir}`;
+  const [insTxPageState, setInsTxPageState] = useState({ key: "", page: 0 });
+  const insTxPageCount = Math.max(1, Math.ceil(sortedSymInsiderTxns.length / INSIDER_PAGE_SIZE));
+  const insTxPage = insTxPageState.key === insTxPageKey ? Math.min(insTxPageState.page, insTxPageCount - 1) : 0;
+  const setInsTxPage = (page: number) => setInsTxPageState({ key: insTxPageKey, page });
+  const pagedInsiderTxns = sortedSymInsiderTxns.slice(insTxPage * INSIDER_PAGE_SIZE, (insTxPage + 1) * INSIDER_PAGE_SIZE);
+  // The "View all" drawer pages its own (date-ordered) list independently.
+  const [insDrawerPageState, setInsDrawerPageState] = useState({ key: "", page: 0 });
+  const insDrawerPage = insDrawerPageState.key === sym
+    ? Math.min(insDrawerPageState.page, Math.max(0, Math.ceil(allSymInsiderTxns.length / INSIDER_PAGE_SIZE) - 1))
+    : 0;
+  const setInsDrawerPage = (page: number) => setInsDrawerPageState({ key: sym, page });
+
+  // Every transaction, for the "View all" drawer; the overview card shows the
+  // first few. Direction comes from the Form 4 acquired/disposed flag — an
+  // award or tax withholding is not an open-market buy or sell, so those are
+  // labelled by their transaction code rather than "Buy"/"Sell".
+  const symInsider = allSymInsiderTxns.map(x => {
+    const shares = Math.round(x.shares ?? 0).toLocaleString("en-US");
+    const verb = x.transactionCode === "P" ? "Buy"
+      : x.transactionCode === "S" ? "Sell"
+      : TX_CODE_LABEL[x.transactionCode] ?? (x.acquiredOrDisposed === "D" ? "Disposed" : "Acquired");
+    const isSell = x.acquiredOrDisposed === "D";
+    return {
       name: x.ownerName ?? "Insider",
-      action: `${x.acquiredOrDisposed === "A" ? "Buy" : "Sell"} ${Math.round(x.shares ?? 0).toLocaleString("en-US")}`,
+      action: `${verb} ${shares}`,
+      isSell,
+      tag: INSIDER_TAG[x.transactionCode] ?? (isSell ? "OUT" : "IN"),
       date: (x.transactionDate ?? "").slice(0, 10),
       valueUsd: x.pricePerShare != null ? x.shares * x.pricePerShare : null,
-    }));
+    };
+  });
+  const insiderVendor: VendorKey = allSymInsiderTxns[0]?.vendor === "fmp" ? "fmp" : "sec";
+
+  // Ownership: FMP's 13F rollup for the newest fully-filed quarter, then the
+  // company doc's copy; short interest is Polygon-only (FMP has no feed).
+  const inst = ownership?.institutional ?? null;
+  const instPct = inst?.ownershipPct ?? liveCompany?.instOwnershipPct ?? null;
+  const instHolders = inst?.holders ?? liveCompany?.inst13FHolders ?? null;
+  const instHoldersChg = inst?.holdersChange ?? liveCompany?.inst13FHoldersChange ?? null;
+  const instAsOf = inst?.asOf ?? liveCompany?.instAsOf ?? null;
+  const shortInt = ownership?.shortInterest ?? null;
+  const topHolders = ownership?.topHolders ?? [];
 
   const data = {
     name: liveCompany?.name ?? sym,
@@ -1193,6 +1275,12 @@ export function StockScreen({
   // The calendar holds only a few rows per ticker, so most quarters stay null.
   const salesSurpriseFor = (end: string | undefined): number | null => {
     if (!end) return null;
+    // FMP's per-report revenue estimate on the quarter itself covers the full
+    // history; the calendar match below is the fallback for docs built before it.
+    const q = financialsDoc?.quarters?.find(x => x.endDate === end);
+    if (q?.revenue != null && q.revenueEstimateReported) {
+      return ((q.revenue - q.revenueEstimateReported) / Math.abs(q.revenueEstimateReported)) * 100;
+    }
     const endMs = Date.parse(end);
     const ev = symEvents.find(e => {
       const lag = Date.parse(e.date) - endMs;
@@ -2277,7 +2365,7 @@ export function StockScreen({
             <div className="card-h">
               <h3>Insider &amp; institutional</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <VendorTag v="sec" />
+                <VendorTag v={insiderVendor} />
                 <span className="link" onClick={() => setInnerDrawer("insider")}>View all →</span>
               </div>
             </div>
@@ -2286,8 +2374,8 @@ export function StockScreen({
                 Recent insider transactions
               </div>
               {data.insiderActivity.length > 0 ? (
-                data.insiderActivity.map((n, idx) => {
-                  const isSell = /sale|sold|exercis/i.test(n.action);
+                data.insiderActivity.slice(0, 8).map((n, idx) => {
+                  const isSell = n.isSell;
                   return (
                     <div key={idx} className="minirow" style={{ cursor: "pointer", alignItems: "flex-start", gap: 10 }}>
                       <span className="tkr" style={{ flex: "none" }}>{sym}</span>
@@ -2310,16 +2398,23 @@ export function StockScreen({
                 <span style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".05em" }}>
                   Institutional
                 </span>
-                <VendorTag v="fmp" />
+                <VendorTag v={["fmp", "polygon"]} />
               </div>
               {(() => {
-                const io = liveCompany?.instOwnershipPct;
-                const holders = liveCompany?.inst13FHolders;
-                const chg = liveCompany?.inst13FHoldersChange;
+                const io = instPct;
+                const holders = instHolders;
+                const chg = instHoldersChg;
                 const rows: [string, ReactNode][] = [
                   ["Inst. ownership", io != null ? `${io.toFixed(1)}%` : null],
-                  // Short interest has no Polygon (404) or FMP source — needs FINRA.
-                  ["Short interest", null],
+                  // FMP has no short-interest feed; FINRA data via Polygon.
+                  ["Short interest", shortInt ? (
+                    <span title={`FINRA settlement ${shortInt.settlementDate}`}>
+                      {compactNum(shortInt.shortInterest)} sh
+                      {shortInt.daysToCover != null && (
+                        <span style={{ marginLeft: 6, fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{shortInt.daysToCover.toFixed(1)}d</span>
+                      )}
+                    </span>
+                  ) : null],
                   // "filers", NOT "funds": FMP's investorsHolding counts 13F
                   // FILERS, and one filer (BlackRock Inc.) files a single report
                   // covering hundreds of individual funds. Labelling it "funds"
@@ -2343,9 +2438,9 @@ export function StockScreen({
                   </div>
                 ));
               })()}
-              {liveCompany?.instAsOf && (
+              {instAsOf && (
                 <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                  13F rollup · {liveCompany.instAsOf}
+                  13F rollup · {instAsOf}
                 </div>
               )}
             </div>
@@ -2947,11 +3042,50 @@ export function StockScreen({
             isEtf ? (
               <EtfHoldingsView symbol={sym} />
             ) : (
-              <div className="sd-hold">
-              <div className="card">
-                <div className="card-h">
-                  <h3>Insider transactions<span className="sd-unit">{allSymInsiderTxns.length} Form 4 filings</span></h3>
-                  <VendorTag v="sec" />
+              <div className="sd-hold" style={insiderExpanded ? { display: "flex", flexDirection: "column", gap: 14 } : undefined}>
+              <div className="card" style={insiderExpanded ? { width: "100%" } : undefined}>
+                <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <h3>Insider transactions<span className="sd-unit">{allSymInsiderTxns.length} transactions</span></h3>
+                    <VendorTag v={insiderVendor} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInsiderExpanded(prev => !prev)}
+                    className="pill"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "4px 10px",
+                      background: insiderExpanded ? "var(--brand-soft, rgba(99,102,241,0.15))" : "var(--surface-3)",
+                      color: insiderExpanded ? "var(--brand, #6366f1)" : "var(--text-hi)",
+                      border: `1px solid ${insiderExpanded ? "var(--brand, #6366f1)" : "var(--border-soft)"}`,
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: ".72rem",
+                      fontWeight: 600,
+                      transition: "all .15s ease",
+                      flexShrink: 0,
+                    }}
+                    title={insiderExpanded ? "Minimize back to normal 2-column view" : "Expand to full width to view all columns"}
+                  >
+                    {insiderExpanded ? (
+                      <>
+                        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 14h6m0 0v6m0-6L3 21M20 10h-6m0 0V4m0 6l7-7" />
+                        </svg>
+                        Minimize
+                      </>
+                    ) : (
+                      <>
+                        <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                        </svg>
+                        Expand
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 <div className="card-b" style={{ padding: 0 }}>
@@ -2960,135 +3094,284 @@ export function StockScreen({
                       <DataState loading={insiderLoading} label={`No Form 4 insider transactions recorded for ${sym}.`} />
                     </div>
                   ) : (
-                    <div className="table-wrap" style={{ overflowX: "auto" }}>
-                      <table className="tbl" style={{ width: "100%", fontSize: ".8rem" }}>
-                        <thead>
-                          <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
-                            <th
-                              onClick={() => {
-                                if (insTxSortCol === "date") {
-                                  setInsTxSortDir(d => (d === "asc" ? "desc" : "asc"));
-                                } else {
-                                  setInsTxSortCol("date");
-                                  setInsTxSortDir("desc");
-                                }
-                              }}
-                              style={{ textAlign: "left", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
-                              title="Click to sort by date"
-                            >
-                              Date {insTxSortCol === "date" ? (insTxSortDir === "desc" ? "▼" : "▲") : ""}
-                            </th>
-                            <th style={{ textAlign: "left", padding: "10px 14px" }}>Insider / Owner</th>
-                            <th style={{ textAlign: "left", padding: "10px 14px" }}>Role / Title</th>
-                            <th style={{ textAlign: "center", padding: "10px 14px" }}>Side</th>
-                            <th
-                              onClick={() => {
-                                if (insTxSortCol === "shares") {
-                                  setInsTxSortDir(d => (d === "asc" ? "desc" : "asc"));
-                                } else {
-                                  setInsTxSortCol("shares");
-                                  setInsTxSortDir("desc");
-                                }
-                              }}
-                              style={{ textAlign: "right", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
-                              title="Click to sort by shares"
-                            >
-                              Shares {insTxSortCol === "shares" ? (insTxSortDir === "desc" ? "▼" : "▲") : ""}
-                            </th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Price / Share</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Total Value</th>
-                            <th style={{ textAlign: "center", padding: "10px 14px" }}>Filing</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedSymInsiderTxns.map((tx, idx) => {
-                            const isBuy = tx.acquiredOrDisposed === "A";
-                            const isSell = tx.acquiredOrDisposed === "D";
-                            // SEC reports no market price for grants, gifts, RSU/option
-                            // exercises and conversions (price absent or $0) — say what
-                            // the row is rather than leaving a bare dash.
-                            const price = tx.pricePerShare != null && tx.pricePerShare > 0 ? tx.pricePerShare : null;
-                            const valUsd = price != null && tx.shares > 0 ? tx.shares * price : null;
-                            const codeLabel = TX_CODE_LABEL[tx.transactionCode] ?? `Code ${tx.transactionCode}`;
-                            const noPriceTip = `${codeLabel} (code ${tx.transactionCode}) — no market price reported on the Form 4`;
-                            const filingUrl = form4Url(tx.id);
-                            return (
-                              <tr key={`${tx.id || idx}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
-                                <td className="mono" style={{ padding: "10px 14px", color: "var(--text-dim-solid)", fontSize: ".76rem" }}>
-                                  {(tx.transactionDate ?? "").slice(0, 10)}
-                                </td>
-                                <td style={{ padding: "10px 14px" }}>
-                                  <b style={{ color: "var(--text-hi)" }}>{tx.ownerName ?? "Insider"}</b>
-                                </td>
-                                <td style={{ padding: "10px 14px", color: "var(--text-dim-solid)", fontSize: ".75rem" }}>
-                                  {tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% Owner")}
-                                </td>
-                                <td style={{ textAlign: "center", padding: "10px 14px" }}>
-                                  <span
-                                    className="tr-badge"
-                                    style={{
-                                      background: isBuy ? "var(--up)22" : isSell ? "var(--down)22" : "var(--surface-3)",
-                                      color: isBuy ? "var(--up)" : isSell ? "var(--down)" : "var(--text-dim-solid)",
-                                      fontWeight: 700,
-                                      padding: "3px 8px",
-                                      borderRadius: 6,
-                                      fontSize: ".66rem",
-                                    }}
-                                  >
-                                    {isBuy ? "BUY" : isSell ? "SELL" : tx.transactionCode || "TX"}
-                                  </span>
-                                </td>
-                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-hi)" }}>
-                                  {Math.round(tx.shares ?? 0).toLocaleString("en-US")}
-                                </td>
-                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
-                                  {price != null ? `$${price.toFixed(2)}` : (
-                                    <span title={noPriceTip} style={{ fontSize: ".7rem", fontFamily: "var(--f-sans, inherit)" }}>{codeLabel}</span>
-                                  )}
-                                </td>
-                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
-                                  {valUsd != null ? (
-                                    <span className={isBuy ? "up" : "down"} style={{ fontWeight: 700 }}>
-                                      {isBuy ? "+" : "−"}${Math.abs(valUsd) >= 1e6 ? `${(Math.abs(valUsd) / 1e6).toFixed(1)}M` : Math.round(Math.abs(valUsd)).toLocaleString("en-US")}
+                    <div className="table-wrap" style={{ overflowX: "auto", width: "100%" }}>
+                      {insiderExpanded ? (
+                        <table className="tbl" style={{ width: "100%", tableLayout: "fixed", fontSize: ".8rem" }}>
+                          <colgroup>
+                            <col style={{ width: "11%" }} />
+                            <col style={{ width: "18%" }} />
+                            <col style={{ width: "19%" }} />
+                            <col style={{ width: "7%" }} />
+                            <col style={{ width: "11%" }} />
+                            <col style={{ width: "11%" }} />
+                            <col style={{ width: "12%" }} />
+                            <col style={{ width: "11%" }} />
+                          </colgroup>
+                          <thead>
+                            <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
+                              <th
+                                onClick={() => {
+                                  if (insTxSortCol === "date") {
+                                    setInsTxSortDir(d => (d === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setInsTxSortCol("date");
+                                    setInsTxSortDir("desc");
+                                  }
+                                }}
+                                style={{ textAlign: "left", padding: "8px 6px", cursor: "pointer", userSelect: "none" }}
+                                title="Click to sort by date"
+                              >
+                                Date {insTxSortCol === "date" ? (insTxSortDir === "desc" ? "▼" : "▲") : ""}
+                              </th>
+                              <th style={{ textAlign: "left", padding: "8px 6px" }}>Insider / Owner</th>
+                              <th style={{ textAlign: "left", padding: "8px 6px" }}>Role / Title</th>
+                              <th style={{ textAlign: "center", padding: "8px 4px" }}>Side</th>
+                              <th
+                                onClick={() => {
+                                  if (insTxSortCol === "shares") {
+                                    setInsTxSortDir(d => (d === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setInsTxSortCol("shares");
+                                    setInsTxSortDir("desc");
+                                  }
+                                }}
+                                style={{ textAlign: "right", padding: "8px 6px", cursor: "pointer", userSelect: "none" }}
+                                title="Click to sort by shares"
+                              >
+                                Shares {insTxSortCol === "shares" ? (insTxSortDir === "desc" ? "▼" : "▲") : ""}
+                              </th>
+                              <th style={{ textAlign: "right", padding: "8px 6px" }}>Price / Share</th>
+                              <th style={{ textAlign: "right", padding: "8px 6px" }}>Total Value</th>
+                              <th style={{ textAlign: "center", padding: "8px 6px" }}>Filing</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagedInsiderTxns.map((tx, idx) => {
+                              const isBuy = tx.acquiredOrDisposed === "A";
+                              const isSell = tx.acquiredOrDisposed === "D";
+                              const price = tx.pricePerShare != null && tx.pricePerShare > 0 ? tx.pricePerShare : null;
+                              const valUsd = price != null && tx.shares > 0 ? tx.shares * price : null;
+                              const codeLabel = TX_CODE_LABEL[tx.transactionCode] ?? `Code ${tx.transactionCode}`;
+                              const noPriceTip = `${codeLabel} (code ${tx.transactionCode}) — no market price reported on the Form 4`;
+                              const filingUrl = tx.url ?? form4Url(tx.id);
+                              return (
+                                <tr key={`${tx.id || idx}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                                  <td className="mono" style={{ padding: "8px 6px", color: "var(--text-dim-solid)", fontSize: ".76rem", whiteSpace: "nowrap" }}>
+                                    {(tx.transactionDate ?? "").slice(0, 10)}
+                                  </td>
+                                  <td style={{ padding: "8px 6px" }}>
+                                    <div style={{ color: "var(--text-hi)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={tx.ownerName ?? "Insider"}>
+                                      {tx.ownerName ?? "Insider"}
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "8px 6px", color: "var(--text-dim-solid)", fontSize: ".74rem", whiteSpace: "normal", lineHeight: 1.25, wordBreak: "break-word" }}>
+                                    {tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% Owner")}
+                                  </td>
+                                  <td style={{ textAlign: "center", padding: "8px 4px" }}>
+                                    <span
+                                      className="tr-badge"
+                                      style={{
+                                        background: isBuy ? "var(--up)22" : isSell ? "var(--down)22" : "var(--surface-3)",
+                                        color: isBuy ? "var(--up)" : isSell ? "var(--down)" : "var(--text-dim-solid)",
+                                        fontWeight: 700,
+                                        padding: "2px 6px",
+                                        borderRadius: 5,
+                                        fontSize: ".66rem",
+                                      }}
+                                    >
+                                      {isBuy ? "BUY" : isSell ? "SELL" : tx.transactionCode || "TX"}
                                     </span>
-                                  ) : (
-                                    <span title={noPriceTip} style={{ color: "var(--text-dim-solid)" }}>—</span>
-                                  )}
-                                </td>
-                                <td style={{ textAlign: "center", padding: "10px 14px" }}>
-                                  {filingUrl ? (
-                                    <a className="pill" href={filingUrl} target="_blank" rel="noopener noreferrer"
-                                      title="Open this Form 4 on SEC EDGAR"
-                                      style={{ background: "var(--surface-3)", color: "var(--brand)", fontSize: ".62rem", textDecoration: "none", cursor: "pointer" }}>
-                                      Form 4 ↗
-                                    </a>
-                                  ) : (
-                                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".62rem" }}>
-                                      Form 4
+                                  </td>
+                                  <td className="mono" style={{ textAlign: "right", padding: "8px 6px", color: "var(--text-hi)" }}>
+                                    {Math.round(tx.shares ?? 0).toLocaleString("en-US")}
+                                  </td>
+                                  <td className="mono" style={{ textAlign: "right", padding: "8px 6px", color: "var(--text-dim-solid)" }}>
+                                    {price != null ? `$${price.toFixed(2)}` : (
+                                      <span title={noPriceTip} style={{ fontSize: ".7rem", fontFamily: "var(--f-sans, inherit)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block", maxWidth: "100%" }}>
+                                        {codeLabel}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="mono" style={{ textAlign: "right", padding: "8px 6px" }}>
+                                    {valUsd != null ? (
+                                      <span className={isBuy ? "up" : "down"} style={{ fontWeight: 700 }}>
+                                        {isBuy ? "+" : "−"}${Math.abs(valUsd) >= 1e6 ? `${(Math.abs(valUsd) / 1e6).toFixed(1)}M` : Math.round(Math.abs(valUsd)).toLocaleString("en-US")}
+                                      </span>
+                                    ) : (
+                                      <span title={noPriceTip} style={{ color: "var(--text-dim-solid)" }}>—</span>
+                                    )}
+                                  </td>
+                                  <td style={{ textAlign: "center", padding: "8px 6px" }}>
+                                    {filingUrl ? (
+                                      <a className="pill" href={filingUrl} target="_blank" rel="noopener noreferrer"
+                                        title="Open this Form 4 on SEC EDGAR"
+                                        style={{ background: "var(--surface-3)", color: "var(--brand)", fontSize: ".64rem", textDecoration: "none", cursor: "pointer", padding: "2px 6px", display: "inline-block", whiteSpace: "nowrap" }}>
+                                        Form 4 ↗
+                                      </a>
+                                    ) : (
+                                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)", fontSize: ".64rem", padding: "2px 6px", display: "inline-block", whiteSpace: "nowrap" }}>
+                                        Form 4
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <table className="tbl" style={{ width: "100%", tableLayout: "fixed", fontSize: ".8rem" }}>
+                          <colgroup>
+                            <col style={{ width: "17%" }} />
+                            <col style={{ width: "35%" }} />
+                            <col style={{ width: "12%" }} />
+                            <col style={{ width: "18%" }} />
+                            <col style={{ width: "18%" }} />
+                          </colgroup>
+                          <thead>
+                            <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
+                              <th
+                                onClick={() => {
+                                  if (insTxSortCol === "date") {
+                                    setInsTxSortDir(d => (d === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setInsTxSortCol("date");
+                                    setInsTxSortDir("desc");
+                                  }
+                                }}
+                                style={{ textAlign: "left", padding: "8px 6px", cursor: "pointer", userSelect: "none" }}
+                                title="Click to sort by date"
+                              >
+                                Date {insTxSortCol === "date" ? (insTxSortDir === "desc" ? "▼" : "▲") : ""}
+                              </th>
+                              <th style={{ textAlign: "left", padding: "8px 6px" }}>Insider / Owner</th>
+                              <th style={{ textAlign: "center", padding: "8px 4px" }}>Side</th>
+                              <th
+                                onClick={() => {
+                                  if (insTxSortCol === "shares") {
+                                    setInsTxSortDir(d => (d === "asc" ? "desc" : "asc"));
+                                  } else {
+                                    setInsTxSortCol("shares");
+                                    setInsTxSortDir("desc");
+                                  }
+                                }}
+                                style={{ textAlign: "right", padding: "8px 6px", cursor: "pointer", userSelect: "none" }}
+                                title="Click to sort by shares"
+                              >
+                                Shares {insTxSortCol === "shares" ? (insTxSortDir === "desc" ? "▼" : "▲") : ""}
+                              </th>
+                              <th style={{ textAlign: "right", padding: "8px 6px" }}>Total Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagedInsiderTxns.map((tx, idx) => {
+                              const isBuy = tx.acquiredOrDisposed === "A";
+                              const isSell = tx.acquiredOrDisposed === "D";
+                              const price = tx.pricePerShare != null && tx.pricePerShare > 0 ? tx.pricePerShare : null;
+                              const valUsd = price != null && tx.shares > 0 ? tx.shares * price : null;
+                              const codeLabel = TX_CODE_LABEL[tx.transactionCode] ?? `Code ${tx.transactionCode}`;
+                              const noPriceTip = `${codeLabel} (code ${tx.transactionCode}) — no market price reported on the Form 4`;
+                              const filingUrl = tx.url ?? form4Url(tx.id);
+                              return (
+                                <tr key={`${tx.id || idx}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                                  <td className="mono" style={{ padding: "8px 6px", color: "var(--text-dim-solid)", fontSize: ".76rem", whiteSpace: "nowrap" }}>
+                                    {(tx.transactionDate ?? "").slice(0, 10)}
+                                  </td>
+                                  <td style={{ padding: "8px 6px" }}>
+                                    <div style={{ color: "var(--text-hi)", fontWeight: 600, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={tx.ownerName ?? "Insider"}>
+                                      {tx.ownerName ?? "Insider"}
+                                    </div>
+                                    <div style={{ color: "var(--text-dim-solid)", fontSize: ".72rem", marginTop: 2, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% Owner")}>
+                                      {tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% Owner")}
+                                    </div>
+                                  </td>
+                                  <td style={{ textAlign: "center", padding: "8px 4px" }}>
+                                    <span
+                                      className="tr-badge"
+                                      style={{
+                                        background: isBuy ? "var(--up)22" : isSell ? "var(--down)22" : "var(--surface-3)",
+                                        color: isBuy ? "var(--up)" : isSell ? "var(--down)" : "var(--text-dim-solid)",
+                                        fontWeight: 700,
+                                        padding: "2px 6px",
+                                        borderRadius: 5,
+                                        fontSize: ".66rem",
+                                      }}
+                                    >
+                                      {isBuy ? "BUY" : isSell ? "SELL" : tx.transactionCode || "TX"}
                                     </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                                  </td>
+                                  <td className="mono" style={{ textAlign: "right", padding: "8px 6px" }}>
+                                    <div style={{ color: "var(--text-hi)", fontWeight: 600 }}>
+                                      {Math.round(tx.shares ?? 0).toLocaleString("en-US")}
+                                    </div>
+                                    <div style={{ color: "var(--text-dim-solid)", fontSize: ".72rem", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {price != null ? `$${price.toFixed(2)}` : (
+                                        <span title={noPriceTip} style={{ fontFamily: "var(--f-sans, inherit)" }}>{codeLabel}</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="mono" style={{ textAlign: "right", padding: "8px 6px" }}>
+                                    <div>
+                                      {valUsd != null ? (
+                                        <span className={isBuy ? "up" : "down"} style={{ fontWeight: 700 }}>
+                                          {isBuy ? "+" : "−"}${Math.abs(valUsd) >= 1e6 ? `${(Math.abs(valUsd) / 1e6).toFixed(1)}M` : Math.round(Math.abs(valUsd)).toLocaleString("en-US")}
+                                        </span>
+                                      ) : (
+                                        <span title={noPriceTip} style={{ color: "var(--text-dim-solid)" }}>—</span>
+                                      )}
+                                    </div>
+                                    {filingUrl && (
+                                      <a
+                                        className="pill"
+                                        href={filingUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Open this Form 4 on SEC EDGAR"
+                                        style={{
+                                          display: "inline-block",
+                                          marginTop: 3,
+                                          padding: "1px 6px",
+                                          background: "var(--surface-3)",
+                                          color: "var(--brand)",
+                                          fontSize: ".62rem",
+                                          textDecoration: "none",
+                                        }}
+                                      >
+                                        Form 4 ↗
+                                      </a>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                      <Pager page={insTxPage} total={sortedSymInsiderTxns.length} pageSize={INSIDER_PAGE_SIZE} onPage={setInsTxPage} />
                     </div>
                   )}
                 </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+              <div style={insiderExpanded ? { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, width: "100%" } : { display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
                 <div className="card">
-                  <div className="card-h"><h3>Institutional</h3><VendorTag v="fmp" /></div>
+                  <div className="card-h"><h3>Institutional</h3><VendorTag v={["fmp", "polygon"]} /></div>
                   {(() => {
-                    const io = liveCompany?.instOwnershipPct;
-                    const holders = liveCompany?.inst13FHolders;
-                    const chg = liveCompany?.inst13FHoldersChange;
+                    const io = instPct;
+                    const holders = instHolders;
+                    const chg = instHoldersChg;
                     return (<>
                       <div className="sd-row"><span className="grow">Institutional ownership</span><span className="num">{io != null ? `${io.toFixed(1)}%` : <NotAvailable />}</span></div>
-                      {/* No Polygon (404) or FMP source for short interest — needs FINRA. */}
-                      <div className="sd-row"><span className="grow">Short interest</span><span className="num dim"><NotAvailable /></span></div>
+                      {/* FMP has no short-interest feed; FINRA data via Polygon. */}
+                      <div className="sd-row">
+                        <span className="grow">Short interest</span>
+                        <span className="num" title={shortInt ? `FINRA settlement ${shortInt.settlementDate}` : undefined}>
+                          {shortInt ? (<>
+                            {compactNum(shortInt.shortInterest)} sh
+                            {shortInt.daysToCover != null && <span className="dim" style={{ marginLeft: 6 }}>{shortInt.daysToCover.toFixed(1)} days</span>}
+                          </>) : <NotAvailable />}
+                        </span>
+                      </div>
                       {/* "filers", not "funds": FMP counts 13F FILERS, and one filer can cover hundreds of funds. */}
                       <div className="sd-row">
                         <span className="grow">13F filers holding</span>
@@ -3099,7 +3382,7 @@ export function StockScreen({
                           )}
                         </span>
                       </div>
-                      {liveCompany?.instAsOf && <div className="sd-foot">13F rollup · {liveCompany.instAsOf}</div>}
+                      {instAsOf && <div className="sd-foot">13F rollup · {instAsOf}</div>}
                     </>);
                   })()}
                 </div>
@@ -3600,21 +3883,26 @@ export function StockScreen({
                   <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Insider &amp; Institutional · {sym}</div>
                   <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Form 4 filings · 13F institutional data</div>
                 </div>
-                <VendorTag v="sec" />
+                <VendorTag v={[insiderVendor, "fmp", "polygon"].filter((v, i, a) => a.indexOf(v) === i) as VendorKey[]} />
                 <button className="closebtn" onClick={() => setInnerDrawer(null)}>✕</button>
               </div>
               <div className="drawer-b">
                 <div className="metric-grid" style={{ marginBottom: 14 }}>
-                  <div className="m"><div className="k">Inst. ownership</div><div className="v"><NotAvailable /></div></div>
-                  <div className="m"><div className="k">Short interest</div><div className="v"><NotAvailable /></div></div>
-                  <div className="m"><div className="k">13F filers</div><div className="v"><NotAvailable /></div></div>
+                  <div className="m"><div className="k">Inst. ownership</div><div className="v">{instPct != null ? `${instPct.toFixed(1)}%` : <NotAvailable />}</div></div>
+                  <div className="m">
+                    <div className="k">Short interest</div>
+                    <div className="v" title={shortInt ? `FINRA settlement ${shortInt.settlementDate}` : undefined}>
+                      {shortInt ? `${compactNum(shortInt.shortInterest)}${shortInt.daysToCover != null ? ` · ${shortInt.daysToCover.toFixed(1)}d` : ""}` : <NotAvailable />}
+                    </div>
+                  </div>
+                  <div className="m"><div className="k">13F filers</div><div className="v">{instHolders != null ? instHolders.toLocaleString() : <NotAvailable />}</div></div>
                 </div>
-                <div className="ai-sec"><div className="h">Recent insider transactions (Form 4)</div></div>
-                {data.insiderActivity.length > 0 ? data.insiderActivity.map((n, i) => {
-                  const isSell = /sale|sold|exercis/i.test(n.action);
+                <div className="ai-sec"><div className="h">Insider transactions ({data.insiderActivity.length})</div></div>
+                {data.insiderActivity.length > 0 ? data.insiderActivity.slice(insDrawerPage * INSIDER_PAGE_SIZE, (insDrawerPage + 1) * INSIDER_PAGE_SIZE).map((n, i) => {
+                  const isSell = n.isSell;
                   return (
-                    <div key={i} className="minirow" style={{ alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-soft)" }}>
-                      <span className={`pill ${isSell ? "dn" : "up"}`} style={{ flex: "none", fontSize: ".66rem" }}>{isSell ? "SELL" : "BUY"}</span>
+                    <div key={insDrawerPage * INSIDER_PAGE_SIZE + i} className="minirow" style={{ alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                      <span className={`pill ${isSell ? "dn" : "up"}`} style={{ flex: "none", fontSize: ".66rem" }}>{n.tag}</span>
                       <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.45 }}>
                         <b style={{ color: "var(--text-hi)" }}>{n.name}</b> {n.action}{" "}
                         <span style={{ color: "var(--text-dim-solid)" }}>({n.date})</span>
@@ -3625,10 +3913,29 @@ export function StockScreen({
                     </div>
                   );
                 }) : (
-                  <DataState loading={insiderLoading} label="No recent Form 4 activity found for this ticker." />
+                  <DataState loading={insiderLoading} label="No insider transactions found for this ticker." />
                 )}
-                <div className="ai-sec" style={{ marginTop: 14 }}><div className="h">Top institutional holders (13F)</div></div>
-                <DataState label="Per-ticker 13F holder mapping needs SEC positions keyed by ticker instead of CUSIP — not available yet." />
+                <Pager page={insDrawerPage} total={data.insiderActivity.length} pageSize={INSIDER_PAGE_SIZE} onPage={setInsDrawerPage} />
+                <div className="ai-sec" style={{ marginTop: 14 }}>
+                  <div className="h">Top institutional holders (13F{instAsOf ? ` · ${instAsOf}` : ""})</div>
+                </div>
+                {topHolders.length > 0 ? topHolders.map((h) => (
+                  <div key={h.cik ?? h.name} className="minirow" style={{ gap: 10, padding: "6px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                    <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.4 }}>
+                      <b style={{ color: "var(--text-hi)" }}>{titleCaseLabel(h.name)}</b>
+                      {h.isNew && <span className="pill up" style={{ marginLeft: 6, fontSize: ".6rem" }}>NEW</span>}
+                      <span style={{ display: "block", color: "var(--text-dim-solid)", fontSize: ".72rem" }}>
+                        {compactNum(h.shares)} sh
+                        {h.sharesChange != null && h.sharesChange !== 0 && (
+                          <span className={h.sharesChange > 0 ? "up" : "down"}> · {h.sharesChange > 0 ? "+" : "−"}{compactNum(Math.abs(h.sharesChange))} QoQ</span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="r mono">{h.ownershipPct != null ? `${h.ownershipPct.toFixed(2)}%` : <NotAvailable />}</span>
+                  </div>
+                )) : (
+                  <DataState loading={ownershipLoading} label="No 13F holder data for this ticker." />
+                )}
               </div>
             </div>
           )}
@@ -3876,7 +4183,7 @@ export function StockScreen({
                         </div>
                       )}
                       <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                        %chg is year-over-year (same quarter, prior year). %surp is actual vs analyst estimate — sales surprise needs a revenue-estimate feed, not available yet.
+                        %chg is year-over-year (same quarter, prior year). %surp is actual vs the FMP analyst consensus for that report.
                       </div>
                     </div>
                   </div>

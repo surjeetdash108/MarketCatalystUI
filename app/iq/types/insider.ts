@@ -14,6 +14,38 @@ export interface InsiderTxDoc {
   pricePerShare: number | null;
   sharesOwnedAfter?: number | null;
   filingDate?: string | null;
+  /** SEC filing link from the vendor (FMP rows); SEC-sourced rows derive it from the id. */
+  url?: string | null;
+  /** Who served the row: FMP (primary) or SEC EDGAR Form 4 (backup). */
+  vendor?: "fmp" | "sec";
+}
+
+/** GET /live/ownership — FMP 13F rollup + top holders, Polygon short interest. */
+export interface OwnershipDoc {
+  ticker: string;
+  institutional: {
+    asOf: string;
+    ownershipPct: number | null;
+    holders: number | null;
+    holdersChange: number | null;
+    shares: number | null;
+  } | null;
+  topHolders: Array<{
+    name: string;
+    cik: string | null;
+    shares: number;
+    sharesChange: number | null;
+    ownershipPct: number | null;
+    marketValue: number | null;
+    isNew: boolean;
+  }>;
+  shortInterest: {
+    settlementDate: string;
+    shortInterest: number;
+    avgDailyVolume: number | null;
+    daysToCover: number | null;
+  } | null;
+  sources: { institutional: "fmp" | null; shortInterest: "polygon" | null };
 }
 
 /** SEC Form 4 transaction codes (Form 4 General Instructions, Table 8). */

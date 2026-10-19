@@ -182,9 +182,10 @@ export function annualEpsSalesRows(
   });
 }
 
-/** One row per reported quarter, oldest first. %chg is YoY (4 back); %surp is
- *  actual-vs-estimate on the FMP consensus (non-GAAP) basis. Sales has no
- *  estimate feed, so its surprise column stays "—" rather than fabricated. */
+/** One row per reported quarter, oldest first. %chg is YoY (4 back); EPS %surp
+ *  is actual-vs-estimate on the FMP consensus (non-GAAP) basis; sales %surp is
+ *  reported revenue vs FMP's consensus revenue estimate for that report, "—"
+ *  when FMP has no estimate (never fabricated). */
 export function quarterlyEpsSalesRows(
   quarters: QuarterFinancials[],
   /** Used only when `quarters` is empty — see quartersFromEpsHistory. */
@@ -228,7 +229,11 @@ export function quarterlyEpsSalesRows(
       epsSurp: pctCell(quarterEpsSurprisePct(r)),
       sales: r.revenue != null ? r.revenue / 1e6 : null,
       salesChg: pctChangeStr(r.revenue, yoy?.revenue),
-      salesSurp: "—",
+      salesSurp: pctCell(
+        r.revenue != null && r.revenueEstimateReported
+          ? ((r.revenue - r.revenueEstimateReported) / Math.abs(r.revenueEstimateReported)) * 100
+          : null,
+      ),
     };
   });
 }

@@ -182,6 +182,9 @@ export interface QuarterFinancials {
   /** FMP estimate from the SAME surprise row as epsActualReported — the two are
    * compared for beat/miss so they share a basis. Absent on pre-existing docs. */
   epsEstimateReported?: number | null;
+  /** FMP consensus revenue estimate from the quarter's report (raw dollars),
+   * paired with `revenue` for the sales %surp. Absent on pre-existing docs. */
+  revenueEstimateReported?: number | null;
   costOfRevenue: number | null;
   operatingExpenses: number | null;
   researchAndDevelopment: number | null;
