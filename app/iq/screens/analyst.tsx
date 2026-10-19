@@ -18,6 +18,40 @@ const A = "#fbbf24"; // Amber / Warning
 const DIM = "#5f6763"; // Dim Gray
 const TEXT_HI = "#e8ecea";
 const TEXT_MUTED = "#8b938f";
+/** Floor for the "Moving the needle" section on very short windows. */
+const NEEDLE_SECTION_MIN_HEIGHT = 360;
+/** Space kept between the section and the bottom of the screen. */
+const NEEDLE_SECTION_BOTTOM_GAP = 16;
+
+/**
+ * Sizes an element to the rest of the visible screen below it: from its top
+ * (measured as if the page were scrolled to the top) to the bottom of the
+ * scrolling `.main` area, less the fixed disclaimer bar that overlays it.
+ * Re-measures on window resize and whenever anything above it changes size.
+ * A callback ref with cleanup (React 19), so no state or effect is involved.
+ */
+function fillRemainingHeight(el: HTMLDivElement | null) {
+  if (!el) return;
+  const scroller = el.closest(".main") as HTMLElement | null;
+  const fit = () => {
+    const viewportTop = scroller ? scroller.getBoundingClientRect().top : 0;
+    const viewportHeight = scroller ? scroller.clientHeight : window.innerHeight;
+    const scrolled = scroller ? scroller.scrollTop : window.scrollY;
+    const top = el.getBoundingClientRect().top - viewportTop + scrolled;
+    const bar = document.querySelector(".disclaimer-bar")?.getBoundingClientRect().height ?? 0;
+    const h = Math.max(NEEDLE_SECTION_MIN_HEIGHT, viewportHeight - top - bar - NEEDLE_SECTION_BOTTOM_GAP);
+    el.style.height = `${Math.round(h)}px`;
+  };
+  fit();
+  window.addEventListener("resize", fit);
+  // The summary cards above can grow/shrink as data loads; re-fit when they do.
+  const ro = new ResizeObserver(fit);
+  if (el.parentElement) ro.observe(el.parentElement);
+  return () => {
+    window.removeEventListener("resize", fit);
+    ro.disconnect();
+  };
+}
 const BORDER_DARK = "#1f2523";
 const BG_SURFACE = "#0e1110";
 const BG_CARD = "#121615";
@@ -333,8 +367,6 @@ export function AnalystScreen() {
   const [showSigModal, setShowSigModal] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const [activeTip, setActiveTip] = useState<string | null>(null);
-  const [chartModalStock, setChartModalStock] = useState<ProcessedAction | null>(null);
-  const [chartRange, setChartRange] = useState<"1M" | "3M" | "6M">("3M");
   const [firmHistModal, setFirmHistModal] = useState<ProcessedFirm | null>(null);
   const [firmHistFilter, setFirmHistFilter] = useState<"All" | "Hits" | "Misses" | "Open">("All");
   const [singleCallModal, setSingleCallModal] = useState<{
@@ -1138,8 +1170,8 @@ export function AnalystScreen() {
             </div>
           </div>
 
-          {/* Master / Detail Two-Column Layout */}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 1fr) minmax(420px, 1.25fr)", gap: 24, alignItems: "stretch" }}>
+          {/* Master / Detail Two-Column Layout — fills the screen below the summary; each column scrolls inside it */}
+          <div ref={fillRemainingHeight} style={{ display: "grid", gridTemplateColumns: "minmax(340px, 1fr) minmax(420px, 1.25fr)", gap: 24, alignItems: "stretch", minHeight: 0 }}>
             {/* ── LEFT COLUMN: Moving the needle today ── */}
             <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "16px 18px 12px" }}>
@@ -1290,7 +1322,7 @@ export function AnalystScreen() {
 
             {/* ── RIGHT COLUMN: Focus Stock Deep Dive (Sticky Aside) ── */}
             {selectedStock && (
-              <aside style={{ position: "sticky", top: 16, border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, padding: 22, display: "flex", flexDirection: "column", gap: 18, height: "100%", boxSizing: "border-box" }}>
+              <aside style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, padding: 22, display: "flex", flexDirection: "column", gap: 18, height: "100%", minHeight: 0, overflowY: "auto", boxSizing: "border-box" }}>
                 {/* Header Row */}
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -1304,11 +1336,11 @@ export function AnalystScreen() {
                         >
                           {selectedStock.watched ? "★" : "☆"}
                         </button>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R }}>
                           {selectedStock.dir >= 0 ? "▲" : "▼"} {selectedStock.act}
                         </span>
                       </div>
-                      <div style={{ fontSize: 13, color: TEXT_MUTED, marginTop: 2 }}>
+                      <div style={{ fontSize: 14.5, color: TEXT_MUTED, marginTop: 2 }}>
                         {selectedStock.co} ·{" "}
                         <span
                           onClick={() => handleGoToFirm(selectedStock.firm)}
@@ -1317,6 +1349,18 @@ export function AnalystScreen() {
                           {selectedStock.firm}
                         </span>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* FIRM TRACK RECORD — between the ticker identity and the signal score */}
+                  <div style={{ display: "flex", gap: 18, alignItems: "center", alignSelf: "center", flexShrink: 0 }}>
+                    <div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 20, lineHeight: 1.1, color: TEXT_HI }}>{selectedStock.hit}</div>
+                      <div style={{ fontSize: 12, color: TEXT_MUTED, whiteSpace: "nowrap" }}>firm&apos;s calls hit target</div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 20, lineHeight: 1.1, color: selectedStock.dir >= 0 ? G : R }}>{selectedStock.move}</div>
+                      <div style={{ fontSize: 12, color: TEXT_MUTED, whiteSpace: "nowrap" }}>avg 5-day move after</div>
                     </div>
                   </div>
 
@@ -1349,7 +1393,7 @@ export function AnalystScreen() {
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 24, lineHeight: 1, color: selectedStock.score >= 75 ? G : selectedStock.score >= 50 ? A : DIM }}>
                         {selectedStock.score}
                       </div>
-                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginTop: 2 }}>SIGNAL</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginTop: 2 }}>SIGNAL</div>
                     </div>
 
                     {/* Factor Breakdown Popover */}
@@ -1404,18 +1448,18 @@ export function AnalystScreen() {
                 {/* 3-Col Key Metrics */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${BORDER_DARK}`, borderRadius: 10 }}>
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>RATING</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>{selectedStock.to}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>RATING</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>{selectedStock.to}</div>
                   </div>
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>TARGET</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>TARGET</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>
                       {fmtMoney(selectedStock.pt1)}
                     </div>
                   </div>
                   <div style={{ padding: "10px 12px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>IMPLIED UPSIDE</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 800, marginTop: 2, color: selectedStock.upPct && selectedStock.upPct >= 0 ? G : R }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>IMPLIED UPSIDE</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: selectedStock.upPct && selectedStock.upPct >= 0 ? G : R }}>
                       {selectedStock.upPct != null ? `${selectedStock.upPct >= 0 ? "+" : ""}${selectedStock.upPct.toFixed(1)}%` : "—"}
                     </div>
                   </div>
@@ -1436,7 +1480,7 @@ export function AnalystScreen() {
                     ))}
 
                     {/* Current Price Marker */}
-                    <div style={{ position: "absolute", top: 48, left: `${sliderCalc.pL}%`, transform: "translateX(-50%)", textAlign: "center", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#d3d9d6" }}>
+                    <div style={{ position: "absolute", top: 48, left: `${sliderCalc.pL}%`, transform: "translateX(-50%)", textAlign: "center", fontSize: 12.5, fontFamily: "'JetBrains Mono', monospace", color: "#d3d9d6" }}>
                       <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "6px solid #e8ecea", margin: "0 auto 2px" }} />
                       {fmtMoneyCompact(selectedStock.px)}
                     </div>
@@ -1456,13 +1500,13 @@ export function AnalystScreen() {
                         boxShadow: `0 0 0 4px ${selectedStock.dir >= 0 ? "rgba(74,222,128,.15)" : "rgba(248,113,113,.15)"}`,
                       }}
                     />
-                    <div style={{ position: "absolute", top: 10, left: `${sliderCalc.nL}%`, transform: "translateX(-50%)", fontSize: 11, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R, whiteSpace: "nowrap" }}>
+                    <div style={{ position: "absolute", top: 10, left: `${sliderCalc.nL}%`, transform: "translateX(-50%)", fontSize: 12.5, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R, whiteSpace: "nowrap" }}>
                       New {fmtMoneyCompact(selectedStock.pt1)}
                     </div>
 
                     {/* Min / Max bounds */}
-                    <div style={{ position: "absolute", top: 68, left: -10, fontSize: 10, color: DIM, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.lo}</div>
-                    <div style={{ position: "absolute", top: 68, right: -10, fontSize: 10, color: DIM, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.hi}</div>
+                    <div style={{ position: "absolute", top: 68, left: -10, fontSize: 12, color: DIM, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.lo}</div>
+                    <div style={{ position: "absolute", top: 68, right: -10, fontSize: 12, color: DIM, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.hi}</div>
                   </div>
                 </div>
 
@@ -1471,23 +1515,11 @@ export function AnalystScreen() {
                   <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: G, marginBottom: 8 }}>WHY IT MATTERS</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {selectedStock.why.map((bullet, idx) => (
-                      <div key={idx} style={{ display: "flex", gap: 8, fontSize: 13, lineHeight: 1.45, color: "#d3d9d6" }}>
+                      <div key={idx} style={{ display: "flex", gap: 8, fontSize: 14.5, lineHeight: 1.45, color: "#d3d9d6" }}>
                         <span style={{ color: selectedStock.dir >= 0 ? G : R }}>•</span>
                         <span>{bullet}</span>
                       </div>
                     ))}
-                  </div>
-                </div>
-
-                {/* FIRM TRACK RECORD */}
-                <div style={{ display: "flex", gap: 24, padding: "12px 0", borderTop: `1px solid ${BORDER_DARK}`, borderBottom: `1px solid ${BORDER_DARK}` }}>
-                  <div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 20, color: TEXT_HI }}>{selectedStock.hit}</div>
-                    <div style={{ fontSize: 11, color: TEXT_MUTED }}>firm's calls hit target</div>
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 20, color: selectedStock.dir >= 0 ? G : R }}>{selectedStock.move}</div>
-                    <div style={{ fontSize: 11, color: TEXT_MUTED }}>avg 5-day move after</div>
                   </div>
                 </div>
 
@@ -1513,19 +1545,19 @@ export function AnalystScreen() {
 
                   {/* Street Targets Table */}
                   <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginBottom: 6 }}>EVERY TARGET ON THE STREET</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".1em", color: TEXT_HI, marginBottom: 8 }}>EVERY TARGET ON THE STREET</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                       {streetConsensus.rows.map((r, rIdx) => (
-                        <div key={rIdx} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 52px 50px 50px", gap: 8, alignItems: "center", fontSize: 12 }}>
-                          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: r.isSelFirm ? TEXT_HI : "#b9c0bc", fontWeight: r.isSelFirm ? 700 : 400 }}>
-                            <span onClick={() => handleGoToFirm(r.firm)} style={{ cursor: "pointer" }}>{r.firm}</span>{" "}
-                            <span style={{ color: DIM }}>· {r.rating}</span>
+                        <div key={rIdx} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 84px 44px 52px", gap: 8, alignItems: "center", fontSize: 13.5 }}>
+                          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: TEXT_HI }}>
+                            <span onClick={() => handleGoToFirm(r.firm)} style={{ cursor: "pointer", fontWeight: r.isSelFirm ? 800 : 700 }}>{r.firm}</span>{" "}
+                            <span style={{ color: G, fontWeight: 400 }}>· {r.rating}</span>
                           </span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: TEXT_MUTED, textAlign: "right" }}>{r.when}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: TEXT_HI, textAlign: "right", whiteSpace: "nowrap" }}>{r.when}</span>
                           <div style={{ height: 5, borderRadius: 3, background: "#1b201e", overflow: "hidden" }}>
                             <div style={{ height: 5, width: r.w, background: r.c }} />
                           </div>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", color: r.c }}>${Math.round(r.pt)}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", whiteSpace: "nowrap", color: r.c }}>${Math.round(r.pt)}</span>
                         </div>
                       ))}
                     </div>
@@ -1543,13 +1575,14 @@ export function AnalystScreen() {
                 </div>
 
                 {/* Action Buttons */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto", paddingTop: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: "auto", paddingTop: 8 }}>
                   <button
                     onClick={e => handleToggleAlert(e, selectedStock)}
                     style={{
-                      padding: "11px",
-                      fontSize: 14,
+                      padding: "10px 8px",
+                      fontSize: 13,
                       fontWeight: 700,
+                      lineHeight: 1.25,
                       border: `1px solid ${activeAlerts[selectedStock.id] ? G : G}`,
                       borderRadius: 8,
                       background: activeAlerts[selectedStock.id] ? G : "transparent",
@@ -1560,39 +1593,23 @@ export function AnalystScreen() {
                     {activeAlerts[selectedStock.id] ? "✓ Alert Set" : `Alert me if ${selectedStock.t} moves 5%`}
                   </button>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    <button
-                      onClick={() => setChartModalStock(selectedStock)}
-                      style={{
-                        padding: "9px",
-                        fontSize: 13,
-                        fontWeight: 600,
-                        border: `1px solid ${BORDER_DARK}`,
-                        borderRadius: 8,
-                        background: "transparent",
-                        color: TEXT_HI,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Interactive Chart
-                    </button>
-                    <button
-                      onClick={() => openStockFull(selectedStock.t)}
-                      style={{
-                        padding: "9px",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        border: "1px solid #5a80a8",
-                        borderRadius: 8,
-                        background: "#5a80a8",
-                        color: "#ffffff",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Stock Intelligence ↗
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => openStockFull(selectedStock.t)}
+                    style={{
+                      padding: "10px 8px",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      lineHeight: 1.25,
+                      border: "1px solid #5a80a8",
+                      borderRadius: 8,
+                      background: "#5a80a8",
+                      color: "#ffffff",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Stock Intelligence ↗
+                  </button>
                 </div>
               </aside>
             )}
@@ -2185,107 +2202,6 @@ export function AnalystScreen() {
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL 2: INTERACTIVE SVG CHART MODAL                                 */}
-      {/* ==================================================================== */}
-      {chartModalStock && (
-        <div onClick={() => setChartModalStock(null)} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "min(720px, 100%)", background: BG_CARD, border: `1px solid ${BORDER_DARK}`, borderRadius: 16, padding: 24, boxShadow: "0 24px 60px rgba(0,0,0,.85)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <StockLogo sym={chartModalStock.t} size={36} />
-                <div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 800, color: TEXT_HI }}>{chartModalStock.t}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: chartModalStock.dir >= 0 ? G : R }}>
-                      {chartModalStock.firm} · {chartModalStock.act}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: TEXT_MUTED }}>Price: {fmtMoney(chartModalStock.px)} · Target: {fmtMoney(chartModalStock.pt1)}</div>
-                </div>
-              </div>
-
-              {/* Range Toggle */}
-              <div style={{ display: "inline-flex", gap: 4, padding: 3, border: `1px solid ${BORDER_DARK}`, borderRadius: 8, background: "#0d100f" }}>
-                {(["1M", "3M", "6M"] as const).map(r => (
-                  <button
-                    key={r}
-                    onClick={() => setChartRange(r)}
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: 6,
-                      fontSize: 11,
-                      fontWeight: chartRange === r ? 700 : 500,
-                      border: 0,
-                      cursor: "pointer",
-                      background: chartRange === r ? "#1b201e" : "transparent",
-                      color: chartRange === r ? G : TEXT_MUTED,
-                    }}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* SVG Price & Target Chart */}
-            <div style={{ position: "relative", height: 260, border: `1px solid ${BORDER_DARK}`, borderRadius: 12, background: "#080a09", padding: 12 }}>
-              <svg viewBox="0 0 500 200" preserveAspectRatio="none" style={{ width: "100%", height: "100%", overflow: "visible" }}>
-                <defs>
-                  <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={chartModalStock.dir >= 0 ? G : R} stopOpacity="0.25" />
-                    <stop offset="100%" stopColor={chartModalStock.dir >= 0 ? G : R} stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-
-                {/* Target dashed line */}
-                <line x1="0" y1="35" x2="500" y2="35" stroke={chartModalStock.dir >= 0 ? G : R} strokeWidth="1.5" strokeDasharray="4 4" />
-                <text x="4" y="28" fill={chartModalStock.dir >= 0 ? G : R} fontSize="11" fontFamily="'JetBrains Mono', monospace" fontWeight="700">
-                  Target ${chartModalStock.pt1.toFixed(2)}
-                </text>
-
-                {/* Consensus line */}
-                <line x1="0" y1="75" x2="500" y2="75" stroke="#4b5563" strokeWidth="1" strokeDasharray="2 3" />
-                <text x="4" y="70" fill="#9ca3af" fontSize="10" fontFamily="'JetBrains Mono', monospace">
-                  Street Consensus
-                </text>
-
-                {/* Price history mock curve based on direction */}
-                <path
-                  d={chartModalStock.dir >= 0 ? "M 0 160 Q 120 170 250 120 T 500 95" : "M 0 90 Q 140 70 280 130 T 500 160"}
-                  fill="none"
-                  stroke={TEXT_HI}
-                  strokeWidth="2.5"
-                />
-
-                <path
-                  d={chartModalStock.dir >= 0 ? "M 0 160 Q 120 170 250 120 T 500 95 L 500 200 L 0 200 Z" : "M 0 90 Q 140 70 280 130 T 500 160 L 500 200 L 0 200 Z"}
-                  fill="url(#chartGrad)"
-                />
-
-                {/* Call Event Marker Pin */}
-                <circle cx="490" cy={chartModalStock.dir >= 0 ? "95" : "160"} r="5" fill={chartModalStock.dir >= 0 ? G : R} stroke="#06120a" strokeWidth="2" />
-              </svg>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 18 }}>
-              <div style={{ fontSize: 12, color: TEXT_MUTED }}>
-                Target implies <b style={{ color: chartModalStock.dir >= 0 ? G : R }}>{chartModalStock.upPct != null ? `${chartModalStock.upPct >= 0 ? "+" : ""}${chartModalStock.upPct.toFixed(1)}%` : "—"}</b> from current price.
-              </div>
-              <button
-                onClick={() => {
-                  setChartModalStock(null);
-                  openStockFull(chartModalStock.t);
-                }}
-                style={{ padding: "8px 16px", borderRadius: 8, background: "#5a80a8", color: "#fff", border: 0, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-              >
-                Open in Stock Intelligence ↗
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================================== */}
       {/* MODAL 3: FIRM CALL HISTORY MODAL                                     */}
       {/* ==================================================================== */}
       {firmHistModal && (
@@ -2415,16 +2331,6 @@ export function AnalystScreen() {
                 </p>
 
                 <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                  <button
-                    onClick={() => {
-                      const act = singleCallModal.action;
-                      setSingleCallModal(null);
-                      if (act) setChartModalStock(act);
-                    }}
-                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: "#1b201e", border: `1px solid ${BORDER_DARK}`, color: TEXT_HI, fontWeight: 600, fontSize: 13, cursor: "pointer" }}
-                  >
-                    View Chart
-                  </button>
                   <button
                     onClick={() => {
                       const act = singleCallModal.action;
