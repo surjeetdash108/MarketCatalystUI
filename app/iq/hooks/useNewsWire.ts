@@ -7,8 +7,6 @@ import type { NewsArticleDoc } from "../types";
 /** Client poll cadence. The server re-polls FMP's news + press feeds every 15s
  *  (analyst calls, 8-Ks, macro every 30s), so a story shows within ~15-45s. */
 const POLL_MS = 15_000;
-/** How long a story that arrived while watching keeps its NEW marker. */
-const NEW_FOR_MS = 3 * 60_000;
 /** Wire stories kept client-side. */
 const KEEP = 500;
 
@@ -17,14 +15,12 @@ interface WireResponse { now: number; polledAt: string | null; items: NewsArticl
 
 /**
  * Live news tape: polls GET /live/news-wire every POLL_MS while `active` and
- * the tab is visible, asking only for stories newer than the newest it holds.
- * Stories that land after the first load are reported in `freshIds` (for
- * NEW_FOR_MS) so the feed can flag them as they stream in.
+ * the tab is visible, asking only for stories that arrived since its last
+ * poll. The feed sorts by publish time, so the newest story is always on top.
  */
 export function useNewsWire(active: boolean) {
   const [items, setItems] = useState<NewsArticleDoc[]>([]);
   const [polledAt, setPolledAt] = useState<string | null>(null);
-  const [fresh, setFresh] = useState<Map<string, number>>(new Map());
   const cursor = useRef<number | null>(null);
   const seenUrls = useRef<Set<string>>(new Set());
 
@@ -45,15 +41,6 @@ export function useNewsWire(active: boolean) {
       if (add.length === 0) return;
       for (const d of add) seenUrls.current.add(d.url);
       setItems(prev => [...add, ...prev].slice(0, KEEP));
-      // The first load is the backlog, not news "arriving" — only flag later ones.
-      if (since != null) {
-        const now = Date.now();
-        setFresh(prev => {
-          const next = new Map([...prev].filter(([, at]) => now - at < NEW_FOR_MS));
-          for (const d of add) next.set(d.id, now);
-          return next;
-        });
-      }
     };
     void tick();
     const timer = setInterval(tick, POLL_MS);
@@ -66,18 +53,5 @@ export function useNewsWire(active: boolean) {
     };
   }, [active]);
 
-  // Expire NEW markers even when no further stories arrive.
-  useEffect(() => {
-    if (fresh.size === 0) return;
-    const t = setInterval(() => {
-      const now = Date.now();
-      setFresh(prev => {
-        const next = new Map([...prev].filter(([, at]) => now - at < NEW_FOR_MS));
-        return next.size === prev.size ? prev : next;
-      });
-    }, 15_000);
-    return () => clearInterval(t);
-  }, [fresh.size]);
-
-  return { items, polledAt, freshIds: fresh };
+  return { items, polledAt };
 }

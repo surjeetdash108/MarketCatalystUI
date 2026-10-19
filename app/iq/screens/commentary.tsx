@@ -233,10 +233,8 @@ function mkMark(s: string, key: number) {
 }
 
 /* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight, isNew = false }: {
+function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight}: {
   item: NewsArticleDoc;
-  /** Arrived on the live wire while the reader was watching — flagged NEW. */
-  isNew?: boolean;
   i: number;
   total: number;
   onTicker: (ticker: string) => void;
@@ -260,9 +258,7 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
           i < total - 1
             ? "1px solid var(--border-soft)"
             : "none",
-        background: isNew ? "color-mix(in srgb, var(--brand) 9%, transparent)" : undefined,
-        boxShadow: isNew ? "inset 3px 0 0 var(--brand)" : undefined,
-        transition: "background .6s ease",
+        // background: "var(--surface-1)",
         cursor: item.url ? "pointer" : "default",
       }}
     >
@@ -272,8 +268,6 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          flexDirection: "column",
-          gap: 3,
           fontFamily:
             "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
           fontSize: 18,
@@ -283,11 +277,6 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
         }}
       >
         {etTimeLabel(item.publishedAt)}
-        {isNew && (
-          <span className="pill" style={{ background: "var(--brand)", color: "#fff", fontSize: ".58rem", fontWeight: 800, padding: "1px 6px", letterSpacing: ".04em" }}>
-            NEW
-          </span>
-        )}
       </div>
 
       {/* COLUMN 2 — LOGO */}
@@ -430,21 +419,6 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
             fontSize: 12,
           }}
         >
-          {item.wireKind && WIRE_BADGE[item.wireKind] && (
-            <span
-              style={{
-                color: WIRE_BADGE[item.wireKind].color,
-                border: "1px solid currentColor",
-                borderRadius: 4,
-                padding: "0 5px",
-                fontSize: 10,
-                fontWeight: 800,
-                letterSpacing: ".05em",
-              }}
-            >
-              {WIRE_BADGE[item.wireKind].label}
-            </span>
-          )}
           <span
             style={{
               color: "var(--text-dim-solid)",
@@ -505,13 +479,6 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
     </article>
   );
 }
-/** Badge for live-wire rows by the FMP feed that delivered them (plain news needs none). */
-const WIRE_BADGE: Record<string, { label: string; color: string }> = {
-  press:   { label: "PRESS RELEASE", color: "var(--brand-2, var(--brand))" },
-  analyst: { label: "ANALYST",       color: "var(--warn)" },
-  filing:  { label: "SEC 8-K",       color: "var(--up)" },
-  macro:   { label: "MACRO",         color: "var(--text-dim-solid)" },
-};
 /* ── Main commentary / Live Feed screen ── */
 
 
@@ -854,12 +821,7 @@ export function CommentaryScreen() {
   const feedQuotes = useLiveQuotes(feed.map(n => n.ticker).filter(Boolean));
 
   const feedLabel = (() => {
-    if (activeTab === 0) return { title: "Intraday commentary", badge: (
-      <span className="live" title="Live from FMP: stock news and press releases every 15s; analyst calls, SEC 8-Ks and macro news every 30s">
-        <span className="dot" />Live · streaming{wire.polledAt ? ` · checked ${new Date(wire.polledAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", second: "2-digit" })} ET` : ""}
-        {wire.freshIds.size > 0 && <> · {wire.freshIds.size} new</>}
-      </span>
-    ) };
+    if (activeTab === 0) return { title: "Intraday commentary", badge: <span className="live"><span className="dot" />Live · streaming</span> };
     if (activeTab === 1) return { title: "Pre-market · before 9:30a ET", badge: <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>Pre-market</span> };
     if (activeTab === 2) return { title: "After hours · post 4:00p ET", badge: <span className="pill amc">After hours</span> };
     if (activeTab === 3) return { title: `My names · ${mySymbols.size} tracked`, badge: <span className="pill ai">Portfolio + Watchlist</span> };
@@ -1043,7 +1005,6 @@ export function CommentaryScreen() {
                     null
                   }
                   highlight={q}
-                  isNew={wire.freshIds.has(item.id)}
                 />
               ))}
             </div>
