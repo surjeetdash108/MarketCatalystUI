@@ -184,9 +184,21 @@ function DashPopContent({
           {er.epsEstimate != null ? `$${er.epsEstimate}` : "—"}{er.epsActual != null && er.epsEstimate != null && <> → ${er.epsActual} <span className={er.epsActual >= er.epsEstimate ? "up" : "down"}>({er.epsActual >= er.epsEstimate ? "beat" : "miss"})</span></>}
         </DpRow>
         <DpRow label="Session">{ann?.session ?? <NotAvailable />}</DpRow>
-        <DpRow label="Guidance"><NotAvailable /></DpRow>
+        <DpRow label="Guidance">
+          {ann?.guidanceDirection ? (
+            <span className={ann.guidanceDirection === "raised" ? "up" : ann.guidanceDirection === "cut" ? "down" : "dim"}>
+              {ann.guidanceDirection.toUpperCase()}{ann.guidanceRange ? ` (${ann.guidanceRange})` : ""}
+            </span>
+          ) : ann?.guidanceRange ? (
+            <span>{ann.guidanceRange}</span>
+          ) : ann?.guidanceMentioned ? (
+            <span className="dim">Guidance provided</span>
+          ) : (
+            <NotAvailable />
+          )}
+        </DpRow>
         <DpRow label="Reaction">{ann?.reactionPct != null ? <span className={cls(ann.reactionPct)}>{sign(ann.reactionPct)}</span> : <NotAvailable />}</DpRow>
-        <div className="dp-note">Session &amp; price reaction from the SEC-EDGAR 8-K (item 2.02) announcement. Guidance still needs a filings-text feed.</div>
+        <div className="dp-note">Session, guidance &amp; price reaction from the SEC-EDGAR 8-K (item 2.02) announcement.</div>
       </>;
     } else {
       body = <div className="dp-note">On this week&apos;s earnings calendar.</div>;
@@ -230,7 +242,7 @@ function DashPopContent({
       <DpRow label="P/E">{scr?.peRatio != null ? scr.peRatio.toFixed(1) : <NotAvailable />}</DpRow>
       <DpRow label="RS rank">{scr?.rsRating != null ? `${scr.rsRating}/99` : <NotAvailable />}</DpRow>
       <DpRow label="Sector">{scr?.sector ?? <NotAvailable />}</DpRow>
-      <DpRow label="Next ER"><NotAvailable /></DpRow>
+      <DpRow label="Next ER">{scr?.nextEarningsDate ?? (w?.nextEarningsDate && w.nextEarningsDate !== "—" ? w.nextEarningsDate : null) ?? <NotAvailable />}</DpRow>
       {an && <DpRow label="Consensus"><b style={{ color: "var(--text-hi)" }}>{an.consensus}</b></DpRow>}
     </>;
   } else if (block === "portfolio" && pf) {
@@ -291,7 +303,7 @@ function DashPopContent({
     <div className="dp-head">
       <span className="dp-sym">{sym}</span>
       <span className="dp-nm">{name}</span>
-      <VendorTag v={block === "analyst" ? ["fmp", "polygon"] : block === "insider" ? "sec" : "polygon"} />
+      <VendorTag v={block === "analyst" ? "fmp" : block === "insider" ? ["sec", "fmp"] : "fmp"} />
       <span className="dp-tag">{BLOCK_LABEL[block]}</span>
     </div>
     <div>{body}</div>

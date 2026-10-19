@@ -27,69 +27,33 @@ interface CompanyMeta {
 }
 
 const CURATED_COMPANIES: Record<string, CompanyMeta> = {
-  INTC: { name: "Intel Corp", price: 26.47, chg: 2.31, logoBg: "#0068b5", logoFg: "#fff" },
-  LULU: { name: "Lululemon Athletica", price: 242.30, chg: 0.92, logoBg: "#d22030", logoFg: "#fff" },
-  UNH:  { name: "UnitedHealth Group", price: 349.05, chg: -0.44, logoBg: "#002677", logoFg: "#fff" },
-  SOFI: { name: "SoFi Technologies", price: 19.34, chg: 1.47, logoBg: "#00a2c7", logoFg: "#fff" },
-  SMCI: { name: "Super Micro Computer", price: 41.30, chg: -2.10, logoBg: "#2b6cb0", logoFg: "#fff" },
-  AMZN: { name: "Amazon.com Inc", price: 279.60, chg: -0.71, logoBg: "#ff9900", logoFg: "#111" },
-  NVDA: { name: "Nvidia Corp", price: 217.89, chg: 1.84, logoBg: "#76b900", logoFg: "#0b1400" },
-  AVGO: { name: "Broadcom Inc", price: 362.10, chg: 1.12, logoBg: "#cc092f", logoFg: "#fff" },
-  META: { name: "Meta Platforms Inc", price: 701.15, chg: -0.38, logoBg: "#0866ff", logoFg: "#fff" },
-  PLTR: { name: "Palantir Technologies", price: 171.22, chg: 2.05, logoBg: "#e7ecf4", logoFg: "#111" },
-  HOOD: { name: "Robinhood Markets", price: 118.40, chg: 3.12, logoBg: "#c3f53c", logoFg: "#111" },
-  ORCL: { name: "Oracle Corp", price: 251.80, chg: 0.84, logoBg: "#c74634", logoFg: "#fff" },
-  MSFT: { name: "Microsoft Corp", price: 512.30, chg: 0.27, logoBg: "#00a4ef", logoFg: "#fff" },
-  TSLA: { name: "Tesla Inc", price: 402.55, chg: -1.05, logoBg: "#cc0000", logoFg: "#fff" },
-  SNOW: { name: "Snowflake Inc", price: 198.40, chg: -0.62, logoBg: "#29b5e8", logoFg: "#fff" },
-  CRWD: { name: "CrowdStrike Holdings", price: 441.70, chg: 0.66, logoBg: "#e01f26", logoFg: "#fff" },
-  BTSG: { name: "BrightSpring Health", price: 55.18, chg: -1.30, logoBg: "#e9ecef", logoFg: "#1a2b4a" },
-  AUR:  { name: "Aurora Innovation", price: 6.82, chg: 3.40, logoBg: "#1d2a44", logoFg: "#9fb4ff" },
-  CVX:  { name: "Chevron Corp", price: 195.60, chg: 0.18, logoBg: "#0054a4", logoFg: "#fff" },
-  AMD:  { name: "Advanced Micro Devices", price: 188.75, chg: 1.63, logoBg: "#1a1a1a", logoFg: "#e7ecf4" },
+  INTC: { name: "Intel Corp", price: 0, chg: 0, logoBg: "#0068b5", logoFg: "#fff" },
+  LULU: { name: "Lululemon Athletica", price: 0, chg: 0, logoBg: "#d22030", logoFg: "#fff" },
+  UNH:  { name: "UnitedHealth Group", price: 0, chg: 0, logoBg: "#002677", logoFg: "#fff" },
+  SOFI: { name: "SoFi Technologies", price: 0, chg: 0, logoBg: "#00a2c7", logoFg: "#fff" },
+  SMCI: { name: "Super Micro Computer", price: 0, chg: 0, logoBg: "#2b6cb0", logoFg: "#fff" },
+  AMZN: { name: "Amazon.com Inc", price: 0, chg: 0, logoBg: "#ff9900", logoFg: "#111" },
+  NVDA: { name: "Nvidia Corp", price: 0, chg: 0, logoBg: "#76b900", logoFg: "#0b1400" },
+  AVGO: { name: "Broadcom Inc", price: 0, chg: 0, logoBg: "#cc092f", logoFg: "#fff" },
+  META: { name: "Meta Platforms Inc", price: 0, chg: 0, logoBg: "#0866ff", logoFg: "#fff" },
+  PLTR: { name: "Palantir Technologies", price: 0, chg: 0, logoBg: "#e7ecf4", logoFg: "#111" },
+  HOOD: { name: "Robinhood Markets", price: 0, chg: 0, logoBg: "#c3f53c", logoFg: "#111" },
+  ORCL: { name: "Oracle Corp", price: 0, chg: 0, logoBg: "#c74634", logoFg: "#fff" },
+  MSFT: { name: "Microsoft Corp", price: 0, chg: 0, logoBg: "#00a4ef", logoFg: "#fff" },
+  TSLA: { name: "Tesla Inc", price: 0, chg: 0, logoBg: "#cc0000", logoFg: "#fff" },
+  SNOW: { name: "Snowflake Inc", price: 0, chg: 0, logoBg: "#29b5e8", logoFg: "#fff" },
+  CRWD: { name: "CrowdStrike Holdings", price: 0, chg: 0, logoBg: "#e01f26", logoFg: "#fff" },
+  BTSG: { name: "BrightSpring Health", price: 0, chg: 0, logoBg: "#e9ecef", logoFg: "#1a2b4a" },
+  AUR:  { name: "Aurora Innovation", price: 0, chg: 0, logoBg: "#1d2a44", logoFg: "#9fb4ff" },
+  CVX:  { name: "Chevron Corp", price: 0, chg: 0, logoBg: "#0054a4", logoFg: "#fff" },
+  AMD:  { name: "Advanced Micro Devices", price: 0, chg: 0, logoBg: "#1a1a1a", logoFg: "#e7ecf4" },
 };
 
-// Raw transactions baseline from standalone HTML
+// Raw transactions baseline: populated solely from live SEC Form 4 and FMP market feeds
 type RawTxTuple = [string, string, string, number, string, number, number, number, number | null, number];
 
-const RAW_TRADES_DATA: RawTxTuple[] = [
-  ["INTC", "R. Okafor", "CEO", 1, "P", 0, 120000, 24.18, 18.2, 5],
-  ["INTC", "S. Mehta", "CFO", 1, "P", 0, 45000, 24.40, 12.5, 4],
-  ["INTC", "L. Brandt", "Director", 0, "P", 0, 60000, 23.95, 41.0, 6],
-  ["INTC", "J. Weller", "Director", 0, "S", 1, 20000, 21.10, -4.0, 58],
-  ["SOFI", "N. Patel", "CEO", 1, "P", 0, 200000, 18.42, 3.1, 3],
-  ["SOFI", "N. Patel", "CEO", 1, "P", 0, 120000, 16.90, 2.0, 40],
-  ["CRWD", "A. Rios", "CFO", 1, "M", 0, 40000, 102.10, 0, 3],
-  ["CRWD", "A. Rios", "CFO", 1, "S", 1, 40000, 438.20, -6.0, 3],
-  ["UNH", "D. Feld", "Director", 0, "P", 0, 6200, 338.10, null, 7],
-  ["UNH", "K. Abara", "Director", 0, "P", 0, 2900, 331.40, 22.0, 16],
-  ["LULU", "C. Navarro", "CEO", 1, "P", 0, 21500, 228.40, 6.0, 10],
-  ["META", "E. Varga", "COO", 1, "S", 1, 38000, 712.30, -1.5, 11],
-  ["META", "E. Varga", "COO", 1, "S", 1, 38000, 690.10, -1.5, 41],
-  ["META", "H. Sato", "CTO", 1, "S", 1, 21000, 701.80, -0.9, 72],
-  ["AVGO", "R. Castellan", "Director", 0, "S", 1, 230031, 355.50, -3.0, 13],
-  ["AVGO", "R. Castellan", "Director", 0, "S", 1, 186809, 354.71, -2.5, 13],
-  ["NVDA", "K. Lam", "President & CEO", 1, "S", 1, 1356000, 219.72, -0.4, 18],
-  ["NVDA", "K. Lam", "President & CEO", 1, "S", 1, 900000, 206.30, -0.3, 39],
-  ["NVDA", "M. Duarte", "EVP", 1, "S", 1, 62000, 214.10, -2.6, 27],
-  ["NVDA", "B. Ostrow", "Director", 0, "S", 1, 110000, 194.80, -5.1, 66],
-  ["SMCI", "M. Ho", "Director", 0, "P", 0, 30000, 41.80, 9.0, 21],
-  ["AUR", "Sponsor fund", "10% owner", 0, "S", 0, 72000000, 6.55, -12.0, 50],
-  ["PLTR", "T. Ibsen", "CTO", 1, "S", 1, 306544, 174.85, -2.2, 47],
-  ["PLTR", "T. Ibsen", "CTO", 1, "S", 1, 250000, 160.10, -1.9, 77],
-  ["BTSG", "Sponsor fund", "10% owner", 0, "S", 0, 14669771, 58.45, -31.0, 62],
-  ["AMZN", "P. Whitcomb", "Executive Chair", 1, "S", 0, 1209649, 286.41, -1.1, 64],
-  ["AMZN", "P. Whitcomb", "Executive Chair", 1, "S", 0, 400000, 282.90, -0.4, 30],
-  ["CVX", "J. Haddad", "Director", 0, "S", 0, 271946, 194.48, -14.0, 64],
-  ["AMD", "V. Kessler", "CEO", 1, "S", 1, 80000, 182.40, -0.6, 22],
-  ["MSFT", "D. Arnett", "EVP", 1, "S", 1, 25000, 505.10, -3.2, 15],
-  ["TSLA", "K. Moran", "Director", 0, "S", 0, 150000, 410.20, -18.0, 35],
-  ["HOOD", "C. Lyle", "CFO", 1, "S", 1, 90000, 110.30, -4.4, 20],
-  ["ORCL", "P. Quinn", "Director", 0, "P", 0, 8000, 238.10, 15.0, 25],
-  ["ORCL", "A. Lindqvist", "EVP", 1, "P", 0, 4000, 241.60, 6.0, 19],
-  ["SNOW", "M. Rhee", "CFO", 1, "S", 0, 60000, 205.30, -22.0, 12],
-  ["SNOW", "G. Ortega", "Director", 0, "S", 0, 30000, 210.10, -35.0, 18],
-];
+const RAW_TRADES_DATA: RawTxTuple[] = [];
+
 
 interface TradeItem {
   t: string;
@@ -118,28 +82,8 @@ interface F13Tuple {
   buyer: string;
 }
 
-const RAW_F13_DATA: Record<string, [number, number, number, number, number, number, string, string]> = {
-  HOOD: [188, 96, 63, 9, 7.4, 1388, "64.2%", "Halcyon Ridge Capital"],
-  AVGO: [214, 118, 41, 12, 3.8, 4612, "77.9%", "Northgate Partners"],
-  ORCL: [139, 88, 27, 8, 2.9, 3205, "44.6%", "Larkspur Capital"],
-  PLTR: [161, 131, 38, 21, 2.6, 2940, "52.1%", "Copperline Advisors"],
-  META: [176, 149, 22, 15, 1.2, 5104, "79.8%", "Westbrook Global"],
-  MSFT: [150, 142, 11, 6, 0.4, 6881, "73.5%", "Vanguard Group"],
-  TSLA: [102, 164, 9, 24, -1.8, 4377, "48.3%", "Geode Capital"],
-  NVDA: [128, 171, 14, 19, -2.1, 5912, "67.4%", "BlackRock"],
-  SNOW: [74, 158, 6, 37, -5.9, 1602, "61.0%", "Fernhill Partners"],
-  INTC: [152, 134, 19, 14, 1.9, 3870, "64.8%", "Copperline Advisors"],
-  LULU: [98, 121, 12, 16, -1.2, 1210, "86.1%", "Larkspur Capital"],
-  UNH:  [140, 166, 15, 18, -0.9, 4021, "88.4%", "Copperline Advisors"],
-  SOFI: [96, 58, 24, 5, 4.6, 912, "41.3%", "Halcyon Ridge Capital"],
-  SMCI: [61, 112, 7, 26, -6.4, 744, "58.0%", "Geode Capital"],
-  AMZN: [201, 155, 18, 9, 1.6, 6420, "62.7%", "Westbrook Global"],
-  CRWD: [133, 90, 29, 7, 3.1, 1905, "73.0%", "Northgate Partners"],
-  BTSG: [44, 51, 8, 6, -0.6, 288, "91.2%", "Fernhill Partners"],
-  AUR:  [38, 22, 11, 3, 5.2, 402, "38.5%", "Larkspur Capital"],
-  CVX:  [112, 140, 6, 12, -1.4, 3550, "70.9%", "Vanguard Group"],
-  AMD:  [168, 120, 26, 10, 2.7, 3990, "69.8%", "Northgate Partners"],
-};
+const RAW_F13_DATA: Record<string, [number, number, number, number, number, number, string, string]> = {};
+
 
 // Formatter helpers
 function seed(s: string) {
@@ -483,6 +427,7 @@ export function InsiderScreen() {
   }, [companiesMap, liveInsiderTxRaw]);
 
   // Combined 13F Ownership Stats (curated + live ownership docs)
+  // Combined 13F Ownership Stats (populated from live institutional ownership docs)
   const f13Map = useMemo(() => {
     const map = new Map<string, F13Tuple>();
     for (const [sym, data] of Object.entries(RAW_F13_DATA)) {
@@ -501,25 +446,21 @@ export function InsiderScreen() {
     for (const io of instOwnRaw) {
       if (!io.ticker) continue;
       const sym = io.ticker.toUpperCase().trim();
-      const existing = map.get(sym);
-      if (existing) {
-        if (io.investorsHolding != null) existing.holders = io.investorsHolding;
-        if (io.ownershipPercent != null) existing.own = (io.ownershipPercent * 100).toFixed(1) + "%";
-        if (io.investorsHoldingChange != null && existing.holders > 0) {
-          existing.net = +((io.investorsHoldingChange / existing.holders) * 100).toFixed(1);
-        }
-      } else {
-        map.set(sym, {
-          add: 120,
-          trim: 95,
-          newPos: 15,
-          exits: 8,
-          net: 1.8,
-          holders: io.investorsHolding || 1450,
-          own: io.ownershipPercent != null ? (io.ownershipPercent * 100).toFixed(1) + "%" : "65.0%",
-          buyer: "Vanguard Group",
-        });
-      }
+      const holders = io.investorsHolding || 0;
+      const own = io.ownershipPercent != null ? (io.ownershipPercent * 100).toFixed(1) + "%" : "—";
+      const net = io.investorsHoldingChange != null && holders > 0
+        ? +((io.investorsHoldingChange / holders) * 100).toFixed(1)
+        : 0;
+      map.set(sym, {
+        add: 0,
+        trim: 0,
+        newPos: 0,
+        exits: 0,
+        net,
+        holders,
+        own,
+        buyer: "Institutional",
+      });
     }
     return map;
   }, [instOwnRaw]);
@@ -541,14 +482,14 @@ export function InsiderScreen() {
       const last = rs.length ? Math.min(...rs.map((r) => r.ago)) : null;
 
       const f = f13Map.get(t) || {
-        add: 100,
-        trim: 100,
-        newPos: 10,
-        exits: 10,
+        add: 0,
+        trim: 0,
+        newPos: 0,
+        exits: 0,
         net: 0,
-        holders: 1000,
-        own: "50%",
-        buyer: "Institutional",
+        holders: 0,
+        own: "—",
+        buyer: "—",
       };
 
       const iS =

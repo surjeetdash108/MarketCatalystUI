@@ -34,12 +34,14 @@ import {
   getSixMonthMajorEvents,
 } from "./data";
 import { useTickerSearch } from "../hooks/useTickerSearch";
-import { CandleChart, BarInterval } from "../candle-chart";
+import { BarInterval } from "../candle-chart";
+import { StockChart } from "../stock-panel";
+import { buildChartEarnings, type ChartEarnings } from "../chart-earnings";
 import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso } from "../calendar-range";
-import { StockLogo, IntervalMenu, ChartSelect, CHART_TYPE_OPTIONS, VendorTag } from "../utils";
+import { StockLogo, VendorTag } from "../utils";
 import { SISwitcher } from "./si-switcher";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
@@ -386,10 +388,8 @@ export function StockIntelligenceScreen() {
   const [range, setRange] = useState<"1D" | "5D" | "1M" | "3M" | "6M" | "1Y" | "5Y">("3M");
   const [hoverFrac, setHoverFrac] = useState<number | null>(null);
 
-  // Technicals chart interval & type (matches MC Overview)
+  // Technicals chart candle interval (matches MC Overview & StockChart)
   const [barInterval, setBarInterval] = useState<BarInterval>("1D");
-  const [chartType, setChartType] = useState<"Candles" | "Hollow" | "Bars" | "Line" | "Area">("Candles");
-  const [showEarnings, setShowEarnings] = useState(true);
 
   // Active stock — the URL (?sym=) is the single source of truth on /si, so
   // /si is always the home view and /si?sym=X is always that stock. Reading it
@@ -463,6 +463,19 @@ export function StockIntelligenceScreen() {
     currentTicker || "NVDA",
     range
   );
+
+  // 1-Year daily bars for chart key moments & context (matching MC stock function)
+  const { bars: yearBars } = useBackendBars(
+    currentTicker || "NVDA",
+    "1Y"
+  );
+
+  // Chart earnings with EPS estimate/actual beat/miss markers (matching MC stock function)
+  const chartEarnings: ChartEarnings[] = useMemo(() => {
+    const sym = currentTicker || "NVDA";
+    const symEvents = (liveEarningsList ?? []).filter((e) => e.ticker === sym);
+    return buildChartEarnings(financialsDoc, symEvents, etTodayIso());
+  }, [financialsDoc, liveEarningsList, currentTicker]);
 
   // Real-time price and change from live tick, quotes context, or backend company resource
   const currentPrice = live.tick?.price ?? sharedQuote?.price ?? liveCompany?.price ?? undefined;
@@ -2755,6 +2768,19 @@ export function StockIntelligenceScreen() {
             QL = ["Q2 '24", "Q1 '26"];
           }
 
+          if (!hasFmp && (!fsr[0] || fsr[0].length === 0)) {
+            return (
+              <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--si-text-dim, #5a6876)" }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #f0f4f8)", marginBottom: 8 }}>
+                  Quarterly Statements Not Available
+                </div>
+                <div style={{ fontSize: 13, maxWidth: 420, margin: "0 auto" }}>
+                  Quarterly financial statements for {stock.t} are not reported or synced yet.
+                </div>
+              </div>
+            );
+          }
+
           const FM: [string, (v: number) => string][] = [
             ["REVENUE", (v) => "$" + v.toFixed(1) + "B"],
             ["EPS", (v) => "$" + v.toFixed(2)],
@@ -3046,46 +3072,47 @@ export function StockIntelligenceScreen() {
             ==================================================== */}
         {activeTab === "tech" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Live Technical CandleChart Card (Matches MC Overview) */}
-            <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 16px 8px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                  {stock.t} · LIVE TECHNICAL CHART
-                </span>
-                <VendorTag v={["fmp", "polygon"]} />
-                <span className="cc-chip live" style={{ background: "rgba(74,222,128,0.15)", color: UP, padding: "2px 6px", fontSize: 11, borderRadius: 3, fontWeight: 600 }}>
-                  LIVE
-                </span>
+            {/* Live Technical CandleChart Card with full MC Stock Function feature parity */}
+            <div
+              style={{
+                position: "relative",
+                border: "1px solid var(--si-border, #1c2733)",
+                background: "var(--si-card, rgba(12, 17, 24, 0.9))",
+                padding: "16px 18px 10px",
+              }}
+            >
+              {/* Corner brackets matching SI UI aesthetic */}
+              <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+              <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+              <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+              <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    {stock.t} · LIVE TECHNICAL CHART
+                  </span>
+                  <span style={{ fontSize: 12, color: "var(--si-text-mid, #8b9bb0)", letterSpacing: "0.06em" }}>
+                    {stock.name || liveCompany?.name}
+                  </span>
+                </div>
               </div>
 
               <div style={{ minHeight: 480, width: "100%" }}>
-                <CandleChart
+                <StockChart
                   sym={stock.t}
-                  tf={barInterval}
+                  name={stock.name || liveCompany?.name}
                   interval={barInterval}
-                  chartType={chartType.toLowerCase()}
-                  realBars={realBars}
-                  loading={barsLoading}
-                  toolbarStart={
-                    <>
-                      <IntervalMenu value={barInterval} onChange={setBarInterval} />
-                      <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={(v) => setChartType(v as typeof chartType)} title="Chart type" />
-                      <button
-                        className={`rng indbtn${showEarnings ? " on" : ""}`}
-                        onClick={() => setShowEarnings((v) => !v)}
-                        style={{ height: 28, padding: "0 10px", background: showEarnings ? "rgba(89,128,166,0.2)" : "transparent", border: "1px solid var(--si-border-sec, #2a3a4a)", color: "var(--si-text-hi, #e8eef4)", cursor: "pointer", fontSize: 12 }}
-                      >
-                        Earnings
-                      </button>
-                    </>
-                  }
-                  toolbarEnd={
-                    <>
-                      <VendorTag v={["fmp", "polygon"]} />
-                      {realBars && <span className="cc-chip live" style={{ color: UP, fontSize: 11, marginLeft: 6 }}>live</span>}
-                    </>
-                  }
+                  onIntervalChange={setBarInterval}
+                  expandable
                   height={480}
+                  data={{
+                    live,
+                    bars: { bars: realBars, loading: barsLoading },
+                    yearBars: yearBars ?? null,
+                    news: tickerNews,
+                    earnings: chartEarnings,
+                  }}
                 />
               </div>
             </div>

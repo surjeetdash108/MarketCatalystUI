@@ -26,6 +26,9 @@ export interface EtfHoldingsDoc {
   aum?: number | null;
   expenseRatio?: number | null;
   nav?: number | null;
+  inceptionDate?: string | null;
+  issuer?: string | null;
+  assetClass?: string | null;
   weightingNote?: string | null;
   sectors?: Array<{ sector: string; weight: number }>;
   singleAssetStats?: {
@@ -171,6 +174,48 @@ export function EtfHoldingsView({ symbol }: EtfHoldingsViewProps) {
                 </div>
                 <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)", marginTop: 2 }}>
                   ${(data.aum / 1e9).toFixed(1)}B
+                </div>
+              </div>
+            </>
+          )}
+
+          {data.expenseRatio != null && (
+            <>
+              <div style={{ width: 1, height: 28, background: "var(--border-soft, rgba(255,255,255,0.08))" }} />
+              <div>
+                <div style={{ fontSize: ".68rem", textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)" }}>
+                  Expense Ratio
+                </div>
+                <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)", marginTop: 2 }}>
+                  {(data.expenseRatio * (data.expenseRatio < 1 ? 100 : 1)).toFixed(2)}%
+                </div>
+              </div>
+            </>
+          )}
+
+          {data.nav != null && (
+            <>
+              <div style={{ width: 1, height: 28, background: "var(--border-soft, rgba(255,255,255,0.08))" }} />
+              <div>
+                <div style={{ fontSize: ".68rem", textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)" }}>
+                  NAV
+                </div>
+                <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-hi)", marginTop: 2 }}>
+                  ${data.nav.toFixed(2)}
+                </div>
+              </div>
+            </>
+          )}
+
+          {(data.issuer || data.inceptionDate) && (
+            <>
+              <div style={{ width: 1, height: 28, background: "var(--border-soft, rgba(255,255,255,0.08))" }} />
+              <div>
+                <div style={{ fontSize: ".68rem", textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)" }}>
+                  {data.issuer ? "Issuer" : "Inception"}
+                </div>
+                <div style={{ fontSize: "1.0rem", fontWeight: 600, color: "var(--text-mid, #94a3b8)", marginTop: 2 }}>
+                  {data.issuer ?? data.inceptionDate}
                 </div>
               </div>
             </>

@@ -1204,10 +1204,7 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
           stays meaningful all day for a stock that reported before the bell.
           "—" means the vendor had no pre-market print, not that it was flat. */}
       <td className={`r ecal-num ${fmtUpDn(prePct)}`}>{fmtPctSigned(prePct, 2)}</td>
-      {/* After-hours, as the vendor reports it. See LiveQuote.latePct: this
-          field mirrored the regular-session move for non-reporters when
-          measured, so treat a value here as vendor-reported rather than
-          verified. Shown at the product owner's direction. */}
+      {/* After-hours reaction from FMP extended-hours quote. */}
       <td className={`r ecal-num ${fmtUpDn(postPct)}`}>{fmtPctSigned(postPct, 2)}</td>
       <td className="r ecal-num"><GuidanceCell it={it} /></td>
     </tr>
@@ -1313,9 +1310,7 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
 
   // PRE-MARKET reaction for the rows on screen. Uses the app-wide shared poll,
   // so a ticker here reads exactly as it does on the movers board and drawer.
-  //
-  // Pre-market only. The vendor's after-hours field is not wired — see the note
-  // on LiveQuote.earlyPct for the measurement that disqualified it.
+  // Pre-market and after-hours reactions for the rows on screen from FMP extended-hours quotes.
   const preQuotes = useLiveQuotes(shown.map(i => i.s));
   // Hide an empty section only AFTER every hook has run. Returning earlier
   // changed the hook count whenever a section emptied or refilled (switching
@@ -2024,7 +2019,7 @@ export function EarningsScreen() {
                           </div>
                         )}
                         <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8, lineHeight: 1.4 }}>
-                          Compiled from live analyst &amp; earnings data (FMP · Polygon) — not an AI/LLM narrative.
+                          Compiled from live analyst &amp; earnings data (FMP) — not an AI/LLM narrative.
                         </div>
                       </div>
                     );
@@ -2162,7 +2157,7 @@ export function EarningsScreen() {
                       </div>
                     )}
                     <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 12, lineHeight: 1.5 }}>
-                      Compiled from live analyst &amp; earnings data (FMP · Polygon) — not an AI/LLM narrative.
+                      Compiled from live analyst &amp; earnings data (FMP) — not an AI/LLM narrative.
                     </div>
                   </div>
                 );

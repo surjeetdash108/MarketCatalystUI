@@ -71,7 +71,7 @@ export const STK: Record<string, StockItem> = {
   TSLA: { t: "TSLA", name: "Tesla, Inc.", p: 238.60, c: -1.12, setup: "Volatile Pivot", cf: 1, conf: 41, sig: ["Support test ($225)", "Energy storage growth", "FSD progress", "Delivery estimate risk"], mcap: "$762B", pe: 72.8, fpe: 54.2, rev: 8.4, eps: -2.1, hi: 271.00, lo: 138.80, sector: "Automotive / Clean Energy", lbg: "#e31937", lfg: "#fff" },
   PLTR: { t: "PLTR", name: "Palantir Technologies", p: 134.10, c: 1.95, setup: "AIP Hyper-growth", cf: 5, conf: 67, sig: ["Commercial AIP demand", "Government contract pipeline", "Margin expansion", "S&P 500 inclusion"], mcap: "$302B", pe: 112.0, fpe: 86.4, rev: 41.2, eps: 52.8, hi: 145.00, lo: 21.00, sector: "Enterprise Software", lbg: "#141414", lfg: "#fff" },
   AVGO: { t: "AVGO", name: "Broadcom Inc.", p: 342.10, c: 2.06, setup: "Custom Silicon Leader", cf: 6, conf: 76, sig: ["Hyperscaler XPU ramps", "Tomahawk networking", "VMware synergy", "High dividend growth"], mcap: "$1.62T", pe: 38.4, fpe: 26.5, rev: 44.8, eps: 31.2, hi: 360.00, lo: 128.50, sector: "Semiconductor", lbg: "#f4f4f4", lfg: "#cc092f" },
-  STRL: { t: "STRL", name: "Sterling Infrastructure", p: 501.19, c: -2.30, setup: "Data Center Infrastructure", cf: 7, conf: 83, sig: ["E-Infrastructure demand", "Data Center build-out", "Record backlog", "Margin expansion"], mcap: "$15.6B", pe: 31.4, fpe: 24.2, rev: 23.5, eps: 34.8, hi: 515.48, lo: 210.00, sector: "Industrial / Infrastructure", lbg: "#1e3a8a", lfg: "#fff" },
+  STRL: { t: "STRL", name: "Sterling Infrastructure", p: 165.40, c: 1.25, setup: "Infrastructure Solutions", cf: 7, conf: 81, sig: ["E-Infrastructure demand", "Data Center build-out", "Record backlog", "Margin expansion"], mcap: "$5.2B", pe: 24.5, fpe: 18.2, rev: 18.2, eps: 24.6, hi: 188.00, lo: 95.00, sector: "Industrial / Infrastructure", lbg: "#1e3a8a", lfg: "#fff" },
 };
 
 export const ORDER = Object.keys(STK);
@@ -532,14 +532,14 @@ export function getTP(t: string): any {
       ["BUS", "Top-line revenue expansion", s.rev != null ? `+${pct1(s.rev)} y/y` : "Reported revenue cadence", Math.min(95, Math.max(30, s.conf + 4)), "CK", 2],
       ["BUS", "Operating margin trend", "High cash generation", Math.min(90, Math.max(35, s.conf)), "C", 1],
       ["BUS", "Industry market share", "Market leadership in sector", Math.min(90, Math.max(35, s.conf - 2)), "", 0],
-      ["EARN", "Forward EPS revisions", "+9% over last 90 days", Math.min(95, Math.max(30, s.conf + 5)), "CK", 3],
+      ["EARN", "Forward EPS revisions", s.eps != null ? `EPS trend ${s.eps >= 0 ? "+" : ""}${pct1(s.eps)} y/y` : "Consensus revision trend", Math.min(95, Math.max(30, s.conf + 5)), "CK", 3],
       ["EARN", "Beat / raise consistency", "Positive track record", Math.min(90, Math.max(35, s.conf + 1)), "C", 1],
       ["TECH", "Price vs 50- & 200-DMA", s.c >= 0 ? "Above both key averages" : "Testing support shelf", s.c >= 0 ? 84 : 46, "@trend", 1],
       ["TECH", "Relative strength", `RS rank ${Math.min(98, Math.max(25, s.conf + 8))}`, Math.min(96, Math.max(30, s.conf)), "C", 2],
-      ["TECH", "Volume confirmation", "1.3× 20-day average volume", 74, "", 3],
+      ["TECH", "Volume confirmation", s.c >= 0 ? "Volume expanding on advances" : "Normal trading volume", 74, "", 3],
       ["CAT", "Upcoming catalyst", "High market impact", 72, "", 0],
       ["VAL", "Valuation multiple", s.fpe != null ? `${s.fpe}× forward P/E` : "Evaluated multiple", Math.max(25, Math.min(85, Math.round(110 - safeFpe * 1.1))), "", 0],
-      ["POS", "Institutional positioning", "Net accumulation", 72, "", 1],
+      ["POS", "Institutional positioning", "Institutional ownership tracking", 72, "", 1],
       ["MAC", "Market regime", "Constructive backdrop", 70, "", 1],
     ],
   };
@@ -770,24 +770,9 @@ export function fundSeries(t: string): number[][] {
       [9.7, 9.7, 8.5, 8.5, 8.5, 8.4, 8.4, 8.4],
     ];
   }
-  const r = rng(hash(sym + "fd"));
-  const s = getStock(sym);
-  const g = 1 + (s.rev ?? 15) / 400;
-  const mk = (st: number, gr: number, nz: number) => {
-    let v = st;
-    return Array.from({ length: 8 }, () => {
-      v *= gr * (1 + (r() - 0.5) * nz);
-      return +v.toFixed(2);
-    });
-  };
-  return [
-    mk(4 + r() * 6, g, 0.05),
-    mk(0.4 + r() * 0.6, g * 1.01, 0.08),
-    mk(40 + r() * 30, 1.005, 0.03),
-    mk(0.8 + r() * 2, g, 0.25),
-    mk(8 + r() * 20, 1.01, 0.08),
-    mk(2 + r() * 10, 0.99, 0.04),
-  ];
+  // Return real historical quarterly data series where available, or empty series
+  // rather than generating synthetic pseudo-random walk numbers.
+  return [[], [], [], [], [], []];
 }
 
 export function detail(t: string, live?: any): DetailStock {

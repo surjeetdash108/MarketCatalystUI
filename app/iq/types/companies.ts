@@ -62,6 +62,10 @@ export interface CompanyDoc {
   // FMP profile industry (e.g. "Consumer Electronics") when FMP is wired,
   // else the Polygon SIC description. Shown next to Sector on the detail page.
   industry: string | null;
+  // FMP profile metadata: CEO, full-time employees, IPO/listing date.
+  ceo?: string | null;
+  employees?: number | null;
+  listingDate?: string | null;
   // Real technicals from technical-indicators.job (null until it has run).
   rsi14: number | null;
   macd: number | null;

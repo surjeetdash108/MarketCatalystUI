@@ -190,8 +190,8 @@ const logoFg = (s: string) => (LOGO_BG[s] ?? hashPal(s))[1];
  * "Fmp". The stored `source` value itself is untouched.
  */
 function vendorLabel(source: string | null | undefined): string {
-  const base = (source ?? "polygon").replace(/-ondemand$/i, "").trim();
-  if (!base) return "Polygon";
+  const base = (source ?? "fmp").replace(/-ondemand$/i, "").trim();
+  if (!base) return "FMP";
   return base.toLowerCase() === "fmp" ? "FMP" : base[0].toUpperCase() + base.slice(1);
 }
 
@@ -1761,6 +1761,13 @@ export function StockScreen({
               ) : (
                 <p className="dim">{data.name}</p>
               )}
+              {(liveCompany?.ceo || liveCompany?.employees != null || liveCompany?.listingDate) && (
+                <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginTop: 8, fontSize: ".72rem", color: "var(--text-mid)" }}>
+                  {liveCompany?.ceo && <span><b style={{ color: "var(--text-hi)" }}>CEO:</b> {liveCompany.ceo}</span>}
+                  {liveCompany?.employees != null && <span><b style={{ color: "var(--text-hi)" }}>Employees:</b> {liveCompany.employees.toLocaleString("en-US")}</span>}
+                  {liveCompany?.listingDate && <span><b style={{ color: "var(--text-hi)" }}>Listed:</b> {liveCompany.listingDate}</span>}
+                </div>
+              )}
             </div>
             {/* <span className="sd-snap-src"><VendorTag v={["fmp", "polygon"]} /></span> */}
             {headerActions && <div className="sd-snap-actions">{headerActions}</div>}
@@ -1956,7 +1963,7 @@ export function StockScreen({
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <VendorTag v={["fmp", "polygon"]} />
                     {financialsDoc && (
-                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · FMP</span>
                     )}
                     <div className="tf-pills">
                       <button
@@ -2103,6 +2110,9 @@ export function StockScreen({
                       )}
                       {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetHigh != null && (
                         <span style={{ color: "var(--text-dim-solid)" }}>Range<b>${consensusDoc.priceTargetLow.toFixed(0)}–${consensusDoc.priceTargetHigh.toFixed(0)}</b></span>
+                      )}
+                      {consensusDoc.ptAvgLastYear != null && (
+                        <span style={{ color: "var(--text-dim-solid)" }}>1Y Avg<b>${consensusDoc.ptAvgLastYear.toFixed(0)}</b></span>
                       )}
                     </div>
                   )}
@@ -2309,7 +2319,7 @@ export function StockScreen({
                     {dh && (yieldPct != null
                       ? <span className="pill up">{yieldPct.toFixed(2)}% yield</span>
                       : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>)}
-                    {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · Polygon</span>}
+                    {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · FMP</span>}
                     <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                   </div>
                 </div>
@@ -2597,6 +2607,9 @@ export function StockScreen({
               { k: "Avg volume (20D)", v: avgVol20 != null ? Math.round(avgVol20).toLocaleString("en-US") : null },
               { k: "Sector",        v: data.sector ? titleCaseLabel(data.sector) : null },
               { k: "Industry",      v: data.industry ? titleCaseLabel(data.industry) : null },
+              { k: "CEO",           v: liveCompany?.ceo ?? null },
+              { k: "Employees",     v: liveCompany?.employees != null ? liveCompany.employees.toLocaleString("en-US") : null },
+              { k: "Listing date",  v: liveCompany?.listingDate ? fmtDate(liveCompany.listingDate) : null },
             ];
             const right: Row[] = [
               { k: "Volume",        v: sessionVol != null ? Math.round(sessionVol).toLocaleString("en-US") : null },
@@ -3660,8 +3673,15 @@ export function StockScreen({
 
             {activeTab === "analysis" && consensusDoc?.recentGrades && consensusDoc.recentGrades.length > 0 && (
               <div className="card">
-                <div className="card-h"><h3>Recent analyst actions</h3></div>
-                {consensusDoc.recentGrades.slice(0, 6).map((g, i) => {
+                <div className="card-h">
+                  <h3>Recent analyst actions</h3>
+                  {consensusDoc.ptAvgLastYear != null && (
+                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".68rem" }}>
+                      1Y Avg Target: ${consensusDoc.ptAvgLastYear.toFixed(0)}
+                    </span>
+                  )}
+                </div>
+                {consensusDoc.recentGrades.map((g, i) => {
                   const a = (g.action ?? "").toLowerCase();
                   const col = a.includes("upgrade") ? "var(--up)" : a.includes("downgrade") ? "var(--down)" : "var(--text-dim-solid)";
                   return (
@@ -4063,7 +4083,28 @@ export function StockScreen({
             const inc = incRowsFromFinancials(finPeriod, financialsDoc, () => []);
             const fb = (v: number) => v >= 1 ? `$${v.toFixed(2)}B` : `$${(v * 1000).toFixed(0)}M`;
             const beats10 = hist10.filter(h => h.surp >= 0).length;
-            const annualRows = annualEpsSalesRows(financialsDoc?.annual ?? [], financialsDoc?.epsHistory ?? []);
+            const reportedAnnualRows = annualEpsSalesRows(financialsDoc?.annual ?? [], financialsDoc?.epsHistory ?? []);
+            const reportedYears = new Set(reportedAnnualRows.map(r => r.year));
+            const fwd = [...(financialsDoc?.annualEstimates ?? [])]
+              .filter(e => !reportedYears.has(e.fiscalYear))
+              .sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
+            const startEps = reportedAnnualRows.length ? reportedAnnualRows[reportedAnnualRows.length - 1].eps : null;
+            const startSales = reportedAnnualRows.length ? reportedAnnualRows[reportedAnnualRows.length - 1].sales : null;
+            const salesM = (v: number | null | undefined) => (v != null ? v / 1e6 : null);
+            const forwardRows: typeof reportedAnnualRows = fwd.map((e, i) => {
+              const prevEps = i === 0 ? startEps : fwd[i - 1].epsEstimate;
+              const prevSales = i === 0 ? startSales : salesM(fwd[i - 1].revenueEstimate);
+              return {
+                year: `*${e.fiscalYear}`,
+                eps: e.epsEstimate,
+                epsEst: null,
+                epsChg: pctChangeStr(e.epsEstimate, prevEps),
+                epsSurp: "—",
+                sales: salesM(e.revenueEstimate),
+                salesChg: pctChangeStr(salesM(e.revenueEstimate), prevSales),
+              };
+            });
+            const annualRows = [...reportedAnnualRows, ...forwardRows];
             const quarterlyRows = quarterlyEpsSalesRows(financialsDoc?.quarters ?? [], financialsDoc?.epsHistory ?? []);
             return (
               <div className="side-drawer" style={{ zIndex: 52 }}>
@@ -4138,7 +4179,7 @@ export function StockScreen({
                         </div>
                       )}
                       <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-                        Reported fiscal years only — %chg is year-over-year. Forward analyst estimates aren&apos;t wired yet.
+                        Reported fiscal years and forward analyst estimates (*). %chg is year-over-year.
                       </div>
                     </div>
                   </div>

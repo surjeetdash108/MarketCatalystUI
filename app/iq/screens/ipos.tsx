@@ -483,7 +483,7 @@ export function IPOsScreen() {
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Live IPO Calendar</h3><VendorTag v={["fmp", "polygon"]} /></div>
-            <span className="pill ai" style={{ fontSize: ".68rem" }}>live · Polygon</span>
+            <span className="pill ai" style={{ fontSize: ".68rem" }}>live · FMP</span>
           </div>
           <div className="tbl-wrap">
             <table className="tbl">
