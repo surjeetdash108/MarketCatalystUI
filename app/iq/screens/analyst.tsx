@@ -112,7 +112,7 @@ const CAPS_LIST = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
 
 type MainTab = "Analyst Actions" | "Top Firms" | "All Actions";
 type FilterChip = "All" | "My stocks" | "High signal" | "Upgrades" | "Downgrades" | "Clusters";
-type SortKey = "score" | "t" | "firm" | "up" | "act" | "to";
+type SortKey = "score" | "t" | "firm" | "up" | "act" | "to" | "date";
 type FirmSortKey = "hit" | "ret" | "calls" | "name" | "rank";
 
 interface ProcessedAction {
@@ -739,6 +739,7 @@ export function AnalystScreen() {
       else if (sortKey === "up") res = (a.upPct || 0) - (b.upPct || 0);
       else if (sortKey === "act") res = a.act.localeCompare(b.act);
       else if (sortKey === "to") res = a.to.localeCompare(b.to);
+      else if (sortKey === "date") res = (a.date || "").localeCompare(b.date || "");
       return res * sortDir;
     });
   }, [allActions, filterChip, sectorFilter, capFilter, searchQ, sortKey, sortDir]);
@@ -2039,7 +2040,8 @@ export function AnalystScreen() {
 
           {/* Table */}
           <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflowX: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(100px, 1fr)", gap: 12, padding: "12px 18px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(95px, .7fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(100px, 1fr)", gap: 12, padding: "12px 18px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
+              <span onClick={() => { setSortKey("date"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>DATE</span>
               <span onClick={() => { setSortKey("t"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>TICKER / COMPANY</span>
               <span onClick={() => { setSortKey("firm"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>FIRM</span>
               <span onClick={() => { setSortKey("act"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>ACTION</span>
@@ -2062,7 +2064,7 @@ export function AnalystScreen() {
                     style={{
                       cursor: "pointer",
                       display: "grid",
-                      gridTemplateColumns: "minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(100px, 1fr)",
+                      gridTemplateColumns: "minmax(95px, .7fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(100px, 1fr)",
                       gap: 12,
                       alignItems: "center",
                       padding: "12px 18px",
@@ -2070,6 +2072,10 @@ export function AnalystScreen() {
                       fontSize: 13,
                     }}
                   >
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: TEXT_MUTED, whiteSpace: "nowrap" }}>
+                      {r.date ? r.date.slice(0, 10) : "—"}
+                    </span>
+
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                       <StockLogo sym={r.t} size={28} />
                       <div>

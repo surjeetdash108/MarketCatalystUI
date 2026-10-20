@@ -10,7 +10,7 @@ import { buildChartEarnings } from "../chart-earnings";
 import { StockChart } from "../stock-panel";
 import { exchangeLabel } from "../exchange";
 import { firebaseAuth } from "../../firebase";
-import { apiPost } from "../backend";
+import { apiPost, apiGet } from "../backend";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
 import { useBackendBars, useIntervalBars } from "../hooks/useBackendBars";
@@ -899,7 +899,7 @@ export function StockScreen({
   const [innerDrawer, setInnerDrawer] = useState<InnerDrawer>(null);
   // Peers list sort by session % change; default desc (best performers first).
   const [peerSort, setPeerSort] = useState<"desc" | "asc">("desc");
-  const [peerSortBy, setPeerSortBy] = useState<"c" | "mcap" | "rs" | "sym">("c");
+  const [peerSortBy, setPeerSortBy] = useState<"c" | "w" | "m" | "mcap" | "rs" | "sym">("c");
   const [peerQuery, setPeerQuery] = useState<string>("");
   // News tab period; null = the first period that has any stories.
   const [newsPeriod, setNewsPeriod] = useState<NewsPeriod | null>(null);
@@ -1478,6 +1478,8 @@ export function StockScreen({
     peRatio: number | null;
     rsRating: number | null;
     name: string | null;
+    weeklyChange?: number | null;
+    monthlyChange?: number | null;
   };
   const rawPeerTickers = (liveCompany?.peers ?? []).filter(t => t !== sym);
   const inUniverse = new Set(companies.map(c => c.ticker));
@@ -1486,33 +1488,85 @@ export function StockScreen({
   const missingPeers = rawPeerTickers.filter(t => !inUniverse.has(t));
   const quoteByTicker = useLiveQuotes(missingPeers);
 
-  const relatedPeersAll: PeerRow[] = rawPeerTickers.map(t => {
+  const [enrichedPeers, setEnrichedPeers] = useState<Map<string, {
+    name?: string | null;
+    marketCap?: number | null;
+    peRatio?: number | null;
+    rsRating?: number | null;
+    weeklyChange?: number | null;
+    monthlyChange?: number | null;
+  }>>(new Map());
+
+  // Summaries for EVERY peer: untracked ones need all their fields, and every
+  // peer's monthly change is computed live server-side (price now vs the close
+  // 30 calendar days ago) rather than read from the last stored bar.
+  const peersKey = rawPeerTickers.join(",");
+  useEffect(() => {
+    if (!peersKey) return;
+    let active = true;
+    apiGet<Array<{
+      ticker: string;
+      name: string | null;
+      marketCap: number | null;
+      peRatio: number | null;
+      rsRating: number | null;
+      weeklyChange: number | null;
+      monthlyChange: number | null;
+    }>>(`/live/peers-summary?tickers=${encodeURIComponent(peersKey)}`)
+      .then((rows) => {
+        if (!active || !Array.isArray(rows)) return;
+        setEnrichedPeers((prev) => {
+          const next = new Map(prev);
+          for (const r of rows) {
+            next.set(r.ticker, {
+              name: r.name,
+              marketCap: r.marketCap != null ? (r.marketCap > 1e6 ? r.marketCap / 1e9 : r.marketCap) : null,
+              peRatio: r.peRatio,
+              rsRating: r.rsRating,
+              weeklyChange: r.weeklyChange,
+              monthlyChange: r.monthlyChange,
+            });
+          }
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [peersKey]);
+
+  const relatedPeersAll: PeerRow[] = [];
+  for (const t of rawPeerTickers) {
     const c = companies.find(x => x.ticker === t);
+    const extra = enrichedPeers.get(t);
     if (c && c.pctChange != null) {
-      return {
+      relatedPeersAll.push({
         t: c.ticker,
         c: c.pctChange as number,
         price: c.price ?? null,
-        marketCap: c.marketCap != null ? c.marketCap / 1e9 : null,
-        peRatio: c.peRatio ?? null,
-        rsRating: c.rsRating,
-        name: c.name,
-      };
+        marketCap: c.marketCap != null ? c.marketCap / 1e9 : (extra?.marketCap ?? null),
+        peRatio: c.peRatio ?? extra?.peRatio ?? null,
+        rsRating: c.rsRating ?? extra?.rsRating ?? null,
+        name: c.name || extra?.name || null,
+        weeklyChange: c.week5ChangePct ?? extra?.weeklyChange ?? null,
+        monthlyChange: extra?.monthlyChange ?? c.monthChangePct ?? null,
+      });
+      continue;
     }
     const q = quoteByTicker.get(t);
     if (q && q.pctChange != null) {
-      return {
+      relatedPeersAll.push({
         t,
         c: q.pctChange,
         price: q.price ?? null,
-        marketCap: null,
-        peRatio: null,
-        rsRating: null,
-        name: null,
-      };
+        marketCap: extra?.marketCap ?? null,
+        peRatio: extra?.peRatio ?? null,
+        rsRating: extra?.rsRating ?? null,
+        name: extra?.name ?? null,
+        weeklyChange: extra?.weeklyChange ?? null,
+        monthlyChange: extra?.monthlyChange ?? null,
+      });
     }
-    return null;
-  }).filter((x): x is PeerRow => !!x);
+  }
   // Fallback to same-sector RS leaders only if none of the related tickers resolve.
   const peersAll: PeerRow[] = relatedPeersAll.length
     ? relatedPeersAll
@@ -1527,6 +1581,8 @@ export function StockScreen({
           peRatio: c.peRatio ?? null,
           rsRating: c.rsRating,
           name: c.name,
+          weeklyChange: c.week5ChangePct ?? null,
+          monthlyChange: c.monthChangePct ?? null,
         }));
   const peers = peersAll;                    // card shows ALL peers (scrolls within the card body when they overflow)
   const peersTotal = peersAll.length;
@@ -1550,6 +1606,16 @@ export function StockScreen({
     list.sort((a, b) => {
       if (peerSortBy === "c") {
         return peerSort === "desc" ? b.c - a.c : a.c - b.c;
+      }
+      if (peerSortBy === "w") {
+        const wa = a.weeklyChange ?? -9999;
+        const wb = b.weeklyChange ?? -9999;
+        return peerSort === "desc" ? wb - wa : wa - wb;
+      }
+      if (peerSortBy === "m") {
+        const ma = a.monthlyChange ?? -9999;
+        const mb = b.monthlyChange ?? -9999;
+        return peerSort === "desc" ? mb - ma : ma - mb;
       }
       if (peerSortBy === "mcap") {
         const ma = a.marketCap ?? -1;
@@ -3302,7 +3368,7 @@ export function StockScreen({
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>Sort</span>
                     <div className="sd-seg" role="group" aria-label="Sort peers">
-                      {([["c", "% Change", "desc"], ["mcap", "Market cap", "desc"], ["rs", "RS rating", "desc"], ["sym", "Ticker", "asc"]] as const).map(([k, l, first]) => (
+                      {([["c", "% Change", "desc"], ["w", "Weekly", "desc"], ["m", "Monthly", "desc"], ["mcap", "Market cap", "desc"], ["rs", "RS rating", "desc"], ["sym", "Ticker", "asc"]] as const).map(([k, l, first]) => (
                         <button key={k} type="button" aria-pressed={peerSortBy === k}
                           onClick={() => {
                             if (peerSortBy === k) setPeerSort(x => (x === "desc" ? "asc" : "desc"));
@@ -3324,17 +3390,17 @@ export function StockScreen({
                             <th style={{ textAlign: "left", padding: "10px 14px" }}>Company</th>
                             <th style={{ textAlign: "right", padding: "10px 14px" }}>Price</th>
                             <th style={{ textAlign: "right", padding: "10px 14px" }}>Today's Change</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Weekly Change</th>
+                            <th style={{ textAlign: "right", padding: "10px 14px" }}>Monthly Change</th>
                             <th style={{ textAlign: "right", padding: "10px 14px" }}>Market Cap</th>
                             <th style={{ textAlign: "right", padding: "10px 14px" }}>P/E Ratio</th>
                             <th style={{ textAlign: "center", padding: "10px 14px" }}>RS Rating</th>
-                            <th style={{ textAlign: "right", padding: "10px 14px" }}>vs {sym}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {displayPeers.map(peer => {
                             const isCurrent = peer.t === sym;
                             const tag = peer.c === pmx ? "Leader" : peer.c === pmn ? "Laggard" : "";
-                            const diff = data.pctChange != null ? peer.c - data.pctChange : null;
 
                             return (
                               <tr
@@ -3355,34 +3421,37 @@ export function StockScreen({
                                         {tag && <span className={`sd-rs ${tag === "Leader" ? "lead" : "lag"}`}>{tag}</span>}
                                       </div>
                                       <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                        {peer.name || "—"}
+                                        {peer.name || "N/A"}
                                       </div>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", fontWeight: 600 }}>
-                                  {peer.price != null ? "$" + (peer.price >= 10 ? peer.price.toFixed(2) : peer.price.toFixed(3)) : "—"}
+                                  {peer.price != null ? "$" + (peer.price >= 10 ? peer.price.toFixed(2) : peer.price.toFixed(3)) : "N/A"}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
                                   <span className={cls(peer.c)} style={{ fontWeight: 600 }}>{sign(peer.c)}</span>
                                 </td>
-                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
-                                  {peer.marketCap != null ? cap(peer.marketCap) : "—"}
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
+                                  {peer.weeklyChange != null ? (
+                                    <span className={cls(peer.weeklyChange)} style={{ fontWeight: 600 }}>{sign(peer.weeklyChange)}</span>
+                                  ) : "N/A"}
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px" }}>
+                                  {peer.monthlyChange != null ? (
+                                    <span className={cls(peer.monthlyChange)} style={{ fontWeight: 600 }}>{sign(peer.monthlyChange)}</span>
+                                  ) : "N/A"}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
-                                  {peer.peRatio != null ? peer.peRatio.toFixed(1) : "—"}
+                                  {peer.marketCap != null ? cap(peer.marketCap) : "N/A"}
+                                </td>
+                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
+                                  {peer.peRatio != null ? peer.peRatio.toFixed(1) : "N/A"}
                                 </td>
                                 <td style={{ textAlign: "center", padding: "10px 14px" }}>
                                   {peer.rsRating != null ? (
                                     <span className={`sd-rs${peer.rsRating >= 70 ? " lead" : peer.rsRating < 40 ? " lag" : ""}`}>RS {peer.rsRating}</span>
-                                  ) : "—"}
-                                </td>
-                                <td className="mono" style={{ textAlign: "right", padding: "10px 14px", fontSize: ".75rem" }}>
-                                  {diff != null ? (
-                                    <span style={{ color: diff >= 0 ? "var(--up)" : "var(--down)" }}>
-                                      {diff > 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`}
-                                    </span>
-                                  ) : "—"}
+                                  ) : "N/A"}
                                 </td>
                               </tr>
                             );

@@ -715,6 +715,43 @@ export function StockIntelligenceScreen() {
   const missingPeers = useMemo(() => rawPeerTickers.filter((t) => !inUniverse.has(t)), [rawPeerTickers, inUniverse]);
   const peerQuotesMap = useLiveQuotes(missingPeers);
 
+  const [enrichedPeers, setEnrichedPeers] = useState<Map<string, {
+    name?: string | null;
+    marketCap?: number | null;
+    peRatio?: number | null;
+    rsRating?: number | null;
+  }>>(new Map());
+
+  const missingPeersKey = missingPeers.join(",");
+  useEffect(() => {
+    if (!missingPeersKey) return;
+    let active = true;
+    apiGet<Array<{
+      ticker: string;
+      name: string | null;
+      marketCap: number | null;
+      peRatio: number | null;
+      rsRating: number | null;
+    }>>(`/live/peers-summary?tickers=${encodeURIComponent(missingPeersKey)}`)
+      .then((rows) => {
+        if (!active || !Array.isArray(rows)) return;
+        setEnrichedPeers((prev) => {
+          const next = new Map(prev);
+          for (const r of rows) {
+            next.set(r.ticker, {
+              name: r.name,
+              marketCap: r.marketCap != null ? (r.marketCap > 1e6 ? r.marketCap / 1e9 : r.marketCap) : null,
+              peRatio: r.peRatio,
+              rsRating: r.rsRating,
+            });
+          }
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [missingPeersKey]);
+
   type PeerRowItem = {
     t: string;
     name: string;
@@ -729,38 +766,39 @@ export function StockIntelligenceScreen() {
     if (!stock) return [];
     const related: PeerRowItem[] = rawPeerTickers.map((t) => {
       const c = (companiesList || []).find((x) => x.ticker === t);
+      const extra = enrichedPeers.get(t);
       if (c && c.pctChange != null) {
         return {
           t: c.ticker,
-          name: c.name || t,
+          name: c.name || extra?.name || t,
           price: c.price ?? null,
           c: c.pctChange as number,
-          marketCap: c.marketCap != null ? c.marketCap / 1e9 : null,
-          peRatio: c.peRatio ?? null,
-          rsRating: c.rsRating ?? null,
+          marketCap: c.marketCap != null ? c.marketCap / 1e9 : (extra?.marketCap ?? null),
+          peRatio: c.peRatio ?? extra?.peRatio ?? null,
+          rsRating: c.rsRating ?? extra?.rsRating ?? null,
         };
       }
       const q = peerQuotesMap.get(t);
       if (q && q.pctChange != null) {
         return {
           t,
-          name: t,
+          name: extra?.name || t,
           price: q.price ?? null,
           c: q.pctChange,
-          marketCap: null,
-          peRatio: null,
-          rsRating: null,
+          marketCap: extra?.marketCap ?? null,
+          peRatio: extra?.peRatio ?? null,
+          rsRating: extra?.rsRating ?? null,
         };
       }
       // No live quote yet: list the peer without a price rather than a stale one.
       return {
         t,
-        name: POPULAR[t] || t,
+        name: extra?.name || POPULAR[t] || t,
         price: null,
         c: null,
-        marketCap: null,
-        peRatio: null,
-        rsRating: null,
+        marketCap: extra?.marketCap ?? null,
+        peRatio: extra?.peRatio ?? null,
+        rsRating: extra?.rsRating ?? null,
       };
     }).filter((p) => {
       if (!p || !p.t) return false;
@@ -801,7 +839,7 @@ export function StockIntelligenceScreen() {
       }
     }
     return combined;
-  }, [rawPeerTickers, companiesList, peerQuotesMap, stock, liveCompany?.sector, isBumble]);
+  }, [rawPeerTickers, companiesList, peerQuotesMap, enrichedPeers, stock, liveCompany?.sector, isBumble]);
 
   // Expandable sections state
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);

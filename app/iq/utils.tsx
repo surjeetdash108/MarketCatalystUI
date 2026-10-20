@@ -110,7 +110,10 @@ export function fmt(n: number, d = 2): string {
 }
 
 export function sign(n: number): string {
-  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+  // A move that rounds to zero is "0.00%" — no "+" and never "-0.00%".
+  const r = Math.round(n * 100) / 100;
+  if (r === 0) return '0.00%';
+  return (r > 0 ? '+' : '') + r.toFixed(2) + '%';
 }
 
 export function cls(n: number): string {
