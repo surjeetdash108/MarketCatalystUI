@@ -24,6 +24,7 @@ import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
 import { EtfHoldingsView } from "../etf-holdings-view";
 import { Stock13FFilingsView } from "../stock-13f-view";
 import { StockAnalystActionsView } from "../stock-analyst-actions-view";
+import { StockEarningsEpsSales } from "../stock-earnings-eps-sales";
 import { useSI } from "../si/si-context";
 
 const POPULAR_16_ETFS = new Set([
@@ -37,7 +38,7 @@ import type {
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, type EpsSalesPt } from "../eps-sales-data";
-import { surprisePct, estimatedAnnualEps } from "../types";
+import { surprisePct } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
@@ -617,136 +618,6 @@ function IncLegend() {
   );
 }
 
-const MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** "Jul 26" → the label `months` later ("Oct 26"); null for any other shape. */
-function shiftMonthLabel(label: string, months: number): string | null {
-  const m = label.match(/^([A-Za-z]{3})[ -](\d{2})$/);
-  const mi = m ? MON3.indexOf(m[1]) : -1;
-  if (!m || mi < 0) return null;
-  const t = Number(m[2]) * 12 + mi + months;
-  return `${MON3[((t % 12) + 12) % 12]} ${String(Math.floor(t / 12)).padStart(2, "0")}`;
-}
-/** YoY % for a growth bar; null on a ~0 base or an absurd jump (spin-offs). */
-function yoyPct(cur: number | null | undefined, prev: number | null | undefined): number | null {
-  if (cur == null || prev == null || Math.abs(prev) < 0.05) return null;
-  const v = ((cur - prev) / Math.abs(prev)) * 100;
-  return Math.abs(v) <= 1000 ? v : null;
-}
-
-/** One period on the EPS-surprise strip. `surp` null = no matched estimate;
- *  `est` marks the upcoming period, drawn as a grey placeholder bar. */
-type SurpPt = { label: string; surp: number | null; est?: boolean };
-
-/**
- * EPS surprise strip: beats rise above a dashed baseline, misses hang below,
- * with BEAT / MISS in their own gutter on the left. Fixed 560x260 geometry
- * scaled to the card, matching the Earnings-growth chart beside it.
- */
-function EpsSurpriseChart({ data }: { data: SurpPt[] }) {
-  // BASE sits above centre: a beat's label goes over its bar into the empty
-  // top margin, but a miss's label goes UNDER its bar, toward the period
-  // labels at H - 14. With BASE at 140 the largest miss (84px) put its label
-  // at 242 — on top of the period label at 246. At 128 it ends at 227.
-  const W = 560, H = 260, PADL = 64, PADR = 12, BASE = 128, BW = 22;
-  const step = (W - PADL - PADR) / Math.max(1, data.length);
-  const max = Math.max(1, ...data.map(d => (d.surp != null ? Math.abs(d.surp) : 0)));
-  const scale = 84 / max;
-  const mono = { fontFamily: "var(--f-mono)", fontSize: "11px" };
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }} role="img" aria-label="EPS surprise by period">
-      <line x1={PADL - 8} x2={W - PADR} y1={BASE} y2={BASE} stroke="var(--border-strong)" strokeDasharray="5 5" />
-      <text x={PADL - 14} y={BASE - 16} textAnchor="end" style={{ ...mono, fill: "var(--text-dim-solid)" }}>BEAT</text>
-      <text x={PADL - 14} y={BASE + 22} textAnchor="end" style={{ ...mono, fill: "var(--text-dim-solid)" }}>MISS</text>
-      {data.map((d, i) => {
-        const x = PADL + step * i + step / 2;
-        const label = (
-          <text x={x} y={H - 14} textAnchor="middle" style={{ ...mono, fontSize: "10px", fill: "var(--text-dim-solid)" }}>
-            {d.est ? "*" : ""}{d.label}
-          </text>
-        );
-        if (d.est || d.surp == null) {
-          const bh = d.est ? 40 : 4;
-          return (
-            <g key={d.label + i}>
-              <rect x={x - BW / 2} y={BASE - bh} width={BW} height={bh} rx="3" style={{ fill: "var(--border-strong)" }} />
-              <text x={x} y={BASE - bh - 10} textAnchor="middle" style={{ ...mono, fill: "var(--text-dim-solid)" }}>{d.est ? "est" : "—"}</text>
-              {label}
-            </g>
-          );
-        }
-        const beat = d.surp >= 0, bh = Math.max(3, Math.abs(d.surp) * scale);
-        const y = beat ? BASE - bh : BASE;
-        return (
-          <g key={d.label + i}>
-            <rect x={x - BW / 2} y={y} width={BW} height={bh} rx="3" style={{ fill: beat ? "var(--brand)" : "var(--down)" }} />
-            <text x={x} y={beat ? y - 10 : y + bh + 15} textAnchor="middle"
-              style={{ ...mono, fill: beat ? "var(--text)" : "var(--down)" }}>
-              {beat ? "+" : ""}{d.surp.toFixed(1)}%
-            </text>
-            {label}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-/** One period on the EPS-growth chart. `est` = upcoming consensus, drawn grey. */
-type GrowthPt = { label: string; v: number; yoy: number | null; est?: boolean };
-
-/**
- * Earnings growth (EPS): bars per period with the value on top and YoY above
- * that, a dashed trend line through the bar tops, and three $ gridlines.
- */
-function EpsGrowthBars({ data }: { data: GrowthPt[] }) {
-  const W = 560, H = 260, PT = 44, PB = 34, PL = 46, PR = 12, BW = 22;
-  const vals = data.map(d => d.v);
-  const top = Math.max(0.5, Math.ceil(Math.max(...vals, 0) * 1.25 * 2) / 2);
-  const bot = Math.min(0, ...vals);
-  const ph = H - PT - PB, step = (W - PL - PR) / Math.max(1, data.length);
-  const y = (v: number) => PT + ((top - v) / (top - bot || 1)) * ph;
-  const zero = y(0);
-  const mono = { fontFamily: "var(--f-mono)", fontSize: "11px" };
-  const pts = data.map((d, i) => [PL + step * i + step / 2, y(d.v)] as const);
-  const ticks = bot < 0 ? [bot, 0, top] : [0, top / 2, top];
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }} role="img" aria-label="EPS by period">
-      {ticks.map(v => (
-        <g key={v}>
-          <line x1={PL} x2={W - PR} y1={y(v)} y2={y(v)} stroke="var(--border-soft)" strokeDasharray="4 6" />
-          <text x={PL - 10} y={y(v) + 4} textAnchor="end" style={{ ...mono, fill: "var(--text-dim-solid)" }}>
-            {v < 0 ? "-" : ""}${Math.abs(v).toFixed(2)}
-          </text>
-        </g>
-      ))}
-      <polyline points={pts.map(p => p.join(",")).join(" ")} fill="none" stroke="var(--text-dim-solid)" strokeWidth="1.5" strokeDasharray="4 4" />
-      {data.map((d, i) => {
-        const x = pts[i][0], yv = y(d.v);
-        const by = Math.min(yv, zero), bh = Math.max(2, Math.abs(zero - yv));
-        const labY = d.v >= 0 ? yv - 8 : yv + 16;
-        return (
-          <g key={d.label + i}>
-            <rect x={x - BW / 2} y={by} width={BW} height={bh} rx="3"
-              style={{ fill: d.est ? "var(--border-strong)" : d.v < 0 ? "var(--down)" : "var(--brand)" }} />
-            <text x={x} y={labY} textAnchor="middle"
-              style={{ ...mono, fontSize: "12px", fontWeight: 500, fill: d.est ? "var(--text-dim-solid)" : "var(--text-hi)" }}>
-              {d.v.toFixed(2)}
-            </text>
-            {d.yoy != null && d.v >= 0 && (
-              <text x={x} y={labY - 14} textAnchor="middle" style={{ ...mono, fill: d.yoy < 0 ? "var(--down)" : "var(--brand)" }}>
-                {d.yoy > 0 ? "+" : ""}{Math.round(d.yoy)}%
-              </text>
-            )}
-            <text x={x} y={H - 12} textAnchor="middle" style={{ ...mono, fontSize: "10px", fill: "var(--text-dim-solid)" }}>
-              {d.est ? "*" : ""}{d.label}
-            </text>
-          </g>
-        );
-      })}
-      {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="3" style={{ fill: "var(--text-dim-solid)" }} />)}
-    </svg>
-  );
-}
 
 export type StockTab =
   | "overview"
@@ -906,7 +777,6 @@ export function StockScreen({
   // News tab period; null = the first period that has any stories.
   const [newsPeriod, setNewsPeriod] = useState<NewsPeriod | null>(null);
   const [finPeriod,   setFinPeriod]   = useState<"Q" | "A">("Q");
-  const [erMode,      setErMode]      = useState<"Q" | "A">("Q");
 
   // Tab shown below the persistent header + chart, in the full (non-embedded)
   // view only — the compact hideHeader/hideChart embed (StockPanelLayout) keeps
@@ -2856,109 +2726,8 @@ export function StockScreen({
           </>)}
 
           {activeTab === "earnings" && (() => {
-            const isQ = erMode === "Q";
-            const hist = financialsDoc?.epsHistory ?? [];
-            let surpData: SurpPt[] = [];
-            let growthData: GrowthPt[] = [];
-            let summary: ReactNode = null;
-            if (isQ) {
-              // Last 8 reported quarters, oldest → newest, as in the reference.
-              const qs = hist10.slice(0, 8).reverse();
-              const byLabel = new Map(hist10.map(h => [h.q, h.a]));
-              const lastLbl = hist10[0]?.q;
-              const nextLbl = lastLbl ? shiftMonthLabel(lastLbl, 3) : null;
-              // Upcoming consensus: an unreported epsHistory row, else the calendar.
-              const nextEst = hist
-                .filter(h => h.epsActual == null && h.epsEstimate != null && h.date >= todayStr)
-                .sort((x, y) => x.date.localeCompare(y.date))[0]?.epsEstimate
-                ?? upcomingEr?.epsEstimate ?? null;
-              const dash = (l: string) => l.replace(" ", "-");
-              surpData = qs.map(h => ({ label: dash(h.q), surp: h.e !== 0 ? h.surp : null }));
-              growthData = qs.map(h => {
-                const ago = shiftMonthLabel(h.q, -12);
-                return { label: dash(h.q), v: h.a, yoy: yoyPct(h.a, ago ? byLabel.get(ago) : undefined) };
-              });
-              if (nextLbl && nextEst != null) {
-                const ago = shiftMonthLabel(nextLbl, -12);
-                surpData.push({ label: dash(nextLbl), surp: null, est: true });
-                growthData.push({ label: dash(nextLbl), v: nextEst, yoy: yoyPct(nextEst, ago ? byLabel.get(ago) : undefined), est: true });
-              }
-              const paired = qs.filter(h => h.e !== 0);
-              const last = qs[qs.length - 1];
-              const lastYoy = growthData[qs.length - 1]?.yoy ?? null;
-              summary = last ? (<>
-                {paired.length > 0 && <>{paired.filter(h => h.surp >= 0).length}/{paired.length} beats · </>}
-                {dash(last.q)} ${last.a.toFixed(2)}
-                {lastYoy != null && <> · <span style={{ color: lastYoy < 0 ? "var(--down)" : "var(--up)" }}>{lastYoy > 0 ? "+" : ""}{lastYoy.toFixed(1)}% YoY</span></>}
-              </>) : null;
-            } else {
-              const rows = financialsDoc ? annualEpsSalesRows(financialsDoc.annual, hist).filter(r => r.eps != null).slice(-5) : [];
-              surpData = rows.map(r => ({ label: `FY${r.year}`, surp: surprisePct(r.eps, r.epsEst) }));
-              growthData = rows.map((r, i) => ({ label: `FY${r.year}`, v: r.eps as number, yoy: yoyPct(r.eps, rows[i - 1]?.eps) }));
-              const lastYear = rows[rows.length - 1]?.year;
-              const nextFy = lastYear ? String(Number(lastYear) + 1) : null;
-              const nextEst = nextFy ? estimatedAnnualEps(nextFy, hist) : null;
-              if (nextFy && nextEst != null) {
-                surpData.push({ label: `FY${nextFy}`, surp: null, est: true });
-                growthData.push({ label: `FY${nextFy}`, v: nextEst, yoy: yoyPct(nextEst, rows[rows.length - 1]?.eps), est: true });
-              }
-              const paired = surpData.filter(d => !d.est && d.surp != null);
-              const last = rows[rows.length - 1];
-              const lastYoy = growthData[rows.length - 1]?.yoy ?? null;
-              summary = last ? (<>
-                {paired.length > 0 && <>{paired.filter(d => (d.surp as number) >= 0).length}/{paired.length} beats · </>}
-                FY{last.year} ${(last.eps as number).toFixed(2)}
-                {lastYoy != null && <> · <span style={{ color: lastYoy < 0 ? "var(--down)" : "var(--up)" }}>{lastYoy > 0 ? "+" : ""}{Math.round(lastYoy)}% YoY</span></>}
-              </>) : null;
-            }
-            const hasEst = surpData.some(d => d.est);
-            const empty = (
-              <div className="card-b">
-                <DataState loading={earningsLoading || financialsLoading} label={`No ${isQ ? "quarterly" : "annual"} earnings history synced for ${sym} yet.`} />
-              </div>
-            );
             return (<>
-              <SegToggle label="Period" value={erMode} onChange={setErMode}
-                options={[["Q", "Quarterly"], ["A", "Annual"]]} />
-              <div className="sd-two">
-                <div className="card sd-card">
-                  <div className="card-h">
-                    <h3>EPS surprise</h3>
-                    <span className="mono" style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>
-                      Next: <span style={{ color: "var(--up)", fontWeight: 600 }}>{erDate}</span>
-                    </span>
-                  </div>
-                  {surpData.length === 0 ? empty : (<>
-                    <EpsSurpriseChart data={surpData} />
-                    <div className="sd-foot">
-                      <span className="sd-keys">
-                        <span><i className="sd-key" />Beat</span>
-                        <span><i className="sd-key" style={{ background: "var(--down)" }} />Miss</span>
-                        {hasEst && <span><i className="sd-key est" />Estimate</span>}
-                      </span>
-                    </div>
-                  </>)}
-                </div>
-
-                <div className="card sd-card">
-                  <div className="card-h">
-                    <h3>Earnings growth (EPS)</h3>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {summary && <span className="mono" style={{ fontSize: ".7rem", color: "var(--text-dim-solid)" }}>{summary}</span>}
-                      {growthData.length > 0 && <ExpandBtn title={`${sym} · Earnings growth (EPS)`} node={<EpsGrowthBars data={growthData} />} />}
-                    </div>
-                  </div>
-                  {growthData.length === 0 ? empty : (<>
-                    <EpsGrowthBars data={growthData} />
-                    <div className="sd-foot">
-                      <span className="sd-keys">
-                        <span><i className="sd-key" />Reported</span>
-                        {hasEst && <span><i className="sd-key est" />Estimate</span>}
-                      </span>
-                    </div>
-                  </>)}
-                </div>
-              </div>
+              <StockEarningsEpsSales sym={sym} financialsDoc={financialsDoc} loading={earningsLoading || financialsLoading} />
 
               <EarningsPlaybookCards
                 sym={sym}

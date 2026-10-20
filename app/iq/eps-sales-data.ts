@@ -60,6 +60,9 @@ export type AnnualRow = {
 
 export type QuarterRow = {
   label: string;
+  /** Period-end date (ISO) and its "Sep-24" month label. */
+  end: string;
+  monthLabel: string;
   eps: number | null;
   epsEst: number | null;
   epsChg: string;
@@ -223,6 +226,8 @@ export function quarterlyEpsSalesRows(
         r.fiscalPeriod && r.fiscalYear
           ? `${r.fiscalPeriod} ${r.fiscalYear}`
           : fmtDate(r.endDate, { month: "short", year: "2-digit" }),
+      end: r.endDate as string,
+      monthLabel: fmtDate(r.endDate, { month: "short", year: "2-digit" }).replace(" ", "-"),
       eps,
       epsEst: r.epsEstimateReported ?? null,
       epsChg: pctChangeStr(eps, yoy ? reportedQuarterEps(yoy) : null),
