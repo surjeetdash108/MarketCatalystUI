@@ -43,3 +43,5 @@ next-env.d.ts
 
 # Firebase deploy cache (build artifact)
 .firebase/
+
+.vscode/

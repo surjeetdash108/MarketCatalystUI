@@ -9,6 +9,14 @@ import { WatchlistsContext } from "../hooks/useWatchlists";
 import type { AnalystConsensusDoc, CompanyDoc } from "../types";
 import { useLiveQuotes } from "../live-quotes-context";
 import { etTodayIso } from "../calendar-range";
+import {
+  type FirmStat,
+  type ProcessedAction,
+  RECENT_DAYS,
+  buildAnalystActions,
+  firmKey,
+  pctTxt,
+} from "../analyst-actions-engine";
 
 // ============================================================================
 // Types & Constants
@@ -66,26 +74,6 @@ const FACTORS = [
   ["Context", 10, "Catalyst proximity: earnings within 14 days, FDA, or macro tailwind"],
 ] as const;
 
-/** Measured firm track record (GET /market-data/analyst-firm-stats; analyst-firm-stats job). */
-interface FirmStat {
-  firmKey: string;
-  name: string;
-  ratingChanges: number;
-  avgMoveAfterCall: number | null;
-  avgMoveAfterUpgrade: number | null;
-  avgMoveAfterDowngrade: number | null;
-  targetsResolved: number;
-  hitRatePct: number | null;
-  bullishPct: number | null;
-  recentResolved?: Array<{ ticker: string; date: string; target: number; priceWhenPosted: number; hit: boolean }>;
-}
-/** "J.P. Morgan" / "JP Morgan" / "JPMorgan" → "jpmorgan" (matches the backend key). */
-const firmKey = (name: string) => name.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
-/** Calls within this many days count as "recent" for the header and needle list. */
-const RECENT_DAYS = 7;
-const BULLISH_GRADE = /buy|outperform|overweight|positive|accumulate/i;
-const BEARISH_GRADE = /sell|underperform|underweight|negative|reduce/i;
-const pctTxt = (v: number | null) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`);
 
 const SECTORS_LIST = [
   "All",
@@ -112,38 +100,9 @@ const CAPS_LIST = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
 
 type MainTab = "Analyst Actions" | "Top Firms" | "All Actions";
 type FilterChip = "All" | "My stocks" | "High signal" | "Upgrades" | "Downgrades" | "Clusters";
-type SortKey = "score" | "t" | "firm" | "up" | "act" | "to" | "date";
+type SortKey = "score" | "t" | "firm" | "up" | "act" | "to" | "pt" | "date";
 type FirmSortKey = "hit" | "ret" | "calls" | "name" | "rank";
 
-interface ProcessedAction {
-  id: string;
-  t: string; // Ticker
-  co: string; // Company Name
-  firm: string;
-  act: string; // "Upgrade", "Downgrade", "PT Raise", "PT Cut", "Initiate", "Maintain"
-  dir: number; // 1 = bullish, -1 = bearish, 0 = neutral
-  from: string;
-  to: string;
-  pt1: number; // Current firm price target
-  prevPt: number | null;
-  px: number; // Current price
-  date: string;
-  score: number; // 0-100 Signal Score
-  comp: [number, number, number, number, number]; // Factor components
-  cluster: number; // Number of firms acting on this ticker
-  clusterFirms: string[];
-  street: number[]; // All Street targets
-  hit: string; // Firm's measured 12-month target hit rate, "—" when unmeasured
-  move: string; // Firm's measured avg 5-day move after calls like this one, "—" when unmeasured
-  headline: string;
-  why: string[];
-  held: boolean;
-  watched: boolean;
-  sector: string;
-  cap: string;
-  tags: string[];
-  upPct: number | null; // % upside to this target
-}
 
 interface ProcessedFirm {
   rank: number;
@@ -206,61 +165,7 @@ function getNextCstRefreshDelayMs(): number {
   return (target - currentSeconds) * 1000;
 }
 
-function resolveActionMeta(
-  actionRaw?: string | null,
-  previousGrade?: string | null,
-  newGrade?: string | null,
-  pt?: number | null,
-  prevPt?: number | null,
-) {
-  const act = (actionRaw ?? "").toLowerCase().trim();
-  const prev = (previousGrade ?? "").trim();
-  const next = (newGrade ?? "").trim();
 
-  let shownAction = "Maintain";
-  let dir = 0;
-
-  if (act.includes("upgrade")) {
-    shownAction = "Upgrade";
-    dir = 1;
-  } else if (act.includes("downgrade")) {
-    shownAction = "Downgrade";
-    dir = -1;
-  } else if (act.includes("init")) {
-    shownAction = "Initiate";
-    dir = BULLISH_GRADE.test(next) ? 1 : BEARISH_GRADE.test(next) ? -1 : 0;
-  } else if (pt != null && prevPt != null && pt !== prevPt) {
-    if (pt > prevPt) {
-      shownAction = "PT Raise";
-      dir = 1;
-    } else {
-      shownAction = "PT Cut";
-      dir = -1;
-    }
-  } else if (BULLISH_GRADE.test(next)) {
-    shownAction = "Reiterate";
-    dir = 1;
-  } else if (BEARISH_GRADE.test(next)) {
-    shownAction = "Reiterate";
-    dir = -1;
-  }
-
-  return {
-    shownAction,
-    dir,
-    from: prev || "—",
-    to: next || "—",
-  };
-}
-
-function capCategory(cap?: number | null): string {
-  if (cap == null || cap <= 0) return "—";
-  if (cap >= 200e9) return "Mega";
-  if (cap >= 10e9) return "Large";
-  if (cap >= 2e9) return "Mid";
-  if (cap >= 300e6) return "Small";
-  return "Micro";
-}
 
 // ============================================================================
 // Main Component
@@ -422,125 +327,17 @@ export function AnalystScreen() {
   );
   const extraQuotes = useLiveQuotes(unpricedTickers);
 
-  const allActions = useMemo<ProcessedAction[]>(() => {
-    const DAY = 86_400_000;
-    const dayMs = (d: string) => Date.parse(`${d}T00:00:00Z`);
-    const rows: ProcessedAction[] = [];
-
-    liveConsensus.forEach((c, cIdx) => {
-      const sym = (c.ticker || "").trim().toUpperCase();
-      // Only real rating changes; a stock with none contributes no actions.
-      const grades = (c.recentGrades ?? []).filter((g) => g.firm && g.date);
-      if (!sym || grades.length === 0) return;
-      const comp = companyMap.get(sym);
-      const px = comp?.price && comp.price > 0 ? comp.price : extraQuotes.get(sym)?.price ?? null;
-      if (px == null || !(px > 0)) return; // no live price yet: upside/slider cannot be computed
-      const coName = comp?.name || sym;
-      const sec = comp?.sector || "—";
-      const cap = capCategory(comp?.marketCap);
-
-      // Every target the Street has posted for the stock (real values only).
-      const allPtValues = grades.map((g) => g.priceTarget).filter((v): v is number => v != null && v > 0);
-      if (c.priceTargetConsensus) allPtValues.push(c.priceTargetConsensus);
-      if (c.priceTargetHigh) allPtValues.push(c.priceTargetHigh);
-      if (c.priceTargetLow) allPtValues.push(c.priceTargetLow);
-      const streetTargets = [...new Set(allPtValues)].sort((a, b) => a - b);
-
-      const metas = grades.map((g) => resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget));
-
-      grades.forEach((g, gIdx) => {
-        const firmName = (g.firm as string).trim();
-        const meta = metas[gIdx];
-        const targetPt = g.priceTarget != null && g.priceTarget > 0 ? g.priceTarget : (c.priceTargetConsensus ?? null);
-        if (targetPt == null) return; // nothing to place on the target map
-        const prevPt = g.previousPriceTarget ?? null;
-        const upPct = ((targetPt - px) / px) * 100;
-
-        // Cluster: distinct firms making a same-direction call on this stock
-        // within 72 hours of this one.
-        const clusterFirmsList = [...new Set(
-          grades
-            .filter((o, oIdx) => metas[oIdx].dir === meta.dir && meta.dir !== 0 && Math.abs(dayMs(o.date as string) - dayMs(g.date as string)) <= 3 * DAY)
-            .map((o) => (o.firm as string).trim()),
-        )];
-        const clusterCount = Math.max(1, clusterFirmsList.length);
-
-        const stat = firmStatsByKey.get(firmKey(firmName)) ?? null;
-        const hitRate = stat?.hitRatePct ?? null;
-        const movePct = meta.dir > 0 ? stat?.avgMoveAfterUpgrade ?? null : meta.dir < 0 ? stat?.avgMoveAfterDowngrade ?? null : null;
-
-        // Signal Score (0-100). Firm accuracy uses the measured hit rate; a firm
-        // without enough resolved targets scores the neutral midpoint.
-        const firmAccScore = hitRate != null ? Math.min(35, Math.max(12, Math.round((hitRate / 100) * 35))) : 20;
-        const clusterScore = clusterCount >= 4 ? 25 : clusterCount === 3 ? 21 : clusterCount === 2 ? 15 : 7;
-        const strengthScore = meta.shownAction === "Upgrade" || meta.shownAction === "Downgrade" ? 20 :
-          meta.shownAction.includes("PT") ? 15 : meta.shownAction === "Initiate" ? 14 : 9;
-        const movePctVal = prevPt && prevPt > 0 ? Math.abs((targetPt - prevPt) / prevPt) * 100 : Math.abs(upPct);
-        const moveScore = movePctVal >= 20 ? 10 : movePctVal >= 12 ? 8 : movePctVal >= 5 ? 6 : 4;
-        const isHeld = holdings.has(sym);
-        const isWatched = watchedTickers.has(sym);
-        const contextScore = isHeld ? 10 : isWatched ? 9 : clusterCount >= 2 ? 8 : 6;
-        const totalScore = Math.min(100, Math.max(25, firmAccScore + clusterScore + strengthScore + moveScore + contextScore));
-        const factorsComp: [number, number, number, number, number] = [firmAccScore, clusterScore, strengthScore, moveScore, contextScore];
-
-        const headline = clusterCount >= 2
-          ? `${clusterCount} ${meta.dir >= 0 ? "bullish" : "bearish"} calls within 72h: ${clusterFirmsList.slice(0, 3).join(", ")}${clusterFirmsList.length > 3 ? " and others" : ""}`
-          : `${firmName} ${meta.shownAction.toLowerCase()}s ${sym}${meta.to !== "—" ? ` to ${meta.to}` : ""} with $${targetPt.toFixed(2)} target`;
-
-        const whyBullets: string[] = [];
-        if (isHeld) whyBullets.push(`You hold this stock in your portfolio`);
-        if (isWatched) whyBullets.push(`In your watchlist`);
-        if (clusterCount >= 2) whyBullets.push(`${clusterCount} firms made same-direction calls within 72 hours`);
-        if (streetTargets.length >= 2 && targetPt >= streetTargets[streetTargets.length - 1]) {
-          whyBullets.push(`New $${targetPt.toFixed(2)} PT is the highest on the Street`);
-        } else if (streetTargets.length >= 2 && targetPt <= streetTargets[0]) {
-          whyBullets.push(`New PT is the lowest on the Street`);
-        } else {
-          whyBullets.push(`Target is ${upPct >= 0 ? "+" : ""}${upPct.toFixed(1)}% vs current market price`);
-        }
-        if (hitRate != null && stat) {
-          whyBullets.push(`${firmName}'s price targets were hit within 12 months ${hitRate}% of the time (${stat.targetsResolved} resolved)`);
-        }
-
-        const tags: string[] = [];
-        if (isHeld) tags.push("HOLDING");
-        if (isWatched) tags.push("WATCHLIST");
-        if (clusterCount >= 2) tags.push(`${clusterCount}× CLUSTER`);
-
-        rows.push({
-          id: `${sym}-${firmName}-${g.date || cIdx}-${gIdx}`,
-          t: sym,
-          co: coName,
-          firm: firmName,
-          act: meta.shownAction,
-          dir: meta.dir,
-          from: meta.from,
-          to: meta.to,
-          pt1: targetPt,
-          prevPt,
-          px,
-          date: g.date as string,
-          score: totalScore,
-          comp: factorsComp,
-          cluster: clusterCount,
-          clusterFirms: clusterFirmsList,
-          street: streetTargets.length ? streetTargets : [targetPt],
-          hit: hitRate != null ? `${hitRate}%` : "—",
-          move: pctTxt(movePct),
-          headline,
-          why: whyBullets,
-          held: isHeld,
-          watched: isWatched,
-          sector: sec,
-          cap,
-          tags,
-          upPct,
-        });
-      });
-    });
-
-    return rows.sort((a, b) => b.score - a.score);
-  }, [liveConsensus, companyMap, holdings, watchlistKey, extraQuotes, firmStatsByKey, watchedTickers]);
+  const allActions = useMemo<ProcessedAction[]>(
+    () => buildAnalystActions({
+      consensusDocs: liveConsensus,
+      companyMap,
+      livePrice: (sym) => extraQuotes.get(sym)?.price ?? null,
+      firmStatsByKey,
+      holdings,
+      watchedTickers,
+    }),
+    [liveConsensus, companyMap, holdings, extraQuotes, firmStatsByKey, watchedTickers],
+  );
 
   // Calls made within the last RECENT_DAYS (ET calendar) — what the header and
   // the "Moving the needle" list describe.
@@ -739,6 +536,7 @@ export function AnalystScreen() {
       else if (sortKey === "up") res = (a.upPct || 0) - (b.upPct || 0);
       else if (sortKey === "act") res = a.act.localeCompare(b.act);
       else if (sortKey === "to") res = a.to.localeCompare(b.to);
+      else if (sortKey === "pt") res = a.pt1 - b.pt1;
       else if (sortKey === "date") res = (a.date || "").localeCompare(b.date || "");
       return res * sortDir;
     });
@@ -2040,12 +1838,13 @@ export function AnalystScreen() {
 
           {/* Table */}
           <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflowX: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(95px, .7fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(100px, 1fr)", gap: 12, padding: "12px 18px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(95px, .7fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(120px, .9fr) minmax(90px, .7fr) minmax(100px, 1fr)", gap: 12, padding: "12px 18px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
               <span onClick={() => { setSortKey("date"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>DATE</span>
               <span onClick={() => { setSortKey("t"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>TICKER / COMPANY</span>
               <span onClick={() => { setSortKey("firm"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>FIRM</span>
               <span onClick={() => { setSortKey("act"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>ACTION</span>
               <span onClick={() => { setSortKey("to"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>PREVIOUS → NEW</span>
+              <span onClick={() => { setSortKey("pt"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>PRICE TARGET</span>
               <span onClick={() => { setSortKey("up"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>TO TARGET</span>
               <span onClick={() => { setSortKey("score"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>SIGNAL</span>
             </div>
@@ -2064,7 +1863,7 @@ export function AnalystScreen() {
                     style={{
                       cursor: "pointer",
                       display: "grid",
-                      gridTemplateColumns: "minmax(95px, .7fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(90px, .7fr) minmax(100px, 1fr)",
+                      gridTemplateColumns: "minmax(95px, .7fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(120px, .9fr) minmax(90px, .7fr) minmax(100px, 1fr)",
                       gap: 12,
                       alignItems: "center",
                       padding: "12px 18px",
@@ -2111,6 +1910,23 @@ export function AnalystScreen() {
                     <span style={{ color: TEXT_MUTED }}>
                       {r.from} → <b style={{ color: TEXT_HI }}>{r.to}</b>
                     </span>
+
+                    {r.ptSource === "firm" ? (
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI, fontWeight: 700 }}>
+                        ${r.pt1.toFixed(2)}
+                        {r.prevPt != null && r.prevPt !== r.pt1 && (
+                          <div style={{ fontSize: 11, fontWeight: 500, color: TEXT_MUTED }}>was ${r.prevPt.toFixed(2)}</div>
+                        )}
+                      </span>
+                    ) : (
+                      <span
+                        title="This firm posted no target with this call; % to target uses the Street consensus"
+                        style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_MUTED }}
+                      >
+                        ${r.pt1.toFixed(2)}
+                        <div style={{ fontSize: 11 }}>consensus</div>
+                      </span>
+                    )}
 
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", color: r.upPct && r.upPct >= 0 ? G : R }}>
                       {r.upPct != null ? `${r.upPct >= 0 ? "+" : ""}${r.upPct.toFixed(1)}%` : "—"}

@@ -69,6 +69,11 @@ export interface LiveQuote {
   regularClose: number | null;
   /** When the vendor last updated this quote (epoch ms); null when unknown. */
   updatedAt: number | null;
+  /** Latest session's open / high / low / volume, from the same vendor quote as `price`. */
+  open: number | null;
+  dayHigh: number | null;
+  dayLow: number | null;
+  dayVolume: number | null;
 }
 
 /** Matches MAX_TICKERS on /live/snapshot (the vendor's per-call ceiling). */
@@ -182,6 +187,10 @@ interface SnapshotRow {
   previousClose?: number | null;
   regularClose?: number | null;
   vendorUpdatedAt?: number | null;
+  open?: number | null;
+  dayHigh?: number | null;
+  dayLow?: number | null;
+  dayVolume?: number | null;
 }
 interface SnapshotResponse {
   quotes?: SnapshotRow[];
@@ -276,6 +285,10 @@ export function LiveQuotesProvider({ children }: { children: ReactNode }) {
               previousClose: q.previousClose ?? null,
               regularClose: q.regularClose ?? null,
               updatedAt: q.vendorUpdatedAt ?? null,
+              open: q.open ?? null,
+              dayHigh: q.dayHigh ?? null,
+              dayLow: q.dayLow ?? null,
+              dayVolume: q.dayVolume ?? null,
             });
           }
         }

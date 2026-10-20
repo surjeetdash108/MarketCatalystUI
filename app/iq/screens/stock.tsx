@@ -23,6 +23,7 @@ import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
 // import { EarningsPlaybook } from "./EarningsPlaybook";
 import { EtfHoldingsView } from "../etf-holdings-view";
 import { Stock13FFilingsView } from "../stock-13f-view";
+import { StockAnalystActionsView } from "../stock-analyst-actions-view";
 import { useSI } from "../si/si-context";
 
 const POPULAR_16_ETFS = new Set([
@@ -750,6 +751,7 @@ function EpsGrowthBars({ data }: { data: GrowthPt[] }) {
 export type StockTab =
   | "overview"
   | "analysis"
+  | "analyst"
   | "peers"
   | "earnings"
   | "financials"
@@ -823,7 +825,7 @@ export function StockScreen({
   // match for a given panel just shows that panel as not available.
   // Scoped to this ticker: the backend fills it from FMP on demand when the
   // nightly sweep has no doc, so a stock outside that universe still gets one.
-  const { data: liveConsensus } = useApiList<AnalystConsensusDoc>(
+  const { data: liveConsensus, loading: liveConsensusLoading } = useApiList<AnalystConsensusDoc>(
     `/market-data/analyst-actions?ticker=${encodeURIComponent(sym)}`,
   );
   // Scoped to this ticker server-side: unscoped, the endpoint returns only the
@@ -1098,7 +1100,18 @@ export function StockScreen({
     ? yr.slice(-20).reduce((s, b) => s + b.v, 0) / Math.min(20, yr.length)
     : (keyStats?.avgVolume20 ?? null);
 
-  const sessionVol = useMemo(() => {
+  // Current-session stats straight from the vendor quote (same source and time as
+  // the price) — the stored daily bars lag a session until the nightly sync.
+  const sessionQuote = useLiveQuotes([sym]).get(sym) ?? null;
+  const qPos = (v: number | null | undefined) => (v != null && v > 0 ? v : null);
+  const sessOpen = qPos(sessionQuote?.open);
+  const sessHigh = qPos(sessionQuote?.dayHigh);
+  const sessLow = qPos(sessionQuote?.dayLow);
+  const sessPrevClose = qPos(sessionQuote?.previousClose);
+  const sessVolume = qPos(sessionQuote?.dayVolume);
+  const hasSessionQuote = sessOpen != null && sessHigh != null && sessLow != null && sessPrevClose != null;
+
+  const barSessionVol = useMemo(() => {
     if (yr && yr.length > 0) {
       const v = yr[yr.length - 1]?.v;
       if (typeof v === "number" && v > 0) return v;
@@ -1110,6 +1123,7 @@ export function StockScreen({
     }
     return keyStats?.avgVolume20 ?? null;
   }, [yr, realBars, barInterval, keyStats]);
+  const sessionVol = hasSessionQuote && sessVolume != null ? sessVolume : barSessionVol;
 
 
   const ema50 = ema(yr, 50);
@@ -1316,7 +1330,7 @@ export function StockScreen({
   // "$9.1M" rather than rounding to a meaningless "$0.0B".
   const cap = (v: number) =>
     v >= 1000 ? `$${(v / 1000).toFixed(2)}T`
-    : v >= 10 ? `$${Math.round(v)}B`
+    : v >= 100 ? `$${Math.round(v)}B`
     : v >= 1  ? `$${v.toFixed(1)}B`
     : v > 0   ? `$${(v * 1000).toFixed(v < 0.1 ? 1 : 0)}M`
     : "—";
@@ -1642,6 +1656,7 @@ export function StockScreen({
   const ALL_TABS: { id: StockTab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
     { id: "analysis", label: "Analysis" },
+    ...(!isEtf ? [{ id: "analyst" as StockTab, label: "Analyst Actions" }] : []),
     { id: "peers", label: "Peers", count: peersTotal || undefined },
     { id: "earnings", label: "Earnings", count: hist10.length || undefined },
     { id: "financials", label: "Financials" },
@@ -2646,16 +2661,27 @@ export function StockScreen({
             // as its value, so the card scans top to bottom.
             // The latest session's daily bar gives Open / Day's range / Volume;
             // the bar before it gives Previous close.
-            const dayBar = yr.length > 0 ? yr[yr.length - 1] : null;
+            // Live quote first (current session, consistent with the price);
+            // the stored bars only when the quote lacks the session fields.
+            const lastBar = yr.length > 0 ? yr[yr.length - 1] : null;
             const prevBar = yr.length > 1 ? yr[yr.length - 2] : null;
-            const prevClose = prevBar?.c ?? companySummary?.prevClose ?? null;
+            const dayBar = hasSessionQuote
+              ? { o: sessOpen as number, h: sessHigh as number, l: sessLow as number }
+              : lastBar;
+            const prevClose = hasSessionQuote
+              ? sessPrevClose
+              : (prevBar?.c ?? companySummary?.prevClose ?? null);
             const px = (v: number) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             const pct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
-            const exDiv = (dividendHistory?.history ?? [])
+            // A non-payer's lone 1998 $0.001 record is history, not a current
+            // ex-date: show one only if paid within 12 months or upcoming.
+            const latestExDiv = (dividendHistory?.history ?? [])
               .map(h => h.exDividendDate)
               .filter((d): d is string => !!d)
               .sort()
               .pop() ?? null;
+            const yearAgoIso = new Date(Date.parse(`${etTodayIso()}T00:00:00Z`) - 365 * 86_400_000).toISOString().slice(0, 10);
+            const exDiv = latestExDiv && latestExDiv >= yearAgoIso ? latestExDiv : null;
             const target = consensusDoc?.priceTargetConsensus ?? null;
             const targetUp = target != null && dispPrice != null && dispPrice > 0 ? (target - dispPrice) / dispPrice * 100 : null;
             type Row = { k: string; v: ReactNode | null; delta?: { txt: string; up: boolean } | null };
@@ -3301,6 +3327,16 @@ export function StockScreen({
 
           {activeTab === "13f" && (
             <Stock13FFilingsView symbol={sym} />
+          )}
+
+          {activeTab === "analyst" && (
+            <StockAnalystActionsView
+              symbol={sym}
+              consensusDocs={liveConsensus}
+              companies={companies}
+              livePrice={dispPrice ?? sessionQuote?.price ?? null}
+              loading={liveConsensusLoading}
+            />
           )}
 
           {activeTab === "news" && (() => {

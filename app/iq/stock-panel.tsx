@@ -20,7 +20,7 @@ export const StockScreenEmbed = dynamic<{
   hideIdentity?: boolean;
   hideChart?: boolean;
   headerActions?: React.ReactNode;
-  visibleTabs?: ("overview" | "analysis" | "peers" | "earnings" | "financials" | "holdings" | "13f" | "news")[];
+  visibleTabs?: ("overview" | "analysis" | "analyst" | "peers" | "earnings" | "financials" | "holdings" | "13f" | "news")[];
   initialTab?: "overview" | "analysis" | "peers" | "earnings" | "financials" | "holdings" | "13f" | "news";
   barInterval?: BarInterval;
 }>(
