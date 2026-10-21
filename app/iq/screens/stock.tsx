@@ -1,5 +1,6 @@
 "use client";
 
+import { StockCatalystSummary } from "../mover-news-modal";
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
@@ -3119,22 +3120,8 @@ export function StockScreen({
             const CAP = 40;
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {/* News Summary Section (Task 16) */}
-                <div className="card" style={{ padding: "16px 20px", border: "1px solid var(--border-soft)", borderRadius: "var(--r-md)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)" }}>News Summary</h3>
-                      <span className="pill" style={{ fontSize: ".6rem", background: "var(--up-dim)", color: "var(--up)", fontWeight: 700 }}>AI Synthesis</span>
-                    </div>
-                  </div>
-                  <p style={{ margin: 0, fontSize: ".88rem", lineHeight: 1.6, color: "var(--text-hi)" }}>
-                    {aiAnalysis?.analysis?.newsSummary || (
-                      items.length > 0
-                        ? `Recent news coverage for ${sym} focuses on quarterly performance, key market drivers, and analyst perspectives. Key themes from recent coverage: ${items.slice(0, 3).map(x => x.n.headline).join("; ")}.`
-                        : `No recent news synced for ${sym} yet.`
-                    )}
-                  </p>
-                </div>
+                {/* Summary — the same "Why It Moved" card as the Movers screen. */}
+                <StockCatalystSummary ticker={sym} pctChange={hq.regPct} newsList={tickerNews ?? []} />
 
                 <div className="card">
                   <div className="card-h">

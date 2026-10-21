@@ -1696,29 +1696,13 @@ export function InsiderScreen() {
                     key={idx}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "22px minmax(0,1fr) auto",
-                      gap: 10,
+                      gridTemplateColumns: "minmax(0,1fr) auto",
+                      gap: 16,
                       alignItems: "center",
                       padding: "10px 20px",
                       borderTop: "1px solid var(--border-soft)",
                     }}
                   >
-                    <span
-                      style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        padding: "3px 8px",
-                        borderRadius: 5,
-                        display: "grid",
-                        placeItems: "center",
-                        background: tr.codeBg,
-                        color: tr.color,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {tr.isBuy ? "Buy" : tr.isEx ? "Exercise" : "Sell"}
-                    </span>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                       <span
                         style={{
@@ -1736,7 +1720,21 @@ export function InsiderScreen() {
                         {tr.typeLabel} · {tr.sharesStr} sh @ {tr.priceStr} · {tr.dateStr}
                       </span>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                      <span
+                        style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: "3px 8px",
+                          borderRadius: 5,
+                          lineHeight: 1.2,
+                          background: tr.codeBg,
+                          color: tr.color,
+                        }}
+                      >
+                        {tr.isBuy ? "Buy" : tr.isEx ? "Exercise" : "Sell"}
+                      </span>
                       <span
                         style={{
                           fontFamily: "'JetBrains Mono', monospace",

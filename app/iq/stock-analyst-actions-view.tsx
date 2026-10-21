@@ -141,15 +141,7 @@ export function StockAnalystActionsView({
                     </span>
                     {r.ptSource === "firm" ? (
                       <span className="mono" style={{ textAlign: "right", color: "var(--text-hi)", fontWeight: 700 }}>
-                        {r.prevPt != null && r.prevPt !== r.pt1 && (
-                          <span style={{ color: r.pt1 > r.prevPt ? "var(--up)" : "var(--down)", marginRight: 3 }}>
-                            {r.pt1 > r.prevPt ? "▲" : "▼"}
-                          </span>
-                        )}
                         ${r.pt1.toFixed(2)}
-                        {r.prevPt != null && r.prevPt !== r.pt1 && (
-                          <div style={{ fontSize: ".72rem", fontWeight: 500, color: "var(--text-dim-solid)" }}>was ${r.prevPt.toFixed(2)}</div>
-                        )}
                       </span>
                     ) : (
                       <span

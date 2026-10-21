@@ -32,12 +32,12 @@ const epsTxt = (v: number | null) => (v == null ? "—" : v.toFixed(2));
 const salesTxt = (v: number | null) => (v == null ? "—" : v.toFixed(1));
 const chgClass = (s: string) => (s.startsWith("-") ? "down" : s.startsWith("+") ? "up" : "dim");
 
-/** One panel of bars (EPS or Sales) inside the shared SVG, value on top, label angled below. */
-function Panel({ x, w, title, bars, value, fmt }: {
-  x: number; w: number; title: string; bars: Bar[];
+/** One panel of bars (EPS or Sales), value on top, label angled below. The card heading names it. */
+function Panel({ x, w, bars, value, fmt }: {
+  x: number; w: number; bars: Bar[];
   value: (b: Bar) => number | null; fmt: (v: number) => string;
 }) {
-  const TOP = 62, BOTTOM = 232;
+  const TOP = 30, BOTTOM = 232;
   const vals = bars.map(value).filter((v): v is number => v != null);
   const max = Math.max(0, ...vals), min = Math.min(0, ...vals);
   const span = max - min || 1;
@@ -47,7 +47,6 @@ function Panel({ x, w, title, bars, value, fmt }: {
   const font = Math.max(8, Math.min(12, gw / 3.6));
   return (
     <g>
-      <text x={x} y={26} fill={MUTED} fontSize={15} fontWeight={600}>{title}</text>
       {bars.map((b, i) => {
         const v = value(b);
         const cx = x + gw * i + gw / 2;
@@ -275,7 +274,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
               </div>
             </div>
             <svg ref={svgRef} viewBox="0 0 500 240" width="100%" role="img" aria-label={`${sym} EPS`} style={{ display: "block" }}>
-              <Panel x={10} w={480} title="EPS" bars={bars} value={(b) => b.eps} fmt={(v) => v.toFixed(2)} />
+              <Panel x={10} w={480} bars={bars} value={(b) => b.eps} fmt={(v) => v.toFixed(2)} />
             </svg>
             <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "4px 4px 2px" }}>
               <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ACTUAL, marginRight: 6 }} />Reported</span>
@@ -291,7 +290,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
               <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>Sales ($Mil)</h3>
             </div>
             <svg viewBox="0 0 500 240" width="100%" role="img" aria-label={`${sym} Sales`} style={{ display: "block" }}>
-              <Panel x={10} w={480} title="Sales ($Mil)" bars={bars} value={(b) => b.sales} fmt={(v) => String(Math.round(v))} />
+              <Panel x={10} w={480} bars={bars} value={(b) => b.sales} fmt={(v) => String(Math.round(v))} />
             </svg>
             <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "4px 4px 2px" }}>
               <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ACTUAL, marginRight: 6 }} />Reported</span>

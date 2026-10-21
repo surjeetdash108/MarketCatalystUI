@@ -83,6 +83,273 @@ function extractBullets(
   return bullets.slice(0, 4);
 }
 
+function vendorBadge(vendor?: string, source?: string) {
+  const v = vendor?.toLowerCase() ?? "";
+  const s = source?.toLowerCase() ?? "";
+
+  if (v === "benzinga" || s === "benzinga_wiim") {
+    return (
+      <span
+        style={{
+          background: "rgba(74,222,128,0.14)",
+          color: "var(--brand)",
+          border: "1px solid rgba(74,222,128,0.4)",
+          padding: "3px 9px",
+          borderRadius: 6,
+          fontSize: ".7rem",
+          fontWeight: 700,
+          letterSpacing: ".04em",
+          textTransform: "uppercase",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+        }}
+      >
+        ⚡ Benzinga WIIM
+      </span>
+    );
+  }
+
+  if (s === "ai_synthesis" || v === "llm") {
+    return (
+      <span
+        style={{
+          background: "linear-gradient(135deg, rgba(74,222,128,0.2), rgba(74,222,128,0.25))",
+          color: "#A7F3C0",
+          border: "1px solid rgba(167,243,192,0.4)",
+          padding: "3px 9px",
+          borderRadius: 6,
+          fontSize: ".7rem",
+          fontWeight: 700,
+          letterSpacing: ".04em",
+          textTransform: "uppercase",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+        }}
+      >
+        Market<span style={{ color: "var(--brand)" }}>Catalyst</span> Synthesis
+      </span>
+    );
+  }
+
+  return <VendorTag v={(vendor as any) || "polygon"} />;
+}
+
+/** The Movers "Why It Moved" summary: catalyst sentence, key drivers and source. */
+export function CatalystHero({ ticker, isUp, catalystDoc, newsList }: {
+  ticker: string;
+  isUp: boolean;
+  catalystDoc: MoverCatalystDoc | null;
+  newsList: NewsArticleDoc[];
+}) {
+  const bullets = extractBullets(catalystDoc, newsList, ticker, isUp);
+  const primarySummary = catalystDoc?.catalyst
+    ? cleanCatalystText(catalystDoc.catalyst)
+    : newsList.length > 0 && newsList[0].headline
+    ? `${newsList[0].headline}.${newsList[0].summary ? ` ${newsList[0].summary.slice(0, 160)}…` : ""}`
+    : `No specific company news catalyst was filed for ${ticker} in the last 48 hours. Movement is driven by general market momentum and intraday order flow.`;
+  return (
+    <div
+      style={{
+        background: isUp
+          ? "linear-gradient(145deg, var(--surface-2, rgba(255,255,255,0.04)), rgba(74,222,128,0.08))"
+          : "linear-gradient(145deg, var(--surface-2, rgba(255,255,255,0.04)), rgba(248,113,113,0.08))",
+        border: isUp
+          ? "1px solid rgba(74,222,128,0.3)"
+          : "1px solid rgba(248,113,113,0.3)",
+        borderRadius: 14,
+        padding: "18px 20px",
+        marginBottom: 20,
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: ".75rem",
+            fontWeight: 700,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            color: isUp ? "var(--up, #4ADE80)" : "var(--down, #F87171)",
+          }}
+        >
+          <span>{isUp ? "▲ SUMMARY" : "▼ SUMMARY"}</span>
+        </div>
+        {vendorBadge(catalystDoc?.vendor, catalystDoc?.source)}
+      </div>
+
+      {/* Main Summary Sentence */}
+      <div
+        style={{
+          fontSize: "1.02rem",
+          fontWeight: 600,
+          lineHeight: 1.55,
+          color: "var(--text-hi, #F4F6F5)",
+          marginBottom: 16,
+        }}
+      >
+        {primarySummary}
+      </div>
+
+      {/* Key Bullet Points Section */}
+      <div
+        style={{
+          background: "rgba(0, 0, 0, 0.25)",
+          border: "1px solid var(--border-soft, rgba(255,255,255,0.08))",
+          borderRadius: 10,
+          padding: "14px 16px",
+          marginBottom: 14,
+        }}
+      >
+        <div
+          style={{
+            fontSize: ".72rem",
+            fontWeight: 700,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+            color: "var(--text-dim-solid, #A6AEB5)",
+            marginBottom: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span>🎯</span> Key Catalysts & Drivers
+        </div>
+
+        <ul
+          style={{
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 9,
+          }}
+        >
+          {bullets.map((b, i) => (
+            <li
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                fontSize: ".84rem",
+                lineHeight: 1.5,
+                color: "var(--text-hi, #F4F6F5)",
+              }}
+            >
+              <span
+                style={{
+                  color: isUp ? "var(--up, #4ADE80)" : "var(--down, #F87171)",
+                  fontSize: "1rem",
+                  lineHeight: "1.2rem",
+                  flexShrink: 0,
+                }}
+              >
+                •
+              </span>
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {catalystDoc?.headline && catalystDoc.headline !== catalystDoc.catalyst && (
+        <div
+          style={{
+            fontSize: ".8rem",
+            color: "var(--text-dim-solid, #A6AEB5)",
+            borderTop: "1px solid rgba(255,255,255,0.06)",
+            paddingTop: 10,
+            marginTop: 10,
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>Related Headline:</span> {catalystDoc.headline}
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: ".72rem",
+          color: "var(--text-dim-solid, #A6AEB5)",
+          marginTop: 12,
+        }}
+      >
+        <span>
+          Updated: {catalystDoc?.updatedAt ? new Date(catalystDoc.updatedAt).toLocaleTimeString() : "Just now"}
+        </span>
+
+        {catalystDoc?.newsUrl && (
+          <a
+            href={catalystDoc.newsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "var(--brand, #4ADE80)",
+              textDecoration: "none",
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            Read Source Article ↗
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The same "Why It Moved" summary, fetching its own catalyst for a stock —
+ * used at the top of the stock page's News tab.
+ */
+export function StockCatalystSummary({ ticker, pctChange, newsList }: {
+  ticker: string;
+  pctChange: number | null;
+  newsList: NewsArticleDoc[];
+}) {
+  const isUp = (pctChange ?? 0) >= 0;
+  const dir = isUp ? "gainer" : "loser";
+  const key = `${ticker}|${dir}`;
+  // Loading until a response for the current ticker/direction has arrived.
+  const [fetched, setFetched] = useState<{ key: string; doc: MoverCatalystDoc | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    apiGet<MoverCatalystDoc>(`/market-data/mover-catalyst/${encodeURIComponent(ticker)}?direction=${dir}`)
+      .catch(() => null)
+      .then((doc) => {
+        if (live) setFetched({ key: `${ticker}|${dir}`, doc });
+      });
+    return () => { live = false; };
+  }, [ticker, dir]);
+  const catalystDoc = fetched?.key === key ? fetched.doc : null;
+  if (fetched?.key !== key) {
+    return (
+      <div style={{ padding: "18px 20px", borderRadius: 14, border: "1px solid var(--border-soft)", color: "var(--text-dim-solid)", fontSize: ".85rem" }}>
+        Fetching latest catalyst…
+      </div>
+    );
+  }
+  return <CatalystHero ticker={ticker} isUp={isUp} catalystDoc={catalystDoc} newsList={newsList} />;
+}
+
 export function MoverNewsModal({
   ticker,
   name,
@@ -124,59 +391,6 @@ export function MoverNewsModal({
   }, [ticker, direction, pctChange]);
 
   const isUp = (pctChange ?? 0) >= 0;
-
-  const vendorBadge = (vendor?: string, source?: string) => {
-    const v = vendor?.toLowerCase() ?? "";
-    const s = source?.toLowerCase() ?? "";
-
-    if (v === "benzinga" || s === "benzinga_wiim") {
-      return (
-        <span
-          style={{
-            background: "rgba(74,222,128,0.14)",
-            color: "var(--brand)",
-            border: "1px solid rgba(74,222,128,0.4)",
-            padding: "3px 9px",
-            borderRadius: 6,
-            fontSize: ".7rem",
-            fontWeight: 700,
-            letterSpacing: ".04em",
-            textTransform: "uppercase",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-          }}
-        >
-          ⚡ Benzinga WIIM
-        </span>
-      );
-    }
-
-    if (s === "ai_synthesis" || v === "llm") {
-      return (
-        <span
-          style={{
-            background: "linear-gradient(135deg, rgba(74,222,128,0.2), rgba(74,222,128,0.25))",
-            color: "#A7F3C0",
-            border: "1px solid rgba(167,243,192,0.4)",
-            padding: "3px 9px",
-            borderRadius: 6,
-            fontSize: ".7rem",
-            fontWeight: 700,
-            letterSpacing: ".04em",
-            textTransform: "uppercase",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-          }}
-        >
-          Market<span style={{ color: "var(--brand)" }}>Catalyst</span> Synthesis
-        </span>
-      );
-    }
-
-    return <VendorTag v={(vendor as any) || "polygon"} />;
-  };
 
   return (
     <>
@@ -322,179 +536,9 @@ export function MoverNewsModal({
             </div>
           ) : activeTab === "catalyst" ? (
             (() => {
-              const bullets = extractBullets(catalystDoc, newsList, ticker, isUp);
-              const primarySummary = catalystDoc?.catalyst
-                ? cleanCatalystText(catalystDoc.catalyst)
-                : newsList.length > 0 && newsList[0].headline
-                ? `${newsList[0].headline}.${newsList[0].summary ? ` ${newsList[0].summary.slice(0, 160)}…` : ""}`
-                : `No specific company news catalyst was filed for ${ticker} in the last 48 hours. Movement is driven by general market momentum and intraday order flow.`;
-
               return (
                 <div>
-                  {/* Hero Catalyst Explanation Card */}
-                  <div
-                    style={{
-                      background: isUp
-                        ? "linear-gradient(145deg, var(--surface-2, rgba(255,255,255,0.04)), rgba(74,222,128,0.08))"
-                        : "linear-gradient(145deg, var(--surface-2, rgba(255,255,255,0.04)), rgba(248,113,113,0.08))",
-                      border: isUp
-                        ? "1px solid rgba(74,222,128,0.3)"
-                        : "1px solid rgba(248,113,113,0.3)",
-                      borderRadius: 14,
-                      padding: "18px 20px",
-                      marginBottom: 20,
-                      position: "relative",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginBottom: 12,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: ".75rem",
-                          fontWeight: 700,
-                          letterSpacing: ".06em",
-                          textTransform: "uppercase",
-                          color: isUp ? "var(--up, #4ADE80)" : "var(--down, #F87171)",
-                        }}
-                      >
-                        <span>{isUp ? "▲ GAINER CATALYST SUMMARY" : "▼ LOSER CATALYST SUMMARY"}</span>
-                      </div>
-                      {vendorBadge(catalystDoc?.vendor, catalystDoc?.source)}
-                    </div>
-
-                    {/* Main Summary Sentence */}
-                    <div
-                      style={{
-                        fontSize: "1.02rem",
-                        fontWeight: 600,
-                        lineHeight: 1.55,
-                        color: "var(--text-hi, #F4F6F5)",
-                        marginBottom: 16,
-                      }}
-                    >
-                      {primarySummary}
-                    </div>
-
-                    {/* Key Bullet Points Section */}
-                    <div
-                      style={{
-                        background: "rgba(0, 0, 0, 0.25)",
-                        border: "1px solid var(--border-soft, rgba(255,255,255,0.08))",
-                        borderRadius: 10,
-                        padding: "14px 16px",
-                        marginBottom: 14,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: ".72rem",
-                          fontWeight: 700,
-                          letterSpacing: ".06em",
-                          textTransform: "uppercase",
-                          color: "var(--text-dim-solid, #A6AEB5)",
-                          marginBottom: 10,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <span>🎯</span> Key Catalysts & Drivers
-                      </div>
-
-                      <ul
-                        style={{
-                          listStyle: "none",
-                          padding: 0,
-                          margin: 0,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 9,
-                        }}
-                      >
-                        {bullets.map((b, i) => (
-                          <li
-                            key={i}
-                            style={{
-                              display: "flex",
-                              alignItems: "flex-start",
-                              gap: 10,
-                              fontSize: ".84rem",
-                              lineHeight: 1.5,
-                              color: "var(--text-hi, #F4F6F5)",
-                            }}
-                          >
-                            <span
-                              style={{
-                                color: isUp ? "var(--up, #4ADE80)" : "var(--down, #F87171)",
-                                fontSize: "1rem",
-                                lineHeight: "1.2rem",
-                                flexShrink: 0,
-                              }}
-                            >
-                              •
-                            </span>
-                            <span>{b}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {catalystDoc?.headline && catalystDoc.headline !== catalystDoc.catalyst && (
-                      <div
-                        style={{
-                          fontSize: ".8rem",
-                          color: "var(--text-dim-solid, #A6AEB5)",
-                          borderTop: "1px solid rgba(255,255,255,0.06)",
-                          paddingTop: 10,
-                          marginTop: 10,
-                        }}
-                      >
-                        <span style={{ fontWeight: 600 }}>Related Headline:</span> {catalystDoc.headline}
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        fontSize: ".72rem",
-                        color: "var(--text-dim-solid, #A6AEB5)",
-                        marginTop: 12,
-                      }}
-                    >
-                      <span>
-                        Updated: {catalystDoc?.updatedAt ? new Date(catalystDoc.updatedAt).toLocaleTimeString() : "Just now"}
-                      </span>
-
-                      {catalystDoc?.newsUrl && (
-                        <a
-                          href={catalystDoc.newsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: "var(--brand, #4ADE80)",
-                            textDecoration: "none",
-                            fontWeight: 600,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                        >
-                          Read Source Article ↗
-                        </a>
-                      )}
-                    </div>
-                  </div>
+                  <CatalystHero ticker={ticker} isUp={isUp} catalystDoc={catalystDoc} newsList={newsList} />
 
               {/* Top Recent News Snapshot */}
               {newsList.length > 0 && (
