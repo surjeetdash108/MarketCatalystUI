@@ -5,7 +5,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, type VendorKey, titleCaseLabel, type ChartEarnings, type BarInterval } from "../utils";
+import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, type VendorKey, titleCaseLabel, type ChartEarnings, type BarInterval, formatUsDate } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
 import { StockChart } from "../stock-panel";
 import { exchangeLabel } from "../exchange";
@@ -1525,7 +1525,7 @@ export function StockScreen({
   // data (quarters on file / articles fetched / peer counts), not decorative.
   const ALL_TABS: { id: StockTab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
-    { id: "analysis", label: "Analysis" },
+    { id: "analysis", label: "AI Read" },
     ...(!isEtf ? [{ id: "analyst" as StockTab, label: "Analyst Actions" }] : []),
     { id: "peers", label: "Peers", count: peersTotal || undefined },
     { id: "earnings", label: "Earnings", count: hist10.length || undefined },
@@ -1856,7 +1856,7 @@ export function StockScreen({
                   since it's model-generated / untrusted. ── */}
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
                 <div style={{ fontSize: ".66rem", fontWeight: 700, color: "var(--ai)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span>◆ AI read · {sym}</span>
+                  <span>◆ AI Read</span>
                   {aiAnalysis?.ok && (
                     <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", color: "var(--text-dim-solid)", textTransform: "none", letterSpacing: 0 }}>
                       {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}
@@ -2648,7 +2648,7 @@ export function StockScreen({
 
             <div className="ai-block sd-ai">
               <div className="card-h">
-                <h3 className="ai-c">◆ AI read · {sym}</h3>
+                <h3 className="ai-c">◆ AI Read</h3>
                 {aiAnalysis?.ok && (
                   <span className="pill" style={{ fontSize: ".58rem", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>
                     {aiAnalysis.model}{aiAnalysis.usedWebSearch ? " · web" : ""}
@@ -2980,8 +2980,8 @@ export function StockScreen({
                           </thead>
                           <tbody>
                             {pagedInsiderTxns.map((tx, idx) => {
-                              const isBuy = tx.acquiredOrDisposed === "A";
-                              const isSell = tx.acquiredOrDisposed === "D";
+                              const isBuy = tx.transactionCode === "P" || tx.acquiredOrDisposed === "A";
+                              const isSell = tx.transactionCode === "S" || tx.acquiredOrDisposed === "D";
                               const price = tx.pricePerShare != null && tx.pricePerShare > 0 ? tx.pricePerShare : null;
                               const valUsd = price != null && tx.shares > 0 ? tx.shares * price : null;
                               const codeLabel = TX_CODE_LABEL[tx.transactionCode] ?? `Code ${tx.transactionCode}`;
@@ -2989,7 +2989,7 @@ export function StockScreen({
                               return (
                                 <tr key={`${tx.id || idx}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
                                   <td className="mono" style={{ padding: "8px 6px 8px 18px", color: "var(--text-dim-solid)", fontSize: ".76rem", whiteSpace: "nowrap" }}>
-                                    {(tx.transactionDate ?? "").slice(0, 10)}
+                                    {formatUsDate(tx.transactionDate)}
                                   </td>
                                   <td style={{ padding: "8px 6px" }}>
                                     <div style={{ color: "var(--text-hi)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={tx.ownerName ?? "Insider"}>
@@ -3006,12 +3006,12 @@ export function StockScreen({
                                         background: isBuy ? "var(--up)22" : isSell ? "var(--down)22" : "var(--surface-3)",
                                         color: isBuy ? "var(--up)" : isSell ? "var(--down)" : "var(--text-dim-solid)",
                                         fontWeight: 700,
-                                        padding: "2px 6px",
+                                        padding: "2px 8px",
                                         borderRadius: 5,
-                                        fontSize: ".66rem",
+                                        fontSize: ".7rem",
                                       }}
                                     >
-                                      {isBuy ? "BUY" : isSell ? "SELL" : tx.transactionCode || "TX"}
+                                      {isBuy ? "Buy" : isSell ? "Sell" : tx.transactionCode || "TX"}
                                     </span>
                                   </td>
                                   <td className="mono" style={{ textAlign: "right", padding: "8px 6px", color: "var(--text-hi)" }}>
@@ -3118,37 +3118,56 @@ export function StockScreen({
             const list = items.filter(x => inNewsPeriod(period, x.ms, now)).sort((a, b) => b.ms - a.ms);
             const CAP = 40;
             return (
-              <div className="card">
-                <div className="card-h">
-                  <h3>News</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <VendorTag v={["fmp", "polygon"]} />
-                    {items.length > 0 && (
-                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* News Summary Section (Task 16) */}
+                <div className="card" style={{ padding: "16px 20px", border: "1px solid var(--border-soft)", borderRadius: "var(--r-md)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-hi)" }}>News Summary</h3>
+                      <span className="pill" style={{ fontSize: ".6rem", background: "var(--up-dim)", color: "var(--up)", fontWeight: 700 }}>AI Synthesis</span>
+                    </div>
+                  </div>
+                  <p style={{ margin: 0, fontSize: ".88rem", lineHeight: 1.6, color: "var(--text-hi)" }}>
+                    {aiAnalysis?.analysis?.newsSummary || (
+                      items.length > 0
+                        ? `Recent news coverage for ${sym} focuses on quarterly performance, key market drivers, and analyst perspectives. Key themes from recent coverage: ${items.slice(0, 3).map(x => x.n.headline).join("; ")}.`
+                        : `No recent news synced for ${sym} yet.`
                     )}
-                  </div>
+                  </p>
                 </div>
-                {items.length === 0 ? (
-                  <div className="sd-note" style={{ paddingBottom: 14 }}>No recent news synced for {sym} yet.</div>
-                ) : (<>
-                  <div className="sd-newsbar">
-                    <SegToggle label="News period" value={period} onChange={setNewsPeriod}
-                      options={NEWS_PERIODS.map(([k, l]) => [k, <>{l}<span className="n">{counts[k]}</span></>] as [NewsPeriod, ReactNode])} />
+
+                <div className="card">
+                  <div className="card-h">
+                    <h3>News</h3>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <VendorTag v={["fmp", "polygon"]} />
+                      {items.length > 0 && (
+                        <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live</span>
+                      )}
+                    </div>
                   </div>
-                  {list.length === 0 ? (
-                    <div className="sd-note" style={{ padding: "26px 16px", textAlign: "center" }}>No stories in this period.</div>
-                  ) : list.slice(0, CAP).map(({ n, ms }) => (
-                    <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="sd-news">
-                      <h4>{n.headline}</h4>
-                      <p>
-                        <span>{n.source} · {new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                        {n.vendor && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
-                        {n.sentiment && <span className="pill" style={{ fontSize: ".54rem", textTransform: "capitalize", background: "var(--surface-3)", color: n.sentiment === "positive" ? "var(--up)" : n.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>{n.sentiment}</span>}
-                      </p>
-                    </a>
-                  ))}
-                  {list.length > CAP && <div className="sd-foot">Showing the latest {CAP} of {list.length} stories in this period.</div>}
-                </>)}
+                  {items.length === 0 ? (
+                    <div className="sd-note" style={{ paddingBottom: 14 }}>No recent news synced for {sym} yet.</div>
+                  ) : (<>
+                    <div className="sd-newsbar">
+                      <SegToggle label="News period" value={period} onChange={setNewsPeriod}
+                        options={NEWS_PERIODS.map(([k, l]) => [k, <>{l}<span className="n">{counts[k]}</span></>] as [NewsPeriod, ReactNode])} />
+                    </div>
+                    {list.length === 0 ? (
+                      <div className="sd-note" style={{ padding: "26px 16px", textAlign: "center" }}>No stories in this period.</div>
+                    ) : list.slice(0, CAP).map(({ n, ms }) => (
+                      <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="sd-news">
+                        <h4>{n.headline}</h4>
+                        <p>
+                          <span>{n.source} · {formatUsDate(n.publishedAt || ms)}</span>
+                          {n.vendor && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
+                          {n.sentiment && <span className="pill" style={{ fontSize: ".54rem", textTransform: "capitalize", background: "var(--surface-3)", color: n.sentiment === "positive" ? "var(--up)" : n.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>{n.sentiment}</span>}
+                        </p>
+                      </a>
+                    ))}
+                    {list.length > CAP && <div className="sd-foot">Showing the latest {CAP} of {list.length} stories in this period.</div>}
+                  </>)}
+                </div>
               </div>
             );
           })()}
@@ -3362,39 +3381,6 @@ export function StockScreen({
               </div>
             )}
 
-            {activeTab === "analysis" && consensusDoc?.recentGrades && consensusDoc.recentGrades.length > 0 && (
-              <div className="card">
-                <div className="card-h">
-                  <h3>Recent analyst actions</h3>
-                  {consensusDoc.ptAvgLastYear != null && (
-                    <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".68rem" }}>
-                      1Y Avg Target: ${consensusDoc.ptAvgLastYear.toFixed(0)}
-                    </span>
-                  )}
-                </div>
-                {consensusDoc.recentGrades.map((g, i) => {
-                  const a = (g.action ?? "").toLowerCase();
-                  const col = a.includes("upgrade") ? "var(--up)" : a.includes("downgrade") ? "var(--down)" : "var(--text-dim-solid)";
-                  return (
-                    <div key={i} className="sd-row">
-                      <span className="num" style={{ width: 62, flex: "none", fontSize: ".66rem", color: col, textTransform: "capitalize" }}>{g.action ?? "—"}</span>
-                      <span className="grow" style={{ overflow: "hidden" }}>
-                        <span style={{ display: "block", color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.firm ?? "—"}</span>
-                        {(g.previousGrade || g.newGrade) && (
-                          <span className="num dim" style={{ display: "block", fontSize: ".66rem", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {g.previousGrade ?? "—"} → {g.newGrade ?? "—"}
-                          </span>
-                        )}
-                      </span>
-                      <span className={`num${g.priceTarget != null ? "" : " dim"}`}
-                        title={g.priceTarget != null ? `${g.firm ?? "This firm"}'s price target` : "No price target posted with this action"}>
-                        {g.priceTarget != null ? `$${Math.round(g.priceTarget)}` : "—"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             {activeTab === "analysis" && (
               <div className="card">

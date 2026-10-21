@@ -1653,15 +1653,15 @@ function CandleChartInner({
     const below = kmOpen.y + KM_R + 8;
     const top = below + CARD_H > size.h ? Math.max(4, kmOpen.y - KM_R - 8 - CARD_H) : below;
     return (
-      <div ref={kmCardRef} className="cc-er-card cc-km-card" style={{ left, top, width: CARD_W }} role="dialog" aria-label="Key moment"
+      <div ref={kmCardRef} className="cc-er-card cc-km-card" style={{ left, top, width: CARD_W }} role="dialog" aria-label="Key movement"
         onMouseEnter={cancelPreviewClose} onMouseLeave={schedulePreviewClose}>
         <div className="cc-er-hd">
           <span className="d">
             {dt.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
-            <small>Key moment{km.earnings ? " · earnings" : ""}</small>
+            <small>Key movement{km.earnings ? " · earnings" : ""}</small>
           </span>
           <b className={km.pct >= 0 ? "up" : "down"} style={{ fontSize: 13 }}>{km.pct >= 0 ? "▲" : "▼"} {sgn(km.pct)}</b>
-          <button type="button" className="cc-x" aria-label="Close key moment" onClick={() => setKmSel(null)}>✕</button>
+          <button type="button" className="cc-x" aria-label="Close key movement" onClick={() => setKmSel(null)}>✕</button>
         </div>
         <div className="cc-km-title">{km.title}</div>
         {km.summary
@@ -1703,12 +1703,9 @@ function CandleChartInner({
           Indicators
         </button>
         <QuickStudyButtons studies={studies} />
-        <span className="cc-hint" title="Scroll to zoom · drag to pan · double-click to reset · click an E marker for earnings details">Scroll: zoom · Drag: pan · Double-click: reset · Click <b>E</b>: earnings</span>
+        <span className="cc-hint" title="Scroll to zoom · drag to pan · double-click to reset">Scroll: zoom · Drag: pan · Double-click: reset</span>
         <span className="cc-spacer" />
         {toolbarEnd}
-        <button type="button" className="cc-tvbtn cc-log" aria-pressed={prefs.log}
-          title="Logarithmic price scale (turns on by itself for very wide ranges)"
-          onClick={() => writePrefs(p => ({ ...p, log: !p.log }))}>Log</button>
         <button type="button" className="cc-tvbtn icon" aria-pressed={full}
           title={full ? "Exit full screen (F)" : "Full screen (F)"}
           aria-label={full ? "Exit full screen" : "Expand chart to full screen"} onClick={toggleFull}>

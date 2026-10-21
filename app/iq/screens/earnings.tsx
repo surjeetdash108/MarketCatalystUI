@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
-import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE } from "../utils";
+import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
 import { StockScreenEmbed } from "../stock-panel";
 import { useApiList } from "../hooks/useApiList";
@@ -1995,6 +1995,9 @@ export function EarningsScreen() {
                             {lastSurp != null && <span style={{ color: "var(--text-dim-solid)" }}> · last {lastSurp >= 0 ? "beat" : "miss"} {Math.abs(lastSurp)}%</span>}
                           </Row>
                         )}
+                        <Row label="Next earnings date">
+                          <b>{liveCompanySel?.nextEarningsDate ? formatUsDate(liveCompanySel.nextEarningsDate) : (liveEarnings.find(e => e.ticker === sel && e.date >= etTodayIso())?.date ? formatUsDate(liveEarnings.find(e => e.ticker === sel && e.date >= etTodayIso())!.date) : "TBA")}</b>
+                        </Row>
                         {streetExpects && (
                           <Row label="Street expects (next)"><b>{streetExpects}</b></Row>
                         )}
@@ -2002,21 +2005,6 @@ export function EarningsScreen() {
                           <Row label="Last post-earnings move">
                             <span className={cls(annMatch.reactionPct)}>{sign(annMatch.reactionPct)}</span>
                           </Row>
-                        )}
-                        {c?.recentGrades && c.recentGrades.length > 0 && (
-                          <div style={{ marginTop: 8 }}>
-                            <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-hi)", marginBottom: 4 }}>Recent rating changes</div>
-                            {c.recentGrades.slice(0, 3).map((g, i) => (
-                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: ".74rem", padding: "3px 0", borderBottom: "1px solid var(--border-soft)" }}>
-                                <span style={{ color: "var(--text-dim-solid)", width: 70, flexShrink: 0 }}>{g.date ? String(g.date).slice(0, 10) : "—"}</span>
-                                <span style={{ flex: 1, color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.firm ?? "—"}</span>
-                                <span style={{ color: "var(--text-dim-solid)" }}>{g.previousGrade ? `${g.previousGrade} → ` : ""}{g.newGrade ?? "—"}</span>
-                                {g.action && (
-                                  <span className={/upgrade|initiat/i.test(g.action) ? "pill up" : /downgrade/i.test(g.action) ? "pill dn" : "pill"} style={{ flexShrink: 0 }}>{g.action}</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
                         )}
                         <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8, lineHeight: 1.4 }}>
                           Compiled from live analyst &amp; earnings data (FMP) — not an AI/LLM narrative.
@@ -2133,6 +2121,9 @@ export function EarningsScreen() {
                         {lastSurp != null && <span style={{ color: "var(--text-dim-solid)" }}> · last {lastSurp >= 0 ? "beat" : "miss"} {Math.abs(lastSurp)}%</span>}
                       </Row>
                     )}
+                    <Row label="Next earnings date">
+                      <b>{liveCompanySel?.nextEarningsDate ? formatUsDate(liveCompanySel.nextEarningsDate) : (liveEarnings.find(e => e.ticker === sel && e.date >= etTodayIso())?.date ? formatUsDate(liveEarnings.find(e => e.ticker === sel && e.date >= etTodayIso())!.date) : "TBA")}</b>
+                    </Row>
                     {streetExpects && (
                       <Row label="Street expects (next)"><b>{streetExpects}</b></Row>
                     )}
@@ -2140,21 +2131,6 @@ export function EarningsScreen() {
                       <Row label="Last post-earnings move">
                         <span className={cls(annMatch.reactionPct)}>{sign(annMatch.reactionPct)}</span>
                       </Row>
-                    )}
-                    {c?.recentGrades && c.recentGrades.length > 0 && (
-                      <div style={{ marginTop: 12 }}>
-                        <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-hi)", marginBottom: 6 }}>Recent rating changes</div>
-                        {c.recentGrades.slice(0, 5).map((g, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: ".76rem", padding: "4px 0", borderBottom: "1px solid var(--border-soft)" }}>
-                            <span style={{ color: "var(--text-dim-solid)", width: 74, flexShrink: 0 }}>{g.date ? String(g.date).slice(0, 10) : "—"}</span>
-                            <span style={{ flex: 1, color: "var(--text-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.firm ?? "—"}</span>
-                            <span style={{ color: "var(--text-dim-solid)" }}>{g.previousGrade ? `${g.previousGrade} → ` : ""}{g.newGrade ?? "—"}</span>
-                            {g.action && (
-                              <span className={/upgrade|initiat/i.test(g.action) ? "pill up" : /downgrade/i.test(g.action) ? "pill dn" : "pill"} style={{ flexShrink: 0 }}>{g.action}</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
                     )}
                     <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 12, lineHeight: 1.5 }}>
                       Compiled from live analyst &amp; earnings data (FMP) — not an AI/LLM narrative.

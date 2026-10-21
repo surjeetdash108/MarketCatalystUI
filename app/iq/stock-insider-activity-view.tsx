@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useApiList } from "./hooks/useApiList";
 import type { InsiderTxDoc } from "./types";
-import { DataState, NotAvailable, StockLogo, VendorTag } from "./utils";
+import { DataState, NotAvailable, StockLogo, VendorTag, formatUsDate } from "./utils";
 
 type InsFilter = "All" | "Buys" | "Sells";
 type InsSort = "value" | "date";
@@ -60,7 +60,9 @@ export function StockInsiderActivityView({ symbol }: { symbol: string }) {
           isOpenMarket && x.pricePerShare != null && x.shares > 0
             ? x.shares * x.pricePerShare
             : null;
-        const dir: "buy" | "sell" = x.acquiredOrDisposed === "A" ? "buy" : "sell";
+        const isBuy = x.transactionCode === "P" || x.acquiredOrDisposed === "A";
+        const isSell = x.transactionCode === "S" || x.acquiredOrDisposed === "D";
+        const dir: "buy" | "sell" = isBuy ? "buy" : "sell";
 
         const owner = x.ownerName ?? "Insider";
         const title = x.officerTitle ? ` · ${x.officerTitle}` : x.isOfficer ? " · Officer" : "";
@@ -279,8 +281,16 @@ export function StockInsiderActivityView({ symbol }: { symbol: string }) {
               <table className="tbl" style={{ width: "100%", fontSize: ".8rem" }}>
                 <thead>
                   <tr style={{ background: "var(--surface-1)", borderBottom: "1px solid var(--border-soft)" }}>
+                    <th
+                      className="num"
+                      style={{ textAlign: "left", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
+                      onClick={() => toggleSort("date")}
+                      title="Sort by date"
+                    >
+                      Date <span style={{ color: "var(--brand-2)", opacity: insSort === "date" ? 1 : 0.3 }}>{insSort === "date" && insDir === "asc" ? "▲" : "▼"}</span>
+                    </th>
                     <th style={{ textAlign: "left", padding: "10px 14px" }}>Ticker</th>
-                    <th style={{ textAlign: "center", padding: "10px 14px" }}>Side</th>
+                    <th style={{ textAlign: "center", padding: "10px 14px" }}>Type</th>
                     <th style={{ textAlign: "left", padding: "10px 14px" }}>Insider / Owner</th>
                     <th style={{ textAlign: "left", padding: "10px 14px" }}>Transaction</th>
                     <th
@@ -291,19 +301,14 @@ export function StockInsiderActivityView({ symbol }: { symbol: string }) {
                     >
                       Value <span style={{ color: "var(--brand-2)", opacity: insSort === "value" ? 1 : 0.3 }}>{insSort === "value" && insDir === "asc" ? "▲" : "▼"}</span>
                     </th>
-                    <th
-                      className="num"
-                      style={{ textAlign: "right", padding: "10px 14px", cursor: "pointer", userSelect: "none" }}
-                      onClick={() => toggleSort("date")}
-                      title="Sort by date"
-                    >
-                      Date <span style={{ color: "var(--brand-2)", opacity: insSort === "date" ? 1 : 0.3 }}>{insSort === "date" && insDir === "asc" ? "▲" : "▼"}</span>
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {pagedRows.map((x, i) => (
                     <tr key={`${x.id}-${i}`} style={{ borderBottom: "1px solid var(--border-soft)" }}>
+                      <td className="num mono" style={{ textAlign: "left", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
+                        {formatUsDate(x.date)}
+                      </td>
                       <td style={{ padding: "10px 14px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <StockLogo sym={x.s} size={20} />
@@ -312,17 +317,13 @@ export function StockInsiderActivityView({ symbol }: { symbol: string }) {
                       </td>
                       <td style={{ textAlign: "center", padding: "10px 14px" }}>
                         <span
-                          className="tr-badge"
                           style={{
-                            background: x.dir === "buy" ? "var(--up)22" : "var(--down)22",
-                            color: x.dir === "buy" ? "var(--up)" : "var(--down)",
+                            color: x.dir === "buy" ? "var(--up, #10b981)" : "var(--down, #ef4444)",
                             fontWeight: 700,
-                            padding: "3px 8px",
-                            borderRadius: 6,
-                            fontSize: ".66rem",
+                            fontSize: ".74rem",
                           }}
                         >
-                          {x.dir === "buy" ? "BUY" : "SELL"}
+                          {x.dir === "buy" ? "Buy" : "Sell"}
                         </span>
                       </td>
                       <td style={{ padding: "10px 14px", whiteSpace: "normal", lineHeight: 1.4 }}>
@@ -339,9 +340,6 @@ export function StockInsiderActivityView({ symbol }: { symbol: string }) {
                         ) : (
                           <NotAvailable />
                         )}
-                      </td>
-                      <td className="num mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
-                        {x.date}
                       </td>
                     </tr>
                   ))}

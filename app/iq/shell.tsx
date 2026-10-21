@@ -1569,6 +1569,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                             if (item.slug === "ai-infrastructure") {
                               window.dispatchEvent(new Event("ai-corner-home"));
                             }
+                            if (item.slug === "etf-corner") {
+                              window.dispatchEvent(new Event("etf-corner-home"));
+                            }
                           }}
                           onMouseEnter={e => {
                             if (!navCollapsed) return;

@@ -236,112 +236,153 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
     );
   }
 
+  const valStyle = (s: string): React.CSSProperties => {
+    if (!s || s === "—") return { ...td, color: "var(--text-dim-solid)" };
+    const isPos = s.startsWith("+") || (!s.startsWith("-") && !s.startsWith("−") && parseFloat(s) > 0);
+    const isNeg = s.startsWith("-") || s.startsWith("−") || parseFloat(s) < 0;
+    return {
+      ...td,
+      color: isPos ? "var(--up, #10b981)" : isNeg ? "var(--down, #ef4444)" : "var(--text-dim-solid)",
+      fontWeight: isPos || isNeg ? 700 : 500,
+    };
+  };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Charts */}
-      <div className="card">
-        <div className="card-b" style={{ paddingBottom: 6 }}>
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 4 }}>
-            {note && <span style={{ fontSize: ".75rem", color: "var(--up)" }}>{note}</span>}
-            <button type="button" style={iconBtn} onClick={copyData} title="Copy chart data">
-              <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-              </svg>
-            </button>
-            <button type="button" style={iconBtn} onClick={savePng} title="Save chart as image">
-              <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
-              </svg>
-            </button>
-            <div style={{ display: "flex", gap: 2, padding: 2, borderRadius: 10, background: "var(--surface-1)" }}>
-              <button type="button" style={segBtn(period === "Q")} onClick={() => setPeriod("Q")}>Quarterly</button>
-              <button type="button" style={segBtn(period === "A")} onClick={() => setPeriod("A")}>Annual</button>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: 16, alignItems: "start" }}>
+      {/* LEFT HALF: EPS on top, Sales on bottom */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* EPS Chart Card */}
+        <div className="card">
+          <div className="card-b" style={{ paddingBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>EPS</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {note && <span style={{ fontSize: ".75rem", color: "var(--up)" }}>{note}</span>}
+                <button type="button" style={iconBtn} onClick={copyData} title="Copy chart data">
+                  <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                  </svg>
+                </button>
+                <button type="button" style={iconBtn} onClick={savePng} title="Save chart as image">
+                  <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
+                  </svg>
+                </button>
+                <div style={{ display: "flex", gap: 2, padding: 2, borderRadius: 10, background: "var(--surface-1)" }}>
+                  <button type="button" style={segBtn(period === "Q")} onClick={() => setPeriod("Q")}>Quarterly</button>
+                  <button type="button" style={segBtn(period === "A")} onClick={() => setPeriod("A")}>Annual</button>
+                </div>
+              </div>
+            </div>
+            <svg ref={svgRef} viewBox="0 0 500 240" width="100%" role="img" aria-label={`${sym} EPS`} style={{ display: "block" }}>
+              <Panel x={10} w={480} title="EPS" bars={bars} value={(b) => b.eps} fmt={(v) => v.toFixed(2)} />
+            </svg>
+            <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "4px 4px 2px" }}>
+              <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ACTUAL, marginRight: 6 }} />Reported</span>
+              <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ESTIMATE, marginRight: 6 }} />Analyst consensus estimate</span>
             </div>
           </div>
-          <svg ref={svgRef} viewBox="0 0 1000 270" width="100%" role="img" aria-label={`${sym} EPS and sales`} style={{ display: "block" }}>
-            <Panel x={20} w={455} title="EPS" bars={bars} value={(b) => b.eps} fmt={(v) => v.toFixed(2)} />
-            <Panel x={525} w={455} title="Sales ($Mil)" bars={bars} value={(b) => b.sales} fmt={(v) => String(Math.round(v))} />
-          </svg>
-          <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "2px 4px 4px" }}>
-            <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ACTUAL, marginRight: 6 }} />Reported</span>
-            <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ESTIMATE, marginRight: 6 }} />Analyst consensus estimate</span>
+        </div>
+
+        {/* Sales Chart Card */}
+        <div className="card">
+          <div className="card-b" style={{ paddingBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>Sales ($Mil)</h3>
+            </div>
+            <svg viewBox="0 0 500 240" width="100%" role="img" aria-label={`${sym} Sales`} style={{ display: "block" }}>
+              <Panel x={10} w={480} title="Sales ($Mil)" bars={bars} value={(b) => b.sales} fmt={(v) => String(Math.round(v))} />
+            </svg>
+            <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "4px 4px 2px" }}>
+              <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ACTUAL, marginRight: 6 }} />Reported</span>
+              <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ESTIMATE, marginRight: 6 }} />Analyst consensus estimate</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Fiscal-year table */}
-      <div className="card">
-        <div className="card-b" style={{ padding: 0, overflowX: "auto" }}>
-          <table className="tbl" style={{ width: "100%" }}>
-            <thead>
-              <tr style={{ background: "var(--surface-1)" }}>
-                <th style={{ ...th, textAlign: "left" }}>FISCAL YEAR</th>
-                <th style={th}>EPS</th><th style={th}>%CHG</th>
-                <th style={th}>SALES(M)</th><th style={th}>%CHG</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reportedA.map((r) => (
-                <tr key={r.year}>
-                  <td style={firstCol}>{r.year}</td>
-                  <td style={td}>{epsTxt(r.eps)}</td>
-                  <td style={td} className={chgClass(r.epsChg)}>{r.epsChg}</td>
-                  <td style={td}>{salesTxt(r.sales)}</td>
-                  <td style={td} className={chgClass(r.salesChg)}>{r.salesChg}</td>
+      {/* RIGHT HALF: Fiscal Year on top, Quarterly on bottom */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Fiscal-year table */}
+        <div className="card">
+          <div className="card-b" style={{ padding: 0, overflowX: "auto" }}>
+            <table className="tbl" style={{ width: "100%" }}>
+              <thead>
+                <tr style={{ background: "var(--surface-1)" }}>
+                  <th style={{ ...th, textAlign: "left" }}>Fiscal Year</th>
+                  <th style={th}>EPS</th>
+                  <th style={th}>% Chg</th>
+                  <th style={th}>Sales ($M)</th>
+                  <th style={th}>% Chg</th>
                 </tr>
-              ))}
-              {fwdARows.map((r) => (
-                <tr key={`e${r.year}`} title="Analyst consensus estimate">
-                  <td style={firstCol}>*{r.year}</td>
-                  <td style={td}>{epsTxt(r.eps)}</td>
-                  <td style={td} className={chgClass(r.epsChg)}>{r.epsChg}</td>
-                  <td style={td}>{salesTxt(r.sales)}</td>
-                  <td style={td} className={chgClass(r.salesChg)}>{r.salesChg}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {reportedA.map((r) => (
+                  <tr key={r.year}>
+                    <td style={firstCol}>{r.year}</td>
+                    <td style={td}>{epsTxt(r.eps)}</td>
+                    <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
+                    <td style={td}>{salesTxt(r.sales)}</td>
+                    <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
+                  </tr>
+                ))}
+                {fwdARows.map((r) => (
+                  <tr key={`e${r.year}`} title="Analyst consensus estimate">
+                    <td style={firstCol}>*{r.year}</td>
+                    <td style={td}>{epsTxt(r.eps)}</td>
+                    <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
+                    <td style={td}>{salesTxt(r.sales)}</td>
+                    <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      {/* Quarterly table */}
-      <div className="card">
-        <div className="card-b" style={{ padding: 0, overflowX: "auto" }}>
-          <table className="tbl" style={{ width: "100%" }}>
-            <thead>
-              <tr style={{ background: "var(--surface-1)" }}>
-                <th style={{ ...th, textAlign: "left" }}>QUARTER</th>
-                <th style={th}>EPS</th><th style={th}>%CHG</th><th style={th}>SURP</th>
-                <th style={th}>SALES(M)</th><th style={th}>%CHG</th><th style={th}>SURP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reportedQ.map((r) => (
-                <tr key={r.end}>
-                  <td style={firstCol}>{r.monthLabel}</td>
-                  <td style={td}>{epsTxt(r.eps)}</td>
-                  <td style={td} className={chgClass(r.epsChg)}>{r.epsChg}</td>
-                  <td style={td} className={chgClass(r.epsSurp)}>{r.epsSurp}</td>
-                  <td style={td}>{salesTxt(r.sales)}</td>
-                  <td style={td} className={chgClass(r.salesChg)}>{r.salesChg}</td>
-                  <td style={td} className={chgClass(r.salesSurp)}>{r.salesSurp}</td>
+        {/* Quarterly table */}
+        <div className="card">
+          <div className="card-b" style={{ padding: 0, overflowX: "auto" }}>
+            <table className="tbl" style={{ width: "100%" }}>
+              <thead>
+                <tr style={{ background: "var(--surface-1)" }}>
+                  <th style={{ ...th, textAlign: "left" }}>Quarter</th>
+                  <th style={th}>EPS</th>
+                  <th style={th}>% Chg</th>
+                  <th style={th}>Surprise</th>
+                  <th style={th}>Sales ($M)</th>
+                  <th style={th}>% Chg</th>
+                  <th style={th}>Surprise</th>
                 </tr>
-              ))}
-              {fwdQRows.map((r) => (
-                <tr key={`e${r.label}`} title={`Analyst consensus estimate${r.analysts ? ` (${r.analysts} analysts)` : ""}`}>
-                  <td style={firstCol}>*{r.label}</td>
-                  <td style={td}>{epsTxt(r.eps)}</td>
-                  <td style={td} className={chgClass(r.epsChg)}>{r.epsChg}</td>
-                  <td style={td} className="dim">—</td>
-                  <td style={td}>{salesTxt(r.sales)}</td>
-                  <td style={td} className={chgClass(r.salesChg)}>{r.salesChg}</td>
-                  <td style={td} className="dim">—</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ padding: "8px 14px 12px", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-            * Analyst consensus estimate (FMP). %CHG is year-over-year; SURP is reported vs. the consensus estimate for that report.
+              </thead>
+              <tbody>
+                {reportedQ.map((r) => (
+                  <tr key={r.end}>
+                    <td style={firstCol}>{r.monthLabel}</td>
+                    <td style={td}>{epsTxt(r.eps)}</td>
+                    <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
+                    <td style={valStyle(r.epsSurp)}>{r.epsSurp}</td>
+                    <td style={td}>{salesTxt(r.sales)}</td>
+                    <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
+                    <td style={valStyle(r.salesSurp)}>{r.salesSurp}</td>
+                  </tr>
+                ))}
+                {fwdQRows.map((r) => (
+                  <tr key={`e${r.label}`} title={`Analyst consensus estimate${r.analysts ? ` (${r.analysts} analysts)` : ""}`}>
+                    <td style={firstCol}>*{r.label}</td>
+                    <td style={td}>{epsTxt(r.eps)}</td>
+                    <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
+                    <td style={td} className="dim">—</td>
+                    <td style={td}>{salesTxt(r.sales)}</td>
+                    <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
+                    <td style={td} className="dim">—</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ padding: "8px 14px 12px", fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+              * Analyst consensus estimate (FMP). % Chg is year-over-year; Surprise is reported vs. the consensus estimate for that report.
+            </div>
           </div>
         </div>
       </div>

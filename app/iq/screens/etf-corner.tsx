@@ -146,6 +146,9 @@ export function EtfMarketFunds() {
   useEffect(() => {
     const handleEtfCornerHome = () => {
       setSelectedEtf(null);
+      setActiveSectionId("all");
+      setQuery("");
+      setPopularOpen(true);
     };
 
     window.addEventListener("etf-corner-home", handleEtfCornerHome);
@@ -375,7 +378,7 @@ export function EtfMarketFunds() {
                             )}
 
                             <p title={c.name} className="etf-card-title">
-                              {c.name}
+                              {c.name.replace(/\bETF\b/g, "").replace(/\s{2,}/g, " ").trim()}
                             </p>
                           </div>
                         </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DataState, VendorTag } from "./utils";
+import { DataState, VendorTag, formatUsDate } from "./utils";
 import { useApiList } from "./hooks/useApiList";
 import { apiGet } from "./backend";
 import { useWatchlistsContext } from "./hooks/useWatchlists";
@@ -115,13 +115,13 @@ export function StockAnalystActionsView({
           <div style={{ overflowX: "auto" }}>
             <div style={{ minWidth: 880 }}>
               <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 12, padding: "10px 18px", borderBottom: "1px solid var(--border-soft)", background: "var(--surface-1)", fontSize: ".7rem", fontWeight: 700, letterSpacing: ".08em", color: "var(--text-dim-solid)" }}>
-                {head("date", "DATE")}
-                {head("firm", "FIRM")}
-                {head("act", "ACTION")}
-                {head("to", "PREVIOUS → NEW")}
-                {head("pt", "PRICE TARGET", true)}
-                {head("up", "TO TARGET", true)}
-                {head("score", "SIGNAL", true)}
+                {head("date", "Date")}
+                {head("firm", "Firm")}
+                {head("act", "Action")}
+                {head("to", "Previous → New")}
+                {head("pt", "Price Target", true)}
+                {head("up", "To Target", true)}
+                {head("score", "Signal", true)}
               </div>
               {shown.map((r) => {
                 const sc = r.score >= 75 ? "var(--up)" : r.score >= 50 ? "var(--warn)" : "var(--text-dim-solid)";
@@ -131,14 +131,21 @@ export function StockAnalystActionsView({
                     title={r.headline}
                     style={{ display: "grid", gridTemplateColumns: COLS, gap: 12, alignItems: "center", padding: "11px 18px", borderBottom: "1px solid var(--border-soft)", fontSize: ".82rem" }}
                   >
-                    <span className="mono" style={{ color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>{r.date.slice(0, 10)}</span>
+                    <span className="mono" style={{ color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>{formatUsDate(r.date)}</span>
                     <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{r.firm}</span>
-                    <span style={{ color: r.dir > 0 ? "var(--up)" : r.dir < 0 ? "var(--down)" : "var(--text-dim-solid)", fontWeight: 700 }}>{r.act}</span>
+                    <span style={{ color: r.dir > 0 ? "var(--up)" : r.dir < 0 ? "var(--down)" : "var(--text-dim-solid)", fontWeight: 700 }}>
+                      {r.dir > 0 ? "▲ " : r.dir < 0 ? "▼ " : ""}{r.act}
+                    </span>
                     <span style={{ color: "var(--text-dim-solid)" }}>
                       {r.from} → <b style={{ color: "var(--text-hi)" }}>{r.to}</b>
                     </span>
                     {r.ptSource === "firm" ? (
                       <span className="mono" style={{ textAlign: "right", color: "var(--text-hi)", fontWeight: 700 }}>
+                        {r.prevPt != null && r.prevPt !== r.pt1 && (
+                          <span style={{ color: r.pt1 > r.prevPt ? "var(--up)" : "var(--down)", marginRight: 3 }}>
+                            {r.pt1 > r.prevPt ? "▲" : "▼"}
+                          </span>
+                        )}
                         ${r.pt1.toFixed(2)}
                         {r.prevPt != null && r.prevPt !== r.pt1 && (
                           <div style={{ fontSize: ".72rem", fontWeight: 500, color: "var(--text-dim-solid)" }}>was ${r.prevPt.toFixed(2)}</div>

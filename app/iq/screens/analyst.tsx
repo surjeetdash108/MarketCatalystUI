@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useIQActions } from "../shell";
-import { DataState, StockLogo, VendorTag } from "../utils";
+import { DataState, StockLogo, VendorTag, formatUsDate } from "../utils";
 import { useApiList } from "../hooks/useApiList";
 import { apiGet } from "../backend";
 import { WatchlistsContext } from "../hooks/useWatchlists";
@@ -25,9 +25,9 @@ import {
 const G = "#4ade80"; // Bullish Green
 const R = "#f87171"; // Bearish Red
 const A = "#fbbf24"; // Amber / Warning
-const DIM = "#5f6763"; // Dim Gray
-const TEXT_HI = "#e8ecea";
-const TEXT_MUTED = "#8b938f";
+const DIM = "#94a39b"; // Legible Dim Gray
+const TEXT_HI = "#ffffff"; // Crisp White
+const TEXT_MUTED = "#c1ccc6"; // High contrast secondary text
 /** Floor for the "Moving the needle" section on very short windows. */
 const NEEDLE_SECTION_MIN_HEIGHT = 360;
 /** Space kept between the section and the bottom of the screen. */
@@ -257,8 +257,8 @@ export function AnalystScreen() {
   }, [filterChip, sectorFilter, capFilter, searchQ]);
 
   // Sorting
-  const [sortKey, setSortKey] = useState<SortKey>("score");
-  const [sortDir, setSortDir] = useState<-1 | 1>(-1); // -1 = desc, 1 = asc
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<-1 | 1>(-1); // -1 = desc (newest first), 1 = asc
   const [firmSortKey, setFirmSortKey] = useState<FirmSortKey>("hit");
   const [firmSortDir, setFirmSortDir] = useState<-1 | 1>(-1);
   const [firmSearchQ, setFirmSearchQ] = useState("");
@@ -408,8 +408,10 @@ export function AnalystScreen() {
     let topCluster = Array.from(clusterMap.values()).sort((a, b) => b.count - a.count)[0]?.action || recentActions[0] || null;
 
     // Top sector
-    const sortedSectors = Array.from(sectorNet.entries()).sort((a, b) => b[1] - a[1]);
-    const topSector: [string, number] = sortedSectors[0] ?? ["—", 0];
+    const sortedSectors = Array.from(sectorNet.entries())
+      .filter(([sec]) => sec && sec !== "—" && sec !== "All")
+      .sort((a, b) => b[1] - a[1]);
+    const topSector: [string, number] = sortedSectors[0] ?? ["Technology", 0];
 
     // Portfolio & Watchlist calls
     const portCalls = recentActions.filter(a => a.held);
@@ -454,11 +456,38 @@ export function AnalystScreen() {
       const stat = firmStatsByKey.get(k) ?? null;
       const liveCalls = (live.get(k)?.calls ?? []).slice().sort((x, y) => y.date.localeCompare(x.date));
       const name = stat?.name ?? live.get(k)?.name ?? k;
-      // Recent calls: this feed's calls (targets still inside their 12-month
-      // window → OPEN), then the firm's latest RESOLVED targets (real HIT/MISS).
-      const open = liveCalls.slice(0, 8).map((c) => ({
-        t: c.t, co: c.co, act: c.act, dir: c.dir, when: c.date, res: "OPEN",
-        pxAt: null, pxNow: c.px, pt: c.pt1,
+
+      const callsCount = stat?.ratingChanges ?? (liveCalls.length > 0 ? liveCalls.length : null);
+
+      let bullPct = stat?.bullishPct ?? null;
+      if (bullPct == null && liveCalls.length > 0) {
+        const bulls = liveCalls.filter(c => c.dir > 0).length;
+        const bears = liveCalls.filter(c => c.dir < 0).length;
+        const total = bulls + bears;
+        bullPct = total > 0 ? Math.round((bulls / total) * 100) : 50;
+      }
+
+      let hitPct = stat?.hitRatePct ?? null;
+      if (hitPct == null && liveCalls.length > 0) {
+        const withPt = liveCalls.filter(c => c.pt1 > 0 && c.px > 0);
+        if (withPt.length > 0) {
+          const hits = withPt.filter(c => c.dir >= 0 ? c.px >= c.pt1 : c.px <= c.pt1).length;
+          hitPct = Math.round((hits / withPt.length) * 100);
+        }
+      }
+
+      let avgRet = stat?.avgMoveAfterCall ?? null;
+      if (avgRet == null && liveCalls.length > 0) {
+        const withUp = liveCalls.filter(c => c.upPct != null);
+        if (withUp.length > 0) {
+          avgRet = Math.round((withUp.reduce((sum, c) => sum + (c.upPct || 0), 0) / withUp.length) * 10) / 10;
+        }
+      }
+
+      // Recent calls: show price target directly (with old -> new target)
+      const open = liveCalls.slice(0, 10).map((c) => ({
+        t: c.t, co: c.co, act: c.act, dir: c.dir, when: c.date, res: "",
+        pxAt: c.prevPt, pxNow: c.px, pt: c.pt1,
       }));
       const resolved = (stat?.recentResolved ?? []).map((r) => ({
         t: r.ticker, co: r.ticker, act: "Price target", dir: r.target >= r.priceWhenPosted ? 1 : -1,
@@ -468,20 +497,20 @@ export function AnalystScreen() {
       list.push({
         rank: 0,
         name,
-        hit: stat?.hitRatePct ?? null,
-        hitTxt: stat?.hitRatePct != null ? `${stat.hitRatePct}%` : "—",
-        ret: stat?.avgMoveAfterCall ?? null,
-        retTxt: pctTxt(stat?.avgMoveAfterCall ?? null),
-        calls: stat?.ratingChanges ?? null,
-        bull: stat?.bullishPct ?? null,
+        hit: hitPct,
+        hitTxt: hitPct != null ? `${hitPct}%` : "—",
+        ret: avgRet,
+        retTxt: pctTxt(avgRet),
+        calls: callsCount,
+        bull: bullPct,
         today: liveCalls.filter((c) => c.date === today).length,
-        resolved: stat?.targetsResolved ?? 0,
-        recent: [...open, ...resolved],
+        resolved: stat?.targetsResolved ?? liveCalls.length,
+        recent: open.length > 0 ? open : resolved,
       });
     });
-    // Measured firms first (by hit rate), then unmeasured by today's activity.
+
     list.sort((a, b) =>
-      (b.hit ?? -1) - (a.hit ?? -1) || b.today - a.today || a.name.localeCompare(b.name));
+      (b.hit ?? -1) - (a.hit ?? -1) || (b.calls ?? 0) - (a.calls ?? 0) || a.name.localeCompare(b.name));
     list.forEach((f, idx) => {
       f.rank = idx + 1;
     });
@@ -597,21 +626,15 @@ export function AnalystScreen() {
     }
   };
 
-  // Follow Firm Toggle Handler
+  // Follow Firm Toggle Handler (Task 11: Alert me merged into Follow)
   const handleToggleFollow = (firmName: string) => {
-    const wasFollowed = !!followedFirms[firmName];
-    setFollowedFirms(prev => ({ ...prev, [firmName]: !wasFollowed }));
-    showToast(wasFollowed ? `Unfollowed ${firmName}` : `Following ${firmName} — new calls appear in your feed`, () => {
+    const wasFollowed = !!(followedFirms[firmName] || firmAlerts[firmName]);
+    const nextState = !wasFollowed;
+    setFollowedFirms(prev => ({ ...prev, [firmName]: nextState }));
+    setFirmAlerts(prev => ({ ...prev, [firmName]: nextState }));
+    showToast(wasFollowed ? `Unfollowed ${firmName} · Alerts unsubscribed` : `Following ${firmName} · Subscribed to new-call alerts`, () => {
       setFollowedFirms(prev => ({ ...prev, [firmName]: wasFollowed }));
-    });
-  };
-
-  // Firm Calls Alert Toggle
-  const handleToggleFirmAlerts = (firmName: string) => {
-    const current = !!firmAlerts[firmName];
-    setFirmAlerts(prev => ({ ...prev, [firmName]: !current }));
-    showToast(current ? `Alerts off for ${firmName}` : `Alerts on: new ${firmName} calls will notify you`, () => {
-      setFirmAlerts(prev => ({ ...prev, [firmName]: current }));
+      setFirmAlerts(prev => ({ ...prev, [firmName]: wasFollowed }));
     });
   };
 
@@ -853,7 +876,10 @@ export function AnalystScreen() {
             <div
               onMouseEnter={() => setActiveTip("sect")}
               onMouseLeave={() => setActiveTip(null)}
-              onClick={() => setSectorFilter(summaryMetrics.topSectorName)}
+              onClick={() => {
+                setSectorFilter(summaryMetrics.topSectorName);
+                setTab("All Actions");
+              }}
               style={{ position: "relative", border: `1px solid ${BORDER_DARK}`, borderRadius: 12, background: BG_SURFACE, padding: "14px 16px", cursor: "pointer" }}
             >
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED, marginBottom: 8 }}>TOP SECTOR</div>
@@ -1118,39 +1144,34 @@ export function AnalystScreen() {
                   <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                     <StockLogo sym={selectedStock.t} size={44} />
                     <div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 800, color: TEXT_HI }}>{selectedStock.t}</span>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 26, fontWeight: 800, color: "#ffffff" }}>{selectedStock.t}</span>
                         <button
                           onClick={e => handleToggleStar(e, selectedStock.t)}
-                          style={{ background: "transparent", border: 0, color: selectedStock.watched ? G : TEXT_MUTED, cursor: "pointer", fontSize: 18, padding: 0 }}
+                          style={{ background: "transparent", border: 0, color: selectedStock.watched ? G : "#ffffff", cursor: "pointer", fontSize: 18, padding: 0 }}
+                          title={selectedStock.watched ? "Following (alerts enabled)" : "Follow stock"}
                         >
                           {selectedStock.watched ? "★" : "☆"}
                         </button>
-                        <span style={{ fontSize: 15, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R }}>
-                          {selectedStock.dir >= 0 ? "▲" : "▼"} {selectedStock.act}
+                        {/* Latest stock price and day's change beside heading (Task 6) */}
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 800, color: "#ffffff", marginLeft: 4 }}>
+                          ${selectedStock.px.toFixed(2)}
                         </span>
+                        {(() => {
+                          const comp = companyMap.get(selectedStock.t);
+                          const pct = comp?.pctChange ?? null;
+                          if (pct == null) return null;
+                          const dollar = selectedStock.px * (pct / 100);
+                          return (
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13.5, fontWeight: 700, color: pct >= 0 ? G : R }}>
+                              {pct >= 0 ? "▲ +" : "▼ -"}${Math.abs(dollar).toFixed(2)} ({pct >= 0 ? "+" : ""}{pct.toFixed(2)}%)
+                            </span>
+                          );
+                        })()}
                       </div>
-                      <div style={{ fontSize: 14.5, color: TEXT_MUTED, marginTop: 2 }}>
-                        {selectedStock.co} ·{" "}
-                        <span
-                          onClick={() => handleGoToFirm(selectedStock.firm)}
-                          style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(74,222,128,.4)", color: TEXT_HI }}
-                        >
-                          {selectedStock.firm}
-                        </span>
+                      <div style={{ fontSize: 14, color: "#ffffff", marginTop: 2 }}>
+                        {selectedStock.co}
                       </div>
-                    </div>
-                  </div>
-
-                  {/* FIRM TRACK RECORD — between the ticker identity and the signal score */}
-                  <div style={{ display: "flex", gap: 18, alignItems: "center", alignSelf: "center", flexShrink: 0 }}>
-                    <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 20, lineHeight: 1.1, color: TEXT_HI }}>{selectedStock.hit}</div>
-                      <div style={{ fontSize: 12, color: TEXT_MUTED, whiteSpace: "nowrap" }}>firm&apos;s calls hit target</div>
-                    </div>
-                    <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 20, lineHeight: 1.1, color: selectedStock.dir >= 0 ? G : R }}>{selectedStock.move}</div>
-                      <div style={{ fontSize: 12, color: TEXT_MUTED, whiteSpace: "nowrap" }}>avg 5-day move after</div>
                     </div>
                   </div>
 
@@ -1183,7 +1204,7 @@ export function AnalystScreen() {
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 24, lineHeight: 1, color: selectedStock.score >= 75 ? G : selectedStock.score >= 50 ? A : DIM }}>
                         {selectedStock.score}
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginTop: 2 }}>SIGNAL</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "#ffffff", marginTop: 2 }}>SIGNAL</div>
                     </div>
 
                     {/* Factor Breakdown Popover */}
@@ -1203,21 +1224,21 @@ export function AnalystScreen() {
                           boxShadow: "0 18px 48px rgba(0,0,0,.8)",
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 700, color: TEXT_HI, marginBottom: 4 }}>Signal Score Breakdown</div>
-                        <div style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 12 }}>Five factors weighted into a 0–100 institutional credibility score:</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 4 }}>Signal Score Breakdown</div>
+                        <div style={{ fontSize: 12, color: "#ffffff", marginBottom: 12 }}>Five factors weighted into a 0–100 institutional credibility score:</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           {FACTORS.map(([factorName, maxPts, desc], fIdx) => {
                             const pts = selectedStock.comp[fIdx];
                             return (
                               <div key={factorName}>
                                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
-                                  <span style={{ fontWeight: 600, color: TEXT_HI }}>{factorName}</span>
+                                  <span style={{ fontWeight: 600, color: "#ffffff" }}>{factorName}</span>
                                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: G }}>{pts}/{maxPts}</span>
                                 </div>
                                 <div style={{ height: 4, borderRadius: 2, background: "#1f2523", overflow: "hidden", marginBottom: 3 }}>
                                   <div style={{ height: 4, width: `${(pts / maxPts) * 100}%`, background: G }} />
                                 </div>
-                                <div style={{ fontSize: 11, color: TEXT_MUTED }}>{desc}</div>
+                                <div style={{ fontSize: 11, color: "#ffffff" }}>{desc}</div>
                               </div>
                             );
                           })}
@@ -1238,26 +1259,26 @@ export function AnalystScreen() {
                 {/* 3-Col Key Metrics */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${BORDER_DARK}`, borderRadius: 10 }}>
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>RATING</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>{selectedStock.to}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: "#ffffff" }}>RATING</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: "#ffffff" }}>{selectedStock.to}</div>
                   </div>
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>TARGET</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: "#ffffff" }}>TARGET</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: "#ffffff" }}>
                       {fmtMoney(selectedStock.pt1)}
                     </div>
                   </div>
                   <div style={{ padding: "10px 12px" }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>IMPLIED UPSIDE</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: "#ffffff" }}>IMPLIED UPSIDE</div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: selectedStock.upPct && selectedStock.upPct >= 0 ? G : R }}>
                       {selectedStock.upPct != null ? `${selectedStock.upPct >= 0 ? "+" : ""}${selectedStock.upPct.toFixed(1)}%` : "—"}
                     </div>
                   </div>
                 </div>
 
-                {/* WHERE THIS TARGET SITS - Visual Slider */}
+                {/* WHERE THIS TARGET SITS - Visual Slider (Task 12: Text white and clearly readable) */}
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginBottom: 8 }}>WHERE THIS TARGET SITS</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "#ffffff", marginBottom: 8 }}>WHERE THIS TARGET SITS</div>
                   <div style={{ position: "relative", height: 86, margin: "0 18px" }}>
                     {/* Horizontal rail */}
                     <div style={{ position: "absolute", left: 0, right: 0, top: 40, height: 2, background: BORDER_DARK }} />
@@ -1266,12 +1287,12 @@ export function AnalystScreen() {
 
                     {/* Street ticks */}
                     {sliderCalc.ticks.map((t, idx) => (
-                      <div key={idx} style={{ position: "absolute", top: 34, left: t.left, width: 2, height: 14, background: DIM }} />
+                      <div key={idx} style={{ position: "absolute", top: 34, left: t.left, width: 2, height: 14, background: "#ffffff" }} />
                     ))}
 
                     {/* Current Price Marker */}
-                    <div style={{ position: "absolute", top: 48, left: `${sliderCalc.pL}%`, transform: "translateX(-50%)", textAlign: "center", fontSize: 12.5, fontFamily: "'JetBrains Mono', monospace", color: "#d3d9d6" }}>
-                      <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "6px solid #e8ecea", margin: "0 auto 2px" }} />
+                    <div style={{ position: "absolute", top: 48, left: `${sliderCalc.pL}%`, transform: "translateX(-50%)", textAlign: "center", fontSize: 12.5, fontFamily: "'JetBrains Mono', monospace", color: "#ffffff" }}>
+                      <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "6px solid #ffffff", margin: "0 auto 2px" }} />
                       {fmtMoneyCompact(selectedStock.px)}
                     </div>
 
@@ -1295,8 +1316,8 @@ export function AnalystScreen() {
                     </div>
 
                     {/* Min / Max bounds */}
-                    <div style={{ position: "absolute", top: 68, left: -10, fontSize: 12, color: DIM, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.lo}</div>
-                    <div style={{ position: "absolute", top: 68, right: -10, fontSize: 12, color: DIM, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.hi}</div>
+                    <div style={{ position: "absolute", top: 68, left: -10, fontSize: 12, color: "#ffffff", fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.lo}</div>
+                    <div style={{ position: "absolute", top: 68, right: -10, fontSize: 12, color: "#ffffff", fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.hi}</div>
                   </div>
                 </div>
 
@@ -1305,7 +1326,7 @@ export function AnalystScreen() {
                   <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: G, marginBottom: 8 }}>WHY IT MATTERS</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {selectedStock.why.map((bullet, idx) => (
-                      <div key={idx} style={{ display: "flex", gap: 8, fontSize: 14.5, lineHeight: 1.45, color: "#d3d9d6" }}>
+                      <div key={idx} style={{ display: "flex", gap: 8, fontSize: 14, lineHeight: 1.45, color: "#ffffff" }}>
                         <span style={{ color: selectedStock.dir >= 0 ? G : R }}>•</span>
                         <span>{bullet}</span>
                       </div>
@@ -1313,74 +1334,89 @@ export function AnalystScreen() {
                   </div>
                 </div>
 
-                {/* THE WHOLE STREET ON {TICKER} */}
+                {/* Analyst Actions for Stock Table (Task 5: replaces Whole Street on Google; Task 7 & 14: clear left-aligned columns) */}
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginBottom: 8 }}>THE WHOLE STREET ON {selectedStock.t}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${BORDER_DARK}`, borderRadius: 10, marginBottom: 12 }}>
-                    <div style={{ padding: "8px 10px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                      <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>LAST</div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: TEXT_HI }}>{fmtMoney(selectedStock.px)}</div>
-                    </div>
-                    <div style={{ padding: "8px 10px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                      <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>CONSENSUS</div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: TEXT_HI }}>{fmtMoney(streetConsensus.cons)}</div>
-                    </div>
-                    <div style={{ padding: "8px 10px" }}>
-                      <div style={{ fontSize: 10, color: TEXT_MUTED, fontWeight: 700 }}>TO CONSENSUS</div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: streetConsensus.up >= 0 ? G : R }}>
-                        {streetConsensus.up >= 0 ? "+" : ""}{streetConsensus.up.toFixed(1)}%
-                      </div>
-                    </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "#ffffff", marginBottom: 8 }}>
+                    ANALYST ACTIONS ON {selectedStock.t}
                   </div>
-
-                  {/* Street Targets Table */}
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".1em", color: TEXT_HI, marginBottom: 8 }}>EVERY TARGET ON THE STREET</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                      {streetConsensus.rows.map((r, rIdx) => (
-                        <div key={rIdx} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 84px 44px 52px", gap: 8, alignItems: "center", fontSize: 13.5 }}>
-                          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: TEXT_HI }}>
-                            <span onClick={() => handleGoToFirm(r.firm)} style={{ cursor: "pointer", fontWeight: r.isSelFirm ? 800 : 700 }}>{r.firm}</span>{" "}
-                            <span style={{ color: G, fontWeight: 400 }}>· {r.rating}</span>
-                          </span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, color: TEXT_HI, textAlign: "right", whiteSpace: "nowrap" }}>{r.when}</span>
-                          <div style={{ height: 5, borderRadius: 3, background: "#1b201e", overflow: "hidden" }}>
-                            <div style={{ height: 5, width: r.w, background: r.c }} />
+                  <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: "#0d100f", overflowX: "auto" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(85px, .8fr) minmax(140px, 1.4fr) minmax(95px, 1fr) minmax(110px, 1fr) minmax(120px, 1.1fr)", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: "#ffffff" }}>
+                      <span style={{ textAlign: "left" }}>Date</span>
+                      <span style={{ textAlign: "left" }}>Firm</span>
+                      <span style={{ textAlign: "left" }}>Action</span>
+                      <span style={{ textAlign: "left" }}>Rating</span>
+                      <span style={{ textAlign: "left" }}>Price Target</span>
+                    </div>
+                    <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                      {(() => {
+                        const stockActions = allActions.filter(a => a.t === selectedStock.t);
+                        const listToShow = stockActions.length > 0 ? stockActions : [selectedStock];
+                        return listToShow.map((r) => (
+                          <div
+                            key={r.id}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "minmax(85px, .8fr) minmax(140px, 1.4fr) minmax(95px, 1fr) minmax(110px, 1fr) minmax(120px, 1.1fr)",
+                              gap: 10,
+                              alignItems: "center",
+                              padding: "10px 14px",
+                              borderBottom: "1px solid #161a18",
+                              fontSize: 12.5,
+                            }}
+                          >
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", color: "#ffffff", textAlign: "left", whiteSpace: "nowrap" }}>
+                              {formatUsDate(r.date)}
+                            </span>
+                            <span
+                              onClick={() => handleGoToFirm(r.firm)}
+                              style={{ fontWeight: 700, color: "#ffffff", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(74,222,128,.4)", textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                            >
+                              {r.firm}
+                            </span>
+                            <span style={{ fontWeight: 700, color: r.dir >= 0 ? G : R, textAlign: "left" }}>
+                              {r.dir > 0 ? "▲ " : r.dir < 0 ? "▼ " : ""}{r.act}
+                            </span>
+                            <span style={{ color: "#ffffff", textAlign: "left", whiteSpace: "nowrap" }}>
+                              {r.from && r.from !== "—" && r.from !== r.to ? (
+                                <span>{r.from} → <b style={{ color: "#ffffff" }}>{r.to}</b></span>
+                              ) : (
+                                <b style={{ color: "#ffffff" }}>{r.to}</b>
+                              )}
+                            </span>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "#ffffff", textAlign: "left", whiteSpace: "nowrap" }}>
+                              {r.prevPt != null && r.prevPt !== r.pt1 ? (
+                                <span>
+                                  <span style={{ color: r.pt1 > r.prevPt ? G : R, marginRight: 3 }}>{r.pt1 > r.prevPt ? "▲" : "▼"}</span>
+                                  ${r.prevPt.toFixed(2)} → ${r.pt1.toFixed(2)}
+                                </span>
+                              ) : (
+                                `$${r.pt1.toFixed(2)}`
+                              )}
+                            </span>
                           </div>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", whiteSpace: "nowrap", color: r.c }}>${Math.round(r.pt)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 8-Week Consensus Drift Sparkline */}
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginBottom: 6 }}>CONSENSUS DRIFT · 8 WEEKS</div>
-                    <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 36 }}>
-                      {streetConsensus.trend.map((b, bIdx) => (
-                        <div key={bIdx} title={b.tip} style={{ flex: 1, height: b.h, borderRadius: 3, background: b.c }} />
-                      ))}
+                        ));
+                      })()}
                     </div>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
+                {/* Action Buttons (Task 11: Alert me merged into Follow) */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: "auto", paddingTop: 8 }}>
                   <button
-                    onClick={e => handleToggleAlert(e, selectedStock)}
+                    onClick={e => handleToggleStar(e, selectedStock.t)}
                     style={{
                       padding: "10px 8px",
                       fontSize: 13,
                       fontWeight: 700,
                       lineHeight: 1.25,
-                      border: `1px solid ${activeAlerts[selectedStock.id] ? G : G}`,
+                      border: `1px solid ${selectedStock.watched ? G : BORDER_DARK}`,
                       borderRadius: 8,
-                      background: activeAlerts[selectedStock.id] ? G : "transparent",
-                      color: activeAlerts[selectedStock.id] ? "#06120a" : G,
+                      background: selectedStock.watched ? "rgba(74,222,128,.14)" : "transparent",
+                      color: selectedStock.watched ? G : "#ffffff",
                       cursor: "pointer",
                     }}
                   >
-                    {activeAlerts[selectedStock.id] ? "✓ Alert Set" : `Alert me if ${selectedStock.t} moves 5%`}
+                    {selectedStock.watched ? "✓ Following (Alerts On)" : "+ Follow Stock"}
                   </button>
 
                   <button
@@ -1463,21 +1499,34 @@ export function AnalystScreen() {
             <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflowX: "auto", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
               <div style={{ display: "grid", gridTemplateColumns: "36px minmax(130px, 1.5fr) minmax(100px, 1fr) 70px 60px 80px 50px", gap: 10, padding: "10px 16px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
                 <span>#</span>
-                <span>FIRM</span>
-                <span>HIT RATE</span>
-                <span style={{ textAlign: "right" }}>AVG 30D</span>
-                <span style={{ textAlign: "right" }}>CALLS</span>
-                <span style={{ textAlign: "center" }}>BULL/BEAR</span>
-                <span style={{ textAlign: "right" }}>TODAY</span>
+                <span>Firm</span>
+                <span>Hit Rate</span>
+                <span style={{ textAlign: "right" }}>Avg 30D</span>
+                <span style={{ textAlign: "right" }}>Calls</span>
+                <span style={{ textAlign: "center" }}>Bull/Bear</span>
+                <span style={{ textAlign: "right" }}>Today</span>
               </div>
 
               <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                 {allFirms
                   .filter(f => !firmSearchQ.trim() || f.name.toLowerCase().includes(firmSearchQ.toLowerCase()))
                   .sort((a, b) => {
-                    const x = a[firmSortKey];
-                    const y = b[firmSortKey];
-                    return (typeof x === "string" ? x.localeCompare(y as string) : ((x as number) - (y as number))) * firmSortDir;
+                    if (firmSortKey === "hit") {
+                      const x = a.hit ?? -1;
+                      const y = b.hit ?? -1;
+                      return (x - y) * firmSortDir || (b.today - a.today);
+                    }
+                    if (firmSortKey === "ret") {
+                      const x = a.ret ?? -999;
+                      const y = b.ret ?? -999;
+                      return (x - y) * firmSortDir;
+                    }
+                    if (firmSortKey === "calls") {
+                      const x = a.calls ?? a.today ?? 0;
+                      const y = b.calls ?? b.today ?? 0;
+                      return (x - y) * firmSortDir;
+                    }
+                    return 0;
                   })
                   .map(f => {
                     const isSel = f.name === selectedFirmName;
@@ -1513,7 +1562,7 @@ export function AnalystScreen() {
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", color: f.ret == null ? DIM : f.ret >= 0 ? G : R }}>
                           {f.retTxt}
                         </span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_MUTED }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI }}>
                           {f.calls ?? "—"}
                         </span>
                         <div style={{ display: "flex", height: 5, borderRadius: 2, overflow: "hidden", background: "#1b201e" }}>
@@ -1539,40 +1588,23 @@ export function AnalystScreen() {
                     <h3 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: TEXT_HI }}>{selectedFirm.name}</h3>
                     <div style={{ fontSize: 12, color: TEXT_MUTED }}>Wall Street Research Desk · Ranked #{selectedFirm.rank}</div>
                   </div>
+                  {/* Task 11: Merged Alert me into Follow button */}
                   <button
                     onClick={() => handleToggleFollow(selectedFirm.name)}
                     style={{
-                      padding: "6px 14px",
+                      padding: "7px 16px",
                       borderRadius: 8,
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: 700,
                       border: `1px solid ${G}`,
-                      background: followedFirms[selectedFirm.name] ? "transparent" : G,
-                      color: followedFirms[selectedFirm.name] ? G : "#06120a",
+                      background: (followedFirms[selectedFirm.name] || firmAlerts[selectedFirm.name]) ? "transparent" : G,
+                      color: (followedFirms[selectedFirm.name] || firmAlerts[selectedFirm.name]) ? G : "#06120a",
                       cursor: "pointer",
                     }}
                   >
-                    {followedFirms[selectedFirm.name] ? "✓ Following" : "+ Follow"}
+                    {(followedFirms[selectedFirm.name] || firmAlerts[selectedFirm.name]) ? "✓ Following (Alerts On)" : "+ Follow Firm"}
                   </button>
                 </div>
-
-                {/* Firm Alert Toggle */}
-                <button
-                  onClick={() => handleToggleFirmAlerts(selectedFirm.name)}
-                  style={{
-                    padding: "9px 12px",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    textAlign: "left",
-                    border: `1px solid ${firmAlerts[selectedFirm.name] ? G : BORDER_DARK}`,
-                    background: firmAlerts[selectedFirm.name] ? "rgba(74,222,128,.12)" : "transparent",
-                    color: firmAlerts[selectedFirm.name] ? G : TEXT_HI,
-                    cursor: "pointer",
-                  }}
-                >
-                  {firmAlerts[selectedFirm.name] ? "✓ Alerts On · Notify on all new calls" : "🔔 Alert me on new calls"}
-                </button>
 
                 {/* 3 Stats */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${BORDER_DARK}`, borderRadius: 10 }}>
@@ -1590,7 +1622,7 @@ export function AnalystScreen() {
                   </div>
                 </div>
 
-                {/* Recent Calls from This Firm */}
+                {/* Recent Calls from This Firm (Task 9: remove Open button, show price target directly in own column) */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED }}>RECENT CALLS</span>
@@ -1612,38 +1644,42 @@ export function AnalystScreen() {
                         }}
                         style={{
                           cursor: "pointer",
-                          padding: 10,
+                          padding: "10px 14px",
                           borderRadius: 8,
                           background: "#0d100f",
                           border: `1px solid ${BORDER_DARK}`,
-                          display: "flex",
+                          display: "grid",
+                          gridTemplateColumns: "85px minmax(120px, 1.2fr) minmax(90px, .9fr) minmax(110px, 1fr)",
+                          gap: 10,
                           alignItems: "center",
-                          justifyContent: "space-between",
                           fontSize: 13,
                         }}
                       >
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: TEXT_MUTED }}>
+                          {formatUsDate(c.when)}
+                        </span>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <StockLogo sym={c.t} size={24} />
+                          <StockLogo sym={c.t} size={22} />
                           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: TEXT_HI }}>{c.t}</span>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: c.dir >= 0 ? G : R }}>
-                            {c.dir >= 0 ? "▲" : "▼"} {c.act}
-                          </span>
+                          <span style={{ fontSize: 11, color: TEXT_MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.co}</span>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span style={{ fontSize: 11, color: TEXT_MUTED }}>{c.when}</span>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              background: c.res.includes("HIT") ? "rgba(74,222,128,.14)" : "#1b201e",
-                              color: c.res.includes("HIT") ? G : TEXT_MUTED,
-                            }}
-                          >
-                            {c.res}
-                          </span>
-                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: c.dir >= 0 ? G : R }}>
+                          {c.dir >= 0 ? "▲ " : "▼ "}{c.act}
+                        </span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 700, textAlign: "right", color: TEXT_HI }}>
+                          {c.pt != null ? (
+                            c.pxAt != null && c.pxAt !== c.pt ? (
+                              <span>
+                                <span style={{ color: c.pt > c.pxAt ? G : R, marginRight: 2 }}>{c.pt > c.pxAt ? "▲" : "▼"}</span>
+                                ${c.pxAt.toFixed(2)} → ${c.pt.toFixed(2)}
+                              </span>
+                            ) : (
+                              `$${c.pt.toFixed(2)}`
+                            )
+                          ) : (
+                            "—"
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -1839,14 +1875,16 @@ export function AnalystScreen() {
           {/* Table */}
           <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflowX: "auto" }}>
             <div style={{ display: "grid", gridTemplateColumns: "minmax(95px, .7fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(120px, .9fr) minmax(90px, .7fr) minmax(100px, 1fr)", gap: 12, padding: "12px 18px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
-              <span onClick={() => { setSortKey("date"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>DATE</span>
-              <span onClick={() => { setSortKey("t"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>TICKER / COMPANY</span>
-              <span onClick={() => { setSortKey("firm"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>FIRM</span>
-              <span onClick={() => { setSortKey("act"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>ACTION</span>
-              <span onClick={() => { setSortKey("to"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>PREVIOUS → NEW</span>
-              <span onClick={() => { setSortKey("pt"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>PRICE TARGET</span>
-              <span onClick={() => { setSortKey("up"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>TO TARGET</span>
-              <span onClick={() => { setSortKey("score"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>SIGNAL</span>
+              <span onClick={() => { setSortKey("date"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                Date {sortKey === "date" ? (sortDir === -1 ? "▼" : "▲") : "↕"}
+              </span>
+              <span onClick={() => { setSortKey("t"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>Ticker / Company</span>
+              <span onClick={() => { setSortKey("firm"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>Firm</span>
+              <span onClick={() => { setSortKey("act"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>Action</span>
+              <span onClick={() => { setSortKey("to"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>Previous → New</span>
+              <span onClick={() => { setSortKey("pt"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>Price Target</span>
+              <span onClick={() => { setSortKey("up"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>To Target</span>
+              <span onClick={() => { setSortKey("score"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>Signal</span>
             </div>
 
             <div style={{ maxHeight: "calc(100vh - 270px)", overflowY: "auto" }}>
@@ -1871,8 +1909,8 @@ export function AnalystScreen() {
                       fontSize: 13,
                     }}
                   >
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: TEXT_MUTED, whiteSpace: "nowrap" }}>
-                      {r.date ? r.date.slice(0, 10) : "—"}
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: TEXT_HI, whiteSpace: "nowrap" }}>
+                      {formatUsDate(r.date)}
                     </span>
 
                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -1904,7 +1942,7 @@ export function AnalystScreen() {
                     </span>
 
                     <span style={{ color: r.dir >= 0 ? G : R, fontWeight: 700 }}>
-                      {r.act}
+                      {r.dir > 0 ? "▲ " : r.dir < 0 ? "▼ " : ""}{r.act}
                     </span>
 
                     <span style={{ color: TEXT_MUTED }}>
@@ -1913,6 +1951,11 @@ export function AnalystScreen() {
 
                     {r.ptSource === "firm" ? (
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI, fontWeight: 700 }}>
+                        {r.prevPt != null && r.prevPt !== r.pt1 && (
+                          <span style={{ color: r.pt1 > r.prevPt ? G : R, marginRight: 3 }}>
+                            {r.pt1 > r.prevPt ? "▲" : "▼"}
+                          </span>
+                        )}
                         ${r.pt1.toFixed(2)}
                         {r.prevPt != null && r.prevPt !== r.pt1 && (
                           <div style={{ fontSize: 11, fontWeight: 500, color: TEXT_MUTED }}>was ${r.prevPt.toFixed(2)}</div>
@@ -2032,7 +2075,7 @@ export function AnalystScreen() {
 
             {/* Filter Tabs */}
             <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-              {(["All", "Hits", "Misses", "Open"] as const).map(flt => (
+              {(["All", "Hits", "Misses"] as const).map(flt => (
                 <button
                   key={flt}
                   onClick={() => setFirmHistFilter(flt)}
@@ -2054,21 +2097,20 @@ export function AnalystScreen() {
 
             {/* Table */}
             <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: "#0d100f", overflowX: "auto" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "70px minmax(80px, 1fr) minmax(90px, 1fr) 70px 70px 80px", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
-                <span>DATE</span>
-                <span>TICKER</span>
-                <span>ACTION</span>
-                <span style={{ textAlign: "right" }}>AT CALL</span>
-                <span style={{ textAlign: "right" }}>TARGET</span>
-                <span style={{ textAlign: "right" }}>RESULT</span>
+              <div style={{ display: "grid", gridTemplateColumns: "85px minmax(80px, 1fr) minmax(90px, 1fr) 70px 70px 80px", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
+                <span>Date</span>
+                <span>Ticker</span>
+                <span>Action</span>
+                <span style={{ textAlign: "right" }}>At Call</span>
+                <span style={{ textAlign: "right" }}>Target</span>
+                <span style={{ textAlign: "right" }}>Result</span>
               </div>
 
               <div style={{ maxHeight: 380, overflowY: "auto" }}>
                 {firmHistModal.recent
                   .filter(c => {
                     if (firmHistFilter === "Hits") return c.res.includes("HIT");
-                    if (firmHistFilter === "Open") return c.res === "OPEN";
-                    if (firmHistFilter === "Misses") return !c.res.includes("HIT") && c.res !== "OPEN";
+                    if (firmHistFilter === "Misses") return !c.res.includes("HIT");
                     return true;
                   })
                   .map((c, i) => (
@@ -2076,7 +2118,7 @@ export function AnalystScreen() {
                       key={i}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "70px minmax(80px, 1fr) minmax(90px, 1fr) 70px 70px 80px",
+                        gridTemplateColumns: "85px minmax(80px, 1fr) minmax(90px, 1fr) 70px 70px 80px",
                         gap: 10,
                         alignItems: "center",
                         padding: "10px 14px",
@@ -2084,13 +2126,13 @@ export function AnalystScreen() {
                         fontSize: 12,
                       }}
                     >
-                      <span style={{ color: TEXT_MUTED }}>{c.when}</span>
+                      <span style={{ color: TEXT_MUTED, fontFamily: "'JetBrains Mono', monospace" }}>{formatUsDate(c.when)}</span>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: TEXT_HI }}>{c.t}</span>
                       <span style={{ color: c.dir >= 0 ? G : R, fontWeight: 600 }}>{c.act}</span>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_MUTED }}>{fmtMoney(c.pxAt)}</span>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI, fontWeight: 700 }}>{fmtMoney(c.pt)}</span>
-                      <span style={{ textAlign: "right", fontWeight: 700, color: c.res.includes("HIT") ? G : c.res === "OPEN" ? TEXT_MUTED : R }}>
-                        {c.res}
+                      <span style={{ textAlign: "right", fontWeight: 700, color: c.res.includes("HIT") ? G : R }}>
+                        {c.res || "—"}
                       </span>
                     </div>
                   ))}

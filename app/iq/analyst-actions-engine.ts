@@ -201,7 +201,7 @@ export function buildAnalystActions({
         const whyBullets: string[] = [];
         if (isHeld) whyBullets.push(`You hold this stock in your portfolio`);
         if (isWatched) whyBullets.push(`In your watchlist`);
-        if (clusterCount >= 2) whyBullets.push(`${clusterCount} firms made same-direction calls within 72 hours`);
+        if (clusterCount >= 2) whyBullets.push(`${clusterCount} Firms made same-direction calls within 72 hours`);
         if (streetTargets.length >= 2 && targetPt >= streetTargets[streetTargets.length - 1]) {
           whyBullets.push(`New $${targetPt.toFixed(2)} PT is the highest on the Street`);
         } else if (streetTargets.length >= 2 && targetPt <= streetTargets[0]) {

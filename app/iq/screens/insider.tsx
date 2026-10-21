@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useIQActions } from "../shell";
-import { StockLogo } from "../utils";
+import { StockLogo, formatUsDate } from "../utils";
 import { apiGet } from "../backend";
 import { useApiList } from "../hooks/useApiList";
 import { useLiveQuotes } from "../live-quotes-context";
@@ -258,9 +258,12 @@ export function InsiderScreen() {
   }>("/market-data/institutional-ownership");
   const { data: liveCompanies } = useApiList<CompanyDoc>("/market-data/companies");
 
-  // Tracked universe: tickers with insider trades or a 13F rollup.
+  // Tracked universe: companies universe plus tickers with insider trades or 13F rollup.
   const allTickers = useMemo(() => {
     const set = new Set<string>();
+    liveCompanies.forEach((c) => {
+      if (c.ticker) set.add(c.ticker.toUpperCase().trim());
+    });
     liveInsiderTxRaw.forEach((tx) => {
       if (tx.ticker) set.add(tx.ticker.toUpperCase().trim());
     });
@@ -268,7 +271,7 @@ export function InsiderScreen() {
       if (io.ticker) set.add(io.ticker.toUpperCase().trim());
     });
     return Array.from(set);
-  }, [liveInsiderTxRaw, instOwnRaw]);
+  }, [liveCompanies, liveInsiderTxRaw, instOwnRaw]);
 
   // Live quotes for accurate live prices
   const liveQuotes = useLiveQuotes(allTickers);
@@ -675,13 +678,13 @@ export function InsiderScreen() {
           ? "var(--surface-3)"
           : "var(--down-dim, rgba(248,113,113,.12))";
         const typeLabel = isBuy ? "Open-market buy" : isEx ? "Option exercise" : "Open-market sale";
-        const filingDate = new Date(Date.now() - r.ago * 86400000).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
+        const filingIso = new Date(Date.now() - r.ago * 86400000).toISOString().slice(0, 10);
+        const filingDate = formatUsDate(filingIso);
 
         return {
           ...r,
+          isBuy,
+          isEx,
           color: c,
           codeBg,
           typeLabel,
@@ -1703,20 +1706,18 @@ export function InsiderScreen() {
                     <span
                       style={{
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: 700,
-                        width: 22,
-                        height: 20,
-                        minWidth: 22,
-                        flexShrink: 0,
-                        borderRadius: 4,
+                        padding: "3px 8px",
+                        borderRadius: 5,
                         display: "grid",
                         placeItems: "center",
                         background: tr.codeBg,
                         color: tr.color,
+                        flexShrink: 0,
                       }}
                     >
-                      {tr.code}
+                      {tr.isBuy ? "Buy" : tr.isEx ? "Exercise" : "Sell"}
                     </span>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                       <span

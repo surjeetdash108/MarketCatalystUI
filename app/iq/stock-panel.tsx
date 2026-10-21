@@ -257,7 +257,7 @@ export function StockChart({
         <ChartSelect value={chartType} options={CHART_TYPE_OPTIONS} onChange={v => setChartType(v as ChartType)} title="Chart type" />
         <button className={`rng indbtn${showEarnings ? " on" : ""}`} onClick={() => setShowEarnings(v => !v)}>Earnings</button>
         <button className={`rng indbtn${showMoments ? " on" : ""}`} onClick={() => setShowMoments(v => !v)}
-          title="Mark unusually large moves and the news behind them">Key moments</button>
+          title="Mark unusually large moves and the news behind them">Key Movements</button>
       </>}
       toolbarEnd={<>
         <VendorTag v={["fmp", "polygon"]} />

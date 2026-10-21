@@ -614,3 +614,26 @@ export function headlineLeadsWithTicker(headline: string | null | undefined, tic
   const t = ticker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`^\\$?${t}\\b`, "i").test(headline.trim());
 }
+
+/**
+ * Format date string into US format: MM-DD-YYYY.
+ * Handles YYYY-MM-DD, ISO timestamps, or milliseconds.
+ */
+export function formatUsDate(d: string | number | null | undefined): string {
+  if (!d) return "—";
+  if (typeof d === "string") {
+    const m = d.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[2]}-${m[3]}-${m[1]}`;
+    const mUs = d.trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (mUs) return d.trim();
+  }
+  const parsed = new Date(d);
+  if (!isNaN(parsed.getTime())) {
+    const mm = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(parsed.getUTCDate()).padStart(2, "0");
+    const yyyy = parsed.getUTCFullYear();
+    return `${mm}-${dd}-${yyyy}`;
+  }
+  return String(d);
+}
+
