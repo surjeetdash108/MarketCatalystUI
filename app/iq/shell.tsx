@@ -62,7 +62,8 @@ import type { CompanyDoc, SectorApiDoc, LiveEarningsDoc } from "./types";
 import { surprisePct } from "./types";
 import { LiveQuotesProvider, QUOTE_DELAY_LABEL } from "./live-quotes-context";
 import { SIProvider } from "./si/si-context";
-import { SISwitcher, SISweepOverlay } from "./si/si-switcher";
+import { SISweepOverlay } from "./si/si-switcher";
+import { ModuleSwitcher } from "./module-switcher";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -1301,6 +1302,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   }
 
   const isSiPage = pathname?.startsWith("/si");
+  // Strategy Lab is a full-screen module like SI (its own header, no MC chrome).
+  const isSlPage = pathname === "/sl" || pathname?.startsWith("/sl/");
 
   return (
     <AuthGuard>
@@ -1310,7 +1313,14 @@ export function IQShell({ children }: { children: React.ReactNode }) {
          <SIProvider>
           <div className="iq-root" data-theme={theme} data-font={font}>
             <SISweepOverlay />
-            {isSiPage ? (
+            {isSlPage ? (
+              <main
+                style={{ height: "100vh", overflowY: "auto", overflowX: "hidden", background: "#08090a", width: "100%" }}
+                className="sl-main-scroll"
+              >
+                {children}
+              </main>
+            ) : isSiPage ? (
               <main
                 style={{
                   height: "100vh",
@@ -1437,7 +1447,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
               {/* Integrated Centered Switcher */}
               <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290, padding: "0 12px" }}>
-                <SISwitcher />
+                <ModuleSwitcher />
               </div>
 
               {/* Session ET clock — sits immediately to the right of the search box. */}

@@ -24,8 +24,11 @@ export const SWITCH_MS = 1500;
 /** Navigate once the veil is fully opaque, so the remount happens behind it. */
 const NAV_AT_MS = 400;
 
+/** The three top-level modules the global toggle switches between. */
+export type AppModule = "MC" | "SI" | "SL";
+
 export interface ActiveSwitch {
-  to: "SI" | "MC";
+  to: AppModule;
   key: number;
   startedAt: number;
 }
@@ -51,6 +54,8 @@ export function useActiveSwitch(): ActiveSwitch | null {
 }
 
 const isSiPath = (p: string | null | undefined) => !!p && (p === "/si" || p.startsWith("/si/"));
+/** Strategy Lab lives at /sl (a full-screen module like SI). */
+export const isSlPath = (p: string | null | undefined) => !!p && (p === "/sl" || p.startsWith("/sl/"));
 
 /**
  * Runs one switch: overlay → navigate behind it → overlay fades out. Ignores
@@ -58,7 +63,7 @@ const isSiPath = (p: string | null | undefined) => !!p && (p === "/si" || p.star
  * not landed by the end of the transition, falls back to a full page load so a
  * click always ends up on the other side.
  */
-function runSwitch(to: "SI" | "MC", target: string, push: (url: string) => void) {
+function runSwitch(to: AppModule, target: string, push: (url: string) => void) {
   if (activeSwitch) return;
   const key = Date.now();
   setActiveSwitch({ to, key, startedAt: key });
@@ -75,6 +80,9 @@ function runSwitch(to: "SI" | "MC", target: string, push: (url: string) => void)
 
 interface SIContextType {
   isSI: boolean;
+  /** Which module is on screen (or being switched to). */
+  activeModule: AppModule;
+  enterSL: () => void;
   siTicker: string | null;
   activeTab: SITab;
   setActiveTab: (tab: SITab) => void;
@@ -95,6 +103,7 @@ export function SIProvider({ children }: { children: ReactNode }) {
   // The URL is the source of truth; while a switch runs, show where it's going
   // so the pill slides immediately on click.
   const isSI = sw ? sw.to === "SI" : isSiPath(pathname);
+  const activeModule: AppModule = sw ? sw.to : isSiPath(pathname) ? "SI" : isSlPath(pathname) ? "SL" : "MC";
 
   const [siTicker, setSiTicker] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
@@ -166,6 +175,11 @@ export function SIProvider({ children }: { children: ReactNode }) {
     (ticker?: string) => {
       if (typeof window === "undefined") return;
       const onSiPage = isSiPath(window.location.pathname);
+      // Strategy Lab has no ticker in view — it returns to the dashboard.
+      if (isSlPath(window.location.pathname) && !ticker) {
+        runSwitch("MC", "/dashboard", router.push);
+        return;
+      }
       if (!onSiPage && !ticker) return;
       // On /si the URL decides: /si?sym=X carries X back to Market Catalyst, and
       // plain /si (the SI home view) goes to the dashboard.
@@ -185,6 +199,11 @@ export function SIProvider({ children }: { children: ReactNode }) {
     [router]
   );
 
+  const enterSL = useCallback(() => {
+    if (typeof window === "undefined" || isSlPath(window.location.pathname)) return;
+    runSwitch("SL", "/sl", router.push);
+  }, [router]);
+
   const toggleSI = useCallback(() => {
     if (typeof window !== "undefined" && isSiPath(window.location.pathname)) exitToMC();
     else enterSI();
@@ -194,6 +213,8 @@ export function SIProvider({ children }: { children: ReactNode }) {
     <SIContext.Provider
       value={{
         isSI,
+        activeModule,
+        enterSL,
         siTicker,
         activeTab,
         setActiveTab,
@@ -214,6 +235,8 @@ export function useSI() {
   if (!ctx) {
     return {
       isSI: false,
+      activeModule: "MC" as AppModule,
+      enterSL: () => { },
       siTicker: null,
       activeTab: "overview" as SITab,
       setActiveTab: () => { },

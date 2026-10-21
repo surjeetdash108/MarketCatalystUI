@@ -43,7 +43,7 @@ import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso } from "../calendar-range";
 import { StockLogo, VendorTag } from "../utils";
-import { SISwitcher } from "./si-switcher";
+import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
 import { apiGet, apiPost } from "../backend";
@@ -1126,7 +1126,7 @@ export function StockIntelligenceScreen() {
       `}</style>
 
         <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10, padding: "0 24px" }}>
-          <SISwitcher />
+          <ModuleSwitcher />
           <button
             type="button"
             onClick={toggleTheme}
@@ -1694,7 +1694,7 @@ export function StockIntelligenceScreen() {
           </button>
 
           {/* Search Bar */}
-          <div style={{ position: "relative", width: 220, flex: "none" }}>
+          <div className="si-nav-search" style={{ position: "relative", width: 220, flex: "none" }}>
             <div
               style={{
                 height: 34,
@@ -1781,7 +1781,7 @@ export function StockIntelligenceScreen() {
 
           {/* Issue 5 Fix: Centered SISwitcher inside the header bar */}
           <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290 }}>
-            <SISwitcher />
+            <ModuleSwitcher />
           </div>
 
           {/* Action Buttons */}

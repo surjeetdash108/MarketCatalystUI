@@ -219,7 +219,9 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
           background:
             activeSweep.to === "SI"
               ? "rgba(8,11,16,0.92)"
-              : "rgba(6,8,9,0.92)",
+              : activeSweep.to === "SL"
+                ? "rgba(8,9,10,0.92)"
+                : "rgba(6,8,9,0.92)",
           backdropFilter: "blur(16px)",
           WebkitBackdropFilter: "blur(16px)",
           animation: anim("mcVeil"),
@@ -238,7 +240,9 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
           background: `linear-gradient(90deg, transparent 0%, ${
             activeSweep.to === "SI"
               ? "rgba(127,168,208,0.12) 30%, rgba(127,168,208,0.48) 50%, rgba(127,168,208,0.12) 70%"
-              : "rgba(74,222,128,0.12) 30%, rgba(74,222,128,0.42) 50%, rgba(74,222,128,0.12) 70%"
+              : activeSweep.to === "SL"
+                ? "rgba(201,162,74,0.12) 30%, rgba(201,162,74,0.45) 50%, rgba(201,162,74,0.12) 70%"
+                : "rgba(74,222,128,0.12) 30%, rgba(74,222,128,0.42) 50%, rgba(74,222,128,0.12) 70%"
           }, transparent 100%)`,
           animation: anim("mcSweep"),
           opacity: 0,
@@ -257,16 +261,18 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
           transform: "translateY(-50%)",
           textAlign: "center",
           fontFamily:
-            activeSweep.to === "SI"
+            activeSweep.to !== "MC"
               ? "'Barlow Condensed', sans-serif"
               : "'Manrope', sans-serif",
-          fontSize: activeSweep.to === "SI" ? 34 : 38,
-          fontWeight: activeSweep.to === "SI" ? 700 : 800,
-          letterSpacing: activeSweep.to === "SI" ? "0.22em" : "-0.02em",
+          fontSize: activeSweep.to !== "MC" ? 34 : 38,
+          fontWeight: activeSweep.to !== "MC" ? 700 : 800,
+          letterSpacing: activeSweep.to !== "MC" ? "0.22em" : "-0.02em",
           color:
             activeSweep.to === "SI"
               ? "rgba(169,198,227,0.96)"
-              : "rgba(255,255,255,0.96)",
+              : activeSweep.to === "SL"
+                ? "rgba(240,214,140,0.96)"
+                : "rgba(255,255,255,0.96)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -278,6 +284,8 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
       >
         {activeSweep.to === "SI" ? (
           "STOCK INTELLIGENCE"
+        ) : activeSweep.to === "SL" ? (
+          "STRATEGY LAB"
         ) : (
           <span>
             Market&nbsp;
