@@ -7,9 +7,12 @@ import type { NewsArticleDoc, CompanyDoc } from "./types";
  * they only drifted because each re-implemented this step its own way.
  */
 
-/** Newest first. */
+/** Newest first. Placeholder tickers ("NONE" on market-wide filings) are
+ *  cleared so they never render as a symbol. */
 export function sortNewsDesc(items: NewsArticleDoc[]): NewsArticleDoc[] {
-  return [...items].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  return items
+    .map(n => (n.ticker && !storyTicker(n) ? { ...n, ticker: "" } : n))
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 }
 
 /* Collapse multi-ticker duplicates. Polygon tags one article to EVERY ticker
@@ -48,7 +51,27 @@ export function etTimeLabel(iso: string): string {
   return `${hour}:${minute}${dayPeriod}`;
 }
 
-/** Display label for a story's `category` (anything unknown reads as Macro). */
+/** A real ticker on a story ("NONE" / "N/A" placeholders from the wire are not). */
+export function storyTicker(n: Pick<NewsArticleDoc, "ticker">): string | null {
+  const t = (n.ticker ?? "").trim().toUpperCase();
+  return t && t !== "NONE" && t !== "N/A" && t !== "NULL" ? t : null;
+}
+
+/**
+ * The KIND of story: earnings / merger / company / macro. Synced company news
+ * carries category null, so reading only `category` typed every story Macro;
+ * the subject tag and the ticker decide it when the category is absent.
+ */
+export function storyKind(n: Pick<NewsArticleDoc, "category" | "tag" | "ticker">): "earnings" | "merger" | "company" | "macro" {
+  const c = n.category;
+  if (c === "earnings" || c === "merger" || c === "company") return c;
+  if (c === "macro") return "macro";
+  if (n.tag === "earnings") return "earnings";
+  if (n.tag === "ma") return "merger";
+  return storyTicker(n) ? "company" : "macro";
+}
+
+/** Display label for a story kind (see storyKind). */
 export function catLabel(c: string | null): string {
   if (c === "earnings") return "Earnings";
   if (c === "merger") return "M&A";

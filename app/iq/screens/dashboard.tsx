@@ -9,7 +9,7 @@ import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchIte
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, cleanCatalystText, headlineLeadsWithTicker } from "../utils";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
-import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel } from "../news-feed";
+import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
 import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-context";
@@ -330,7 +330,7 @@ export function DashboardScreen() {
   const { frame: tapeFrame } = useTapeStream();
   const liveIndices = tapeFrame ? tapeItemsToIndexDocs(tapeFrame.items) : [];
   const { data: liveMovers } = useApiList<LiveMoverDoc>("/market-data/movers");
-  const { data: liveEarnings } = useApiList<LiveEarningsDoc>("/market-data/earnings");
+  const { data: liveEarnings, loading: earningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   // Next scheduled report per ticker (earliest calendar date from today on).
   const nextErByTicker = useMemo(() => {
     const today = etTodayIso();
@@ -727,7 +727,7 @@ export function DashboardScreen() {
             </div>
             <div className="card-b" style={{ paddingTop: 4, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
               {earningsToday.length === 0
-                ? <DataState label="No earnings reported today." height={100} />
+                ? <DataState loading={earningsLoading} label="No earnings reported today." height={100} />
                 : earningsToday.slice(0, 10).map(e => {
                     const c = companyByTicker.get(e.ticker);
                     const q = earningsLive.get(e.ticker);
@@ -1447,10 +1447,10 @@ function LiveFeedList({ companyByTicker }: { companyByTicker: Map<string, Compan
         <StockLogo sym={f.ticker} size={28} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: ".8rem", color: "var(--text)", lineHeight: 1.4 }}>
-            {!headlineLeadsWithTicker(f.headline, f.ticker) && <><b style={{ color: "var(--text-hi)" }}>{f.ticker}</b> · </>}{f.headline}
+            {f.ticker && !headlineLeadsWithTicker(f.headline, f.ticker) && <><b style={{ color: "var(--text-hi)" }}>{f.ticker}</b> · </>}{f.headline}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: ".66rem", color: "var(--text-dim-solid)", flexWrap: "wrap" }}>
-            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{catLabel(f.category)}</span>
+            <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{catLabel(storyKind(f))}</span>
             <span className="mono">{etTimeLabel(f.publishedAt)} ET</span>
             <span>· {f.source}</span>
           </div>

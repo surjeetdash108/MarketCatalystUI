@@ -12,6 +12,15 @@ import type { LiveEarningsDoc, CompanyDoc, FinancialsDoc, QuarterFinancials, Ann
 import { isoDay, addDays, mondayOf, fmtDate, etTodayIso } from "../calendar-range";
 import { surprisePct, reportedQuarterEps, quarterEpsSurprisePct } from "../types";
 
+/** Next report date (MM-DD-YYYY): the stored date while it is still ahead,
+ *  else the first upcoming row on the earnings calendar, else "TBA". */
+function nextErFor(stored: string | null | undefined, rows: Array<{ ticker: string; date: string }>, sym: string): string {
+  const today = etTodayIso();
+  if (stored && stored >= today) return formatUsDate(stored);
+  const next = rows.filter(e => e.ticker === sym && e.date >= today).map(e => e.date).sort()[0];
+  return next ? formatUsDate(next) : "TBA";
+}
+
 // Live source (Polygon SEC financials) has ticker/date/epsEstimate/epsActual —
 // no session (BMO/AMC), guidance, price reaction, implied move, or quarterly
 // financials. The selected-company detail card below only ever shows real
@@ -1996,7 +2005,7 @@ export function EarningsScreen() {
                           </Row>
                         )}
                         <Row label="Next earnings date">
-                          <b>{liveCompanySel?.nextEarningsDate ? formatUsDate(liveCompanySel.nextEarningsDate) : (liveEarnings.find(e => e.ticker === sel && e.date >= etTodayIso())?.date ? formatUsDate(liveEarnings.find(e => e.ticker === sel && e.date >= etTodayIso())!.date) : "TBA")}</b>
+                          <b>{nextErFor(liveCompanySel?.nextEarningsDate, liveEarnings, sel)}</b>
                         </Row>
                         {streetExpects && (
                           <Row label="Street expects (next)"><b>{streetExpects}</b></Row>
@@ -2122,7 +2131,7 @@ export function EarningsScreen() {
                       </Row>
                     )}
                     <Row label="Next earnings date">
-                      <b>{liveCompanySel?.nextEarningsDate ? formatUsDate(liveCompanySel.nextEarningsDate) : (liveEarnings.find(e => e.ticker === sel && e.date >= etTodayIso())?.date ? formatUsDate(liveEarnings.find(e => e.ticker === sel && e.date >= etTodayIso())!.date) : "TBA")}</b>
+                      <b>{nextErFor(liveCompanySel?.nextEarningsDate, liveEarnings, sel)}</b>
                     </Row>
                     {streetExpects && (
                       <Row label="Street expects (next)"><b>{streetExpects}</b></Row>
