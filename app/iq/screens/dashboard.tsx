@@ -315,6 +315,16 @@ function DashPopContent({
   </>;
 }
 
+/** Fear & Greed parts: [score key, label, raw input key, what the raw input is]. */
+const FG_PARTS = [
+  ["momentum", "Momentum", "spyVs125dPct", "S&P 500 (SPY) vs its 125-day average"],
+  ["strength", "Strength", "netNewHighsPct", "Net new 52-week highs, % of stocks"],
+  ["breadth", "Breadth", "advancersPct", "Stocks advancing"],
+  ["volatility", "Volatility (VIX)", "vixVs50dPct", "VIX vs its 50-day average"],
+  ["safeHaven", "Safe haven", "spyMinusTlt20dPct", "Stocks minus Treasuries, 20-day return"],
+  ["junkBond", "Junk bonds", "hygMinusLqd20dPct", "Junk minus investment-grade bonds, 20-day return"],
+] as const;
+
 export function DashboardScreen() {
   const { openStock, openStockDetail, openMoverModal, openEarnings, openSector, openIndex } = useIQActions();
   /* Market-wide AI digest for the What Matters Now card. Read-only from the
@@ -358,6 +368,9 @@ export function DashboardScreen() {
   const fgLabel = fearGreed?.label ?? null;
   const fgAsOf = fearGreed?.asOfDate ?? null;
   const fgParts = fearGreed?.components ?? null;
+  const fgInputs = fearGreed?.inputs ?? null;
+  const fgLive = fearGreed?.intraday === true;
+  const fgUpdated = fearGreed?.updatedAt ?? null;
   // Composite F&G history (market_sentiment_history) — backs the history drawer.
   const { data: fgHistory } = useApiList<MarketSentimentHistoryDoc>("/market-data/market-sentiment-history");
   // EDGAR 8-K earnings announcements (session + price reaction).
@@ -1282,16 +1295,23 @@ export function DashboardScreen() {
                     {/* The index is computed from daily closes, once each evening. */}
                     {fgAsOf && (
                       <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
-                        As of {fmtDate(fgAsOf, { month: "short", day: "numeric" })} close
+                        {fgLive && fgUpdated
+                          ? `Live · updated ${new Date(fgUpdated).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET`
+                          : `As of ${fmtDate(fgAsOf, { month: "short", day: "numeric" })} close`}
                       </div>
                     )}
                     {fgParts && (
                       <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "4px 12px", fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
-                        {([["momentum", "Momentum"], ["volatility", "Volatility (VIX)"], ["safeHaven", "Safe haven"], ["breadth", "Breadth"]] as const)
+                        {FG_PARTS
                           .filter(([k]) => typeof fgParts[k] === "number")
-                          .map(([k, name]) => (
-                            <span key={k}>{name} <b className="mono" style={{ color: "var(--text-hi)" }}>{fgParts[k]}</b></span>
-                          ))}
+                          .map(([k, name, input, unit]) => {
+                            const raw = fgInputs?.[input];
+                            return (
+                              <span key={k} title={raw != null ? `${unit}: ${raw}%` : undefined}>
+                                {name} <b className="mono" style={{ color: "var(--text-hi)" }}>{fgParts[k]}</b>
+                              </span>
+                            );
+                          })}
                       </div>
                     )}
                   </div>
