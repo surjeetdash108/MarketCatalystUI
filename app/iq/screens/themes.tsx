@@ -87,7 +87,8 @@ export function ThemesScreen() {
   /** Toggle one theme (multi-select, like sectors). Selecting a theme leaves
    *  sector mode; deselecting the last theme falls back to "all tracked names". */
   function pick(name: string) {
-    setSelectedThemes(cur => cur.includes(name) ? cur.filter(x => x !== name) : [...cur, name]);
+    // One theme at a time: each pill shows that theme's own constituents.
+    setSelectedThemes([name]);
     setSectorSel([]);
     setSel(null);
   }
@@ -152,8 +153,8 @@ export function ThemesScreen() {
           </div>
         )}
 
-        {/* Theme quick-access pills — MULTI-select (toggle in/out); the list
-            shows the union of the selected themes. Sector chips above are the
+        {/* Theme quick-access pills — single-select: the list shows the
+            picked theme's own constituents. Sector chips above are the
             alternate multi-select mode. The Sectors dropdown sits at the right
             end of THIS row (moved off the page header) so it lines up with the
             theme pills. */}

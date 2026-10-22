@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { screenerPresets, type ScreenerStock } from "../data";
+import { screenerPresets, type PresetCtx, type ScreenerStock } from "../data";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
-import type { CompanyDoc } from "../types";
+import type { AnalystConsensusDoc, CompanyDoc, InsiderTxDoc } from "../types";
+import { etTodayIso } from "../calendar-range";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { VendorTag, titleCaseLabel, fmtPrice } from "../utils";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
@@ -162,7 +163,7 @@ export function ScreenerScreen() {
       <body onload="window.print()">
         <h1>${esc(s.ticker)}</h1>
         <div class="name">${esc(s.name)}</div>
-        <div class="sub">${esc(s.sector)} · generated ${new Date().toLocaleString()}</div>
+        <div class="sub">${esc(s.sector)} · generated ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })} ET</div>
         <table><tbody>${metricsHtml}</tbody></table>
         ${c?.description ? `<div class="desc">${esc(c.description)}</div>` : ""}
         <div class="foot">MarketCatalyst — informational only, not investment advice.</div>
@@ -207,6 +208,33 @@ export function ScreenerScreen() {
     setDmaAbove(false); setRsiBand(false); setPriceGt5(false);
   }
 
+  /* ── Market-wide facts some presets need (fetched only while one is on) ── */
+  const needs = new Set([...activePresets].flatMap(i => screenerPresets[i].needs ?? []));
+  const { data: insiderTx } = useApiList<InsiderTxDoc>(needs.has("insider") ? "/market-data/insider-transactions" : null);
+  const { data: analystDocs } = useApiList<AnalystConsensusDoc>(needs.has("analyst") ? "/market-data/analyst-actions" : null);
+  const presetCtx: PresetCtx = (() => {
+    const today = Date.parse(`${etTodayIso()}T00:00:00Z`);
+    const since = (days: number) => new Date(today - days * 86_400_000).toISOString().slice(0, 10);
+    const buyers = new Map<string, Set<string>>();
+    for (const tx of insiderTx) {
+      if (tx.transactionCode !== "P" || !tx.ticker || (tx.transactionDate ?? "") < since(90)) continue;
+      const t = tx.ticker.toUpperCase();
+      const set = buyers.get(t) ?? new Set<string>();
+      set.add(tx.ownerName || "?");
+      buyers.set(t, set);
+    }
+    const upgrades = new Map<string, number>();
+    for (const d of analystDocs) {
+      const t = (d.ticker || "").toUpperCase();
+      const n = (d.recentGrades ?? []).filter(g => /upgrade/i.test(g.action ?? "") && (g.date ?? "") >= since(30)).length;
+      if (n) upgrades.set(t, n);
+    }
+    return {
+      insiderBuyers90: new Map([...buyers].map(([t, set]) => [t, set.size])),
+      upgrades30: upgrades,
+    };
+  })();
+
   /* ── Filtered results ── */
   // The results list starts empty: it only populates once the user has picked
   // at least one filter (a preset, the sector, or any manual criterion). This
@@ -221,16 +249,8 @@ export function ScreenerScreen() {
     if (!matchesSector(sector, s.ticker, s.sector)) return false;
     // Preset filters — stock must pass at least one selected preset (OR logic)
     if (activePresets.size > 0) {
-      const passesAny = [...activePresets].some(idx => {
-        const pf = screenerPresets[idx].f;
-        if (pf.relativeStrength_min !== undefined && (s.relativeStrength == null || s.relativeStrength < pf.relativeStrength_min)) return false;
-        if (pf.salesGrowth_min      !== undefined && (s.salesGrowth == null || s.salesGrowth < pf.salesGrowth_min))                return false;
-        if (pf.epsGrowth_min        !== undefined && (s.epsGrowth == null || s.epsGrowth < pf.epsGrowth_min))                      return false;
-        if (pf.rvolRatio_min        !== undefined && (s.rvolRatio == null || s.rvolRatio < pf.rvolRatio_min))                      return false;
-        if (pf.marketCap_min        !== undefined && s.marketCap        < pf.marketCap_min)        return false;
-        if (pf.techRating           !== undefined && !pf.techRating.includes(s.techRating))        return false;
-        return true;
-      });
+      const c = byTicker.get(s.ticker);
+      const passesAny = !!c && [...activePresets].some(idx => screenerPresets[idx].test?.(c, presetCtx) ?? false);
       if (!passesAny) return false;
     }
     // Manual filters — all must pass (AND logic)
@@ -331,8 +351,10 @@ export function ScreenerScreen() {
                     return (
                       <button
                         key={p.name}
-                        onClick={() => togglePreset(i)}
-                        style={{ display: "flex", alignItems: "flex-start", gap: 8, background: on ? "var(--ai-dim)" : undefined }}
+                        onClick={() => { if (!p.unavailable) togglePreset(i); }}
+                        disabled={!!p.unavailable}
+                        title={p.unavailable}
+                        style={{ display: "flex", alignItems: "flex-start", gap: 8, background: on ? "var(--ai-dim)" : undefined, opacity: p.unavailable ? 0.45 : 1, cursor: p.unavailable ? "not-allowed" : undefined }}
                       >
                         <span style={{
                           flexShrink: 0, width: 14, height: 14, marginTop: 2,
@@ -347,7 +369,7 @@ export function ScreenerScreen() {
                           )}
                         </span>
                         <span>
-                          {p.name}<small>{p.desc}</small>
+                          {p.name}<small>{p.unavailable ? `${p.desc} — data not available yet` : p.desc}</small>
                         </span>
                       </button>
                     );
