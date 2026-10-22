@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DataState, VendorTag, formatUsDate } from "./utils";
+import { DataState, VendorTag, formatUsDate, ptAsOf } from "./utils";
 import { useApiList } from "./hooks/useApiList";
 import { apiGet } from "./backend";
 import { useWatchlistsContext } from "./hooks/useWatchlists";
@@ -168,19 +168,15 @@ export function StockAnalystActionsView({
                     {r.ptSource === "firm" ? (
                       <span className="mono" style={{ textAlign: "right", color: "var(--text-hi)", fontWeight: 700 }}>
                         ${r.pt1.toFixed(2)}
+                        {ptAsOf(r.ptDate, r.date) && (
+                          <div style={{ fontSize: ".72rem", fontWeight: 500, color: "var(--text-dim-solid)" }}>{ptAsOf(r.ptDate, r.date)}</div>
+                        )}
                       </span>
                     ) : (
-                      <span
-                        className="mono"
-                        title="This firm posted no target with this call; % to target uses the Street consensus"
-                        style={{ textAlign: "right", color: "var(--text-dim-solid)" }}
-                      >
-                        ${r.pt1.toFixed(2)}
-                        <div style={{ fontSize: ".72rem" }}>consensus</div>
-                      </span>
+                      <span className="mono" title="This firm posted no price target with this call" style={{ textAlign: "right", color: "var(--text-dim-solid)" }}>—</span>
                     )}
                     <span className="mono" style={{ textAlign: "right", fontWeight: 700, color: r.upPct != null && r.upPct >= 0 ? "var(--up)" : "var(--down)" }}>
-                      {r.upPct != null ? `${r.upPct >= 0 ? "+" : ""}${r.upPct.toFixed(1)}%` : "N/A"}
+                      {r.ptSource === "firm" && r.upPct != null ? `${r.upPct >= 0 ? "+" : ""}${r.upPct.toFixed(1)}%` : "—"}
                     </span>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
                       <div style={{ width: 44, height: 4, borderRadius: 2, background: "var(--surface-3)", overflow: "hidden" }}>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useIQActions } from "../shell";
-import { DataState, StockLogo, VendorTag, formatUsDate } from "../utils";
+import { DataState, StockLogo, VendorTag, formatUsDate, ptAsOf } from "../utils";
 import { useApiList } from "../hooks/useApiList";
 import { apiGet } from "../backend";
 import { WatchlistsContext } from "../hooks/useWatchlists";
@@ -101,9 +101,9 @@ const CAPS_LIST = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
 
 /** Fixed column widths shared by each table's header and rows. The header and every
  *  row are separate grids, so content-sized columns would not line up. */
-const STOCK_CALL_COLS = "86px minmax(120px, 1.3fr) 112px minmax(130px, 1fr) 110px";
-const HIST_COLS = "86px 70px minmax(120px, 1fr) 84px 110px 100px";
-const FIRM_CALL_COLS = "86px minmax(110px, 1.2fr) 112px 110px 96px";
+const STOCK_CALL_COLS = "86px minmax(120px, 1.3fr) 112px minmax(130px, 1fr) 160px";
+const HIST_COLS = "86px 70px minmax(120px, 1fr) 84px 160px 100px";
+const FIRM_CALL_COLS = "86px minmax(110px, 1.2fr) 112px 160px 96px";
 
 type MainTab = "Analyst Actions" | "Top Firms" | "All Actions";
 type FilterChip = "All" | "My stocks" | "High signal" | "Upgrades" | "Downgrades" | "Clusters";
@@ -132,6 +132,7 @@ interface GradeHistoryRow {
   newGrade: string | null;
   action: string | null;
   priceTarget: number | null;
+  priceTargetDate?: string | null;
   previousPriceTarget: number | null;
 }
 
@@ -158,6 +159,8 @@ interface StockCallRow {
   to: string;
   pt: number | null;
   prevPt: number | null;
+  /** When the firm posted `pt` (earlier than `date` = its standing target). */
+  ptDate: string | null;
 }
 
 /** A row in a firm's call list (live feed + stored history). */
@@ -172,6 +175,7 @@ interface FirmCallRow {
   pxAtCall: number | null;
   prevPt: number | null;
   pt: number | null;
+  ptDate: string | null;
   /** "Open", "✓ Hit", "✗ Miss" or the 5-day move after a rating change. */
   res: string;
   /** 1 good / -1 bad / 0 neutral, for the result colour. */
@@ -183,9 +187,17 @@ interface FirmCallRow {
 // Helpers
 // ============================================================================
 
-/** The firm's price target with this call, as a single number. */
-function PtValue({ pt }: { pt: number | null }) {
-  return <>{pt != null && pt > 0 ? `$${pt.toFixed(2)}` : "—"}</>;
+/** The firm's price target with this call, as a single number — with
+ *  "as of MM-DD" when it is a standing target carried from an earlier post. */
+function PtValue({ pt, ptDate, callDate }: { pt: number | null; ptDate?: string | null; callDate?: string }) {
+  if (pt == null || !(pt > 0)) return <>—</>;
+  const asOf = ptAsOf(ptDate, callDate);
+  return (
+    <>
+      ${pt.toFixed(2)}
+      {asOf && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: TEXT_MUTED }}>{asOf}</span>}
+    </>
+  );
 }
 
 function fmtMoney(v: number | null | undefined): string {
@@ -397,11 +409,13 @@ export function AnalystScreen() {
 
   // Calls made within the last RECENT_DAYS (ET calendar) — what the header and
   // the "Moving the needle" list describe.
+  // Recomputed with the feed (not once at mount), so a tab left open past
+  // midnight ET still counts the right days.
   const recentCutoff = useMemo(() => {
     const d = new Date(`${etTodayIso()}T00:00:00Z`);
     d.setUTCDate(d.getUTCDate() - (RECENT_DAYS - 1));
     return d.toISOString().slice(0, 10);
-  }, []);
+  }, [allActions]); // eslint-disable-line react-hooks/exhaustive-deps
   const recentActions = useMemo(() => allActions.filter((a) => a.date >= recentCutoff), [allActions, recentCutoff]);
   const todayCount = useMemo(() => {
     const today = etTodayIso();
@@ -436,7 +450,7 @@ export function AnalystScreen() {
       seen.add(key);
       rows.push({
         key, date: a.date, firm: a.firm, act: a.act, dir: a.dir, from: a.from, to: a.to,
-        pt: a.ptSource === "firm" ? a.pt1 : null, prevPt: a.prevPt,
+        pt: a.ptSource === "firm" ? a.pt1 : null, prevPt: a.prevPt, ptDate: a.ptDate,
       });
     }
     for (const g of stockHistory) {
@@ -448,7 +462,7 @@ export function AnalystScreen() {
       const meta = resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget);
       rows.push({
         key, date: g.date, firm, act: meta.shownAction, dir: meta.dir, from: meta.from, to: meta.to,
-        pt: g.priceTarget, prevPt: g.previousPriceTarget,
+        pt: g.priceTarget, prevPt: g.previousPriceTarget, ptDate: g.priceTargetDate ?? null,
       });
     }
     return rows.sort((a, b) => a.date.localeCompare(b.date) * stockCallDir);
@@ -491,9 +505,10 @@ export function AnalystScreen() {
       }
     }
 
-    const totalRated = bullishCount + bearishCount || 1;
-    const bullPct = Math.round((bullishCount / totalRated) * 100);
-    const bearPct = 100 - bullPct;
+    // No directional calls → 0% / 0%, not "100% bearish".
+    const totalRated = bullishCount + bearishCount;
+    const bullPct = totalRated ? Math.round((bullishCount / totalRated) * 100) : 0;
+    const bearPct = totalRated ? 100 - bullPct : 0;
 
     // Top cluster
     let topCluster = Array.from(clusterMap.values()).sort((a, b) => b.count - a.count)[0]?.action || recentActions[0] || null;
@@ -619,7 +634,7 @@ export function AnalystScreen() {
       seen.add(key);
       rows.push({
         key, t: a.t, co: a.co, act: a.act, dir: a.dir, when: a.date,
-        pxAtCall: null, prevPt: a.prevPt, pt: a.ptSource === "firm" ? a.pt1 : null,
+        pxAtCall: null, prevPt: a.prevPt, pt: a.ptSource === "firm" ? a.pt1 : null, ptDate: a.ptDate,
         res: "Open", tone: 0, kind: "live",
       });
     }
@@ -633,7 +648,7 @@ export function AnalystScreen() {
         const mv = d.move ?? null;
         rows.push({
           key, t, co: companyMap.get(t)?.name ?? t, act, dir: d.dir, when: d.date,
-          pxAtCall: null, prevPt: null, pt: null,
+          pxAtCall: null, prevPt: null, pt: null, ptDate: null,
           res: mv == null ? "—" : `${mv >= 0 ? "+" : "−"}${Math.abs(mv).toFixed(1)}% 5D`,
           tone: mv == null ? 0 : mv >= 0 ? 1 : -1, kind: "rating",
         });
@@ -643,7 +658,7 @@ export function AnalystScreen() {
         seen.add(key);
         rows.push({
           key, t, co: companyMap.get(t)?.name ?? t, act: "Price Target", dir: d.dir, when: d.date,
-          pxAtCall: d.priceWhenPosted ?? null, prevPt: null, pt: d.target ?? null,
+          pxAtCall: d.priceWhenPosted ?? null, prevPt: null, pt: d.target ?? null, ptDate: d.date,
           res: d.hit ? "✓ Hit" : "✗ Miss", tone: d.hit ? 1 : -1, kind: "target",
         });
       }
@@ -683,7 +698,12 @@ export function AnalystScreen() {
     // Text Search
     if (searchQ.trim()) {
       const q = searchQ.trim().toLowerCase();
-      list = list.filter(a => a.t.toLowerCase().includes(q) || a.co.toLowerCase().includes(q) || a.firm.toLowerCase().includes(q));
+      // An exact ticker ("NEE") means that stock only — not every firm or
+      // company whose name merely contains the letters ("Needham").
+      const exact = list.filter(a => a.t.toLowerCase() === q);
+      list = exact.length > 0
+        ? exact
+        : list.filter(a => a.t.toLowerCase().includes(q) || a.co.toLowerCase().includes(q) || a.firm.toLowerCase().includes(q));
     }
 
     // Sorting
@@ -897,7 +917,11 @@ export function AnalystScreen() {
         <div style={{ padding: "20px 24px 40px" }}>
           {/* Header Stats Banner */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap", fontSize: 14, color: TEXT_MUTED }}>
-            <span style={{ color: TEXT_HI, fontWeight: 700 }}>{todayCount} calls today · {recentActions.length} in the last {RECENT_DAYS} days</span>
+            <span style={{ color: TEXT_HI, fontWeight: 700 }}>
+              {consensusLoading && allActions.length === 0
+                ? "Loading analyst calls…"
+                : `${todayCount} calls today · ${recentActions.length} in the last ${RECENT_DAYS} days`}
+            </span>
             <span>·</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ color: G, fontWeight: 700 }}>{summaryMetrics.highSignalCount} high signal (≥75)</span>
@@ -1514,7 +1538,7 @@ export function AnalystScreen() {
                               )}
                             </span>
                             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "#ffffff", whiteSpace: "nowrap" }}>
-                              <PtValue pt={r.pt} />
+                              <PtValue pt={r.pt} ptDate={r.ptDate} callDate={r.date} />
                             </span>
                           </div>
                         ))}
@@ -1801,7 +1825,7 @@ export function AnalystScreen() {
                               {c.dir > 0 ? "▲ " : c.dir < 0 ? "▼ " : ""}{c.act}
                             </span>
                             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: TEXT_HI, whiteSpace: "nowrap" }}>
-                              <PtValue pt={c.pt} />
+                              <PtValue pt={c.pt} ptDate={c.ptDate} callDate={c.when} />
                             </span>
                             <span style={{ fontWeight: 700, whiteSpace: "nowrap", color: c.tone > 0 ? G : c.tone < 0 ? R : TEXT_MUTED }}>
                               {c.res}
@@ -2080,19 +2104,21 @@ export function AnalystScreen() {
                     {r.ptSource === "firm" ? (
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI, fontWeight: 700 }}>
                         ${r.pt1.toFixed(2)}
+                        {ptAsOf(r.ptDate, r.date) && (
+                          <div style={{ fontSize: 12, fontWeight: 500, color: TEXT_HI }}>{ptAsOf(r.ptDate, r.date)}</div>
+                        )}
                       </span>
                     ) : (
                       <span
-                        title="This firm posted no target with this call; % to target uses the Street consensus"
+                        title="This firm posted no price target with this call"
                         style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI }}
                       >
-                        ${r.pt1.toFixed(2)}
-                        <div style={{ fontSize: 12 }}>consensus</div>
+                        —
                       </span>
                     )}
 
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", color: r.upPct && r.upPct >= 0 ? G : R }}>
-                      {r.upPct != null ? `${r.upPct >= 0 ? "+" : ""}${r.upPct.toFixed(1)}%` : "—"}
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textAlign: "right", color: r.ptSource !== "firm" ? TEXT_HI : r.upPct && r.upPct >= 0 ? G : R }}>
+                      {r.ptSource === "firm" && r.upPct != null ? `${r.upPct >= 0 ? "+" : ""}${r.upPct.toFixed(1)}%` : "—"}
                     </span>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
@@ -2247,7 +2273,7 @@ export function AnalystScreen() {
                         </span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", color: TEXT_MUTED, whiteSpace: "nowrap" }}>{fmtMoney(c.pxAtCall)}</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", color: TEXT_HI, fontWeight: 700, whiteSpace: "nowrap" }}>
-                          <PtValue pt={c.pt} />
+                          <PtValue pt={c.pt} ptDate={c.ptDate} callDate={c.when} />
                         </span>
                         <span style={{ fontWeight: 700, whiteSpace: "nowrap", color: c.tone > 0 ? G : c.tone < 0 ? R : TEXT_MUTED }}>
                           {c.res}

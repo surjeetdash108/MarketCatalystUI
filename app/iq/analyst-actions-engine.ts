@@ -39,6 +39,9 @@ export interface ProcessedAction {
   pt1: number; // Price target for this call (the firm's own, else the Street consensus — see ptSource)
   /** "firm": the firm's own target with this call; "consensus": the firm gave none, so the Street consensus stands in. */
   ptSource: "firm" | "consensus";
+  /** Date the firm posted `pt1` (firm targets only). Earlier than `date` means
+   *  the firm reiterated without a new target and this is its standing one. */
+  ptDate: string | null;
   prevPt: number | null;
   px: number; // Current price
   date: string;
@@ -229,6 +232,7 @@ export function buildAnalystActions({
           to: meta.to,
           pt1: targetPt,
           ptSource: g.priceTarget != null && g.priceTarget > 0 ? "firm" : "consensus",
+          ptDate: g.priceTarget != null && g.priceTarget > 0 ? (g.priceTargetDate ?? null) : null,
           prevPt,
           px,
           date: g.date as string,
