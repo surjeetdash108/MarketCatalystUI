@@ -90,8 +90,9 @@ function mergeMostActiveSectors(
     .sort((a, b) => b.items.length - a.items.length);
 }
 
+/** Scan time on the market clock, labelled ET (the app header's clock), not the viewer's zone. */
 const scanTime = (iso?: string) =>
-  iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  iso ? `${new Date(iso).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET` : "";
 
 const TABS = [
   ["win",      "Top Gainers"],
@@ -1078,10 +1079,11 @@ export function MoversScreen() {
         }
       }
     }
-    if (tab === "win")  return b.pctChange    - a.pctChange;
-    if (tab === "lose") return a.pctChange    - b.pctChange;
-    if (tab === "weekwin")  return (b.weekPct ?? 0) - (a.weekPct ?? 0);
-    if (tab === "weeklose") return (a.weekPct ?? 0) - (b.weekPct ?? 0);
+    // Rank on the number each row DISPLAYS (live % / live-remeasured 5-day
+    // move), not the stored sync value — otherwise the list reads out of order.
+    const shownChg = (m: typeof a) => shownValues(m).change ?? (isWeekTab(tab) ? (m.weekPct ?? 0) : m.pctChange);
+    if (tab === "win" || tab === "weekwin")  return shownChg(b) - shownChg(a);
+    if (tab === "lose" || tab === "weeklose") return shownChg(a) - shownChg(b);
     return b.rvolRatio - a.rvolRatio; // "vol"
   });
 
@@ -1390,7 +1392,7 @@ export function MoversScreen() {
                                 style={{
                                   width: "100%",
                                   display: "grid",
-                                  gridTemplateColumns: "60px 46px 1fr auto",
+                                  gridTemplateColumns: "60px 46px 58px 1fr auto",
                                   alignItems: "center",
                                   gap: 7,
                                   padding: "9px 11px",
@@ -1414,7 +1416,11 @@ export function MoversScreen() {
                                   background: rvol != null ? "rgba(245,181,68,.14)" : "var(--surface-3)",
                                   color: rvol != null ? "var(--warn)" : "var(--text-dim-solid)",
                                 }}>
-                                  {rvol != null ? `${rvol.toFixed(1)}x` : volume != null ? `${(volume / 1e6).toFixed(1)}M` : "—"}
+                                  {rvol != null ? `${rvol.toFixed(1)}x` : "—"}
+                                </span>
+                                {/* Today's share volume — what "most active" ranks on. */}
+                                <span title="Volume today" style={{ fontFamily: "var(--f-mono)", fontSize: ".72rem", color: "var(--text)", textAlign: "right" }}>
+                                  {volume != null ? (volume >= 1e9 ? `${(volume / 1e9).toFixed(2)}B` : volume >= 1e6 ? `${(volume / 1e6).toFixed(1)}M` : `${Math.round(volume / 1e3)}K`) : "—"}
                                 </span>
                                 <div style={{ height: 5, display: "flex", justifyContent: pct >= 0 ? "flex-start" : "flex-end" }}>
                                   <div style={{

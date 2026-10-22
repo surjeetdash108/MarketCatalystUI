@@ -111,13 +111,39 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   // volume, breadth %) computed by the backend from OHLCV bars. Pick the latest.
   const { data: recaps } = useApiList<RecapDoc>("/market-data/recaps");
   const latestRecap = [...recaps].sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
-  const internals = latestRecap?.internals ?? null;
+  const recapInternals = latestRecap?.internals ?? null;
   const weekly = latestRecap?.weekly ?? null;
   // New 52-week highs/lows: count company docs whose latest price sits at/through
   // their rolling 52-wk high/low (both from technical-indicators.job). Null when
   // no company doc carries a 52-wk range yet, so we show N/A rather than a false 0.
   const { data: companiesLive } = useApiList<CompanyDoc>("/market-data/companies");
   const with52 = companiesLive.filter(c => c.high52 != null || c.low52 != null);
+  // Today's session: the recap's daily breadth is only written once the day's
+  // bars settle (after the close), so intraday it is computed live from the
+  // company quotes (refreshed every 5 minutes). McClellan needs the daily
+  // series, so it stays with the settled recap.
+  const todayIso = etTodayIso();
+  const internals = recapInternals && recapInternals.date === todayIso
+    ? recapInternals
+    : (() => {
+        const moved = companiesLive.filter(c => c.pctChange != null && c.pctChange !== 0);
+        if (moved.length < 50) return recapInternals;
+        const adv = moved.filter(c => (c.pctChange as number) > 0);
+        const dec = moved.filter(c => (c.pctChange as number) < 0);
+        const vol = (list: CompanyDoc[]) => list.reduce((a, c) => a + (c.dayVolume ?? 0), 0);
+        const upVolume = vol(adv), downVolume = vol(dec);
+        return {
+          ...(recapInternals ?? {}),
+          date: todayIso,
+          advancers: adv.length,
+          decliners: dec.length,
+          breadthPct: adv.length / moved.length,
+          upVolume: upVolume || null,
+          downVolume: downVolume || null,
+          trin: dec.length && upVolume && downVolume ? (adv.length / dec.length) / (upVolume / downVolume) : null,
+          mcclellan: recapInternals?.mcclellan ?? null,
+        };
+      })();
   const newHighs = with52.length ? with52.filter(c => c.price != null && c.high52 != null && c.price >= c.high52).length : null;
   const newLows = with52.length ? with52.filter(c => c.price != null && c.low52 != null && c.price <= c.low52).length : null;
   // Earnings movers by post-announcement price reaction (EDGAR 8-K item 2.02).
