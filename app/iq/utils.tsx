@@ -619,20 +619,38 @@ export function headlineLeadsWithTicker(headline: string | null | undefined, tic
  * Format date string into US format: MM-DD-YYYY.
  * Handles YYYY-MM-DD, ISO timestamps, or milliseconds.
  */
+/**
+ * "as of 07-06" when a firm's target was posted more than 3 days before the
+ * call it is shown on (a reiteration carrying its standing target), else null.
+ */
+export function ptAsOf(ptDate: string | null | undefined, callDate: string | null | undefined): string | null {
+  if (!ptDate || !callDate) return null;
+  const gap = (Date.parse(callDate.slice(0, 10)) - Date.parse(ptDate.slice(0, 10))) / 86_400_000;
+  return gap > 3 ? `as of ${formatUsDate(ptDate).slice(0, 5)}` : null;
+}
+
 export function formatUsDate(d: string | number | null | undefined): string {
   if (!d) return "—";
   if (typeof d === "string") {
-    const m = d.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    // A plain calendar date is shown as-is; a full timestamp is an instant and
+    // is shown on the New York date (taking its UTC date put a 9 PM ET story
+    // on the next day).
+    // No zone (a date, or a New York wall-clock time like "2026-10-21 09:35"):
+    // the written date IS the date. Only a zoned timestamp is converted.
+    const m = d.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/);
     if (m) return `${m[2]}-${m[3]}-${m[1]}`;
     const mUs = d.trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
     if (mUs) return d.trim();
   }
   const parsed = new Date(d);
   if (!isNaN(parsed.getTime())) {
-    const mm = String(parsed.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(parsed.getUTCDate()).padStart(2, "0");
-    const yyyy = parsed.getUTCFullYear();
-    return `${mm}-${dd}-${yyyy}`;
+    // Daily-bar timestamps at UTC midnight are calendar days; anything else is ET.
+    const tz = parsed.getTime() % 86_400_000 === 0 ? "UTC" : "America/New_York";
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" })
+        .formatToParts(parsed).map(x => [x.type, x.value]),
+    );
+    return `${p.month}-${p.day}-${p.year}`;
   }
   return String(d);
 }

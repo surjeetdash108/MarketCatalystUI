@@ -1,3 +1,4 @@
+import type { CompanyDoc } from "./types";
 // ============================================================
 // STOCKWISE — MOCK DATA (TypeScript)
 // ============================================================
@@ -106,33 +107,76 @@ export interface ScreenerStock {
 // ---- Market Pulse (10 items) ----
 
 // ---- What Matters Now ----
+/** Extra market-wide facts some presets need, keyed by ticker. */
+export interface PresetCtx {
+  /** Distinct insiders with open-market buys in the last 90 days. */
+  insiderBuyers90: Map<string, number>;
+  /** Analyst upgrades in the last 30 days. */
+  upgrades30: Map<string, number>;
+}
+
+/**
+ * A preset screen. `test` decides membership from the company doc (unknown
+ * data never passes). A preset whose criteria need data the app does not have
+ * carries `unavailable` instead and is shown disabled, rather than silently
+ * matching the whole universe.
+ */
 export interface ScreenerPreset {
   name: string;
   desc: string;
-  f: { relativeStrength_min?: number; salesGrowth_min?: number; epsGrowth_min?: number; rvolRatio_min?: number; techRating?: string[]; marketCap_min?: number; };
+  test?: (c: CompanyDoc, ctx: PresetCtx) => boolean;
+  needs?: Array<"insider" | "analyst">;
+  unavailable?: string;
 }
 
+const num = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
+const pct = (v: number | null | undefined) => (num(v) ? v * 100 : null);
+
 export const screenerPresets: ScreenerPreset[] = [
-  { name: 'Briefing growth screen',      desc: '6-mo RS ≥ 80 · sales & EPS growth · expanding margins', f: { relativeStrength_min: 80, salesGrowth_min: 20, epsGrowth_min: 25 } },
-  { name: 'Post-earnings momentum',      desc: 'beat + raise · gap up · RVOL > 2×',                      f: { rvolRatio_min: 2 } },
-  { name: 'Oversold quality',            desc: 'RSI < 35 · positive FCF · above 200-DMA',                f: {} },
-  { name: 'Unusual volume',              desc: 'RVOL > 3× · price > $5',                                 f: { rvolRatio_min: 3 } },
-  { name: 'CAN SLIM leaders',            desc: "O'Neil: EPS+sales accel · RS ≥ 90 · near highs",         f: { relativeStrength_min: 90, salesGrowth_min: 15, epsGrowth_min: 20 } },
-  { name: 'Minervini trend template',    desc: 'price > 50 > 150 > 200-DMA, all rising',                 f: { relativeStrength_min: 75 } },
-  { name: '52-week-high breakouts',      desc: 'new 52w high · volume surge',                             f: { rvolRatio_min: 1.5, relativeStrength_min: 80 } },
-  { name: 'Gap-and-go (premarket)',      desc: 'gap > 4% · premarket RVOL > 5×',                          f: { rvolRatio_min: 3 } },
-  { name: 'Relative-strength leaders',  desc: 'RS ≥ 90 vs S&P over 6 months',                            f: { relativeStrength_min: 90 } },
-  { name: 'Dividend growth aristocrats', desc: '25-yr dividend growth · payout < 60%',                   f: {} },
-  { name: 'Magic Formula (Greenblatt)', desc: 'high ROIC · high earnings yield',                          f: {} },
-  { name: 'GARP',                        desc: 'growth ≥ 15% · PEG < 1.5',                               f: { salesGrowth_min: 15, epsGrowth_min: 15 } },
-  { name: 'Deep value (low P/E + FCF)', desc: 'P/E < 12 · FCF yield > 8%',                               f: {} },
-  { name: 'Net-net / asset value',       desc: 'price < net current assets',                              f: {} },
-  { name: 'Short-squeeze candidates',   desc: 'short interest > 20% · rising price',                     f: { relativeStrength_min: 60 } },
-  { name: 'Insider-buying cluster',      desc: '3+ insider buys in 90 days',                              f: {} },
-  { name: 'Analyst-upgrade momentum',   desc: '2+ upgrades in 30 days · PT raised',                      f: { relativeStrength_min: 70 } },
-  { name: 'Golden cross (50>200)',       desc: '50-DMA crossing above 200-DMA',                           f: { relativeStrength_min: 65 } },
-  { name: 'Bollinger squeeze breakout', desc: 'low volatility → expansion',                               f: { rvolRatio_min: 2 } },
-  { name: 'Cup-with-handle setups',     desc: 'classic base · breakout pivot',                            f: { relativeStrength_min: 80 } },
+  { name: 'Briefing growth screen', desc: 'RS ≥ 80 · sales growth ≥ 20% · EPS growth ≥ 25%',
+    test: c => num(c.rsRating) && c.rsRating >= 80 && (pct(c.revenueGrowthYoY) ?? -1) >= 20 && (pct(c.epsGrowthYoY) ?? -1) >= 25 },
+  { name: 'Post-earnings momentum', desc: 'up ≥ 3% today · RVOL > 2× · EPS growth > 0',
+    test: c => num(c.pctChange) && c.pctChange >= 3 && num(c.rvol) && c.rvol > 2 && (pct(c.epsGrowthYoY) ?? -1) > 0 },
+  { name: 'Oversold quality', desc: 'RSI < 35 · above 200-DMA · profitable (P/E > 0)',
+    test: c => num(c.rsi14) && c.rsi14 < 35 && c.aboveSma200 === true && num(c.peRatio) && c.peRatio > 0 },
+  { name: 'Unusual volume', desc: 'RVOL > 3× · price > $5',
+    test: c => num(c.rvol) && c.rvol > 3 && num(c.price) && c.price > 5 },
+  { name: 'CAN SLIM leaders', desc: "RS ≥ 90 · sales ≥ 15% · EPS ≥ 20% · within 15% of 52w high",
+    test: c => num(c.rsRating) && c.rsRating >= 90 && (pct(c.revenueGrowthYoY) ?? -1) >= 15 && (pct(c.epsGrowthYoY) ?? -1) >= 20 && num(c.pctFromHigh52) && c.pctFromHigh52 >= -15 },
+  { name: 'Minervini trend template', desc: 'price > 50-DMA > 200-DMA · ≥ 30% above 52w low · within 25% of high · RS ≥ 70',
+    test: c => num(c.price) && num(c.sma50) && num(c.sma200) && c.price > c.sma50 && c.sma50 > c.sma200
+      && num(c.low52) && c.price >= c.low52 * 1.3 && num(c.pctFromHigh52) && c.pctFromHigh52 >= -25 && num(c.rsRating) && c.rsRating >= 70 },
+  { name: '52-week-high breakouts', desc: 'within 2% of 52w high · RVOL ≥ 1.5×',
+    test: c => num(c.pctFromHigh52) && c.pctFromHigh52 >= -2 && num(c.rvol) && c.rvol >= 1.5 },
+  { name: 'Gap-and-go', desc: 'up > 4% today · RVOL > 3×',
+    test: c => num(c.pctChange) && c.pctChange > 4 && num(c.rvol) && c.rvol > 3 },
+  { name: 'Relative-strength leaders', desc: 'RS ≥ 90 vs S&P over 6 months',
+    test: c => num(c.rsRating) && c.rsRating >= 90 },
+  { name: 'Dividend growth aristocrats', desc: '25-yr dividend growth · payout < 60%',
+    unavailable: 'Needs 25 years of dividend history per stock, which the screener does not have yet.' },
+  { name: 'Magic Formula (Greenblatt)', desc: 'high ROIC · high earnings yield',
+    unavailable: 'Needs return on invested capital, which the screener does not have yet.' },
+  { name: 'GARP', desc: 'sales & EPS growth ≥ 15% · PEG < 1.5',
+    test: c => {
+      const g = pct(c.epsGrowthYoY);
+      return (pct(c.revenueGrowthYoY) ?? -1) >= 15 && g != null && g >= 15 && num(c.peRatio) && c.peRatio > 0 && c.peRatio / g < 1.5;
+    } },
+  { name: 'Deep value (low P/E)', desc: 'P/E between 0 and 12',
+    test: c => num(c.peRatio) && c.peRatio > 0 && c.peRatio < 12 },
+  { name: 'Net-net / asset value', desc: 'price < net current assets',
+    unavailable: 'Needs balance-sheet current assets and liabilities, which the screener does not have yet.' },
+  { name: 'Short-squeeze candidates', desc: 'short interest > 20% · rising price',
+    unavailable: 'Needs short interest as a % of float, which the screener does not have yet.' },
+  { name: 'Insider-buying cluster', desc: '3+ insiders bought on the open market in 90 days', needs: ["insider"],
+    test: (c, ctx) => (ctx.insiderBuyers90.get(c.ticker) ?? 0) >= 3 },
+  { name: 'Analyst-upgrade momentum', desc: '2+ analyst upgrades in 30 days', needs: ["analyst"],
+    test: (c, ctx) => (ctx.upgrades30.get(c.ticker) ?? 0) >= 2 },
+  { name: 'Golden cross (50>200)', desc: '50-DMA above the 200-DMA by less than 3% (a recent cross)',
+    test: c => num(c.sma50) && num(c.sma200) && c.sma200 > 0 && c.sma50 > c.sma200 && c.sma50 / c.sma200 - 1 < 0.03 },
+  { name: 'Volatility expansion', desc: '30-day volatility < 30% · moved ≥ 2% today on RVOL ≥ 1.5×',
+    test: c => num(c.realizedVol30) && c.realizedVol30 < 30 && num(c.pctChange) && Math.abs(c.pctChange) >= 2 && num(c.rvol) && c.rvol >= 1.5 },
+  { name: 'Cup-with-handle setups', desc: 'classic base · breakout pivot',
+    unavailable: 'Needs chart-pattern detection, which the screener does not have yet.' },
 ];
 
 // ---- Commentary (live intraday feed) ----

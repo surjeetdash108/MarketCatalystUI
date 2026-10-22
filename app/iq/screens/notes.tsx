@@ -7,6 +7,7 @@ import { useLiveQuotes } from "../live-quotes-context";
 import { useIQActions } from "../shell";
 import { ChartCard, StockListCard } from "../stock-panel";
 import { DataState } from "../utils";
+import { etTodayIso } from "../calendar-range";
 
 /* One chart note as returned by GET /api/stock-notes/all. */
 interface NoteRow {
@@ -141,12 +142,12 @@ function useAllNotes() {
 }
 
 function fmtWhen(d: Date): string {
-  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })} ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET`;
 }
 
 function fmtShortDate(d: Date): string {
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "2-digit" });
+  const sameYear = etTodayIso(d).slice(0, 4) === etTodayIso().slice(0, 4);
+  return d.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric", timeZone: "America/New_York" } : { month: "short", day: "numeric", year: "2-digit", timeZone: "America/New_York" });
 }
 
 export function NotesScreen() {

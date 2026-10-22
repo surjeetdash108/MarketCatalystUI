@@ -15,7 +15,7 @@ import { NEWS_TAGS } from "../types/news";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { TickerAnalysisDrawer } from "../ticker-analysis-drawer";
 import { StockScreenEmbed } from "../stock-panel";
-import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel } from "../news-feed";
+import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
@@ -190,9 +190,6 @@ function catCol(c: string | null): string {
  * disagree about which bucket a story is in.
  */
 const CAT_KEYS = ["earnings", "merger", "company", "macro"] as const;
-function catKey(c: string | null): string {
-  return c === "earnings" || c === "merger" || c === "company" ? c : "macro";
-}
 
 function etHour(iso: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -744,7 +741,7 @@ export function CommentaryScreen() {
   const afterHours = sorted.filter(n => etHour(n.publishedAt) >= 16);
   // Macro = market-wide stories (FMP general news on the live wire). Synced
   // company news carries category null, which used to land every story here.
-  const macro      = sorted.filter(n => n.category === "macro" || !n.ticker);
+  const macro      = sorted.filter(n => storyKind(n) === "macro");
   const myFeed     = sorted.filter(n => mySymbols.has(n.ticker));
 
   const tabFeed: NewsArticleDoc[] = (() => {
@@ -771,7 +768,7 @@ export function CommentaryScreen() {
         (n.headline ?? "").toLowerCase().includes(q) ||
         (n.summary ?? "").toLowerCase().includes(q))) return false;
     if (tagFilter !== "all" && (n.tag ?? "other") !== tagFilter) return false;
-    if (catFilter !== "all" && catKey(n.category) !== catFilter) return false;
+    if (catFilter !== "all" && storyKind(n) !== catFilter) return false;
     if (effSec !== "All" || capFilter !== "All") {
       const c = companyByTicker.get(n.ticker);
       if (effSec !== "All" && !matchesSector(effSec, n.ticker, c?.sector)) return false;
@@ -805,7 +802,7 @@ export function CommentaryScreen() {
     for (const n of base) {
       const t = n.tag ?? "other";
       tags[t] = (tags[t] ?? 0) + 1;
-      const c = catKey(n.category);
+      const c = storyKind(n);
       cats[c] = (cats[c] ?? 0) + 1;
     }
     return [tags, cats] as const;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { etTodayIso } from "./calendar-range";
 
 /**
  * Themed date picker — replaces the browser's native <input type="date">, whose
@@ -40,9 +41,9 @@ function addMonths(iso: string, n: number): string {
   const last = new Date(Date.UTC(y, m + n + 1, 0)).getUTCDate();
   return toIso(y, m + n, Math.min(d, last));
 }
+/** Today on the New York market calendar (YYYY-MM-DD). */
 function localToday(): string {
-  const t = new Date();
-  return toIso(t.getFullYear(), t.getMonth(), t.getDate());
+  return etTodayIso();
 }
 /** "Sep 29, 2026" — formatted in UTC so the stored day is the shown day. */
 export function formatDisplayDate(iso: string): string {

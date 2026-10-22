@@ -410,7 +410,7 @@ export function MacroScreen() {
                         {evs.length ? evs.map((d, i) => {
                           const e = toMacroEvent(d);
                           const color = e.tier === "High" ? "var(--down)" : e.tier === "Med" ? "var(--warn)" : "var(--text-dim-solid)";
-                          const valBits = [e.est !== "—" ? `est ${e.est}` : "", e.actual !== "—" ? `act ${e.actual}` : ""].filter(Boolean).join(" · ");
+                          const valBits = [e.prev !== "—" ? `prior ${e.prev}` : "", e.est !== "—" ? `est ${e.est}` : "", e.actual !== "—" ? `act ${e.actual}` : ""].filter(Boolean).join(" · ");
                           return (
                             <div key={(d.id ?? e.ev) + i} title={`${e.ev} — click for details`}
                               onClick={ev => { ev.stopPropagation(); setEcoSel(d); }}
@@ -531,7 +531,7 @@ export function MacroScreen() {
 
       {/* All market holidays for the running year — modal */}
       {holidaysAllOpen && (() => {
-        const yr = new Date().getFullYear();
+        const yr = Number(etTodayIso().slice(0, 4));
         const yearHolidays = usMarketHolidays(yr);
         return (
           <>

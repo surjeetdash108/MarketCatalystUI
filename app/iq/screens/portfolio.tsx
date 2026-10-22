@@ -13,6 +13,7 @@ import { TickerSearchField } from "../ticker-search-field";
 import { DatePicker, formatDisplayDate } from "../date-picker";
 import { AiSummaryCard } from "../ai-summary-card";
 import { AiAggregateBlock } from "../ai-aggregate-block";
+import { etTodayIso } from "../calendar-range";
 
 interface Holding {
   ticker: string;
@@ -46,12 +47,9 @@ function qty(v: number) {
   return v.toLocaleString("en-US", { maximumFractionDigits: 6 });
 }
 
-/** Today in the user's local timezone as YYYY-MM-DD — the date input's max. */
+/** Today on the New York market calendar as YYYY-MM-DD — the date input's max. */
 function localToday() {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
+  return etTodayIso();
 }
 
 /** Backend errors arrive as a JSON body string; show just its message. */

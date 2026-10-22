@@ -40,6 +40,8 @@ export interface CompanyDoc {
   pctChange: number | null;
   marketCap: number | null;
   rvol?: number | null;
+  /** Today's share volume so far (company-quotes job, during the session). */
+  dayVolume?: number | null;
   peRatio: number | null;
   forwardPe?: number | null;
   // Latest reported EPS (eps) and trailing-twelve-month EPS (epsTtm), written
