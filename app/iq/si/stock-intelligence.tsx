@@ -561,15 +561,18 @@ export function StockIntelligenceScreen() {
       .filter((e) => e.ticker === currentTicker && e.date >= todayIso)
       .map((e) => e.date)
       .sort()[0] ?? null;
-    const erDate = storedEr ?? calEr;
+    const erDate = [storedEr, calEr].filter((d): d is string => !!d && d >= todayIso).sort()[0] ?? null;
     const erDays = erDate ? Math.round((Date.parse(erDate + "T00:00:00Z") - todayMs) / 86_400_000) : null;
     const pivots = liveCompany?.keyLevels?.daily ?? null;
+    const isBank = /bank|savings|thrift|financial/i.test(liveCompany?.industry ?? "") || /financial/i.test(liveCompany?.sector ?? "");
+    const isUtilityOrSame = latest?.grossProfit != null && latest?.operatingIncome != null && latest.grossProfit === latest.operatingIncome;
+    const suppressGross = isBank || isUtilityOrSame;
     return {
       price: num(currentPrice),
       changePct: num(currentChange),
       sector: liveCompany?.sector ?? null,
       revGrowthYoY: latest?.revenue != null && yearAgo?.revenue ? ((latest.revenue - yearAgo.revenue) / Math.abs(yearAgo.revenue)) * 100 : null,
-      grossMargin: margin(latest, "grossProfit"),
+      grossMargin: suppressGross ? null : margin(latest, "grossProfit"),
       opMargin: margin(latest, "operatingIncome"),
       opMarginYearAgo: margin(yearAgo, "operatingIncome"),
       epsBeats: last4.length ? last4.filter((q) => (q.epsActualReported as number) >= (q.epsEstimateReported as number)).length : null,
@@ -661,7 +664,7 @@ export function StockIntelligenceScreen() {
     // A stored nextEarningsDate can be a report that already happened (MSFT
     // showed Jul 29 after it reported); only a future date counts.
     const storedEr = liveCompany?.nextEarningsDate && liveCompany.nextEarningsDate >= todayStr ? liveCompany.nextEarningsDate : null;
-    const realErDate = storedEr || upcomingEr?.date || null;
+    const realErDate = [storedEr, upcomingEr?.date].filter((d): d is string => !!d && d >= todayStr).sort()[0] ?? null;
 
     const items: UpcomingEvent[] = [];
 
@@ -2908,7 +2911,7 @@ export function StockIntelligenceScreen() {
         {activeTab === "fund" && (() => {
           const hasFmp = Boolean(financialsDoc?.quarters && financialsDoc.quarters.length >= 2);
           // Banks: gross margin, EBITDA and free cash flow are not meaningful.
-          const isBank = /bank|savings|thrift/i.test(liveCompany?.industry ?? "");
+          const isBank = /bank|savings|thrift|financial/i.test(liveCompany?.industry ?? "") || /bank|financial/i.test(liveCompany?.sector ?? "");
           const fmpQ = hasFmp && financialsDoc?.quarters ? [...financialsDoc.quarters].slice(0, 8).reverse() : null;
 
           let fsr: number[][];

@@ -16,9 +16,9 @@ import { surprisePct, reportedQuarterEps, quarterEpsSurprisePct } from "../types
  *  else the first upcoming row on the earnings calendar, else "TBA". */
 function nextErFor(stored: string | null | undefined, rows: Array<{ ticker: string; date: string }>, sym: string): string {
   const today = etTodayIso();
-  if (stored && stored >= today) return formatUsDate(stored);
   const next = rows.filter(e => e.ticker === sym && e.date >= today).map(e => e.date).sort()[0];
-  return next ? formatUsDate(next) : "TBA";
+  const candidates = [stored, next].filter((d): d is string => !!d && d >= today).sort();
+  return candidates[0] ? formatUsDate(candidates[0]) : "TBA";
 }
 
 // Live source (Polygon SEC financials) has ticker/date/epsEstimate/epsActual —
