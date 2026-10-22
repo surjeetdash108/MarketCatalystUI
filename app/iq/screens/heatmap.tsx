@@ -397,8 +397,8 @@ function HeatmapInner() {
                           const cellPxW = (sr.w / 100) * sectPxW;
                           const cellPxH = (sr.h / 100) * (sectPxH - HEADER_H);
                           const minDim  = Math.min(cellPxW, cellPxH);
-                          const showText   = minDim > 18 && cellPxW > 24;
-                          const showChange = minDim > 32 && cellPxW > 40;
+                          const showText   = minDim > 16 && cellPxW > 20;
+                          const showChange = (minDim > 20 && cellPxW > 24) || (cellPxW >= 24 && cellPxH >= 20);
                           const fs = Math.max(0.56, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 72));
 
                           return (
@@ -525,7 +525,7 @@ function HeatmapInner() {
                 const cellPxW = (sr.w / 100) * (APPROX_W - 32);
                 const cellPxH = (sr.h / 100) * (APPROX_H - 24);
                 const showText   = cellPxW >= Math.max(13, sym.length * 4) && cellPxH >= 10;
-                const showChange = cellPxW >= 32 && cellPxH >= 24;
+                const showChange = (cellPxW >= 24 && cellPxH >= 18) || (cellPxW >= 20 && cellPxH >= 20);
                 const fs = Math.max(0.48, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 70));
 
                 return (
