@@ -55,8 +55,25 @@ const BASE_URL = resolveBackendBaseUrl();
 function resolveStreamOrigin(): string {
   const direct = process.env.NEXT_PUBLIC_LIVE_STREAM_ORIGIN?.trim().replace(/\/$/, "");
   const isRemote = !!direct && !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(direct);
-  return isRemote ? (direct as string) : BASE_URL;
+  if (isRemote) return direct as string;
+  // The production app hosts stream straight from the live Cloud Run service
+  // even when the build lacks the env var. A build without it once sent every
+  // stream through Hosting, which buffered them while each held a backend slot
+  // for an hour — 22 Oct 2026, the service ran out of slots and answered 429.
+  if (typeof window !== "undefined" && PROD_APP_HOSTS.has(window.location.hostname)) {
+    return LIVE_STREAM_ORIGIN_PROD;
+  }
+  return BASE_URL;
 }
+
+/** The `market-catalyst-live` Cloud Run service (CORS allows the hosts below). */
+const LIVE_STREAM_ORIGIN_PROD = "https://market-catalyst-live-h66dwv5tjq-uc.a.run.app";
+/** Deployed app hosts allowed by that service's CORS list. */
+const PROD_APP_HOSTS = new Set([
+  "app.marketcatalyst.ai",
+  "marketcatalyst.web.app",
+  "marketcatalyst.firebaseapp.com",
+]);
 
 const STREAM_ORIGIN = resolveStreamOrigin();
 

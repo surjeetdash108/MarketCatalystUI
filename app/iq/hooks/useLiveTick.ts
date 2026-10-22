@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet, streamUrl } from "../backend";
+import { subscribeStream } from "./shared-event-source";
 
 /** How stale the last SSE tick must be before the JSON poll steps in (ms). */
 const SSE_STALE_MS = 8000;
@@ -124,8 +125,6 @@ export function useLiveTick(sym: string): UseLiveTickResult {
     };
     void fetchOnce();
 
-    const es = new EventSource(streamUrl(`/live/stream?ticker=${encodeURIComponent(upper)}`));
-
     const onTick = (ev: MessageEvent<string>) => {
       try {
         const t = JSON.parse(ev.data) as StreamTick;
@@ -161,19 +160,20 @@ export function useLiveTick(sym: string): UseLiveTickResult {
 
     const onError = () => setConnected(false);
 
-    es.addEventListener("tick", onTick);
-    es.addEventListener("snapshot", onSnapshot);
-    es.addEventListener("error", onError);
+    // One connection per ticker per page, shared by every subscriber to it.
+    const unsubscribe = subscribeStream(streamUrl(`/live/stream?ticker=${encodeURIComponent(upper)}`), {
+      tick: onTick,
+      snapshot: onSnapshot,
+      status: () => {},
+      error: onError,
+    });
 
     const poll = setInterval(() => void fetchOnce(), POLL_MS);
 
     return () => {
       cancelled = true;
       clearInterval(poll);
-      es.removeEventListener("tick", onTick);
-      es.removeEventListener("snapshot", onSnapshot);
-      es.removeEventListener("error", onError);
-      es.close();
+      unsubscribe();
     };
   }, [sym]);
 

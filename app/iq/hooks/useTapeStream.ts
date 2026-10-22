@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet, streamUrl } from "../backend";
+import { subscribeStream } from "./shared-event-source";
 import type { TapeFrame } from "../types/tape";
 
 /** How stale the last SSE frame must be before the JSON poll steps in (ms). */
@@ -43,7 +44,6 @@ export function useTapeStream() {
     };
     void fetchOnce();
 
-    const es = new EventSource(streamUrl("/live/tape/stream"));
     const onTape = (ev: MessageEvent<string>) => {
       try {
         lastSse = Date.now();
@@ -55,22 +55,21 @@ export function useTapeStream() {
         console.error("tape stream: malformed frame", err);
       }
     };
-    const onOpen = () => setConnected(true);
     const onError = () => setConnected(false);
 
-    es.addEventListener("tape", onTape);
-    es.addEventListener("open", onOpen);
-    es.addEventListener("error", onError);
+    // One connection per page, shared with every other tape subscriber.
+    const unsubscribe = subscribeStream(streamUrl("/live/tape/stream"), {
+      tape: onTape,
+      heartbeat: () => {},
+      error: onError,
+    });
 
     const poll = setInterval(() => void fetchOnce(), POLL_MS);
 
     return () => {
       cancelled = true;
       clearInterval(poll);
-      es.removeEventListener("tape", onTape);
-      es.removeEventListener("open", onOpen);
-      es.removeEventListener("error", onError);
-      es.close();
+      unsubscribe();
     };
   }, []);
 
