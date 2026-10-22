@@ -17,6 +17,8 @@ import { useApiList } from "../hooks/useApiList";
 import { useBackendBars, useIntervalBars } from "../hooks/useBackendBars";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
+import { latestSessionDate } from "../market-status";
+import { etSessionDate } from "../indicators";
 import { useLiveQuotes, extendedSession } from "../live-quotes-context";
 import { EarningsPlaybook, EarningsPlaybookCards, playbookReports } from "./EarningsPlaybook";
 import { useHeadlineQuote, QuoteHeadline } from "../quote-headline";
@@ -111,7 +113,7 @@ function pivotsFrom(h: number, l: number, c: number): Pivots {
   return { pivot: p, r1: 2 * p - l, s1: 2 * p - h, r2: p + range, s2: p - range, r3: h + 2 * (p - l), s3: l - 2 * (h - p) };
 }
 // H/L/C of the last COMPLETE week (excludes the current, partial week).
-function priorWeekHLC(bars: { t: number; h: number; l: number; c: number }[]): { h: number; l: number; c: number } | null {
+function priorWeekHLC(bars: { t: number; h: number; l: number; c: number }[], now: Date = new Date()): { h: number; l: number; c: number } | null {
   const weeks = new Map<string, { h: number; l: number; c: number; t: number }>();
   for (const b of bars) {
     const d = new Date(b.t);
@@ -122,9 +124,24 @@ function priorWeekHLC(bars: { t: number; h: number; l: number; c: number }[]): {
     else { cur.h = Math.max(cur.h, b.h); cur.l = Math.min(cur.l, b.l); if (b.t >= cur.t) { cur.c = b.c; cur.t = b.t; } }
   }
   const keys = [...weeks.keys()].sort();
-  if (keys.length < 2) return null;
-  const w = weeks.get(keys[keys.length - 2])!;
-  return { h: w.h, l: w.l, c: w.c };
+  // The newest week is skipped only while it is still trading — today (ET) is
+  // in it and its Friday close has not passed. Same rule as the backend's
+  // keyLevels.weekly (technical-indicators.job).
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false,
+  }).formatToParts(now);
+  const g = (type: string) => parts.find(p => p.type === type)?.value ?? "";
+  const today = new Date(`${g("year")}-${g("month")}-${g("day")}T00:00:00Z`);
+  const dow = today.getUTCDay();
+  const weekDone = dow === 6 || dow === 0 || (dow === 5 && (Number(g("hour")) % 24) >= 16);
+  today.setUTCDate(today.getUTCDate() - ((dow + 6) % 7)); // back to Monday
+  const thisWeek = today.toISOString().slice(0, 10);
+  const newest = keys[keys.length - 1];
+  const newestComplete = newest != null && (newest < thisWeek || (newest === thisWeek && weekDone));
+  const basis = newestComplete ? newest : keys[keys.length - 2];
+  const w = basis != null ? weeks.get(basis) : undefined;
+  return w ? { h: w.h, l: w.l, c: w.c } : null;
 }
 // Drop a still-forming current-day bar from a daily series so client-side pivot
 // fallbacks use the last FULLY-COMPLETED session — mirrors the backend keyLevels
@@ -151,6 +168,7 @@ function lastCompletedSessionBar<T extends { t: number }>(bars: T[]): T | null {
   const done = completedSessions(bars);
   return done.length ? done[done.length - 1] : null;
 }
+const barDate = (b: { t: number }) => etSessionDate(b.t);
 function ema(bars: { c: number }[], n: number): number | null {
   if (bars.length < n) return null;
   const k = 2 / (n + 1);
@@ -967,8 +985,12 @@ export function StockScreen({
   // Falls back to the company doc's own avgVolume20 (technical-indicators.job,
   // or the summary's identical computation) until the year of bars this
   // normally derives from has loaded — same reasoning as keyStats below.
-  const avgVol20 = yr.length > 0
-    ? yr.slice(-20).reduce((s, b) => s + b.v, 0) / Math.min(20, yr.length)
+  // Twenty COMPLETED sessions: the series can end on today's still-forming
+  // bar, which pulled the average down by half a day's volume (CRM read 8.36M
+  // against a 20-session 8.81M).
+  const yrDone = completedSessions(yr);
+  const avgVol20 = yrDone.length > 0
+    ? yrDone.slice(-20).reduce((s, b) => s + b.v, 0) / Math.min(20, yrDone.length)
     : (keyStats?.avgVolume20 ?? null);
 
   // Current-session stats straight from the vendor quote (same source and time as
@@ -982,18 +1004,22 @@ export function StockScreen({
   const sessVolume = qPos(sessionQuote?.dayVolume);
   const hasSessionQuote = sessOpen != null && sessHigh != null && sessLow != null && sessPrevClose != null;
 
-  const barSessionVol = useMemo(() => {
-    if (yr && yr.length > 0) {
-      const v = yr[yr.length - 1]?.v;
-      if (typeof v === "number" && v > 0) return v;
-    }
+  // A daily bar describes THIS session only when it is dated for it. Between
+  // the open and the next sync the series ends on the previous session: STRL
+  // on 20 Oct showed 19 Oct's open, range and volume as the day's, and 16 Oct's
+  // close as the previous close. A stale last bar is the previous close, not
+  // today's stats.
+  const sessionDate = latestSessionDate();
+  const lastYrBar = yr.length > 0 ? yr[yr.length - 1] : null;
+  const lastBarIsSession = lastYrBar != null && barDate(lastYrBar) === sessionDate;
+  const lastRealBar = realBars && realBars.length > 0 ? realBars[realBars.length - 1] : null;
+  const barSessionVol =
+    lastBarIsSession && lastYrBar && lastYrBar.v > 0 ? lastYrBar.v
     // Only a 1D candle's volume IS the session's — a 5m or 1W candle's isn't.
-    if (barInterval === "1D" && realBars && realBars.length > 0) {
-      const v = realBars[realBars.length - 1]?.v;
-      if (typeof v === "number" && v > 0) return v;
-    }
-    return keyStats?.avgVolume20 ?? null;
-  }, [yr, realBars, barInterval, keyStats]);
+    : barInterval === "1D" && lastRealBar && barDate(lastRealBar) === sessionDate && lastRealBar.v > 0 ? lastRealBar.v
+    // Nothing for this session: no figure, rather than another day's volume
+    // or the 20-day average standing in for it.
+    : null;
   const sessionVol = hasSessionQuote && sessVolume != null ? sessVolume : barSessionVol;
 
 
@@ -1230,6 +1256,18 @@ export function StockScreen({
     if (hi == null && offHigh52 != null && 1 + offHigh52 / 100 > 0) hi = p / (1 + offHigh52 / 100);
     if (lo == null && offLow52 != null && 1 + offLow52 / 100 > 0) lo = p / (1 + offLow52 / 100);
   }
+  // Off-high/low measured from the range shown beside them. The stored
+  // percentages run off the last stored bar, so a high made today is missing:
+  // XOM read -1.2% (off 179.30) beside a 52-week range topping out at today's
+  // 180.26. Only when a real range is on screen — never one derived from these
+  // same percentages just above.
+  const offPx = dispPrice != null && dispPrice > 0 ? dispPrice : p > 0 ? p : null;
+  const offHigh52Shown = rawHi != null && hi != null && hi > 0 && offPx != null
+    ? (offPx / Math.max(hi, offPx) - 1) * 100
+    : offHigh52;
+  const offLow52Shown = rawLo != null && lo != null && lo > 0 && offPx != null
+    ? (offPx / Math.min(lo, offPx) - 1) * 100
+    : offLow52;
 
   // Trend / MA posture, from the price vs its 20/50/200-day SMAs computed
   // client-side from the year of daily bars. These used to come from the RS
@@ -1279,14 +1317,18 @@ export function StockScreen({
     ? `Below the ${maList(belowLs)} — bearish alignment.`
     : `Below the ${maList(belowLs)}, above the ${maList(aboveLs)} — mixed.`;
 
+  // Price the EMA/SMA signals compare against — a real one or none. `p` is 0
+  // while the company doc has no price, and 0 > any average is false, so CRM's
+  // EMA 50 and SMA 200 both read "Sell" with the stock trading above both.
+  const sigPx = p > 0 ? p : dispPrice != null && dispPrice > 0 ? dispPrice : null;
   const indRows: [string, string | null, string][] = [
     ["RSI (14)", rsi != null ? rsi.toFixed(2) : null, rsi == null ? "" : rsi > 70 ? "Sell" : rsi < 40 ? "Buy" : "Neutral"],
     ["MACD (12,26)", macd != null ? macd.toFixed(1) : null, macdBuy == null ? "" : macdBuy ? "Buy" : "Sell"],
     // Stoch %K and Wilder ADX(14) now computed by technical-indicators.job.
     ["Stoch %K", stochKv != null ? stochKv.toFixed(1) : null, stochKv == null ? "" : stochKv > 80 ? "Sell" : stochKv < 20 ? "Buy" : "Neutral"],
     ["ADX (14)", adx14 != null ? adx14.toFixed(1) : null, adx14 == null ? "" : adx14 > 25 ? "Strong" : adx14 < 20 ? "Weak" : "Neutral"],
-    ["EMA 50", ema50 != null ? nf(ema50) : null, ema50 != null ? (p > ema50 ? "Buy" : "Sell") : ""],
-    ["SMA 200", sma200 != null ? nf(sma200) : null, sma200 != null ? (p > sma200 ? "Buy" : "Sell") : ""],
+    ["EMA 50", ema50 != null ? nf(ema50) : null, ema50 != null && sigPx != null ? (sigPx > ema50 ? "Buy" : "Sell") : ""],
+    ["SMA 200", sma200 != null ? nf(sma200) : null, sma200 != null && sigPx != null ? (sigPx > sma200 ? "Buy" : "Sell") : ""],
   ];
 
   // Real 10-quarter EPS history from the per-ticker financials feed
@@ -1802,8 +1844,8 @@ export function StockScreen({
                 // Distance from the 52-week extremes. Both are computed nightly
                 // and were sitting unused while the range they refer to was
                 // already on screen. "% off high" is the IBD-style read.
-                ["Off 52W High",   offHigh52 != null ? offHigh52.toFixed(1) + "%" : null],
-                ["Off 52W Low",    offLow52 != null ? "+" + offLow52.toFixed(1) + "%" : null],
+                ["Off 52W High",   offHigh52Shown != null ? offHigh52Shown.toFixed(1) + "%" : null],
+                ["Off 52W Low",    offLow52Shown != null ? "+" + offLow52Shown.toFixed(1) + "%" : null],
                 ["Avg Vol (20d)",  avgVol20 != null ? nf(avgVol20 / 1e6) + "M" : null],
                 ["Sector",         titleCaseLabel(data.sector)],
                 ["Industry",       titleCaseLabel(data.industry)],
@@ -2220,8 +2262,8 @@ export function StockScreen({
               ) : (
                 ([
                   ["52W High", hi,     isUp ? "up"   : "dim"],
-                  ["EMA 50",   ema50,  ema50 != null && p > ema50 ? "up" : "down"],
-                  ["SMA 200",  sma200, sma200 != null && p > sma200 ? "up" : "down"],
+                  ["EMA 50",   ema50,  ema50 == null || sigPx == null ? "dim" : sigPx > ema50 ? "up" : "down"],
+                  ["SMA 200",  sma200, sma200 == null || sigPx == null ? "dim" : sigPx > sma200 ? "up" : "down"],
                   ["52W Low",  lo,     isUp ? "dim"  : "down"],
                 ] as [string, number | null, string][]).map(x => (
                   <div key={x[0]} className="minirow">
@@ -2533,9 +2575,11 @@ export function StockScreen({
             // The latest session's daily bar gives Open / Day's range / Volume;
             // the bar before it gives Previous close.
             // Live quote first (current session, consistent with the price);
-            // the stored bars only when the quote lacks the session fields.
-            const lastBar = yr.length > 0 ? yr[yr.length - 1] : null;
-            const prevBar = yr.length > 1 ? yr[yr.length - 2] : null;
+            // the stored bars only when the quote lacks the session fields —
+            // and only a bar dated for this session counts as it (see
+            // lastBarIsSession). Otherwise the last bar IS the previous close.
+            const lastBar = lastBarIsSession ? lastYrBar : null;
+            const prevBar = lastBarIsSession ? (yr.length > 1 ? yr[yr.length - 2] : null) : lastYrBar;
             const dayBar = hasSessionQuote
               ? { o: sessOpen as number, h: sessHigh as number, l: sessLow as number }
               : lastBar;
@@ -2579,9 +2623,9 @@ export function StockScreen({
               { k: "Previous close", v: prevClose != null ? px(prevClose) : null },
               { k: "Day's range",   v: dayBar ? `${px(dayBar.l)} – ${px(dayBar.h)}` : null },
               { k: "52-week range", v: hi != null && lo != null ? `${px(lo)} – ${px(hi)}` : null },
-              { k: "Off 52W high / low", v: offHigh52 != null || offLow52 != null
-                  ? <><span className={offHigh52 != null && offHigh52 < 0 ? "down" : undefined}>{offHigh52 != null ? offHigh52.toFixed(1) + "%" : "—"}</span>
-                      {" / "}<span className="up">{offLow52 != null ? "+" + offLow52.toFixed(1) + "%" : "—"}</span></>
+              { k: "Off 52W high / low", v: offHigh52Shown != null || offLow52Shown != null
+                  ? <><span className={offHigh52Shown != null && offHigh52Shown < 0 ? "down" : undefined}>{offHigh52Shown != null ? offHigh52Shown.toFixed(1) + "%" : "—"}</span>
+                      {" / "}<span className="up">{offLow52Shown != null ? "+" + offLow52Shown.toFixed(1) + "%" : "—"}</span></>
                   : null },
               { k: "Analysts",      v: consensusDoc?.consensus
                   ? <span style={{ color: consensusTone(consensusDoc.consensus) }}>{consensusDoc.consensus}</span>
@@ -2981,8 +3025,13 @@ export function StockScreen({
                           </thead>
                           <tbody>
                             {pagedInsiderTxns.map((tx, idx) => {
-                              const isBuy = tx.transactionCode === "P" || tx.acquiredOrDisposed === "A";
-                              const isSell = tx.transactionCode === "S" || tx.acquiredOrDisposed === "D";
+                              // Only open-market trades (Form 4 codes P / S) are buys or sells.
+                              // Awards, tax withholding, gifts and exercises carry the same
+                              // acquired/disposed flag but are not trades, so they show their
+                              // own code tag: keyed off that flag, MSFT's tax-withheld shares
+                              // read "Sell" and STRL's stock awards "Buy".
+                              const isBuy = tx.transactionCode === "P";
+                              const isSell = tx.transactionCode === "S";
                               const price = tx.pricePerShare != null && tx.pricePerShare > 0 ? tx.pricePerShare : null;
                               const valUsd = price != null && tx.shares > 0 ? tx.shares * price : null;
                               const codeLabel = TX_CODE_LABEL[tx.transactionCode] ?? `Code ${tx.transactionCode}`;
@@ -3012,7 +3061,7 @@ export function StockScreen({
                                         fontSize: ".7rem",
                                       }}
                                     >
-                                      {isBuy ? "Buy" : isSell ? "Sell" : tx.transactionCode || "TX"}
+                                      {isBuy ? "Buy" : isSell ? "Sell" : INSIDER_TAG[tx.transactionCode] ?? (tx.transactionCode || "TX")}
                                     </span>
                                   </td>
                                   <td className="mono" style={{ textAlign: "right", padding: "8px 6px", color: "var(--text-hi)" }}>
@@ -3027,8 +3076,8 @@ export function StockScreen({
                                   </td>
                                   <td className="mono" style={{ textAlign: "right", padding: "8px 18px 8px 6px" }}>
                                     {valUsd != null ? (
-                                      <span className={isBuy ? "up" : "down"} style={{ fontWeight: 700 }}>
-                                        {isBuy ? "+" : "−"}${Math.abs(valUsd) >= 1e6 ? `${(Math.abs(valUsd) / 1e6).toFixed(1)}M` : Math.round(Math.abs(valUsd)).toLocaleString("en-US")}
+                                      <span className={isBuy ? "up" : isSell ? "down" : undefined} style={{ fontWeight: 700, color: isBuy || isSell ? undefined : "var(--text-dim-solid)" }}>
+                                        {isBuy ? "+" : isSell ? "−" : ""}${Math.abs(valUsd) >= 1e6 ? `${(Math.abs(valUsd) / 1e6).toFixed(1)}M` : Math.round(Math.abs(valUsd)).toLocaleString("en-US")}
                                       </span>
                                     ) : (
                                       <span title={noPriceTip} style={{ color: "var(--text-dim-solid)" }}>—</span>
@@ -3396,8 +3445,8 @@ export function StockScreen({
                 ) : (
                   ([
                     ["52W High", hi,     isUp ? "up"   : "dim"],
-                    ["EMA 50",   ema50,  ema50 != null && p > ema50 ? "up" : "down"],
-                    ["SMA 200",  sma200, sma200 != null && p > sma200 ? "up" : "down"],
+                    ["EMA 50",   ema50,  ema50 == null || sigPx == null ? "dim" : sigPx > ema50 ? "up" : "down"],
+                    ["SMA 200",  sma200, sma200 == null || sigPx == null ? "dim" : sigPx > sma200 ? "up" : "down"],
                     ["52W Low",  lo,     isUp ? "dim"  : "down"],
                   ] as [string, number | null, string][]).map(x => (
                     <div key={x[0]} className="sd-row">

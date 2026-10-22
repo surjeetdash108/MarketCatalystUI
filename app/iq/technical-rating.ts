@@ -59,7 +59,9 @@ export function computeTechnicalRating(bars: OHLCBar[]): TechnicalRating | null 
   const last = n - 1, c = bars[last].c;
 
   const R = rsi(bars, 14)[last];
-  const K = stoch(bars, 14).k[last];
+  // The (14, 3, 3) %K is the 3-bar average of the raw %K — stoch()'s `d` for
+  // (14, 3) — not the raw `k` this row used to read under that label.
+  const K = stoch(bars, 14, 3).d[last];
   const M = macd(bars);
   const A = adx(bars, 14)[last];
   const AO = awesome(bars)[last];
