@@ -5,7 +5,7 @@ import { DataState, VendorTag, formatUsDate } from "./utils";
 import { useApiList } from "./hooks/useApiList";
 import { apiGet } from "./backend";
 import { useWatchlistsContext } from "./hooks/useWatchlists";
-import type { AnalystConsensusDoc, CompanyDoc } from "./types";
+import type { AnalystConsensusDoc, AnalystRatingChange, CompanyDoc } from "./types";
 import { buildAnalystActions, type FirmStat, type ProcessedAction } from "./analyst-actions-engine";
 
 type SortKey = "date" | "firm" | "act" | "to" | "pt" | "up" | "score";
@@ -34,6 +34,11 @@ export function StockAnalystActionsView({
   const { data: firmStatsList } = useApiList<FirmStat>("/market-data/analyst-firm-stats");
   const firmStatsByKey = useMemo(() => new Map(firmStatsList.map((f) => [f.firmKey, f] as const)), [firmStatsList]);
 
+  // Fetch complete rating change history for this stock from FMP grades
+  const { data: fullHistory, loading: historyLoading } = useApiList<AnalystRatingChange>(
+    sym ? `/market-data/analyst-history?ticker=${encodeURIComponent(sym)}` : null
+  );
+
   const [holdings, setHoldings] = useState<Set<string>>(new Set());
   useEffect(() => {
     apiGet<{ holdings: Array<{ ticker: string }> }>("/api/portfolio")
@@ -56,17 +61,38 @@ export function StockAnalystActionsView({
     return m;
   }, [companies]);
 
+  const effectiveConsensusDocs = useMemo(() => {
+    const existing = consensusDocs.find((c) => (c.ticker || "").trim().toUpperCase() === sym);
+    if (fullHistory && fullHistory.length > 0) {
+      if (existing) {
+        return [{ ...existing, recentGrades: fullHistory }];
+      }
+      return [{
+        id: sym,
+        ticker: sym,
+        strongBuy: 0,
+        buy: 0,
+        hold: 0,
+        sell: 0,
+        strongSell: 0,
+        consensus: "Hold",
+        recentGrades: fullHistory,
+      }];
+    }
+    return consensusDocs;
+  }, [consensusDocs, fullHistory, sym]);
+
   const rows = useMemo<ProcessedAction[]>(
     () =>
       buildAnalystActions({
-        consensusDocs: consensusDocs.filter((c) => (c.ticker || "").trim().toUpperCase() === sym),
+        consensusDocs: effectiveConsensusDocs.filter((c) => (c.ticker || "").trim().toUpperCase() === sym),
         companyMap,
         livePrice: (t) => (t === sym ? livePrice : null),
         firmStatsByKey,
         holdings,
         watchedTickers,
       }),
-    [consensusDocs, sym, companyMap, livePrice, firmStatsByKey, holdings, watchedTickers],
+    [effectiveConsensusDocs, sym, companyMap, livePrice, firmStatsByKey, holdings, watchedTickers],
   );
 
   const [sortKey, setSortKey] = useState<SortKey>("date");
@@ -166,15 +192,32 @@ export function StockAnalystActionsView({
                 );
               })}
             </div>
-            {pages > 1 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 18px", fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-                <span>Showing {pg * PAGE_SIZE + 1}–{Math.min((pg + 1) * PAGE_SIZE, sorted.length)} of {sorted.length}</span>
-                <span style={{ display: "flex", gap: 8 }}>
-                  <button type="button" className="pill" disabled={pg === 0} onClick={() => setPage(pg - 1)}>‹ Prev</button>
-                  <button type="button" className="pill" disabled={pg >= pages - 1} onClick={() => setPage(pg + 1)}>Next ›</button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", borderTop: "1px solid var(--border-soft)", fontSize: ".78rem", color: "var(--text-dim-solid)", flexWrap: "wrap", gap: 10 }}>
+              <span>Showing {sorted.length === 0 ? 0 : pg * PAGE_SIZE + 1}–{Math.min((pg + 1) * PAGE_SIZE, sorted.length)} of {sorted.length} (Page {pg + 1} of {pages})</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  type="button"
+                  className="pill"
+                  disabled={pg <= 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  style={{ opacity: pg <= 0 ? 0.45 : 1, cursor: pg <= 0 ? "not-allowed" : "pointer" }}
+                >
+                  ‹ Prev
+                </button>
+                <span style={{ fontFamily: "var(--f-mono, monospace)", fontSize: ".75rem", padding: "0 6px" }}>
+                  {pg + 1} / {pages}
                 </span>
+                <button
+                  type="button"
+                  className="pill"
+                  disabled={pg >= pages - 1}
+                  onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
+                  style={{ opacity: pg >= pages - 1 ? 0.45 : 1, cursor: pg >= pages - 1 ? "not-allowed" : "pointer" }}
+                >
+                  Next ›
+                </button>
               </div>
-            )}
+            </div>
           </div>
         )}
       </div>

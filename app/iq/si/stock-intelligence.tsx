@@ -51,6 +51,7 @@ import type {
   CompanyDoc,
   FinancialsDoc,
   AnalystConsensusDoc,
+  AnalystRatingChange,
   InsiderTxDoc,
   NewsArticleDoc,
   LiveEarningsDoc,
@@ -428,6 +429,9 @@ export function StockIntelligenceScreen() {
   // and full insider history (not just tickers a nightly sweep covered).
   const { data: liveConsensusList } = useApiList<AnalystConsensusDoc>(
     currentTicker ? `/market-data/analyst-actions?ticker=${encodeURIComponent(currentTicker)}` : null,
+  );
+  const { data: liveAnalystHistory } = useApiList<AnalystRatingChange>(
+    currentTicker ? `/market-data/analyst-history?ticker=${encodeURIComponent(currentTicker)}` : null,
   );
   const { data: liveInsiderList } = useApiList<InsiderTxDoc>(
     currentTicker ? `/market-data/insider-transactions?ticker=${encodeURIComponent(currentTicker)}` : null,
@@ -3391,32 +3395,34 @@ export function StockIntelligenceScreen() {
           const tickerConsensus = (Array.isArray(liveConsensusList) ? liveConsensusList : []).find(
             (c) => c?.ticker && c.ticker.toUpperCase() === stock.t
           );
-          if (tickerConsensus?.recentGrades && Array.isArray(tickerConsensus.recentGrades) && tickerConsensus.recentGrades.length > 0) {
-            tickerConsensus.recentGrades.slice(0, 8).forEach((g) => {
-              const dd = calcDd(g.date);
-              const dir = g.action === "upgrade" || (g.priceTarget && g.previousPriceTarget && g.priceTarget > g.previousPriceTarget)
-                ? "Positive"
-                : g.action === "downgrade"
-                  ? "Risk"
-                  : "Neutral";
-              liveCatalystItems.push({
-                date: fmtDateShort(g.date),
-                cat: "Analyst actions",
-                ev: `${g.firm || "Analyst"} ${g.action || "rates"} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
-                note: `${g.previousGrade ? `Prior: ${g.previousGrade}. ` : ""}${g.previousPriceTarget ? `Prior target: $${g.previousPriceTarget}. ` : ""}Consensus: ${tickerConsensus.consensus || "Hold"} (${(tickerConsensus.buy ?? 0) + (tickerConsensus.strongBuy ?? 0)} Buys).`,
-                imp: "MED",
-                dir,
-                dd,
-                sourceBadge: "FMP",
-              });
+          const allGrades = (Array.isArray(liveAnalystHistory) && liveAnalystHistory.length > 0)
+            ? liveAnalystHistory
+            : (tickerConsensus?.recentGrades && Array.isArray(tickerConsensus.recentGrades) ? tickerConsensus.recentGrades : []);
+
+          allGrades.forEach((g) => {
+            const dd = calcDd(g.date);
+            const dir = g.action === "upgrade" || (g.priceTarget && g.previousPriceTarget && g.priceTarget > g.previousPriceTarget)
+              ? "Positive"
+              : g.action === "downgrade"
+                ? "Risk"
+                : "Neutral";
+            liveCatalystItems.push({
+              date: fmtDateShort(g.date),
+              cat: "Analyst actions",
+              ev: `${g.firm || "Analyst"} ${g.action || "rates"} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
+              note: `${g.previousGrade ? `Prior: ${g.previousGrade}. ` : ""}${g.previousPriceTarget ? `Prior target: $${g.previousPriceTarget}. ` : ""}Consensus: ${tickerConsensus?.consensus || "Hold"} (${(tickerConsensus?.buy ?? 0) + (tickerConsensus?.strongBuy ?? 0)} Buys).`,
+              imp: "MED",
+              dir,
+              dd,
+              sourceBadge: "FMP",
             });
-          }
+          });
 
           // 3. INSIDER ACTIVITY (FMP SEC Form 4 Filings)
           const tickerInsiders = (Array.isArray(liveInsiderList) ? liveInsiderList : []).filter(
             (i) => i?.ticker && i.ticker.toUpperCase() === stock.t
           );
-          tickerInsiders.slice(0, 8).forEach((ins) => {
+          tickerInsiders.forEach((ins) => {
             const dd = calcDd(ins.transactionDate);
             const isBuy = ins.acquiredOrDisposed === "A";
             const totalVal = ins.pricePerShare ? (ins.shares * ins.pricePerShare) / 1e6 : null;
@@ -3452,7 +3458,7 @@ export function StockIntelligenceScreen() {
               dd: calcDd(topDate),
               sourceBadge: "13F FMP",
             });
-            inst13FData.holders.slice(0, 5).forEach((h) => {
+            inst13FData.holders.forEach((h) => {
               const hDate = h.filingDate || h.reportDate || topDate;
               liveCatalystItems.push({
                 date: fmtDateShort(hDate),
@@ -3467,16 +3473,20 @@ export function StockIntelligenceScreen() {
             });
           }
 
-          // 5. NEWS, PRODUCT LAUNCHES, REGULATORY (Polygon / Finnhub / FMP)
-          (Array.isArray(tickerNews) ? tickerNews : []).slice(0, 12).forEach((art) => {
+          // 5. NEWS, PRODUCT LAUNCHES, REGULATORY, INDUSTRY EVENTS, MACRO (Polygon / Finnhub / FMP)
+          (Array.isArray(tickerNews) ? tickerNews : []).forEach((art) => {
             const dd = calcDd(art.publishedAt);
             let cat = "News";
             const headline = art?.headline || "";
             const hLower = headline.toLowerCase();
-            if (art.tag === "product" || hLower.includes("launch") || hLower.includes("unveil")) {
+            if (art.tag === "product" || hLower.includes("launch") || hLower.includes("unveil") || hLower.includes("release") || hLower.includes("debut") || hLower.includes("unveils") || hLower.includes("launches") || hLower.includes("product") || hLower.includes("chip") || hLower.includes("device") || hLower.includes("platform") || hLower.includes("model")) {
               cat = "Product launches";
-            } else if (art.tag === "legal" || hLower.includes("fda") || hLower.includes("sec") || hLower.includes("antitrust")) {
+            } else if (art.tag === "legal" || hLower.includes("fda") || hLower.includes("sec") || hLower.includes("antitrust") || hLower.includes("regulat") || hLower.includes("investigat") || hLower.includes("lawsuit") || hLower.includes("court") || hLower.includes("patent") || hLower.includes("probe") || hLower.includes("doj") || hLower.includes("ftc") || hLower.includes("tariff") || hLower.includes("sanction")) {
               cat = "Regulatory";
+            } else if (hLower.includes("conference") || hLower.includes("summit") || hLower.includes("expo") || hLower.includes("symposium") || hLower.includes("keynote") || hLower.includes("forum") || hLower.includes("showcase") || hLower.includes("presentation") || hLower.includes("investor day") || hLower.includes("ai day")) {
+              cat = "Industry events";
+            } else if (hLower.includes("macro") || hLower.includes("fed") || hLower.includes("fomc") || hLower.includes("inflation") || hLower.includes("cpi") || hLower.includes("rate cut") || hLower.includes("rate hike") || hLower.includes("interest rate") || hLower.includes("treasury") || hLower.includes("gdp") || hLower.includes("jobs report") || hLower.includes("payroll") || hLower.includes("unemployment") || hLower.includes("recession")) {
+              cat = "Macro";
             } else if (art.tag === "earnings") {
               cat = "Earnings";
             } else if (art.tag === "analyst") {
@@ -3502,7 +3512,7 @@ export function StockIntelligenceScreen() {
             { date: "Oct 29", cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Federal Open Market Committee policy announcement and press conference.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 29"), sourceBadge: "FED" },
           ];
 
-          const MAX_DAYS = 365;
+          const MAX_DAYS = 3650;
 
           const combined = [...liveCatalystItems, ...marketScheduleEvents].filter(
             (c) => c.dd >= -MAX_DAYS && c.dd <= MAX_DAYS
