@@ -1182,9 +1182,9 @@ export function StockScreen({
   // (MSFT showed Jul 29 after reporting), so a past one falls through to the
   // earnings calendar. Never a past date: "—" when nothing is scheduled.
   const storedEr = keyStats?.nextEarningsDate && keyStats.nextEarningsDate >= todayStr ? keyStats.nextEarningsDate : null;
-  const erDate = storedEr
-    || symEvents.find(e => e.date >= todayStr)?.date
-    || "—";
+  const calEr = symEvents.find(e => e.date >= todayStr)?.date ?? null;
+  const erCandidates = [storedEr, calEr].filter((d): d is string => !!d && d >= todayStr).sort();
+  const erDate = erCandidates[0] || "—";
   // Earnings dots for both charts on this screen. Shared derivation (see
   // chart-earnings.ts) so the panel charts on watchlist / portfolio / screener /
   // movers / IPOs place the same reports at the same points. Called with the
@@ -1769,13 +1769,18 @@ export function StockScreen({
               ) : (
                 <p className="dim">{data.name}</p>
               )}
-              {(liveCompany?.ceo || liveCompany?.employees != null || liveCompany?.listingDate) && (
-                <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginTop: 8, fontSize: ".72rem", color: "var(--text-mid)" }}>
-                  {liveCompany?.ceo && <span><b style={{ color: "var(--text-hi)" }}>CEO:</b> {liveCompany.ceo}</span>}
-                  {liveCompany?.employees != null && <span><b style={{ color: "var(--text-hi)" }}>Employees:</b> {liveCompany.employees.toLocaleString("en-US")}</span>}
-                  {liveCompany?.listingDate && <span><b style={{ color: "var(--text-hi)" }}>Listed:</b> {liveCompany.listingDate}</span>}
-                </div>
-              )}
+              {(() => {
+                const ceoVal = liveCompany?.ceo ?? (keyStats as any)?.ceo ?? (data as any)?.ceo ?? null;
+                const empVal = liveCompany?.employees ?? (keyStats as any)?.employees ?? (data as any)?.employees ?? null;
+                const listingDateVal = liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate ?? null;
+                return (ceoVal || empVal != null || listingDateVal) && (
+                  <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginTop: 8, fontSize: ".72rem", color: "var(--text-mid)" }}>
+                    {ceoVal && <span><b style={{ color: "var(--text-hi)" }}>CEO:</b> {ceoVal}</span>}
+                    {empVal != null && <span><b style={{ color: "var(--text-hi)" }}>Employees:</b> {Number(empVal).toLocaleString("en-US")}</span>}
+                    {listingDateVal && <span><b style={{ color: "var(--text-hi)" }}>Listed:</b> {fmtDate(listingDateVal)}</span>}
+                  </div>
+                );
+              })()}
             </div>
             {/* <span className="sd-snap-src"><VendorTag v={["fmp", "polygon"]} /></span> */}
             {headerActions && <div className="sd-snap-actions">{headerActions}</div>}
@@ -2624,13 +2629,13 @@ export function StockScreen({
                   ? `$${divPerShare.toFixed(2)}${data.dividendYield != null ? ` (${data.dividendYield.toFixed(2)}%)` : ""}`
                   : data.dividendYield != null ? data.dividendYield.toFixed(2) + "%" : null },
               { k: "Ex-dividend date", v: exDiv ? fmtDate(exDiv) : null },
-              { k: "Beta",          v: data.beta != null ? data.beta.toFixed(2) : null },
+              { k: "Beta",          v: data.beta != null ? data.beta.toFixed(2) : ((keyStats as any)?.beta != null ? Number((keyStats as any).beta).toFixed(2) : ((liveCompany as any)?.beta != null ? Number((liveCompany as any).beta).toFixed(2) : null)) },
               { k: "Avg volume (20D)", v: avgVol20 != null ? Math.round(avgVol20).toLocaleString("en-US") : null },
               { k: "Sector",        v: data.sector ? titleCaseLabel(data.sector) : null },
               { k: "Industry",      v: data.industry ? titleCaseLabel(data.industry) : null },
-              { k: "CEO",           v: liveCompany?.ceo ?? null },
-              { k: "Employees",     v: liveCompany?.employees != null ? liveCompany.employees.toLocaleString("en-US") : null },
-              { k: "Listing date",  v: liveCompany?.listingDate ? fmtDate(liveCompany.listingDate) : null },
+              { k: "CEO",           v: liveCompany?.ceo ?? (keyStats as any)?.ceo ?? (data as any)?.ceo ?? null },
+              { k: "Employees",     v: (liveCompany?.employees ?? (keyStats as any)?.employees ?? (data as any)?.employees) != null ? Number(liveCompany?.employees ?? (keyStats as any)?.employees ?? (data as any)?.employees).toLocaleString("en-US") : null },
+              { k: "Listing date",  v: (liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate) ? fmtDate(liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate) : null },
             ];
             const right: Row[] = [
               { k: "Volume",        v: sessionVol != null ? Math.round(sessionVol).toLocaleString("en-US") : null },
