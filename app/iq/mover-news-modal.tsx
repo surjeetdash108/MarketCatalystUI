@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { apiGet } from "./backend";
-import { StockLogo, fmt, sign, VendorTag, cleanCatalystText } from "./utils";
+import { StockLogo, fmt, sign, VendorTag, cleanCatalystText, formatUsDate } from "./utils";
 import type { MoverCatalystDoc, NewsArticleDoc } from "./types";
 
 interface MoverNewsModalProps {
@@ -291,7 +291,7 @@ export function CatalystHero({ ticker, isUp, catalystDoc, newsList }: {
         }}
       >
         <span>
-          Updated: {catalystDoc?.updatedAt ? new Date(catalystDoc.updatedAt).toLocaleTimeString() : "Just now"}
+          Updated: {catalystDoc?.updatedAt ? `${new Date(catalystDoc.updatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET` : "Just now"}
         </span>
 
         {catalystDoc?.newsUrl && (
@@ -607,7 +607,7 @@ export function MoverNewsModal({
                         >
                           <span style={{ fontWeight: 600 }}>{item.source}</span>
                           <span>·</span>
-                          <span>{item.publishedAt ? new Date(item.publishedAt).toLocaleDateString() : ""}</span>
+                          <span>{item.publishedAt ? formatUsDate(item.publishedAt) : ""}</span>
                         </div>
                       </a>
                     ))}
@@ -654,7 +654,7 @@ export function MoverNewsModal({
                           {item.source}
                         </div>
                         <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid, #A6AEB5)" }}>
-                          {item.publishedAt ? new Date(item.publishedAt).toLocaleString() : ""}
+                          {item.publishedAt ? `${new Date(item.publishedAt).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET` : ""}
                         </div>
                       </div>
 

@@ -254,10 +254,11 @@ export function QuoteHeadline({ q }: { q: HeadlineQuote }) {
               letterSpacing: "-.02em",
             }}
           >
-            ${fmt(regPrice, 2)}
+            {/* No quote yet: a dash, never a "$0.00 / 0.00%" that reads as real. */}
+            {regPrice > 0 ? `$${fmt(regPrice, 2)}` : "—"}
           </span>
 
-          {regPct != null && (
+          {regPct != null && regPrice > 0 && (
             <span
               className={`c ${cls(regPct)}`}
               style={{

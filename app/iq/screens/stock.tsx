@@ -449,13 +449,15 @@ const NEWS_PERIODS: Array<[NewsPeriod, string]> = [
 /** Whether a story published at `ms` falls in period `p`, relative to `now`. */
 function inNewsPeriod(p: NewsPeriod, ms: number, now: Date): boolean {
   const DAY = 86_400_000, age = now.getTime() - ms;
-  const d = new Date(ms);
+  // Calendar periods on the New York date, not the viewer's.
+  const [dy, dm] = etTodayIso(new Date(ms)).split("-").map(Number);
+  const [ny, nm] = etTodayIso(now).split("-").map(Number);
   switch (p) {
     case "w": return age < 7 * DAY;
     case "pw": return age >= 7 * DAY && age < 14 * DAY;
-    case "m": return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-    case "q": return d.getFullYear() === now.getFullYear() && Math.floor(d.getMonth() / 3) === Math.floor(now.getMonth() / 3);
-    case "y": return d.getFullYear() === now.getFullYear();
+    case "m": return dy === ny && dm === nm;
+    case "q": return dy === ny && Math.floor((dm - 1) / 3) === Math.floor((nm - 1) / 3);
+    case "y": return dy === ny;
   }
 }
 
@@ -649,6 +651,9 @@ export type StockTab =
   | "13f"
   | "news";
 
+/** How often the AI read is re-checked until (and after) it arrives. */
+const AI_RECHECK_MS = 30_000;
+
 export function StockScreen({
   initialSym,
   hideHeader,
@@ -769,7 +774,10 @@ export function StockScreen({
   // naturally ignores a late summary once the real thing has landed. A
   // non-partial summary (the server already had the full doc in memory)
   // reads identically to a full CompanyDoc for every field below.
-  const keyStats: CompanyDoc | CompanySummary | null = liveCompany ?? companySummary;
+  // Until either loads (or if /live/company fails), the stock's row in the
+  // already-loaded companies list fills Key Stats instead of a wall of N/A.
+  const listedCompany = companies.find(c => c.ticker === sym) ?? null;
+  const keyStats: CompanyDoc | CompanySummary | null = liveCompany ?? companySummary ?? listedCompany;
   // Which symbol's "no data" popup the user has dismissed (so it doesn't reopen).
   const [dismissedNoData, setDismissedNoData] = useState("");
   const { data: dividendHistory, loading: dividendLoading } = useApiResource<DividendHistoryDoc>(`/live/dividend-history?ticker=${encodeURIComponent(sym)}`);
@@ -780,7 +788,12 @@ export function StockScreen({
   const { data: tickerNews } = useApiResource<NewsArticleDoc[]>(`/live/news?ticker=${encodeURIComponent(sym)}`, 30000);
   // On-demand AI read (technicals + news synthesised by OpenRouter), cached 30
   // min server-side. Appended below the deterministic rows + news list.
-  const { data: aiAnalysis, loading: aiLoading, error: aiError } = useApiResource<AiAnalysisDoc>(`/live/ai-analysis?ticker=${encodeURIComponent(sym)}`);
+  const { data: aiAnalysis, loading: aiLoading, error: aiError } = useApiResource<AiAnalysisDoc>(
+    `/live/ai-analysis?ticker=${encodeURIComponent(sym)}`,
+    // Re-check: a slow model outlives the 20s request timeout, but the backend
+    // finishes and caches the read, so a later poll picks it up.
+    AI_RECHECK_MS,
+  );
 
   // ── Notes (Firebase stock_comments) ──────────────────────────────────────
   const [noteInput, setNoteInput] = useState("");
@@ -1165,10 +1178,12 @@ export function StockScreen({
     .sort((a, b) => a.date.localeCompare(b.date));
   const todayStr = etTodayIso();
   // The backend's nextEarningsDate (on both /live/company and its /summary)
-  // wins; the synced earnings feed only fills in when the backend has none.
-  const erDate = keyStats?.nextEarningsDate
+  // wins while it is still ahead; a stored date can be a report already made
+  // (MSFT showed Jul 29 after reporting), so a past one falls through to the
+  // earnings calendar. Never a past date: "—" when nothing is scheduled.
+  const storedEr = keyStats?.nextEarningsDate && keyStats.nextEarningsDate >= todayStr ? keyStats.nextEarningsDate : null;
+  const erDate = storedEr
     || symEvents.find(e => e.date >= todayStr)?.date
-    || symEvents[symEvents.length - 1]?.date
     || "—";
   // Earnings dots for both charts on this screen. Shared derivation (see
   // chart-earnings.ts) so the panel charts on watchlist / portfolio / screener /
@@ -2541,7 +2556,7 @@ export function StockScreen({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: ".8rem", color: "var(--text)" }}>{n.headline}</div>
                     <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 3, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span>{n.source} · {new Date(n.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                      <span>{n.source} · {new Date(n.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}</span>
                       {n.vendor && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
                       {n.sentiment && <span className="pill" style={{ fontSize: ".54rem", textTransform: "capitalize", background: "var(--surface-3)", color: n.sentiment === "positive" ? "var(--up)" : n.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>{n.sentiment}</span>}
                     </div>

@@ -11205,7 +11205,7 @@ button.pill.lf-chip {
 .etf-full-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 42px 90px minmax(0, 1fr) auto auto;
+  grid-template-columns: 42px 90px minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 16px;
   padding: 11px 16px;
@@ -11225,7 +11225,7 @@ button.pill.lf-chip {
 
 @media (max-width: 640px) {
   .etf-full-row {
-    grid-template-columns: 36px 70px minmax(0, 1fr) auto;
+    grid-template-columns: 36px 60px minmax(0, 1fr) auto auto;
     gap: 12px;
     padding: 9px 12px;
   }
