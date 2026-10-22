@@ -187,6 +187,15 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   const pageSectors = sortedSectors.slice(pageStart, pageStart + SEC_PAGE);
 
   const now = new Date();
+  const etHour = parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      hour12: false,
+    }).format(now),
+    10,
+  );
+  const isPostClose = etHour >= 16;
   // Market (New York) dates, matching the backend recaps job — the UTC date
   // flipped to tomorrow at 8 PM ET, and the title used the viewer's own clock.
   const todayStr = etTodayIso(now);
@@ -620,7 +629,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
       {/* ── Page head ── */}
       <div className="page-head">
         <div>
-          <h1 className="page-title">{activeTab === 1 ? "Weekly Recap" : "End-of-Day Recap"}</h1>
+          <h1 className="page-title">{activeTab === 1 ? "Weekly Recap" : isPostClose ? "End-of-Day Recap" : "Intraday Market Recap"}</h1>
         </div>
         <div className="sd-seg" role="group" aria-label="Recap period">
           {(["daily", "weekly"] as const).map(p => (
