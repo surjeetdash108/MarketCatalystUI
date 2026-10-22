@@ -76,15 +76,15 @@ export function resolveActionMeta(
   let shownAction = "Maintain";
   let dir = 0;
 
-  if (act.includes("upgrade")) {
+  if (act.includes("init") || (prev === "" && next !== "" && !act.includes("upgrade") && !act.includes("downgrade"))) {
+    shownAction = "Initiate";
+    dir = BULLISH_GRADE.test(next) ? 1 : BEARISH_GRADE.test(next) ? -1 : 0;
+  } else if (act.includes("upgrade")) {
     shownAction = "Upgrade";
     dir = 1;
   } else if (act.includes("downgrade")) {
     shownAction = "Downgrade";
     dir = -1;
-  } else if (act.includes("init")) {
-    shownAction = "Initiate";
-    dir = BULLISH_GRADE.test(next) ? 1 : BEARISH_GRADE.test(next) ? -1 : 0;
   } else if (pt != null && prevPt != null && pt !== prevPt) {
     if (pt > prevPt) {
       shownAction = "PT Raise";
@@ -147,8 +147,7 @@ export function buildAnalystActions({
       const grades = (c.recentGrades ?? []).filter((g) => g.firm && g.date);
       if (!sym || grades.length === 0) return;
       const comp = companyMap.get(sym);
-      const px = comp?.price && comp.price > 0 ? comp.price : livePrice(sym);
-      if (px == null || !(px > 0)) return; // no live price yet: upside/slider cannot be computed
+      const px = comp?.price && comp.price > 0 ? comp.price : (livePrice(sym) ?? 0);
       const coName = comp?.name || sym;
       const sec = comp?.sector || "—";
       const cap = capCategory(comp?.marketCap);
@@ -168,7 +167,7 @@ export function buildAnalystActions({
         const targetPt = g.priceTarget != null && g.priceTarget > 0 ? g.priceTarget : (c.priceTargetConsensus ?? null);
         if (targetPt == null) return; // nothing to place on the target map
         const prevPt = g.previousPriceTarget ?? null;
-        const upPct = ((targetPt - px) / px) * 100;
+        const upPct = px > 0 ? ((targetPt - px) / px) * 100 : null;
 
         // Cluster: distinct firms making a same-direction call on this stock
         // within 72 hours of this one.
@@ -189,7 +188,7 @@ export function buildAnalystActions({
         const clusterScore = clusterCount >= 4 ? 25 : clusterCount === 3 ? 21 : clusterCount === 2 ? 15 : 7;
         const strengthScore = meta.shownAction === "Upgrade" || meta.shownAction === "Downgrade" ? 20 :
           meta.shownAction.includes("PT") ? 15 : meta.shownAction === "Initiate" ? 14 : 9;
-        const movePctVal = prevPt && prevPt > 0 ? Math.abs((targetPt - prevPt) / prevPt) * 100 : Math.abs(upPct);
+        const movePctVal = prevPt && prevPt > 0 ? Math.abs((targetPt - prevPt) / prevPt) * 100 : upPct != null ? Math.abs(upPct) : 0;
         const moveScore = movePctVal >= 20 ? 10 : movePctVal >= 12 ? 8 : movePctVal >= 5 ? 6 : 4;
         const isHeld = holdings.has(sym);
         const isWatched = watchedTickers.has(sym);
@@ -209,8 +208,10 @@ export function buildAnalystActions({
           whyBullets.push(`New $${targetPt.toFixed(2)} PT is the highest on the Street`);
         } else if (streetTargets.length >= 2 && targetPt <= streetTargets[0]) {
           whyBullets.push(`New PT is the lowest on the Street`);
-        } else {
+        } else if (upPct != null) {
           whyBullets.push(`Target is ${upPct >= 0 ? "+" : ""}${upPct.toFixed(1)}% vs current market price`);
+        } else {
+          whyBullets.push(`New price target: $${targetPt.toFixed(2)}`);
         }
         if (hitRate != null && stat) {
           whyBullets.push(`${firmName}'s price targets were hit within 12 months ${hitRate}% of the time (${stat.targetsResolved} resolved)`);
