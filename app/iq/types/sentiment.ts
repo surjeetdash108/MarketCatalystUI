@@ -3,6 +3,10 @@ export interface MarketSentimentDoc {
   id: string;
   value?: number;
   label?: string;
+  /** Session (YYYY-MM-DD) whose close the value is computed from. */
+  asOfDate?: string | null;
+  /** 0–100 parts: momentum, safeHaven, volatility, breadth. */
+  components?: Record<string, number>;
 }
 
 /** Mirrors `market_sentiment_history/{date}` — GET /market-data/market-sentiment-history. One composite Fear & Greed value per past trading day. */

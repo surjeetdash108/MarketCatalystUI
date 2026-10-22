@@ -313,7 +313,8 @@ export function SemiGauge({ val, label, id = "sg" }: { val: number; label: strin
   const ny = cy - r * Math.sin(a);
   const arcLen = 170;
   const dashOffset = arcLen - arcLen * val / 100;
-  const color = val >= 60 ? "var(--up)" : val >= 40 ? "var(--warn)" : "var(--down)";
+  // Same bands as the label: Neutral is 45–55, above is Greed, below is Fear.
+  const color = val > 55 ? "var(--up)" : val >= 45 ? "var(--warn)" : "var(--down)";
   const gradId = `${id}-grad`;
   return (
     <svg viewBox="0 0 140 90" width={cs(150)} style={{ display: "block" }}>

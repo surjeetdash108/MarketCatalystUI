@@ -389,6 +389,9 @@ function trendRead(price: number | null, sma50: number | null, sma200: number | 
   return `${where}; ${structure}.`;
 }
 
+/** Catalyst cards shown per page in each section. */
+const CAT_PAGE_SIZE = 100;
+
 export function StockIntelligenceScreen() {
   const { theme, setTheme } = useIQActions();
   const isLight = theme === "light";
@@ -894,6 +897,9 @@ export function StockIntelligenceScreen() {
   const [expandedFwd, setExpandedFwd] = useState<Record<string, boolean>>({});
   const [showFundEv, setShowFundEv] = useState(false);
   const [selectedCatFilter, setSelectedCatFilter] = useState("All");
+  // Catalysts page, keyed to the stock + section it belongs to, so switching
+  // either starts back at page 1 without an effect.
+  const [catPageState, setCatPageState] = useState<{ key: string; page: number }>({ key: "", page: 0 });
   const [showReadme, setShowReadme] = useState(false);
 
   // Thesis Lab interactive state
@@ -3584,7 +3590,16 @@ export function StockIntelligenceScreen() {
 
           const filtered = combined.filter((c) => selectedCatFilter === "All" || c.cat === selectedCatFilter);
 
-          const cats = filtered.map((cItem) => ({
+          // 100 per page — a stock can carry thousands of grade / Form 4 / 13F
+          // rows, and rendering them all at once froze the tab.
+          const pageKey = `${stock.t}|${selectedCatFilter}`;
+          const pageCount = Math.max(1, Math.ceil(filtered.length / CAT_PAGE_SIZE));
+          const catPage = Math.min(catPageState.key === pageKey ? catPageState.page : 0, pageCount - 1);
+          const setCatPage = (page: number) => setCatPageState({ key: pageKey, page });
+          const pageStart = catPage * CAT_PAGE_SIZE;
+          const pageEnd = Math.min(pageStart + CAT_PAGE_SIZE, filtered.length);
+
+          const cats = filtered.slice(pageStart, pageEnd).map((cItem) => ({
             ...cItem,
             catUpper: cItem.cat.toUpperCase(),
             when: cItem.dd < 0 ? `${-cItem.dd}D AGO` : cItem.dd === 0 ? "TODAY" : `IN ${cItem.dd}D`,
@@ -3633,11 +3648,35 @@ export function StockIntelligenceScreen() {
                 })}
               </div>
 
-              {/* Timeline cards */}
+              {/* Timeline cards, one page at a time */}
+              {filtered.length > CAT_PAGE_SIZE && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
+                  <span>Showing {pageStart + 1}–{pageEnd} of {filtered.length}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      disabled={catPage === 0}
+                      onClick={() => setCatPage(catPage - 1)}
+                      style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: catPage === 0 ? "#5d6b79" : "var(--si-text-hi, #e8eef4)", cursor: catPage === 0 ? "default" : "pointer", fontFamily: "inherit", fontSize: 12 }}
+                    >
+                      ‹ Prev
+                    </button>
+                    <span>Page {catPage + 1} / {pageCount}</span>
+                    <button
+                      type="button"
+                      disabled={catPage >= pageCount - 1}
+                      onClick={() => setCatPage(catPage + 1)}
+                      style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: catPage >= pageCount - 1 ? "#5d6b79" : "var(--si-text-hi, #e8eef4)", cursor: catPage >= pageCount - 1 ? "default" : "pointer", fontFamily: "inherit", fontSize: 12 }}
+                    >
+                      Next ›
+                    </button>
+                  </span>
+                </div>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {cats.map((cItem, i) => (
                   <div
-                    key={i}
+                    key={pageStart + i}
                     style={{
                       border: `1px solid ${cItem.bd}`,
                       background: "var(--si-card, rgba(12, 17, 24, 0.9))",
@@ -3709,6 +3748,31 @@ export function StockIntelligenceScreen() {
                   </div>
                 )}
               </div>
+              {filtered.length > CAT_PAGE_SIZE && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
+                  <span>Showing {pageStart + 1}–{pageEnd} of {filtered.length}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      disabled={catPage === 0}
+                      onClick={() => setCatPage(catPage - 1)}
+                      style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: catPage === 0 ? "#5d6b79" : "var(--si-text-hi, #e8eef4)", cursor: catPage === 0 ? "default" : "pointer", fontFamily: "inherit", fontSize: 12 }}
+                    >
+                      ‹ Prev
+                    </button>
+                    <span>Page {catPage + 1} / {pageCount}</span>
+                    <button
+                      type="button"
+                      disabled={catPage >= pageCount - 1}
+                      onClick={() => setCatPage(catPage + 1)}
+                      style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: catPage >= pageCount - 1 ? "#5d6b79" : "var(--si-text-hi, #e8eef4)", cursor: catPage >= pageCount - 1 ? "default" : "pointer", fontFamily: "inherit", fontSize: 12 }}
+                    >
+                      Next ›
+                    </button>
+                  </span>
+                </div>
+              )}
+
             </div>
           );
         })()}

@@ -356,6 +356,8 @@ export function DashboardScreen() {
   const fearGreed = marketSentiment.find(d => d.id === "fear_greed");
   const fgVal = fearGreed?.value ?? null;
   const fgLabel = fearGreed?.label ?? null;
+  const fgAsOf = fearGreed?.asOfDate ?? null;
+  const fgParts = fearGreed?.components ?? null;
   // Composite F&G history (market_sentiment_history) — backs the history drawer.
   const { data: fgHistory } = useApiList<MarketSentimentHistoryDoc>("/market-data/market-sentiment-history");
   // EDGAR 8-K earnings announcements (session + price reaction).
@@ -1274,7 +1276,26 @@ export function DashboardScreen() {
             </div>
             <div className="card-b gauge-wrap">
               {fgVal != null && fgLabel != null
-                ? <SemiGauge val={fgVal} label={fgLabel} id="fg" />
+                ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: "100%" }}>
+                    <SemiGauge val={fgVal} label={fgLabel} id="fg" />
+                    {/* The index is computed from daily closes, once each evening. */}
+                    {fgAsOf && (
+                      <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
+                        As of {fmtDate(fgAsOf, { month: "short", day: "numeric" })} close
+                      </div>
+                    )}
+                    {fgParts && (
+                      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "4px 12px", fontSize: ".66rem", color: "var(--text-dim-solid)" }}>
+                        {([["momentum", "Momentum"], ["volatility", "Volatility (VIX)"], ["safeHaven", "Safe haven"], ["breadth", "Breadth"]] as const)
+                          .filter(([k]) => typeof fgParts[k] === "number")
+                          .map(([k, name]) => (
+                            <span key={k}>{name} <b className="mono" style={{ color: "var(--text-hi)" }}>{fgParts[k]}</b></span>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )
                 : <DataState loading={marketSentimentLoading} label="Fear &amp; Greed hasn't synced yet." height={140} />}
             </div>
           </div>
@@ -1309,7 +1330,7 @@ export function DashboardScreen() {
                   .sort((a, b) => a.id.localeCompare(b.id))
                   .slice(-90);
                 if (rows.length < 2) {
-                  return <DataState label="Fear & Greed history populates once the fear-greed job has run over a backfilled ohlcv_bars." />;
+                  return <DataState label="Fear & Greed history fills in after the fear-greed job's next run." />;
                 }
                 const vals = rows.map(r => r.value as number);
                 const W = 320, H = 90;
