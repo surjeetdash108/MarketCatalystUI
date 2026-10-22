@@ -174,7 +174,7 @@ const LISTS: ListDef[] = [
     hint: "Insiders and institutions moving the same direction — the highest-confluence setups.",
     pick: (S) =>
       S.filter(
-        (s) => s.hasF13 && ((s.iS >= 3 && s.net > 0) || (s.iS <= -3 && s.net < 0))
+        (s) => s.hasF13 && ((s.buyV > s.offV && s.iS >= 3 && s.net > 0) || (s.offV > s.buyV && s.iS <= -3 && s.net < 0))
       ).sort((a, b) => Math.abs(b.iS) - Math.abs(a.iS)),
     m: "agree",
   },
@@ -206,13 +206,13 @@ interface CompanyStats {
 }
 
 const tagOf = (s: CompanyStats): [string, string, string] =>
-  s.buyers >= 3
-    ? ["Cluster buy", UP, "var(--up-dim, rgba(74,222,128,.12))"]
-    : s.buys.length && s.csBuy
-    ? ["C-suite buy", UP, "var(--up-dim, rgba(74,222,128,.12))"]
-    : s.buys.length
-    ? ["Insider buy", UP, "var(--up-dim, rgba(74,222,128,.12))"]
-    : s.off.length
+  s.buyV > s.offV && s.buys.length
+    ? s.buyers >= 3
+      ? ["Cluster buy", UP, "var(--up-dim, rgba(74,222,128,.12))"]
+      : s.csBuy
+      ? ["C-suite buy", UP, "var(--up-dim, rgba(74,222,128,.12))"]
+      : ["Insider buy", UP, "var(--up-dim, rgba(74,222,128,.12))"]
+    : s.offV > s.buyV && s.off.length
     ? ["Insider sale", DN, "var(--down-dim, rgba(248,113,113,.12))"]
     : s.plan.length
     ? ["10b5-1 only", "var(--text-pure-dim)", "var(--surface-3)"]
@@ -236,12 +236,15 @@ function toTradeItems(txs: InsiderTxDoc[], priceOf: (t: string) => number | null
 
     const role = tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% owner");
     const isCs = /CEO|CFO|COO|CTO|PRESIDENT|EXECUTIVE|CHIEF/i.test(role) ? 1 : 0;
-    const code = tx.transactionCode || (tx.acquiredOrDisposed === "A" ? "P" : "S");
+    const rawCode = (tx.transactionCode || "").toUpperCase().trim();
+    // SEC Form 4 codes: P=Buy, S=Sale, M=Option exercise, F=Tax withholding, A=Award, G=Gift, D=Return to issuer
+    const code = rawCode || (tx.acquiredOrDisposed === "A" ? "P" : "S");
     const curPx = priceOf(t);
     // Stake change from the filing: shares traded vs. holdings before the trade.
     const after = tx.sharesOwnedAfter ?? null;
-    const before = after == null ? null : tx.acquiredOrDisposed === "D" ? after + tx.shares : after - tx.shares;
-    const stake = before == null ? null : before <= 0 ? null : ((tx.acquiredOrDisposed === "D" ? -1 : 1) * tx.shares / before) * 100;
+    const isAcquisition = code === "P" || code === "A" || code === "M" || tx.acquiredOrDisposed === "A";
+    const before = after == null ? null : !isAcquisition ? after + tx.shares : after - tx.shares;
+    const stake = before == null ? null : before <= 0 ? null : ((!isAcquisition ? -1 : 1) * tx.shares / before) * 100;
     const filedTime = tx.filingDate ? Date.parse(tx.filingDate) : NaN;
 
     list.push({
@@ -278,21 +281,20 @@ function statsFor(t: string, rs: TradeItem[], f: F13Tuple | undefined): CompanyS
   const csBuy = buys.some((r) => r.cs === 1);
   const last = rs.length ? Math.min(...rs.map((r) => r.ago)) : null;
 
-
-  const iS =
-    buyers >= 3
-      ? 5
-      : buys.length && csBuy
-      ? 4
-      : buys.length
-      ? 3
-      : off.length
-      ? offV > 1e8
-        ? -4
-        : -3
-      : plan.length
-      ? -1
-      : 0;
+  // Sentiment based on net insider volume:
+  let iS = 0;
+  if (buyV > offV && buys.length > 0) {
+    if (buyers >= 3) iS = 5;
+    else if (csBuy) iS = 4;
+    else iS = 3;
+  } else if (offV > buyV && off.length > 0) {
+    if (offV > 1e8) iS = -4;
+    else iS = -3;
+  } else if (plan.length > 0) {
+    iS = -1;
+  } else {
+    iS = 0;
+  }
 
   return {
     t,
@@ -455,49 +457,6 @@ export function InsiderScreen() {
     };
   }, [effectiveFocus]);
 
-  // Stats dictionary for fast lookup
-  const statsMap = useMemo(() => {
-    const map = new Map<string, CompanyStats>();
-    allStats.forEach((s) => map.set(s.t, s));
-    return map;
-  }, [allStats]);
-
-  // Metric string generator for the left list
-  const formatMetric = (s: CompanyStats, mode: string) => {
-    const ago = s.last != null ? s.last + "d ago" : "";
-    if (mode === "buy") return ["+" + fm(s.buyV), s.buyers + " insider" + (s.buyers > 1 ? "s" : "") + " · " + ago, UP];
-    if (mode === "sell") return ["−" + fm(s.offV), s.off.length + " off-plan · " + ago, DN];
-    if (mode === "f13") return [fp(s.net) + " shs", (s.netFunds > 0 ? "+" : "") + s.netFunds + " net funds", s.net >= 0 ? UP : DN];
-    if (mode === "new") return [s.newPos + " new", s.exits + " exits", "#8fa6ff"];
-    if (mode === "agree") return [s.iS > 0 ? "Both buying" : "Both selling", "funds " + fp(s.net), s.iS > 0 ? UP : DN];
-    return s.iS > 0
-      ? ["+" + fm(s.buyV), s.buyers + " buyer" + (s.buyers > 1 ? "s" : "") + " · " + ago, UP]
-      : ["−" + fm(s.offV), "off-plan · " + ago, DN];
-  };
-
-  // Filtered List for Left Column
-  const currentListDef = useMemo(() => {
-    return LISTS.find((l) => l.k === activeListKey) || LISTS[0];
-  }, [activeListKey]);
-
-  const searchQ = searchQuery.trim().toUpperCase();
-
-  const filteredStatsList = useMemo(() => {
-    if (searchQ) {
-      return allStats.filter(
-        (s) => s.t.startsWith(searchQ) || (companiesMap.get(s.t)?.name || "").toUpperCase().includes(searchQ)
-      );
-    }
-    return currentListDef.pick(allStats);
-  }, [searchQ, allStats, companiesMap, currentListDef]);
-
-  // Ensure focus ticker is valid
-  useEffect(() => {
-    if (filteredStatsList.length > 0 && !filteredStatsList.some((s) => s.t === focusTicker) && searchQ) {
-      setFocusTicker(filteredStatsList[0].t);
-    }
-  }, [filteredStatsList, focusTicker, searchQ]);
-
   // Active focus data
   // The selected stock's 13F rollup straight from FMP (newest fully-filed
   // quarter, fetched on demand) — authoritative over the cached collection,
@@ -511,12 +470,12 @@ export function InsiderScreen() {
     effectiveFocus ? `/market-data/insider-transactions?ticker=${encodeURIComponent(effectiveFocus)}` : null,
   );
   const focusBase = useMemo(() => {
-    const base = statsMap.get(effectiveFocus) || null;
+    const base = allStats.find((s) => s.t === effectiveFocus) || null;
     const own = focusTxRaw.filter((x) => (x.ticker || "").toUpperCase().trim() === effectiveFocus);
     if (!base || own.length === 0) return base;
     const rows = toTradeItems(own, (t) => companiesMap.get(t)?.price ?? null).filter((r) => r.ago <= rangeDays);
     return statsFor(effectiveFocus, rows, f13Map.get(effectiveFocus));
-  }, [statsMap, effectiveFocus, focusTxRaw, companiesMap, f13Map, rangeDays]);
+  }, [allStats, effectiveFocus, focusTxRaw, companiesMap, f13Map, rangeDays]);
   const focusInst = focusOwnership?.ticker === effectiveFocus ? focusOwnership.institutional : null;
   const focusStats: CompanyStats | null = focusBase && focusInst && focusInst.holders != null
     ? {
@@ -532,6 +491,59 @@ export function InsiderScreen() {
         netFunds: (focusInst.increasedPositions ?? 0) - (focusInst.reducedPositions ?? 0),
       }
     : focusBase;
+
+  // Stats dictionary for fast lookup, updating with focusStats when loaded
+  const statsMap = useMemo(() => {
+    const map = new Map<string, CompanyStats>();
+    allStats.forEach((s) => map.set(s.t, s));
+    if (focusStats && focusStats.t) {
+      map.set(focusStats.t, focusStats);
+    }
+    return map;
+  }, [allStats, focusStats]);
+
+  // Metric string generator for the left list
+  const formatMetric = (s: CompanyStats, mode: string) => {
+    const ago = s.last != null ? s.last + "d ago" : "";
+    if (mode === "buy") return ["+" + fm(s.buyV), s.buyers + " insider" + (s.buyers > 1 ? "s" : "") + " · " + ago, UP];
+    if (mode === "sell") return ["−" + fm(s.offV), s.off.length + " off-plan · " + ago, DN];
+    if (mode === "f13") return [fp(s.net) + " shs", (s.netFunds > 0 ? "+" : "") + s.netFunds + " net funds", s.net >= 0 ? UP : DN];
+    if (mode === "new") return [s.newPos + " new", s.exits + " exits", "#8fa6ff"];
+    if (mode === "agree") return [s.buyV > s.offV && s.iS > 0 ? "Both buying" : "Both selling", "funds " + fp(s.net), s.buyV > s.offV && s.iS > 0 ? UP : DN];
+    if (s.buyV > s.offV && s.iS > 0) {
+      return ["+" + fm(s.buyV), s.buyers + " buyer" + (s.buyers > 1 ? "s" : "") + " · " + ago, UP];
+    }
+    if (s.offV > 0) {
+      return ["−" + fm(s.offV), s.off.length + " off-plan · " + ago, DN];
+    }
+    return ["—", ago ? "Quiet · " + ago : "Quiet", "var(--text-pure-dim)"];
+  };
+
+  // Filtered List for Left Column
+  const currentListDef = useMemo(() => {
+    return LISTS.find((l) => l.k === activeListKey) || LISTS[0];
+  }, [activeListKey]);
+
+  const searchQ = searchQuery.trim().toUpperCase();
+
+  const filteredStatsList = useMemo(() => {
+    const list = searchQ
+      ? allStats.filter(
+          (s) => s.t.startsWith(searchQ) || (companiesMap.get(s.t)?.name || "").toUpperCase().includes(searchQ)
+        )
+      : currentListDef.pick(allStats);
+    if (focusStats && focusStats.t) {
+      return list.map((s) => (s.t === focusStats.t ? focusStats : s));
+    }
+    return list;
+  }, [searchQ, allStats, companiesMap, currentListDef, focusStats]);
+
+  // Ensure focus ticker is valid
+  useEffect(() => {
+    if (filteredStatsList.length > 0 && !filteredStatsList.some((s) => s.t === focusTicker) && searchQ) {
+      setFocusTicker(filteredStatsList[0].t);
+    }
+  }, [filteredStatsList, focusTicker, searchQ]);
   const focusCompany: CompanyMeta = companiesMap.get(effectiveFocus) || {
     name: effectiveFocus,
     price: null,
@@ -589,29 +601,32 @@ export function InsiderScreen() {
     const px = focusCompany.price;
     const chg = focusCompany.chg;
 
-    const iC = s.iS >= 3 ? UP : s.iS <= -3 ? DN : GR;
+    const isNetBuy = s.buyV > s.offV && s.buys.length > 0;
+    const isNetSell = s.offV > s.buyV && s.off.length > 0;
+
+    const iC = isNetBuy ? UP : isNetSell ? DN : GR;
     const iVerdict =
-      s.buyers >= 3
-        ? "Cluster buying"
-        : s.iS === 4
-        ? "C-suite buying"
-        : s.iS === 3
-        ? "Insider buying"
-        : s.iS <= -3
+      isNetBuy
+        ? s.buyers >= 3
+          ? "Cluster buying"
+          : s.csBuy
+          ? "C-suite buying"
+          : "Insider buying"
+        : isNetSell
         ? "Insider selling"
         : s.plan.length
         ? "Routine selling only"
         : "No activity";
 
     const iWhy =
-      s.buyers >= 3
-        ? `${s.buyers} insiders bought ${fm(s.buyV)} on the open market within days — the highest-conviction Form 4 pattern.`
-        : s.buys.length
-        ? `${s.buyers} insider${s.buyers > 1 ? "s" : ""} bought ${fm(s.buyV)} with personal cash${
-            s.csBuy ? ", including C-suite" : ""
-          }. Buys are the cleaner signal — sales have many reasons.`
-        : s.off.length
-        ? `${fm(s.offV)} sold on the open market. Sales have many reasons (taxes, diversification, pre-set plans) — watch size vs. holdings and whether more insiders follow.`
+      isNetBuy
+        ? s.buyers >= 3
+          ? `${s.buyers} insiders bought ${fm(s.buyV)} on the open market within days — the highest-conviction Form 4 pattern.`
+          : `${s.buyers} insider${s.buyers > 1 ? "s" : ""} bought ${fm(s.buyV)} with personal cash${
+              s.csBuy ? ", including C-suite" : ""
+            }. Buys are the cleaner signal — sales have many reasons.`
+        : isNetSell
+        ? `${fm(s.offV)} sold on the open market (${s.off.length} sale${s.off.length > 1 ? "s" : ""}). Sales have many reasons (taxes, diversification, pre-set plans) — watch size vs. holdings and whether more insiders follow.`
         : s.plan.length
         ? `All ${fm(s.planV)} of sales were pre-scheduled 10b5-1 plans. Treat as routine liquidity, not a view on the stock.`
         : `No Form 4 filings in the last ${rangeDays} days.`;
@@ -630,13 +645,13 @@ export function InsiderScreen() {
       : "No 13F rollup is available for this ticker yet.";
 
     const agree =
-      s.iS >= 3 && s.net > 0
+      isNetBuy && s.net > 0
         ? ["Confluence: insiders and funds are both buying", UP]
-        : s.iS <= -3 && s.net < 0
+        : isNetSell && s.net < 0
         ? ["Confluence: insiders and funds are both selling", DN]
-        : s.iS >= 3 && s.net <= -2
+        : isNetBuy && s.net <= -2
         ? ["Divergence: insiders buying while funds distribute", AMB]
-        : s.iS <= -3 && s.net >= 2
+        : isNetSell && s.net >= 2
         ? ["Divergence: insiders selling into fund accumulation", AMB]
         : null;
 
@@ -694,13 +709,53 @@ export function InsiderScreen() {
         const isBuy = r.code === "P";
         const isPln = r.code === "S" && r.plan;
         const isEx = r.code === "M";
-        const c = isBuy ? UP : isPln ? "var(--warn, #c27b84)" : isEx ? GR : DN;
-        const codeBg = isBuy
-          ? "var(--up-dim, rgba(74,222,128,.12))"
-          : isEx
-          ? "var(--surface-3)"
-          : "var(--down-dim, rgba(248,113,113,.12))";
-        const typeLabel = isBuy ? "Open-market buy" : isEx ? "Option exercise" : "Open-market sale";
+        const isTax = r.code === "F";
+        const isAward = r.code === "A";
+        const isGift = r.code === "G";
+        const isRet = r.code === "D";
+
+        let typeLabel = "Open-market sale";
+        let c = DN;
+        let codeBg = "var(--down-dim, rgba(248,113,113,.12))";
+        let valPrefix = "−";
+
+        if (isBuy) {
+          typeLabel = "Open-market buy";
+          c = UP;
+          codeBg = "var(--up-dim, rgba(74,222,128,.12))";
+          valPrefix = "+";
+        } else if (isPln) {
+          typeLabel = "10b5-1 sale";
+          c = "var(--warn, #c27b84)";
+          codeBg = "var(--down-dim, rgba(248,113,113,.12))";
+          valPrefix = "−";
+        } else if (isEx) {
+          typeLabel = "Option exercise";
+          c = GR;
+          codeBg = "var(--surface-3)";
+          valPrefix = "";
+        } else if (isTax) {
+          typeLabel = "Tax withholding";
+          c = "var(--warn, #c27b84)";
+          codeBg = "var(--surface-3)";
+          valPrefix = "−";
+        } else if (isAward) {
+          typeLabel = "Stock award";
+          c = "var(--brand, #4a67d8)";
+          codeBg = "var(--surface-3)";
+          valPrefix = "+";
+        } else if (isGift) {
+          typeLabel = "Gift";
+          c = GR;
+          codeBg = "var(--surface-3)";
+          valPrefix = "";
+        } else if (isRet) {
+          typeLabel = "Return to issuer";
+          c = "var(--warn, #c27b84)";
+          codeBg = "var(--surface-3)";
+          valPrefix = "−";
+        }
+
         const filingDate = formatUsDate(r.date);
 
         return {
@@ -712,7 +767,7 @@ export function InsiderScreen() {
           typeLabel,
           sharesStr: r.sh.toLocaleString("en-US"),
           priceStr: "$" + r.px.toFixed(2),
-          valueStr: (isBuy ? "+" : isEx ? "" : "−") + fm(r.value),
+          valueStr: valPrefix + fm(r.value),
           sinceStr: r.since == null ? "—" : fp(r.since),
           sinceColor: r.since == null ? GR : r.since >= 0 ? UP : DN,
           dateStr: filingDate,
