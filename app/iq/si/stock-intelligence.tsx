@@ -41,7 +41,7 @@ import { buildChartEarnings, type ChartEarnings } from "../chart-earnings";
 import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
-import { etTodayIso } from "../calendar-range";
+import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex } from "../calendar-range";
 import { StockLogo, VendorTag } from "../utils";
 import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
@@ -144,7 +144,7 @@ function SixMonthAreaChart({
       const idx = Math.min(n - 1, Math.round((k / (count - 1)) * (n - 1)));
       const b = chartBars[idx];
       const d = new Date(b.t);
-      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+      const label = fmtMarketDate(d);
       ticks.push({ x: xOf(idx), label });
     }
     return ticks;
@@ -373,6 +373,22 @@ const rangesDef: Record<string, [number, number, number]> = {
   "5Y": [350, 0.024, 0.80],
 };
 
+
+/** One sentence on price vs its 50- and 200-day averages, from the real values. */
+function trendRead(price: number | null, sma50: number | null, sma200: number | null): string {
+  if (price == null || sma50 == null || sma200 == null) return "Moving-average data is not available for this stock yet.";
+  const $ = (v: number) => `$${v.toFixed(2)}`;
+  const rel = (ma: number) => (Math.abs(price / ma - 1) < 0.01 ? "at" : price > ma ? "above" : "below");
+  const r50 = rel(sma50), r200 = rel(sma200);
+  const where = r50 === r200
+    ? `Price (${$(price)}) trades ${r50} both its 50-day (${$(sma50)}) and 200-day (${$(sma200)}) moving averages`
+    : `Price (${$(price)}) trades ${r50} its 50-day (${$(sma50)}) and ${r200} its 200-day (${$(sma200)}) moving average`;
+  const structure = sma50 > sma200
+    ? "the 50-day sits above the 200-day (an uptrend structure)"
+    : "the 50-day sits below the 200-day (a downtrend structure)";
+  return `${where}; ${structure}.`;
+}
+
 export function StockIntelligenceScreen() {
   const { theme, setTheme } = useIQActions();
   const isLight = theme === "light";
@@ -439,7 +455,10 @@ export function StockIntelligenceScreen() {
   const { data: liveEarningsList } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   const { data: companiesList } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: aiAnalysisDoc } = useApiResource<AiAnalysisDoc>(
-    currentTicker ? `/live/ai-analysis?ticker=${encodeURIComponent(currentTicker)}` : null
+    currentTicker ? `/live/ai-analysis?ticker=${encodeURIComponent(currentTicker)}` : null,
+    // Re-check: a slow model outlives the request timeout; the backend still
+    // finishes and caches the synthesis for the next poll.
+    30_000,
   );
 
   const [pendingPeerOpen, setPendingPeerOpen] = useState<{ ticker: string; name?: string } | null>(null);
@@ -510,7 +529,15 @@ export function StockIntelligenceScreen() {
       q && q.revenue && q[field] != null ? ((q[field] as number) / q.revenue) * 100 : null;
     const last4 = qs.slice(0, 4).filter((q) => q.epsActualReported != null && q.epsEstimateReported != null);
     const est = [...(financialsDoc?.annualEstimates ?? [])].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
-    const thisYear = new Date().getFullYear();
+    // The fiscal year in progress is the one after the last REPORTED year (a
+    // calendar-year rule picked NVDA's already-reported FY2026 as "current").
+    const lastReportedFy = Math.max(
+      0,
+      ...(financialsDoc?.annual ?? [])
+        .filter((a) => a.epsActual != null || a.revenue != null)
+        .map((a) => Number(a.fiscalYear) || 0),
+    );
+    const thisYear = lastReportedFy > 0 ? lastReportedFy + 1 : new Date().getFullYear();
     const curEst = est.find((e) => Number(e.fiscalYear) >= thisYear && e.epsEstimate != null) ?? null;
     const nextEst = curEst ? est.find((e) => Number(e.fiscalYear) === Number(curEst.fiscalYear) + 1 && e.epsEstimate != null) ?? null : null;
     const cons = (Array.isArray(liveConsensusList) ? liveConsensusList : []).find((c) => c.ticker === currentTicker) ?? null;
@@ -523,7 +550,15 @@ export function StockIntelligenceScreen() {
     );
     const insiderNet = insider90.reduce((a, x) => a + (x.transactionCode === "P" ? 1 : -1) * x.shares * (x.pricePerShare ?? 0), 0);
     const news7 = (Array.isArray(tickerNews) ? tickerNews : []).filter((n) => n.publishedAt && Date.parse(n.publishedAt) >= todayMs - 7 * 86_400_000);
-    const erDate = liveCompany?.nextEarningsDate ?? null;
+    // Next report on or after today: the stored date when it is still ahead,
+    // else the earnings calendar (a stored date can be a report already made).
+    const todayIso = etTodayIso();
+    const storedEr = liveCompany?.nextEarningsDate && liveCompany.nextEarningsDate >= todayIso ? liveCompany.nextEarningsDate : null;
+    const calEr = (Array.isArray(liveEarningsList) ? liveEarningsList : [])
+      .filter((e) => e.ticker === currentTicker && e.date >= todayIso)
+      .map((e) => e.date)
+      .sort()[0] ?? null;
+    const erDate = storedEr ?? calEr;
     const erDays = erDate ? Math.round((Date.parse(erDate + "T00:00:00Z") - todayMs) / 86_400_000) : null;
     const pivots = liveCompany?.keyLevels?.daily ?? null;
     return {
@@ -569,7 +604,7 @@ export function StockIntelligenceScreen() {
       newsPos: news7.length ? news7.filter((n) => n.sentiment === "positive").length : null,
       newsNeg: news7.length ? news7.filter((n) => n.sentiment === "negative").length : null,
     };
-  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews]);
+  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews, liveEarningsList]);
 
   const stock: StockItem | null = useMemo(() => {
     if (!currentTicker) return null;
@@ -620,7 +655,10 @@ export function StockIntelligenceScreen() {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const upcomingEr = symEvents.find((e) => e.date >= todayStr) ?? null;
-    const realErDate = liveCompany?.nextEarningsDate || upcomingEr?.date || null;
+    // A stored nextEarningsDate can be a report that already happened (MSFT
+    // showed Jul 29 after it reported); only a future date counts.
+    const storedEr = liveCompany?.nextEarningsDate && liveCompany.nextEarningsDate >= todayStr ? liveCompany.nextEarningsDate : null;
+    const realErDate = storedEr || upcomingEr?.date || null;
 
     const items: UpcomingEvent[] = [];
 
@@ -650,10 +688,11 @@ export function StockIntelligenceScreen() {
     }
 
     // 2. Upcoming Macro & Regulatory Dates
+    const fomcDay = nextFomcDecision(todayStr);
     const calendarEvents = [
-      { date: "2026-10-25", name: "Monthly Options Expiry (OpEx)", desc: `Pinning pressure expected around key ${stock.t} open interest strikes`, imp: "LOW" as const, col: "#93a1af" },
-      { date: "2026-10-29", name: "FOMC Rate Decision", desc: "Federal Reserve policy decision and press conference; macro equity multiple driver", imp: "HIGH" as const, col: STEEL },
-      { date: "2026-11-14", name: "Q3 13F Filing Deadline", desc: "Institutional ownership updates and hedge fund positioning reports filed with SEC", imp: "MED" as const, col: STEEL },
+      { date: nextMonthlyOpex(todayStr), name: "Monthly Options Expiry (OpEx)", desc: `Pinning pressure expected around key ${stock.t} open interest strikes`, imp: "LOW" as const, col: "#93a1af" },
+      ...(fomcDay ? [{ date: fomcDay, name: "FOMC Rate Decision", desc: "Federal Reserve policy decision and press conference; macro equity multiple driver", imp: "HIGH" as const, col: STEEL }] : []),
+      { date: next13fDeadline(todayStr), name: "13F Filing Deadline", desc: "Institutional ownership updates and hedge fund positioning reports filed with SEC", imp: "MED" as const, col: STEEL },
     ];
 
     calendarEvents.forEach((ev) => {
@@ -698,8 +737,9 @@ export function StockIntelligenceScreen() {
       sixMonthBars,
       financialsDoc?.quarters,
       tickerNews,
+      financialsDoc?.epsHistory,
     );
-  }, [stock, sixMonthBars, financialsDoc?.quarters, tickerNews]);
+  }, [stock, sixMonthBars, financialsDoc?.quarters, tickerNews, financialsDoc?.epsHistory]);
 
   // Real peers from Polygon/FMP (liveCompany.peers) and MC company universe (matches stock function)
   const isBumble = stock?.t?.toUpperCase() === "BMBL" || stock?.name?.toLowerCase().includes("bumble") || currentTicker?.toUpperCase() === "BMBL";
@@ -1465,32 +1505,28 @@ export function StockIntelligenceScreen() {
     { k: "52W HIGH / LOW", v: `${hi52 != null ? usd(hi52) : "—"} / ${lo52 != null ? usd(lo52) : "—"}`, sub: "Range" },
   ];
 
+  // Overview signal scores, confidence and confluence come from the same
+  // 6-month bullish forward run as the "Why it could move" tab, so the two
+  // never disagree (the old fallback showed fixed 88/87/80/… for every stock).
+  const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
+  const overviewConf = Math.round(overviewRun.conf);
+  const overviewCf = overviewRun.cats.filter((c) => Math.round(c.score) >= 60).length;
+
   // Confluence dots
   const confluenceDots = [0, 1, 2, 3, 4, 5, 6].map((i) => ({
-    c: i < stock.cf ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border, #1c2733)",
+    c: i < overviewCf ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border, #1c2733)",
   }));
 
   type SignalScoreItem = { name: string; val: number; color: string; widthPct: string };
-  // Signal scores mapping - strictly synchronized with the 7 forward signal categories
-  const signalScores: SignalScoreItem[] = (stockDetail.fwd?.cats && stockDetail.fwd.cats.length === 7)
-    ? stockDetail.fwd.cats.map((cat: any) => {
-      const val = Math.round(cat.score);
-      return {
-        name: cat.label,
-        val,
-        color: sc(val),
-        widthPct: `${val}%`,
-      };
-    })
-    : [
-      { name: "BUSINESS", val: 88, color: sc(88), widthPct: "88%" },
-      { name: "EARNINGS", val: 87, color: sc(87), widthPct: "87%" },
-      { name: "TECHNICALS", val: 80, color: sc(80), widthPct: "80%" },
-      { name: "CATALYSTS", val: 71, color: sc(71), widthPct: "71%" },
-      { name: "VALUATION", val: 70, color: sc(70), widthPct: "70%" },
-      { name: "FLOWS", val: 71, color: sc(71), widthPct: "71%" },
-      { name: "MACRO", val: 67, color: sc(67), widthPct: "67%" },
-    ];
+  const signalScores: SignalScoreItem[] = overviewRun.cats.map((cat) => {
+    const val = Math.round(cat.score);
+    return {
+      name: String(SHORT[cat.k] || cat.label).toUpperCase(),
+      val,
+      color: sc(val),
+      widthPct: `${val}%`,
+    };
+  });
 
   return (
     <div
@@ -2281,7 +2317,7 @@ export function StockIntelligenceScreen() {
                       CONFIDENCE
                     </div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
-                      {stock.conf}
+                      {overviewConf}
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
                     </div>
                   </div>
@@ -2291,7 +2327,7 @@ export function StockIntelligenceScreen() {
                     </div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                        {stock.cf}
+                        {overviewCf}
                       </span>
                       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>/ 7</span>
                     </div>
@@ -2865,6 +2901,8 @@ export function StockIntelligenceScreen() {
             ==================================================== */}
         {activeTab === "fund" && (() => {
           const hasFmp = Boolean(financialsDoc?.quarters && financialsDoc.quarters.length >= 2);
+          // Banks: gross margin, EBITDA and free cash flow are not meaningful.
+          const isBank = /bank|savings|thrift/i.test(liveCompany?.industry ?? "");
           const fmpQ = hasFmp && financialsDoc?.quarters ? [...financialsDoc.quarters].slice(0, 8).reverse() : null;
 
           let fsr: number[][];
@@ -2874,7 +2912,11 @@ export function StockIntelligenceScreen() {
             // Real FMP fundamental data series
             const revSeries = fmpQ.map((q) => (q.revenue || 0) / 1e9);
             const epsSeries = fmpQ.map((q) => reportedQuarterEps(q) ?? q.epsActual ?? 0);
-            const gmSeries = fmpQ.map((q) => q.grossMarginPct != null ? q.grossMarginPct : (q.revenue ? ((q.grossProfit || 0) / q.revenue) * 100 : 0));
+            // Gross margin means nothing for a bank (no cost of goods; JPM read
+            // 62.3%), and a statement whose gross profit IS operating income
+            // (NEE: 32.4% / 32.4%) has no real gross line — show no data then.
+            const noGross = isBank || fmpQ.every((q) => q.grossProfit != null && q.operatingIncome != null && q.grossProfit === q.operatingIncome);
+            const gmSeries = noGross ? [] : fmpQ.map((q) => q.grossMarginPct != null ? q.grossMarginPct : (q.revenue ? ((q.grossProfit || 0) / q.revenue) * 100 : 0));
             const fcfSeries = fmpQ.map((q) => {
               if (q.freeCashFlow != null) return q.freeCashFlow / 1e9;
               if (q.operatingCashFlow != null && q.capitalExpenditures != null) {
@@ -2883,7 +2925,8 @@ export function StockIntelligenceScreen() {
               return (q.operatingCashFlow ?? q.netIncome ?? 0) / 1e9;
             });
             const opSeries = fmpQ.map((q) => (q.operatingIncome ?? q.netIncome ?? 0) / 1e9);
-            const debtSeries = fmpQ.map((q) => (q.longTermDebt ?? 0) / 1e9);
+            // Total debt (short + long term + leases), as quote pages report it — not long-term only.
+            const debtSeries = fmpQ.map((q) => (q.totalDebt ?? q.longTermDebt ?? 0) / 1e9);
             fsr = [revSeries, epsSeries, gmSeries, fcfSeries, opSeries, debtSeries];
             QL = [
               `${fmpQ[0].fiscalPeriod || "Q"} '${(fmpQ[0].fiscalYear || "").slice(-2)}`,
@@ -2959,17 +3002,22 @@ export function StockIntelligenceScreen() {
           const enterpriseVal = (mcapNum != null && latestDebt != null && latestCash != null)
             ? mcapNum + latestDebt - latestCash
             : null;
-          const realEvEbitda = (enterpriseVal != null && ttmEbitda != null && Number.isFinite(ttmEbitda) && ttmEbitda > 0)
+          const realEvEbitda = (!isBank && enterpriseVal != null && ttmEbitda != null && Number.isFinite(ttmEbitda) && ttmEbitda > 0)
             ? enterpriseVal / ttmEbitda
             : null;
 
           const ttmFcf = computeTtmFcf(fmpQ);
-          const realFcfYield = (ttmFcf != null && mcapNum != null && Number.isFinite(mcapNum) && mcapNum > 0)
+          const realFcfYield = (!isBank && ttmFcf != null && mcapNum != null && Number.isFinite(mcapNum) && mcapNum > 0)
             ? (ttmFcf / mcapNum) * 100
             : null;
 
-          const realPeg = (stock.fpe != null && realFundGrowth?.epsYoy != null && Number.isFinite(realFundGrowth.epsYoy) && realFundGrowth.epsYoy > 0)
-            ? stock.fpe / realFundGrowth.epsYoy
+          // PEG = trailing P/E ÷ expected EPS growth (next fiscal year's estimate
+          // vs the year in progress) — not one quarter's volatile y/y change.
+          const expGrowth = siFacts.fwdEps != null && siFacts.nextFyEps != null && siFacts.fwdEps > 0
+            ? (siFacts.nextFyEps / siFacts.fwdEps - 1) * 100
+            : null;
+          const realPeg = (livePe != null && livePe > 0 && expGrowth != null && expGrowth > 0)
+            ? livePe / expGrowth
             : null;
 
           const evLabel = latestQ && !hasTotalDebt && latestQ.longTermDebt != null ? "EV/EBITDA (LT Debt)" : "EV/EBITDA";
@@ -3284,7 +3332,7 @@ export function StockIntelligenceScreen() {
                   ))}
                 </div>
                 <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-                  Price trades above rising 50-day and 200-day moving averages with constructive consolidation following the last momentum breakout.
+                  {trendRead(siFacts.price, siFacts.sma50, siFacts.sma200)}
                 </div>
               </div>
 
@@ -3343,6 +3391,12 @@ export function StockIntelligenceScreen() {
                   return Math.round((targetDate.getTime() - usTodayStart) / (1000 * 60 * 60 * 24));
                 }
               }
+              const ymd = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+              if (ymd) {
+                // A calendar day, not an instant: never shift it through a time zone.
+                const targetDate = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+                return Math.round((targetDate.getTime() - usTodayStart) / (1000 * 60 * 60 * 24));
+              }
             }
             const d = new Date(dateInput);
             if (isNaN(d.getTime())) return 0;
@@ -3360,9 +3414,7 @@ export function StockIntelligenceScreen() {
                 return trimmed;
               }
             }
-            const d = new Date(dateInput);
-            if (isNaN(d.getTime())) return String(dateInput);
-            return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+            return fmtMarketDate(dateInput);
           };
 
           // 1. EARNINGS (FMP Live Earnings Feed & Financials)
@@ -3507,9 +3559,11 @@ export function StockIntelligenceScreen() {
           });
 
           // 6. MARKET-WIDE CALENDAR SCHEDULE (Options expiration, FOMC rate decisions)
+          const opexIso = nextMonthlyOpex();
+          const fomcIso = nextFomcDecision();
           const marketScheduleEvents: typeof liveCatalystItems = [
-            { date: "Oct 25", cat: "Macro", ev: "Monthly options expiration (OpEx)", note: "Exchange-wide monthly options contract settlement session.", imp: "LOW", dir: "Neutral", dd: calcDd("Oct 25"), sourceBadge: "CALENDAR" },
-            { date: "Oct 29", cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Federal Open Market Committee policy announcement and press conference.", imp: "HIGH", dir: "Risk", dd: calcDd("Oct 29"), sourceBadge: "FED" },
+            { date: fmtMarketDate(opexIso), cat: "Macro", ev: "Monthly options expiration (OpEx)", note: "Exchange-wide monthly options contract settlement session.", imp: "LOW", dir: "Neutral", dd: calcDd(opexIso), sourceBadge: "CALENDAR" },
+            ...(fomcIso ? [{ date: fmtMarketDate(fomcIso), cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Federal Open Market Committee policy announcement and press conference.", imp: "HIGH" as const, dir: "Risk" as const, dd: calcDd(fomcIso), sourceBadge: "FED" }] : []),
           ];
 
           const MAX_DAYS = 3650;
