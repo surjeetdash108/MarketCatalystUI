@@ -5,6 +5,7 @@ import { StockScreenEmbed } from "../shell";
 // import { useIQActions, StockScreenEmbed } from "../shell";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
+import { useLiveQuotes } from "../live-quotes-context";
 import { DataState, NotAvailable, VendorTag, StockLogo, hashStr, fmt, sign, cls } from "../utils";
 // import type { AiInfraTheme, AiInfraThemeDetail, AiInfraCompany, AiInfraCapBucket, CompanyDoc } from "../types";
 import type { AiInfraTheme, AiInfraThemeDetail, AiInfraCompany, AiInfraCapBucket } from "../types";
@@ -644,6 +645,8 @@ export function AiInfrastructureScreen() {
   }, []);
 
   const { data: themes, loading, error } = useApiList<AiInfraTheme>("/market-data/ai-infrastructure");
+  // Live day change for each tile's sample tickers (the tiles showed names only).
+  const tileQuotes = useLiveQuotes(themes.flatMap(t => t.sampleTickers));
 
   if (themeKey) {
     return (
@@ -826,6 +829,12 @@ export function AiInfrastructureScreen() {
                               }}
                             >
                               {tk}
+                              {(() => {
+                                const pc = tileQuotes.get(tk)?.pctChange;
+                                return pc != null ? (
+                                  <span style={{ marginLeft: 5, color: pc > 0 ? "var(--up)" : pc < 0 ? "var(--down)" : "var(--text-dim-solid)" }}>{sign(pc)}</span>
+                                ) : null;
+                              })()}
                             </span>
                           ))}
                           {/* The chips are only the largest few; say how many

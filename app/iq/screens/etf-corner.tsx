@@ -201,6 +201,20 @@ export function EtfMarketFunds() {
   const pagedFunds = useMemo(() => {
     return filteredFunds.slice(startIdx, endIdx);
   }, [filteredFunds, startIdx, endIdx]);
+  // Live price + day change for the funds on screen (the lists showed size only).
+  const fundSymbols = useMemo(() => pagedFunds.map(f => f.symbol), [pagedFunds]);
+  const fundQuotes = useLiveQuotes(fundSymbols);
+  const fundPx = (sym: string) => {
+    const q = fundQuotes.get(sym);
+    return (
+      <span style={{ fontFamily: "var(--f-mono)", fontSize: ".74rem", whiteSpace: "nowrap", textAlign: "right" }}>
+        <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{fmtPrice(q?.price)}</span>
+        {q?.pctChange != null && (
+          <span className={cls(q.pctChange)} style={{ marginLeft: 6 }}>{arr(q.pctChange)} {sign(q.pctChange)}</span>
+        )}
+      </span>
+    );
+  };
 
   /*
    * ETF DETAIL VIEW (for top 16 popular ETF cards)
@@ -577,6 +591,8 @@ export function EtfMarketFunds() {
                               </span>
                             )}
 
+                            {fundPx(f.symbol)}
+
                             <span
                               className="etf-full-row-action"
                               style={{
@@ -764,7 +780,7 @@ export function EtfMarketFunds() {
                               style={{
                                 width: "100%",
                                 display: "grid",
-                                gridTemplateColumns: "38px minmax(0, 1fr) auto",
+                                gridTemplateColumns: "38px minmax(0, 1fr) auto auto",
                                 alignItems: "center",
                                 gap: 14,
                                 padding: "9px 10px",
@@ -833,6 +849,7 @@ export function EtfMarketFunds() {
                                   {f.badge}
                                 </span>
                               )}
+                              {fundPx(f.symbol)}
                             </button>
                           );
                         })
