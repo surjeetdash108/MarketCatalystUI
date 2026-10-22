@@ -1,3 +1,4 @@
+import { fmtMarketDate } from "../calendar-range";
 import { StockItem, DetailStock, SITab, UpcomingEvent, MajorSixMonthEvent } from "./types";
 export type { MajorSixMonthEvent };
 
@@ -194,8 +195,10 @@ const compactUsd = (v: number) => {
 };
 
 /** Forward P/E on the current-year consensus EPS, when both are positive. */
+/** Forward P/E on the NEXT fiscal year's EPS estimate (Yahoo's basis), else the year in progress. */
 export function forwardPe(f: SiFacts): number | null {
-  return has(f.price) && has(f.fwdEps) && f.fwdEps > 0 ? +(f.price / f.fwdEps).toFixed(1) : null;
+  const eps = has(f.nextFyEps) && f.nextFyEps > 0 ? f.nextFyEps : f.fwdEps;
+  return has(f.price) && has(eps) && eps > 0 ? +(f.price / eps).toFixed(1) : null;
 }
 
 type Driver = [cat: string, name: string, value: string, score: number, flags: string, dd: number];
@@ -522,7 +525,9 @@ export function thesisTargets(t: string, dir: "Bull" | "Bear", hz: string, run: 
   const base = at(base12);
   const up = at(bull12);
   const dn = at(bear12);
-  const target = bull ? base : Math.min((dn + base) / 2, p * 0.94);
+  // A long thesis needs its target above the price (XOM: $172 target under a
+  // $177 price on a "bullish" thesis) — mirrors the bear case's floor below it.
+  const target = bull ? Math.max((up + base) / 2, p * 1.06) : Math.min((dn + base) / 2, p * 0.94);
   const lvl = (hz === "12M" ? P.sup2 : P.sup) ?? p * 0.95;
   const stop = bull ? Math.min(lvl * 0.985, p * 0.95) : Math.max((P.res ?? p * 1.05) * 1.015, p * 1.05);
   return { target, stop, base, up, dn, src: parts.map((x) => x.src), revAdj, lvl, f };
@@ -721,6 +726,8 @@ export function getSixMonthMajorEvents(
   bars?: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }>,
   quarters?: any[] | null,
   news?: any[] | null,
+  /** Report-dated EPS history (financialsDoc.epsHistory) — the real report days. */
+  reports?: Array<{ date: string; fiscalYear: number; fiscalPeriod: string; epsActual: number | null; epsEstimate: number | null }> | null,
 ): MajorSixMonthEvent[] {
   if (!bars || bars.length < 15) return [];
   const stockName = s.name || sym;
@@ -744,19 +751,32 @@ export function getSixMonthMajorEvents(
   }
 
   return selected.map((m, i) => {
-    const dateStr = new Date(m.t).toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+    const dateStr = fmtMarketDate(m.t, { month: "short", day: "2-digit" });
     const fr = +(m.idx / (bars.length - 1)).toFixed(2);
     const retFmt = `${m.ret >= 0 ? "+" : "−"}${Math.abs(m.ret).toFixed(2)}%`;
 
-    const q = quarters?.find((x: any) => {
-      const qd = x.filingDate || x.endDate;
-      if (!qd) return false;
-      return Math.abs(new Date(qd + "T00:00:00Z").getTime() - m.t) <= 4 * 86_400_000;
+    // An earnings move is the report day itself (before-open report) or the
+    // next session (after-close report, incl. over a weekend): 0–3 days after
+    // the REPORT date. The 10-Q filing date (±4 days) both missed real report
+    // moves (COST Sep 25) and claimed moves made before a report (NEE Jul 21).
+    const moveDay = Date.parse(`${new Date(m.t).toISOString().slice(0, 10)}T00:00:00Z`);
+    const rep = (reports ?? []).find((r) => {
+      const d = Date.parse(`${r.date}T00:00:00Z`);
+      return Number.isFinite(d) && moveDay - d >= 0 && moveDay - d <= 3 * 86_400_000;
     });
+    const q = rep
+      ? quarters?.find((x) => String(x.fiscalYear) === String(rep.fiscalYear) && x.fiscalPeriod === rep.fiscalPeriod) ?? {}
+      : !reports?.length
+        ? quarters?.find((x: any) => {
+            const qd = x.filingDate || x.endDate;
+            if (!qd) return false;
+            return Math.abs(new Date(qd + "T00:00:00Z").getTime() - m.t) <= 4 * 86_400_000;
+          })
+        : undefined;
     if (q) {
-      const period = [q.fiscalPeriod, q.fiscalYear].filter(Boolean).join(" ") || "Quarterly";
-      const eps = q.epsActualReported ?? q.epsActual ?? null;
-      const est = q.epsEstimateReported ?? q.epsEstimate ?? null;
+      const period = rep ? `${rep.fiscalPeriod} ${rep.fiscalYear}` : [q.fiscalPeriod, q.fiscalYear].filter(Boolean).join(" ") || "Quarterly";
+      const eps = rep?.epsActual ?? q.epsActualReported ?? q.epsActual ?? null;
+      const est = rep?.epsEstimate ?? q.epsEstimateReported ?? q.epsEstimate ?? null;
       const verdict = eps != null && est != null ? (eps >= est ? "EPS beat" : "EPS miss") : null;
       const facts = [
         q.revenue != null ? `revenue $${(q.revenue / 1e9).toFixed(2)}B` : null,
@@ -773,18 +793,27 @@ export function getSixMonthMajorEvents(
       };
     }
 
-    const n = (news || []).find((x: any) => {
-      const pub = x.publishedAt || x.date;
-      if (!pub) return false;
-      const ms = typeof pub === "number" ? pub : new Date(pub).getTime();
-      return Math.abs(ms - m.t) <= 3 * 86_400_000;
-    });
+    // A headline can only explain a move if it came out before the session
+    // closed: from the day before the move through the move day itself (ET).
+    // Allowing articles up to 3 days AFTER pinned NEE's Jul 24-25 "after its
+    // latest earnings report" piece onto its Jul 22 move. Closest one wins.
+    const sessionEnd = moveDay + 86_400_000 + 4 * 3_600_000; // midnight ET the next day
+    const sessionStartPrev = moveDay - 86_400_000;
+    const n = (news || [])
+      .map((x: any) => {
+        const pub = x.publishedAt || x.date;
+        const ms = !pub ? NaN : typeof pub === "number" ? pub : new Date(pub).getTime();
+        return { x, ms };
+      })
+      .filter(({ ms }) => Number.isFinite(ms) && ms >= sessionStartPrev && ms < sessionEnd)
+      .sort((a, b) => Math.abs(a.ms - moveDay) - Math.abs(b.ms - moveDay))[0]?.x;
     const title = n ? String(n.headline ?? n.title ?? "") : "";
     if (title) {
       const lower = title.toLowerCase();
+      // "Earnings" only when a report actually fell on this move (handled
+      // above); an article that merely mentions earnings is company news.
       const cat: MajorSixMonthEvent["category"] =
         /target|rating|upgrade|downgrade|analyst/.test(lower) ? "Analyst"
-        : /earnings|revenue|results|guidance/.test(lower) ? "Earnings"
         : /product|launch|platform|unveil/.test(lower) ? "Product"
         : "Corporate";
       return {
@@ -804,7 +833,7 @@ export function getSixMonthMajorEvents(
       label: `${retFmt} session move`,
       category: "Macro" as const,
       mv: +m.ret.toFixed(2),
-      details: "Largest move in this stretch; no earnings report or headline found within 3 days of it.",
+      details: "Largest move in this stretch; no earnings report or same-day headline found for it.",
       fr,
     };
   });
