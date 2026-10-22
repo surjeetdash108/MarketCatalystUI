@@ -10,6 +10,7 @@ import { useBackendBars } from "../hooks/useBackendBars";
 import type { InsiderTxDoc, CompanyDoc, OwnershipDoc } from "../types";
 import { useApiResource } from "../hooks/useApiResource";
 import type { Stock13FResponse } from "../stock-13f-view";
+import { etTodayIso, fmtMarketDate } from "../calendar-range";
 
 // ---- Constants & Theme Colors (matches 13F & Insider standalone HTML) ----
 const UP = "var(--up, #3fd68a)";
@@ -39,6 +40,8 @@ interface TradeItem {
   px: number;
   stake: number | null;
   ago: number;
+  /** Transaction date as filed (YYYY-MM-DD). */
+  date: string;
   value: number;
   /** % move from the trade price to the current price; null without a live price. */
   since: number | null;
@@ -216,6 +219,106 @@ const tagOf = (s: CompanyStats): [string, string, string] =>
     : ["Quiet", "var(--text-pure-dim)", "var(--surface-3)"];
 
 // ---- Main Component ----
+
+/** Form 4 rows → trade items (priced, within 6 months, never future-dated). */
+function toTradeItems(txs: InsiderTxDoc[], priceOf: (t: string) => number | null): TradeItem[] {
+  const list: TradeItem[] = [];
+  const now = Date.now();
+  for (const tx of txs) {
+    if (!tx.ticker || !tx.shares || !tx.pricePerShare) continue;
+    const t = tx.ticker.toUpperCase().trim();
+    const txTime = Date.parse(tx.transactionDate);
+    if (!Number.isFinite(txTime)) continue;
+    // A trade dated after today is a mis-keyed filing date, not a real trade.
+    if (tx.transactionDate.slice(0, 10) > etTodayIso()) continue;
+    const ago = Math.max(0, Math.round((now - txTime) / 86400000));
+    if (ago > 180) continue; // within 6M
+
+    const role = tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% owner");
+    const isCs = /CEO|CFO|COO|CTO|PRESIDENT|EXECUTIVE|CHIEF/i.test(role) ? 1 : 0;
+    const code = tx.transactionCode || (tx.acquiredOrDisposed === "A" ? "P" : "S");
+    const curPx = priceOf(t);
+    // Stake change from the filing: shares traded vs. holdings before the trade.
+    const after = tx.sharesOwnedAfter ?? null;
+    const before = after == null ? null : tx.acquiredOrDisposed === "D" ? after + tx.shares : after - tx.shares;
+    const stake = before == null ? null : before <= 0 ? null : ((tx.acquiredOrDisposed === "D" ? -1 : 1) * tx.shares / before) * 100;
+    const filedTime = tx.filingDate ? Date.parse(tx.filingDate) : NaN;
+
+    list.push({
+      t,
+      name: tx.ownerName || "Insider",
+      role,
+      cs: isCs,
+      code,
+      plan: 0, // the feed carries no 10b5-1 flag
+      sh: tx.shares,
+      px: tx.pricePerShare,
+      stake,
+      ago,
+      date: tx.transactionDate.slice(0, 10),
+      value: tx.shares * tx.pricePerShare,
+      since: curPx != null && tx.pricePerShare > 0 ? ((curPx / tx.pricePerShare) - 1) * 100 : null,
+      filedLag: Number.isFinite(filedTime) ? Math.max(0, Math.round((filedTime - txTime) / 86400000)) : null,
+    });
+  }
+  return list;
+}
+
+/** One stock's insider + 13F rollup from its trades in the window. */
+function statsFor(t: string, rs: TradeItem[], f: F13Tuple | undefined): CompanyStats {
+  const buys = rs.filter((r) => r.code === "P");
+  const off = rs.filter((r) => r.code === "S" && !r.plan);
+  const plan = rs.filter((r) => r.code === "S" && r.plan);
+
+  const buyV = buys.reduce((a, r) => a + r.value, 0);
+  const offV = off.reduce((a, r) => a + r.value, 0);
+  const planV = plan.reduce((a, r) => a + r.value, 0);
+
+  const buyers = new Set(buys.map((r) => r.name)).size;
+  const csBuy = buys.some((r) => r.cs === 1);
+  const last = rs.length ? Math.min(...rs.map((r) => r.ago)) : null;
+
+
+  const iS =
+    buyers >= 3
+      ? 5
+      : buys.length && csBuy
+      ? 4
+      : buys.length
+      ? 3
+      : off.length
+      ? offV > 1e8
+        ? -4
+        : -3
+      : plan.length
+      ? -1
+      : 0;
+
+  return {
+    t,
+    rs,
+    buys,
+    off,
+    plan,
+    buyV,
+    offV,
+    planV,
+    buyers,
+    csBuy,
+    last,
+    add: f?.add ?? 0,
+    trim: f?.trim ?? 0,
+    newPos: f?.newPos ?? 0,
+    exits: f?.exits ?? 0,
+    net: f?.net ?? 0,
+    holders: f?.holders ?? 0,
+    own: f?.own ?? "—",
+    hasF13: !!f,
+    netFunds: f ? f.add - f.trim : 0,
+    iS,
+  };
+}
+
 export function InsiderScreen() {
   const { openStockFull } = useIQActions();
 
@@ -296,45 +399,10 @@ export function InsiderScreen() {
   }, [liveQuotes, allTickers, liveCompanies]);
 
   // Form 4 trades — real filings only.
-  const tradesList: TradeItem[] = useMemo(() => {
-    const list: TradeItem[] = [];
-    const now = Date.now();
-    for (const tx of liveInsiderTxRaw) {
-      if (!tx.ticker || !tx.shares || !tx.pricePerShare) continue;
-      const t = tx.ticker.toUpperCase().trim();
-      const txTime = Date.parse(tx.transactionDate);
-      if (!Number.isFinite(txTime)) continue;
-      const ago = Math.max(0, Math.round((now - txTime) / 86400000));
-      if (ago > 180) continue; // within 6M
-
-      const role = tx.officerTitle || (tx.isOfficer ? "Officer" : "Director / 10% owner");
-      const isCs = /CEO|CFO|COO|CTO|PRESIDENT|EXECUTIVE|CHIEF/i.test(role) ? 1 : 0;
-      const code = tx.transactionCode || (tx.acquiredOrDisposed === "A" ? "P" : "S");
-      const curPx = companiesMap.get(t)?.price ?? null;
-      // Stake change from the filing: shares traded vs. holdings before the trade.
-      const after = tx.sharesOwnedAfter ?? null;
-      const before = after == null ? null : tx.acquiredOrDisposed === "D" ? after + tx.shares : after - tx.shares;
-      const stake = before == null ? null : before <= 0 ? null : ((tx.acquiredOrDisposed === "D" ? -1 : 1) * tx.shares / before) * 100;
-      const filedTime = tx.filingDate ? Date.parse(tx.filingDate) : NaN;
-
-      list.push({
-        t,
-        name: tx.ownerName || "Insider",
-        role,
-        cs: isCs,
-        code,
-        plan: 0, // the feed carries no 10b5-1 flag
-        sh: tx.shares,
-        px: tx.pricePerShare,
-        stake,
-        ago,
-        value: tx.shares * tx.pricePerShare,
-        since: curPx != null && tx.pricePerShare > 0 ? ((curPx / tx.pricePerShare) - 1) * 100 : null,
-        filedLag: Number.isFinite(filedTime) ? Math.max(0, Math.round((filedTime - txTime) / 86400000)) : null,
-      });
-    }
-    return list;
-  }, [companiesMap, liveInsiderTxRaw]);
+  const tradesList: TradeItem[] = useMemo(
+    () => toTradeItems(liveInsiderTxRaw, (t) => companiesMap.get(t)?.price ?? null),
+    [companiesMap, liveInsiderTxRaw],
+  );
 
   // 13F rollups — FMP's own counts; a ticker without one has no entry.
   const f13Map = useMemo(() => {
@@ -358,63 +426,11 @@ export function InsiderScreen() {
   }, [instOwnRaw]);
 
   // Compute stats for all companies in the window
-  const allStats: CompanyStats[] = useMemo(() => {
-    return Array.from(companiesMap.keys()).map((t) => {
-      const rs = tradesList.filter((r) => r.t === t && r.ago <= rangeDays);
-      const buys = rs.filter((r) => r.code === "P");
-      const off = rs.filter((r) => r.code === "S" && !r.plan);
-      const plan = rs.filter((r) => r.code === "S" && r.plan);
-
-      const buyV = buys.reduce((a, r) => a + r.value, 0);
-      const offV = off.reduce((a, r) => a + r.value, 0);
-      const planV = plan.reduce((a, r) => a + r.value, 0);
-
-      const buyers = new Set(buys.map((r) => r.name)).size;
-      const csBuy = buys.some((r) => r.cs === 1);
-      const last = rs.length ? Math.min(...rs.map((r) => r.ago)) : null;
-
-      const f = f13Map.get(t);
-
-      const iS =
-        buyers >= 3
-          ? 5
-          : buys.length && csBuy
-          ? 4
-          : buys.length
-          ? 3
-          : off.length
-          ? offV > 1e8
-            ? -4
-            : -3
-          : plan.length
-          ? -1
-          : 0;
-
-      return {
-        t,
-        rs,
-        buys,
-        off,
-        plan,
-        buyV,
-        offV,
-        planV,
-        buyers,
-        csBuy,
-        last,
-        add: f?.add ?? 0,
-        trim: f?.trim ?? 0,
-        newPos: f?.newPos ?? 0,
-        exits: f?.exits ?? 0,
-        net: f?.net ?? 0,
-        holders: f?.holders ?? 0,
-        own: f?.own ?? "—",
-        hasF13: !!f,
-        netFunds: f ? f.add - f.trim : 0,
-        iS,
-      };
-    });
-  }, [companiesMap, tradesList, f13Map, rangeDays]);
+  const allStats: CompanyStats[] = useMemo(
+    () => Array.from(companiesMap.keys()).map((t) =>
+      statsFor(t, tradesList.filter((r) => r.t === t && r.ago <= rangeDays), f13Map.get(t))),
+    [companiesMap, tradesList, f13Map, rangeDays],
+  );
 
   // Focus: the user's pick, else the top of the "Most notable" list.
   const effectiveFocus = focusTicker || (LISTS[0].pick(allStats)[0]?.t ?? "");
@@ -489,7 +505,18 @@ export function InsiderScreen() {
   const { data: focusOwnership } = useApiResource<OwnershipDoc>(
     effectiveFocus ? `/live/ownership?ticker=${encodeURIComponent(effectiveFocus)}` : null,
   );
-  const focusBase = statsMap.get(effectiveFocus) || null;
+  // The market-wide feed keeps only recent sales and is page-capped, so the
+  // focused stock's counts come from its own complete Form 4 feed.
+  const { data: focusTxRaw } = useApiList<InsiderTxDoc>(
+    effectiveFocus ? `/market-data/insider-transactions?ticker=${encodeURIComponent(effectiveFocus)}` : null,
+  );
+  const focusBase = useMemo(() => {
+    const base = statsMap.get(effectiveFocus) || null;
+    const own = focusTxRaw.filter((x) => (x.ticker || "").toUpperCase().trim() === effectiveFocus);
+    if (!base || own.length === 0) return base;
+    const rows = toTradeItems(own, (t) => companiesMap.get(t)?.price ?? null).filter((r) => r.ago <= rangeDays);
+    return statsFor(effectiveFocus, rows, f13Map.get(effectiveFocus));
+  }, [statsMap, effectiveFocus, focusTxRaw, companiesMap, f13Map, rangeDays]);
   const focusInst = focusOwnership?.ticker === effectiveFocus ? focusOwnership.institutional : null;
   const focusStats: CompanyStats | null = focusBase && focusInst && focusInst.holders != null
     ? {
@@ -634,11 +661,7 @@ export function InsiderScreen() {
       const fill = isBuy ? UP : isOff ? DN : "var(--surface-1)";
       const label = isBuy ? "B" : isOff ? "S" : "";
 
-      const tradeDate = new Date(Date.now() - r.ago * 86400000).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
+      const tradeDate = fmtMarketDate(r.date, { month: "short", day: "numeric", year: "numeric" });
 
       return {
         key: mKey,
@@ -678,8 +701,7 @@ export function InsiderScreen() {
           ? "var(--surface-3)"
           : "var(--down-dim, rgba(248,113,113,.12))";
         const typeLabel = isBuy ? "Open-market buy" : isEx ? "Option exercise" : "Open-market sale";
-        const filingIso = new Date(Date.now() - r.ago * 86400000).toISOString().slice(0, 10);
-        const filingDate = formatUsDate(filingIso);
+        const filingDate = formatUsDate(r.date);
 
         return {
           ...r,
