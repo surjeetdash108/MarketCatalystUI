@@ -1191,13 +1191,13 @@ export function MoversScreen() {
             Unusual Volume and the two weekly ones, which draw from the tracked
             universe and rank by RVOL or by the 5-day move. It was stating the
             wrong source AND the wrong ranking on three tabs out of five. */}
-        {((tab === "biggest" ? biggestCount : tab === "active" ? activeCount : liveCount) > 0) && (
+        {((tab === "biggest" ? biggestCount : tab === "active" ? activeCount : searched.length) > 0) && (
           <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
             {tab === "biggest"
               ? `${biggestCount} names · top 20 gainers + top 20 losers by sector · ${QUOTE_DELAY_LABEL}`
               : tab === "active"
               ? `${activeCount} names · top volume + top relative volume by sector · ${QUOTE_DELAY_LABEL}`
-              : `${liveCount} names · ${
+              : `${searched.length} names · ${
                   isWeekTab(tab) ? "tracked universe · ranked by 5-day move"
                   : tab === "vol" ? "tracked universe · ranked by relative volume"
                   : "top 100 gainers + 100 losers · ranked by session move"
