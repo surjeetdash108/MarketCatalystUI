@@ -145,23 +145,16 @@ export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
  * per theme).
  */
 function BrandLogo({ height = 28 }: { height?: number }) {
+  const width = Math.round(height * (66 / 60));
   return (
-    <span className="brand-logo" style={{ gap: Math.round(height * 0.3), lineHeight: 1 }}>
-      <svg viewBox="0 0 44 44" width={height} height={height} aria-hidden="true" style={{ flexShrink: 0 }}>
-        <defs>
-          <linearGradient id="mcBrandGrad" x1="4" y1="40" x2="40" y2="4" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#0D3B2E" />
-            <stop offset="1" style={{ stopColor: "var(--brand)" }} />
-          </linearGradient>
-        </defs>
-        <rect x="5" y="22" width="6" height="17" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="15" y="28" width="6" height="11" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="25" y="14" width="6" height="25" rx="2" fill="url(#mcBrandGrad)" />
-        {/* Peak-valley-peak "M" silhouette across the three bar tops, continuing
-            into the arrowhead — not a smooth ascending staircase. */}
-        <path d="M8 22 L18 28 L28 14 L36 6" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M40 2 L36 11 L31 6 Z" fill="url(#mcBrandGrad)" />
-      </svg>
+    <span className="brand-logo" style={{ gap: Math.round(height * 0.3), lineHeight: 1, display: "inline-flex", alignItems: "center" }}>
+      <img
+        src="/logo-mark.webp"
+        alt="MarketCatalyst"
+        width={width}
+        height={height}
+        style={{ height, width: "auto", display: "block", flexShrink: 0 }}
+      />
       <span style={{
         fontFamily: "var(--f-display), system-ui, sans-serif",
         fontWeight: 800, fontSize: Math.round(height * 0.68), letterSpacing: "-0.02em", whiteSpace: "nowrap",

@@ -53,12 +53,13 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
 
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "24px" }}>
-            <span className="hw-logo" style={{ width: 46, height: 46, borderRadius: 13, boxShadow: "0 0 28px -6px var(--brand)" }}>
-              <svg viewBox="0 0 24 24" width={22} height={22} fill="none">
-                <path d="M3 17l5-6 4 4 6-9" stroke="var(--on-brand)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="20" cy="5.5" r="2.4" fill="var(--on-brand)" />
-              </svg>
-            </span>
+            <img
+              src="/logo-mark.webp"
+              alt="MarketCatalyst"
+              width={53}
+              height={48}
+              style={{ display: "block", height: 48, width: "auto", filter: "drop-shadow(0 0 24px rgba(0, 209, 143, 0.45))" }}
+            />
           </div>
 
           {/* Word mark */}
@@ -119,12 +120,13 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
           <div className="lp-auth-card">
             {/* Stays put while the form scrolls under it. */}
             <Link href="/" className="lp-auth-brand">
-              <span className="hw-logo" style={{ width: 26, height: 26, borderRadius: 7 }}>
-                <svg viewBox="0 0 24 24" width={14} height={14} fill="none">
-                  <path d="M3 17l5-6 4 4 6-9" stroke="var(--on-brand)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="20" cy="5.5" r="2.4" fill="var(--on-brand)" />
-                </svg>
-              </span>
+              <img
+                src="/logo-mark.webp"
+                alt="MarketCatalyst"
+                width={26}
+                height={24}
+                style={{ display: "block", height: 24, width: "auto", flexShrink: 0 }}
+              />
               <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: ".95rem", color: "var(--text-hi)" }}>
                 MarketCatalyst
               </span>

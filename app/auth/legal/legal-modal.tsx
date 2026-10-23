@@ -60,6 +60,13 @@ export function LegalModal({ type, onClose }: LegalModalProps) {
         {/* Modal Header */}
         <div className="legal-modal-head">
           <div className="legal-modal-title" id="legal-modal-heading">
+            <img
+              src="/logo-mark.webp"
+              alt="MarketCatalyst"
+              width={24}
+              height={22}
+              style={{ display: "block", height: 22, width: "auto", flexShrink: 0 }}
+            />
             <span>{isTerms ? "Terms of Service" : "Privacy Policy"}</span>
             <span className="legal-modal-badge">Oct 22, 2026</span>
           </div>
