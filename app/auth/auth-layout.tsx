@@ -200,13 +200,13 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
           gap: 48px;
           align-items: center;
           justify-content: center;
-          max-width: 1140px;
+          max-width: 1240px;
           width: 100%;
           position: relative;
           z-index: 1;
         }
         .lp-auth-left { flex: 1 1 0; max-width: 560px; text-align: center; }
-        .lp-auth-form { flex: 0 0 480px; width: 480px; max-width: 94vw; }
+        .lp-auth-form { flex: 0 0 600px; width: 600px; max-width: 94vw; }
 
         .lp-auth-card {
           display: flex;
