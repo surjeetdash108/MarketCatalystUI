@@ -29,6 +29,7 @@ import { Stock13FFilingsView } from "../stock-13f-view";
 import { StockAnalystActionsView } from "../stock-analyst-actions-view";
 import { StockEarningsEpsSales } from "../stock-earnings-eps-sales";
 import { useSI } from "../si/si-context";
+import { resolveDividends } from "../dividend.util";
 
 const POPULAR_16_ETFS = new Set([
   "CIBR", "DIA", "GLD", "HACK", "HYG", "IBIT", "IWM", "QQEW",
@@ -1231,12 +1232,25 @@ export function StockScreen({
   const offHigh52 = keyStats?.pctFromHigh52 ?? null;
   const offLow52 = keyStats?.pctFromLow52 ?? null;
   const rsiSeries = liveCompany?.rsi14Series ?? null;
-  const divPerShare = keyStats?.dividendPerShare ?? null;
   // Headline quote (regular session + after hours), shared with the panel
   // charts so both print the same number. Kept separate from `p` so the many
   // derived stats below (EPS, 52w positioning) stay pinned to the snapshot.
   const hq = useHeadlineQuote(sym, live, { price: data.price, pctChange: data.pctChange });
   const { dispPrice } = hq;
+
+  const divMetrics = resolveDividends({
+    dh: dividendHistory,
+    price: dispPrice ?? data.price,
+    fallbackDivPerShare: keyStats?.dividendPerShare,
+    fallbackYield: data.dividendYield,
+  });
+  const divPerShare = divMetrics.forwardPerShare;
+
+  const isErConfirmed = Boolean(
+    (liveCompany as any)?.earningsConfirmed ??
+    (keyStats as any)?.earningsConfirmed ??
+    symEvents.find(e => e.date === erDate && (e as any).confirmed)
+  );
 
   // v is in $B. Below $1B, show millions so micro-caps (e.g. GAUZ ≈ $9M) read
   // "$9.1M" rather than rounding to a meaningless "$0.0B".
@@ -1857,9 +1871,9 @@ export function StockScreen({
             <div className="keystats">
               {([
                 ["Mkt Cap",        mc != null ? cap(mc) : null],
-                ["P/E",            data.peRatio != null ? data.peRatio.toFixed(1) : null],
+                ["P/E",            eps != null && eps <= 0 ? "n/a" : (data.peRatio != null ? data.peRatio.toFixed(1) : null)],
                 ["EPS (TTM)",      eps != null ? "$" + eps.toFixed(2) : null],
-                ["Next ER",        erDate],
+                ["Next ER",        erDate !== "—" ? `${fmtDate(erDate)}${!isErConfirmed ? " (Estimated)" : ""}` : null],
                 ["52W Range",      hi != null && lo != null ? "$" + nf(lo) + " – $" + nf(hi) : null],
                 // Distance from the 52-week extremes. Both are computed nightly
                 // and were sitting unused while the range they refer to was
@@ -1869,11 +1883,8 @@ export function StockScreen({
                 ["Avg Vol (20d)",  avgVol20 != null ? nf(avgVol20 / 1e6) + "M" : null],
                 ["Sector",         titleCaseLabel(data.sector)],
                 ["Industry",       titleCaseLabel(data.industry)],
-                // Forward-annualized yield (latest declared rate × frequency ÷
-                // price), per the backend methodology change — the "(fwd)" tag
-                // tells users it's forward, not trailing-twelve-month.
-                ["Div Yield",      data.dividendYield != null ? data.dividendYield.toFixed(2) + "% (fwd)" : null],
-                ["Div / Share",    divPerShare != null ? "$" + divPerShare.toFixed(2) + " (fwd)" : null],
+                ["Div Yield",      divMetrics.isPayer && divMetrics.forwardYieldPct != null ? `${divMetrics.forwardYieldPct.toFixed(2)}% (fwd)` : (divMetrics.isPayer ? null : "None")],
+                ["Div / Share",    divMetrics.isPayer && divMetrics.forwardPerShare != null ? `$${divMetrics.forwardPerShare.toFixed(2)} (fwd)` : (divMetrics.isPayer ? null : "None")],
               ] as [string, string | null][]).map(k => (
                 <div key={k[0]} className="kstat">
                   <div className="k">{k[0]}</div>
@@ -2307,17 +2318,17 @@ export function StockScreen({
         <div className="sd-rowflex">
           {(() => {
             const dh = dividendHistory;
-            const hasReal = !!dh && dh.isPayer;
-            const yieldPct = hasReal ? dh!.yieldPct : null;
-            const annualDiv = hasReal ? (dh!.ttmTotal ?? 0) : 0;
+            const hasReal = divMetrics.isPayer;
+            const yieldPct = divMetrics.forwardYieldPct ?? (hasReal ? dh?.yieldPct : null);
+            const annualDiv = divMetrics.trailingPerShare ?? (hasReal ? (dh?.ttmTotal ?? 0) : 0);
             const payoutRatio = eps != null && eps > 0 && yieldPct != null && yieldPct > 0
               ? Math.min(99, Math.round((annualDiv / eps) * 100)) : null;
-            const growthLabel = hasReal && dh!.cagr5yPct != null
-              ? `${dh!.cagr5yPct >= 0 ? "+" : ""}${dh!.cagr5yPct.toFixed(1)}% / yr`
+            const growthLabel = hasReal && dh?.cagr5yPct != null
+              ? `${dh.cagr5yPct >= 0 ? "+" : ""}${dh.cagr5yPct.toFixed(1)}% / yr`
               : null;
-            const streakLabel = hasReal && dh!.increaseStreakYears > 0 ? ` · ${dh!.increaseStreakYears}-yr streak` : "";
-            const divRows = hasReal
-              ? dh!.history.slice(0, 5).map(h => ({
+            const streakLabel = hasReal && dh && dh.increaseStreakYears > 0 ? ` · ${dh.increaseStreakYears}-yr streak` : "";
+            const divRows = hasReal && dh
+              ? dh.history.slice(0, 5).map(h => ({
                   label: h.exDividendDate ?? "—",
                   perShare: h.amount,
                   note: h.exDividendDate ? `ex ${h.exDividendDate.slice(5)}` : "",
@@ -2329,9 +2340,12 @@ export function StockScreen({
                   <h3>Dividend &amp; split history</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <VendorTag v={["fmp", "polygon"]} />
-                    {dh && (yieldPct != null
-                      ? <span className="pill up">{yieldPct.toFixed(2)}% yield</span>
-                      : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>)}
+                    {hasReal ? (<>
+                      {divMetrics.forwardYieldPct != null && <span className="pill up">{divMetrics.forwardYieldPct.toFixed(2)}% fwd</span>}
+                      {divMetrics.trailingYieldPct != null && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".65rem" }}>{divMetrics.trailingYieldPct.toFixed(2)}% trailing</span>}
+                    </>) : (
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>None</span>
+                    )}
                     {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · FMP</span>}
                     <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                   </div>
@@ -2359,8 +2373,12 @@ export function StockScreen({
                         </div>
                       ))}
                       <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
-                        <span className="mid">Annual ({dh!.ttmPayments} payments)</span>
-                        <span className="r" style={{ color: "var(--text-hi)" }}>${annualDiv.toFixed(2)}/sh</span>
+                        <span className="mid">Forward run-rate</span>
+                        <span className="r" style={{ color: "var(--text-hi)" }}>${divMetrics.forwardPerShare != null ? divMetrics.forwardPerShare.toFixed(2) : annualDiv.toFixed(2)}/sh</span>
+                      </div>
+                      <div className="minirow" style={{ paddingTop: 4 }}>
+                        <span className="mid">Trailing ({dh.ttmPayments ?? 4} payments)</span>
+                        <span className="r" style={{ color: "var(--text-dim-solid)" }}>${annualDiv.toFixed(2)}/sh</span>
                       </div>
                     </>
                   )}
@@ -2622,13 +2640,15 @@ export function StockScreen({
             type Row = { k: string; v: ReactNode | null; delta?: { txt: string; up: boolean } | null };
             const left: Row[] = [
               { k: "Market cap",    v: mc != null ? cap(mc) : null },
-              { k: "P/E ratio",     v: data.peRatio != null ? data.peRatio.toFixed(2) : null },
+              { k: "P/E ratio",     v: eps != null && eps <= 0 ? "n/a" : (data.peRatio != null ? data.peRatio.toFixed(2) : null) },
               { k: "EPS (TTM)",     v: eps != null ? "$" + eps.toFixed(2) : null },
               // Forward-annualized (latest declared rate × frequency ÷ price).
-              { k: "Dividend (fwd)", v: divPerShare != null
-                  ? `$${divPerShare.toFixed(2)}${data.dividendYield != null ? ` (${data.dividendYield.toFixed(2)}%)` : ""}`
-                  : data.dividendYield != null ? data.dividendYield.toFixed(2) + "%" : null },
-              { k: "Ex-dividend date", v: exDiv ? fmtDate(exDiv) : null },
+              { k: "Dividend (fwd)", v: divMetrics.isPayer
+                  ? (divMetrics.forwardPerShare != null
+                      ? `$${divMetrics.forwardPerShare.toFixed(2)}${divMetrics.forwardYieldPct != null ? ` (${divMetrics.forwardYieldPct.toFixed(2)}%)` : ""}`
+                      : divMetrics.forwardYieldPct != null ? divMetrics.forwardYieldPct.toFixed(2) + "%" : null)
+                  : "None" },
+              { k: "Ex-dividend date", v: exDiv ? fmtDate(exDiv) : (divMetrics.isPayer ? null : "None") },
               { k: "Beta",          v: data.beta != null ? data.beta.toFixed(2) : ((keyStats as any)?.beta != null ? Number((keyStats as any).beta).toFixed(2) : ((liveCompany as any)?.beta != null ? Number((liveCompany as any).beta).toFixed(2) : null)) },
               { k: "Avg volume (20D)", v: avgVol20 != null ? Math.round(avgVol20).toLocaleString("en-US") : null },
               { k: "Sector",        v: data.sector ? titleCaseLabel(data.sector) : null },
@@ -2652,7 +2672,7 @@ export function StockScreen({
                   : null },
               { k: "Price target",  v: target != null ? px(target) : null,
                 delta: targetUp != null ? { txt: pct(targetUp), up: targetUp >= 0 } : null },
-              { k: "Earnings date", v: erDate !== "—" ? fmtDate(erDate) : null },
+              { k: "Earnings date", v: erDate !== "—" ? <>{fmtDate(erDate)}{!isErConfirmed && <span className="pill" style={{ marginLeft: 6, fontSize: ".65rem", padding: "1px 5px", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Estimated</span>}</> : null },
             ];
             const col = (rows: Row[]) => (
               <dl className="sd-kv">
@@ -2927,19 +2947,24 @@ export function StockScreen({
 
                   {(() => {
                     const dh = dividendHistory;
-                    const hasReal = !!dh && dh.isPayer;
-                    const yieldPct = hasReal ? dh!.yieldPct : null;
-                    const annualDiv = hasReal ? (dh!.ttmTotal ?? 0) : 0;
+                    const hasReal = divMetrics.isPayer;
+                    const yieldPct = divMetrics.forwardYieldPct ?? (hasReal ? dh?.yieldPct : null);
+                    const annualDiv = divMetrics.trailingPerShare ?? (hasReal ? (dh?.ttmTotal ?? 0) : 0);
                     const payoutRatio = eps != null && eps > 0 && yieldPct != null && yieldPct > 0
                       ? Math.min(99, Math.round((annualDiv / eps) * 100)) : null;
-                    const cagr = hasReal ? dh!.cagr5yPct : null;
+                    const cagr = hasReal && dh ? dh.cagr5yPct : null;
                     return (
                       <div className="card">
                         <div className="card-h">
                           <h3>Dividend history</h3>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <VendorTag v={["fmp", "polygon"]} />
-                            {yieldPct != null && <span className="pill up">{yieldPct.toFixed(2)}% yield</span>}
+                            {hasReal ? (<>
+                              {divMetrics.forwardYieldPct != null && <span className="pill up">{divMetrics.forwardYieldPct.toFixed(2)}% fwd</span>}
+                              {divMetrics.trailingYieldPct != null && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".65rem" }}>{divMetrics.trailingYieldPct.toFixed(2)}% trailing</span>}
+                            </>) : (
+                              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>None</span>
+                            )}
                             <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                           </div>
                         </div>
@@ -2954,9 +2979,9 @@ export function StockScreen({
                               ? <span style={{ color: cagr < 0 ? "var(--down)" : "var(--up)" }}>{cagr >= 0 ? "+" : "−"}{Math.abs(cagr).toFixed(1)}%/yr</span>
                               : "—"}
                             {payoutRatio != null && <> · payout {payoutRatio}%</>}
-                            {dh!.increaseStreakYears > 0 && <> · {dh!.increaseStreakYears}-yr streak</>}
+                            {dh.increaseStreakYears > 0 && <> · {dh.increaseStreakYears}-yr streak</>}
                           </div>
-                          {dh!.history.slice(0, 5).map((h, i) => (
+                          {dh.history.slice(0, 5).map((h, i) => (
                             <div key={(h.exDividendDate ?? "") + i} className="sd-row">
                               <span className="grow num">{h.exDividendDate ?? "—"}</span>
                               <span className="num">{h.amount != null ? `$${h.amount.toFixed(4)}/sh` : "—"}</span>
@@ -2964,7 +2989,11 @@ export function StockScreen({
                             </div>
                           ))}
                           <div className="sd-row">
-                            <span className="grow">Annual ({dh!.ttmPayments} payments)</span>
+                            <span className="grow">Forward run-rate</span>
+                            <span className="num">${divMetrics.forwardPerShare != null ? divMetrics.forwardPerShare.toFixed(2) : annualDiv.toFixed(2)}/sh</span>
+                          </div>
+                          <div className="sd-row">
+                            <span className="grow">Trailing ({dh.ttmPayments ?? 4} payments)</span>
                             <span className="num">${annualDiv.toFixed(2)}/sh</span>
                           </div>
                         </>)}
@@ -3326,7 +3355,7 @@ export function StockScreen({
                                   {peer.marketCap != null ? cap(peer.marketCap) : "N/A"}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
-                                  {peer.peRatio != null ? peer.peRatio.toFixed(1) : "N/A"}
+                                  {peer.peRatio != null ? (peer.peRatio > 0 ? peer.peRatio.toFixed(1) : "n/a") : "N/A"}
                                 </td>
                                 <td style={{ textAlign: "center", padding: "10px 14px" }}>
                                   {peer.rsRating != null ? (

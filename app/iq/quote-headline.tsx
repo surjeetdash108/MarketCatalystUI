@@ -9,7 +9,7 @@
 
 import { fmt, cls, arr } from "./utils";
 import { useBackendMarketStatus } from "./hooks/useBackendMarketStatus";
-import { useLiveQuotes } from "./live-quotes-context";
+import { useLiveQuotes, pairedQuote } from "./live-quotes-context";
 import { useApiResource } from "./hooks/useApiResource";
 import type { UseLiveTickResult } from "./hooks/useLiveTick";
 import type { OHLCBar } from "./candle-chart";
@@ -102,13 +102,17 @@ export function useHeadlineQuote(
   const p = snapshot.price ?? 0;
   const dollar = snapshot.pctChange != null ? Math.abs((snapshot.pctChange / 100) * p) : null;
 
-  const livePrice = sharedQuote?.price ?? live.tick?.price ?? null;
-  const dispPrice = livePrice ?? snapshot.price;
-  const dispPct = sharedQuote?.pctChange ?? live.pct ?? snapshot.pctChange;
+  const paired = pairedQuote(
+    sharedQuote,
+    live.tick ? { price: live.tick.price, pctChange: live.pct } : null,
+    snapshot,
+  );
+  const dispPrice = paired.price;
+  const dispPct = paired.pctChange;
 
   const sharedDollar =
-    sharedQuote?.price != null && sharedQuote.pctChange != null
-      ? Math.abs(sharedQuote.price - sharedQuote.price / (1 + sharedQuote.pctChange / 100))
+    paired.price != null && paired.pctChange != null
+      ? Math.abs(paired.price - paired.price / (1 + paired.pctChange / 100))
       : null;
   const dispDollar = sharedDollar ?? (live.change != null ? Math.abs(live.change) : dollar);
 

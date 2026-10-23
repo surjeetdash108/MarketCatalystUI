@@ -64,10 +64,22 @@ export function VendorTag({ v }: { v: VendorKey | VendorKey[] }) {
 // is no live source yet" — used instead of either (a) silently rendering
 // nothing, which reads as broken, or (b) inventing a plausible-looking number.
 
-/** Inline placeholder for a single removed field (a table cell, a stat, a pill). */
-export function NotAvailable({ label = "N/A" }: { label?: string }) {
+/** Inline placeholder for a single removed or non-applicable field. */
+export function NotAvailable({
+  label = "N/A",
+  title,
+}: {
+  label?: string;
+  title?: string;
+}) {
+  const defaultTitle =
+    label === "None"
+      ? "Does not pay a dividend"
+      : label.toLowerCase() === "n/a"
+      ? "Not applicable"
+      : undefined;
   return (
-    <span className="not-avail" title="No live data source for this yet">
+    <span className="not-avail" title={title ?? defaultTitle}>
       {label}
     </span>
   );

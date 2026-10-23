@@ -14,6 +14,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-context";
 import { pulseFromLive, buildSectorList, tapeItemsToIndexDocs } from "../live-market-indices";
+import { isCommonEquity } from "../universe.util";
 import type {
   LiveMoverDoc, LiveEarningsDoc, CompanyDoc, SectorApiDoc,
   InsiderTxDoc, AnalystConsensusDoc, MarketSentimentDoc, MarketSentimentHistoryDoc, EarningsAnnouncementDoc,
@@ -379,6 +380,7 @@ export function DashboardScreen() {
   const { data: recaps, loading: recapsLoading } = useApiList<RecapDoc>("/market-data/recaps");
   const latestRecap = [...recaps].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0] ?? null;
   const { data: mostSearched, loading: mostSearchedLoading } = useApiResource<{ results: Array<{ ticker: string; count: number }> }>("/live/most-searched-tickers?limit=18");
+  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
   // Dedupe: merge repeated tickers and collapse dual-class share listings
   // (e.g. GOOG & GOOGL for Alphabet, FOX & FOXA for Fox) by matching company
   // name or shared ticker root so the same issuer never appears twice.
@@ -400,6 +402,8 @@ export function DashboardScreen() {
     const issuerToPrimary = new Map<string, string>();
 
     for (const r of mostSearched?.results ?? []) {
+      const c = companyByTicker.get(r.ticker);
+      if (c && !isCommonEquity(c)) continue;
       const issuer = companyNameMap.get(r.ticker) || r.ticker.replace(/\.[AB]$/, "");
       let primaryTicker = issuerToPrimary.get(issuer);
       if (!primaryTicker) {
@@ -424,7 +428,13 @@ export function DashboardScreen() {
   // most recent prior day, so when nothing has reported today the widget is
   // empty rather than showing stale rows. (`earnings` above stays the full list
   // for popover name/EPS lookups.)
-  const earningsToday = mergeEarningsData(liveEarnings.filter(e => e.date === etTodayIso()));
+  const earningsToday = mergeEarningsData(
+    liveEarnings.filter(
+      (e) =>
+        e.date === etTodayIso() &&
+        (!companyByTicker.get(e.ticker) || isCommonEquity(companyByTicker.get(e.ticker))),
+    ),
+  );
   const earningsLive = useLiveQuotes(earningsToday.map(e => e.ticker));
   const mergedSectorList = buildSectorList(companies, sectorsLive);
   const metalsLive = useLiveQuotes(METAL_TICKERS);
@@ -434,7 +444,6 @@ export function DashboardScreen() {
     return chg == null ? [] : [{ ...m, chg }];
   });
   const metalsAvg = metals.length ? metals.reduce((s, m) => s + m.chg, 0) / metals.length : null;
-  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
 
   // key = the Firestore doc id, not ticker+dir: a single ticker can have
   // dozens of insider filings in the same direction (CRWD has 42 disposals),
@@ -500,8 +509,9 @@ export function DashboardScreen() {
 
   // Leaders/Laggards: real rsRating from `companies`, not the mock screener
   // catalog. Only tickers the rs-rating job has actually scored are ranked.
+  // Common equities only (no ETFs, preferreds, warrants, or sector-less symbols).
   // Top / bottom 20 by relative strength — the widget scrolls through them.
-  const rankedCompanies = companies.filter(c => c.rsRating != null);
+  const rankedCompanies = companies.filter(c => c.rsRating != null && isCommonEquity(c));
   const leaders  = [...rankedCompanies].sort((a, b) => (b.rsRating ?? 0) - (a.rsRating ?? 0)).slice(0, 20);
   const laggards = [...rankedCompanies].sort((a, b) => (a.rsRating ?? 0) - (b.rsRating ?? 0)).slice(0, 20);
   // Each ranked stock's OWN day move (QA rows 204/233). It used to be looked up

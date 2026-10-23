@@ -683,8 +683,13 @@ export function StockIntelligenceScreen() {
         ? `Consensus: ${[epsEst ? `EPS ${epsEst}` : "", revEst ? `Rev ${revEst}` : ""].filter(Boolean).join(" · ")}`
         : `Consensus quarterly revenue and EPS report for ${stock.t}`;
 
+      const isConfirmed = Boolean(
+        (upcomingEr as any)?.confirmed ?? (liveCompany as any)?.earningsConfirmed
+      );
+      const estBadge = !isConfirmed ? " (Estimated)" : "";
+
       items.push({
-        date: fmtDateStr,
+        date: `${fmtDateStr}${estBadge}`,
         days: daysStr,
         n: upcomingEr?.session ? `Earnings Release (${upcomingEr.session})` : "Quarterly Earnings Release",
         txt: `${estTxt}; historical event volatility window`,
