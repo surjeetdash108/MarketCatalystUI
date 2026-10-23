@@ -173,7 +173,7 @@ export function StockAnalystActionsView({
                         )}
                       </span>
                     ) : (
-                      <span className="mono" title="This firm posted no price target with this call" style={{ textAlign: "right", color: "var(--text-dim-solid)" }}>—</span>
+                      <span className="mono" title="Not available from data source" style={{ textAlign: "right", color: "var(--text-dim-solid)" }}>—</span>
                     )}
                     <span className="mono" style={{ textAlign: "right", fontWeight: 700, color: r.upPct != null && r.upPct >= 0 ? "var(--up)" : "var(--down)" }}>
                       {r.ptSource === "firm" && r.upPct != null ? `${r.upPct >= 0 ? "+" : ""}${r.upPct.toFixed(1)}%` : "—"}

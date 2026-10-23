@@ -11,7 +11,7 @@ type InsSort = "value" | "date";
 interface FormattedTx {
   id: string;
   s: string;
-  dir: "buy" | "sell";
+  dir: "buy" | "sell" | "other";
   role: string;
   det: string;
   valUsd: number | null;
@@ -60,9 +60,9 @@ export function StockInsiderActivityView({ symbol }: { symbol: string }) {
           isOpenMarket && x.pricePerShare != null && x.shares > 0
             ? x.shares * x.pricePerShare
             : null;
-        const isBuy = x.transactionCode === "P" || x.acquiredOrDisposed === "A";
-        const isSell = x.transactionCode === "S" || x.acquiredOrDisposed === "D";
-        const dir: "buy" | "sell" = isBuy ? "buy" : "sell";
+        const isBuy = x.transactionCode === "P";
+        const isSell = x.transactionCode === "S";
+        const dir: "buy" | "sell" | "other" = isBuy ? "buy" : isSell ? "sell" : "other";
 
         const owner = x.ownerName ?? "Insider";
         const title = x.officerTitle ? ` · ${x.officerTitle}` : x.isOfficer ? " · Officer" : "";
@@ -96,16 +96,16 @@ export function StockInsiderActivityView({ symbol }: { symbol: string }) {
       });
   }, [stockTxns]);
 
-  // Aggregate stats
-  const nBuy = stockTxns.filter(x => x.acquiredOrDisposed === "A").length;
-  const nSell = stockTxns.filter(x => x.acquiredOrDisposed === "D").length;
+  // Aggregate stats — open-market purchases (P) and sales (S) only per SEC rule
+  const nBuy = stockTxns.filter(x => x.transactionCode === "P").length;
+  const nSell = stockTxns.filter(x => x.transactionCode === "S").length;
 
   let totalBuyVal = 0;
   let totalSellVal = 0;
   FEED.forEach(x => {
     if (x.valUsd != null) {
       if (x.dir === "buy") totalBuyVal += x.valUsd;
-      else totalSellVal += x.valUsd;
+      else if (x.dir === "sell") totalSellVal += x.valUsd;
     }
   });
   const netDollarVolume = totalBuyVal - totalSellVal;
@@ -318,12 +318,17 @@ export function StockInsiderActivityView({ symbol }: { symbol: string }) {
                       <td style={{ textAlign: "center", padding: "10px 14px" }}>
                         <span
                           style={{
-                            color: x.dir === "buy" ? "var(--up, #10b981)" : "var(--down, #ef4444)",
+                            color:
+                              x.dir === "buy"
+                                ? "var(--up, #10b981)"
+                                : x.dir === "sell"
+                                ? "var(--down, #ef4444)"
+                                : "var(--text-dim-solid)",
                             fontWeight: 700,
                             fontSize: ".74rem",
                           }}
                         >
-                          {x.dir === "buy" ? "Buy" : "Sell"}
+                          {x.dir === "buy" ? "Buy" : x.dir === "sell" ? "Sell" : x.code ? `Code ${x.code}` : "Other"}
                         </span>
                       </td>
                       <td style={{ padding: "10px 14px", whiteSpace: "normal", lineHeight: 1.4 }}>

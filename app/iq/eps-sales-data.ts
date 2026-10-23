@@ -195,9 +195,16 @@ export function quarterlyEpsSalesRows(
   epsHistory: EpsHistoryRow[] = [],
 ): QuarterRow[] {
   const src = quarters.length > 0 ? quarters : quartersFromEpsHistory(epsHistory);
-  const asc = [...src]
-    .filter(r => r.endDate)
-    .sort((a, b) => (a.endDate as string).localeCompare(b.endDate as string));
+  const dedupedMap = new Map<string, QuarterFinancials>();
+  for (const r of src) {
+    if (!r.endDate) continue;
+    const key = r.fiscalPeriod && r.fiscalYear ? `${r.fiscalYear}-${r.fiscalPeriod}` : r.endDate;
+    const existing = dedupedMap.get(key);
+    if (!existing || (r.revenue != null && existing.revenue == null)) {
+      dedupedMap.set(key, r);
+    }
+  }
+  const asc = [...dedupedMap.values()].sort((a, b) => (a.endDate as string).localeCompare(b.endDate as string));
 
   // Year-ago comparison matched on FISCAL LABELS, not by stepping back four
   // rows. "Four back" assumes four filings a year, which is two YEARS back for

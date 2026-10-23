@@ -1744,7 +1744,7 @@ export function StockScreen({
                 <QuoteHeadline q={hq} />
               </div>
               <div className="sd-snap-meta" style={{ marginTop: 14, display: "flex", alignItems: "center" }}>
-                <span>Vol <b>{sessionVol != null ? fmt(sessionVol) : "—"}</b></span>
+                <span>Vol <b>{sessionVol != null ? fmt(sessionVol, 0) : "—"}</b></span>
                 {mc != null && <span>Mkt cap <b>{cap(mc)}</b></span>}
                 {inSectorRank != null && inSectorTotal != null && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".52rem", padding: "1px 5px" }}>

@@ -2110,7 +2110,7 @@ export function AnalystScreen() {
                       </span>
                     ) : (
                       <span
-                        title="This firm posted no price target with this call"
+                        title="Not available from data source"
                         style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI }}
                       >
                         —

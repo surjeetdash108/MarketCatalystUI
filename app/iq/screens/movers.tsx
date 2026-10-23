@@ -1197,10 +1197,14 @@ export function MoversScreen() {
               ? `${biggestCount} names · top 20 gainers + top 20 losers by sector · ${QUOTE_DELAY_LABEL}`
               : tab === "active"
               ? `${activeCount} names · top volume + top relative volume by sector · ${QUOTE_DELAY_LABEL}`
-              : `${searched.length} names · ${
+              : `${searched.length} ${
+                  tab === "win" || tab === "weekwin" ? "gainers" : tab === "lose" || tab === "weeklose" ? "losers" : "names"
+                } · ${
                   isWeekTab(tab) ? "tracked universe · ranked by 5-day move"
                   : tab === "vol" ? "tracked universe · ranked by relative volume"
-                  : "top 100 gainers + 100 losers · ranked by session move"
+                  : tab === "win" ? "ranked by session gain"
+                  : tab === "lose" ? "ranked by session decline"
+                  : "ranked by session move"
                 } · ${QUOTE_DELAY_LABEL}`}
           </span>
         )}

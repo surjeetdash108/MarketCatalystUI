@@ -43,13 +43,13 @@ export const THEMES: Theme[] = [
   { id: "internet", name: "Internet & Media", desc: "Digital advertising, streaming and social",
     tickers: ["META", "GOOGL", "AMZN", "NFLX", "PINS", "SNAP"] },
   { id: "consumer", name: "Consumer & Retail", desc: "Brands, retail and consumer discretionary",
-    tickers: ["AMZN", "TSLA", "SBUX", "NKE", "MCD", "HD", "TGT", "WBA"] },
+    tickers: ["AMZN", "TSLA", "SBUX", "NKE", "MCD", "HD", "TGT", "COST"] },
   { id: "fintech", name: "Fintech", desc: "Payments, crypto and financial innovation",
     tickers: ["PYPL", "SQ", "V", "MA", "SOFI", "COIN", "AFRM"] },
   { id: "hardware", name: "Devices & Hardware", desc: "Physical compute, servers and peripherals",
     tickers: ["AAPL", "DELL", "SMCI", "HPQ", "NTAP", "WDC"] },
   { id: "value", name: "Deep Value", desc: "Low-multiple, out-of-favor names with recovery potential",
-    tickers: ["INTC", "WBA", "DELL", "F", "BAC", "C", "T"] },
+    tickers: ["INTC", "KSS", "DELL", "F", "BAC", "C", "T"] },
 ];
 
 export const THEME_NAMES: string[] = THEMES.map(t => t.name);

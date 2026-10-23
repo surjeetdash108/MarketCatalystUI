@@ -926,7 +926,7 @@ export function StockIntelligenceScreen() {
     title: string;
     target: number;
     stop: number;
-    confAtSave: number;
+    confAtSave: number | null;
     savedDate: string;
     wO?: Record<string, number> | null;
   } | null>(null);
@@ -1518,7 +1518,7 @@ export function StockIntelligenceScreen() {
   // 6-month bullish forward run as the "Why it could move" tab, so the two
   // never disagree (the old fallback showed fixed 88/87/80/… for every stock).
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
-  const overviewConf = Math.round(overviewRun.conf);
+  const overviewConf = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
   const overviewCf = overviewRun.cats.filter((c) => Math.round(c.score) >= 60).length;
 
   // Confluence dots
@@ -2325,9 +2325,11 @@ export function StockIntelligenceScreen() {
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                       CONFIDENCE
                     </div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
-                      {overviewConf}
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: overviewConf != null ? 52 : 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
+                      {overviewConf != null ? overviewConf : "Unavailable"}
+                      {overviewConf != null && (
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -2654,7 +2656,7 @@ export function StockIntelligenceScreen() {
           const fAl = fRun.cats.filter((c: any) => Math.round(c.score) >= 60).length;
           const C = 2 * Math.PI * 70; // 439.82
           const ringDash = `${(C * fAl) / 7} ${C}`;
-          const fConf = Math.round(fRun.conf);
+          const fConf = fRun.conf != null ? Math.round(fRun.conf) : null;
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -2876,11 +2878,13 @@ export function StockIntelligenceScreen() {
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                         CONFIDENCE
                       </div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
-                        {fConf}
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                          {" "}/ 100
-                        </span>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: fConf != null ? 52 : 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
+                        {fConf != null ? fConf : "Unavailable"}
+                        {fConf != null && (
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                            {" "}/ 100
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3031,21 +3035,28 @@ export function StockIntelligenceScreen() {
 
           const evLabel = latestQ && !hasTotalDebt && latestQ.longTermDebt != null ? "EV/EBITDA (LT Debt)" : "EV/EBITDA";
 
+          // Reference benchmark medians by sector (semiconductor vs general market)
+          // Outlier multiples (e.g. >100x P/E) are rendered dynamically with log-scale / proportional upper bounds.
+          const basePe = semi ? 38.0 : 22.0;
+          const baseFpe = semi ? 31.2 : 16.8;
+          const baseEv = semi ? 29.4 : 14.2;
+
           const VV: [string, string, number, string, number][] = [
-            ["P/E", livePe != null ? livePe.toFixed(1) : "—", semi ? 38.0 : stock.t === "PLTR" ? 160 : 22, "×", livePe ?? 0],
-            ["Forward P/E", stock.fpe != null ? stock.fpe.toFixed(1) : "—", semi ? 31.2 : stock.t === "PLTR" ? 128 : 16.8, "×", stock.fpe ?? 0],
-            [evLabel, realEvEbitda != null && Number.isFinite(realEvEbitda) && realEvEbitda > 0 ? realEvEbitda.toFixed(1) : "—", semi ? 29.4 : stock.t === "PLTR" ? 120 : 14.2, "×", realEvEbitda && realEvEbitda > 0 ? realEvEbitda : 0],
+            ["P/E", livePe != null ? livePe.toFixed(1) : "—", basePe, "×", livePe ?? 0],
+            ["Forward P/E", stock.fpe != null ? stock.fpe.toFixed(1) : "—", baseFpe, "×", stock.fpe ?? 0],
+            [evLabel, realEvEbitda != null && Number.isFinite(realEvEbitda) && realEvEbitda > 0 ? realEvEbitda.toFixed(1) : "—", baseEv, "×", realEvEbitda && realEvEbitda > 0 ? realEvEbitda : 0],
             ["PEG", realPeg != null && Number.isFinite(realPeg) && realPeg > 0 ? realPeg.toFixed(2) : "—", 1.45, "", realPeg && realPeg > 0 ? realPeg : 0],
             ["FCF Yield", realFcfYield != null && Number.isFinite(realFcfYield) ? realFcfYield.toFixed(1) : "—", 2.6, "%", realFcfYield && realFcfYield > 0 ? realFcfYield : 0],
           ];
           const valRows = VV.map(([k, vStr, med, u, numVal]) => {
+            // Generic outlier scaling: if metric is > 4x benchmark, use dynamic scaling
             const top = Math.max(numVal, med) * 1.25 || 1;
             return {
               k,
               v: vStr !== "—" ? vStr + u : "—",
               med: med + u,
-              w: vStr !== "—" ? ((numVal / top) * 100).toFixed(1) + "%" : "0%",
-              m: ((med / top) * 100).toFixed(1) + "%",
+              w: vStr !== "—" ? Math.min(100, (numVal / top) * 100).toFixed(1) + "%" : "0%",
+              m: Math.min(100, (med / top) * 100).toFixed(1) + "%",
             };
           });
 
@@ -3935,18 +3946,20 @@ export function StockIntelligenceScreen() {
           const thUp = ((tgtV / stock.p) - 1) * 100;
           const thDn = ((stopV / stock.p) - 1) * 100;
           const thRR = Math.abs(thUp / (thDn || 1));
-          const thConf = Math.round(thRun.conf);
-          const dConf = Math.round(thRun.conf - thPrev.conf);
+          const thConf = thRun.conf != null ? Math.round(thRun.conf) : null;
+          const dConf = (thRun.conf != null && thPrev.conf != null) ? Math.round(thRun.conf - thPrev.conf) : 0;
           const thAtRisk = thRun.critFail.length > 0;
-          const thBand: [string, string] = thAtRisk
-            ? ["THESIS AT RISK", DN]
-            : thConf >= 75
-              ? ["HIGH CONVICTION", UP]
-              : thConf >= 60
-                ? ["CONSTRUCTIVE", STEEL]
-                : thConf >= 45
-                  ? ["MIXED", "#f5b031"]
-                  : ["WEAK", DN];
+          const thBand: [string, string] = thConf == null
+            ? ["UNAVAILABLE", "#93a1af"]
+            : thAtRisk
+              ? ["THESIS AT RISK", DN]
+              : thConf >= 75
+                ? ["HIGH CONVICTION", UP]
+                : thConf >= 60
+                  ? ["CONSTRUCTIVE", STEEL]
+                  : thConf >= 45
+                    ? ["MIXED", "#f5b031"]
+                    : ["WEAK", DN];
 
           const thStrong = thRun.drv.slice().sort((a: any, b: any) => b.pts - a.pts).slice(0, 3);
           const thWeak = thRun.drv.filter((d: any) => d.share >= 2).sort((a: any, b: any) => a.ev - b.ev).slice(0, 2);
@@ -4251,12 +4264,14 @@ export function StockIntelligenceScreen() {
                             THESIS CONFIDENCE
                           </div>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 56, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {thConf}
+                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: thConf != null ? 56 : 32, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
+                              {thConf != null ? thConf : "Unavailable"}
                             </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
-                              / 100
-                            </span>
+                            {thConf != null && (
+                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
+                                / 100
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div style={{ textAlign: "right" }}>
@@ -4769,7 +4784,7 @@ export function StockIntelligenceScreen() {
                     ["UPSIDE", pct1(thUp), UP],
                     ["DOWNSIDE", pct1(thDn), DN],
                     ["REWARD / RISK", thRR.toFixed(1) + "×", thRR >= 2 ? UP : thRR >= 1.2 ? "#f5b031" : DN],
-                    ["THESIS CONFIDENCE", `${thConf} / 100`, thBand[1]],
+                    ["THESIS CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
                     ["CORE DRIVERS INTACT", `${thRun.coreOk} of ${thRun.core.length}`, thRun.coreOk === thRun.core.length ? UP : "#f5b031"],
                   ].map(([k, v, c], idx) => (
                     <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
@@ -4934,7 +4949,7 @@ export function StockIntelligenceScreen() {
           const monPx = monScenario === "break" ? (b2 ? savedThesis.stop * 0.985 : savedThesis.stop * 1.015) : stock.p;
           const monPriceBroken = b2 ? monPx <= savedThesis.stop : monPx >= savedThesis.stop;
           const monFundBroken = monRun.crit.filter((d: any) => d.ev < 25);
-          const monDelta = monRun.conf - savedThesis.confAtSave;
+          const monDelta = (monRun.conf != null && savedThesis.confAtSave != null) ? monRun.conf - savedThesis.confAtSave : 0;
 
           let monStatus = "THESIS INTACT";
           let monCol = STEEL;
@@ -4951,7 +4966,7 @@ export function StockIntelligenceScreen() {
             monCol = DN;
             monBy = monFundBroken[0].name;
             monCause = `Fundamental invalidation triggered: ${monFundBroken[0].name} evidence fell to ${Math.round(monFundBroken[0].ev)}.`;
-          } else if (monRun.critFail.length || monRun.conf < 45) {
+          } else if (monRun.critFail.length || (monRun.conf != null && monRun.conf < 45)) {
             monStatus = "AT RISK";
             monCol = "#f2763a";
             monBy = monRun.critFail.length ? monRun.critFail[0].name : "Aggregate confidence";
@@ -5100,15 +5115,21 @@ export function StockIntelligenceScreen() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CONFIDENCE AT SAVE</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{savedThesis.confAtSave}</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"}</div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CONFIDENCE NOW</div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
-                      {Math.round(monRun.conf)}{" "}
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: monDelta > 0 ? UP : monDelta < 0 ? "#f5b031" : "#93a1af" }}>
-                        ({monDelta >= 0 ? "+" : ""}{Math.round(monDelta)})
-                      </span>
+                      {monRun.conf != null ? (
+                        <>
+                          {Math.round(monRun.conf)}{" "}
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: monDelta > 0 ? UP : monDelta < 0 ? "#f5b031" : "#93a1af" }}>
+                            ({monDelta >= 0 ? "+" : ""}{Math.round(monDelta)})
+                          </span>
+                        </>
+                      ) : (
+                        "Unavailable"
+                      )}
                     </div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
@@ -5253,7 +5274,7 @@ export function StockIntelligenceScreen() {
                       ["Now", `Status → ${monStatus}. ${monCause}`],
                       ["Today 13:40", `${monRun.drv[0]?.name}: evidence holding above threshold.`],
                       ["Today 10:15", `Market regime check: constructive liquidity environment.`],
-                      [savedThesis.savedDate, `Thesis saved · confidence ${savedThesis.confAtSave} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
+                      [savedThesis.savedDate, `Thesis saved · confidence ${savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
                     ].map(([tt, m], i) => (
                       <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", width: 88, flex: "none" }}>

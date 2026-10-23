@@ -379,15 +379,36 @@ export function DashboardScreen() {
   const { data: recaps, loading: recapsLoading } = useApiList<RecapDoc>("/market-data/recaps");
   const latestRecap = [...recaps].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0] ?? null;
   const { data: mostSearched, loading: mostSearchedLoading } = useApiResource<{ results: Array<{ ticker: string; count: number }> }>("/live/most-searched-tickers?limit=18");
-  // Dedupe: merge any repeated ticker and collapse Google's dual class
-  // (GOOG → GOOGL) so the same company never appears twice.
+  // Dedupe: merge repeated tickers and collapse dual-class share listings
+  // (e.g. GOOG & GOOGL for Alphabet, FOX & FOXA for Fox) by matching company
+  // name or shared ticker root so the same issuer never appears twice.
   const searchedDeduped = (() => {
+    // Map ticker -> company name / root issuer identifier
+    const companyNameMap = new Map<string, string>();
+    for (const c of companies) {
+      if (c.ticker && c.name) {
+        // Normalize name: strip Class A/B/C, Inc, Corp, etc.
+        const norm = c.name.toLowerCase()
+          .replace(/\bclass\s+[abc]\b/gi, "")
+          .replace(/\b(inc|corp|corporation|co|ltd|plc)\b\.?/gi, "")
+          .trim();
+        companyNameMap.set(c.ticker, norm);
+      }
+    }
+
     const map = new Map<string, { ticker: string; count: number }>();
+    const issuerToPrimary = new Map<string, string>();
+
     for (const r of mostSearched?.results ?? []) {
-      const key = r.ticker === "GOOG" ? "GOOGL" : r.ticker;
-      const cur = map.get(key);
+      const issuer = companyNameMap.get(r.ticker) || r.ticker.replace(/\.[AB]$/, "");
+      let primaryTicker = issuerToPrimary.get(issuer);
+      if (!primaryTicker) {
+        primaryTicker = r.ticker;
+        issuerToPrimary.set(issuer, primaryTicker);
+      }
+      const cur = map.get(primaryTicker);
       if (cur) cur.count += r.count;
-      else map.set(key, { ticker: key, count: r.count });
+      else map.set(primaryTicker, { ticker: primaryTicker, count: r.count });
     }
     return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 18);
   })();

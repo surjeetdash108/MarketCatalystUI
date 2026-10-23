@@ -382,7 +382,7 @@ export function getStock(
   };
   if (!skipThesis) {
     const tr = thesisRun(sym, "Bull", "6M", undefined, undefined, facts);
-    item.conf = Math.round(tr.conf);
+    item.conf = tr.conf != null ? Math.round(tr.conf) : 0;
     item.cf = tr.cats.filter((c: any) => c.ds.length > 0 && Math.round(c.score) >= 60).length;
   }
   return item;
@@ -445,8 +445,7 @@ export function thesisRun(t: string, dir: "Bull" | "Bear", hz: string, adj?: any
       dd: bull ? dd : -dd,
     };
   });
-  let conf = 0;
-  const cats = CATS_T.map(([k, label]) => {
+  const catData = CATS_T.map(([k, label]) => {
     const ds = drv.filter((d: any) => d.cat === k);
     const slots: Record<string, any[]> = {};
     ds.forEach((d: any) => {
@@ -462,19 +461,33 @@ export function thesisRun(t: string, dir: "Bull" | "Bear", hz: string, adj?: any
       sv += w * v;
       return { a, w };
     });
-    // No data for a category = neutral, not a guess either way.
-    const score = sw ? sv / sw : 50;
-    const pts = (score * W[k]) / 100;
-    conf += pts;
-    sl.forEach(({ a, w }) =>
+    const hasData = sw > 0;
+    const score = hasData ? sv / sw : 0;
+    return { k, label, ds, slots, sl, sw, sv, hasData, score, baseW: W[k] || 0 };
+  });
+
+  const totalValidWeight = catData
+    .filter((c) => c.hasData)
+    .reduce((sum, c) => sum + c.baseW, 0);
+
+  let conf: number | null = 0;
+  const cats = catData.map((c) => {
+    const effW = totalValidWeight > 0 && c.hasData ? (c.baseW / totalValidWeight) * 100 : 0;
+    const pts = (c.score * effW) / 100;
+    if (conf != null) conf += pts;
+    c.sl.forEach(({ a, w }) =>
       a.forEach((d: any) => {
-        d.share = (W[k] * (w / sw)) / a.length;
+        d.share = c.sw ? (effW * (w / c.sw)) / a.length : 0;
         d.pts = (d.share * d.ev) / 100;
         d.shared = a.length > 1;
       })
     );
-    return { k, label, w: W[k], score, pts, ds };
+    return { k: c.k, label: c.label, w: effW, score: c.score, pts, ds: c.ds };
   });
+
+  if (totalValidWeight === 0) {
+    conf = null;
+  }
   const core = drv.filter((d: any) => d.core);
   const crit = drv.filter((d: any) => d.crit);
   return {
