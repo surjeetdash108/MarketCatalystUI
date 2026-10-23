@@ -325,7 +325,7 @@ export function SettingsScreen() {
             </div>
             <ProfileRow label="Mobile number" value={profile?.mobileNumber} />
             <ProfileRow label="Age" value={profile?.age} />
-            <ProfileRow label="Income range" value={profile?.incomeRange} />
+            {/* <ProfileRow label="Income range" value={profile?.incomeRange} />
             <ProfileRow label="Investment experience" value={profile?.investmentExperience} />
             <ProfileRow label="Investment goals" value={profile?.investmentGoals} />
             <ProfileRow label="Risk tolerance" value={profile?.riskTolerance} />
@@ -337,7 +337,7 @@ export function SettingsScreen() {
             <ProfileRow
               label="Preferred asset classes"
               value={profile?.preferredAssetClasses?.join(", ")}
-            />
+            /> */}
             <div style={{ display: "flex", gap: 8, marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
               <button className="iq-btn-ghost" onClick={() => router.push("/profile/edit")}>
                 Edit Profile

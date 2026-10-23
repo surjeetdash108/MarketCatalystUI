@@ -47,12 +47,13 @@ export function ProfileEditForm() {
       window.alert(msg);
       return;
     }
-    if (profile.preferredAssetClasses.length === 0) {
-      const msg = "Select at least one preferred asset class.";
-      setError(msg);
-      window.alert(msg);
-      return;
-    }
+    // Temporarily disabled while preferred asset classes input is commented out
+    // if (profile.preferredAssetClasses.length === 0) {
+    //   const msg = "Select at least one preferred asset class.";
+    //   setError(msg);
+    //   window.alert(msg);
+    //   return;
+    // }
     setError("");
     setSuccess("");
     setIsSaving(true);

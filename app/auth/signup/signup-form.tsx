@@ -80,10 +80,11 @@ export function SignupForm() {
         const msg = "Please agree to our Terms and conditions and Privacy policy to create an account.";
         setError(msg); showError(msg); return;
       }
-      if (profile.preferredAssetClasses.length === 0) {
-        const msg = "Select at least one preferred asset class.";
-        setError(msg); showError(msg); return;
-      }
+      // Temporarily disabled while preferred asset classes input is commented out
+      // if (profile.preferredAssetClasses.length === 0) {
+      //   const msg = "Select at least one preferred asset class.";
+      //   setError(msg); showError(msg); return;
+      // }
       const cred = await createUserWithEmailAndPassword(firebaseAuth, profile.email, password);
       await updateProfile(cred.user, { displayName: profile.name });
       await apiPatch("/api/profile", {
