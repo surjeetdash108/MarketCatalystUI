@@ -22,6 +22,7 @@ import {
   shouldUseGoogleRedirect,
   showError,
 } from "../auth-utils";
+import { LegalModal } from "../legal/legal-modal";
 
 const divider: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 12,
@@ -40,6 +41,8 @@ const label: React.CSSProperties = {
 export function SignupForm() {
   const [password, setPassword] = useState("");
   const [profile, setProfile] = useState<InvestorProfile>(emptyInvestorProfile);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [legalModal, setLegalModal] = useState<"terms" | "privacy" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState("");
@@ -73,6 +76,10 @@ export function SignupForm() {
     e.preventDefault();
     setError(""); setIsSubmitting(true);
     try {
+      if (!acceptedTerms) {
+        const msg = "Please agree to our Terms and conditions and Privacy policy to create an account.";
+        setError(msg); showError(msg); return;
+      }
       if (profile.preferredAssetClasses.length === 0) {
         const msg = "Select at least one preferred asset class.";
         setError(msg); showError(msg); return;
@@ -92,6 +99,10 @@ export function SignupForm() {
   }
 
   async function handleGoogle() {
+    if (!acceptedTerms) {
+      const msg = "Please agree to our Terms and conditions and Privacy policy to continue.";
+      setError(msg); showError(msg); return;
+    }
     setError(""); setIsSubmitting(true);
 
     // Standalone PWA environment cannot open popup windows — use redirect flow there
@@ -198,6 +209,86 @@ export function SignupForm() {
           />
         </div>
 
+        {/* Terms & Privacy acceptance */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "2px 0 2px" }}>
+          <input
+            id="terms-checkbox"
+            type="checkbox"
+            checked={acceptedTerms}
+            onChange={e => setAcceptedTerms(e.target.checked)}
+            style={{
+              width: 16,
+              height: 16,
+              marginTop: 2,
+              accentColor: "var(--brand)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          />
+          <label
+            htmlFor="terms-checkbox"
+            style={{
+              fontSize: ".78rem",
+              lineHeight: 1.45,
+              color: "var(--text-dim-solid)",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            By signing up you agree to our{" "}
+            <button
+              type="button"
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                setLegalModal("terms");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                color: "var(--brand)",
+                textDecoration: "underline",
+                textUnderlineOffset: 2,
+                fontSize: "inherit",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = "var(--brand-2)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--brand)")}
+            >
+              Terms and conditions
+            </button>{" "}
+            and{" "}
+            <button
+              type="button"
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                setLegalModal("privacy");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                color: "var(--brand)",
+                textDecoration: "underline",
+                textUnderlineOffset: 2,
+                fontSize: "inherit",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = "var(--brand-2)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--brand)")}
+            >
+              Privacy policy
+            </button>
+            .
+          </label>
+        </div>
+
         {error && (
           <div style={{
             background: "var(--down-dim)", border: "1px solid var(--down)",
@@ -232,6 +323,13 @@ export function SignupForm() {
           Sign in
         </Link>
       </p>
+
+      {legalModal && (
+        <LegalModal
+          type={legalModal}
+          onClose={() => setLegalModal(null)}
+        />
+      )}
     </div>
   );
 }
