@@ -197,16 +197,16 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         }
         .lp-auth-cols {
           display: flex;
-          gap: 46px;
+          gap: 48px;
           align-items: center;
           justify-content: center;
-          max-width: 1060px;
+          max-width: 1140px;
           width: 100%;
           position: relative;
           z-index: 1;
         }
         .lp-auth-left { flex: 1 1 0; max-width: 560px; text-align: center; }
-        .lp-auth-form { flex: 0 0 380px; max-width: 94vw; }
+        .lp-auth-form { flex: 0 0 480px; width: 480px; max-width: 94vw; }
 
         .lp-auth-card {
           display: flex;
