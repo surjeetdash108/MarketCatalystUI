@@ -13,6 +13,7 @@ import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../n
 import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-context";
+import { INDEX_MEMBERS } from "../index-constituents";
 import { pulseFromLive, buildSectorList, tapeItemsToIndexDocs } from "../live-market-indices";
 import { isCommonEquity } from "../universe.util";
 import type {
@@ -22,13 +23,14 @@ import type {
 } from "../types";
 
 // Insider mini-list, market internals and F&G history all had hardcoded mock
-// arrays here. None have a reachable live source today: insider transactions
-// use the real `insider_transactions` feed exclusively now (no mock
-// fallback); market internals (advance/decline, TICK, TRIN, McClellan,
-// put/call) and F&G composite history have no `/market-data/*` route at all
-// yet (the backend jobs that could feed them write to Firestore directly,
-// with no REST endpoint), so those two render DataState instead of inventing
-// numbers.
+// arrays here; nothing is invented any more. Insider transactions use the real
+// `insider_transactions` feed exclusively (no mock fallback). F&G composite
+// history is read from `/market-data/market-sentiment-history`. Market
+// internals reach this screen two ways: the Recaps card prints the latest
+// recap's `internals` (universe-wide advancers/decliners, TRIN, breadth %), and
+// the Market Breadth card counts advancers/decliners per index client-side from
+// the synced `companies` quotes. TICK, McClellan and put/call still have no
+// `/market-data/*` route, so no widget here shows them.
 
 // "View all" widgets now navigate to /menu/{screen} (see the <Link> controls);
 // the only remaining in-page drawer is Fear & Greed history. The removed drawer
@@ -46,6 +48,47 @@ const METAL_ETFS: { sym: string; label: string; name: string }[] = [
   { sym: "PALL", label: "Pall.",  name: "Palladium (abrdn Physical Palladium)" },
 ];
 const METAL_TICKERS = METAL_ETFS.map(m => m.sym);
+
+// Market Breadth card: advancers vs decliners for each index, counted from the
+// synced `companies` day change. Membership is the static INDEX_MEMBERS list
+// (no index feed is licensed), so a member we do not sync simply has no quote —
+// the card reports that as coverage ("n of m constituents with quotes") instead
+// of treating a missing quote as unchanged.
+const BREADTH_INDEXES: { key: keyof typeof INDEX_MEMBERS; label: string }[] = [
+  { key: "SP500", label: "S&P 500" },
+  { key: "NDX",   label: "Nasdaq-100" },
+  { key: "DOW",   label: "Dow 30" },
+];
+/** Below this share of an index's members with a quote, the row is flagged partial. */
+const BREADTH_PARTIAL_BELOW = 0.5;
+
+interface IndexBreadth {
+  key: string;
+  label: string;
+  advancers: number;
+  decliners: number;
+  unchanged: number;
+  /** Members with a usable day change — advancers + decliners + unchanged. */
+  covered: number;
+  /** Members on the static list. */
+  total: number;
+}
+
+function computeIndexBreadth(companies: CompanyDoc[]): IndexBreadth[] {
+  return BREADTH_INDEXES.map(({ key, label }) => {
+    const members = INDEX_MEMBERS[key];
+    let advancers = 0, decliners = 0, unchanged = 0;
+    for (const c of companies) {
+      if (!members.has(c.ticker)) continue;
+      const p = c.pctChange;
+      if (p == null || !Number.isFinite(p)) continue;
+      if (p > 0) advancers++;
+      else if (p < 0) decliners++;
+      else unchanged++;
+    }
+    return { key, label, advancers, decliners, unchanged, covered: advancers + decliners + unchanged, total: members.size };
+  });
+}
 
 // ---- Dash hover popup ----
 type PopBlock = "earnings" | "movers" | "analyst" | "watchlist" | "portfolio" | "insider" | "screener" | "searched";
@@ -444,6 +487,7 @@ export function DashboardScreen() {
     return chg == null ? [] : [{ ...m, chg }];
   });
   const metalsAvg = metals.length ? metals.reduce((s, m) => s + m.chg, 0) / metals.length : null;
+  const indexBreadth = useMemo(() => computeIndexBreadth(companies), [companies]);
 
   // key = the Firestore doc id, not ticker+dir: a single ticker can have
   // dozens of insider filings in the same direction (CRWD has 42 disposals),
@@ -1277,6 +1321,69 @@ export function DashboardScreen() {
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 12b. Market Breadth (advancers vs decliners by index) ──
+            Sits beside Recaps, which prints the universe-wide counts. Counted
+            here from the same `companies` day change the Market Heatmap card
+            colours its tiles with, so the two cards cannot disagree. */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market Breadth</h3><VendorTag v={["fmp", "polygon"]} /></div>
+              <Link className="link" href="/menu/heatmap">Heatmap →</Link>
+            </div>
+            <div className="card-b">
+              {indexBreadth.every(b => b.covered === 0) ? (
+                <DataState loading={companiesLoading} label="No index constituent quotes synced yet." height={80} />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+                  {indexBreadth.map(b => {
+                    const partial = b.covered < b.total * BREADTH_PARTIAL_BELOW;
+                    const summary = `${b.label}: ${b.advancers} advancing, ${b.decliners} declining${b.unchanged > 0 ? `, ${b.unchanged} unchanged` : ""}`;
+                    return (
+                      <div key={b.key}>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+                          <span style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-hi)" }}>{b.label}</span>
+                          {b.covered > 0 ? (
+                            <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
+                              <b className="up">{b.advancers}</b> adv · <b className="down">{b.decliners}</b> dec
+                              {b.unchanged > 0 && <> · {b.unchanged} unch</>}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>No quotes yet</span>
+                          )}
+                        </div>
+                        {/* One proportion bar per index: green advancers, grey
+                            unchanged, red decliners, as shares of the members
+                            that HAVE a quote. */}
+                        <div
+                          role="img"
+                          aria-label={summary}
+                          title={summary}
+                          style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", background: "var(--surface-3)" }}
+                        >
+                          {b.covered > 0 && (
+                            <>
+                              <div style={{ flex: `${b.advancers} 1 0%`, background: "var(--up)" }} />
+                              <div style={{ flex: `${b.unchanged} 1 0%`, background: "var(--text-dim-solid)", opacity: 0.5 }} />
+                              <div style={{ flex: `${b.decliners} 1 0%`, background: "var(--down)" }} />
+                            </>
+                          )}
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: ".66rem", color: partial ? "var(--warn)" : "var(--text-dim-solid)" }}>
+                          {b.covered} of {b.total} constituents with quotes{partial ? " · partial" : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)" }}>
+                    Day change from synced company quotes. Membership is a static list, so the counts cover only the constituents we hold quotes for.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

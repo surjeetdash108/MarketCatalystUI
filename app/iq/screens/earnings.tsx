@@ -47,6 +47,8 @@ interface EarnCalItem {
   guideRange: string | null;
   /** The sentence the direction came from — shown as the cell's tooltip. */
   guideSnippet: string | null;
+  /** The release talked about guidance, even if it gave no direction or range. */
+  guideMentioned: boolean;
   react: number | null;
 }
 
@@ -72,6 +74,7 @@ function toEarnCalItem(d: LiveEarningsDoc): EarnCalItem {
     guide: null,
     guideRange: null,
     guideSnippet: null,
+    guideMentioned: false,
     react: null,
   };
 }
@@ -1006,21 +1009,31 @@ const SESSION_QUOTE_CAP = 120;
 
 /** One row of the at-a-glance snapshot — the Earnings-Hub "results" layout:
  *  actual vs consensus EPS + surprise, revenue actual/consensus, and the
- *  same-quarter-a-year-ago comparables. Everything comes from Polygon + FMP;
- *  Guidance is intentionally absent (no vendor feed for it). */
+ *  same-quarter-a-year-ago comparables. EPS / revenue come from Polygon + FMP;
+ *  Guidance comes from the company's own 8-K press release (EDGAR
+ *  earnings_announcements feed), not a market-data vendor. */
 /**
  * Guidance the company issued in its own 8-K press release — NOT analyst
  * consensus, and not derived from news headlines (measured: 22 guidance
  * headlines per month across the whole feed, most misattributed by Polygon's
- * multi-ticker tagging). A dash means the release did not state a direction,
- * which is the honest answer for roughly half of reporters.
+ * multi-ticker tagging). Raised / Cut / Mixed / Reaffirmed when the release
+ * says which way it moved; the stated range when only a range was given;
+ * "Provided" when guidance was mentioned with no direction or range. A dash
+ * means no filing for this reporting date carries guidance (an upcoming
+ * reporter has no 8-K yet — the previous quarter's is deliberately not shown).
  */
 function GuidanceCell({ it }: { it: EarnCalItem }) {
   if (!it.guide) {
     // A stored range with no direction still tells the reader something.
-    return it.guideRange
-      ? <span style={{ color: "var(--text-dim-solid)" }} title={`Guidance issued: ${it.guideRange}`}>{it.guideRange}</span>
-      : <span style={{ color: "var(--text-dim-solid)" }}>—</span>;
+    if (it.guideRange) {
+      return <span style={{ color: "var(--text-dim-solid)" }} title={`Guidance issued: ${it.guideRange}`}>{it.guideRange}</span>;
+    }
+    // Guidance was in the release but it never said which way it moved (real
+    // for ~44% of filings) — say so rather than showing it as missing data.
+    if (it.guideMentioned || it.guideSnippet) {
+      return <span style={{ color: "var(--text-dim-solid)" }} title={it.guideSnippet ?? "Guidance provided in the earnings release"}>Provided</span>;
+    }
+    return <span style={{ color: "var(--text-dim-solid)" }}>—</span>;
   }
   const label = { raised: "Raised", cut: "Cut", mixed: "Mixed", reaffirmed: "Reaffirmed" }[it.guide];
   const arrow = it.guide === "raised" ? "\u25B2" : it.guide === "cut" ? "\u25BC" : "";
@@ -1238,14 +1251,51 @@ const GLANCE_FIRST_DIR: Record<GlanceSortKey, "asc" | "desc"> = {
 };
 
 /** Guidance ordered by how favourable it is, so a descending sort surfaces
- *  raises first and cuts last. A range with no stated direction ranks above
- *  nothing at all; a blank cell has no value and sorts to the end either way. */
+ *  raises first and cuts last. A range / "Provided" with no stated direction
+ *  ranks above nothing at all; a blank cell has no value and sorts to the end
+ *  either way. */
 const GUIDANCE_RANK: Record<string, number> = {
   raised: 5, reaffirmed: 4, mixed: 3, cut: 2,
 };
 function guidanceValue(it: EarnCalItem): number | null {
   if (it.guide) return GUIDANCE_RANK[it.guide] ?? null;
-  return it.guideRange ? 1 : null;
+  return it.guideRange || it.guideMentioned || it.guideSnippet ? 1 : null;
+}
+
+/** An 8-K can land a day or two off the calendar's reporting date (after-close
+ *  reports filed the next morning, weekends). Within this many days counts as
+ *  the same report; further out it is a different quarter. */
+const GUIDANCE_MATCH_DAYS = 3;
+
+function isoDayNumber(iso: string): number {
+  return Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86_400_000;
+}
+
+function hasGuidanceInfo(a: EarningsAnnouncementDoc): boolean {
+  return !!(a.guidanceDirection || a.guidanceRange || a.guidanceSnippet || a.guidanceMentioned);
+}
+
+/** The announcement for one ticker nearest to a calendar reporting date, within
+ *  ±GUIDANCE_MATCH_DAYS — or null. Null is deliberate for an upcoming report
+ *  that has no 8-K yet: the feed still holds the PREVIOUS quarter's filing for
+ *  that ticker, and showing its Raised/Cut as this quarter's would be wrong. */
+function nearestAnnouncement(
+  list: EarningsAnnouncementDoc[] | undefined,
+  date: string,
+): EarningsAnnouncementDoc | null {
+  if (!list) return null;
+  const target = isoDayNumber(date);
+  let best: EarningsAnnouncementDoc | null = null;
+  let bestGap = Infinity;
+  for (const a of list) {
+    const gap = Math.abs(isoDayNumber(a.announceDate) - target);
+    if (!(gap <= GUIDANCE_MATCH_DAYS)) continue; // also drops NaN (unparseable dates)
+    if (gap < bestGap || (gap === bestGap && best && hasGuidanceInfo(a) && !hasGuidanceInfo(best))) {
+      best = a;
+      bestGap = gap;
+    }
+  }
+  return best;
 }
 
 function glanceValue(it: EarnCalItem, k: GlanceSortKey): number | string | null {
@@ -1446,13 +1496,17 @@ export function EarningsScreen() {
    * rather than being placed on a coin-flip.
    */
   const annUsualSession = new Map<string, "BMO" | "AMC">();
-  // Guidance rides the same 8-K feed and the same ticker|date key as session.
-  const annGuidanceByKey = new Map<string, EarningsAnnouncementDoc>();
+  // Guidance rides the same 8-K feed, but is joined by ticker + NEAREST date
+  // (±GUIDANCE_MATCH_DAYS) rather than an exact ticker|date key — an after-close
+  // report is often filed the next day, so the exact join missed it and the cell
+  // showed empty.
+  const annByTicker = new Map<string, EarningsAnnouncementDoc[]>();
   for (const a of earningsAnnouncements) {
     if (a.session === "BMO" || a.session === "AMC") {
       annSessionByKey.set(`${a.ticker}|${a.announceDate}`, a.session);
     }
-    annGuidanceByKey.set(`${a.ticker}|${a.announceDate}`, a);
+    const list = annByTicker.get(a.ticker);
+    if (list) list.push(a); else annByTicker.set(a.ticker, [a]);
   }
   {
     const tally = new Map<string, { BMO: number; AMC: number }>();
@@ -1522,9 +1576,17 @@ export function EarningsScreen() {
         ?? null,
     }))
     .map(it => {
-      const a = annGuidanceByKey.get(`${it.s}|${it.date}`);
+      // No filing within the window (e.g. an upcoming report) -> leave guidance
+      // empty; the previous quarter's direction must not pass as this one's.
+      const a = nearestAnnouncement(annByTicker.get(it.s), it.date);
       return a
-        ? { ...it, guide: a.guidanceDirection ?? null, guideRange: a.guidanceRange ?? null, guideSnippet: a.guidanceSnippet ?? null }
+        ? {
+            ...it,
+            guide: a.guidanceDirection ?? null,
+            guideRange: a.guidanceRange ?? null,
+            guideSnippet: a.guidanceSnippet ?? null,
+            guideMentioned: a.guidanceMentioned ?? false,
+          }
         : it;
     })
     .filter(it => session === "both" || it.sess === session)

@@ -306,7 +306,9 @@ export function ScreenerScreen() {
       <div style={{ padding: "0 18px 18px" }}>
 
         {/* ── Filter card ── */}
-        <div className="card" style={{ marginBottom: 14, overflow: "visible" }}>
+        {/* .card is its own stacking context (entrance-animation transform), so the open
+            dropdown's z-index must be lifted on the card itself to clear the Results card. */}
+        <div className="card" style={{ marginBottom: 14, overflow: "visible", position: "relative", zIndex: ddOpen ? 50 : undefined }}>
 
           <div className="filt-hdr" style={{ cursor: "pointer" }} onClick={() => setFiltersOpen(o => !o)}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
