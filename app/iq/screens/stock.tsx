@@ -830,11 +830,20 @@ export function StockScreen({
     }
   }, [visibleTabs, activeTab]);
 
-  // Watchlists are backend-synced (multiple named lists). The star is "filled"
-  // when the ticker is in ANY list; clicking it opens the which-list picker.
+  // Watchlists are backend-synced (multiple named lists). The star beside the
+  // ticker name is "filled" when the ticker is in ANY list. See toggleWatch for
+  // what a click does.
   const { watchlists, addTicker, removeTicker, createList, tickerLimit } = useWatchlistsContext();
   const watchedSet = useMemo(() => new Set(watchlists.flatMap(w => w.tickers)), [watchlists]);
   const [wlPicker, setWlPicker] = useState<{ sym: string; x: number; y: number } | null>(null);
+  const [starBusy, setStarBusy] = useState(false);
+  const [wlToast, setWlToast] = useState<{ text: string; kind: "ok" | "error" } | null>(null);
+  useEffect(() => {
+    if (!wlToast) return;
+    // Failures carry a longer explanation, so they stay up a little longer.
+    const t = setTimeout(() => setWlToast(null), wlToast.kind === "error" ? 5000 : 2600);
+    return () => clearTimeout(t);
+  }, [wlToast]);
   const chartRef = useRef<HTMLDivElement>(null);
 
   // Cross-column height match (generic — works for any stock, any peer count):
@@ -1631,6 +1640,36 @@ export function StockScreen({
     setWlPicker({ sym: s, x: r.right - 250, y: r.bottom });
   }
 
+  /**
+   * The star beside the ticker name. Not saved → one click adds it to the first
+   * watchlist (creating "My Watchlist" if there is none) and confirms with a
+   * toast. Saved in one list → a click removes it. Saved in several → open the
+   * picker, since "unstar" would be ambiguous.
+   */
+  async function toggleWatch(e: React.MouseEvent<HTMLButtonElement>) {
+    const S = sym.toUpperCase();
+    const saved = watchlists.filter(w => w.tickers.includes(S));
+    if (saved.length > 1) { openWatchlistPicker(S, e); return; }
+    if (saved.length === 1) {
+      void removeTicker(saved[0].id, S);
+      setWlToast({ text: `${S} removed from ${saved[0].name}`, kind: "ok" });
+      return;
+    }
+    // The server always returns at least one list, so none here means they
+    // haven't loaded (the button is disabled then) — never create one from here.
+    const list = watchlists[0];
+    if (!list) return;
+    setStarBusy(true);
+    try {
+      const res = await addTicker(list.id, S);
+      setWlToast(res.ok
+        ? { text: `${S} added to ${list.name}`, kind: "ok" }
+        : { text: res.message, kind: "error" });
+    } finally {
+      setStarBusy(false);
+    }
+  }
+
   return (
     // The container-query scope. This screen renders at four very different
     // widths — full screen, the mover drawer, the detail popover and the
@@ -1701,7 +1740,30 @@ export function StockScreen({
                 {/* StockLogo matches the height of NVDA + NASDAQ ET perfectly */}
                 <StockLogo sym={sym} size={23} style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0 }} />
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-                  <h1 style={{ lineHeight: 1.25 }}>{sym}</h1>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <h1 style={{ lineHeight: 1.25 }}>{sym}</h1>
+                    {(() => {
+                      const S = sym.toUpperCase();
+                      const lists = watchlists.filter(w => w.tickers.includes(S));
+                      const label = watchlists.length === 0 ? "Loading your watchlists…"
+                        : lists.length === 0 ? `Add ${S} to watchlist`
+                        : lists.length === 1 ? `Remove ${S} from ${lists[0].name}`
+                        : `Edit watchlists for ${S}`;
+                      return (
+                        <button
+                          type="button"
+                          className={`sd-star${watchedSet.has(S) ? " on" : ""}`}
+                          onClick={toggleWatch}
+                          disabled={starBusy || watchlists.length === 0}
+                          aria-pressed={watchedSet.has(S)}
+                          aria-label={label}
+                          title={label}
+                        >
+                          {watchedSet.has(S) ? "★" : "☆"}
+                        </button>
+                      );
+                    })()}
+                  </div>
                   <div className="ex" style={{ lineHeight: 1.25 }} title={[data.name, ex, group].filter(Boolean).join(" · ")}>
                     {[ex, group].filter(Boolean).join(" · ") || data.name}
                   </div>
@@ -4192,7 +4254,8 @@ export function StockScreen({
         </>
       )}
 
-      {/* Which-watchlist picker (opened from a search-result star) */}
+      {/* Which-watchlist picker (opened from the star when the ticker is in
+          several lists) */}
       {wlPicker && (
         <WatchlistPicker
           sym={wlPicker.sym}
@@ -4204,6 +4267,30 @@ export function StockScreen({
           onClose={() => setWlPicker(null)}
           anchor={{ x: wlPicker.x, y: wlPicker.y }}
         />
+      )}
+
+      {/* Watchlist confirmation toast for the star — same look as Movers'. */}
+      {wlToast && (
+        <div
+          role={wlToast.kind === "error" ? "alert" : "status"}
+          aria-live={wlToast.kind === "error" ? "assertive" : "polite"}
+          style={{
+            position: "fixed", top: 22, left: "50%", transform: "translateX(-50%)",
+            zIndex: 999, background: "var(--surface-1)",
+            border: `1px solid ${wlToast.kind === "error" ? "var(--down)" : "var(--brand)"}`,
+            color: "var(--text-hi)", borderRadius: 10, padding: "11px 20px",
+            fontSize: ".85rem", fontWeight: 600, lineHeight: 1.4,
+            whiteSpace: wlToast.kind === "error" ? "normal" : "nowrap",
+            maxWidth: "min(560px, calc(100vw - 32px))",
+            boxShadow: "0 14px 40px -10px rgba(0,0,0,.6)",
+            display: "inline-flex", alignItems: "center", gap: 9,
+          }}
+        >
+          <span style={{ color: wlToast.kind === "error" ? "var(--down)" : "var(--brand)", fontSize: "1rem", flexShrink: 0 }}>
+            {wlToast.kind === "error" ? "!" : "★"}
+          </span>
+          {wlToast.text}
+        </div>
       )}
 
       {/* ── No-data popup — the searched ticker has no market data ── */}

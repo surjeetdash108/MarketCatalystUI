@@ -12658,6 +12658,38 @@ table.sd-ftab {
   line-height: 1.15;
 }
 
+/* Watchlist star beside the ticker name */
+.sd-snap-id .sd-star {
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--text-dim-solid);
+  cursor: pointer;
+  transition: color .15s, transform .15s;
+}
+
+.sd-snap-id .sd-star:hover:not(:disabled),
+.sd-snap-id .sd-star.on {
+  color: var(--warn);
+}
+
+.sd-snap-id .sd-star:hover:not(:disabled) {
+  transform: scale(1.12);
+}
+
+.sd-snap-id .sd-star:disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+.sd-snap-id .sd-star:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .sd-snap-id .ex {
   font-family: var(--f-mono);
   font-size: .64rem;
