@@ -1024,8 +1024,16 @@ export function StockIntelligenceScreen() {
   // Check if we have real revenue and EPS growth from financialsDoc (FMP)
   const realFundGrowth = useMemo(() => {
     if (!financialsDoc?.quarters || financialsDoc.quarters.length < 5) return null;
-    const latest = financialsDoc.quarters[0];
-    const yearAgo = financialsDoc.quarters[4];
+    // Same year-ago rule as siFacts: the same fiscal period one year earlier,
+    // not whatever sits four slots down (a missing quarter shifted it).
+    const qs = [...financialsDoc.quarters]
+      .filter((q) => q.endDate)
+      .sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
+    const latest = qs[0];
+    const yearAgo = latest
+      ? qs.find((q) => q.fiscalPeriod === latest.fiscalPeriod && Number(q.fiscalYear) === Number(latest.fiscalYear) - 1)
+      : undefined;
+    if (!latest || !yearAgo) return null;
     let revYoy: number | null = null;
     let epsYoy: number | null = null;
     if (latest.revenue != null && yearAgo.revenue != null && yearAgo.revenue > 0) {

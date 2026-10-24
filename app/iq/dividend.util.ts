@@ -22,8 +22,11 @@ export function resolveDividends(params: {
   const { dh, price, fallbackDivPerShare, fallbackYield } = params;
 
   if (dh) {
-    // If dividendHistory doc is loaded, its isPayer reflects active payer status with grace window
-    const isPayer = !!dh.isPayer;
+    // The doc's isPayer reflects active-payer status with the grace window. A
+    // doc written before that flag existed has none: decide from its forward
+    // amount instead of reading "missing" as "not a payer" (which blanked every
+    // real payer until its doc was rebuilt).
+    const isPayer = typeof dh.isPayer === "boolean" ? dh.isPayer : dh.forwardPerShare != null && dh.forwardPerShare > 0;
     if (!isPayer) {
       return {
         forwardPerShare: null,

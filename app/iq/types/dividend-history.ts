@@ -24,6 +24,7 @@ export interface DividendHistoryDoc {
   cagr5yPct: number | null;
   increaseStreakYears: number;
   frequency: number | null;
-  isPayer: boolean;
+  /** Absent on docs written before the grace-window flag existed. */
+  isPayer?: boolean;
   source: string;
 }
