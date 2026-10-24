@@ -41,7 +41,7 @@ import type {
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL } from "../types";
-import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, type EpsSalesPt } from "../eps-sales-data";
+import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 
@@ -3909,9 +3909,7 @@ export function StockScreen({
             const beats10 = hist10.filter(h => h.surp >= 0).length;
             const reportedAnnualRows = annualEpsSalesRows(financialsDoc?.annual ?? [], financialsDoc?.epsHistory ?? []);
             const reportedYears = new Set(reportedAnnualRows.map(r => r.year));
-            const fwd = [...(financialsDoc?.annualEstimates ?? [])]
-              .filter(e => !reportedYears.has(e.fiscalYear))
-              .sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
+            const fwd = forwardAnnualEstimates(financialsDoc).filter(e => !reportedYears.has(e.fiscalYear));
             const startEps = reportedAnnualRows.length ? reportedAnnualRows[reportedAnnualRows.length - 1].eps : null;
             const startSales = reportedAnnualRows.length ? reportedAnnualRows[reportedAnnualRows.length - 1].sales : null;
             const salesM = (v: number | null | undefined) => (v != null ? v / 1e6 : null);

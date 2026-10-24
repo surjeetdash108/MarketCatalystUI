@@ -106,13 +106,10 @@ export function computeQuarterFcf(q: {
   operatingCashFlow?: number | null;
   capitalExpenditures?: number | null;
 }): number | null {
-  if (
-    q.freeCashFlow != null &&
-    typeof q.freeCashFlow === "number" &&
-    Number.isFinite(q.freeCashFlow)
-  ) {
-    return q.freeCashFlow;
-  }
+  // Operating cash flow minus capex, computed here whenever both are known.
+  // FMP's own freeCashFlow is OCF + capex, so a period where FMP stored capex
+  // with the wrong sign comes out inflated (AEP Q2 2026: capex +$2.79B → FCF
+  // +$4.6B instead of −$1.0B; SO likewise). Capex is spending either way.
   if (
     q.operatingCashFlow != null &&
     typeof q.operatingCashFlow === "number" &&
@@ -122,6 +119,13 @@ export function computeQuarterFcf(q: {
     Number.isFinite(q.capitalExpenditures)
   ) {
     return q.operatingCashFlow - Math.abs(q.capitalExpenditures);
+  }
+  if (
+    q.freeCashFlow != null &&
+    typeof q.freeCashFlow === "number" &&
+    Number.isFinite(q.freeCashFlow)
+  ) {
+    return q.freeCashFlow;
   }
   return null;
 }

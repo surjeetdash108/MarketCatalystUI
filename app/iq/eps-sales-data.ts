@@ -14,6 +14,7 @@
  */
 import type {
   FinancialsDoc,
+  AnnualEstimate,
   AnnualFinancials,
   QuarterFinancials,
   EpsHistoryRow,
@@ -248,4 +249,32 @@ export function quarterlyEpsSalesRows(
       ),
     };
   });
+}
+
+/**
+ * Forward annual estimates for the fiscal years AFTER the last reported one,
+ * labelled the way the reported years are.
+ *
+ * Estimates are keyed by the calendar year their fiscal year ENDS in (FMP
+ * `analyst-estimates` date), while FMP's statements label a fiscal year that
+ * ends in January by the year it started: HD's year ending 2026-02-01 is
+ * "2025" in the statements and "2026" in the estimates. Comparing the labels
+ * treated an already-reported year as the year in progress, so the forward
+ * P/E was on the wrong year for every January year-end company (HD 21.3 vs
+ * 20.0, KR 12.9 vs 12.2, ZUMZ 30.9 vs 16.0). Years are matched on the last
+ * reported period's END date instead, and the estimates are relabelled with
+ * the statements' offset so "*2026" follows "2025".
+ */
+export function forwardAnnualEstimates(doc: Pick<FinancialsDoc, "annual" | "annualEstimates"> | null | undefined): AnnualEstimate[] {
+  const est = [...(doc?.annualEstimates ?? [])].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
+  const reported = (doc?.annual ?? [])
+    .filter((a) => (a.epsActual != null || a.revenue != null) && a.endDate)
+    .sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)))[0];
+  if (!reported) return est;
+  const endYear = Number(String(reported.endDate).slice(0, 4));
+  const label = Number(reported.fiscalYear);
+  const offset = Number.isFinite(label) && label > 0 ? label - endYear : 0;
+  return est
+    .filter((e) => Number(e.fiscalYear) > endYear)
+    .map((e) => (offset === 0 ? e : { ...e, fiscalYear: String(Number(e.fiscalYear) + offset) }));
 }

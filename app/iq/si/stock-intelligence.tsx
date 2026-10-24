@@ -44,6 +44,7 @@ import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex } from "../calendar-range";
 import { StockLogo, VendorTag } from "../utils";
 import { resolveActionMeta } from "../analyst-actions-engine";
+import { forwardAnnualEstimates } from "../eps-sales-data";
 import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
@@ -58,7 +59,7 @@ import type {
   LiveEarningsDoc,
   AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps, computeTtmFcf } from "../types";
+import { reportedQuarterEps, computeTtmFcf, computeQuarterFcf } from "../types";
 import { useIQActions } from "../shell";
 import type { Stock13FResponse } from "../stock-13f-view";
 
@@ -532,17 +533,11 @@ export function StockIntelligenceScreen() {
     const margin = (q: typeof latest | undefined, field: "grossProfit" | "operatingIncome") =>
       q && q.revenue && q[field] != null ? ((q[field] as number) / q.revenue) * 100 : null;
     const last4 = qs.slice(0, 4).filter((q) => q.epsActualReported != null && q.epsEstimateReported != null);
-    const est = [...(financialsDoc?.annualEstimates ?? [])].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
-    // The fiscal year in progress is the one after the last REPORTED year (a
-    // calendar-year rule picked NVDA's already-reported FY2026 as "current").
-    const lastReportedFy = Math.max(
-      0,
-      ...(financialsDoc?.annual ?? [])
-        .filter((a) => a.epsActual != null || a.revenue != null)
-        .map((a) => Number(a.fiscalYear) || 0),
-    );
-    const thisYear = lastReportedFy > 0 ? lastReportedFy + 1 : new Date().getFullYear();
-    const curEst = est.find((e) => Number(e.fiscalYear) >= thisYear && e.epsEstimate != null) ?? null;
+    // The fiscal year in progress is the first after the last REPORTED year,
+    // matched on period end dates (see forwardAnnualEstimates — label
+    // comparison put January year-ends one year behind).
+    const est = forwardAnnualEstimates(financialsDoc);
+    const curEst = est[0]?.epsEstimate != null ? est[0] : null;
     const nextEst = curEst ? est.find((e) => Number(e.fiscalYear) === Number(curEst.fiscalYear) + 1 && e.epsEstimate != null) ?? null : null;
     const cons = (Array.isArray(liveConsensusList) ? liveConsensusList : []).find((c) => c.ticker === currentTicker) ?? null;
     // Windows anchored on today's ET date (render-pure, no clock read).
@@ -2936,13 +2931,9 @@ export function StockIntelligenceScreen() {
             // (NEE: 32.4% / 32.4%) has no real gross line — show no data then.
             const noGross = isBank || fmpQ.every((q) => q.grossProfit != null && q.operatingIncome != null && q.grossProfit === q.operatingIncome);
             const gmSeries = noGross ? [] : fmpQ.map((q) => q.grossMarginPct != null ? q.grossMarginPct : (q.revenue ? ((q.grossProfit || 0) / q.revenue) * 100 : 0));
-            const fcfSeries = fmpQ.map((q) => {
-              if (q.freeCashFlow != null) return q.freeCashFlow / 1e9;
-              if (q.operatingCashFlow != null && q.capitalExpenditures != null) {
-                return (q.operatingCashFlow - Math.abs(q.capitalExpenditures)) / 1e9;
-              }
-              return (q.operatingCashFlow ?? q.netIncome ?? 0) / 1e9;
-            });
+            // Same definition as the TTM FCF yield (computeQuarterFcf) — never
+            // operating cash flow or net income standing in for it.
+            const fcfSeries = fmpQ.map((q) => (computeQuarterFcf(q) ?? 0) / 1e9);
             const opSeries = fmpQ.map((q) => (q.operatingIncome ?? q.netIncome ?? 0) / 1e9);
             // Total debt (short + long term + leases), as quote pages report it — not long-term only.
             const debtSeries = fmpQ.map((q) => (q.totalDebt ?? q.longTermDebt ?? 0) / 1e9);
@@ -2969,13 +2960,21 @@ export function StockIntelligenceScreen() {
             );
           }
 
+          // Dollar amounts in billions: the sign goes before the "$" ("-$5.4B",
+          // not "$-5.4B", which reads as 5.4), and under $1B shows in millions
+          // ("$167M", not "$0.0B").
+          const usdB = (v: number) => {
+            const a = Math.abs(v);
+            const sign = v < 0 && a >= 0.0005 ? "-" : "";
+            return a >= 1 ? `${sign}$${a.toFixed(1)}B` : `${sign}$${(a * 1000).toFixed(0)}M`;
+          };
           const FM: [string, (v: number) => string][] = [
-            ["REVENUE", (v) => "$" + v.toFixed(1) + "B"],
-            ["EPS", (v) => "$" + v.toFixed(2)],
+            ["REVENUE", usdB],
+            ["EPS", (v) => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2)],
             ["GROSS MARGIN", (v) => v.toFixed(1) + "%"],
-            ["FREE CASH FLOW", (v) => "$" + v.toFixed(1) + "B"],
-            [hasFmp ? "OPERATING INCOME" : "ROIC", (v) => (hasFmp ? "$" + v.toFixed(1) + "B" : v.toFixed(0) + "%")],
-            ["TOTAL DEBT", (v) => "$" + v.toFixed(1) + "B"],
+            ["FREE CASH FLOW", usdB],
+            [hasFmp ? "OPERATING INCOME" : "ROIC", (v) => (hasFmp ? usdB(v) : v.toFixed(0) + "%")],
+            ["TOTAL DEBT", usdB],
           ];
           const fundMetrics = FM.map(([k, f], i) => {
             const a = fsr[i] ?? [];

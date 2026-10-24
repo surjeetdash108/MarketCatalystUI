@@ -139,9 +139,20 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return JSON.parse(text, sectorReviver) as T;
 }
 
-/** Renames backend sector labels (see normalizeSector) wherever a response carries one. */
+/**
+ * Applied to every API response as it is parsed:
+ *  - renames backend sector labels (see normalizeSector);
+ *  - shows the vendor's published beta (`betaVendor`, FMP — the 5-year monthly
+ *    figure quote pages show) as `beta` when a company has one, keeping our
+ *    own computed beta as the fallback. One place, so every screen agrees.
+ */
 function sectorReviver(key: string, value: unknown): unknown {
-  return key === "sector" && typeof value === "string" ? normalizeSector(value) : value;
+  if (key === "sector" && typeof value === "string") return normalizeSector(value);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const o = value as { beta?: unknown; betaVendor?: unknown };
+    if (typeof o.betaVendor === "number" && Number.isFinite(o.betaVendor)) o.beta = o.betaVendor;
+  }
+  return value;
 }
 
 export function apiGet<T>(path: string): Promise<T> {

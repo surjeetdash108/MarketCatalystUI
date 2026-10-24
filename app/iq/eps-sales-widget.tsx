@@ -4,7 +4,7 @@ import { useState } from "react";
 import { NotAvailable, VendorTag } from "./utils";
 import type { FinancialsDoc, AnnualFinancials, QuarterFinancials, EpsHistoryRow } from "./types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, estimatedAnnualEps } from "./types";
-import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, type AnnualRow } from "./eps-sales-data";
+import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type AnnualRow } from "./eps-sales-data";
 
 
 
@@ -144,9 +144,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
   // vendor is wired. %chg is vs the immediately prior year (last reported year
   // for the first estimate, then the prior estimate).
   const reportedYears = new Set(annualRows.map(r => r.year));
-  const fwd = [...(financialsDoc?.annualEstimates ?? [])]
-    .filter(e => !reportedYears.has(e.fiscalYear))
-    .sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
+  const fwd = forwardAnnualEstimates(financialsDoc).filter(e => !reportedYears.has(e.fiscalYear));
   const startEps = annualRows.length ? annualRows[annualRows.length - 1].eps : null;
   const startSales = annualRows.length ? annualRows[annualRows.length - 1].sales : null;
   const salesM = (v: number | null | undefined) => (v != null ? v / 1e6 : null);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { forwardAnnualEstimates } from "../eps-sales-data";
 import { useIQActions, ExpandBtn } from "../shell";
 import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
@@ -1784,9 +1785,7 @@ export function EarningsScreen() {
   // "What street expects" — prefer the next (unreported) quarter's consensus EPS,
   // else the nearest forward fiscal-year estimate. Both come from the FMP feed.
   const upcomingRow = liveMatches.find(e => e.epsActual == null && e.epsEstimate != null);
-  const fwdAnnual = [...(financialsDoc?.annualEstimates ?? [])]
-    .filter(e => e.epsEstimate != null)
-    .sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear))[0];
+  const fwdAnnual = forwardAnnualEstimates(financialsDoc).find(e => e.epsEstimate != null);
   const streetExpects = upcomingRow?.epsEstimate != null
     ? `$${upcomingRow.epsEstimate.toFixed(2)} · ${upcomingRow.date}`
     : fwdAnnual?.epsEstimate != null
