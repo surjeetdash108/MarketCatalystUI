@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DataState, VendorTag, formatUsDate, ptAsOf } from "./utils";
+import { DataState, VendorTag, formatUsDate } from "./utils";
 import { useApiList } from "./hooks/useApiList";
 import { apiGet } from "./backend";
 import { useWatchlistsContext } from "./hooks/useWatchlists";
@@ -10,6 +10,13 @@ import { buildAnalystActions, type FirmStat, type ProcessedAction } from "./anal
 
 type SortKey = "date" | "firm" | "act" | "to" | "pt" | "up" | "score";
 const PAGE_SIZE = 20;
+/**
+ * Calls older than this are hidden until "Show older" is clicked. FMP's full
+ * history reaches back to 2012; rows from firms that left coverage years ago
+ * (HOFT / Sidoti 2018–2020) read as current and cannot be checked against
+ * today's public feeds.
+ */
+const RECENT_MONTHS = 12;
 const COLS = "minmax(95px,.7fr) minmax(150px,1.3fr) minmax(100px,.8fr) minmax(150px,1.2fr) minmax(120px,.9fr) minmax(90px,.7fr) minmax(100px,.9fr)";
 
 /**
@@ -95,6 +102,17 @@ export function StockAnalystActionsView({
     [effectiveConsensusDocs, sym, companyMap, livePrice, firmStatsByKey, holdings, watchedTickers],
   );
 
+  // Keyed by symbol, so another stock opens on the recent view again.
+  const [olderFor, setOlderFor] = useState<string | null>(null);
+  const showOlder = olderFor === sym;
+  const cutoff = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - RECENT_MONTHS);
+    return d.toISOString().slice(0, 10);
+  }, []);
+  const olderCount = useMemo(() => rows.filter((r) => r.date < cutoff).length, [rows, cutoff]);
+  const visible = useMemo(() => (showOlder ? rows : rows.filter((r) => r.date >= cutoff)), [rows, showOlder, cutoff]);
+
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<-1 | 1>(-1);
   const [page, setPage] = useState(0);
@@ -103,12 +121,12 @@ export function StockAnalystActionsView({
     const v = (r: ProcessedAction): string | number =>
       sortKey === "date" ? r.date : sortKey === "firm" ? r.firm : sortKey === "act" ? r.act
         : sortKey === "to" ? r.to : sortKey === "pt" ? r.pt1 : sortKey === "up" ? (r.upPct ?? -Infinity) : r.score;
-    return [...rows].sort((a, b) => {
+    return [...visible].sort((a, b) => {
       const x = v(a), y = v(b);
       const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
       return c * sortDir || b.date.localeCompare(a.date);
     });
-  }, [rows, sortKey, sortDir]);
+  }, [visible, sortKey, sortDir]);
   const pages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pg = Math.min(page, pages - 1);
   const shown = sorted.slice(pg * PAGE_SIZE, (pg + 1) * PAGE_SIZE);
@@ -129,13 +147,21 @@ export function StockAnalystActionsView({
   return (
     <div className="card" style={{ width: "100%" }}>
       <div className="card-h" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <h3>Analyst Actions<span className="sd-unit">{rows.length} {rows.length === 1 ? "call" : "calls"}</span></h3>
+        <h3>Analyst Actions<span className="sd-unit">{visible.length} {visible.length === 1 ? "call" : "calls"}{showOlder ? "" : ` · last ${RECENT_MONTHS} months`}</span></h3>
         <VendorTag v="fmp" />
+        {olderCount > 0 && (
+          <button type="button" className="pill" onClick={() => { setOlderFor(showOlder ? null : sym); setPage(0); }} style={{ marginLeft: "auto" }}>
+            {showOlder ? `Hide older` : `Show older (${olderCount})`}
+          </button>
+        )}
       </div>
       <div className="card-b" style={{ padding: 0 }}>
-        {rows.length === 0 ? (
+        {visible.length === 0 ? (
           <div style={{ padding: 36 }}>
-            <DataState loading={loading} label={`No analyst rating actions on file for ${sym}.`} />
+            <DataState
+              loading={loading || historyLoading}
+              label={rows.length > 0 ? `No analyst actions on ${sym} in the last ${RECENT_MONTHS} months.` : `No analyst rating actions on file for ${sym}.`}
+            />
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -168,9 +194,6 @@ export function StockAnalystActionsView({
                     {r.ptSource === "firm" ? (
                       <span className="mono" style={{ textAlign: "right", color: "var(--text-hi)", fontWeight: 700 }}>
                         ${r.pt1.toFixed(2)}
-                        {ptAsOf(r.ptDate, r.date) && (
-                          <div style={{ fontSize: ".72rem", fontWeight: 500, color: "var(--text-dim-solid)" }}>{ptAsOf(r.ptDate, r.date)}</div>
-                        )}
                       </span>
                     ) : (
                       <span className="mono" title="Not available from data source" style={{ textAlign: "right", color: "var(--text-dim-solid)" }}>—</span>

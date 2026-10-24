@@ -36,11 +36,10 @@ export interface ProcessedAction {
   dir: number; // 1 = bullish, -1 = bearish, 0 = neutral
   from: string;
   to: string;
-  pt1: number; // Price target for this call (the firm's own, else the Street consensus — see ptSource)
-  /** "firm": the firm's own target with this call; "consensus": the firm gave none, so the Street consensus stands in. */
+  pt1: number; // The firm's own target with this call; 0 when it gave none (see ptSource)
+  /** "firm": the firm's own target with this call; "consensus": the firm gave none, so the row shows "—". */
   ptSource: "firm" | "consensus";
-  /** Date the firm posted `pt1` (firm targets only). Earlier than `date` means
-   *  the firm reiterated without a new target and this is its standing one. */
+  /** Date the firm posted `pt1` (firm targets only) — within a day or so of `date`. */
   ptDate: string | null;
   prevPt: number | null;
   px: number; // Current price
@@ -97,12 +96,24 @@ function getRatingRank(grade?: string | null): number | null {
   return null;
 }
 
+/**
+ * The label a call is shown with.
+ *
+ * "Maintain" is only claimed when it is known: the rating is unchanged AND the
+ * firm's target with this call is known and not moved. FMP's `grades` has no
+ * targets, so a reiteration whose target the feeds lack used to read
+ * "Maintain" when the firm had raised or cut it (E2E Oct 2026: 96 rows). It
+ * now reads "Rating maintained" — the rating is the only thing known.
+ * `ptChange` is the direction the firm's own headline stated, used when the
+ * figures are missing.
+ */
 export function resolveActionMeta(
   actionRaw?: string | null,
   previousGrade?: string | null,
   newGrade?: string | null,
   pt?: number | null,
   prevPt?: number | null,
+  ptChange?: "raise" | "cut" | null,
 ) {
   const act = (actionRaw ?? "").toLowerCase().trim();
   const prev = (previousGrade ?? "").trim();
@@ -134,19 +145,16 @@ export function resolveActionMeta(
     shownAction = "Downgrade";
     dir = -1;
   }
-  // 3. PT Raise or PT Cut when current target is above or below prior target
-  else if (pt != null && prevPt != null && pt !== prevPt) {
-    if (pt > prevPt) {
-      shownAction = "PT Raise";
-      dir = 1;
-    } else {
-      shownAction = "PT Cut";
-      dir = -1;
-    }
+  // 3. PT Raise or PT Cut: from the two figures, else the headline's word
+  else if ((pt != null && prevPt != null && pt !== prevPt) || ptChange) {
+    const up = pt != null && prevPt != null && pt !== prevPt ? pt > prevPt : ptChange === "raise";
+    shownAction = up ? "PT Raise" : "PT Cut";
+    dir = up ? 1 : -1;
   }
-  // 4. Reiterate/Maintain only when rating and target are unchanged
+  // 4. Rating unchanged: "Maintain"/"Reiterate" only with a known, unmoved
+  //    target; without one the target change is unknown.
   else {
-    shownAction = act.includes("reiterat") ? "Reiterate" : "Maintain";
+    shownAction = pt == null ? "Rating maintained" : act.includes("reiterat") ? "Reiterate" : "Maintain";
     dir = (nextRank ?? 3) > 3 ? 1 : (nextRank ?? 3) < 3 ? -1 : 0;
   }
 
@@ -209,7 +217,7 @@ export function buildAnalystActions({
       if (c.priceTargetLow) allPtValues.push(c.priceTargetLow);
       const streetTargets = [...new Set(allPtValues)].sort((a, b) => a - b);
 
-      const metas = grades.map((g) => resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget));
+      const metas = grades.map((g) => resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget, g.priceTargetChange));
 
       grades.forEach((g, gIdx) => {
         const firmName = (g.firm as string).trim();

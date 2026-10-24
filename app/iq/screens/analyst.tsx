@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useCallback, useContext, useRef } from "react";
 import { useIQActions } from "../shell";
-import { DataState, StockLogo, VendorTag, formatUsDate, ptAsOf } from "../utils";
+import { DataState, StockLogo, VendorTag, formatUsDate } from "../utils";
 import { useApiList } from "../hooks/useApiList";
 import { apiGet } from "../backend";
 import { WatchlistsContext } from "../hooks/useWatchlists";
@@ -134,6 +134,7 @@ interface GradeHistoryRow {
   priceTarget: number | null;
   priceTargetDate?: string | null;
   previousPriceTarget: number | null;
+  priceTargetChange?: "raise" | "cut" | null;
 }
 
 /** One stored call by a firm (GET /market-data/analyst-firm-calls). */
@@ -187,17 +188,10 @@ interface FirmCallRow {
 // Helpers
 // ============================================================================
 
-/** The firm's price target with this call, as a single number — with
- *  "as of MM-DD" when it is a standing target carried from an earlier post. */
-function PtValue({ pt, ptDate, callDate }: { pt: number | null; ptDate?: string | null; callDate?: string }) {
+/** The firm's price target with this call, as a single number ("—" when it gave none). */
+function PtValue({ pt }: { pt: number | null; ptDate?: string | null; callDate?: string }) {
   if (pt == null || !(pt > 0)) return <>—</>;
-  const asOf = ptAsOf(ptDate, callDate);
-  return (
-    <>
-      ${pt.toFixed(2)}
-      {asOf && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: TEXT_MUTED }}>{asOf}</span>}
-    </>
-  );
+  return <>${pt.toFixed(2)}</>;
 }
 
 function fmtMoney(v: number | null | undefined): string {
@@ -459,7 +453,7 @@ export function AnalystScreen() {
       const key = `${g.date}|${firmKey(firm)}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const meta = resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget);
+      const meta = resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget, g.priceTargetChange);
       rows.push({
         key, date: g.date, firm, act: meta.shownAction, dir: meta.dir, from: meta.from, to: meta.to,
         pt: g.priceTarget, prevPt: g.previousPriceTarget, ptDate: g.priceTargetDate ?? null,
@@ -2104,9 +2098,6 @@ export function AnalystScreen() {
                     {r.ptSource === "firm" ? (
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI, fontWeight: 700 }}>
                         ${r.pt1.toFixed(2)}
-                        {ptAsOf(r.ptDate, r.date) && (
-                          <div style={{ fontSize: 12, fontWeight: 500, color: TEXT_HI }}>{ptAsOf(r.ptDate, r.date)}</div>
-                        )}
                       </span>
                     ) : (
                       <span

@@ -43,6 +43,7 @@ import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex } from "../calendar-range";
 import { StockLogo, VendorTag } from "../utils";
+import { resolveActionMeta } from "../analyst-actions-engine";
 import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
@@ -3478,15 +3479,15 @@ export function StockIntelligenceScreen() {
 
           allGrades.forEach((g) => {
             const dd = calcDd(g.date);
-            const dir = g.action === "upgrade" || (g.priceTarget && g.previousPriceTarget && g.priceTarget > g.previousPriceTarget)
-              ? "Positive"
-              : g.action === "downgrade"
-                ? "Risk"
-                : "Neutral";
+            // Same label and direction as the Analyst Actions table.
+            const meta = resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget, g.priceTargetChange);
+            // A reiteration is neutral news whatever the standing rating.
+            const moved = !/maintain|reiterate/i.test(meta.shownAction);
+            const dir = moved && meta.dir > 0 ? "Positive" : moved && meta.dir < 0 ? "Risk" : "Neutral";
             liveCatalystItems.push({
               date: fmtDateShort(g.date),
               cat: "Analyst actions",
-              ev: `${g.firm || "Analyst"} ${g.action || "rates"} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
+              ev: `${g.firm || "Analyst"}: ${meta.shownAction} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
               note: `${g.previousGrade ? `Prior: ${g.previousGrade}. ` : ""}${g.previousPriceTarget ? `Prior target: $${g.previousPriceTarget}. ` : ""}Consensus: ${tickerConsensus?.consensus || "Hold"} (${(tickerConsensus?.buy ?? 0) + (tickerConsensus?.strongBuy ?? 0)} Buys).`,
               imp: "MED",
               dir,

@@ -632,16 +632,6 @@ export function headlineLeadsWithTicker(headline: string | null | undefined, tic
  * Format date string into US format: MM-DD-YYYY.
  * Handles YYYY-MM-DD, ISO timestamps, or milliseconds.
  */
-/**
- * "as of 07-06" when a firm's target was posted more than 3 days before the
- * call it is shown on (a reiteration carrying its standing target), else null.
- */
-export function ptAsOf(ptDate: string | null | undefined, callDate: string | null | undefined): string | null {
-  if (!ptDate || !callDate) return null;
-  const gap = (Date.parse(callDate.slice(0, 10)) - Date.parse(ptDate.slice(0, 10))) / 86_400_000;
-  return gap > 3 ? `as of ${formatUsDate(ptDate).slice(0, 5)}` : null;
-}
-
 export function formatUsDate(d: string | number | null | undefined): string {
   if (!d) return "—";
   if (typeof d === "string") {
