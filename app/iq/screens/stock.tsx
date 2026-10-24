@@ -44,6 +44,7 @@ import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_L
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
+import { range52 } from "../range52";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
 
@@ -1141,8 +1142,8 @@ export function StockScreen({
     sector: keyStats?.sector ?? null,
     industry: keyStats?.industry ?? null,
     insiderActivity: symInsider,
-    week52High: week52?.high ?? keyStats?.high52 ?? null,
-    week52Low: week52?.low ?? keyStats?.low52 ?? null,
+    week52High: range52({ high: keyStats?.high52 ?? week52?.high, low: keyStats?.low52 ?? week52?.low }, { high: sessHigh, low: sessLow }).high,
+    week52Low: range52({ high: keyStats?.high52 ?? week52?.high, low: keyStats?.low52 ?? week52?.low }, { high: sessHigh, low: sessLow }).low,
   };
   const isUp = (data.pctChange ?? 0) >= 0;
   // `p` keeps a 0 fallback purely as the numeric baseline for the derived
@@ -2717,7 +2718,11 @@ export function StockScreen({
               { k: "Industry",      v: data.industry ? titleCaseLabel(data.industry) : null },
               { k: "CEO",           v: liveCompany?.ceo ?? (keyStats as any)?.ceo ?? (data as any)?.ceo ?? null },
               { k: "Employees",     v: (liveCompany?.employees ?? (keyStats as any)?.employees ?? (data as any)?.employees) != null ? Number(liveCompany?.employees ?? (keyStats as any)?.employees ?? (data as any)?.employees).toLocaleString("en-US") : null },
-              { k: "Listing date",  v: (liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate) ? fmtDate(liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate) : null },
+              { k: "Listing date",  v: (() => {
+                  // A vendor placeholder (GE: 1900-01-01) is no listing date.
+                  const d = String(liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate ?? "").slice(0, 10);
+                  return /^\d{4}-\d{2}-\d{2}$/.test(d) && d > "1900-12-31" ? fmtDate(d) : null;
+                })() },
             ];
             const right: Row[] = [
               { k: "Volume",        v: sessionVol != null ? Math.round(sessionVol).toLocaleString("en-US") : null },

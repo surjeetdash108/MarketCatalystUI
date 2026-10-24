@@ -333,10 +333,13 @@ function fmtMcap(mc: number | null | undefined): string {
  */
 function week5Base(closes: Week5Close[] | null | undefined, sessionDate: string): number | null {
   if (!closes || closes.length !== 6) return null;
-  const newest = closes[5].date;
-  if (newest > sessionDate) return null;
-  const lag = sessionsBetween(newest, sessionDate);
-  return lag <= 5 ? closes[lag].close : null;
+  if (closes[5].date > sessionDate) return null;
+  // Matched by DATE: the close exactly 5 trading sessions before the price's
+  // session. Indexing back from the newest bar assumed no session was missing
+  // from the stored bars; with one gone, [0] sat 6 sessions back (CIFR −21.0%
+  // vs −11.6%, TTMI −21.5% vs −14.7%, E2E Oct 23). No exact match → null, and
+  // the stored move stands.
+  return closes.find((c) => sessionsBetween(c.date, sessionDate) === 5)?.close ?? null;
 }
 
 // Largest → smallest. The dropdown only offers tiers that actually have movers
@@ -934,7 +937,9 @@ export function MoversScreen() {
     // the stored move stands — never today's 1-day %, which is not a 5-day number.
     let change = pq.pctChange;
     if (isWeekTab(tab)) {
-      const base = weekCloses ? week5Base(weekCloses, sessionDate) : weekBase;
+      // Only a base with a known date: the undated week5BaseClose of older
+      // docs can sit 6+ sessions back once a new session opens.
+      const base = weekCloses ? week5Base(weekCloses, sessionDate) : null;
       change = pq.price != null && base != null && base > 0
         ? ((pq.price - base) / base) * 100
         : (weekPct ?? null);

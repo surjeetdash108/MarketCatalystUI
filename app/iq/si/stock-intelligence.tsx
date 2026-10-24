@@ -44,6 +44,8 @@ import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex } from "../calendar-range";
 import { StockLogo, VendorTag } from "../utils";
 import { resolveActionMeta } from "../analyst-actions-engine";
+import { useHeadlineQuote } from "../quote-headline";
+import { range52 } from "../range52";
 import { forwardAnnualEstimates } from "../eps-sales-data";
 import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
@@ -515,8 +517,17 @@ export function StockIntelligenceScreen() {
   }, [financialsDoc, liveEarningsList, currentTicker]);
 
   // Real-time price and change from live tick, quotes context, or backend company resource
-  const currentPrice = live.tick?.price ?? sharedQuote?.price ?? liveCompany?.price ?? undefined;
-  const currentChange = live.pct ?? sharedQuote?.pctChange ?? liveCompany?.pctChange ?? undefined;
+  // Same headline rule as the stock page (useHeadlineQuote): outside regular
+  // hours the price is the last REGULAR close with that session's change; the
+  // extended-hours move is separate. Taking the after-hours trade with a % that
+  // still included the regular session mixed the two (E2E Oct 23: BAC −0.90%
+  // vs −0.79%, EPM, GE, JACK).
+  const headline = useHeadlineQuote(currentTicker || "", live, {
+    price: liveCompany?.price ?? null,
+    pctChange: liveCompany?.pctChange ?? null,
+  });
+  const currentPrice = (headline.regPrice > 0 ? headline.regPrice : null) ?? live.tick?.price ?? sharedQuote?.price ?? liveCompany?.price ?? undefined;
+  const currentChange = (headline.regPrice > 0 ? headline.regPct : null) ?? live.pct ?? sharedQuote?.pctChange ?? liveCompany?.pctChange ?? undefined;
 
   // Every input the Stock Intelligence engine reasons from — all real data
   // loaded above. Missing inputs stay null; the engine drops what needs them.
@@ -1513,8 +1524,12 @@ export function StockIntelligenceScreen() {
   // Stats definition for Overview header
   const peVal = liveCompany?.peRatio ?? stock.pe;
   const fpeVal = liveCompany?.forwardPe ?? stock.fpe;
-  const hi52 = liveCompany?.high52 ?? stock.hi;
-  const lo52 = liveCompany?.low52 ?? stock.lo;
+  const r52 = range52(
+    { high: liveCompany?.high52 ?? stock.hi, low: liveCompany?.low52 ?? stock.lo },
+    { high: sharedQuote?.dayHigh, low: sharedQuote?.dayLow },
+  );
+  const hi52 = r52.high;
+  const lo52 = r52.low;
   const statsRow = [
     { k: "MARKET CAP", v: realMcap || "—", sub: liveCompany?.sector || stock.sector || "Equity" },
     { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },

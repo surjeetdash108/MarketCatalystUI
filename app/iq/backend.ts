@@ -106,37 +106,50 @@ async function authHeaders(): Promise<Record<string, string>> {
 const REQUEST_TIMEOUT_MS = 20_000;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = { ...(await authHeaders()), ...(init.headers ?? {}) };
   // Without this a stalled connection (common on flaky mobile networks) leaves
   // the fetch pending indefinitely. Callers that await it — e.g. the auth
-  // listener's profile fetch — would then never settle.
+  // listener's profile fetch — would then never settle. The timer covers the
+  // whole request: the auth token, the headers AND the body. It used to be
+  // cleared once headers arrived, so a body that stalled mid-download (the
+  // full earnings list) left a widget on "Loading…" for good.
   const controller = new AbortController();
+  let timedOut = false;
   const timeoutId = setTimeout(() => {
+    timedOut = true;
     try {
       controller.abort("Request timed out");
     } catch {
       controller.abort();
     }
   }, REQUEST_TIMEOUT_MS);
-  let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+    const aborted = new Promise<Record<string, string>>((_, reject) =>
+      controller.signal.addEventListener("abort", () => reject(new Error("Request timed out")), { once: true }),
+    );
+    // Settles late (or never) once the race is decided — never an unhandled rejection.
+    aborted.catch(() => {});
+    const auth = await Promise.race([authHeaders(), aborted]);
+    const headers = { ...auth, ...(init.headers ?? {}) };
+    const res = await fetch(`${BASE_URL}${path}`, {
       ...init,
       headers,
       signal: init.signal ?? controller.signal,
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new BackendApiError(res.status, body || res.statusText);
+    }
+    if (res.status === 204) return undefined as T;
+
+    const text = await res.text();
+    if (!text.trim()) return undefined as T;
+    return JSON.parse(text, sectorReviver) as T;
+  } catch (err) {
+    if (timedOut && !(err instanceof BackendApiError)) throw new Error(`Request timed out: ${path}`);
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new BackendApiError(res.status, body || res.statusText);
-  }
-  if (res.status === 204) return undefined as T;
-
-  const text = await res.text();
-  if (!text.trim()) return undefined as T;
-  return JSON.parse(text, sectorReviver) as T;
 }
 
 /**
