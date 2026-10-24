@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StockLogo, DataState, VendorTag, cls, sign, fmt, titleCaseLabel, headlineLeadsWithTicker } from "../utils";
 import { useIQActions } from "../shell";
@@ -149,6 +149,89 @@ function EarningsAnnouncementsTab() {
   );
 }
 
+// ── Biggest % tab (T074) ──────────────────────────────────────────────────
+// Briefing.com-style SCANX digest: today's top gainers and losers, grouped by
+// sector. The backend (market-scan.service.ts) rebuilds it on demand when the
+// stored copy is older than 2h, so the tab re-reads it on that same cadence.
+interface ScanItem { ticker: string; name: string | null; pctChange: number | null; price?: number | null }
+interface ScanSectorGroup { sector: string; items: ScanItem[] }
+interface BiggestPctScan { generatedAt: string; gainers: ScanSectorGroup[]; losers: ScanSectorGroup[] }
+
+const BIGGEST_PCT_REFRESH_MS = 2 * 60 * 60 * 1000;
+
+/** Scan time on the market clock, labelled ET like the rest of the app. */
+const scanTimeET = (iso?: string) =>
+  iso ? `${new Date(iso).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET` : "";
+
+/** Biggest % tab — own component so the fetch only runs while the tab is open. */
+function BiggestPctTab() {
+  const { data, loading } = useApiResource<BiggestPctScan>("/live/scan/biggest-pct", BIGGEST_PCT_REFRESH_MS);
+  const { openStockDetail } = useIQActions();
+  const [side, setSide] = useState<"gainers" | "losers">("gainers");
+  const groups = (data?.[side] ?? []).filter(g => g.items.length > 0);
+  const count = (gs?: ScanSectorGroup[]) => (gs ?? []).reduce((n, g) => n + g.items.length, 0);
+  const sideTickers = groups.flatMap(g => g.items.map(i => i.ticker));
+  const color = side === "gainers" ? "var(--up)" : "var(--down)";
+  return (
+    <div style={{ padding: "14px 18px 18px" }}>
+      <div className="card">
+        <div className="card-h">
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <h3>Today&apos;s biggest % gainers / losers</h3><VendorTag v={["fmp", "polygon"]} />
+          </div>
+          {data?.generatedAt && (
+            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+              as of {scanTimeET(data.generatedAt)} · refreshes every 2h
+            </span>
+          )}
+        </div>
+        <div className="card-b" style={{ maxHeight: "none", padding: "14px 18px 18px" }}>
+          {!data ? (
+            <DataState loading={loading} label="Generating the scan…" />
+          ) : (
+            <>
+              <div className="tabs" role="tablist" aria-label="Gainers or losers" style={{ display: "inline-flex", marginBottom: 14 }}>
+                {([["gainers", "Gainers", "var(--up)"], ["losers", "Losers", "var(--down)"]] as const).map(([k, label, col]) => {
+                  const on = side === k;
+                  return (
+                    <button key={k} type="button" role="tab" aria-selected={on}
+                      className={`tab${on ? " on" : ""}`} onClick={() => setSide(k)}
+                      style={on ? { color: col, fontWeight: 700 } : undefined}>
+                      {label} <span style={{ opacity: .6, fontWeight: 500 }}>{count(data[k])}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {groups.length === 0 ? (
+                <DataState loading={false} label="No movers in this scan yet." />
+              ) : groups.map(g => (
+                <div key={g.sector} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: ".66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-dim-solid)", marginBottom: 6 }}>
+                    {g.sector} <span style={{ opacity: .6, fontWeight: 500 }}>{g.items.length}</span>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {g.items.map(i => (
+                      <button key={i.ticker} type="button"
+                        onClick={() => openStockDetail(i.ticker, sideTickers)}
+                        title={i.name ?? i.ticker}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px 4px 6px", borderRadius: 8, cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--border-soft)", color: "inherit", fontSize: ".76rem" }}>
+                        <StockLogo sym={i.ticker} size={18} />
+                        <b style={{ color: "var(--text-hi)" }}>{i.ticker}</b>
+                        {i.price != null && <span style={{ color: "var(--text-dim-solid)" }}>{fmt(i.price)}</span>}
+                        {i.pctChange != null && <span style={{ color, fontWeight: 600 }}>{sign(i.pctChange)}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Market-cap tiers derived from companies.marketCap (raw USD). Used to filter
 // the feed by the size of the company each news item is about.
 const CAP_TIERS = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
@@ -229,11 +312,74 @@ function mkMark(s: string, key: number) {
   );
 }
 
-/* ── Feed item ── the logo filters the feed by that ticker; the body opens the source article. */
-function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight}: {
+/** Compact inline read of the per-ticker AI analysis — the same read-only
+ *  endpoint the ◆ Analysis drawer (TickerAnalysisDrawer) uses. Mounted only
+ *  while a feed row is expanded, so nothing is fetched until the user opens it
+ *  (lazy on first open). It never triggers generation: a ticker the pipeline
+ *  has not reached yet comes back `empty` and is shown as "not analysed yet". */
+interface FeedAnalysisDoc {
+  empty?: boolean;
+  summary?: string;
+  sentiment?: string;
+  keyDevelopments?: string[];
+  lastUpdatedAt?: string;
+}
+
+function FeedItemAnalysis({ ticker }: { ticker: string }) {
+  const { data, loading } = useApiResource<FeedAnalysisDoc>(
+    `/live/ticker-analysis?ticker=${encodeURIComponent(ticker)}`,
+  );
+  const empty = !loading && (!data || !!data.empty || !data.summary);
+  const dim = { fontSize: ".78rem", color: "var(--text-dim-solid)" } as const;
+  const tone =
+    data?.sentiment === "positive" ? "var(--up)"
+    : data?.sentiment === "negative" ? "var(--down)"
+    : data?.sentiment === "mixed" ? "var(--warn)"
+    : "var(--text-dim-solid)";
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+        <span className="ta-lbl" style={{ marginBottom: 0 }}>◆ AI analysis · {ticker}</span>
+        {!loading && !empty && (
+          <span className="pill" style={{ background: "var(--surface-3)", color: tone, textTransform: "capitalize", fontWeight: 700 }}>
+            {data?.sentiment ?? "neutral"}
+          </span>
+        )}
+      </div>
+      {loading ? (
+        <div style={dim}>Loading analysis…</div>
+      ) : empty ? (
+        <div style={dim}>No AI analysis for {ticker} yet — it is generated as news arrives for this ticker.</div>
+      ) : (
+        <>
+          <p className="ta-p">{data?.summary}</p>
+          {!!data?.keyDevelopments?.length && (
+            <ul className="ta-list" style={{ marginTop: 6 }}>
+              {data.keyDevelopments.slice(0, 3).map((x, k) => <li key={k}>{x}</li>)}
+            </ul>
+          )}
+          <div style={{ marginTop: 6, fontSize: ".64rem", color: "var(--text-dim-solid)" }}>
+            AI-generated from news · informational only, not investment advice
+            {data?.lastUpdatedAt ? ` · updated ${data.lastUpdatedAt.slice(0, 16).replace("T", " ")}` : ""}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Feed item ── vertical accordion row. The headline is the toggle (chevron +
+   aria-expanded); collapsed it shows the headline, a 2-line summary preview and
+   the metadata line, expanded it shows the full summary, the inline AI analysis
+   for the ticker and the actions (◆ Analysis drawer, read the source article).
+   The logo still opens the stock; the ticker prefix still filters the feed. */
+function FeedItem({ item, i, total, isOpen, onToggle, onTicker, onStockOpen, onAnalysis, marketCap, livePct, highlight}: {
   item: NewsArticleDoc;
   i: number;
   total: number;
+  /** Single-open accordion state, owned by the parent (`openId`). */
+  isOpen: boolean;
+  onToggle: () => void;
   onTicker: (ticker: string) => void;
   onStockOpen: (ticker: string) => void;
   onAnalysis: (ticker: string) => void;
@@ -243,6 +389,47 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
    *  headline and description. Empty string when the search box is empty. */
   highlight: string;
 }) {
+  const panelId = useId();
+  // Only http(s) links are offered as "Read article" — feed rows come from
+  // vendor data, so a non-web scheme is never turned into a link.
+  const safeUrl = item.url && /^https?:\/\//i.test(item.url) ? item.url : null;
+  // A row with no summary, no ticker and no link has nothing to reveal, so it
+  // stays a plain headline instead of a toggle that expands to nothing.
+  const canToggle = !!item.summary || !!item.ticker || !!safeUrl;
+  const open = isOpen && canToggle;
+  const hasPanel = !!item.ticker || !!safeUrl;
+  const headlineType = {
+    color: "var(--text-hi)",
+    fontSize: "clamp(15px, 1.5vw, 22px)",
+    lineHeight: 1.18,
+    letterSpacing: "-.025em",
+    fontWeight: 600,
+  } as const;
+  const headlineInner = (
+    <>
+      {/* Skip the "TLT:" prefix when the headline already opens with
+          the ticker ("TLT's Yield Edge…"), so it isn't printed twice. */}
+      {!!item.ticker && !headlineLeadsWithTicker(item.headline, item.ticker) && (<>
+        <span
+          onClick={(e) => {
+            // The prefix filters the feed — it must not also toggle the row.
+            e.stopPropagation();
+            onTicker(item.ticker);
+            onStockOpen(item.ticker);
+          }}
+          style={{
+            cursor: "pointer",
+            // color: "var(--text)",
+          }}
+          title={`Filter the feed by ${item.ticker}`}
+        >
+          {item.ticker}
+        </span>
+        {": "}
+      </>)}
+      {highlightMatch(item.headline, highlight)}
+    </>
+  );
   return (
     <article
       style={{
@@ -256,7 +443,11 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
             ? "1px solid var(--border-soft)"
             : "none",
         // background: "var(--surface-1)",
-        cursor: item.url ? "pointer" : "default",
+        // Open row: soft brand wash + inset left rail (box-shadow, so the grid
+        // columns never shift by a border width) — same cue GlanceTab uses.
+        background: open ? "color-mix(in srgb, var(--brand) 5%, transparent)" : "transparent",
+        boxShadow: open ? "inset 3px 0 0 var(--brand)" : "none",
+        transition: "background .18s ease, box-shadow .18s ease",
       }}
     >
       {/* COLUMN 1 — TIME */}
@@ -314,15 +505,9 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
 
       {/* COLUMN 3 — ALL OTHER CONTENT */}
       <div
-        onClick={() => {
-          if (item.url) {
-            window.open(item.url, "_blank", "noopener,noreferrer");
-          }
-        }}
         style={{
           minWidth: 0,
           width: "100%",
-          cursor: item.url ? "pointer" : "default",
         }}
       >
         {/* Live tag */}
@@ -347,42 +532,65 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
           Live
         </span> */}
 
-        {/* Headline */}
-        <div
-          style={{
-            marginTop: 13,
-            // color: "var(--text)",
-            color:"var(--text-hi)",
-            fontSize: "clamp(15px, 1.5vw, 22px)",
-            lineHeight: 1.18,
-            letterSpacing: "-.025em",
-            fontWeight: 600,
-            // maxWidth: "42ch",
-          }}
-        >
-          {/* Skip the "TLT:" prefix when the headline already opens with
-              the ticker ("TLT's Yield Edge…"), so it isn't printed twice. */}
-          {!!item.ticker && !headlineLeadsWithTicker(item.headline, item.ticker) && (<>
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                onTicker(item.ticker);
-                onStockOpen(item.ticker);
-              }}
+        {/* Headline — the accordion toggle (heading wrapper keeps it
+            navigable by heading; the real <button> inside carries
+            aria-expanded). Rows with nothing to reveal stay plain text. */}
+        <div role="heading" aria-level={3} style={{ marginTop: 13 }}>
+          {canToggle ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={open}
+              aria-controls={open ? panelId : undefined}
               style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                width: "100%",
+                margin: 0,
+                padding: 0,
+                background: "none",
+                border: 0,
                 cursor: "pointer",
-                // color: "var(--text)",
+                textAlign: "left",
+                fontFamily: "inherit",
+                ...headlineType,
               }}
-              title={`Filter the feed by ${item.ticker}`}
             >
-              {item.ticker}
-            </span>
-            {": "}
-          </>)}
-          {highlightMatch(item.headline, highlight)}
+              <span style={{ flex: 1, minWidth: 0 }}>{headlineInner}</span>
+              {/* Chevron: height matches the first headline line (1.18em) so it
+                  stays aligned with line one when the headline wraps. */}
+              <span
+                aria-hidden="true"
+                style={{
+                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  height: "1.18em",
+                  color: "var(--text-dim-solid)",
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }}
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </span>
+            </button>
+          ) : (
+            <div style={headlineType}>{headlineInner}</div>
+          )}
         </div>
 
-        {/* Summary */}
+        {/* Summary — clamped to 2 lines as a preview, full text when open. */}
         {item.summary && (
           <div
             style={{
@@ -392,10 +600,14 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
               fontSize: 14,
               lineHeight: 1.58,
               // maxWidth: "76ch",
-              display: "-webkit-box",
-              WebkitBoxOrient: "vertical",
-              WebkitLineClamp: 2,
-              overflow: "hidden",
+              ...(open
+                ? null
+                : {
+                    display: "-webkit-box",
+                    WebkitBoxOrient: "vertical" as const,
+                    WebkitLineClamp: 2,
+                    overflow: "hidden",
+                  }),
             }}
           >
             {highlightMatch(item.summary, highlight)}
@@ -460,18 +672,61 @@ function FeedItem({ item, i, total, onTicker, onStockOpen, onAnalysis, marketCap
             </>
           )}
 
-          {!!item.ticker && <button
-            className="feed-analysis-btn"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onAnalysis(item.ticker);
-            }}
-            title={`AI analysis for ${item.ticker}`}
-          >
-            ◆ Analysis
-          </button>}
         </div>
+
+        {/* Expanded detail — inline AI analysis (lazy: only mounted while open)
+            plus the row actions. The ◆ Analysis button still opens the full
+            drawer; "Read article" is where the old whole-body click went. */}
+        {open && hasPanel && (
+          <div
+            id={panelId}
+            style={{
+              marginTop: 10,
+              paddingTop: 10,
+              borderTop: "1px solid var(--border-soft)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            {!!item.ticker && <FeedItemAnalysis ticker={item.ticker} />}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {!!item.ticker && (
+                <button
+                  type="button"
+                  className="feed-analysis-btn"
+                  onClick={() => onAnalysis(item.ticker)}
+                  title={`AI analysis for ${item.ticker}`}
+                >
+                  ◆ Analysis
+                </button>
+              )}
+              {safeUrl && (
+                <a
+                  href={safeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "2px 8px",
+                    borderRadius: 20,
+                    border: "1px solid var(--border-soft)",
+                    color: "var(--text-dim-solid)",
+                    fontSize: ".56rem",
+                    fontWeight: 700,
+                    letterSpacing: ".02em",
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Read article ↗
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </article>
   );
@@ -687,8 +942,12 @@ export function CommentaryScreen() {
   // gone nothing on this screen reads them, so the two requests go too rather
   // than loading data that is never rendered. The macro-regime read still has a
   // home on the Macro & VIX screen.
-  const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Announcement
+  const [mainTab,       setMainTab]       = useState(0); // 0 = News, 1 = Announcement, 2 = Weekly, 3 = Monthly, 4 = Biggest %
   const wire = useNewsWire(mainTab === 0);
+  // Results companies have declared (today + yesterday), as news-shaped rows from
+  // the stored earnings data — so an earnings release lands in the stream even
+  // when no outlet or 8-K row carries it. Polled once a minute while News is open.
+  const { data: earningsRows } = useApiResource<NewsArticleDoc[]>(mainTab === 0 ? "/live/earnings-wire" : null, 60_000);
   const [activeTab,     setActiveTab]     = useState(0);
   const [search,        setSearch]        = useState("");
   const [secFilter,     setSecFilter]     = useState("All");
@@ -706,6 +965,10 @@ export function CommentaryScreen() {
   /* Which ticker's rolling AI analysis is open. Read-only: the endpoint never
      triggers generation, so opening this cannot incur a model call. */
   const [analysisTicker, setAnalysisTicker] = useState<string | null>(null);
+  /* Which feed row is expanded (single-open accordion, same pattern as the
+     Announcement / Summary tabs). Keyed by item id, so a row stays open while
+     the live wire adds stories above it. */
+  const [openId, setOpenId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
@@ -735,6 +998,7 @@ export function CommentaryScreen() {
   const liveNews = [
     ...syncedNews,
     ...wire.items.filter(n => !syncedUrls.has(n.url) && !syncedTitles.has(`${n.ticker}|${(n.headline ?? "").toLowerCase()}`)),
+    ...(earningsRows ?? []),
   ];
   const sorted = sortNewsDesc(liveNews);
   const premarket  = sorted.filter(n => etHour(n.publishedAt) < 9.5);
@@ -837,6 +1101,7 @@ export function CommentaryScreen() {
         <div className="tabs">
           <button className={`tab${mainTab === 0 ? " on" : ""}`} style={mainTab === 0 ? SEL_TAB : undefined} onClick={() => setMainTab(0)}>News</button>
           <button className={`tab${mainTab === 1 ? " on" : ""}`} style={mainTab === 1 ? SEL_TAB : undefined} onClick={() => setMainTab(1)}>Announcement</button>
+          <button className={`tab${mainTab === 4 ? " on" : ""}`} style={mainTab === 4 ? SEL_TAB : undefined} onClick={() => setMainTab(4)}>Biggest %</button>
           <button className={`tab${mainTab === 2 ? " on" : ""}`} style={mainTab === 2 ? SEL_TAB : undefined} onClick={() => setMainTab(2)}>Weekly Summary</button>
           <button className={`tab${mainTab === 3 ? " on" : ""}`} style={mainTab === 3 ? SEL_TAB : undefined} onClick={() => setMainTab(3)}>Monthly Summary</button>
         </div>
@@ -992,6 +1257,8 @@ export function CommentaryScreen() {
                   item={item}
                   i={i}
                   total={feed.length}
+                  isOpen={openId === item.id}
+                  onToggle={() => setOpenId(cur => (cur === item.id ? null : item.id))}
                   onTicker={sym => setSearch(sym)}
                   onStockOpen={sym => openStockDetail(sym, feed.map(x => x.ticker))}
                   onAnalysis={setAnalysisTicker}
@@ -1012,6 +1279,7 @@ export function CommentaryScreen() {
       </>)}
 
       {mainTab === 1 && <EarningsAnnouncementsTab />}
+      {mainTab === 4 && <BiggestPctTab />}
       {mainTab === 2 && <GlanceTab period="weekly" heading="Weekly summary" />}
       {mainTab === 3 && <GlanceTab period="monthly" heading="Monthly summary" />}
 
