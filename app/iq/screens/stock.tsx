@@ -44,7 +44,7 @@ import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_L
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
-import { range52 } from "../range52";
+import { range52, fiftyTwoWeekBars } from "../range52";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
 
@@ -1007,8 +1007,10 @@ export function StockScreen({
   // bar, which pulled the average down by half a day's volume (CRM read 8.36M
   // against a 20-session 8.81M).
   const yrDone = completedSessions(yr);
-  const week52 = yr.length > 1
-    ? { high: Math.max(...yr.map(b => b.h)), low: Math.min(...yr.map(b => b.l)) }
+  // Fallback only (keyStats.high52/low52 first): the same 52-week window as the backend.
+  const yr52w = fiftyTwoWeekBars(yrDone);
+  const week52 = yr52w.length > 0
+    ? { high: Math.max(...yr52w.map(b => b.h)), low: Math.min(...yr52w.map(b => b.l)) }
     : null;
   // Falls back to the company doc's own avgVolume20 (technical-indicators.job,
   // or the summary's identical computation) until the year of bars this
