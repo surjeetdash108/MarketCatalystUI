@@ -1091,7 +1091,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const tickerSearchResults = useTickerSearch(searchQ);
   const searchMatches: Array<{ sym: string; name: string | null; price: number | null; pctChange: number | null }> = searchQ
     ? (() => {
-        const q = searchQ.toLowerCase();
+        const q = searchQ.trim().toLowerCase();
+        const upper = searchQ.trim().toUpperCase();
         const bySym = new Map(tickerSearchResults.map(r => [r.ticker, r]));
         // A handful of live `companies` docs are written by side-jobs (news
         // count, fundamentals growth) that can create the doc before the
@@ -1100,10 +1101,27 @@ export function IQShell({ children }: { children: React.ReactNode }) {
         const nameMatched = shellCompanies.filter(
           c => !!c.ticker && ((c.name ?? "").toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)) && !bySym.has(c.ticker),
         );
-        return [
+        const candidates = [
           ...tickerSearchResults.map(r => ({ sym: r.ticker, name: r.name, price: r.price, pctChange: r.pctChange })),
           ...nameMatched.map(c => ({ sym: c.ticker, name: c.name, price: c.price, pctChange: c.pctChange })),
         ];
+
+        // Rank candidates: exact ticker → ticker prefix → name prefix → substring
+        const exact: typeof candidates = [];
+        const tickerPrefix: typeof candidates = [];
+        const namePrefix: typeof candidates = [];
+        const substring: typeof candidates = [];
+
+        for (const item of candidates) {
+          const symUpper = (item.sym ?? "").toUpperCase();
+          const nameLower = (item.name ?? "").toLowerCase();
+          if (symUpper === upper) exact.push(item);
+          else if (symUpper.startsWith(upper)) tickerPrefix.push(item);
+          else if (nameLower.startsWith(q)) namePrefix.push(item);
+          else substring.push(item);
+        }
+
+        return [...exact, ...tickerPrefix, ...namePrefix, ...substring];
       })()
     : quickAccessCompanies.filter(c => !!c.ticker).map(c => ({ sym: c.ticker, name: c.name, price: c.price, pctChange: c.pctChange }));
   // On-demand quote enrichment: /live/search returns only ticker+name (its
