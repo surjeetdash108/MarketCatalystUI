@@ -4974,6 +4974,10 @@ table.tbl tr:hover td {
   color: var(--down);
 }
 
+.flat {
+  color: var(--text-dim-solid);
+}
+
 .warn {
   color: var(--warn);
 }

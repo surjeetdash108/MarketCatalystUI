@@ -200,16 +200,18 @@ export function useHeadlineQuote(
   const preMarketQuote = !isPre || isTodayAfter4amET(sharedQuote?.updatedAt ?? null);
   const barExt = barsFallback ? lastExtendedClose(dayBars, isPre) : null;
   const extPrice = barsFallback
-    ? (barExt?.price ?? null)
+    ? (barExt?.price ?? (dayBarsDoc ? regPrice : null))
     : isExtended && preMarketQuote ? (sharedQuote?.price ?? live.tick?.price ?? null) : null;
-  const extMove = extPrice != null && regPrice > 0 ? extPrice - regPrice : null;
+  const rawMove = extPrice != null && regPrice > 0 ? extPrice - regPrice : null;
+  // If move rounds to zero (< 0.5 cent), treat as exact zero so it displays clean "+0.00" / "+0.00%"
+  const extMove = rawMove != null ? (Math.abs(rawMove) < 0.005 ? 0 : rawMove) : null;
   const ahPrice = extPrice;
   const ahPct = extMove != null ? (extMove / regPrice) * 100 : null;
   const ahDollar = extMove != null ? Math.abs(extMove) : null;
 
-  // No extended trade since the close — or a feed with no session split, whose
-  // price IS the close — shows no block rather than a "+0.00" one.
-  const showAfterHours = isExtended && extMove != null && Math.abs(extMove) >= 0.005;
+  // Show extended hours block outside regular hours whenever an extended price is available
+  // (shows +0.00 / +0.00% when there is no change).
+  const showAfterHours = isExtended && extMove != null;
   const extLabel = isPre ? "PRE-MARKET" : "AFTER HOURS";
 
   /*
@@ -224,7 +226,7 @@ export function useHeadlineQuote(
     : isPre
     ? "At prev. close"
     : quoteAt != null ? `At close: ${fmtAsOf(closeOf(quoteAt))}` : "At close";
-  const ahAt = barsFallback ? (barExt?.at ?? null) : quoteAt;
+  const ahAt = barsFallback ? (barExt?.at ?? quoteAt) : quoteAt;
   const ahAsOf = showAfterHours && ahAt != null ? fmtAsOf(ahAt) : null;
 
   return { dispPrice, regPrice, regPct, regDollar, ahPrice, ahPct, ahDollar, showAfterHours, extLabel, regAsOf, ahAsOf };
