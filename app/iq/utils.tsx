@@ -404,7 +404,13 @@ export function hashStr(s: string): number {
 }
 
 // ---- Shared earnings-history row shape (real data — populated per-caller from live earnings_events) ----
-export interface EarnQ { q: string; e: number; a: number; surp: number; mv: number; surpStr?: string; }
+export interface EarnQ {
+  q: string; e: number; a: number; surp: number; mv: number; surpStr?: string;
+  /** GAAP diluted EPS for the quarter (displayed as "EPS"); `a`/`e` stay the adjusted pair the surprise uses. */
+  gaap?: number | null;
+  /** "Q3 FY26 (ended Sep 5)". */
+  label?: string;
+}
 
 export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
   const d = [...hist].slice(0, 12).reverse();

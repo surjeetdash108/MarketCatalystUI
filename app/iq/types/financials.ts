@@ -8,6 +8,61 @@ export function reportedQuarterEps(q: QuarterFinancials): number | null {
 }
 
 /**
+ * THE reported-EPS basis for display: GAAP diluted EPS from the income
+ * statement (`epsActual`). Quarterly EPS, the latest EPS actual and EPS growth
+ * all use it. FMP's adjusted figure (`epsActualReported`) is kept ONLY for the
+ * beat/miss surprise, where it must match the basis of the estimate — see
+ * ADJUSTED_SURPRISE_LABEL. Null when the statement has no EPS (never the
+ * adjusted figure in its place: the two bases must not mix on one line).
+ */
+export function gaapQuarterEps(q: { epsActual?: number | null }): number | null {
+  return typeof q.epsActual === "number" && Number.isFinite(q.epsActual) ? q.epsActual : null;
+}
+
+/** Label for every surprise derived from the adjusted (FMP matched) pair. */
+export const ADJUSTED_SURPRISE_LABEL = "Adjusted EPS vs estimate";
+
+/**
+ * Revenue and GAAP EPS growth, latest quarter vs the same fiscal period one
+ * year earlier (not "four slots down" — a missing quarter shifted that).
+ * EPS growth is null when the year-ago EPS is within ±$0.05 (a % of a
+ * near-zero base is meaningless).
+ */
+export function quarterYoY(
+  quarters: Array<{ endDate?: string | null; fiscalPeriod?: string | null; fiscalYear?: string | number | null; revenue?: number | null; epsActual?: number | null }> | null | undefined,
+): { revYoy: number | null; epsYoy: number | null } | null {
+  const qs = [...(quarters ?? [])].filter((q) => q.endDate).sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
+  const latest = qs[0];
+  const yearAgo = latest
+    ? qs.find((q) => q.fiscalPeriod === latest.fiscalPeriod && Number(q.fiscalYear) === Number(latest.fiscalYear) - 1)
+    : undefined;
+  if (!latest || !yearAgo) return null;
+  const revYoy = latest.revenue != null && yearAgo.revenue != null && yearAgo.revenue > 0
+    ? ((latest.revenue - yearAgo.revenue) / yearAgo.revenue) * 100
+    : null;
+  const le = gaapQuarterEps(latest), ye = gaapQuarterEps(yearAgo);
+  const epsYoy = le != null && ye != null && Math.abs(ye) > 0.05 ? ((le - ye) / Math.abs(ye)) * 100 : null;
+  return { revYoy, epsYoy };
+}
+
+/**
+ * A quarter named by its fiscal period and when it ended — "Q3 FY26 (ended
+ * Sep 5)" — so the newest quarter is never just a month that can be read as
+ * the calendar quarter (PEP's Q3 ends Sep 5; a "Sep '26" label hid that).
+ */
+export function quarterLabel(q: { fiscalPeriod?: string | null; fiscalYear?: string | number | null; endDate?: string | null }): string {
+  const fy = q.fiscalYear != null && String(q.fiscalYear).length >= 2 ? `FY${String(q.fiscalYear).slice(-2)}` : "";
+  const fp = q.fiscalPeriod ?? "";
+  let end = "";
+  if (q.endDate && /^\d{4}-\d{2}-\d{2}/.test(q.endDate)) {
+    const d = new Date(`${q.endDate.slice(0, 10)}T00:00:00Z`);
+    end = `ended ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`;
+  }
+  const head = [fp, fy].filter(Boolean).join(" ");
+  return head && end ? `${head} (${end})` : head || end;
+}
+
+/**
  * THE surprise-% derivation — `(actual − estimate) / |estimate| × 100`.
  *
  * This was hand-written at half a dozen call sites with three different

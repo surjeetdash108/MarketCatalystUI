@@ -61,7 +61,7 @@ import type {
   LiveEarningsDoc,
   AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps, computeTtmFcf, computeQuarterFcf, computeOperatingIncomeSeries } from "../types";
+import { computeTtmFcf, computeQuarterFcf, computeOperatingIncomeSeries, gaapQuarterEps, quarterYoY } from "../types";
 import { useIQActions } from "../shell";
 import type { Stock13FResponse } from "../stock-13f-view";
 
@@ -1035,27 +1035,8 @@ export function StockIntelligenceScreen() {
   // Check if we have real revenue and EPS growth from financialsDoc (FMP)
   const realFundGrowth = useMemo(() => {
     if (!financialsDoc?.quarters || financialsDoc.quarters.length < 5) return null;
-    // Same year-ago rule as siFacts: the same fiscal period one year earlier,
-    // not whatever sits four slots down (a missing quarter shifted it).
-    const qs = [...financialsDoc.quarters]
-      .filter((q) => q.endDate)
-      .sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
-    const latest = qs[0];
-    const yearAgo = latest
-      ? qs.find((q) => q.fiscalPeriod === latest.fiscalPeriod && Number(q.fiscalYear) === Number(latest.fiscalYear) - 1)
-      : undefined;
-    if (!latest || !yearAgo) return null;
-    let revYoy: number | null = null;
-    let epsYoy: number | null = null;
-    if (latest.revenue != null && yearAgo.revenue != null && yearAgo.revenue > 0) {
-      revYoy = ((latest.revenue - yearAgo.revenue) / yearAgo.revenue) * 100;
-    }
-    const latestEps = reportedQuarterEps(latest) ?? latest.epsActual;
-    const yearAgoEps = reportedQuarterEps(yearAgo) ?? yearAgo.epsActual;
-    if (latestEps != null && yearAgoEps != null && Math.abs(yearAgoEps) > 0.05) {
-      epsYoy = ((latestEps - yearAgoEps) / Math.abs(yearAgoEps)) * 100;
-    }
-    return { revYoy, epsYoy };
+    // Revenue and GAAP diluted EPS growth vs the same fiscal period a year earlier.
+    return quarterYoY(financialsDoc.quarters);
   }, [financialsDoc]);
 
   // Real market cap format
@@ -1534,7 +1515,7 @@ export function StockIntelligenceScreen() {
     { k: "MARKET CAP", v: realMcap || "—", sub: liveCompany?.sector || stock.sector || "Equity" },
     { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },
     { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
-    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
+    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, GAAP diluted" : "y/y, latest qtr" },
     { k: "52W HIGH / LOW", v: `${hi52 != null ? usd(hi52) : "—"} / ${lo52 != null ? usd(lo52) : "—"}`, sub: "Range" },
   ];
 
@@ -2948,7 +2929,8 @@ export function StockIntelligenceScreen() {
           if (fmpQ && fmpQ.length >= 2) {
             // Real FMP fundamental data series
             const revSeries = fmpQ.map((q) => (q.revenue || 0) / 1e9);
-            const epsSeries = fmpQ.map((q) => reportedQuarterEps(q) ?? q.epsActual ?? 0);
+            // GAAP diluted (gaapQuarterEps) — the same basis as EPS (TTM) and P/E.
+            const epsSeries = fmpQ.map((q) => gaapQuarterEps(q) ?? 0);
             // Gross margin means nothing for a bank (no cost of goods; JPM read
             // 62.3%), and a statement whose gross profit IS operating income
             // (NEE: 32.4% / 32.4%) has no real gross line — show no data then.
@@ -2994,7 +2976,7 @@ export function StockIntelligenceScreen() {
           };
           const FM: [string, (v: number) => string][] = [
             ["REVENUE", usdB],
-            ["EPS", (v) => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2)],
+            ["EPS (GAAP)", (v) => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2)],
             ["GROSS MARGIN", (v) => v.toFixed(1) + "%"],
             ["FREE CASH FLOW", usdB],
             [hasFmp ? "OPERATING INCOME" : "ROIC", (v) => (hasFmp ? usdB(v) : v.toFixed(0) + "%")],

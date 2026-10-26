@@ -21,6 +21,7 @@ import type {
 } from "./types";
 import {
   reportedQuarterEps,
+  gaapQuarterEps,
   quarterEpsSurprisePct,
   quarterEpsSurpriseStr,
   reportedAnnualEps,
@@ -66,7 +67,10 @@ export type QuarterRow = {
   /** Period-end date (ISO) and its "Sep-24" month label. */
   end: string;
   monthLabel: string;
+  /** GAAP diluted EPS. */
   eps: number | null;
+  /** FMP adjusted EPS — the basis of epsEst and epsSurp. */
+  epsAdj: number | null;
   epsEst: number | null;
   epsChg: string;
   epsSurp: string;
@@ -141,7 +145,8 @@ export function epsSalesSeries(
       .slice(-12)
       .map(r => ({
         label: fmtDate(r.endDate, { month: "short", year: "2-digit" }).replace(" ", "-"),
-        eps: reportedQuarterEps(r),
+        // GAAP diluted (see gaapQuarterEps); the adjusted figure is only the surprise basis.
+        eps: gaapQuarterEps(r),
         sales: r.revenue != null ? r.revenue / 1e6 : null,
         end: r.endDate as string,
       }));
@@ -228,7 +233,7 @@ export function quarterlyEpsSalesRows(
 
   return asc.map((r, i) => {
     const yoy = yearAgoOf(r, i);
-    const eps = reportedQuarterEps(r);
+    const eps = gaapQuarterEps(r);
     return {
       // Always show fiscal quarter + year (e.g. "Q3 2026"); fall back to the
       // period-end month/year only when the fiscal labels are missing.
@@ -239,8 +244,10 @@ export function quarterlyEpsSalesRows(
       end: r.endDate as string,
       monthLabel: fmtDate(r.endDate, { month: "short", year: "2-digit" }).replace(" ", "-"),
       eps,
+      // Adjusted actual: the basis of the estimate and the surprise beside it.
+      epsAdj: r.epsActualReported ?? null,
       epsEst: r.epsEstimateReported ?? null,
-      epsChg: pctChangeStr(eps, yoy ? reportedQuarterEps(yoy) : null),
+      epsChg: pctChangeStr(eps, yoy ? gaapQuarterEps(yoy) : null),
       epsSurp: quarterEpsSurpriseStr(r),
       sales: r.revenue != null ? r.revenue / 1e6 : null,
       salesChg: pctChangeStr(r.revenue, yoy?.revenue),

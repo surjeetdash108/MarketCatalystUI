@@ -40,7 +40,7 @@ import type {
   CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc, OwnershipDoc,
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL } from "../types";
+import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, gaapQuarterEps, quarterLabel, ADJUSTED_SURPRISE_LABEL } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
@@ -1415,6 +1415,8 @@ export function StockScreen({
           : `${q.fiscalPeriod ?? ""} ${q.fiscalYear ?? ""}`.trim(),
         e: paired && repEst != null ? repEst : 0, a: act, surp: parseFloat(surp.toFixed(1)), mv: 0,
         surpStr,
+        gaap: gaapQuarterEps(q),
+        label: quarterLabel(q),
       };
     });
   const beatStreak = (() => {
@@ -2609,10 +2611,9 @@ export function StockScreen({
                   <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 8 }}>Next report: {erDate}</div>
                   {hist10.slice(0, 5).map(q => (
                     <div key={q.q} className="minirow">
-                      <span className="tkr" style={{ width: 60 }}>{q.q}</span>
-                      <span className="mid mono">
-                        {q.e !== 0 && <span style={{ color: "var(--text-dim-solid)" }}>est ${fmt(q.e, 2)} → </span>}
-                        ${fmt(q.a, 2)} act
+                      <span className="tkr" style={{ width: 60 }} title={q.label}>{q.q}</span>
+                      <span className="mid mono" title={`EPS (GAAP diluted)${q.e !== 0 ? `; ${ADJUSTED_SURPRISE_LABEL}: adj. $${fmt(q.a, 2)} vs est. $${fmt(q.e, 2)}` : ""}`}>
+                        {q.gaap != null ? `$${fmt(q.gaap, 2)} GAAP` : "—"}
                       </span>
                       {q.surpStr && q.surpStr !== "—"
                         ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surpStr.includes("vs est") ? q.surpStr : `${q.surp >= 0 ? "beat" : "miss"} ${q.surpStr}`}</span>
@@ -3887,17 +3888,19 @@ export function StockScreen({
                         <thead>
                           <tr>
                             <th>Quarter</th>
-                            <th className="num">EPS est</th>
-                            <th className="num">EPS act</th>
-                            <th className="num">Surprise</th>
+                            <th className="num" title="GAAP diluted EPS">EPS (GAAP)</th>
+                            <th className="num" title="FMP adjusted EPS — the basis of the estimate">Adj. EPS</th>
+                            <th className="num">Est. (adj.)</th>
+                            <th className="num" title={ADJUSTED_SURPRISE_LABEL}>{ADJUSTED_SURPRISE_LABEL}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {hist10.map(q => (
                             <tr key={q.q}>
-                              <td><b style={{ color: "var(--text-hi)" }}>{q.q}</b></td>
-                              <td className="num">${q.e.toFixed(2)}</td>
+                              <td><b style={{ color: "var(--text-hi)" }}>{q.label || q.q}</b></td>
+                              <td className="num">{q.gaap != null ? `$${q.gaap.toFixed(2)}` : "—"}</td>
                               <td className="num">${q.a.toFixed(2)}</td>
+                              <td className="num">{q.e !== 0 ? `$${q.e.toFixed(2)}` : "—"}</td>
                               <td className={`num ${q.surp >= 0 ? "up" : "down"}`}>{q.surpStr && q.surpStr !== "—" ? q.surpStr : `${q.surp >= 0 ? "+" : ""}${q.surp}%`}</td>
                             </tr>
                           ))}

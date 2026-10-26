@@ -1,0 +1,339 @@
+{
+"source": "GET /live/financials (deployed live API), captured 2026-10-26 20:05Z",
+"PEP": [
+{
+"fiscalPeriod": "Q3",
+"fiscalYear": "2026",
+"endDate": "2026-09-05",
+"filingDate": "2026-10-08",
+"revenue": 25274000000,
+"epsActual": 2.23,
+"epsEstimate": 2.29,
+"epsActualReported": 2.34,
+"epsEstimateReported": 2.29
+},
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2026",
+"endDate": "2026-06-13",
+"filingDate": "2026-07-09",
+"revenue": 24181000000,
+"epsActual": 2.18,
+"epsEstimate": 2.19,
+"epsActualReported": 2.2,
+"epsEstimateReported": 2.19
+},
+{
+"fiscalPeriod": "Q1",
+"fiscalYear": "2026",
+"endDate": "2026-03-21",
+"filingDate": "2026-04-16",
+"revenue": 19443000000,
+"epsActual": 1.7,
+"epsEstimate": 1.54,
+"epsActualReported": 1.61,
+"epsEstimateReported": 1.54
+},
+{
+"fiscalPeriod": "Q4",
+"fiscalYear": "2025",
+"endDate": "2025-12-27",
+"filingDate": "2026-02-03",
+"revenue": 29343000000,
+"epsActual": 1.85,
+"epsEstimate": 2.24,
+"epsActualReported": 2.26,
+"epsEstimateReported": 2.24
+},
+{
+"fiscalPeriod": "Q3",
+"fiscalYear": "2025",
+"endDate": "2025-09-06",
+"filingDate": "2025-10-09",
+"revenue": 23937000000,
+"epsActual": 1.9,
+"epsEstimate": 2.26,
+"epsActualReported": 2.29,
+"epsEstimateReported": 2.26
+},
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2025",
+"endDate": "2025-06-14",
+"filingDate": "2025-05-23",
+"revenue": 22726000000,
+"epsActual": 0.92,
+"epsEstimate": 2.03,
+"epsActualReported": 2.12,
+"epsEstimateReported": 2.03
+},
+{
+"fiscalPeriod": "Q1",
+"fiscalYear": "2025",
+"endDate": "2025-03-22",
+"filingDate": "2025-04-24",
+"revenue": 17919000000,
+"epsActual": 1.33,
+"epsEstimate": 1.49,
+"epsActualReported": 1.48,
+"epsEstimateReported": 1.49
+},
+{
+"fiscalPeriod": "Q4",
+"fiscalYear": "2024",
+"endDate": "2024-12-31",
+"filingDate": "2025-02-04",
+"revenue": 27784000000,
+"epsActual": 1.11,
+"epsEstimate": 1.95,
+"epsActualReported": 1.96,
+"epsEstimateReported": 1.95
+},
+{
+"fiscalPeriod": "Q3",
+"fiscalYear": "2024",
+"endDate": "2024-09-07",
+"filingDate": "2024-10-08",
+"revenue": 23319000000,
+"epsActual": 2.13,
+"epsEstimate": 2.29,
+"epsActualReported": 2.31,
+"epsEstimateReported": 2.29
+},
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2024",
+"endDate": "2024-06-15",
+"filingDate": "2024-07-11",
+"revenue": 22501000000,
+"epsActual": 2.23,
+"epsEstimate": 2.16,
+"epsActualReported": 2.28,
+"epsEstimateReported": 2.16
+}
+],
+"REPX": [
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2026",
+"endDate": "2026-06-30",
+"filingDate": "2026-08-05",
+"revenue": 165850000,
+"epsActual": 4.11,
+"epsEstimate": 1.63,
+"epsActualReported": 2.55,
+"epsEstimateReported": 1.63
+},
+{
+"fiscalPeriod": "Q1",
+"fiscalYear": "2026",
+"endDate": "2026-03-31",
+"filingDate": "2026-05-06",
+"revenue": 113881000,
+"epsActual": -3.38,
+"epsEstimate": 1.1,
+"epsActualReported": 1.02,
+"epsEstimateReported": 1.1
+},
+{
+"fiscalPeriod": "Q4",
+"fiscalYear": "2025",
+"endDate": "2025-12-31",
+"filingDate": "2026-03-04",
+"revenue": 97277000,
+"epsActual": 4.02,
+"epsEstimate": 0.83,
+"epsActualReported": 1.35,
+"epsEstimateReported": 0.83
+},
+{
+"fiscalPeriod": "Q3",
+"fiscalYear": "2025",
+"endDate": "2025-09-30",
+"filingDate": "2025-11-05",
+"revenue": 106852000,
+"epsActual": 0.77,
+"epsEstimate": 0.97,
+"epsActualReported": 0.77,
+"epsEstimateReported": 0.97
+},
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2025",
+"endDate": "2025-06-30",
+"filingDate": "2025-08-06",
+"revenue": 85394000,
+"epsActual": 1.44,
+"epsEstimate": 1,
+"epsActualReported": 1.44,
+"epsEstimateReported": 1
+},
+{
+"fiscalPeriod": "Q1",
+"fiscalYear": "2025",
+"endDate": "2025-03-31",
+"filingDate": "2025-05-07",
+"revenue": 102457000,
+"epsActual": 1.36,
+"epsEstimate": 1.63,
+"epsActualReported": 1.62,
+"epsEstimateReported": 1.63
+},
+{
+"fiscalPeriod": "Q4",
+"fiscalYear": "2024",
+"endDate": "2024-12-31",
+"filingDate": "2025-03-05",
+"revenue": 102695000,
+"epsActual": 0.52,
+"epsEstimate": 1.66,
+"epsActualReported": 0.96,
+"epsEstimateReported": 1.66
+},
+{
+"fiscalPeriod": "Q3",
+"fiscalYear": "2024",
+"endDate": "2024-09-30",
+"filingDate": "2024-11-06",
+"revenue": 102339000,
+"epsActual": 1.21,
+"epsEstimate": 1.57,
+"epsActualReported": 1.21,
+"epsEstimateReported": 1.57
+},
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2024",
+"endDate": "2024-06-30",
+"filingDate": "2024-08-07",
+"revenue": 105403000,
+"epsActual": 1.59,
+"epsEstimate": 1.74,
+"epsActualReported": 1.59,
+"epsEstimateReported": 1.74
+},
+{
+"fiscalPeriod": "Q1",
+"fiscalYear": "2024",
+"endDate": "2024-03-31",
+"filingDate": "2024-05-08",
+"revenue": 99744000,
+"epsActual": 0.94,
+"epsEstimate": 1.5,
+"epsActualReported": 0.94,
+"epsEstimateReported": 1.5
+}
+],
+"BAC": [
+{
+"fiscalPeriod": "Q3",
+"fiscalYear": "2026",
+"endDate": "2026-09-30",
+"filingDate": "2026-10-14",
+"revenue": 29958000000,
+"epsActual": 0.91,
+"epsEstimate": 1.1,
+"epsActualReported": 1.08,
+"epsEstimateReported": 1.1
+},
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2026",
+"endDate": "2026-06-30",
+"filingDate": "2026-07-31",
+"revenue": 31558000000,
+"epsActual": 1.2,
+"epsEstimate": 1.13,
+"epsActualReported": 1.21,
+"epsEstimateReported": 1.13
+},
+{
+"fiscalPeriod": "Q1",
+"fiscalYear": "2026",
+"endDate": "2026-03-31",
+"filingDate": "2026-05-01",
+"revenue": 30272000000,
+"epsActual": 1.11,
+"epsEstimate": 1.01,
+"epsActualReported": 1.11,
+"epsEstimateReported": 1.01
+},
+{
+"fiscalPeriod": "Q4",
+"fiscalYear": "2025",
+"endDate": "2025-12-31",
+"filingDate": "2026-02-25",
+"revenue": 31180000000,
+"epsActual": 0.97,
+"epsEstimate": 0.958,
+"epsActualReported": 0.98,
+"epsEstimateReported": 0.958
+},
+{
+"fiscalPeriod": "Q3",
+"fiscalYear": "2025",
+"endDate": "2025-09-30",
+"filingDate": "2025-10-31",
+"revenue": 28088000000,
+"epsActual": 1.06,
+"epsEstimate": 0.952,
+"epsActualReported": 1.06,
+"epsEstimateReported": 0.952
+},
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2025",
+"endDate": "2025-06-30",
+"filingDate": "2025-07-31",
+"revenue": 26463000000,
+"epsActual": 0.89,
+"epsEstimate": 0.86,
+"epsActualReported": 0.89,
+"epsEstimateReported": 0.86
+},
+{
+"fiscalPeriod": "Q1",
+"fiscalYear": "2025",
+"endDate": "2025-03-31",
+"filingDate": "2025-04-30",
+"revenue": 27366000000,
+"epsActual": 0.9,
+"epsEstimate": 0.817,
+"epsActualReported": 0.9,
+"epsEstimateReported": 0.817
+},
+{
+"fiscalPeriod": "Q4",
+"fiscalYear": "2024",
+"endDate": "2024-12-31",
+"filingDate": "2025-02-25",
+"revenue": 25347000000,
+"epsActual": 0.82,
+"epsEstimate": 0.78,
+"epsActualReported": 0.82,
+"epsEstimateReported": 0.78
+},
+{
+"fiscalPeriod": "Q3",
+"fiscalYear": "2024",
+"endDate": "2024-09-30",
+"filingDate": "2024-10-29",
+"revenue": 25345000000,
+"epsActual": 0.81,
+"epsEstimate": 0.77,
+"epsActualReported": 0.81,
+"epsEstimateReported": 0.77
+},
+{
+"fiscalPeriod": "Q2",
+"fiscalYear": "2024",
+"endDate": "2024-06-30",
+"filingDate": "2024-07-30",
+"revenue": 25377000000,
+"epsActual": 0.83,
+"epsEstimate": 0.8,
+"epsActualReported": 0.83,
+"epsEstimateReported": 0.8
+}
+]
+}

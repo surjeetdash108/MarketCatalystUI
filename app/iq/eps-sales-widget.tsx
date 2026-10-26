@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { NotAvailable, VendorTag } from "./utils";
 import type { FinancialsDoc, AnnualFinancials, QuarterFinancials, EpsHistoryRow } from "./types";
-import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, estimatedAnnualEps } from "./types";
+import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, estimatedAnnualEps, ADJUSTED_SURPRISE_LABEL } from "./types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type AnnualRow } from "./eps-sales-data";
 
 
@@ -278,7 +278,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
             <div style={{ overflowX: "auto" }}>
               <table className="tbl">
                 <thead>
-                  <tr><th>Quarter</th><th className="num">EPS act</th><th className="num">EPS est</th><th className="num">%chg</th><th className="num">%surp</th><th className="num">Sales (M)</th><th className="num">%chg</th><th className="num">%surp</th></tr>
+                  <tr><th>Quarter</th><th className="num" title="GAAP diluted EPS">EPS (GAAP)</th><th className="num">%chg</th><th className="num" title="FMP adjusted EPS — the basis of the estimate">Adj. EPS</th><th className="num">Est. (adj.)</th><th className="num" title={ADJUSTED_SURPRISE_LABEL}>Adj. vs est.</th><th className="num">Sales (M)</th><th className="num">%chg</th><th className="num">%surp</th></tr>
                 </thead>
                 <tbody>
                   {/* Newest quarter first. */}
@@ -286,8 +286,9 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
                     <tr key={`${r.label}-${i}`}>
                       <td style={{ fontWeight: 700, color: "var(--text-hi)" }}>{r.label}</td>
                       <td className="num">{r.eps != null ? `$${r.eps.toFixed(2)}` : <NotAvailable />}</td>
-                      <td className="num">{r.epsEst != null ? `$${r.epsEst.toFixed(2)}` : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.epsChg)}`}>{r.epsChg}</td>
+                      <td className="num">{r.epsAdj != null ? `$${r.epsAdj.toFixed(2)}` : <NotAvailable />}</td>
+                      <td className="num">{r.epsEst != null ? `$${r.epsEst.toFixed(2)}` : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.epsSurp)}`}>{r.epsSurp}</td>
                       <td className="num">{r.sales != null ? r.sales.toFixed(1) : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.salesChg)}`}>{r.salesChg}</td>
@@ -298,7 +299,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
               </table>
             </div>
             <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 8 }}>
-              %chg is year-over-year. %surp is actual vs analyst estimate — blank until an estimate feed is wired.
+              EPS is GAAP diluted; %chg is year-over-year on that basis. The surprise compares FMP&apos;s adjusted EPS with the estimate on the same basis ({ADJUSTED_SURPRISE_LABEL}).
             </div>
           </div>
         )}
