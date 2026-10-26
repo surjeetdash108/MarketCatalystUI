@@ -404,7 +404,7 @@ export function hashStr(s: string): number {
 }
 
 // ---- Shared earnings-history row shape (real data — populated per-caller from live earnings_events) ----
-export interface EarnQ { q: string; e: number; a: number; surp: number; mv: number; }
+export interface EarnQ { q: string; e: number; a: number; surp: number; mv: number; surpStr?: string; }
 
 export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
   const d = [...hist].slice(0, 12).reverse();

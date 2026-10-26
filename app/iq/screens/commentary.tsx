@@ -11,6 +11,7 @@ import { useNewsWire } from "../hooks/useNewsWire";
 import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
 import type { NewsArticleDoc, CompanyDoc, WatchlistDoc, HoldingDoc } from "../types";
+import { formatEpsSurprise } from "../types";
 import { NEWS_TAGS } from "../types/news";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { TickerAnalysisDrawer } from "../ticker-analysis-drawer";
@@ -93,6 +94,7 @@ function EarningsAnnouncementsTab() {
             </div>
           ) : rows.map((r) => {
             const a = r.announcement;
+            const surpStr = a ? formatEpsSurprise(a.epsActual, a.epsEstimate) : "—";
             const id = `${r.ticker}_${a?.reportDate ?? r.lastUpdatedAt}`;
             const isOpen = openId === id;
             const vClass = a?.verdict === "beat" ? "up" : a?.verdict === "miss" ? "down" : "";
@@ -108,7 +110,7 @@ function EarningsAnnouncementsTab() {
                   </div>
                   {a?.verdict && a.verdict !== "unknown" && (
                     <span className="pill" style={{ textTransform: "capitalize", flexShrink: 0 }}>
-                      <span className={vClass}>{a.verdict}{a.surprisePct != null ? ` ${sign(a.surprisePct)}` : ""}</span>
+                      <span className={vClass}>{a.verdict}{a.surprisePct != null ? ` ${sign(a.surprisePct)}` : (surpStr !== "—" ? ` (${surpStr})` : "")}</span>
                     </span>
                   )}
                   <span style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", flexShrink: 0, minWidth: 76, textAlign: "right" }}>{a?.reportDate ?? ""}</span>
@@ -120,7 +122,7 @@ function EarningsAnnouncementsTab() {
                     {a && (
                       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
                         {a.epsActual != null && <span>EPS <b style={{ color: "var(--text-hi)" }}>{a.epsActual}</b>{a.epsEstimate != null ? ` vs est ${a.epsEstimate}` : ""}</span>}
-                        {a.surprisePct != null && <span>Surprise <b className={vClass}>{sign(a.surprisePct)}</b></span>}
+                        {(a.surprisePct != null || surpStr !== "—") && <span>Surprise <b className={vClass}>{a.surprisePct != null ? sign(a.surprisePct) : surpStr}</b></span>}
                         {a.revenueActual != null && <span>Rev <b style={{ color: "var(--text-hi)" }}>{fmt(a.revenueActual)}</b>{a.revenueEstimate != null ? ` vs ${fmt(a.revenueEstimate)}` : ""}</span>}
                       </div>
                     )}

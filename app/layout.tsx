@@ -141,6 +141,9 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-icon.png",
   },
+  other: {
+    "git-commit": process.env.NEXT_PUBLIC_GIT_COMMIT || "unknown",
+  },
 };
 
 export default function RootLayout({

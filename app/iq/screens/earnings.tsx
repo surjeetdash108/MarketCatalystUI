@@ -11,7 +11,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes } from "../live-quotes-context";
 import type { LiveEarningsDoc, CompanyDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EarningsAnnouncementDoc, AnalystConsensusDoc } from "../types";
 import { isoDay, addDays, mondayOf, fmtDate, etTodayIso } from "../calendar-range";
-import { surprisePct, reportedQuarterEps, quarterEpsSurprisePct } from "../types";
+import { surprisePct, reportedQuarterEps, quarterEpsSurprisePct, formatEpsSurprise, quarterEpsSurpriseStr } from "../types";
 
 /** Next report date (MM-DD-YYYY): the stored date while it is still ahead,
  *  else the first upcoming row on the earnings calendar, else "TBA". */
@@ -1076,6 +1076,7 @@ interface GlanceQuarterRow {
   act: number | null;
   est: number | null;
   surp: number | null;
+  surpStr: string;
   revenue: number | null;
 }
 
@@ -1119,6 +1120,7 @@ function GlanceQuarters({ ticker, colSpan }: { ticker: string; colSpan: number }
       act: h.epsActual,
       est: h.epsEstimate,
       surp: surprisePct(h.epsActual, h.epsEstimate),
+      surpStr: formatEpsSurprise(h.epsActual, h.epsEstimate),
       revenue: revByPeriod.get(`${h.fiscalYear}-${h.fiscalPeriod}`) ?? null,
     }));
 
@@ -1135,6 +1137,7 @@ function GlanceQuarters({ ticker, colSpan }: { ticker: string; colSpan: number }
       act: reportedQuarterEps(q),
       est: q.epsEstimateReported ?? q.epsEstimate,
       surp: quarterEpsSurprisePct(q),
+      surpStr: quarterEpsSurpriseStr(q),
       revenue: q.revenue,
     }));
 
@@ -1171,7 +1174,7 @@ function GlanceQuarters({ ticker, colSpan }: { ticker: string; colSpan: number }
                     <td className="r ecal-num" style={{ color: "var(--text-dim-solid)" }}>
                       {r.est != null ? `$${r.est.toFixed(2)}` : "—"}
                     </td>
-                    <td className={`r ecal-num ${fmtUpDn(r.surp)}`}>{fmtPctSigned(r.surp)}</td>
+                    <td className={`r ecal-num ${fmtUpDn(r.act != null && r.est != null ? r.act - r.est : r.surp)}`}>{r.surpStr}</td>
                     <td className="r ecal-num">{fmtRev(r.revenue)}</td>
                   </tr>
                 ))}
@@ -1186,7 +1189,9 @@ function GlanceQuarters({ ticker, colSpan }: { ticker: string; colSpan: number }
 
 function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: EarnCalItem; showDate: boolean; onSelect: (s: string, date: string) => void; colSpan: number; prePct: number | null; postPct: number | null }) {
   const epsSurp = surprise(it.epsE, it.epsA);
+  const epsSurpStr = formatEpsSurprise(it.epsA, it.epsE);
   const yoyRev = surprise(it.revYearAgo, it.revA); // (rev - yearAgo)/|yearAgo|
+  const isUp = it.epsA != null && it.epsE != null ? it.epsA >= it.epsE : (epsSurp != null ? epsSurp >= 0 : null);
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -1214,7 +1219,7 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
         </div>
       </td>
       {showDate && <td className="r ecal-num" style={{ whiteSpace: "nowrap", color: "var(--text-dim-solid)" }}>{it.date ? it.date.slice(5) : "—"}</td>}
-      <td className={`r ecal-num ${fmtUpDn(epsSurp)}`}>{fmtPctSigned(epsSurp)}</td>
+      <td className={`r ecal-num ${isUp == null ? "" : isUp ? "up" : "dn"}`}>{epsSurpStr}</td>
       <td className="r ecal-num">{it.epsA != null ? `$${it.epsA.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{it.epsE != null ? `$${it.epsE.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num" style={{ color: "var(--text-dim-solid)" }}>{it.epsAYearAgo != null ? `$${it.epsAYearAgo.toFixed(2)}` : "—"}</td>
@@ -1773,13 +1778,14 @@ export function EarningsScreen() {
     const act = repAct ?? (q.epsActual as number);
     const est = repEst ?? ((qq.epsEstimate ?? null));
     const pairedSurp = surprisePct(repAct, repEst);
+    const surpStr = formatEpsSurprise(repAct, repEst);
     const paired = pairedSurp != null;
     const surp = pairedSurp ?? 0;
     if (paired) { pairedTotal++; if (surp >= 0) pairedBeats++; }
     const label = q.endDate
       ? fmtDate(q.endDate, histPeriod === "A" ? { year: "numeric" } : { month: "short", year: "2-digit" })
       : (histPeriod === "A" ? `${q.fiscalYear ?? ""}`.trim() : `${(q as QuarterFinancials).fiscalPeriod ?? ""} ${q.fiscalYear ?? ""}`.trim());
-    return { q: label, e: est ?? 0, a: act, surp: parseFloat(surp.toFixed(1)), mv: 0 };
+    return { q: label, e: est ?? 0, a: act, surp: parseFloat(surp.toFixed(1)), mv: 0, surpStr };
   });
   const beats = pairedBeats;
   // "What street expects" — prefer the next (unreported) quarter's consensus EPS,
@@ -1926,14 +1932,19 @@ export function EarningsScreen() {
                             actually reported AND there's a matched estimate to
                             compare against — an upcoming reporter has no result
                             yet, so showing "Miss 0%" there would be a fabrication. */}
-                        {r.epsSurp != null && (
-                          <span
-                            className="ew-tickrow-surp"
-                            style={{ color: r.epsSurp >= 0 ? "var(--up)" : "var(--down)" }}
-                          >
-                            {r.epsSurp >= 0 ? "Beat" : "Miss"} {fmtPctSigned(r.epsSurp, 1)}
-                          </span>
-                        )}
+                        {(() => {
+                          const surpDisplay = formatEpsSurprise(r.epsA, r.epsE, { pctDigits: 1 });
+                          if (surpDisplay === "—") return null;
+                          const isBeat = (r.epsA ?? 0) >= (r.epsE ?? 0);
+                          return (
+                            <span
+                              className="ew-tickrow-surp"
+                              style={{ color: isBeat ? "var(--up)" : "var(--down)" }}
+                            >
+                              {surpDisplay.includes("vs est") ? surpDisplay : `${isBeat ? "Beat" : "Miss"} ${surpDisplay}`}
+                            </span>
+                          );
+                        })()}
                       </span>
                     </button>
                   ))}

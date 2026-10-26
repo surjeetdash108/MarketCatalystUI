@@ -22,9 +22,11 @@ import type {
 import {
   reportedQuarterEps,
   quarterEpsSurprisePct,
+  quarterEpsSurpriseStr,
   reportedAnnualEps,
   estimatedAnnualEps,
   surprisePct,
+  formatEpsSurprise,
 } from "./types";
 import { fmtDate } from "./calendar-range";
 
@@ -179,7 +181,7 @@ export function annualEpsSalesRows(
       eps,
       epsEst,
       epsChg: pctChangeStr(eps, prevEps),
-      epsSurp: pctCell(surp),
+      epsSurp: formatEpsSurprise(eps, epsEst),
       sales: r.revenue != null ? r.revenue / 1e6 : null,
       salesChg: pctChangeStr(r.revenue, prev?.revenue),
     };
@@ -239,7 +241,7 @@ export function quarterlyEpsSalesRows(
       eps,
       epsEst: r.epsEstimateReported ?? null,
       epsChg: pctChangeStr(eps, yoy ? reportedQuarterEps(yoy) : null),
-      epsSurp: pctCell(quarterEpsSurprisePct(r)),
+      epsSurp: quarterEpsSurpriseStr(r),
       sales: r.revenue != null ? r.revenue / 1e6 : null,
       salesChg: pctChangeStr(r.revenue, yoy?.revenue),
       salesSurp: pctCell(

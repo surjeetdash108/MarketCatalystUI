@@ -61,7 +61,7 @@ import type {
   LiveEarningsDoc,
   AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps, computeTtmFcf, computeQuarterFcf } from "../types";
+import { reportedQuarterEps, computeTtmFcf, computeQuarterFcf, computeOperatingIncomeSeries } from "../types";
 import { useIQActions } from "../shell";
 import type { Stock13FResponse } from "../stock-13f-view";
 
@@ -2957,7 +2957,8 @@ export function StockIntelligenceScreen() {
             // Same definition as the TTM FCF yield (computeQuarterFcf) — never
             // operating cash flow or net income standing in for it.
             const fcfSeries = fmpQ.map((q) => (computeQuarterFcf(q) ?? 0) / 1e9);
-            const opSeries = fmpQ.map((q) => (q.operatingIncome ?? q.netIncome ?? 0) / 1e9);
+            // Never fall back to net income; return [] to render "—" when missing or for banks.
+            const opSeries = computeOperatingIncomeSeries(fmpQ, isBank);
             // Total debt (short + long term + leases), as quote pages report it — not long-term only.
             const debtSeries = fmpQ.map((q) => (q.totalDebt ?? q.longTermDebt ?? 0) / 1e9);
             fsr = [revSeries, epsSeries, gmSeries, fcfSeries, opSeries, debtSeries];

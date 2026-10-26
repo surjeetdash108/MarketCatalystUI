@@ -42,7 +42,7 @@ import type {
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL } from "../types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type EpsSalesPt } from "../eps-sales-data";
-import { surprisePct } from "../types";
+import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 import { range52 } from "../range52";
 
@@ -1003,16 +1003,16 @@ export function StockScreen({
   const klWeekly =
     (liveCompany?.keyLevels?.weekly ?? null)
     ?? (priorWk ? pivotsFrom(priorWk.h, priorWk.l, priorWk.c) : null);
+  // Twenty COMPLETED sessions: the series can end on today's still-forming
+  // bar, which pulled the average down by half a day's volume (CRM read 8.36M
+  // against a 20-session 8.81M).
+  const yrDone = completedSessions(yr);
   const week52 = yr.length > 1
     ? { high: Math.max(...yr.map(b => b.h)), low: Math.min(...yr.map(b => b.l)) }
     : null;
   // Falls back to the company doc's own avgVolume20 (technical-indicators.job,
   // or the summary's identical computation) until the year of bars this
   // normally derives from has loaded — same reasoning as keyStats below.
-  // Twenty COMPLETED sessions: the series can end on today's still-forming
-  // bar, which pulled the average down by half a day's volume (CRM read 8.36M
-  // against a 20-session 8.81M).
-  const yrDone = completedSessions(yr);
   const avgVol20 = yrDone.length > 0
     ? yrDone.slice(-20).reduce((s, b) => s + b.v, 0) / Math.min(20, yrDone.length)
     : (keyStats?.avgVolume20 ?? null);
@@ -1403,6 +1403,7 @@ export function StockScreen({
       const repAct = q.epsActualReported ?? null;
       const repEst = q.epsEstimateReported ?? null;
       const pairedSurp = surprisePct(repAct, repEst);
+      const surpStr = formatEpsSurprise(repAct, repEst);
       const paired = pairedSurp != null;
       const act = repAct ?? (q.epsActual as number);
       const surp = pairedSurp ?? 0;
@@ -1411,6 +1412,7 @@ export function StockScreen({
           ? fmtDate(q.endDate, { month: "short", year: "2-digit" })
           : `${q.fiscalPeriod ?? ""} ${q.fiscalYear ?? ""}`.trim(),
         e: paired && repEst != null ? repEst : 0, a: act, surp: parseFloat(surp.toFixed(1)), mv: 0,
+        surpStr,
       };
     });
   const beatStreak = (() => {
@@ -2610,9 +2612,11 @@ export function StockScreen({
                         {q.e !== 0 && <span style={{ color: "var(--text-dim-solid)" }}>est ${fmt(q.e, 2)} → </span>}
                         ${fmt(q.a, 2)} act
                       </span>
-                      {q.e !== 0
-                        ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "beat" : "miss"} {Math.abs(q.surp)}%</span>
-                        : <span className="r" style={{ color: "var(--text-dim-solid)" }}>—</span>}
+                      {q.surpStr && q.surpStr !== "—"
+                        ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surpStr.includes("vs est") ? q.surpStr : `${q.surp >= 0 ? "beat" : "miss"} ${q.surpStr}`}</span>
+                        : (q.e !== 0
+                          ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "beat" : "miss"} {Math.abs(q.surp)}%</span>
+                          : <span className="r" style={{ color: "var(--text-dim-solid)" }}>—</span>)}
                     </div>
                   ))}
                 </>
@@ -3892,7 +3896,7 @@ export function StockScreen({
                               <td><b style={{ color: "var(--text-hi)" }}>{q.q}</b></td>
                               <td className="num">${q.e.toFixed(2)}</td>
                               <td className="num">${q.a.toFixed(2)}</td>
-                              <td className={`num ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "+" : ""}{q.surp}%</td>
+                              <td className={`num ${q.surp >= 0 ? "up" : "down"}`}>{q.surpStr && q.surpStr !== "—" ? q.surpStr : `${q.surp >= 0 ? "+" : ""}${q.surp}%`}</td>
                             </tr>
                           ))}
                         </tbody>

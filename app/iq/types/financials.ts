@@ -38,10 +38,37 @@ export function surprisePct(
   return Math.abs(pct) > MAX_SURPRISE ? null : pct;
 }
 
+/**
+ * Format EPS surprise for display everywhere surprise is shown.
+ * When |estimate| < $0.05, shows the dollar difference (e.g. "+$0.01 vs est").
+ * Otherwise shows "+X%" / "-X%" up to MAX_SURPRISE (500%), or "—" when missing/exceeded.
+ */
+export function formatEpsSurprise(
+  actual: number | null | undefined,
+  estimate: number | null | undefined,
+  options?: { pctDigits?: number },
+): string {
+  if (actual == null || estimate == null) return "—";
+  const diff = actual - estimate;
+  if (Math.abs(estimate) < MIN_ESTIMATE) {
+    const sign = diff >= 0 ? "+" : "-";
+    return `${sign}$${Math.abs(diff).toFixed(2)} vs est`;
+  }
+  const pct = (diff / Math.abs(estimate)) * 100;
+  if (Math.abs(pct) > MAX_SURPRISE) return "—";
+  const digits = options?.pctDigits ?? 0;
+  return `${pct >= 0 ? "+" : ""}${digits > 0 ? pct.toFixed(digits) : Math.round(pct)}%`;
+}
+
 /** Matched-pair EPS surprise % (FMP reported actual vs the estimate from the same
  * surprise row, split-normalized). null when there's no matched pair. */
 export function quarterEpsSurprisePct(q: QuarterFinancials): number | null {
   return surprisePct(q.epsActualReported, q.epsEstimateReported);
+}
+
+/** Matched-pair formatted EPS surprise string. */
+export function quarterEpsSurpriseStr(q: QuarterFinancials): string {
+  return formatEpsSurprise(q.epsActualReported, q.epsEstimateReported);
 }
 
 /** One quarter of the deep FMP reported-EPS history (non-GAAP, split-normalized,
@@ -129,6 +156,27 @@ export function computeQuarterFcf(q: {
   }
   return null;
 }
+
+/**
+ * Operating income fundamental series for stock intelligence tiles.
+ * Never falls back to net income.
+ * Returns empty array (leading to "—" display) if operating income is missing
+ * or if the entity is a bank/financial where operating income is not reported.
+ */
+export function computeOperatingIncomeSeries(
+  fmpQ: Array<{ operatingIncome?: number | null; netIncome?: number | null }>,
+  isBank?: boolean
+): number[] {
+  if (isBank) return [];
+  if (!fmpQ || fmpQ.length === 0) return [];
+  // If every quarter is missing operating income, or the latest quarter is missing, show "—"
+  const latest = fmpQ[fmpQ.length - 1];
+  if (latest?.operatingIncome == null || fmpQ.every((q) => q.operatingIncome == null)) {
+    return [];
+  }
+  return fmpQ.map((q) => (q.operatingIncome ?? 0) / 1e9);
+}
+
 
 /**
  * Calculates TTM Free Cash Flow over the most recent 4 quarters.
