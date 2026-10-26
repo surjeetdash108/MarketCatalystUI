@@ -1138,11 +1138,14 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // serves the same shared server-side cache anyway, so the dropdown shows the
   // same numbers as every other surface; only its poll phase is independent.
   const searchQuotesPath = searchOpen && enrichSyms ? `/live/quotes?tickers=${encodeURIComponent(enrichSyms)}` : null;
-  const { data: liveSearchQuotes } = useApiResource<Array<{ ticker: string; price: number | null; pctChange: number | null }>>(searchQuotesPath, 30000);
-  const quoteMap = new Map((liveSearchQuotes ?? []).map(q => [q.ticker.toUpperCase(), { price: q.price, pctChange: q.pctChange }]));
-  const displayMatches = searchMatches.map(m => {
+  // Outside regular hours `price` is the official 4:00 PM close and the
+  // extended trade comes separately (backend quoteRow) — shown on its own line.
+  type SearchExt = { session: "pre-market" | "after-hours"; price: number; pctChange: number; at: number | null };
+  const { data: liveSearchQuotes } = useApiResource<Array<{ ticker: string; price: number | null; pctChange: number | null; extended?: SearchExt | null }>>(searchQuotesPath, 30000);
+  const quoteMap = new Map((liveSearchQuotes ?? []).map(q => [q.ticker.toUpperCase(), { price: q.price, pctChange: q.pctChange, extended: q.extended ?? null }]));
+  const displayMatches: Array<(typeof searchMatches)[number] & { extended?: SearchExt | null }> = searchMatches.map(m => {
     const q = quoteMap.get(m.sym);
-    return q ? { ...m, price: q.price ?? m.price, pctChange: q.pctChange ?? m.pctChange } : m;
+    return q ? { ...m, price: q.price ?? m.price, pctChange: q.pctChange ?? m.pctChange, extended: q.extended } : m;
   });
   const cmdRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLElement>(null);
@@ -1438,6 +1441,14 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                               </div>
                             )}
                           </div>
+                          {m.extended && (
+                            <div className="mono" style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}
+                              title="The official 4:00 PM close is shown above; this is the latest extended-hours trade.">
+                              {m.extended.session === "pre-market" ? "Pre-market" : "After hours"} {fmt(m.extended.price)}{" "}
+                              <span className={cls(m.extended.pctChange)}>{sign(m.extended.pctChange)}</span>
+                              {m.extended.at != null && <> · {new Date(m.extended.at).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })} ET</>}
+                            </div>
+                          )}
                           <div className="palette-item-sub">{m.name ?? "Stock"} · click to open</div>
                         </div>
                         <button
