@@ -10,7 +10,6 @@ export const menuItems = [
   { label: 'Calendar', slug: 'macro', group: 'Markets', icon: '📅', badge: null },
   // ---- Research ----
   { label: 'Screener', slug: 'screener', group: 'Research', icon: '🔍', badge: null },
-  { label: 'Themes', slug: 'themes', group: 'Research', icon: '◈', badge: null },
   { label: 'IPOs', slug: 'ipos', group: 'Research', icon: '🚀', badge: null },
   { label: '13F & Insider', slug: 'insider', group: 'Research', icon: '📄', badge: null },
   // { label: 'Search', slug: 'stock', group: 'Research', icon: '📊', badge: null },

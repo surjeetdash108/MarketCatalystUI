@@ -5,7 +5,7 @@ import { EarningsScreen } from "../../iq/screens/earnings";
 import { MoversScreen } from "../../iq/screens/movers";
 import { HeatmapScreen } from "../../iq/screens/heatmap";
 import { AnalystScreen } from "../../iq/screens/analyst";
-import { ScreenerScreen } from "../../iq/screens/screener";
+import { ScreenerHub } from "../../iq/screens/screener-hub";
 import { IPOsScreen } from "../../iq/screens/ipos";
 import { PortfolioScreen } from "../../iq/screens/portfolio";
 import { WatchlistScreen } from "../../iq/screens/watchlist";
@@ -16,7 +16,6 @@ import { CommentaryScreen } from "../../iq/screens/commentary";
 import { RecapScreen } from "../../iq/screens/recap";
 import { MacroScreen } from "../../iq/screens/macro";
 import { OptionsScreen } from "../../iq/screens/options";
-import { ThemesScreen } from "../../iq/screens/themes";
 import { AiInfrastructureScreen } from "../../iq/screens/ai-infrastructure";
 import { EtfMarketFunds } from "../../iq/screens/etf-corner";
 
@@ -34,8 +33,9 @@ const SCREENS: Record<string, React.ReactNode> = {
   movers:      <MoversScreen />,
   heatmap:     <HeatmapScreen />,
   analyst:     <AnalystScreen />,
-  screener:    <ScreenerScreen />,
-  themes:      <ThemesScreen />,
+  screener:    <ScreenerHub />,
+  // Themes now lives under Screener; the old URL still works.
+  themes:      <ScreenerHub initial="themes" />,
   ipos:        <IPOsScreen />,
   portfolio:   <PortfolioScreen />,
   watchlist:   <WatchlistScreen />,
