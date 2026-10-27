@@ -48,6 +48,13 @@ import { resolveActionMeta } from "../analyst-actions-engine";
 import { useHeadlineQuote } from "../quote-headline";
 import { range52, resolve52WeekRange } from "../range52";
 import { forwardAnnualEstimates } from "../eps-sales-data";
+import {
+  resolvePeMultiple,
+  resolveFpeMultiple,
+  resolveEvEbitdaMultiple,
+  resolvePegMultiple,
+  resolveFcfYieldMultiple,
+} from "../multiples";
 import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
@@ -1522,6 +1529,12 @@ export function StockIntelligenceScreen() {
   // Stats definition for Overview header
   const peVal = liveCompany?.peRatio ?? stock.pe;
   const fpeVal = liveCompany?.forwardPe ?? stock.fpe;
+  const peRes = resolvePeMultiple(peVal, liveCompany?.epsTtm ?? stock.eps);
+  const peSub = peRes.reason
+    ? peRes.reason.toLowerCase()
+    : fpeVal != null
+    ? `fwd ${fpeVal.toFixed(1)}×`
+    : "fwd —";
   const r52 = resolve52WeekRange(
     { high52: liveCompany?.high52 ?? stock.hi, low52: liveCompany?.low52 ?? stock.lo },
     { high: sharedQuote?.dayHigh, low: sharedQuote?.dayLow },
@@ -1530,7 +1543,7 @@ export function StockIntelligenceScreen() {
   const lo52 = r52.low;
   const statsRow = [
     { k: "MARKET CAP", v: realMcap || "—", sub: liveCompany?.sector || stock.sector || "Equity" },
-    { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },
+    { k: "P/E", v: peRes.v, sub: peSub },
     { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
     { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
     { k: "52W HIGH / LOW", v: `${hi52 != null ? usd(hi52) : "—"} / ${lo52 != null ? usd(lo52) : "—"}`, sub: "Range" },
@@ -3060,6 +3073,12 @@ export function StockIntelligenceScreen() {
             ? livePe / expGrowth
             : null;
 
+          const peMultiple = resolvePeMultiple(livePe, liveCompany?.epsTtm ?? stock.eps);
+          const fpeMultiple = resolveFpeMultiple(stock.fpe);
+          const evEbitdaMultiple = resolveEvEbitdaMultiple(isBank, enterpriseVal, ttmEbitda);
+          const pegMultiple = resolvePegMultiple(isBank, livePe, expGrowth, liveCompany?.epsTtm ?? stock.eps);
+          const fcfYieldMultiple = resolveFcfYieldMultiple(isBank, ttmFcf, mcapNum);
+
           const evLabel = latestQ && !hasTotalDebt && latestQ.longTermDebt != null ? "EV/EBITDA (LT Debt)" : "EV/EBITDA";
 
           // Reference benchmark medians by sector (semiconductor vs general market)
@@ -3068,22 +3087,23 @@ export function StockIntelligenceScreen() {
           const baseFpe = semi ? 31.2 : 16.8;
           const baseEv = semi ? 29.4 : 14.2;
 
-          const VV: [string, string, number, string, number][] = [
-            ["P/E", livePe != null ? livePe.toFixed(1) : "—", basePe, "×", livePe ?? 0],
-            ["Forward P/E", stock.fpe != null ? stock.fpe.toFixed(1) : "—", baseFpe, "×", stock.fpe ?? 0],
-            [evLabel, realEvEbitda != null && Number.isFinite(realEvEbitda) && realEvEbitda > 0 ? realEvEbitda.toFixed(1) : "—", baseEv, "×", realEvEbitda && realEvEbitda > 0 ? realEvEbitda : 0],
-            ["PEG", realPeg != null && Number.isFinite(realPeg) && realPeg > 0 ? realPeg.toFixed(2) : "—", 1.45, "", realPeg && realPeg > 0 ? realPeg : 0],
-            ["FCF Yield", realFcfYield != null && Number.isFinite(realFcfYield) ? realFcfYield.toFixed(1) : "—", 2.6, "%", realFcfYield && realFcfYield > 0 ? realFcfYield : 0],
+          const valItems = [
+            { k: "P/E", res: peMultiple, med: `${basePe}×`, medNum: basePe },
+            { k: "Forward P/E", res: fpeMultiple, med: `${baseFpe}×`, medNum: baseFpe },
+            { k: evLabel, res: evEbitdaMultiple, med: `${baseEv}×`, medNum: baseEv },
+            { k: "PEG", res: pegMultiple, med: "1.45", medNum: 1.45 },
+            { k: "FCF Yield", res: fcfYieldMultiple, med: "2.6%", medNum: 2.6 },
           ];
-          const valRows = VV.map(([k, vStr, med, u, numVal]) => {
-            // Generic outlier scaling: if metric is > 4x benchmark, use dynamic scaling
-            const top = Math.max(numVal, med) * 1.25 || 1;
+
+          const valRows = valItems.map(({ k, res, med, medNum }) => {
+            const top = Math.max(res.num, medNum) * 1.25 || 1;
             return {
               k,
-              v: vStr !== "—" ? vStr + u : "—",
-              med: med + u,
-              w: vStr !== "—" ? Math.min(100, (numVal / top) * 100).toFixed(1) + "%" : "0%",
-              m: Math.min(100, (med / top) * 100).toFixed(1) + "%",
+              v: res.v,
+              reason: res.reason,
+              med,
+              w: res.num > 0 ? Math.min(100, (res.num / top) * 100).toFixed(1) + "%" : "0%",
+              m: Math.min(100, (medNum / top) * 100).toFixed(1) + "%",
             };
           });
 
@@ -3141,9 +3161,16 @@ export function StockIntelligenceScreen() {
                         <div style={{ height: 10, width: vl.w, background: "#5980a6" }} />
                         <div style={{ position: "absolute", top: -4, left: vl.m, width: 2, height: 18, background: "#e8eef4", boxShadow: "0 0 6px rgba(255,255,255,0.4)" }} />
                       </div>
-                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                        {vl.v}
-                      </span>
+                      <div style={{ width: 78, display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center" }} title={vl.reason}>
+                        <span style={{ textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: vl.v === "n/m" ? "var(--si-text-sub, #5d6b79)" : "var(--si-text-hi, #e8eef4)" }}>
+                          {vl.v}
+                        </span>
+                        {vl.reason && (
+                          <span style={{ fontSize: 9, fontFamily: "'Manrope', sans-serif", color: "var(--si-text-sub, #5d6b79)", whiteSpace: "nowrap", lineHeight: 1 }}>
+                            {vl.reason}
+                          </span>
+                        )}
+                      </div>
                       <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
                         {vl.med}
                       </span>

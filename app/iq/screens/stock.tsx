@@ -45,6 +45,7 @@ import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows
 import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 import { range52, fiftyTwoWeekBars, resolve52WeekRange } from "../range52";
+import { resolvePeMultiple } from "../multiples";
 import { nextEarningsDate } from "../next-earnings";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
@@ -1938,7 +1939,7 @@ export function StockScreen({
             <div className="keystats">
               {([
                 ["Mkt Cap",        mc != null ? cap(mc) : null],
-                ["P/E",            eps != null && eps <= 0 ? "n/a" : (data.peRatio != null ? data.peRatio.toFixed(1) : null)],
+                ["P/E",            (eps != null && eps <= 0) || (data.peRatio != null && data.peRatio <= 0) ? "n/m" : (data.peRatio != null ? data.peRatio.toFixed(1) : (eps != null ? "n/m" : null))],
                 ["EPS (TTM)",      eps != null ? "$" + eps.toFixed(2) : null],
                 ["Next ER",        erDate !== "—" ? `${fmtDate(erDate)}${!isErConfirmed ? " (Estimated)" : ""}` : null],
                 ["52W Range",      hi != null && lo != null ? "$" + nf(lo) + " – $" + nf(hi) : null],
@@ -2709,7 +2710,7 @@ export function StockScreen({
             type Row = { k: string; v: ReactNode | null; delta?: { txt: string; up: boolean } | null };
             const left: Row[] = [
               { k: "Market cap",    v: mc != null ? cap(mc) : null },
-              { k: "P/E ratio",     v: eps != null && eps <= 0 ? "n/a" : (data.peRatio != null ? data.peRatio.toFixed(2) : null) },
+              { k: "P/E ratio",     v: (eps != null && eps <= 0) || (data.peRatio != null && data.peRatio <= 0) ? "n/m" : (data.peRatio != null ? data.peRatio.toFixed(2) : (eps != null ? "n/m" : null)) },
               { k: "EPS (TTM)",     v: eps != null ? "$" + eps.toFixed(2) : null },
               // Forward-annualized (latest declared rate × frequency ÷ price).
               { k: "Dividend (fwd)", v: divMetrics.isPayer
