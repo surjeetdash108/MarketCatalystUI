@@ -11,7 +11,7 @@ import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes, QUOTE_DELAY_LABEL, pairedQuote, extendedSession } from "../live-quotes-context";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import type { LiveMoverDoc, CompanyDoc, NewsArticleDoc, AnalystConsensusDoc, AnalystRatingChange, Week5Close } from "../types";
-import { latestSessionDate, sessionsBetween } from "../market-status";
+import { latestSessionDate, sessionsBetween, etParts, addDays } from "../market-status";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { MoverNewsModal } from "../mover-news-modal";
 
@@ -100,11 +100,11 @@ const TABS = [
   ["active",   "Most Active"],
   ["biggest",  "Biggest %"],
   ["vol",      "Unusual Volume"],
-  ["weekwin",  "Weekly Gainers"],
-  ["weeklose", "Weekly Losers"],
+  ["weekwin",  "This Week Gainers"],
+  ["weeklose", "This Week Losers"],
 ] as const;
 type TabKey = "win" | "lose" | "active" | "biggest" | "vol" | "weekwin" | "weeklose";
-/** True for the two 5-day tabs, which rank on weekPct rather than today's move. */
+/** True for the two week tabs, which rank on this week's move rather than today's move. */
 const isWeekTab = (t: TabKey) => t === "weekwin" || t === "weeklose";
 
 function ScanSection({
@@ -319,27 +319,53 @@ function fmtMcap(mc: number | null | undefined): string {
   return `$${Math.round(mc).toLocaleString()}`;
 }
 /**
- * The close a live 5-day move starts from: the one exactly 5 sessions before
- * `sessionDate`, the session the shown price belongs to.
- *
- * `closes` are the last 6 dated closes, oldest → newest. While the newest bar
- * is from that same session the base is closes[0]; each session the bars lag
- * behind the price moves it forward one. Re-measuring the live price against
- * a fixed closes[0] instead (the old week5BaseClose path) counted 6+ sessions
- * as soon as a new session opened.
- *
- * null when the window cannot reach the base: bars more than 5 sessions behind,
- * or a newest bar later than the shown price.
+ * Prior Friday close that "This Week" (Monday to Friday) starts from.
+ * 
+ * For the active calendar week (which resets every Monday at 09:30 ET market open),
+ * this finds the last close strictly before this week's Monday (the prior Friday close).
+ * 
+ * If sessionDate is strictly before this week's Monday (e.g. at Monday 09:30 ET before
+ * current-week trades arrive, or for tickers that haven't traded yet this week),
+ * returns null so old week data is not displayed.
  */
-function week5Base(closes: Week5Close[] | null | undefined, sessionDate: string): number | null {
-  if (!closes || closes.length !== 6) return null;
-  if (closes[5].date > sessionDate) return null;
-  // Matched by DATE: the close exactly 5 trading sessions before the price's
-  // session. Indexing back from the newest bar assumed no session was missing
-  // from the stored bars; with one gone, [0] sat 6 sessions back (CIFR −21.0%
-  // vs −11.6%, TTMI −21.5% vs −14.7%, E2E Oct 23). No exact match → null, and
-  // the stored move stands.
-  return closes.find((c) => sessionsBetween(c.date, sessionDate) === 5)?.close ?? null;
+function thisWeekBase(
+  closes: Week5Close[] | null | undefined,
+  sessionDate: string,
+  now: Date = new Date(),
+): { base: number | null; hasSessionThisWeek: boolean } {
+  if (!closes || closes.length === 0) return { base: null, hasSessionThisWeek: false };
+
+  const { weekday, isoDate, minutes } = etParts(now);
+  const isBeforeMondayOpen = weekday === "Mon" && minutes < 570;
+
+  let mondayDate: string;
+  if (weekday === "Mon") {
+    mondayDate = isBeforeMondayOpen ? addDays(isoDate, -7) : isoDate;
+  } else if (weekday === "Tue") {
+    mondayDate = addDays(isoDate, -1);
+  } else if (weekday === "Wed") {
+    mondayDate = addDays(isoDate, -2);
+  } else if (weekday === "Thu") {
+    mondayDate = addDays(isoDate, -3);
+  } else if (weekday === "Fri") {
+    mondayDate = addDays(isoDate, -4);
+  } else if (weekday === "Sat") {
+    mondayDate = addDays(isoDate, -5);
+  } else { // Sun
+    mondayDate = addDays(isoDate, -6);
+  }
+
+  const hasSessionThisWeek = sessionDate >= mondayDate;
+  if (!hasSessionThisWeek) {
+    return { base: null, hasSessionThisWeek: false };
+  }
+
+  const priorCloses = closes.filter(c => c.date < mondayDate);
+  if (priorCloses.length === 0) {
+    return { base: closes[0]?.close ?? null, hasSessionThisWeek: true };
+  }
+
+  return { base: priorCloses[priorCloses.length - 1].close, hasSessionThisWeek: true };
 }
 
 // Largest → smallest. The dropdown only offers tiers that actually have movers
@@ -434,10 +460,11 @@ function mergeMovers(
 }
 
 export function MoversScreen() {
-  const { data: liveMovers, loading: moversLoading, error: moversError } = useApiList<LiveMoverDoc>("/market-data/movers");
-  const { data: rvolCompanies, loading: companiesLoading, error: companiesError } = useApiList<CompanyDoc>("/market-data/companies");
+  const { data: liveMovers, loading: moversLoading, error: moversError } = useApiList<LiveMoverDoc>("/market-data/movers", 30_000);
+  const { data: rvolCompanies, loading: companiesLoading, error: companiesError } = useApiList<CompanyDoc>("/market-data/companies", 30_000);
   const { data: volumeLeaders, loading: volumeLoading } = useApiResource<{ leaders: VolumeLeaderDoc[] }>(
     "/market-data/volume-leaders",
+    30_000,
   );
   const companyByTicker = useMemo(
     () => new Map(rvolCompanies.map(c => [c.ticker?.trim().toUpperCase(), c])),
@@ -613,6 +640,7 @@ export function MoversScreen() {
 
   const { data: biggestPctData, loading: biggestLoading } = useApiResource<BiggestPctScan>(
     tab === "biggest" ? "/live/scan/biggest-pct" : null,
+    30_000,
   );
 
   const filteredBiggest = useMemo(() => {
@@ -657,6 +685,7 @@ export function MoversScreen() {
 
   const { data: mostActiveData, loading: mostActiveLoading } = useApiResource<MostActiveScan>(
     tab === "active" ? "/live/scan/most-active" : null,
+    30_000,
   );
 
   const filteredMostActive = useMemo(() => {
@@ -801,11 +830,9 @@ export function MoversScreen() {
     if (effCap !== "All" && m.cap !== effCap) return false;
     if (tab === "win")  return m.pctChange > 0;
     if (tab === "lose") return m.pctChange < 0;
-    // Weekly tabs split on the 5-day move. `weekPct` is guaranteed non-null on
-    // weeklyRows (they're filtered on it), but the guard keeps this honest if
-    // the source ever changes.
-    if (tab === "weekwin")  return (m.weekPct ?? 0) > 0;
-    if (tab === "weeklose") return (m.weekPct ?? 0) < 0;
+    // For This Week Gainers / Losers, pass candidates through so shownValues and visible
+    // filter on live-calculated this-week return against Friday's close:
+    if (tab === "weekwin" || tab === "weeklose") return true;
     return true;
   });
 
@@ -874,7 +901,6 @@ export function MoversScreen() {
   const quoteByTicker = useLiveQuotes(shownTickers);
   // Session the shown prices belong to, for the 5-day base. Recomputed on each
   // quote poll (a new Map every 30s), so it rolls over at the open on its own.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const sessionDate = useMemo(() => latestSessionDate(), [quoteByTicker]);
 
   /**
@@ -931,18 +957,16 @@ export function MoversScreen() {
 
     const pq = extOnly ? baselinePair : pairedQuote(q, baselinePair);
 
-    // 5-day move re-measured to the shown price, from the close exactly 5
-    // sessions before that price's session. Docs written before the backend
-    // published week5Closes keep the old fixed base. When no base is usable,
-    // the stored move stands — never today's 1-day %, which is not a 5-day number.
+    // This Week move (Mon-Fri) measured to the shown price, from the close strictly
+    // before this week's Monday (prior Friday close).
     let change = pq.pctChange;
     if (isWeekTab(tab)) {
-      // Only a base with a known date: the undated week5BaseClose of older
-      // docs can sit 6+ sessions back once a new session opens.
-      const base = weekCloses ? week5Base(weekCloses, sessionDate) : null;
-      change = pq.price != null && base != null && base > 0
-        ? ((pq.price - base) / base) * 100
-        : (weekPct ?? null);
+      const { base, hasSessionThisWeek } = thisWeekBase(weekCloses, sessionDate);
+      if (!hasSessionThisWeek || base == null || base <= 0 || pq.price == null) {
+        change = null;
+      } else {
+        change = ((pq.price - base) / base) * 100;
+      }
     }
 
     return { price: pq.price, change };
@@ -1110,7 +1134,7 @@ export function MoversScreen() {
     filtered.filter(m => {
       const { change } = shownValues(m);
 
-      if (change == null) return true;
+      if (change == null) return false;
 
       if (tab === "win" || tab === "weekwin") return change > 0;
       if (tab === "lose" || tab === "weeklose") return change < 0;
@@ -1205,7 +1229,7 @@ export function MoversScreen() {
               : `${searched.length} ${
                   tab === "win" || tab === "weekwin" ? "gainers" : tab === "lose" || tab === "weeklose" ? "losers" : "names"
                 } · ${
-                  isWeekTab(tab) ? "tracked universe · ranked by 5-day move"
+                  isWeekTab(tab) ? "tracked universe · ranked by this week's move (Mon–Fri)"
                   : tab === "vol" ? "tracked universe · ranked by relative volume"
                   : tab === "win" ? "ranked by session gain"
                   : tab === "lose" ? "ranked by session decline"
@@ -1523,7 +1547,7 @@ export function MoversScreen() {
               {sortTh("company", "Company")}
               {sortTh("mcap",    "Mkt Cap", true)}
               {sortTh("price",   "Price",  true)}
-              {sortTh("change",  isWeekTab(tab) ? "5-day" : "Change", true)}
+              {sortTh("change",  isWeekTab(tab) ? "This Week" : "Change", true)}
               {sortTh("rvol",    "RVOL",   true)}
               {sortTh("cap", "Cap · Sector", true)}
               <th style={{ whiteSpace: "nowrap" }}>Why It Moved</th>
@@ -1542,7 +1566,9 @@ export function MoversScreen() {
                         <div style={{ padding: 16, color: "var(--text-dim-solid)" }}>
                           {moversError || companiesError
                             ? "Unable to connect to backend server. Please ensure MarketCatalystBackend is running."
-                            : "No stocks match these filters."}
+                            : isWeekTab(tab)
+                              ? "No movers data for this week yet."
+                              : "No stocks match these filters."}
                         </div>
                       )}
                     </td>

@@ -25,7 +25,7 @@ const MARKET_HOLIDAYS = new Set<string>([
 
 // Extract ET wall-clock parts (DST-aware via the IANA zone) for any Date,
 // independent of the machine/browser timezone.
-function etParts(d: Date) {
+export function etParts(d: Date) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
       timeZone: "America/New_York",
@@ -63,7 +63,7 @@ export function getMarketStatus(now: Date = new Date()): MarketStatus {
 }
 
 /** Shift a YYYY-MM-DD date by whole days (noon UTC keeps it clear of DST edges). */
-function addDays(iso: string, n: number): string {
+export function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
