@@ -319,3 +319,12 @@ export function buildAnalystActions({
 
     return rows.sort((a, b) => b.score - a.score);
 }
+
+/**
+ * The price a row shows: null (rendered "—") when the stock has no quote yet.
+ * `px` is 0 internally for "unknown" so the >0 guards above skip it, and that
+ * 0 was rendered as "$0.00" beside a signal-76 call (FLG, E2E Oct 26).
+ */
+export function shownPrice(px: number | null | undefined): number | null {
+  return px != null && Number.isFinite(px) && px > 0 ? px : null;
+}
