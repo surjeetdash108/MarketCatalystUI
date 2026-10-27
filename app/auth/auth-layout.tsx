@@ -242,8 +242,14 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
           overflow-y: auto;
           overscroll-behavior: contain;
           padding: 22px 26px 22px;
-          scrollbar-width: thin;
-          scrollbar-color: var(--border-strong) transparent;
+        }
+        /* Chrome 121+ would let these override the webkit scrollbar below and
+           draw the native bar with arrow buttons, so Firefox only. */
+        @supports not selector(::-webkit-scrollbar) {
+          .lp-auth-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-strong) transparent;
+          }
         }
         .lp-auth-scroll::-webkit-scrollbar { width: 9px; }
         .lp-auth-scroll::-webkit-scrollbar-track { background: transparent; }
