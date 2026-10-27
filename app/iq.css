@@ -343,10 +343,10 @@
 .app {
   display: grid;
   grid-template-columns: 3.875rem calc(var(--rail-w) - 3.875rem) 1fr;
-  grid-template-rows: 44px 34px 1fr;
+  grid-template-rows: 48px 48px 1fr;
   grid-template-areas:
     'brand brand topbar'
-    'rail rail ticker'
+    'res res subbar'
     'rail rail main';
   height: 100vh;
   height: 100dvh;
@@ -359,7 +359,7 @@
   grid-template-columns: 3.875rem calc(var(--rail-w) - 3.875rem) 1fr;
   grid-template-areas:
     'brand brand topbar'
-    'rail ticker ticker'
+    'rail res subbar'
     'rail main main';
 }
 
@@ -428,7 +428,7 @@
      ≈ (54px topbar row - 28px logo height) / 2, matching the topbar's own
      centering instead of the full 88px cell. */
   justify-content: flex-start;
-  padding: 13px 16px 0;
+  padding: 10px 16px 0;
   border-right: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);
   gap: 8px;
@@ -769,14 +769,63 @@
 
 /* ticker */
 .ticker {
-  grid-area: ticker;
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
   display: flex;
   align-items: center;
   overflow: hidden;
-  border-bottom: 1px solid var(--border-soft);
   background: var(--surface-0);
   position: relative;
   z-index: 8;
+}
+
+/* Row 2, left: the Resources link under the logo. */
+.resbar {
+  grid-area: res;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--surface-0);
+  border-right: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+  z-index: 10;
+}
+.resbar-link {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--brand);
+  font-size: .875rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .13s;
+}
+.resbar-link:hover { background: var(--surface-2); }
+.app.nav-collapsed .resbar { padding: 0 6px; }
+
+/* Row 2, right: search box + module switcher. */
+.subbar {
+  grid-area: subbar;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--surface-0);
+  border-bottom: 1px solid var(--border-soft);
+  z-index: 9;
+  min-width: 0;
+}
+.subbar .cmd-wrap { flex: 0 1 26rem; max-width: 26rem; }
+.subbar .cmd { height: 36px; font-size: .8125rem; }
+.subbar .cmd-input { font-size: .8125rem; }
+/* The module switcher used to be pinned top-centre of the viewport; it lives in this bar now. */
+.app .subbar .mod-switch-pin {
+  position: static !important;
+  transform: none !important;
 }
 
 .ticker::before,
@@ -8742,9 +8791,13 @@ table.tbl tr:hover td {
        lets the column shrink to the viewport; wide children scroll inside .main
        instead. Desktop .app is untouched. */
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 54px 34px 1fr;
-    grid-template-areas: 'topbar' 'ticker' 'main';
+    grid-template-rows: 54px auto 1fr;
+    grid-template-areas: 'topbar' 'subbar' 'main';
   }
+  .resbar,
+  .ticker { display: none; }
+  .subbar { padding: 6px 10px; gap: 8px; overflow-x: auto; }
+  .subbar .cmd-wrap { flex: 1 1 160px; max-width: none; }
 
   /* Let the content column actually shrink below its children's intrinsic width. */
   .main {
@@ -13303,3 +13356,362 @@ h6.sd-sec {
   color: var(--brand);
   text-decoration: underline;
 }
+/* ============================================================
+   What Matters Now — carousel (curated reads, one per slide)
+   ============================================================ */
+.iq-root .wmnc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px 4px;
+}
+.iq-root .wmnc-head .t { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.iq-root .wmnc-head h2 {
+  margin: 0;
+  font-family: var(--f-display);
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text-hi);
+  letter-spacing: -.01em;
+  line-height: 1.25;
+}
+.iq-root .wmnc-sub { font-size: .8rem; font-weight: 600; color: var(--text-dim-solid); margin-left: 4px; }
+.iq-root .wmnc-wrap { padding: 6px 18px 14px; }
+.iq-root .wmnc-viewport { overflow: hidden; min-height: 190px; }
+.iq-root .wmnc-track {
+  display: flex;
+  height: 100%;
+  transition: transform 1.2s cubic-bezier(.65, 0, .35, 1);
+  will-change: transform;
+}
+.iq-root .wmnc-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: opacity 1.2s ease;
+}
+.iq-root .wmnc-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-family: var(--f-mono);
+  font-size: .72rem;
+  color: var(--text-dim-solid);
+}
+.iq-root .wmnc-tag { font-weight: 700; letter-spacing: .06em; color: var(--brand); }
+.iq-root .wmnc-tag.warn { color: var(--warn); }
+.iq-root .wmnc-tag.up { color: var(--up); }
+.iq-root .wmnc-tag.down { color: var(--down); }
+.iq-root .wmnc-tag.info { color: #5bc0f8; }
+.iq-root .wmnc-when { margin-left: auto; color: var(--text); }
+.iq-root .wmnc-lead { font-size: .95rem; line-height: 1.6; color: var(--text-hi); text-wrap: pretty; }
+.iq-root .wmnc-body { font-size: .84rem; line-height: 1.6; color: var(--text); text-wrap: pretty; }
+.iq-root .wmnc-point { display: flex; align-items: center; gap: 8px; font-size: .84rem; color: var(--text-hi); }
+.iq-root .wmnc-point .d { color: var(--brand); }
+.iq-root .wmnc-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+.iq-root .wmnc-pos { font-family: var(--f-mono); font-size: .72rem; color: var(--text-dim-solid); min-width: 40px; text-align: right; }
+.iq-root .wmnc-pos b { color: var(--text-hi); font-weight: 600; }
+.iq-root .wmnc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 24px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .72rem;
+  padding: 0 8px;
+  transition: border-color .13s, color .13s;
+}
+.iq-root .wmnc-btn.wmnc-sq { width: 24px; padding: 0; }
+.iq-root .wmnc-btn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+.iq-root .wmnc-btn:disabled { opacity: .35; cursor: default; }
+.iq-root .wmnc-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  transition: background .5s ease, box-shadow .5s ease, border-color .5s ease;
+}
+.iq-root .wmnc-dot:hover { border-color: var(--brand); }
+.iq-root .wmnc-dot.on { background: var(--brand); border-color: var(--brand); box-shadow: 0 0 10px rgba(74, 222, 128, .5); }
+
+/* ============================================================
+   Community Pulse — tweets + trader chat
+   ============================================================ */
+.iq-root .cpulse {
+  flex: 1;
+  min-width: 0;
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+}
+.iq-root .cpulse-h { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
+.iq-root .cpulse-h h3 { flex: 1; min-width: 0; margin: 0; font-family: var(--f-display); font-size: 1rem; font-weight: 700; color: var(--text-hi); }
+.iq-root .cpulse-orb {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--brand);
+  background: radial-gradient(circle, rgba(74, 222, 128, .22), rgba(74, 222, 128, .06) 70%);
+  border: 1px solid rgba(74, 222, 128, .45);
+  box-shadow: 0 0 14px rgba(74, 222, 128, .25);
+}
+.iq-root .cpulse-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+.iq-root .cpulse-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 10px 8px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--text-dim-solid);
+  font-size: .85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.iq-root .cpulse-tabs button:hover { background: var(--surface-2); }
+.iq-root .cpulse-tabs button.on { color: var(--text-hi); border-bottom-color: var(--brand); }
+.iq-root .cpulse-tabs .n {
+  font-family: var(--f-mono);
+  font-size: .64rem;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--text-dim-solid);
+}
+.iq-root .cpulse-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; scrollbar-width: thin; }
+.iq-root .cpulse-av {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: .8rem;
+  color: #08090a;
+}
+.iq-root .cpulse-av.sm { width: 26px; height: 26px; font-size: .66rem; }
+.iq-root .cpulse-tw { display: flex; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); transition: background .15s; }
+.iq-root .cpulse-tw:hover { background: var(--surface-2); }
+.iq-root .cpulse-tw-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.iq-root .cpulse-tw-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.iq-root .cpulse-tw-top .nm { font-weight: 700; font-size: .8rem; color: var(--text-hi); white-space: nowrap; }
+.iq-root .cpulse-tw-top .hd { color: var(--text-dim-solid); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iq-root .cpulse-tw-top .ago { margin-left: auto; flex: none; color: var(--text-dim-solid); font-size: .72rem; }
+.iq-root .cpulse-tw-text { font-size: .8rem; line-height: 1.45; color: var(--text-hi); text-wrap: pretty; }
+.iq-root .cpulse-tw-foot { display: flex; align-items: center; gap: 6px; }
+.iq-root .cpulse-tw-foot .tk-link { background: none; border: 0; padding: 0; font: inherit; font-size: .78rem; font-weight: 700; color: #1d9bf0; cursor: pointer; }
+.iq-root .cpulse-tw-foot .tk-link:hover { text-decoration: underline; }
+.iq-root .cpulse-tw-foot .tk-plain { font-size: .78rem; font-weight: 600; color: var(--text-dim-solid); }
+.iq-root .cpulse-tw-foot .tm { margin-left: auto; font-family: var(--f-mono); font-size: .64rem; color: var(--text-dim-solid); }
+.iq-root .cpulse-chat { padding: 10px 16px; gap: 10px; }
+.iq-root .cpulse-msg { display: flex; align-items: flex-end; gap: 8px; }
+.iq-root .cpulse-msg.me { flex-direction: row-reverse; }
+.iq-root .cpulse-msg .bub-wrap { max-width: 78%; display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.iq-root .cpulse-msg.me .bub-wrap { align-items: flex-end; }
+.iq-root .cpulse-msg .who { font-size: .68rem; color: var(--text-dim-solid); }
+.iq-root .cpulse-msg .bub {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-hi);
+  border-radius: 10px 10px 10px 2px;
+  padding: 7px 11px;
+  font-size: .8rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+.iq-root .cpulse-msg.me .bub { background: var(--brand-dim); border-color: rgba(74, 222, 128, .3); border-radius: 10px 10px 2px 10px; }
+.iq-root .cpulse-compose { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.iq-root .cpulse-compose input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 9px 12px;
+  color: var(--text-hi);
+  font-size: .82rem;
+  outline: none;
+}
+.iq-root .cpulse-compose input:focus { border-color: var(--brand); }
+.iq-root .cpulse-compose button {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: var(--brand);
+  color: var(--on-brand);
+  cursor: pointer;
+}
+
+/* Left column (What Matters Now + Most Searched) and Community Pulse stack on narrow screens. */
+@media (max-width: 1100px) {
+  .iq-root .dash > .wmn-left, .iq-root .dash > .cpulse-col { grid-column: span 12; }
+}
+
+/* Alpha Signals bar */
+.iq-root .alpha-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 44px 12px 16px;
+  border: 1px solid rgba(139, 124, 246, .35);
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(139, 124, 246, .12), var(--surface-1) 60%);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .18s, box-shadow .18s;
+}
+.iq-root .alpha-bar:hover { border-color: #6d5fd6; box-shadow: 0 0 0 1px rgba(139, 124, 246, .35), 0 0 28px rgba(139, 124, 246, .2); }
+.iq-root .alpha-ic { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 8px; background: rgba(139, 124, 246, .18); color: #b3a8ff; }
+.iq-root .alpha-txt { flex: 1 1 260px; min-width: 0; }
+.iq-root .alpha-txt b { display: block; font-size: .875rem; font-weight: 800; color: var(--text-hi); }
+.iq-root .alpha-txt span { font-size: .78rem; color: var(--text-dim-solid); }
+.iq-root .alpha-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.iq-root .alpha-chip { font-family: var(--f-mono); font-size: .72rem; padding: 4px 8px; border-radius: 6px; background: var(--surface-0); border: 1px solid var(--border); color: var(--text-hi); }
+.iq-root .alpha-go { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; border: 1px solid rgba(139, 124, 246, .35); color: #b3a8ff; }
+
+/* Screener hub: sub-tabs */
+.iq-root .scr-tabs { display: flex; gap: 6px; padding: 0 18px; border-bottom: 1px solid var(--border-soft); margin-bottom: 4px; }
+.iq-root .scr-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 14px 16px 10px; font-size: .95rem; font-weight: 700; color: var(--text-dim-solid); cursor: pointer; transition: color .15s; }
+.iq-root .scr-tabs button:hover { color: var(--text-hi); }
+.iq-root .scr-tabs button.on { color: var(--text-hi); border-bottom-color: var(--brand); }
+
+/* Alpha Signals */
+.iq-root .alp { padding: 12px 18px 24px; display: flex; flex-direction: column; gap: 16px; }
+.iq-root .alp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.iq-root .alp-head h2 { margin: 0 8px 0 0; font-family: var(--f-display); font-size: 1.1rem; color: var(--text-hi); }
+.iq-root .alp-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); font-size: .72rem; color: var(--text); }
+.iq-root .alp-pill i, .iq-root .alp-status.up, .iq-root .alp-status.warn { }
+.iq-root .alp-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim-solid); }
+.iq-root .alp-pill i.up { background: var(--up); } .alp-pill i.warn { background: var(--warn); }
+.iq-root .alp-cards { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.iq-root .alp-card { flex: 0 0 190px; text-align: left; display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); color: inherit; cursor: pointer; transition: border-color .15s; }
+.iq-root .alp-card:hover, .iq-root .alp-card.on { border-color: var(--brand); }
+.iq-root .alp-card-top { display: flex; align-items: center; gap: 8px; }
+.iq-root .alp-card-top b { font-family: var(--f-display); font-size: 1.05rem; color: var(--text-hi); }
+.iq-root .alp-card-top .mono { margin-left: auto; font-size: .78rem; }
+.iq-root .alp-card-mid { display: flex; align-items: center; gap: 10px; }
+.iq-root .alp-ring { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--brand); font-size: .74rem; font-weight: 700; color: var(--text-hi); flex: none; }
+.iq-root .alp-ring.big { width: 56px; height: 56px; font-size: 1.1rem; margin-left: auto; }
+.iq-root .alp-status { font-size: .74rem; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: var(--surface-3); color: var(--text-dim-solid); }
+.iq-root .alp-status.up { background: var(--up-dim); color: var(--up); }
+.iq-root .alp-status.warn { background: var(--warn-dim); color: var(--warn); }
+.iq-root .alp-card-foot { font-family: var(--f-mono); font-size: .68rem; color: var(--text-dim-solid); }
+.iq-root .alp-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .alp-main { grid-template-columns: 1fr; } }
+.iq-root .alp-list, .iq-root .alp-detail { border: 1px solid var(--border); border-radius: 14px; background: var(--surface-1); overflow: hidden; }
+.iq-root .alp-list-h { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 16px 10px; }
+.iq-root .alp-list-h b { font-family: var(--f-display); font-size: 1rem; color: var(--text-hi); }
+.iq-root .alp-list-h span { font-size: .75rem; color: var(--text-dim-solid); }
+.iq-root .alp-seg { display: flex; gap: 4px; width: 100%; }
+.iq-root .alp-seg button { border: 0; background: transparent; padding: 5px 10px; border-radius: 6px; font-size: .78rem; color: var(--text); cursor: pointer; }
+.iq-root .alp-seg button.on { background: var(--brand-dim); color: var(--brand); }
+.iq-root .alp-rows { display: flex; flex-direction: column; max-height: 520px; overflow: auto; scrollbar-width: thin; }
+.iq-root .alp-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border: 0; border-top: 1px solid var(--border-soft); background: transparent; text-align: left; color: inherit; cursor: pointer; }
+.iq-root .alp-row:hover { background: var(--surface-2); }
+.iq-root .alp-row.on { background: var(--brand-dim); }
+.iq-root .alp-row .n { width: 18px; font-size: .72rem; color: var(--text-dim-solid); }
+.iq-root .alp-row .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.iq-root .alp-row .nm b { color: var(--text-hi); font-size: .85rem; }
+.iq-root .alp-row .nm small { color: var(--text-dim-solid); font-size: .7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iq-root .alp-row .sc { font-weight: 700; font-size: .8rem; color: var(--text-hi); }
+.iq-root .alp-row .px { display: flex; flex-direction: column; align-items: flex-end; font-size: .82rem; color: var(--text-hi); min-width: 70px; }
+.iq-root .alp-row .px small { font-size: .7rem; }
+.iq-root .alp-detail { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.iq-root .alp-detail-h { display: flex; align-items: center; gap: 12px; }
+.iq-root .alp-detail-h .t { display: flex; flex-direction: column; min-width: 0; }
+.iq-root .alp-detail-h .t b { font-family: var(--f-display); font-size: 1.15rem; color: var(--text-hi); }
+.iq-root .alp-detail-h .t small { color: var(--text-dim-solid); font-size: .75rem; }
+.iq-root .alp-detail-h .t .mono { font-size: .85rem; color: var(--text-hi); } .alp-detail-h .t i { font-style: normal; }
+.iq-root .alp-detail-s { display: flex; align-items: center; gap: 10px; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim-solid); }
+.iq-root .alp-sum { margin: 0; font-size: .88rem; line-height: 1.6; color: var(--text-hi); }
+.iq-root .alp-parts { display: flex; flex-direction: column; gap: 8px; }
+.iq-root .alp-part { display: grid; grid-template-columns: 120px 1fr 30px; align-items: center; gap: 10px; font-size: .78rem; color: var(--text); }
+.iq-root .alp-part .bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.iq-root .alp-part .bar i { display: block; height: 100%; background: var(--brand); }
+.iq-root .alp-part b { text-align: right; color: var(--text-hi); font-family: var(--f-mono); }
+.iq-root .alp-open { align-self: flex-start; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--brand); background: var(--brand-dim); color: var(--brand); font-weight: 700; cursor: pointer; }
+.iq-root .alp-note { font-size: .7rem; color: var(--text-dim-solid); }
+
+/* The ticker (long nowrap track) now lives inside .topbar. Without min-width:0 the
+   grid track grows to the track's full width and the whole page lays out thousands
+   of px wide. */
+.iq-root .topbar, .iq-root .subbar, .iq-root .main { min-width: 0; }
+.iq-root .ticker { contain: inline-size; }
+
+/* Floating sidebar toggle: small chevron button straddling the rail edge, mid-height. */
+.iq-root .nav-float-toggle {
+  position: fixed;
+  z-index: 60;
+  top: 50%;
+  left: calc(var(--rail-w) - 12px);
+  transform: translateY(-50%);
+  width: 24px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-hi);
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+  transition: left .3s cubic-bezier(.65, 0, .35, 1), border-radius .3s, color .18s, border-color .18s;
+}
+.iq-root .nav-float-toggle svg { transition: transform .3s cubic-bezier(.65, 0, .35, 1); }
+.iq-root .nav-float-toggle:hover { color: var(--brand); border-color: var(--brand); }
+.iq-root .app.nav-collapsed .nav-float-toggle { left: calc(3.875rem - 12px); }
+.iq-root .app.nav-collapsed .nav-float-toggle svg { transform: rotate(180deg); }
+@media (max-width: 767px) { .iq-root .nav-float-toggle { display: none; } }
+
+/* Top row sits above the sub-bar so the profile / notification dropdowns that
+   hang down from it are not painted over by the search row. */
+.iq-root .topbar { position: relative; z-index: 12; }
+
+/* Community Pulse fills its grid row (like the design): the panel is positioned inside
+   the cell, so the row height comes from the left column, not from the panel. */
+.iq-root .dash > .cpulse-col { position: relative; display: block !important; min-height: 380px; }
+.iq-root .cpulse { position: absolute; inset: 0; min-height: 0; }
+
+/* Most Searched Tickers: one horizontally scrolling row (collapsible), as in the design. */
+.iq-root .srch-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.iq-root .srch-toggle { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; }
+.iq-root .srch-toggle:hover { border-color: var(--brand); color: var(--brand); }

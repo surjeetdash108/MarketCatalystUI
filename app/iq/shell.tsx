@@ -1354,20 +1354,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <div className="brandcell">
               <div className="brand-top">
                 <BrandLogo height={28} />
-                <button
-                  className="nav-collapse-btn"
-                  onClick={() => setNavCollapsed(c => { const next = !c; localStorage.setItem("iq-nav-collapsed", next ? "1" : "0"); return next; })}
-                  aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
-                  title={navCollapsed ? "Expand navigation" : "Collapse navigation"}
-                >
-                  {/* Panel-collapse glyph: a framed rail with a chevron showing
-                      which way the sidebar will move. */}
-                  <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <path d="M9 3v18" />
-                    {navCollapsed ? <path d="m14 9 3 3-3 3" /> : <path d="m16 15-3-3 3-3" />}
-                  </svg>
-                </button>
               </div>
             </div>
 
@@ -1383,73 +1369,18 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               <div className="mob-brand">
                 <BrandLogo height={22} />
               </div>
-              <div className="cmd-wrap" ref={cmdRef}>
-                <div className={`cmd${searchOpen ? " cmd-active" : ""}`}>
-                  <span className="palette-icon">⌕</span>
-                  <input
-                    className="cmd-input"
-                    placeholder="Search tickers and stocks…"
-                    value={searchQ}
-                    onFocus={() => setSearchOpen(true)}
-                    onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
-                    onKeyDown={e => {
-                      if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); }
-                      if (e.key === "Enter") {
-                        // Use the top match, or fall back to the raw typed ticker
-                        // (the stock page fetches any symbol on demand), so pressing
-                        // Enter always opens the Search page.
-                        goToStock(displayMatches[0]?.sym ?? searchQ);
-                      }
-                    }}
-                  />
-                  {searchQ && <button className="cmd-clear" onClick={() => { setSearchQ(""); setSearchOpen(false); }}>✕</button>}
+              {/* Ticker tape lives in the top row; search + module switcher moved to the sub-bar below. */}
+              <div className="ticker">
+                <div className="ticker-track">
+                  {tickerItems.map((x, i) => (
+                    <div key={i} className="tk">
+                      <span className="lbl">{x.label}</span>
+                      <span className="val">{fmt(x.value, 2)}</span>
+                      <span className={`chg ${cls(x.change)}`}>{arr(x.change)} {Math.abs(x.change).toFixed(2)}%</span>
+                    </div>
+                  ))}
                 </div>
-                {searchOpen && (
-                  <div className="cmd-dropdown">
-                    {displayMatches.length > 0 && (
-                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "6px 12px 2px", fontSize: ".6rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".04em" }}>
-                        Tickers <VendorTag v={["fmp", "polygon"]} />
-                      </div>
-                    )}
-                    {displayMatches.map(m => (
-                      <div key={m.sym} className="palette-item"
-                        onMouseDown={e => e.preventDefault()}
-                        onClick={() => goToStock(m.sym)}
-                      >
-                        <div className="palette-item-icon" style={{ color: "var(--brand-2)", fontWeight: 700, fontFamily: "var(--f-mono)" }}>{m.sym[0]}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                            <div className="palette-item-label">{m.sym}</div>
-                            {m.price != null && (
-                              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                                <span className="mono" style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>{fmt(m.price)}</span>
-                                {m.pctChange != null && <span className={`mono ${cls(m.pctChange)}`} style={{ fontSize: ".72rem" }}>{sign(m.pctChange)}</span>}
-                              </div>
-                            )}
-                          </div>
-                          <div className="palette-item-sub">{m.name ?? "Stock"} · click to open</div>
-                        </div>
-                        <button
-                          title={searchStarred.has(m.sym) ? "Edit watchlists" : "Add to a watchlist"}
-                          onMouseDown={e => e.preventDefault()}
-                          onClick={e => { e.stopPropagation(); openSearchStar(m.sym, e); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", color: searchStarred.has(m.sym) ? "var(--warn)" : "var(--text-dim-solid)", padding: "0 4px" }}>
-                          {searchStarred.has(m.sym) ? "★" : "☆"}
-                        </button>
-                      </div>
-                    ))}
-                    {searchQ && displayMatches.length === 0 && (
-                      <div style={{ padding: "12px 15px", color: "var(--text-dim-solid)", fontSize: "0.8125rem" }}>No results for &ldquo;{searchQ}&rdquo;</div>
-                    )}
-                  </div>
-                )}
               </div>
-
-              {/* Integrated Centered Switcher */}
-              <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290, padding: "0 12px" }}>
-                <ModuleSwitcher />
-              </div>
-
               {/* Session ET clock — sits immediately to the right of the search box. */}
               <div className="topbar-clock">
                 {navTime.day} · <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{navTime.time} ET</span>
@@ -1522,18 +1453,98 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            {/* Ticker */}
-            <div className="ticker">
-              <div className="ticker-track">
-                {tickerItems.map((x, i) => (
-                  <div key={i} className="tk">
-                    <span className="lbl">{x.label}</span>
-                    <span className="val">{fmt(x.value, 2)}</span>
-                    <span className={`chg ${cls(x.change)}`}>{arr(x.change)} {Math.abs(x.change).toFixed(2)}%</span>
+            {/* Resources — sits under the logo, left of the search box */}
+            <div className="resbar">
+              <a className="resbar-link" href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z" />
+                  <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />
+                </svg>
+                <span>Resources</span>
+              </a>
+            </div>
+
+            {/* Sub-bar: search + module switcher */}
+            <div className="subbar">
+              <div className="cmd-wrap" ref={cmdRef}>
+                <div className={`cmd${searchOpen ? " cmd-active" : ""}`}>
+                  <span className="palette-icon">⌕</span>
+                  <input
+                    className="cmd-input"
+                    placeholder="Search tickers and stocks…"
+                    value={searchQ}
+                    onFocus={() => setSearchOpen(true)}
+                    onChange={e => { setSearchQ(e.target.value); setSearchOpen(true); }}
+                    onKeyDown={e => {
+                      if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); }
+                      if (e.key === "Enter") {
+                        // Use the top match, or fall back to the raw typed ticker
+                        // (the stock page fetches any symbol on demand), so pressing
+                        // Enter always opens the Search page.
+                        goToStock(displayMatches[0]?.sym ?? searchQ);
+                      }
+                    }}
+                  />
+                  {searchQ && <button className="cmd-clear" onClick={() => { setSearchQ(""); setSearchOpen(false); }}>✕</button>}
+                </div>
+                {searchOpen && (
+                  <div className="cmd-dropdown">
+                    {displayMatches.length > 0 && (
+                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "6px 12px 2px", fontSize: ".6rem", color: "var(--text-dim-solid)", textTransform: "uppercase", letterSpacing: ".04em" }}>
+                        Tickers <VendorTag v={["fmp", "polygon"]} />
+                      </div>
+                    )}
+                    {displayMatches.map(m => (
+                      <div key={m.sym} className="palette-item"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => goToStock(m.sym)}
+                      >
+                        <div className="palette-item-icon" style={{ color: "var(--brand-2)", fontWeight: 700, fontFamily: "var(--f-mono)" }}>{m.sym[0]}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                            <div className="palette-item-label">{m.sym}</div>
+                            {m.price != null && (
+                              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                                <span className="mono" style={{ fontSize: ".78rem", color: "var(--text-hi)" }}>{fmt(m.price)}</span>
+                                {m.pctChange != null && <span className={`mono ${cls(m.pctChange)}`} style={{ fontSize: ".72rem" }}>{sign(m.pctChange)}</span>}
+                              </div>
+                            )}
+                          </div>
+                          <div className="palette-item-sub">{m.name ?? "Stock"} · click to open</div>
+                        </div>
+                        <button
+                          title={searchStarred.has(m.sym) ? "Edit watchlists" : "Add to a watchlist"}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={e => { e.stopPropagation(); openSearchStar(m.sym, e); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", color: searchStarred.has(m.sym) ? "var(--warn)" : "var(--text-dim-solid)", padding: "0 4px" }}>
+                          {searchStarred.has(m.sym) ? "★" : "☆"}
+                        </button>
+                      </div>
+                    ))}
+                    {searchQ && displayMatches.length === 0 && (
+                      <div style={{ padding: "12px 15px", color: "var(--text-dim-solid)", fontSize: "0.8125rem" }}>No results for &ldquo;{searchQ}&rdquo;</div>
+                    )}
                   </div>
-                ))}
+                )}
+              </div>
+
+              {/* Integrated Centered Switcher */}
+              <div style={{ flex: "none", display: "flex", alignItems: "center" }}>
+                <ModuleSwitcher />
               </div>
             </div>
+
+            {/* Floating rail toggle — sits on the sidebar edge, mid-height */}
+          <button
+            className="nav-float-toggle"
+            onClick={() => setNavCollapsed(c => { const next = !c; localStorage.setItem("iq-nav-collapsed", next ? "1" : "0"); return next; })}
+            aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+            title={navCollapsed ? "Expand navigation" : "Collapse navigation"}
+          >
+            <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
 
             {/* Mobile nav scrim — inside .app so it shares .app's stacking context with the rail */}
             {navOpen && <div className="mob-nav-scrim" onClick={() => setNavOpen(false)} />}

@@ -11,6 +11,8 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
 import { useApiResource } from "../hooks/useApiResource";
+import { WmnCarousel, type WmnSlide } from "../wmn-carousel";
+import { CommunityPulse } from "../community-pulse";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-context";
 import { pulseFromLive, buildSectorList, tapeItemsToIndexDocs } from "../live-market-indices";
@@ -442,6 +444,51 @@ export function DashboardScreen() {
       }));
   })();
 
+  // What Matters Now slides: the AI digest first, then its key developments,
+  // then a few live reads (volatility, sentiment, top gainer). Every slide is
+  // built from data we already hold; a slide with no data behind it is skipped.
+  const wmnWhen = wmn?.generatedAt
+    ? new Date(wmn.generatedAt).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(/, (\d{1,2}:\d{2})/, " · $1") + " ET"
+    : undefined;
+  const wmnSlides: WmnSlide[] = [];
+  if (wmn?.summary) {
+    wmnSlides.push({
+      tag: "AI DIGEST", tone: "brand", name: "MarketCatalyst AI", when: wmnWhen,
+      lead: wmn.summary, body: wmn.overallAssessment, point: wmn.keyDevelopments?.[0],
+    });
+    (wmn.keyDevelopments ?? []).slice(1, 5).forEach((k, idx) => {
+      wmnSlides.push({ tag: "KEY DEVELOPMENT", tone: "info", name: `#${idx + 2}`, when: wmnWhen, lead: k });
+    });
+  }
+  const vixP = pulse.find(x => x.label === "VIX");
+  if (vixP) {
+    wmnSlides.push({
+      tag: "VOLATILITY", tone: "warn", name: "VIX",
+      lead: `The VIX is at ${fmt(vixP.value, 2)}, ${vixP.change >= 0 ? "up" : "down"} ${Math.abs(vixP.change).toFixed(2)}%.`,
+      point: `VIX ${fmt(vixP.value, 2)} · ${sign(vixP.change)}`,
+    });
+  }
+  if (fgVal != null) {
+    wmnSlides.push({
+      tag: "SENTIMENT", tone: fgVal < 45 ? "down" : fgVal > 55 ? "up" : "warn", name: "Fear & Greed",
+      lead: `The Fear & Greed index sits at ${Math.round(fgVal)}${fgLabel ? ` — ${fgLabel}` : ""}.`,
+      point: fgAsOf ? `As of ${fgAsOf}` : undefined,
+    });
+  }
+  // "Heating up": green on the day with volume running well above normal.
+  const heatingUp = movers
+    .filter(m => m.pctChange >= 1 && m.rvolRatio >= 1.5)
+    .sort((a, b) => b.pctChange - a.pctChange)
+    .slice(0, 4);
+  const topGainer = [...movers].sort((a, b) => b.pctChange - a.pctChange)[0];
+  if (topGainer) {
+    wmnSlides.push({
+      tag: "MOVER", tone: "up", name: topGainer.ticker,
+      lead: `${topGainer.name && topGainer.name !== topGainer.ticker ? `${topGainer.name} (${topGainer.ticker})` : topGainer.ticker} is the day’s top gainer, up ${topGainer.pctChange.toFixed(2)}%.`,
+      point: `${topGainer.ticker} ${sign(topGainer.pctChange)} · top gainer`,
+    });
+  }
+
   // Real watchlist/portfolio (signed-in user). No demo fallback: an empty
   // list renders DataState instead of a fabricated $128,430 showcase.
   const uid = firebaseAuth.currentUser?.uid ?? null;
@@ -501,7 +548,7 @@ export function DashboardScreen() {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [moversTab, setMoversTab] = useState<0 | 1 | 2>(0);
   const [scrTab, setScrTab] = useState<"leaders" | "laggards">("leaders");
-  const [wmnOpen, setWmnOpen] = useState(true);
+  const [searchedOpen, setSearchedOpen] = useState(true);
 
   // ---- Dash pop hover ----
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -603,80 +650,53 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        {/* ── 2. What Matters Now ── */}
-        <div className="col-12">
-          <div className={`wmn${wmnOpen ? " open" : ""}`}>
-            <button
-              type="button"
-              className="wmn-h"
-              aria-expanded={wmnOpen}
-              onClick={() => setWmnOpen(o => !o)}
-            >
+        {/* ── 2. What Matters Now + Most Searched (left) · Community Pulse (right) ── */}
+        <div className="col-8 wmn-left" style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="wmn open">
+            <div className="wmnc-head">
               <div className="t">
                 <div className="wmn-orb">
                   <svg viewBox="0 0 24 24" fill="none">
                     <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z" fill="currentColor" />
                   </svg>
                 </div>
-                <h2>What Matters Now</h2>
-              </div>
-              <span style={{ display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
-                {/* Replaces the old subtitle line — same signal, no second row,
-                    so the orb centres against the title. */}
-                {wmn?.summary && (
-                  <span className="wmn-live"><span className="dot" />Live</span>
-                )}
-                <svg className="wmn-chev" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            </button>
-            <div className="wmn-collapse">
-              <div className="wmn-collapse-inner">
-                {/* The card's whole content: the AI read, scrolling inside a
-                    fixed height so a long digest cannot push the rest of the
-                    dashboard down the page. */}
-                {wmn?.summary && (
-                  <div className="wmn-ai">
-                    <p className="wmn-ai-sum">{wmn.summary}</p>
-                    {wmn.overallAssessment && (
-                      <p className="wmn-ai-assess">{wmn.overallAssessment}</p>
-                    )}
-                    {!!wmn.keyDevelopments?.length && (
-                      <ul className="wmn-ai-list">
-                        {wmn.keyDevelopments.slice(0, 4).map((k, i) => <li key={i}>{k}</li>)}
-                      </ul>
-                    )}
-                    {/* The counts are the inputs the AI read, not items shown on
-                        this card (the headline list was removed), so the wording
-                        says "based on" rather than implying a list. QA row 248. */}
-                    <div className="wmn-ai-foot">
-                      AI summary based on {wmn.sourceCounts?.news ?? 0} news {(wmn.sourceCounts?.news ?? 0) === 1 ? "story" : "stories"}
-                      {wmn.sourceCounts?.analyses ? ` · ${wmn.sourceCounts.analyses} ${wmn.sourceCounts.analyses === 1 ? "analysis" : "analyses"}` : ""}
-                      {wmn.generatedAt ? ` · ${wmn.generatedAt.slice(11, 16)} UTC` : ""}
-                    </div>
-                  </div>
-                )}
-                {/* Headline list removed: the card now shows the AI read only.
-                    The same stories remain one click away in the Live Feed, and
-                    duplicating them here pushed the analysis off-screen. */}
-                {!wmn?.summary && (
-                  <DataState loading={!wmn} label="No market-moving activity to summarise yet." />
-                )}
+                <h2>What Matters Now <span className="wmnc-sub">(MarketCatalyst Curated)</span></h2>
               </div>
             </div>
           </div>
-        </div>
- {/* ── needs an Anthropic API key ── */}
+
+          {heatingUp.length > 0 && (
+            <Link className="alpha-bar" href="/menu/movers" title="Open Movers">
+              <div className="alpha-ic">
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M19.07 4.93A10 10 0 1 0 22 12" /><path d="M16.24 7.76A6 6 0 1 0 18 12" /><circle cx="12" cy="12" r="1.6" /><path d="M12 12l6-6" /></svg>
+              </div>
+              <div className="alpha-txt"><b>Alpha Signals</b><span>{heatingUp.length} stocks heating up · up on the day with above-average volume</span></div>
+              <div className="alpha-chips">
+                {heatingUp.map(m => (
+                  <span key={m.ticker} className="alpha-chip">{m.ticker} <span className="up">{sign(m.pctChange)}</span></span>
+                ))}
+              </div>
+              <span className="alpha-go" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
+              </span>
+            </Link>
+          )}
 
         {/* ── 2b. Most Searched Tickers ── */}
         <div className="col-12">
           <div className="card">
             <div className="card-h">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Most Searched Tickers</h3><VendorTag v={["firebase", "fmp", "polygon"]} /></div>
-              <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>by user searches</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>by user searches</span>
+                <button type="button" className="srch-toggle" aria-expanded={searchedOpen}
+                  title={searchedOpen ? "Collapse" : "Expand"} onClick={() => setSearchedOpen(o => !o)}>
+                  <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ transform: searchedOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }}><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+              </span>
             </div>
-            <div className="card-b" style={{ paddingTop: 6 }}>
+            {searchedOpen && <div className="card-b" style={{ paddingTop: 6 }}>
               {searchedDeduped.length === 0 ? (
                 <DataState loading={mostSearchedLoading} label="No searches recorded yet." />
               ) : (
@@ -684,7 +704,7 @@ export function DashboardScreen() {
                 // gets the same width on every row, so the last row no longer
                 // stretches to odd sizes and nothing has to be clamped with a
                 // max-width. auto-fill + minmax picks the column count.
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(216px, 1fr))", gap: 8 }}>
+                <div className="srch-row">
                   {searchedDeduped.map(({ ticker, count }) => {
                     const c = companyByTicker.get(ticker);
                     // Prefer the live quote; fall back to the base companies doc.
@@ -699,7 +719,7 @@ export function DashboardScreen() {
                           // minWidth:0 lets the tile shrink inside its grid
                           // track; without it the intrinsic width of the row
                           // wins and the price/count spill past the border.
-                          minWidth: 0, overflow: "hidden",
+                          flex: "0 0 210px", minWidth: 0, overflow: "hidden",
                           border: "1.5px solid transparent", borderRadius: 10,
                           // Gradient border: the direction colour glows across the
                           // TOP edge and fades to the neutral border down the sides.
@@ -708,6 +728,14 @@ export function DashboardScreen() {
                         }}
                       >
                         <StockLogo sym={ticker} size={28} />
+              {wmnSlides.length > 0 && (
+                <span className="wmn-live"><span className="dot" />Live</span>
+              )}
+            </div>
+            <div className="wmnc-wrap">
+              {wmnSlides.length > 0
+                ? <WmnCarousel slides={wmnSlides} />
+                : <DataState loading={!wmn} label="No market-moving activity to summarise yet." />}
                         {/* The only flexible column, and the only one allowed to
                             shrink — the logo, price and count keep their natural
                             width, so a long company name truncates instead of
@@ -739,7 +767,7 @@ export function DashboardScreen() {
             <div className="card-h">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Earnings Today</h3><VendorTag v={["fmp", "polygon"]} /></div>
               <Link className="link" href="/menu/earnings">View all →</Link>
-            </div>
+            </div>}
             <div className="card-b" style={{ paddingTop: 4, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
               {earningsToday.length === 0
                 ? <DataState loading={earningsLoading} label="No earnings reported today." height={100} />
@@ -776,6 +804,10 @@ export function DashboardScreen() {
                                 : "var(--text-hi)",
                               whiteSpace: "nowrap",
                             }}>
+        </div>
+        <div className="col-4 cpulse-col" style={{ minWidth: 0, display: "flex" }}>
+          <CommunityPulse />
+        </div>
                               EPS ${e.epsActual.toFixed(2)}
                             </span>
                           ) : e.epsEstimate != null ? (
