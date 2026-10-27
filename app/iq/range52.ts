@@ -46,3 +46,31 @@ export function fiftyTwoWeekBars<T extends { t: number }>(bars: readonly T[], no
   const cut = start.toISOString().slice(0, 10);
   return bars.filter((b) => day(b.t) > cut);
 }
+
+/**
+ * Shared 52-week range resolver for all screens (Stock detail, SI Overview, etc).
+ * Prioritizes stored high52/low52 (or high/low), falling back to completed
+ * 52-week bars if available, and widens with the live session dayHigh/dayLow.
+ */
+export function resolve52WeekRange(
+  source?: { high52?: number | null; low52?: number | null; high?: number | null; low?: number | null } | null,
+  session?: { dayHigh?: number | null; dayLow?: number | null; high?: number | null; low?: number | null } | null,
+  fallbackBars?: readonly { h: number; l: number; t: number }[] | null,
+): { high: number | null; low: number | null } {
+  let baseHigh = source?.high52 ?? source?.high ?? null;
+  let baseLow = source?.low52 ?? source?.low ?? null;
+
+  if ((baseHigh == null || baseLow == null) && fallbackBars && fallbackBars.length > 0) {
+    const bars52 = fiftyTwoWeekBars(fallbackBars);
+    if (bars52.length > 0) {
+      if (baseHigh == null) baseHigh = Math.max(...bars52.map((b) => b.h));
+      if (baseLow == null) baseLow = Math.min(...bars52.map((b) => b.l));
+    }
+  }
+
+  const sessHigh = session?.dayHigh ?? session?.high ?? null;
+  const sessLow = session?.dayLow ?? session?.low ?? null;
+
+  return range52({ high: baseHigh, low: baseLow }, { high: sessHigh, low: sessLow });
+}
+

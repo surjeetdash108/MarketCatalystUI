@@ -95,7 +95,7 @@ export function playbookReports(doc: FinancialsDoc | null | undefined): Playbook
       period: q.endDate ?? null,
       epsActual: q.epsActual,
       epsEstimate: q.epsEstimate,
-      epsReported: q.epsActualReported ?? null,
+      epsReported: q.epsActualReported ?? q.epsActual ?? null,
       epsEstimateReported: q.epsEstimateReported ?? null,
     }));
 }
@@ -429,7 +429,7 @@ export function EarningsPlaybook({ sym, reports }: { sym: string; reports: Playb
                 <th>Quarter</th>
                 <th>Announced</th>
                 {hasBeatMiss && <th>Result</th>}
-                {hasBeatMiss && <th className="num">EPS act</th>}
+                {hasBeatMiss && <th className="num">Adj. EPS</th>}
                 {hasBeatMiss && <th className="num">EPS est</th>}
                 <th className="num">Gap</th>
                 <th className="num">Day 1</th>
@@ -567,7 +567,7 @@ export function EarningsPlaybookCards({ sym, reports, onViewAll }: {
               <th>Quarter</th>
               <th>Announced</th>
               {hasBeatMiss && <th>Result</th>}
-              {hasBeatMiss && <th>EPS act</th>}
+              {hasBeatMiss && <th>Adj. EPS</th>}
               {hasBeatMiss && <th>EPS est</th>}
               <th>Gap</th>
               <th>Day 1</th>

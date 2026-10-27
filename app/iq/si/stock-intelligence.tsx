@@ -46,7 +46,7 @@ import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonth
 import { StockLogo, VendorTag } from "../utils";
 import { resolveActionMeta } from "../analyst-actions-engine";
 import { useHeadlineQuote } from "../quote-headline";
-import { range52 } from "../range52";
+import { range52, resolve52WeekRange } from "../range52";
 import { forwardAnnualEstimates } from "../eps-sales-data";
 import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
@@ -1522,8 +1522,8 @@ export function StockIntelligenceScreen() {
   // Stats definition for Overview header
   const peVal = liveCompany?.peRatio ?? stock.pe;
   const fpeVal = liveCompany?.forwardPe ?? stock.fpe;
-  const r52 = range52(
-    { high: liveCompany?.high52 ?? stock.hi, low: liveCompany?.low52 ?? stock.lo },
+  const r52 = resolve52WeekRange(
+    { high52: liveCompany?.high52 ?? stock.hi, low52: liveCompany?.low52 ?? stock.lo },
     { high: sharedQuote?.dayHigh, low: sharedQuote?.dayLow },
   );
   const hi52 = r52.high;

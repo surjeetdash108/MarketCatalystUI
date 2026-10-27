@@ -44,7 +44,7 @@ import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_L
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
-import { range52, fiftyTwoWeekBars } from "../range52";
+import { range52, fiftyTwoWeekBars, resolve52WeekRange } from "../range52";
 import { nextEarningsDate } from "../next-earnings";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
@@ -328,7 +328,7 @@ function incRowsFromFinancials(
       opex: opex / 1e9,
       oi: operatingIncome / 1e9,
       ni: netIncome / 1e9,
-      eps: r.epsActual ?? 0,
+      eps: (r as QuarterFinancials).epsActualReported ?? r.epsActual ?? 0,
     };
   });
 }
@@ -1128,6 +1128,8 @@ export function StockScreen({
   const shortInt = ownership?.shortInterest ?? null;
   const topHolders = ownership?.topHolders ?? [];
 
+  const r52 = resolve52WeekRange(keyStats, { high: sessHigh, low: sessLow }, yrDone);
+
   const data = {
     name: liveCompany?.name ?? sym,
     description: liveCompany?.description ?? null,
@@ -1145,8 +1147,8 @@ export function StockScreen({
     sector: keyStats?.sector ?? null,
     industry: keyStats?.industry ?? null,
     insiderActivity: symInsider,
-    week52High: range52({ high: keyStats?.high52 ?? week52?.high, low: keyStats?.low52 ?? week52?.low }, { high: sessHigh, low: sessLow }).high,
-    week52Low: range52({ high: keyStats?.high52 ?? week52?.high, low: keyStats?.low52 ?? week52?.low }, { high: sessHigh, low: sessLow }).low,
+    week52High: r52.high,
+    week52Low: r52.low,
   };
   const isUp = (data.pctChange ?? 0) >= 0;
   // `p` keeps a 0 fallback purely as the numeric baseline for the derived
@@ -3989,7 +3991,7 @@ export function StockScreen({
                             <thead>
                               <tr>
                                 <th>Fiscal year</th>
-                                <th className="num">EPS</th>
+                                <th className="num">Adj. EPS</th>
                                 <th className="num">%chg</th>
                                 <th className="num">Sales (mil)</th>
                                 <th className="num">%chg</th>
@@ -4030,7 +4032,7 @@ export function StockScreen({
                             <thead>
                               <tr>
                                 <th>Quarter</th>
-                                <th className="num">EPS</th>
+                                <th className="num">Adj. EPS</th>
                                 <th className="num">%chg</th>
                                 <th className="num">%surp</th>
                                 <th className="num">Sales (mil)</th>

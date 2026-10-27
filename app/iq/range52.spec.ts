@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
-import { fiftyTwoWeekBars } from "./range52";
+import { fiftyTwoWeekBars, resolve52WeekRange } from "./range52";
 
 // Real Polygon daily bars 2025-10-22 … 2026-10-23 (shared with the backend's
 // technical-indicators-52w.spec). Daily bars are stamped at ET midnight.
@@ -29,3 +29,30 @@ describe("fiftyTwoWeekBars before the 20:00 ET rollover (Oct 26 2026 after the c
     });
   }
 });
+
+describe("resolve52WeekRange unifies range across stock page and SI (Item 2)", () => {
+  it("uses stored high52/low52 and widens by live session high/low", () => {
+    const range = resolve52WeekRange(
+      { high52: 95.57, low52: 45.0 },
+      { dayHigh: 96.2, dayLow: 46.5 },
+    );
+    assert.strictEqual(range.high, 96.2);
+    assert.strictEqual(range.low, 45.0);
+  });
+
+  it("supports stock.hi / stock.lo aliases from Stock Intelligence", () => {
+    const range = resolve52WeekRange(
+      { high: 285.46, low: 110.0 },
+      { dayHigh: 280.0, dayLow: 108.5 },
+    );
+    assert.strictEqual(range.high, 285.46);
+    assert.strictEqual(range.low, 108.5);
+  });
+
+  it("falls back to completed bars when source high52 is missing", () => {
+    const bars = toBars(fx["SFM"]);
+    const range = resolve52WeekRange(null, { dayHigh: 108.0, dayLow: 60.0 }, bars);
+    assert.strictEqual(range.high, 108.0);
+  });
+});
+

@@ -348,7 +348,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
               <thead>
                 <tr style={{ background: "var(--surface-1)" }}>
                   <th style={{ ...th, textAlign: "left" }}>Fiscal Year</th>
-                  <th style={th}>EPS</th>
+                  <th style={th}>Adj. EPS</th>
                   <th style={th}>% Chg</th>
                   <th style={th}>Sales ($M)</th>
                   <th style={th}>% Chg</th>
@@ -385,7 +385,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
               <thead>
                 <tr style={{ background: "var(--surface-1)" }}>
                   <th style={{ ...th, textAlign: "left" }}>Quarter</th>
-                  <th style={th}>EPS</th>
+                  <th style={th}>Adj. EPS</th>
                   <th style={th}>% Chg</th>
                   <th style={th}>Surprise</th>
                   <th style={th}>Sales ($M)</th>

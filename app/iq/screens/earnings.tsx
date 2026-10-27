@@ -1788,9 +1788,10 @@ export function EarningsScreen() {
     return { q: label, e: est ?? 0, a: act, surp: parseFloat(surp.toFixed(1)), mv: 0, surpStr };
   });
   const beats = pairedBeats;
-  // "What street expects" — prefer the next (unreported) quarter's consensus EPS,
-  // else the nearest forward fiscal-year estimate. Both come from the FMP feed.
-  const upcomingRow = liveMatches.find(e => e.epsActual == null && e.epsEstimate != null);
+  const today = etTodayIso();
+  const upcomingRow = liveMatches
+    .filter(e => e.epsActual == null && e.epsEstimate != null && (!today || e.date >= today))
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
   const fwdAnnual = forwardAnnualEstimates(financialsDoc).find(e => e.epsEstimate != null);
   const streetExpects = upcomingRow?.epsEstimate != null
     ? `$${upcomingRow.epsEstimate.toFixed(2)} · ${upcomingRow.date}`
