@@ -130,7 +130,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     aborted.catch(() => {});
     const auth = await Promise.race([authHeaders(), aborted]);
     const headers = { ...auth, ...(init.headers ?? {}) };
+    const isLiveOrMarketData = path.startsWith("/market-data/") || path.startsWith("/live/");
     const res = await fetch(`${BASE_URL}${path}`, {
+      cache: isLiveOrMarketData ? "no-store" : init.cache,
       ...init,
       headers,
       signal: init.signal ?? controller.signal,
