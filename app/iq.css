@@ -3538,10 +3538,8 @@ table.tbl tr:hover td {
   max-height: 330px;
   overflow-y: auto;
   padding-right: 8px;
-  /* Firefox equivalent of the widened webkit thumb/track below — keeps the
-     scrollbar legible there too instead of falling back to the OS default. */
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) var(--surface-2);
+  /* Firefox equivalent of the webkit thumb/track below lives in the
+     @supports block at the end of this file. */
 }
 
 .wmn-ai::-webkit-scrollbar {
@@ -9632,15 +9630,20 @@ table.tbl tr:hover td {
 
 /* Scrollbar — thin gradient thumb. */
 /* Firefox has no ::-webkit pseudo-elements. It cannot do a 2px bar (thin is
-   ~8px) but it can do the same fade: transparent at rest, brand on interaction. */
-.iq-root * {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
+   ~8px) but it can do the same fade: transparent at rest, brand on interaction.
+   Gated on @supports because Chrome 121+ lets scrollbar-width/-color override
+   ::-webkit-scrollbar, which swapped the 2px overlay bar for the native one
+   with arrow buttons (e.g. in the search dropdown). */
+@supports not selector(::-webkit-scrollbar) {
+  .iq-root * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
 
-.iq-root *:hover,
-.iq-root.is-scrolling * {
-  scrollbar-color: var(--brand) transparent;
+  .iq-root *:hover,
+  .iq-root.is-scrolling * {
+    scrollbar-color: var(--brand) transparent;
+  }
 }
 
 /* Icon-only rail is ~54px wide; a scrollbar there is pure noise, and the rail
@@ -12734,7 +12737,6 @@ table.sd-ftab {
   border: 1px solid var(--border-soft);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.02);
-  scrollbar-width: thin;
 }
 
 .sd-snap-about p {
@@ -13334,4 +13336,18 @@ h6.sd-sec {
 .cc-km-src a:hover {
   color: var(--brand);
   text-decoration: underline;
+}
+
+/* Firefox-only scrollbar sizing for the scrollers that have their own look.
+   Chrome 121+ lets scrollbar-width/-color override ::-webkit-scrollbar and draws
+   the native bar with arrow buttons, so these are gated on @supports. */
+@supports not selector(::-webkit-scrollbar) {
+  .wmn-ai {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) var(--surface-2);
+  }
+
+  .sd-snap-about {
+    scrollbar-width: thin;
+  }
 }
