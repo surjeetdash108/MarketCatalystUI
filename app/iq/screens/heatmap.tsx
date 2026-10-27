@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useIQActions } from "../shell";
 import { sign, heatCol, fmt, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
-import { tilePctLabel } from "../heatmap-label";
+import { tilePctLabel, tileTypography } from "../heatmap-label";
 import { useApiList } from "../hooks/useApiList";
 import { useLiveQuotes } from "../live-quotes-context";
 import { buildSectorList } from "../live-market-indices";
@@ -397,9 +397,7 @@ function HeatmapInner() {
                           const hc      = tileCol(chg, g.name);
                           const cellPxW = (sr.w / 100) * sectPxW;
                           const cellPxH = (sr.h / 100) * (sectPxH - HEADER_H);
-                          const minDim  = Math.min(cellPxW, cellPxH);
-                          const showText   = minDim > 16 && cellPxW > 20;
-                          const fs = Math.max(0.56, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 72));
+                          const typo    = tileTypography(sym, chg, cellPxW, cellPxH);
 
                           return (
                             <div key={sym}
@@ -420,18 +418,18 @@ function HeatmapInner() {
                               onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
                               onMouseOut={e => (e.currentTarget.style.filter = "")}
                             >
-                              {showText && (
+                              {typo.showText && (
                                 <>
                                   <span style={{
                                     fontFamily: "var(--f-mono)", fontWeight: 700,
-                                    color: hc.fg, fontSize: `${fs}rem`,
+                                    color: hc.fg, fontSize: `${typo.fs}rem`,
                                     lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
                                   }}>{sym}</span>
-                                  {tilePctLabel(chg, cellPxW, cellPxH) != null && (
+                                  {typo.pctLabel != null && (
                                     <span style={{
                                       fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
-                                      fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 3,
-                                    }}>{tilePctLabel(chg, cellPxW, cellPxH)}</span>
+                                      fontSize: `${typo.pctFs}rem`, lineHeight: 1, marginTop: typo.gapPx,
+                                    }}>{typo.pctLabel}</span>
                                   )}
                                 </>
                               )}
@@ -524,8 +522,7 @@ function HeatmapInner() {
                 const hc      = tileCol(chg, activeSector.name);
                 const cellPxW = (sr.w / 100) * (APPROX_W - 32);
                 const cellPxH = (sr.h / 100) * (APPROX_H - 24);
-                const showText   = cellPxW >= Math.max(13, sym.length * 4) && cellPxH >= 10;
-                const fs = Math.max(0.48, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 70));
+                const typo    = tileTypography(sym, chg, cellPxW, cellPxH);
 
                 return (
                   <div key={sym}
@@ -546,18 +543,18 @@ function HeatmapInner() {
                     onMouseOver={e => (e.currentTarget.style.filter = "brightness(1.25)")}
                     onMouseOut={e => (e.currentTarget.style.filter = "")}
                   >
-                    {showText && (
+                    {typo.showText && (
                       <>
                         <span style={{
                           fontFamily: "var(--f-mono)", fontWeight: 700,
-                          color: hc.fg, fontSize: `${fs}rem`,
+                          color: hc.fg, fontSize: `${typo.fs}rem`,
                           lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
                         }}>{sym}</span>
-                        {tilePctLabel(chg, cellPxW, cellPxH) != null && (
+                        {typo.pctLabel != null && (
                           <span style={{
                             fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
-                            fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 2,
-                          }}>{tilePctLabel(chg, cellPxW, cellPxH)}</span>
+                            fontSize: `${typo.pctFs}rem`, lineHeight: 1, marginTop: typo.gapPx,
+                          }}>{typo.pctLabel}</span>
                         )}
                       </>
                     )}
