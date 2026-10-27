@@ -41,9 +41,36 @@ export function useTickerSearch(rawQuery: string): TickerSearchResult[] {
 
     const handle = setTimeout(() => {
       apiGet<SearchResponse>(`/live/search?q=${encodeURIComponent(trimmed)}`)
-        .then((data) => {
+        .then(async (data) => {
           if (cancelled) return;
-          setResults(data.results.map((r) => ({ ticker: r.ticker, name: r.name, price: null, pctChange: null })));
+          const initial = data.results.map((r) => ({ ticker: r.ticker, name: r.name, price: null, pctChange: null }));
+          setResults(initial);
+
+          const topTickers = data.results.slice(0, 8).map((r) => r.ticker).filter(Boolean);
+          if (topTickers.length > 0) {
+            try {
+              const snap = await apiGet<{ quotes: Array<{ ticker?: string; price?: number | null; changePct?: number | null }> }>(
+                `/live/snapshot?tickers=${encodeURIComponent(topTickers.join(","))}`,
+              );
+              if (cancelled) return;
+              if (snap?.quotes && Array.isArray(snap.quotes)) {
+                const quoteMap = new Map<string, { price: number | null; changePct: number | null }>();
+                for (const q of snap.quotes) {
+                  if (q.ticker) {
+                    quoteMap.set(q.ticker, { price: q.price ?? null, changePct: q.changePct ?? null });
+                  }
+                }
+                setResults((prev) =>
+                  prev.map((r) => {
+                    const q = quoteMap.get(r.ticker);
+                    return q ? { ...r, price: q.price, pctChange: q.changePct } : r;
+                  }),
+                );
+              }
+            } catch {
+              // Best-effort prefetch; initial results remain visible
+            }
+          }
         })
         .catch((err) => {
           if (cancelled) return;

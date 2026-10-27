@@ -1048,7 +1048,10 @@ export function StockScreen({
     // Nothing for this session: no figure, rather than another day's volume
     // or the 20-day average standing in for it.
     : null;
-  const sessionVol = hasSessionQuote && sessVolume != null ? sessVolume : barSessionVol;
+  const sessionVol =
+    sessVolume ??
+    barSessionVol ??
+    (qPos((liveCompany as any)?.volume) ?? qPos((keyStats as any)?.volume) ?? null);
 
 
   const ema50 = ema(yr, 50);
@@ -1137,8 +1140,8 @@ export function StockScreen({
     homepageUrl: liveCompany?.homepageUrl ?? null,
     // Null (not 0) when the company doc has no price yet, so the header renders a
     // loading dash instead of a fabricated $0.00 / +0.00% (BUG-DATA-007).
-    price: liveCompany?.price ?? null,
-    pctChange: liveCompany?.pctChange ?? null,
+    price: liveCompany?.price ?? companySummary?.price ?? null,
+    pctChange: liveCompany?.pctChange ?? companySummary?.pctChange ?? null,
     // Key Stats fields read off keyStats (full doc, falling back to the fast
     // summary) so the card fills in ~1-3s for a brand-new ticker instead of
     // sitting on N/A until the full doc finishes building.
