@@ -3587,10 +3587,8 @@ table.tbl tr:hover td {
   max-height: 330px;
   overflow-y: auto;
   padding-right: 8px;
-  /* Firefox equivalent of the widened webkit thumb/track below — keeps the
-     scrollbar legible there too instead of falling back to the OS default. */
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) var(--surface-2);
+  /* Firefox equivalent of the webkit thumb/track below lives in the
+     @supports block at the end of this file. */
 }
 
 .wmn-ai::-webkit-scrollbar {
@@ -9689,15 +9687,20 @@ table.tbl tr:hover td {
 
 /* Scrollbar — thin gradient thumb. */
 /* Firefox has no ::-webkit pseudo-elements. It cannot do a 2px bar (thin is
-   ~8px) but it can do the same fade: transparent at rest, brand on interaction. */
-.iq-root * {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
+   ~8px) but it can do the same fade: transparent at rest, brand on interaction.
+   Gated on @supports because Chrome 121+ lets scrollbar-width/-color override
+   ::-webkit-scrollbar, which swapped the 2px overlay bar for the native one
+   with arrow buttons (e.g. in the search dropdown). */
+@supports not selector(::-webkit-scrollbar) {
+  .iq-root * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
 
-.iq-root *:hover,
-.iq-root.is-scrolling * {
-  scrollbar-color: var(--brand) transparent;
+  .iq-root *:hover,
+  .iq-root.is-scrolling * {
+    scrollbar-color: var(--brand) transparent;
+  }
 }
 
 /* Icon-only rail is ~54px wide; a scrollbar there is pure noise, and the rail
@@ -12791,7 +12794,6 @@ table.sd-ftab {
   border: 1px solid var(--border-soft);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.02);
-  scrollbar-width: thin;
 }
 
 .sd-snap-about p {
@@ -13544,7 +13546,7 @@ h6.sd-sec {
   background: var(--surface-3);
   color: var(--text-dim-solid);
 }
-.iq-root .cpulse-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; scrollbar-width: thin; }
+.iq-root .cpulse-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .iq-root .cpulse-av {
   width: 34px;
   height: 34px;
@@ -13656,7 +13658,7 @@ h6.sd-sec {
 .iq-root .alp-pill i, .iq-root .alp-status.up, .iq-root .alp-status.warn { }
 .iq-root .alp-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim-solid); }
 .iq-root .alp-pill i.up { background: var(--up); } .alp-pill i.warn { background: var(--warn); }
-.iq-root .alp-cards { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.iq-root .alp-cards { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
 .iq-root .alp-card { flex: 0 0 190px; text-align: left; display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); color: inherit; cursor: pointer; transition: border-color .15s; }
 .iq-root .alp-card:hover, .iq-root .alp-card.on { border-color: var(--brand); }
 .iq-root .alp-card-top { display: flex; align-items: center; gap: 8px; }
@@ -13678,7 +13680,7 @@ h6.sd-sec {
 .iq-root .alp-seg { display: flex; gap: 4px; width: 100%; }
 .iq-root .alp-seg button { border: 0; background: transparent; padding: 5px 10px; border-radius: 6px; font-size: .78rem; color: var(--text); cursor: pointer; }
 .iq-root .alp-seg button.on { background: var(--brand-dim); color: var(--brand); }
-.iq-root .alp-rows { display: flex; flex-direction: column; max-height: 520px; overflow: auto; scrollbar-width: thin; }
+.iq-root .alp-rows { display: flex; flex-direction: column; max-height: 520px; overflow: auto; }
 .iq-root .alp-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border: 0; border-top: 1px solid var(--border-soft); background: transparent; text-align: left; color: inherit; cursor: pointer; }
 .iq-root .alp-row:hover { background: var(--surface-2); }
 .iq-root .alp-row.on { background: var(--brand-dim); }
@@ -13748,6 +13750,24 @@ h6.sd-sec {
 .iq-root .cpulse { position: absolute; inset: 0; min-height: 0; }
 
 /* Most Searched Tickers: one horizontally scrolling row (collapsible), as in the design. */
-.iq-root .srch-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.iq-root .srch-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .iq-root .srch-toggle { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; }
 .iq-root .srch-toggle:hover { border-color: var(--brand); color: var(--brand); }
+
+/* Firefox-only scrollbar sizing for the scrollers that have their own look.
+   Chrome 121+ lets scrollbar-width/-color override ::-webkit-scrollbar and draws
+   the native bar with arrow buttons, so these are gated on @supports. */
+@supports not selector(::-webkit-scrollbar) {
+  .wmn-ai {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) var(--surface-2);
+  }
+
+  .sd-snap-about,
+  .iq-root .cpulse-body,
+  .iq-root .alp-cards,
+  .iq-root .alp-rows,
+  .iq-root .srch-row {
+    scrollbar-width: thin;
+  }
+}

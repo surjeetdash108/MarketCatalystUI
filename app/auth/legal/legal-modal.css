@@ -97,8 +97,15 @@
   line-height: 1.7;
   color: var(--text-dim-solid, #a6aeb5);
   scroll-behavior: smooth;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-strong, #2a3037) transparent;
+}
+
+/* Firefox only: in Chrome 121+ these would override the webkit scrollbar below
+   and draw the native bar with arrow buttons. */
+@supports not selector(::-webkit-scrollbar) {
+  .legal-modal-body {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong, #2a3037) transparent;
+  }
 }
 
 .legal-modal-body::-webkit-scrollbar {
