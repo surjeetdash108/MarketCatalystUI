@@ -20,19 +20,28 @@ export function range52(
 
 /** 52 weeks, in days. */
 const FIFTY_TWO_WEEKS_DAYS = 364;
+/** The vendor day rolls to a new session once that day's extended hours end (20:00 ET). */
+const ROLLOVER_MINUTES_ET = 20 * 60;
 
 /**
- * The completed daily bars inside the 52 weeks ending at the newest one: dated
- * AFTER (newest session − 364 days), session dates read in New York. Same rule
- * as the backend's fiftyTwoWeekWindow; quote pages use it. "The last 252 bars"
- * reached a session too far back and put a year-old extreme into the range
- * (SFM 109.61 / GS 744.66 / CAT 513.01 vs the published 107.31 / 754 / 521.43
- * at the Oct 23 2026 close).
+ * The completed daily bars the published 52-week range covers: dated AFTER
+ * (anchor − 364 days) through the newest. The anchor is the newest session
+ * once its day, extended hours included, is over (20:00 ET); before that it is
+ * the previous session, and the newest bar only widens the range. Same rule as
+ * the backend's fiftyTwoWeekWindow (E2E Oct 23 + Oct 26: SFM 107.31 / GS 754 /
+ * CAT 521.43 and ANIP 96.57 / MSEX 62.18 / ORCL 287).
  */
-export function fiftyTwoWeekBars<T extends { t: number }>(bars: readonly T[]): T[] {
+export function fiftyTwoWeekBars<T extends { t: number }>(bars: readonly T[], now: number = Date.now()): T[] {
   if (bars.length === 0) return [];
   const day = (ms: number) => new Date(ms).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  const start = new Date(`${day(bars[bars.length - 1].t)}T00:00:00Z`);
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false })
+      .formatToParts(new Date(now)).map((x) => [x.type, x.value]),
+  );
+  const minutes = (Number(p.hour) % 24) * 60 + Number(p.minute);
+  const last = day(bars[bars.length - 1].t);
+  const anchor = bars.length > 1 && last === day(now) && minutes < ROLLOVER_MINUTES_ET ? day(bars[bars.length - 2].t) : last;
+  const start = new Date(`${anchor}T00:00:00Z`);
   start.setUTCDate(start.getUTCDate() - FIFTY_TWO_WEEKS_DAYS);
   const cut = start.toISOString().slice(0, 10);
   return bars.filter((b) => day(b.t) > cut);

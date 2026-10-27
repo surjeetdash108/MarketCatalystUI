@@ -18,3 +18,14 @@ describe("fiftyTwoWeekBars (Oct 23 2026 close)", () => {
     });
   }
 });
+
+describe("fiftyTwoWeekBars before the 20:00 ET rollover (Oct 26 2026 after the close)", () => {
+  const fx2 = JSON.parse(readFileSync(new URL("./fixtures/52w-rollover-oct26.json", import.meta.url), "utf-8"));
+  const AT_17_ET = Date.parse("2026-10-26T21:00:00Z");
+  for (const [t, expected] of [["ANIP", 96.57], ["MSEX", 62.18], ["ORCL", 287]] as const) {
+    it(`${t} 52-week high matches the public ${expected}`, () => {
+      const w = fiftyTwoWeekBars(toBars(fx2[t]), AT_17_ET);
+      assert.ok(Math.abs(Math.max(...w.map((b) => b.h)) - expected) <= expected * 0.005);
+    });
+  }
+});
