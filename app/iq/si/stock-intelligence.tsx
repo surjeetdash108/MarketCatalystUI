@@ -38,6 +38,7 @@ import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
 import { StockChart } from "../stock-panel";
 import { buildChartEarnings, type ChartEarnings } from "../chart-earnings";
+import { nextEarningsDate, withOneUpcomingReport } from "../next-earnings";
 import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
@@ -563,12 +564,11 @@ export function StockIntelligenceScreen() {
     // Next report on or after today: the stored date when it is still ahead,
     // else the earnings calendar (a stored date can be a report already made).
     const todayIso = etTodayIso();
-    const storedEr = liveCompany?.nextEarningsDate && liveCompany.nextEarningsDate >= todayIso ? liveCompany.nextEarningsDate : null;
-    const calEr = (Array.isArray(liveEarningsList) ? liveEarningsList : [])
-      .filter((e) => e.ticker === currentTicker && e.date >= todayIso)
-      .map((e) => e.date)
-      .sort()[0] ?? null;
-    const erDate = [storedEr, calEr].filter((d): d is string => !!d && d >= todayIso).sort()[0] ?? null;
+    const erDate = nextEarningsDate(
+      liveCompany?.nextEarningsDate,
+      (Array.isArray(liveEarningsList) ? liveEarningsList : []).filter((e) => e.ticker === currentTicker),
+      todayIso,
+    );
     const erDays = erDate ? Math.round((Date.parse(erDate + "T00:00:00Z") - todayMs) / 86_400_000) : null;
     const pivots = liveCompany?.keyLevels?.daily ?? null;
     const isBank = /bank|savings|thrift|financial/i.test(liveCompany?.industry ?? "") || /financial/i.test(liveCompany?.sector ?? "");
@@ -667,11 +667,9 @@ export function StockIntelligenceScreen() {
       .filter((e) => e.ticker === stock.t)
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const upcomingEr = symEvents.find((e) => e.date >= todayStr) ?? null;
-    // A stored nextEarningsDate can be a report that already happened (MSFT
-    // showed Jul 29 after it reported); only a future date counts.
-    const storedEr = liveCompany?.nextEarningsDate && liveCompany.nextEarningsDate >= todayStr ? liveCompany.nextEarningsDate : null;
-    const realErDate = [storedEr, upcomingEr?.date].filter((d): d is string => !!d && d >= todayStr).sort()[0] ?? null;
+    // One next-report date for every card (next-earnings.ts).
+    const realErDate = nextEarningsDate(liveCompany?.nextEarningsDate, symEvents, todayStr);
+    const upcomingEr = withOneUpcomingReport(symEvents, realErDate, todayStr).find((e) => e.date >= todayStr) ?? null;
 
     const items: UpcomingEvent[] = [];
 
@@ -3467,8 +3465,14 @@ export function StockIntelligenceScreen() {
           };
 
           // 1. EARNINGS (FMP Live Earnings Feed & Financials)
-          const tickerEarnings = (Array.isArray(liveEarningsList) ? liveEarningsList : []).filter(
+          // One upcoming card per report, dated like every other screen (next-earnings.ts).
+          const tickerEarningsAll = (Array.isArray(liveEarningsList) ? liveEarningsList : []).filter(
             (e) => e?.ticker && e.ticker.toUpperCase() === stock.t
+          );
+          const tickerEarnings = withOneUpcomingReport(
+            tickerEarningsAll,
+            nextEarningsDate(liveCompany?.nextEarningsDate, tickerEarningsAll, etTodayIso()),
+            etTodayIso(),
           );
           tickerEarnings.forEach((e) => {
             const dd = calcDd(e.date);

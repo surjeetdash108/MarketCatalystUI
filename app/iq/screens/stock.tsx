@@ -45,6 +45,7 @@ import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows
 import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 import { range52, fiftyTwoWeekBars } from "../range52";
+import { nextEarningsDate } from "../next-earnings";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
 
@@ -1194,10 +1195,7 @@ export function StockScreen({
   // wins while it is still ahead; a stored date can be a report already made
   // (MSFT showed Jul 29 after reporting), so a past one falls through to the
   // earnings calendar. Never a past date: "—" when nothing is scheduled.
-  const storedEr = keyStats?.nextEarningsDate && keyStats.nextEarningsDate >= todayStr ? keyStats.nextEarningsDate : null;
-  const calEr = symEvents.find(e => e.date >= todayStr)?.date ?? null;
-  const erCandidates = [storedEr, calEr].filter((d): d is string => !!d && d >= todayStr).sort();
-  const erDate = erCandidates[0] || "—";
+  const erDate = nextEarningsDate(keyStats?.nextEarningsDate, symEvents, todayStr) || "—";
   // Earnings dots for both charts on this screen. Shared derivation (see
   // chart-earnings.ts) so the panel charts on watchlist / portfolio / screener /
   // movers / IPOs place the same reports at the same points. Called with the
