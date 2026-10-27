@@ -7,6 +7,7 @@ import { apiGet } from "./backend";
 import { useWatchlistsContext } from "./hooks/useWatchlists";
 import type { AnalystConsensusDoc, AnalystRatingChange, CompanyDoc } from "./types";
 import { buildAnalystActions, type FirmStat, type ProcessedAction } from "./analyst-actions-engine";
+import { isRecentAnalystAction, analystCutoffDateIso } from "./analyst-cutoff";
 
 type SortKey = "date" | "firm" | "act" | "to" | "pt" | "up" | "score";
 const PAGE_SIZE = 20;
@@ -105,13 +106,9 @@ export function StockAnalystActionsView({
   // Keyed by symbol, so another stock opens on the recent view again.
   const [olderFor, setOlderFor] = useState<string | null>(null);
   const showOlder = olderFor === sym;
-  const cutoff = useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - RECENT_MONTHS);
-    return d.toISOString().slice(0, 10);
-  }, []);
-  const olderCount = useMemo(() => rows.filter((r) => r.date < cutoff).length, [rows, cutoff]);
-  const visible = useMemo(() => (showOlder ? rows : rows.filter((r) => r.date >= cutoff)), [rows, showOlder, cutoff]);
+  const cutoff = useMemo(() => analystCutoffDateIso(), []);
+  const olderCount = useMemo(() => rows.filter((r) => !isRecentAnalystAction(r.date)).length, [rows]);
+  const visible = useMemo(() => (showOlder ? rows : rows.filter((r) => isRecentAnalystAction(r.date))), [rows, showOlder]);
 
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<-1 | 1>(-1);

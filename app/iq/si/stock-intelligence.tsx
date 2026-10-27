@@ -45,6 +45,7 @@ import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex } from "../calendar-range";
 import { StockLogo, VendorTag } from "../utils";
 import { resolveActionMeta } from "../analyst-actions-engine";
+import { isRecentAnalystAction } from "../analyst-cutoff";
 import { useHeadlineQuote } from "../quote-headline";
 import { range52, resolve52WeekRange } from "../range52";
 import { forwardAnnualEstimates } from "../eps-sales-data";
@@ -3527,9 +3528,10 @@ export function StockIntelligenceScreen() {
           const tickerConsensus = (Array.isArray(liveConsensusList) ? liveConsensusList : []).find(
             (c) => c?.ticker && c.ticker.toUpperCase() === stock.t
           );
-          const allGrades = (Array.isArray(liveAnalystHistory) && liveAnalystHistory.length > 0)
+          const rawGrades = (Array.isArray(liveAnalystHistory) && liveAnalystHistory.length > 0)
             ? liveAnalystHistory
             : (tickerConsensus?.recentGrades && Array.isArray(tickerConsensus.recentGrades) ? tickerConsensus.recentGrades : []);
+          const allGrades = rawGrades.filter(g => isRecentAnalystAction(g.date));
 
           allGrades.forEach((g) => {
             const dd = calcDd(g.date);

@@ -19,6 +19,7 @@ import {
   resolveActionMeta,
   shownPrice,
 } from "../analyst-actions-engine";
+import { isRecentAnalystAction } from "../analyst-cutoff";
 
 // ============================================================================
 // Types & Constants
@@ -315,9 +316,11 @@ export function AnalystScreen() {
 
   // Pagination for All Actions table to avoid DOM bloat & freezing
   const [allActionsShown, setAllActionsShown] = useState(50);
+  const [showOlderAllActions, setShowOlderAllActions] = useState(false);
+  const [showOlderStockCalls, setShowOlderStockCalls] = useState(false);
   useEffect(() => {
     setAllActionsShown(50);
-  }, [filterChip, sectorFilter, capFilter, searchQ]);
+  }, [filterChip, sectorFilter, capFilter, searchQ, showOlderAllActions]);
 
   // Sorting
   const [sortKey, setSortKey] = useState<SortKey>("date");
@@ -462,6 +465,14 @@ export function AnalystScreen() {
     }
     return rows.sort((a, b) => a.date.localeCompare(b.date) * stockCallDir);
   }, [selectedStock, allActions, stockHistory, stockCallDir]);
+
+  useEffect(() => {
+    setShowOlderStockCalls(false);
+  }, [selectedStockId]);
+
+  const recentStockCalls = useMemo(() => stockCalls.filter((r) => isRecentAnalystAction(r.date)), [stockCalls]);
+  const olderStockCallsCount = stockCalls.length - recentStockCalls.length;
+  const displayedStockCalls = showOlderStockCalls ? stockCalls : recentStockCalls;
 
   // --------------------------------------------------------------------------
   // Summary Cards Calculations
@@ -667,6 +678,11 @@ export function AnalystScreen() {
   const filteredActions = useMemo(() => {
     let list = allActions;
 
+    // 12-month rolling cutoff on default view
+    if (!showOlderAllActions) {
+      list = list.filter(a => isRecentAnalystAction(a.date));
+    }
+
     // Filter Chip
     if (filterChip === "My stocks") {
       list = list.filter(a => a.held || a.watched);
@@ -714,7 +730,7 @@ export function AnalystScreen() {
       else if (sortKey === "date") res = (a.date || "").localeCompare(b.date || "");
       return res * sortDir;
     });
-  }, [allActions, filterChip, sectorFilter, capFilter, searchQ, sortKey, sortDir]);
+  }, [allActions, showOlderAllActions, filterChip, sectorFilter, capFilter, searchQ, sortKey, sortDir]);
 
   // Moving the needle high-signal list for Analyst Actions tab
   // Deduplicate by ticker so each unique stock appears once with its highest-signal call
@@ -1502,12 +1518,12 @@ export function AnalystScreen() {
                         <span>Price Target</span>
                       </div>
                       <div style={{ maxHeight: 320, overflowY: "auto" }}>
-                        {stockCalls.length === 0 && (
+                        {displayedStockCalls.length === 0 && (
                           <div style={{ padding: "14px", fontSize: 12.5, color: TEXT_MUTED }}>
-                            {stockHistoryLoading ? "Loading analyst history…" : "No analyst actions on record."}
+                            {stockHistoryLoading ? "Loading analyst history…" : stockCalls.length > 0 ? "No analyst actions in the last 12 months." : "No analyst actions on record."}
                           </div>
                         )}
-                        {stockCalls.map((r) => (
+                        {displayedStockCalls.map((r) => (
                           <div
                             key={r.key}
                             style={{ display: "grid", gridTemplateColumns: STOCK_CALL_COLS, gap: 12, alignItems: "center", padding: "10px 14px", borderBottom: "1px solid #161a18", fontSize: 12.5 }}
@@ -1541,7 +1557,28 @@ export function AnalystScreen() {
                     </div>
                   </div>
                   {stockCalls.length > 0 && (
-                    <div style={{ marginTop: 6, fontSize: 11, color: TEXT_MUTED }}>{stockCalls.length} actions on record</div>
+                    <div style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: TEXT_MUTED }}>
+                      <span>
+                        {displayedStockCalls.length} {displayedStockCalls.length === 1 ? "action" : "actions"}{showOlderStockCalls ? "" : " · last 12 months"}
+                      </span>
+                      {olderStockCallsCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowOlderStockCalls(o => !o)}
+                          style={{
+                            background: "transparent",
+                            border: `1px solid ${BORDER_DARK}`,
+                            borderRadius: 6,
+                            color: G,
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {showOlderStockCalls ? "Hide older" : `Show older (${olderStockCallsCount})`}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -2012,6 +2049,22 @@ export function AnalystScreen() {
                   {chip}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setShowOlderAllActions(o => !o)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 7,
+                  fontSize: 12,
+                  fontWeight: showOlderAllActions ? 700 : 500,
+                  border: `1px solid ${showOlderAllActions ? G : BORDER_DARK}`,
+                  cursor: "pointer",
+                  background: showOlderAllActions ? "#1b201e" : "transparent",
+                  color: showOlderAllActions ? G : TEXT_MUTED,
+                }}
+              >
+                {showOlderAllActions ? "Older Included" : "Last 12 Months"}
+              </button>
             </div>
 
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: TEXT_MUTED }}>
