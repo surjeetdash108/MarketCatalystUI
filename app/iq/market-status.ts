@@ -63,14 +63,14 @@ export function getMarketStatus(now: Date = new Date()): MarketStatus {
 }
 
 /** Shift a YYYY-MM-DD date by whole days (noon UTC keeps it clear of DST edges). */
-function addDays(iso: string, n: number): string {
+export function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 
 /** True for a weekday that is not a full-closure holiday. */
-function isTradingDay(iso: string): boolean {
+export function isTradingDay(iso: string): boolean {
   const wd = new Date(`${iso}T12:00:00Z`).getUTCDay();
   return wd !== 0 && wd !== 6 && !MARKET_HOLIDAYS.has(iso);
 }
@@ -100,4 +100,18 @@ export function sessionsBetween(from: string, to: string): number {
     if (isTradingDay(d)) n++;
   }
   return n;
+}
+
+/**
+ * Returns the session date exactly `n` trading sessions before `sessionDate`.
+ * Example: for 2026-10-27 (Tue) and n=5, returns 2026-10-20 (Tue).
+ */
+export function tradingSessionsBack(sessionDate: string, n = 5): string {
+  let d = sessionDate;
+  let count = 0;
+  for (let i = 0; i < 60 && count < n; i++) {
+    d = addDays(d, -1);
+    if (isTradingDay(d)) count++;
+  }
+  return d;
 }

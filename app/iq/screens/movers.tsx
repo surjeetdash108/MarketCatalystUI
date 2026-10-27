@@ -11,7 +11,8 @@ import { useApiResource } from "../hooks/useApiResource";
 import { useLiveQuotes, QUOTE_DELAY_LABEL, pairedQuote, extendedSession } from "../live-quotes-context";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import type { LiveMoverDoc, CompanyDoc, NewsArticleDoc, AnalystConsensusDoc, AnalystRatingChange, Week5Close } from "../types";
-import { latestSessionDate, sessionsBetween } from "../market-status";
+import { latestSessionDate } from "../market-status";
+import { week5Base } from "../movers-week5";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { MoverNewsModal } from "../mover-news-modal";
 
@@ -317,29 +318,6 @@ function fmtMcap(mc: number | null | undefined): string {
   if (mc >= 1e9)  return `$${(mc / 1e9).toFixed(1)}B`;
   if (mc >= 1e6)  return `$${(mc / 1e6).toFixed(0)}M`;
   return `$${Math.round(mc).toLocaleString()}`;
-}
-/**
- * The close a live 5-day move starts from: the one exactly 5 sessions before
- * `sessionDate`, the session the shown price belongs to.
- *
- * `closes` are the last 6 dated closes, oldest → newest. While the newest bar
- * is from that same session the base is closes[0]; each session the bars lag
- * behind the price moves it forward one. Re-measuring the live price against
- * a fixed closes[0] instead (the old week5BaseClose path) counted 6+ sessions
- * as soon as a new session opened.
- *
- * null when the window cannot reach the base: bars more than 5 sessions behind,
- * or a newest bar later than the shown price.
- */
-function week5Base(closes: Week5Close[] | null | undefined, sessionDate: string): number | null {
-  if (!closes || closes.length !== 6) return null;
-  if (closes[5].date > sessionDate) return null;
-  // Matched by DATE: the close exactly 5 trading sessions before the price's
-  // session. Indexing back from the newest bar assumed no session was missing
-  // from the stored bars; with one gone, [0] sat 6 sessions back (CIFR −21.0%
-  // vs −11.6%, TTMI −21.5% vs −14.7%, E2E Oct 23). No exact match → null, and
-  // the stored move stands.
-  return closes.find((c) => sessionsBetween(c.date, sessionDate) === 5)?.close ?? null;
 }
 
 // Largest → smallest. The dropdown only offers tiers that actually have movers
@@ -1196,13 +1174,13 @@ export function MoversScreen() {
             Unusual Volume and the two weekly ones, which draw from the tracked
             universe and rank by RVOL or by the 5-day move. It was stating the
             wrong source AND the wrong ranking on three tabs out of five. */}
-        {((tab === "biggest" ? biggestCount : tab === "active" ? activeCount : searched.length) > 0) && (
+        {((tab === "biggest" ? biggestCount : tab === "active" ? activeCount : visible.length) > 0) && (
           <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
             {tab === "biggest"
               ? `${biggestCount} names · top 20 gainers + top 20 losers by sector · ${QUOTE_DELAY_LABEL}`
               : tab === "active"
               ? `${activeCount} names · top volume + top relative volume by sector · ${QUOTE_DELAY_LABEL}`
-              : `${searched.length} ${
+              : `${visible.length} ${
                   tab === "win" || tab === "weekwin" ? "gainers" : tab === "lose" || tab === "weeklose" ? "losers" : "names"
                 } · ${
                   isWeekTab(tab) ? "tracked universe · ranked by 5-day move"
