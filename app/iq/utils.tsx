@@ -202,65 +202,65 @@ const cs = (n: number) => Math.round(n * CHART_SCALE);
  *     the backend answers 204 (No Content) for a ticker Polygon has no branding
  *     for, which completes successfully with nothing to draw.
  */
-export function useTickerLogo(sym: string) {
-  const [sourceIdx, setSourceIdx] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [prevSym, setPrevSym] = useState(sym);
+// Session-level caches so repeated renders across screens resolve synchronously in 0ms
+const knownMissingLogos = new Set<string>();
+const knownLoadedLogos = new Set<string>();
 
-  if (prevSym !== sym) {
-    setPrevSym(sym);
-    setSourceIdx(0);
-    setLoaded(false);
-    setFailed(false);
+export function useTickerLogo(sym: string) {
+  const s = (sym || "").toUpperCase().trim();
+  const isKnownMissing = knownMissingLogos.has(s);
+  const isKnownLoaded = knownLoadedLogos.has(s);
+
+  const [loaded, setLoaded] = useState(isKnownLoaded);
+  const [failed, setFailed] = useState(isKnownMissing);
+  const [prevSym, setPrevSym] = useState(s);
+
+  if (prevSym !== s) {
+    setPrevSym(s);
+    setLoaded(knownLoadedLogos.has(s));
+    setFailed(knownMissingLogos.has(s));
   }
 
-  // Multi-tier logo resolution:
-  // 1. Backend proxy / Polygon branding (/live/logo?ticker=...)
-  // 2. Parqet symbol logo CDN (covers ETFs: SPY, IVV, VOO, etc.)
-  const sources = [
-    backendUrl(`/live/logo?ticker=${encodeURIComponent(sym)}`),
-    `https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}?format=png`,
-  ];
-
-  const currentSrc = sources[sourceIdx] ?? "";
+  // Backend /live/logo checks Polygon -> FMP -> Parqet with server-side caching
+  // and returns 204 No Content when unavailable (preventing browser 404 network errors).
+  const src = isKnownMissing ? "" : backendUrl(`/live/logo?ticker=${encodeURIComponent(s)}`);
 
   const handleFailure = useCallback(() => {
-    setSourceIdx(idx => {
-      if (idx + 1 < sources.length) {
-        return idx + 1;
-      }
-      setFailed(true);
-      return idx;
-    });
-  }, [sources.length]);
+    knownMissingLogos.add(s);
+    setFailed(true);
+  }, [s]);
+
+  const handleSuccess = useCallback(() => {
+    knownLoadedLogos.add(s);
+    setLoaded(true);
+    setFailed(false);
+  }, [s]);
 
   const ref = useCallback(
     (el: HTMLImageElement | null) => {
       if (!el || !el.complete) return;
       if (el.naturalWidth > 0) {
-        setLoaded(true);
-        setFailed(false);
+        handleSuccess();
       } else {
         handleFailure();
       }
     },
-    [handleFailure]
+    [handleSuccess, handleFailure]
   );
 
   return {
     loaded,
     failed,
-    sym,
-    sourceIdx,
+    sym: s,
     imgProps: {
       ref,
-      src: currentSrc,
+      src,
       alt: "",
+      loading: "lazy" as const,
+      decoding: "async" as const,
       onLoad: (e: React.SyntheticEvent<HTMLImageElement>) => {
         if (e.currentTarget.naturalWidth > 0) {
-          setLoaded(true);
-          setFailed(false);
+          handleSuccess();
         } else {
           handleFailure();
         }
@@ -289,7 +289,7 @@ export function StockLogo({ sym, size = 22, style }: { sym: string; size?: numbe
   const s = (sym || "").toUpperCase().trim();
   const idx = s.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % _LP.length;
   const px = Math.round(size * TICKER_LOGO_SCALE);
-  const { loaded, failed, sym: logoSym, sourceIdx, imgProps } = useTickerLogo(s);
+  const { loaded, failed, imgProps } = useTickerLogo(s);
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -304,7 +304,7 @@ export function StockLogo({ sym, size = 22, style }: { sym: string; size?: numbe
       {!loaded && (s[0] ?? "")}
       {!failed && (
         <img
-          key={`${logoSym}_${sourceIdx}`}
+          key={s}
           {...imgProps}
           style={{
             ...LOGO_IMG_STYLE,
