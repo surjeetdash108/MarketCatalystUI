@@ -17,6 +17,7 @@ import {
   firmKey,
   pctTxt,
   resolveActionMeta,
+  shownPrice,
 } from "../analyst-actions-engine";
 
 // ============================================================================
@@ -1252,7 +1253,7 @@ export function AnalystScreen() {
                         {/* Price & Move Column */}
                         <div style={{ textAlign: "left" }}>
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: TEXT_HI }}>
-                            {fmtMoney(action.px)}
+                            {fmtMoney(shownPrice(action.px))}
                           </div>
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: action.dir >= 0 ? G : R, whiteSpace: "nowrap" }}>
                             {action.dir >= 0 ? "▲" : "▼"} {action.upPct != null ? `${action.upPct >= 0 ? "+" : ""}${action.upPct.toFixed(1)}%` : action.move}
