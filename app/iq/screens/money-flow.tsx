@@ -422,24 +422,16 @@ export function MoneyFlowScreen() {
           min-height: 0;
           display: flex;
         }
-        .mf-sectors-col {
-          width: 330px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          border-right: 1px solid #1a2328;
-          padding-right: 8px;
-          box-sizing: border-box;
-          background: #08090a;
-        }
         .mf-sectors-list {
-          flex: 1;
+          width: 330px;
           display: flex;
           flex-direction: column;
           justifyContent: space-between;
           gap: 2px;
-          padding: 2px 0 10px 0;
+          padding: 4px 6px 10px 0;
           overflow-y: auto;
+          background: #08090a;
+          border-right: 1px solid #1a2328;
           scrollbar-width: thin;
         }
         .mf-top2-breadth-pane {
@@ -603,15 +595,13 @@ export function MoneyFlowScreen() {
           .mf-sectors-split {
             flex-direction: column !important;
           }
-          .mf-sectors-col {
+          .mf-sectors-list {
             width: 100% !important;
+            max-height: 250px !important;
             border-right: none !important;
             border-bottom: 1px solid #1a2328 !important;
             padding-right: 0 !important;
             padding-bottom: 6px !important;
-          }
-          .mf-sectors-list {
-            max-height: 250px !important;
           }
           .mf-top2-breadth-pane {
             padding: 8px 0 !important;
@@ -777,7 +767,97 @@ export function MoneyFlowScreen() {
           >
 
 
-            {/* Sectors Column + Top 2 In/Out + Breadth */}
+            {/* 1. S&P 500 Live Tape Card (in its own separate div, width same as sectors section) */}
+            <div
+              style={{
+                width: 330,
+                maxWidth: "100%",
+                boxSizing: "border-box",
+              }}
+            >
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => openIndex?.("S&P 500")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") openIndex?.("S&P 500");
+                }}
+                title="Click to view S&P 500 index details"
+                style={{
+                  cursor: "pointer",
+                  border: "1px solid #1e2427",
+                  background: "#0c0f10",
+                  borderRadius: 8,
+                  padding: "9px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 3,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+                  transition: "border-color 0.15s, background 0.15s",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "#c9a24a";
+                  (e.currentTarget as HTMLElement).style.background = "#121618";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "#1e2427";
+                  (e.currentTarget as HTMLElement).style.background = "#0c0f10";
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      letterSpacing: ".1em",
+                      textTransform: "uppercase",
+                      color: "#7a8481",
+                    }}
+                  >
+                    S&P 500
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 16,
+                      fontWeight: 800,
+                      color: "#eef2f4",
+                    }}
+                  >
+                    {spxDisplayPrice}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: spxIsUp ? "#3ddc84" : "#f0565a",
+                    }}
+                  >
+                    {spxIsUp ? "▲ " : "▼ "}{spxDisplayChange}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Sectors Split: Sectors (20) in its own separate div + Top 2 In/Out + Breadth */}
             <div
               className="mf-sectors-split"
               style={{
@@ -787,114 +867,29 @@ export function MoneyFlowScreen() {
                 display: "flex",
               }}
             >
-              {/* Sectors Column (Width 330px with S&P 500 Live Tape Card at top) */}
-              <div className="mf-sectors-col">
-                {/* S&P 500 Live Tape Card (at top of Sectors section with width same as sectors section) */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openIndex?.("S&P 500")}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") openIndex?.("S&P 500");
-                  }}
-                  title="Click to view S&P 500 index details · Live from FMP"
-                  style={{
-                    cursor: "pointer",
-                    border: "1px solid #1e2427",
-                    background: "#0c0f10",
-                    borderRadius: 8,
-                    padding: "9px 12px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 3,
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
-                    transition: "border-color 0.15s, background 0.15s",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = "#c9a24a";
-                    (e.currentTarget as HTMLElement).style.background = "#121618";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = "#1e2427";
-                    (e.currentTarget as HTMLElement).style.background = "#0c0f10";
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 10.5,
-                        fontWeight: 700,
-                        letterSpacing: ".1em",
-                        textTransform: "uppercase",
-                        color: "#7a8481",
-                      }}
-                    >
-                      S&P 500
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      justifyContent: "space-between",
-                      gap: 8,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 16,
-                        fontWeight: 800,
-                        color: "#eef2f4",
-                      }}
-                    >
-                      {spxDisplayPrice}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: spxIsUp ? "#3ddc84" : "#f0565a",
-                      }}
-                    >
-                      {spxIsUp ? "▲ " : "▼ "}{spxDisplayChange}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Sectors Vertical List (Distinct Container) */}
-                <div
-                  className="mf-sectors-list"
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    gap: 2,
-                    padding: "6px 8px 10px",
-                    overflowY: "auto",
-                    background: "#08090a",
-                    border: "1px solid #1a2328",
-                    borderRadius: 8,
-                    scrollbarWidth: "thin",
-                  }}
-                >
+              {/* 20 Sectors Vertical List (in its own separate div) */}
+              <div
+                className="mf-sectors-list"
+                style={{
+                  width: 330,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  padding: "4px 8px 10px 0",
+                  overflowY: "auto",
+                  background: "#08090a",
+                  borderRight: "1px solid #1a2328",
+                  scrollbarWidth: "thin",
+                }}
+              >
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    padding: "2px 4px 6px",
-                    marginBottom: 4,
-                    borderBottom: "1px solid #14181a",
+                    padding: "2px 6px",
+                    marginBottom: 2,
                   }}
                 >
                   <span
@@ -1023,7 +1018,6 @@ export function MoneyFlowScreen() {
                     </button>
                   );
                 })}
-                </div>
               </div>
 
               {/* Top 2 In / Top 2 Out Cards + Breadth Bar */}
@@ -1301,7 +1295,7 @@ export function MoneyFlowScreen() {
                   <div
                     style={{
                       width: 10,
-                      height: 290,
+                      height: 420,
                       borderRadius: 5,
                       overflow: "hidden",
                       display: "flex",
