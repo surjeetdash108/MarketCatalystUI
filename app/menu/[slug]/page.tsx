@@ -18,6 +18,7 @@ import { MacroScreen } from "../../iq/screens/macro";
 import { OptionsScreen } from "../../iq/screens/options";
 import { AiInfrastructureScreen } from "../../iq/screens/ai-infrastructure";
 import { EtfMarketFunds } from "../../iq/screens/etf-corner";
+import { MoneyFlowScreen } from "../../iq/screens/money-flow";
 
 export function generateStaticParams() {
   return [
@@ -25,6 +26,7 @@ export function generateStaticParams() {
       .filter(item => item.slug !== "dashboard")
       .map(item => ({ slug: item.slug })),
     { slug: "stock" },
+    { slug: "money-flow" },
   ];
 }
 
@@ -49,6 +51,7 @@ const SCREENS: Record<string, React.ReactNode> = {
   macro:       <MacroScreen />,
   "etf-corner":        <EtfMarketFunds />,
   "ai-infrastructure": <AiInfrastructureScreen />,
+  "money-flow":        <MoneyFlowScreen />,
 };
 
 export default async function MenuPage({

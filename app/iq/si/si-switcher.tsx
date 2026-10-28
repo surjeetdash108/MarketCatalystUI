@@ -219,7 +219,7 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
           background:
             activeSweep.to === "SI"
               ? "rgba(8,11,16,0.92)"
-              : activeSweep.to === "SL"
+              : activeSweep.to === "SL" || activeSweep.to === "MF"
                 ? "rgba(8,9,10,0.92)"
                 : "rgba(6,8,9,0.92)",
           backdropFilter: "blur(16px)",
@@ -240,8 +240,8 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
           background: `linear-gradient(90deg, transparent 0%, ${
             activeSweep.to === "SI"
               ? "rgba(127,168,208,0.12) 30%, rgba(127,168,208,0.48) 50%, rgba(127,168,208,0.12) 70%"
-              : activeSweep.to === "SL"
-                ? "rgba(201,162,74,0.12) 30%, rgba(201,162,74,0.45) 50%, rgba(201,162,74,0.12) 70%"
+              : activeSweep.to === "SL" || activeSweep.to === "MF"
+                ? "rgba(224,187,94,0.12) 30%, rgba(224,187,94,0.45) 50%, rgba(224,187,94,0.12) 70%"
                 : "rgba(74,222,128,0.12) 30%, rgba(74,222,128,0.42) 50%, rgba(74,222,128,0.12) 70%"
           }, transparent 100%)`,
           animation: anim("mcSweep"),
@@ -270,7 +270,7 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
           color:
             activeSweep.to === "SI"
               ? "rgba(169,198,227,0.96)"
-              : activeSweep.to === "SL"
+              : activeSweep.to === "SL" || activeSweep.to === "MF"
                 ? "rgba(240,214,140,0.96)"
                 : "rgba(255,255,255,0.96)",
           display: "flex",
@@ -286,6 +286,8 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
           "STOCK INTELLIGENCE"
         ) : activeSweep.to === "SL" ? (
           "STRATEGY LAB"
+        ) : activeSweep.to === "MF" ? (
+          "MONEY FLOW"
         ) : (
           <span>
             Market&nbsp;

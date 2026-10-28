@@ -61,7 +61,7 @@ import { pulseFromLive, tapeItemsToIndexDocs } from "./live-market-indices";
 import type { CompanyDoc, SectorApiDoc, LiveEarningsDoc } from "./types";
 import { surprisePct } from "./types";
 import { LiveQuotesProvider, QUOTE_DELAY_LABEL } from "./live-quotes-context";
-import { SIProvider } from "./si/si-context";
+import { SIProvider, useSI } from "./si/si-context";
 import { SISweepOverlay } from "./si/si-switcher";
 import { ModuleSwitcher } from "./module-switcher";
 
@@ -200,7 +200,8 @@ function NavIcon({ slug }: { slug: string }) {
 function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
   sym: string; companies: CompanyDoc[]; sectorsLive: SectorApiDoc[]; loading: boolean; onClose: () => void;
 }) {
-  const { openStockFull, openSector } = useIQActions();
+  const { openSector } = useIQActions();
+  const { exitToMC, enterSI } = useSI();
   const c = companies.find(x => x.ticker === sym);
 
   const name   = c?.name ?? sym;
@@ -280,9 +281,38 @@ function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
                 View {titleCaseLabel(sector)} in heatmap →
               </button>
             )}
-            <button className="btn cta" style={{ width: "100%" }}
-              onClick={() => { onClose(); openStockFull(sym); }}>
-              Open full stock page →
+            <button
+              className="btn cta"
+              style={{
+                width: "100%",
+                background: "#4ade80",
+                color: "#05210f",
+                fontWeight: 700,
+                fontSize: ".88rem",
+              }}
+              onClick={() => {
+                onClose();
+                exitToMC(sym);
+              }}
+            >
+              Open {sym} in Market Catalyst →
+            </button>
+            <button
+              className="btn cta"
+              style={{
+                width: "100%",
+                background: "#16202c",
+                border: "1px solid #2a3a4a",
+                color: "#7fa8d0",
+                fontWeight: 700,
+                fontSize: ".88rem",
+              }}
+              onClick={() => {
+                onClose();
+                enterSI(sym);
+              }}
+            >
+              Open {sym} in Stock Intelligence →
             </button>
           </div>
         </div>
@@ -292,7 +322,7 @@ function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
 }
 
 function EarningsDrawer({ sym, liveEarnings, loading, onClose }: { sym: string; liveEarnings: LiveEarningsDoc[]; loading: boolean; onClose: () => void }) {
-  const { openStockFull } = useIQActions();
+  const { exitToMC, enterSI } = useSI();
   const events = liveEarnings.filter(x => x.ticker === sym).sort((a, b) => b.date.localeCompare(a.date));
   const e = events[0] ?? null;
   const epsBeat = e ? surprisePct(e.epsActual, e.epsEstimate) : null;
@@ -326,8 +356,40 @@ function EarningsDrawer({ sym, liveEarnings, loading, onClose }: { sym: string; 
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button className="btn cta" style={{ flex: 1 }} onClick={() => { onClose(); openStockFull(sym); }}>Open full stock page</button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+            <button
+              className="btn cta"
+              style={{
+                width: "100%",
+                background: "#4ade80",
+                color: "#05210f",
+                fontWeight: 700,
+                fontSize: ".88rem",
+              }}
+              onClick={() => {
+                onClose();
+                exitToMC(sym);
+              }}
+            >
+              Open {sym} in Market Catalyst →
+            </button>
+            <button
+              className="btn cta"
+              style={{
+                width: "100%",
+                background: "#16202c",
+                border: "1px solid #2a3a4a",
+                color: "#7fa8d0",
+                fontWeight: 700,
+                fontSize: ".88rem",
+              }}
+              onClick={() => {
+                onClose();
+                enterSI(sym);
+              }}
+            >
+              Open {sym} in Stock Intelligence →
+            </button>
           </div>
         </div>
       </div>
@@ -1318,6 +1380,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const isSiPage = pathname?.startsWith("/si");
   // Strategy Lab is a full-screen module like SI (its own header, no MC chrome).
   const isSlPage = pathname === "/sl" || pathname?.startsWith("/sl/");
+  // Money Flow is a full-screen module like SI (its own header, no MC chrome).
+  const isMfPage = pathname === "/money-flow" || pathname?.startsWith("/money-flow/");
 
   return (
     <AuthGuard>
@@ -1358,6 +1422,34 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   }
                   .si-main-scroll::-webkit-scrollbar-thumb:hover {
                     background: #5980a6 !important;
+                  }
+                `}</style>
+                {children}
+              </main>
+            ) : isMfPage ? (
+              <main
+                style={{
+                  height: "100vh",
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                  background: "#08090a",
+                  width: "100%",
+                }}
+                className="mf-main-scroll"
+              >
+                <style>{`
+                  .mf-main-scroll::-webkit-scrollbar {
+                    width: 8px !important;
+                  }
+                  .mf-main-scroll::-webkit-scrollbar-track {
+                    background: #08090a !important;
+                  }
+                  .mf-main-scroll::-webkit-scrollbar-thumb {
+                    background: #233038 !important;
+                    border-radius: 4px !important;
+                  }
+                  .mf-main-scroll::-webkit-scrollbar-thumb:hover {
+                    background: #e0bb5e !important;
                   }
                 `}</style>
                 {children}
