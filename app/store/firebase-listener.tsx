@@ -4,6 +4,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { useEffect } from "react";
 import { firebaseAuth } from "../firebase";
 import { apiGet } from "../iq/backend";
+import { clearSession } from "../iq/session";
 import { setAuthReady, setUser } from "./auth-slice";
 import { useAppDispatch } from "./hooks";
 import { setProfile, setProfileLoading, StoredProfile } from "./profile-slice";
@@ -50,6 +51,9 @@ export function FirebaseListener() {
             if (!cancelled) dispatch(setProfile(null));
           }
         } else {
+          // Signed out by any route (button, admin console, expired): the next
+          // login must claim its own session rather than inherit this one.
+          clearSession();
           dispatch(setUser(null));
           dispatch(setProfile(null));
           if (!cancelled) dispatch(setAuthReady());
