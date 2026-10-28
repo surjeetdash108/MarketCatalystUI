@@ -749,7 +749,7 @@ export function DashboardScreen() {
           </div>
 
           {heatingUp.length > 0 && (
-            <Link className="alpha-bar" href="/menu/movers" title="Open Movers">
+            <Link className="alpha-bar" href="/menu/screener" title="Open Alpha Signals">
               <div className="alpha-ic">
                 <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M19.07 4.93A10 10 0 1 0 22 12" /><path d="M16.24 7.76A6 6 0 1 0 18 12" /><circle cx="12" cy="12" r="1.6" /><path d="M12 12l6-6" /></svg>
               </div>
