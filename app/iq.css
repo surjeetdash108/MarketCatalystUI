@@ -816,7 +816,11 @@
   padding: 0 16px;
   background: var(--surface-0);
   border-bottom: 1px solid var(--border-soft);
-  z-index: 9;
+  /* Hosts the search dropdown, whose own z-index (200) is trapped inside this
+     bar's stacking context. It must out-rank the sticky page tab bars
+     (.sd-tabbar, z-index 20) in .main, or they paint over the results — while
+     staying under the profile dropdown (30) and the scrim/drawer (50/51). */
+  z-index: 25;
   min-width: 0;
 }
 .subbar .cmd-wrap { flex: 0 1 26rem; max-width: 26rem; }
