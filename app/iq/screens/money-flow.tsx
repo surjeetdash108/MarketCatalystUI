@@ -383,7 +383,7 @@ export function MoneyFlowScreen() {
           display: flex;
         }
         .mf-sectors-list {
-          width: 260px;
+          width: 330px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
@@ -432,15 +432,15 @@ export function MoneyFlowScreen() {
             max-width: 100% !important;
           }
           .mf-col-left {
-            flex: 1.22 1 0 !important;
-            min-width: 360px !important;
+            flex: 1.3 1 0 !important;
+            min-width: 440px !important;
           }
           .mf-col-mid {
-            flex: 0.88 1 0 !important;
+            flex: 0.85 1 0 !important;
             min-width: 270px !important;
           }
           .mf-col-right {
-            flex: 1.65 1 0 !important;
+            flex: 1.6 1 0 !important;
             min-width: 360px !important;
           }
         }
@@ -808,16 +808,16 @@ export function MoneyFlowScreen() {
               display: "flex",
             }}
           >
-            {/* 19 Sectors Vertical List (Width increased to 260px) */}
+            {/* 19 Sectors Vertical List (Width increased to 330px) */}
             <div
               className="mf-sectors-list"
               style={{
-                width: 260,
+                width: 330,
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
                 gap: 2,
-                padding: "4px 6px 10px 0",
+                padding: "4px 8px 10px 0",
                 overflowY: "auto",
                 background: "#08090a",
                 borderRight: "1px solid #1a2328",
@@ -1028,8 +1028,10 @@ export function MoneyFlowScreen() {
                         cursor: "pointer",
                         display: "flex",
                         flexDirection: "column",
-                        gap: 3,
-                        padding: "8px 10px",
+                        gap: 5,
+                        padding: "12px 14px",
+                        minHeight: 88,
+                        justifyContent: "space-between",
                         borderRadius: 10,
                         border: `1px solid ${
                           isMatch
@@ -1130,8 +1132,10 @@ export function MoneyFlowScreen() {
                         cursor: "pointer",
                         display: "flex",
                         flexDirection: "column",
-                        gap: 3,
-                        padding: "8px 10px",
+                        gap: 5,
+                        padding: "12px 14px",
+                        minHeight: 88,
+                        justifyContent: "space-between",
                         borderRadius: 10,
                         border: `1px solid ${
                           isMatch
@@ -1234,7 +1238,7 @@ export function MoneyFlowScreen() {
                 <div
                   style={{
                     width: 10,
-                    height: 180,
+                    height: 290,
                     borderRadius: 5,
                     overflow: "hidden",
                     display: "flex",
@@ -2411,53 +2415,73 @@ export function MoneyFlowScreen() {
             if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
           }}
           onMouseLeave={handleTileLeave}
-          style={{
-            position: "fixed",
-            zIndex: 9999,
-            left:
-              typeof window !== "undefined" && window.innerWidth < 640
-                ? 12
-                : Math.max(
-                    16,
-                    Math.min(
-                      window.innerWidth - 490,
-                      hoveredStock.rect.right + 12
-                    )
-                  ),
-            top:
-              typeof window !== "undefined" && window.innerWidth < 640
-                ? "50%"
-                : Math.max(
-                    16,
-                    Math.min(window.innerHeight - 520, hoveredStock.rect.top - 60)
-                  ),
-            transform:
-              typeof window !== "undefined" && window.innerWidth < 640
-                ? "translateY(-50%)"
-                : "none",
-            width:
-              typeof window !== "undefined" && window.innerWidth < 640
-                ? "calc(100vw - 24px)"
-                : 460,
-            maxHeight: "calc(100vh - 32px)",
-            overflowY: "auto",
-            pointerEvents: "auto",
-            background: "#0b0d0e",
-            border: `1px solid ${
-              hoveredStock.stock.bull
-                ? "rgba(61,220,132,.45)"
-                : "rgba(240,86,90,.45)"
-            }`,
-            borderBottom: `2px solid ${
-              hoveredStock.stock.bull ? "#3ddc84" : "#f0565a"
-            }`,
-            borderRadius: 12,
-            boxShadow: "0 24px 60px rgba(0,0,0,.75)",
-            padding: 14,
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-          }}
+          style={(() => {
+            const POPOVER_W = 460;
+            const isMobileScreen = typeof window !== "undefined" && window.innerWidth < 640;
+            let popLeft: number | string = 12;
+            let popTop: number | string = 16;
+            let popTransform = "none";
+
+            if (isMobileScreen) {
+              popLeft = 12;
+              popTop = "50%";
+              popTransform = "translateY(-50%)";
+            } else if (typeof window !== "undefined") {
+              const rect = hoveredStock.rect;
+              const spaceRight = window.innerWidth - rect.right;
+              const spaceLeft = rect.left;
+
+              // If enough space on right and not in the right half of the screen, place to the right of tile:
+              if (spaceRight >= POPOVER_W + 20 && rect.left < window.innerWidth / 2) {
+                popLeft = rect.right + 14;
+              } else if (spaceLeft >= POPOVER_W + 20) {
+                // Otherwise place strictly to the left of the hovered stock tile
+                popLeft = rect.left - POPOVER_W - 14;
+              } else if (spaceRight >= POPOVER_W + 20) {
+                popLeft = rect.right + 14;
+              } else {
+                // If neither side has 480px, place on whichever side has more space
+                if (spaceLeft > spaceRight) {
+                  popLeft = Math.max(12, rect.left - POPOVER_W - 14);
+                } else {
+                  popLeft = Math.min(window.innerWidth - POPOVER_W - 12, rect.right + 14);
+                }
+              }
+
+              // Vertical positioning: align near tile's top, clamped within window bounds
+              popTop = Math.max(
+                16,
+                Math.min(window.innerHeight - 540, rect.top - 20)
+              );
+            }
+
+            return {
+              position: "fixed" as const,
+              zIndex: 9999,
+              left: popLeft,
+              top: popTop,
+              transform: popTransform,
+              width: isMobileScreen ? "calc(100vw - 24px)" : POPOVER_W,
+              maxHeight: "calc(100vh - 32px)",
+              overflowY: "auto" as const,
+              pointerEvents: "auto" as const,
+              background: "#0b0d0e",
+              border: `1px solid ${
+                hoveredStock.stock.bull
+                  ? "rgba(61,220,132,.45)"
+                  : "rgba(240,86,90,.45)"
+              }`,
+              borderBottom: `2px solid ${
+                hoveredStock.stock.bull ? "#3ddc84" : "#f0565a"
+              }`,
+              borderRadius: 12,
+              boxShadow: "0 24px 60px rgba(0,0,0,.75)",
+              padding: 14,
+              display: "flex",
+              flexDirection: "column" as const,
+              gap: 10,
+            };
+          })()}
         >
           {/* Header */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
