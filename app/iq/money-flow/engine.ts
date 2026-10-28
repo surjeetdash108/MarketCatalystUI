@@ -26,12 +26,30 @@ export interface StockBase {
   sh: number;
 }
 
+export interface CompanyMarketData {
+  marketCap?: number | null;
+  price?: number | null;
+  pctChange?: number | null;
+  keyLevels?: {
+    daily?: {
+      pivot?: number | null;
+      r1?: number | null;
+      r2?: number | null;
+      r3?: number | null;
+      s1?: number | null;
+      s2?: number | null;
+      s3?: number | null;
+    } | null;
+  } | null;
+}
+
 export interface StockSession extends StockBase {
   k: number;
   mv: number;
   px: number;
   bull: boolean;
   chop: boolean;
+  marketCap?: number;
   zi: number;
   zLo: number;
   zHi: number;
@@ -227,7 +245,10 @@ export function computeSessionK(progress01: number): number {
   return Math.max(1, Math.min(78, Math.round(progress01 * 78)));
 }
 
-export function computeStockSession(progress01: number): StockSession[] {
+export function computeStockSession(
+  progress01: number,
+  companyOverrides?: Map<string, CompanyMarketData>
+): StockSession[] {
   const k = computeSessionK(progress01);
   const thr = 0.6 * Math.min(1, 0.35 + k / 78);
 
@@ -242,6 +263,11 @@ export function computeStockSession(progress01: number): StockSession[] {
       Math.min(3, b.vol * (0.85 + 0.3 * Math.sin(k / 9 + b.p0)))
     ).toFixed(2);
     const chop = Math.abs(mv) < thr || vol < 1.05;
+
+    // FMP overrides for market cap and shares
+    const ov = companyOverrides?.get(b.t);
+    const mcap = ov?.marketCap != null && ov.marketCap > 0 ? ov.marketCap : undefined;
+    const sh = mcap != null ? mcap / (px || b.p0) : b.sh;
 
     let zi = 0;
     let zLo = 0;
@@ -272,6 +298,23 @@ export function computeStockSession(progress01: number): StockSession[] {
       S2 = S1 * 0.995;
     }
 
+    // Accurate FMP Support & Resistance Classic Pivot Levels when available
+    const kl = ov?.keyLevels?.daily;
+    if (kl && typeof kl.r1 === "number" && typeof kl.s1 === "number") {
+      R1 = kl.r1;
+      R2 = typeof kl.r2 === "number" ? kl.r2 : R1 * 1.01;
+      R3 = typeof kl.r3 === "number" ? kl.r3 : R2 * 1.01;
+      S1 = kl.s1;
+      S2 = typeof kl.s2 === "number" ? kl.s2 : S1 * 0.99;
+      if (typeof kl.pivot === "number") {
+        zLo = Math.min(kl.pivot, S1);
+        zHi = Math.max(kl.pivot, R1);
+      } else {
+        zLo = S1;
+        zHi = R1;
+      }
+    }
+
     const entry = bull ? zHi : zLo;
     const stop = bull ? S1 : R1;
     const tgt = bull ? R2 : S2;
@@ -291,6 +334,8 @@ export function computeStockSession(progress01: number): StockSession[] {
 
     return {
       ...b,
+      sh,
+      marketCap: mcap ?? (sh * px),
       k,
       mv,
       px,
