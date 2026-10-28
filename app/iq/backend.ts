@@ -1,5 +1,7 @@
+import { signOut } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
 import { normalizeSector } from "./sector-filter";
+import { clearSession, SESSION_SUPERSEDED, sessionIdFor } from "./session";
 
 /**
  * Base URL for the MarketCatalystBackEnd REST/SSE surface, resolved at RUNTIME
@@ -87,7 +89,37 @@ export class BackendApiError extends Error {
   }
 }
 
-/** Attaches the current Firebase ID token, if any. Anonymous/public GETs get no header at all. */
+async function claimSession(token: string, sessionId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/session/claim`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  });
+  if (!res.ok) throw new BackendApiError(res.status, (await res.text().catch(() => "")) || res.statusText);
+}
+
+/** Another device logged in as this user: drop this device's login and return to the login page. */
+let endingSession = false;
+async function endSupersededSession(): Promise<void> {
+  if (endingSession) return;
+  endingSession = true;
+  clearSession();
+  try {
+    await signOut(firebaseAuth);
+  } catch {
+    // Already signed out, or the SDK is unavailable — the redirect below still applies.
+  }
+  window.location.assign("/auth/login?reason=signed-in-elsewhere");
+}
+
+function isSupersededResponse(status: number, body: string): boolean {
+  return status === 401 && body.includes(SESSION_SUPERSEDED);
+}
+
+/**
+ * Attaches the current Firebase ID token and this device's session id, if
+ * signed in. Anonymous/public GETs get no header at all.
+ */
 async function authHeaders(): Promise<Record<string, string>> {
   if (typeof window !== "undefined" && firebaseAuth?.authStateReady) {
     try {
@@ -99,7 +131,8 @@ async function authHeaders(): Promise<Record<string, string>> {
   const user = firebaseAuth.currentUser;
   if (!user) return {};
   const token = await user.getIdToken();
-  return { Authorization: `Bearer ${token}` };
+  const sessionId = await sessionIdFor(user.uid, (id) => claimSession(token, id));
+  return { Authorization: `Bearer ${token}`, "X-Session-Id": sessionId };
 }
 
 /** Requests abort after this long so a stalled mobile connection can't hang forever. */
@@ -139,6 +172,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      if (isSupersededResponse(res.status, body)) void endSupersededSession();
       throw new BackendApiError(res.status, body || res.statusText);
     }
     if (res.status === 204) return undefined as T;
@@ -255,6 +289,7 @@ export async function apiUpload<T>(
         }
         return;
       }
+      if (isSupersededResponse(xhr.status, xhr.responseText)) void endSupersededSession();
       reject(new BackendApiError(xhr.status, xhr.responseText || xhr.statusText));
     };
     // Status 0: the request never completed, so there is no HTTP status to

@@ -61,6 +61,9 @@ export function LoginForm() {
 
   useEffect(() => {
     let isMounted = true;
+    if (new URLSearchParams(window.location.search).get("reason") === "signed-in-elsewhere") {
+      setError("You were signed out because this account was signed in on another device.");
+    }
     void (async () => {
       try {
         const cred = await getRedirectResult(firebaseAuth);
