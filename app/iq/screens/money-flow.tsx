@@ -50,6 +50,8 @@ export function MoneyFlowScreen() {
           marketCap: c.marketCap,
           price: c.price,
           pctChange: c.pctChange,
+          rvol: c.rvol ?? null,
+          dayVolume: c.dayVolume ?? null,
           keyLevels: c.keyLevels,
         });
       }
@@ -238,6 +240,7 @@ export function MoneyFlowScreen() {
     () => (tapeFrame ? tapeItemsToIndexDocs(tapeFrame.items) : []),
     [tapeFrame]
   );
+  // 4 Live Market Summary Cards from FMP tape stream
   const spxIndex = useMemo(
     () => liveIndices.find((i) => i.id === "SPX" || i.label === "S&P 500"),
     [liveIndices]
@@ -255,6 +258,56 @@ export function MoneyFlowScreen() {
   });
   const spxIsUp = rawSpxChange >= 0;
   const spxDisplayChange = `${spxIsUp ? "+" : ""}${rawSpxChange.toFixed(2)}%`;
+
+  const ndxIndex = useMemo(
+    () => liveIndices.find((i) => i.id === "NDX" || i.id === "COMP" || i.label === "NASDAQ"),
+    [liveIndices]
+  );
+  const qqqQuote = liveQuotesMap.get("QQQ");
+  const rawNdxPrice =
+    ndxIndex?.value ??
+    (qqqQuote?.price != null ? qqqQuote.price * 40 : 20245.80);
+  const rawNdxChange =
+    ndxIndex?.pctChange ??
+    (qqqQuote?.pctChange != null ? qqqQuote.pctChange : 0.62);
+  const ndxDisplayPrice = rawNdxPrice.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const ndxIsUp = rawNdxChange >= 0;
+  const ndxDisplayChange = `${ndxIsUp ? "+" : ""}${rawNdxChange.toFixed(2)}%`;
+
+  const wtiIndex = useMemo(
+    () => liveIndices.find((i) => i.id === "CL" || i.id === "WTI" || i.label === "WTI Crude"),
+    [liveIndices]
+  );
+  const rawWtiPrice = wtiIndex?.value ?? 71.85;
+  const rawWtiChange = wtiIndex?.pctChange ?? 1.24;
+  const wtiDisplayPrice = `$${rawWtiPrice.toFixed(2)}`;
+  const wtiIsUp = rawWtiChange >= 0;
+  const wtiDisplayChange = `${wtiIsUp ? "+" : ""}${rawWtiChange.toFixed(2)}%`;
+
+  const goldIndex = useMemo(
+    () => liveIndices.find((i) => i.id === "GC" || i.id === "GOLD" || i.label === "Gold"),
+    [liveIndices]
+  );
+  const rawGoldPrice = goldIndex?.value ?? 2748.10;
+  const rawGoldChange = goldIndex?.pctChange ?? -0.38;
+  const goldDisplayPrice = `$${rawGoldPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const goldIsUp = rawGoldChange >= 0;
+  const goldDisplayChange = `${goldIsUp ? "+" : ""}${rawGoldChange.toFixed(2)}%`;
+
+  // Dynamic 16 Sectors: Exclude top 2 inflow and top 2 outflow sectors
+  const excludedSectorNames = useMemo(() => {
+    const set = new Set<string>();
+    sectorData.top2Inflow.forEach((s) => set.add(s.name));
+    sectorData.top2Outflow.forEach((s) => set.add(s.name));
+    return set;
+  }, [sectorData]);
+
+  const remainingSectors = useMemo(() => {
+    return sectorData.sectors.filter((s) => !excludedSectorNames.has(s.name));
+  }, [sectorData, excludedSectorNames]);
 
   // S&P 500 breadth scaled to the full 500 constituent universe
   const total500 = 500;
@@ -722,12 +775,7 @@ export function MoneyFlowScreen() {
         {/* Subtitle & Glossary Button */}
         <div className="mf-desc-row">
           <div className="mf-desc-text">
-            See where big money is moving today — which sectors are attracting
-            capital and which are being sold, the 15 strongest gainers and losers
-            sized by how hard they&apos;re moving, and the order blocks where big
-            buyers and sellers left their footprints — so you can trade with the
-            flow, wait for price to return to a proven zone instead of chasing,
-            and skip stocks whose sector isn&apos;t backing the move.
+            Follow today&apos;s money: hot and cold sectors, the top 15 movers each way, and the key price levels to watch.
           </div>
           <button
             type="button"
@@ -767,97 +815,102 @@ export function MoneyFlowScreen() {
           >
 
 
-            {/* 1. S&P 500 Live Tape Card (in its own separate div, width same as sectors section) */}
+            {/* 4 Index Cards: S&P 500, NASDAQ, WTI CRUDE, GOLD */}
             <div
+              className="mf-indices-grid"
               style={{
-                width: 330,
-                maxWidth: "100%",
-                boxSizing: "border-box",
+                display: "grid",
+                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                gap: 6,
+                minWidth: 0,
               }}
             >
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => openIndex?.("S&P 500")}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") openIndex?.("S&P 500");
-                }}
-                title="Click to view S&P 500 index details"
-                style={{
-                  cursor: "pointer",
-                  border: "1px solid #1e2427",
-                  background: "#0c0f10",
-                  borderRadius: 8,
-                  padding: "9px 12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
-                  transition: "border-color 0.15s, background 0.15s",
-                  width: "100%",
-                  boxSizing: "border-box",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#c9a24a";
-                  (e.currentTarget as HTMLElement).style.background = "#121618";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = "#1e2427";
-                  (e.currentTarget as HTMLElement).style.background = "#0c0f10";
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
+              {[
+                { n: "S&P 500", px: spxDisplayPrice, chg: spxDisplayChange, isUp: spxIsUp, action: () => openIndex?.("S&P 500") },
+                { n: "NASDAQ", px: ndxDisplayPrice, chg: ndxDisplayChange, isUp: ndxIsUp, action: () => openIndex?.("NASDAQ") },
+                { n: "WTI CRUDE", px: wtiDisplayPrice, chg: wtiDisplayChange, isUp: wtiIsUp, action: () => openIndex?.("WTI Crude") },
+                { n: "GOLD", px: goldDisplayPrice, chg: goldDisplayChange, isUp: goldIsUp, action: () => openIndex?.("Gold") },
+              ].map((ix) => {
+                const col = ix.isUp ? "#3ddc84" : "#f0565a";
+                return (
+                  <div
+                    key={ix.n}
+                    role="button"
+                    tabIndex={0}
+                    onClick={ix.action}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") ix.action?.();
+                    }}
+                    title={`Click to view ${ix.n} index details`}
                     style={{
-                      fontSize: 10.5,
-                      fontWeight: 700,
-                      letterSpacing: ".1em",
-                      textTransform: "uppercase",
-                      color: "#7a8481",
+                      cursor: "pointer",
+                      border: "1px solid #1e2427",
+                      background: "#0c0f10",
+                      borderRadius: 7,
+                      padding: "6px 8px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                      transition: "border-color 0.15s, background 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "#c9a24a";
+                      (e.currentTarget as HTMLElement).style.background = "#121618";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = "#1e2427";
+                      (e.currentTarget as HTMLElement).style.background = "#0c0f10";
                     }}
                   >
-                    S&P 500
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    justifyContent: "space-between",
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 16,
-                      fontWeight: 800,
-                      color: "#eef2f4",
-                    }}
-                  >
-                    {spxDisplayPrice}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: spxIsUp ? "#3ddc84" : "#f0565a",
-                    }}
-                  >
-                    {spxIsUp ? "▲ " : "▼ "}{spxDisplayChange}
-                  </span>
-                </div>
-              </div>
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        letterSpacing: ".08em",
+                        textTransform: "uppercase",
+                        color: "#7a8481",
+                      }}
+                    >
+                      {ix.n}
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "baseline",
+                        justifyContent: "space-between",
+                        gap: 4,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: "#eef2f4",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {ix.px}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          color: col,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {ix.isUp ? "▲ " : "▼ "}{ix.chg}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* 2. Sectors Split: Sectors (20) in its own separate div + Top 2 In/Out + Breadth */}
+            {/* 2. Sectors Split: Sectors (Remaining 16) + Top 2 In/Out + Breadth */}
             <div
               className="mf-sectors-split"
               style={{
@@ -867,16 +920,17 @@ export function MoneyFlowScreen() {
                 display: "flex",
               }}
             >
-              {/* 20 Sectors Vertical List (in its own separate div) */}
+              {/* Remaining 16 Sectors Vertical List (Dynamically excludes Top 2 In/Out) */}
               <div
                 className="mf-sectors-list"
                 style={{
-                  width: 330,
+                  width: 220,
+                  flex: "0 0 220px",
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "space-between",
                   gap: 2,
-                  padding: "4px 8px 10px 0",
+                  padding: "4px 6px 10px 0",
                   overflowY: "auto",
                   background: "#08090a",
                   borderRight: "1px solid #1a2328",
@@ -888,20 +942,20 @@ export function MoneyFlowScreen() {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    padding: "2px 6px",
+                    padding: "2px 4px",
                     marginBottom: 2,
                   }}
                 >
                   <span
                     style={{
-                      fontSize: 10.5,
+                      fontSize: 10,
                       fontWeight: 700,
                       letterSpacing: ".12em",
                       textTransform: "uppercase",
                       color: "#c9a24a",
                     }}
                   >
-                    Sectors ({sectorData.sectors.length})
+                    Sectors ({remainingSectors.length})
                   </span>
                   {selectedSector && (
                     <button
@@ -922,7 +976,7 @@ export function MoneyFlowScreen() {
                   )}
                 </div>
 
-                {sectorData.sectors.map((sc) => {
+                {remainingSectors.map((sc) => {
                   const isSelected = selectedSector === sc.name;
                   const isMatch = activeSector === sc.name;
                   const isDimmed = Boolean(activeSector && !isMatch);
@@ -943,13 +997,13 @@ export function MoneyFlowScreen() {
                         flexDirection: "column",
                         gap: 2,
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 11,
+                        fontSize: 10.5,
                         background: isMatch
                           ? "rgba(201,162,74,0.22)"
                           : "transparent",
                         borderLeft: `2px solid ${sc.color}`,
                         outline: isMatch ? "1px solid #e0bb5e" : "none",
-                        padding: "2px 6px",
+                        padding: "2px 5px",
                         borderRadius: "0 4px 4px 0",
                         opacity: isDimmed ? 0.35 : 1,
                         transition: "opacity 0.2s, background 0.15s",
@@ -959,18 +1013,19 @@ export function MoneyFlowScreen() {
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
-                          gap: 6,
+                          gap: 4,
                         }}
                       >
                         <span
                           style={{
                             fontFamily: "Manrope, sans-serif",
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: 700,
                             color: "#e6ebe8",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
+                            maxWidth: 130,
                           }}
                         >
                           {sc.name}
@@ -979,6 +1034,7 @@ export function MoneyFlowScreen() {
                           style={{
                             color: sc.color,
                             fontWeight: 700,
+                            fontSize: 10.5,
                             whiteSpace: "nowrap",
                             flex: "none",
                           }}
@@ -1011,7 +1067,7 @@ export function MoneyFlowScreen() {
                             }}
                           />
                         </div>
-                        <span style={{ color: "#7a8481", fontSize: 10 }}>
+                        <span style={{ color: "#7a8481", fontSize: 9.5 }}>
                           {sc.avgPctFormatted}
                         </span>
                       </div>
@@ -1025,9 +1081,10 @@ export function MoneyFlowScreen() {
                 className="mf-top2-breadth-pane"
                 style={{
                   flex: 1,
-                  padding: "6px 8px",
+                  minWidth: 190,
+                  padding: "4px 6px",
                   display: "flex",
-                  gap: 10,
+                  gap: 8,
                   alignItems: "stretch",
                 }}
               >
@@ -1036,21 +1093,22 @@ export function MoneyFlowScreen() {
                     flex: 1,
                     display: "flex",
                     flexDirection: "column",
-                    gap: 8,
+                    gap: 6,
                     justifyContent: "center",
+                    minWidth: 0,
                   }}
                 >
                   {noneInTop15Txt && (
                     <div
                       style={{
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10.5,
+                        fontSize: 10,
                         color: "#f0d68c",
                         background: "rgba(8,9,10,0.92)",
                         border: "1px solid #5a4a22",
                         borderRadius: 6,
-                        padding: "6px 8px",
-                        lineHeight: 1.35,
+                        padding: "5px 7px",
+                        lineHeight: 1.3,
                       }}
                     >
                       {noneInTop15Txt}
@@ -1059,9 +1117,9 @@ export function MoneyFlowScreen() {
 
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: 9.5,
                       fontWeight: 800,
-                      letterSpacing: ".14em",
+                      letterSpacing: ".12em",
                       textTransform: "uppercase",
                       color: "#3ddc84",
                     }}
@@ -1087,11 +1145,11 @@ export function MoneyFlowScreen() {
                           cursor: "pointer",
                           display: "flex",
                           flexDirection: "column",
-                          gap: 5,
-                          padding: "12px 14px",
-                          minHeight: 88,
+                          gap: 4,
+                          padding: "7px 10px",
+                          minHeight: 70,
                           justifyContent: "space-between",
-                          borderRadius: 10,
+                          borderRadius: 8,
                           border: `1px solid ${isMatch
                             ? "#c9a24a"
                             : "rgba(61,220,132,0.35)"
@@ -1100,10 +1158,11 @@ export function MoneyFlowScreen() {
                             ? "rgba(201,162,74,0.18)"
                             : "rgba(61,220,132,0.06)",
                           boxShadow: isMatch
-                            ? "0 0 16px rgba(201,162,74,0.3)"
+                            ? "0 0 14px rgba(201,162,74,0.3)"
                             : "none",
                           opacity: isDimmed ? 0.35 : 1,
                           transition: "opacity 0.2s, border-color 0.15s, background 0.15s",
+                          minWidth: 0,
                         }}
                       >
                         <div
@@ -1115,10 +1174,10 @@ export function MoneyFlowScreen() {
                         >
                           <span
                             style={{
-                              fontSize: 9.5,
+                              fontSize: 9,
                               fontWeight: 800,
                               color: "#3ddc84",
-                              letterSpacing: ".1em",
+                              letterSpacing: ".08em",
                             }}
                           >
                             INFLOW
@@ -1126,7 +1185,7 @@ export function MoneyFlowScreen() {
                           <span
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 10.5,
+                              fontSize: 10,
                               color: "#aab3b0",
                             }}
                           >
@@ -1135,8 +1194,8 @@ export function MoneyFlowScreen() {
                         </div>
                         <span
                           style={{
-                            fontSize: 13.5,
-                            fontWeight: 800,
+                            fontSize: 12.5,
+                            fontWeight: 700,
                             color: "#eef2f4",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
@@ -1148,7 +1207,7 @@ export function MoneyFlowScreen() {
                         <span
                           style={{
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: 700,
                             color: "#3ddc84",
                           }}
@@ -1161,9 +1220,9 @@ export function MoneyFlowScreen() {
 
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: 9.5,
                       fontWeight: 800,
-                      letterSpacing: ".14em",
+                      letterSpacing: ".12em",
                       textTransform: "uppercase",
                       color: "#f0565a",
                       marginTop: 2,
@@ -1190,11 +1249,11 @@ export function MoneyFlowScreen() {
                           cursor: "pointer",
                           display: "flex",
                           flexDirection: "column",
-                          gap: 5,
-                          padding: "12px 14px",
-                          minHeight: 88,
+                          gap: 4,
+                          padding: "7px 10px",
+                          minHeight: 70,
                           justifyContent: "space-between",
-                          borderRadius: 10,
+                          borderRadius: 8,
                           border: `1px solid ${isMatch
                             ? "#c9a24a"
                             : "rgba(240,86,90,0.35)"
@@ -1203,10 +1262,11 @@ export function MoneyFlowScreen() {
                             ? "rgba(201,162,74,0.18)"
                             : "rgba(240,86,90,0.06)",
                           boxShadow: isMatch
-                            ? "0 0 16px rgba(201,162,74,0.3)"
+                            ? "0 0 14px rgba(201,162,74,0.3)"
                             : "none",
                           opacity: isDimmed ? 0.35 : 1,
                           transition: "opacity 0.2s, border-color 0.15s, background 0.15s",
+                          minWidth: 0,
                         }}
                       >
                         <div
@@ -1218,10 +1278,10 @@ export function MoneyFlowScreen() {
                         >
                           <span
                             style={{
-                              fontSize: 9.5,
+                              fontSize: 9,
                               fontWeight: 800,
                               color: "#f0565a",
-                              letterSpacing: ".1em",
+                              letterSpacing: ".08em",
                             }}
                           >
                             OUTFLOW
@@ -1229,7 +1289,7 @@ export function MoneyFlowScreen() {
                           <span
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 10.5,
+                              fontSize: 10,
                               color: "#aab3b0",
                             }}
                           >
@@ -1238,8 +1298,8 @@ export function MoneyFlowScreen() {
                         </div>
                         <span
                           style={{
-                            fontSize: 13.5,
-                            fontWeight: 800,
+                            fontSize: 12.5,
+                            fontWeight: 700,
                             color: "#eef2f4",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
@@ -1251,7 +1311,7 @@ export function MoneyFlowScreen() {
                         <span
                           style={{
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: 700,
                             color: "#f0565a",
                           }}
@@ -1267,36 +1327,37 @@ export function MoneyFlowScreen() {
                 <div
                   title="S&P 500 Market Breadth"
                   style={{
-                    width: 44,
+                    width: 36,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    gap: 6,
+                    gap: 4,
                     fontFamily: "'JetBrains Mono', monospace",
                     justifyContent: "center",
+                    flex: "none",
                   }}
                 >
                   <span
                     style={{
-                      fontSize: 9.5,
+                      fontSize: 9,
                       fontWeight: 800,
                       color: "#aab3b0",
                       textAlign: "center",
-                      lineHeight: 1.2,
+                      lineHeight: 1.15,
                     }}
                   >
                     S&P<br />500
                   </span>
                   <span
-                    style={{ fontSize: 11, fontWeight: 700, color: "#3ddc84" }}
+                    style={{ fontSize: 10, fontWeight: 700, color: "#3ddc84" }}
                   >
                     {advCount} ▲
                   </span>
                   <div
                     style={{
-                      width: 10,
-                      height: 420,
-                      borderRadius: 5,
+                      width: 8,
+                      height: 340,
+                      borderRadius: 4,
                       overflow: "hidden",
                       display: "flex",
                       flexDirection: "column",
@@ -1318,19 +1379,28 @@ export function MoneyFlowScreen() {
                     />
                   </div>
                   <span
-                    style={{ fontSize: 11, fontWeight: 700, color: "#f0565a" }}
+                    style={{ fontSize: 10, fontWeight: 700, color: "#f0565a" }}
                   >
                     {decCount} ▼
                   </span>
                   <span
                     style={{
                       fontSize: 9,
-                      color: "#7a8481",
-                      textAlign: "center",
-                      lineHeight: 1.2,
+                      fontWeight: 800,
+                      color: advPct >= 50 ? "#3ddc84" : "#f0565a",
                     }}
                   >
-                    {advPct}%<br />adv
+                    {advPct}%
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: 8,
+                        color: "#7a8481",
+                        fontWeight: 600,
+                      }}
+                    >
+                      adv
+                    </span>
                   </span>
                 </div>
               </div>
@@ -2673,9 +2743,10 @@ export function MoneyFlowScreen() {
               },
               {
                 k: "Mkt Cap",
-                v: hoveredStock.stock.marketCap
+                v: (hoveredStock.stock.marketCap
                   ? formatCompactDollars(hoveredStock.stock.marketCap)
-                  : formatCompactDollars(hoveredStock.stock.px * hoveredStock.stock.sh),
+                  : formatCompactDollars(hoveredStock.stock.px * hoveredStock.stock.sh)
+                ).replace(/^\+/, ""),
                 c: "#eef2f4",
                 b: false,
               },

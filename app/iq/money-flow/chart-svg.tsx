@@ -221,21 +221,49 @@ export function FullChartSvg({
   const cw = (W - PL - PR) / (NB || 1);
   const fz = 11;
 
-  const lv: Array<[string, number]> = [
+  const safeStockPx = Number.isFinite(stock.px) && stock.px > 0 ? stock.px : (stock.p0 || 100);
+
+  const rawLevels: Array<[string, number]> = [
     ["R2", stock.R2],
     ["R1", stock.R1],
     ["S1", stock.S1],
     ["S2", stock.S2],
   ];
 
-  const vals = candles.flatMap((x) => [x.h, x.l]).concat(lv.map((x) => x[1]));
-  const mx = Math.max(...vals) * 1.0008;
-  const mn = Math.min(...vals) * 0.9992;
-  const y = (v: number) => PT + ((mx - v) / (mx - mn || 1)) * (H - PT - PB);
+  const lv: Array<[string, number]> = rawLevels.filter(
+    (x): x is [string, number] =>
+      typeof x[1] === "number" &&
+      Number.isFinite(x[1]) &&
+      x[1] > 0 &&
+      Math.abs(x[1] - safeStockPx) / safeStockPx < 0.25
+  );
+
+  const safeCandles = (candles && candles.length > 0)
+    ? candles
+    : [{ o: safeStockPx, c: safeStockPx, h: safeStockPx * 1.002, l: safeStockPx * 0.998, vw: safeStockPx }];
+
+  const candleVals = safeCandles
+    .flatMap((x) => [x.h, x.l, x.o, x.c])
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
+
+  const levelVals = lv.map((x) => x[1]);
+  const allVals = candleVals.length ? candleVals.concat(levelVals) : [safeStockPx * 0.99, safeStockPx * 1.01];
+
+  let mx = Math.max(...allVals) * 1.0008;
+  let mn = Math.min(...allVals) * 0.9992;
+  if (!Number.isFinite(mx) || !Number.isFinite(mn) || mx <= mn) {
+    mx = safeStockPx * 1.015;
+    mn = safeStockPx * 0.985;
+  }
+
+  const y = (v: number) => {
+    const val = Number.isFinite(v) ? v : safeStockPx;
+    return PT + ((mx - val) / (mx - mn || 1)) * (H - PT - PB);
+  };
 
   const zx = PL + ZI * cw;
-  const obs = layers.ob ? computeOrderBlocks(stock, candles) : [];
-  const swings = layers.liq || layers.str ? computeSwings(candles, tf <= 3 ? 4 : tf >= 15 ? 2 : 3) : [];
+  const obs = layers.ob ? computeOrderBlocks(stock, safeCandles) : [];
+  const swings = layers.liq || layers.str ? computeSwings(safeCandles, tf <= 3 ? 4 : tf >= 15 ? 2 : 3) : [];
 
   return (
     <svg
@@ -370,7 +398,7 @@ export function FullChartSvg({
       {/* VWAP */}
       {layers.vwap && (
         <polyline
-          points={candles
+          points={safeCandles
             .map((b, i) => `${PL + i * cw + cw / 2},${y(b.vw)}`)
             .join(" ")}
           fill="none"
@@ -383,16 +411,16 @@ export function FullChartSvg({
       {/* Fair Value Gaps (FVG) */}
       {layers.fvg && (() => {
         const F: Array<{ i: number; lo: number; hi: number; bull: boolean }> = [];
-        for (let i = 1; i < candles.length - 1; i++) {
-          const a = candles[i - 1];
-          const b = candles[i + 1];
+        for (let i = 1; i < safeCandles.length - 1; i++) {
+          const a = safeCandles[i - 1];
+          const b = safeCandles[i + 1];
           if (b.l > a.h && (b.l - a.h) / (a.h || 1) > 0.0006) F.push({ i, lo: a.h, hi: b.l, bull: true });
           if (b.h < a.l && (a.l - b.h) / (a.l || 1) > 0.0006) F.push({ i, lo: b.h, hi: a.l, bull: false });
         }
         return F.slice(-7).map((g, gi) => {
           let end: number | null = null;
-          for (let j = g.i + 2; j < candles.length; j++) {
-            if (g.bull ? candles[j].l <= g.lo : candles[j].h >= g.hi) {
+          for (let j = g.i + 2; j < safeCandles.length; j++) {
+            if (g.bull ? safeCandles[j].l <= g.lo : safeCandles[j].h >= g.hi) {
               end = j;
               break;
             }
@@ -432,8 +460,8 @@ export function FullChartSvg({
       {/* Liquidity (BSL / SSL) */}
       {layers.liq && swings.map((p, pi) => {
         let sw: number | null = null;
-        for (let j = p.i + 1; j < candles.length; j++) {
-          if (p.hi ? candles[j].h > p.p : candles[j].l < p.p) {
+        for (let j = p.i + 1; j < safeCandles.length; j++) {
+          if (p.hi ? safeCandles[j].h > p.p : safeCandles[j].l < p.p) {
             sw = j;
             break;
           }
@@ -484,21 +512,21 @@ export function FullChartSvg({
 
       {/* Structure Layer */}
       {layers.str && (() => {
-        const N = candles.length;
+        const N = safeCandles.length;
         const xi = (i: number) => PL + i * cw + cw / 2;
-        const hiAll = Math.max(...candles.map((q) => q.h));
-        const loAll = Math.min(...candles.map((q) => q.l));
+        const hiAll = Math.max(...safeCandles.map((q) => q.h));
+        const loAll = Math.min(...safeCandles.map((q) => q.l));
         const eq = (hiAll + loAll) / 2;
         const pdh = stock.p0 * 1.0065;
         const pdl = stock.p0 * 0.9938;
 
         const orn = Math.max(1, Math.round(30 / tf));
-        const orb = candles.slice(0, Math.min(N, orn));
+        const orb = safeCandles.slice(0, Math.min(N, orn));
         const orh = Math.max(...orb.map((q) => q.h));
         const orl = Math.min(...orb.map((q) => q.l));
 
-        const ih = candles.findIndex((q) => q.h === hiAll);
-        const il = candles.findIndex((q) => q.l === loAll);
+        const ih = safeCandles.findIndex((q) => q.h === hiAll);
+        const il = safeCandles.findIndex((q) => q.l === loAll);
 
         let lH: SwingPoint | null = null;
         let lL: SwingPoint | null = null;
@@ -506,8 +534,8 @@ export function FullChartSvg({
 
         const ev: Array<{ p: SwingPoint; j: number }> = [];
         swingSorted.forEach((p) => {
-          for (let j = p.i + 3; j < candles.length; j++) {
-            if (p.hi ? candles[j].c > p.p : candles[j].c < p.p) {
+          for (let j = p.i + 3; j < safeCandles.length; j++) {
+            if (p.hi ? safeCandles[j].c > p.p : safeCandles[j].c < p.p) {
               ev.push({ p, j });
               break;
             }
@@ -833,7 +861,7 @@ export function FullChartSvg({
       })()}
 
       {/* Candles */}
-      {candles.map((b, i) => {
+      {safeCandles.map((b, i) => {
         const cx = PL + i * cw + cw / 2;
         const cyO = y(b.o);
         const cyC = y(b.c);

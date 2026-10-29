@@ -30,6 +30,8 @@ export interface CompanyMarketData {
   marketCap?: number | null;
   price?: number | null;
   pctChange?: number | null;
+  rvol?: number | null;
+  dayVolume?: number | null;
   keyLevels?: {
     daily?: {
       pivot?: number | null;
@@ -50,6 +52,7 @@ export interface StockSession extends StockBase {
   bull: boolean;
   chop: boolean;
   marketCap?: number;
+  dayVolume?: number;
   zi: number;
   zLo: number;
   zHi: number;
@@ -254,20 +257,23 @@ export function computeStockSession(
 
   return getBaseUniverse().map((b) => {
     const P = (v: number) => b.p0 * (1 + v / 100);
-    const seg = b.path.slice(0, k + 1);
-    const mv = +seg[k].toFixed(2);
+    const seg = b.path && b.path.length ? b.path.slice(0, k + 1) : [0];
+    const mv = +(seg[Math.min(k, seg.length - 1)] ?? 0).toFixed(2);
     const px = P(mv);
     const bull = mv > 0;
-    const vol = +Math.max(
-      0.6,
-      Math.min(3, b.vol * (0.85 + 0.3 * Math.sin(k / 9 + b.p0)))
-    ).toFixed(2);
-    const chop = Math.abs(mv) < thr || vol < 1.05;
 
-    // FMP overrides for market cap and shares
+    // FMP overrides for market cap, volume, RVOL, and key levels
     const ov = companyOverrides?.get(b.t);
     const mcap = ov?.marketCap != null && ov.marketCap > 0 ? ov.marketCap : undefined;
     const sh = mcap != null ? mcap / (px || b.p0) : b.sh;
+    const realRvol = ov?.rvol != null && ov.rvol > 0 ? ov.rvol : null;
+    const vol = realRvol != null
+      ? +realRvol.toFixed(2)
+      : +Math.max(
+          0.6,
+          Math.min(3, b.vol * (0.85 + 0.3 * Math.sin(k / 9 + b.p0)))
+        ).toFixed(2);
+    const chop = Math.abs(mv) < thr || vol < 1.05;
 
     let zi = 0;
     let zLo = 0;
@@ -300,13 +306,13 @@ export function computeStockSession(
 
     // Accurate FMP Support & Resistance Classic Pivot Levels when available
     const kl = ov?.keyLevels?.daily;
-    if (kl && typeof kl.r1 === "number" && typeof kl.s1 === "number") {
+    if (kl && typeof kl.r1 === "number" && typeof kl.s1 === "number" && kl.r1 > 0 && kl.s1 > 0) {
       R1 = kl.r1;
-      R2 = typeof kl.r2 === "number" ? kl.r2 : R1 * 1.01;
-      R3 = typeof kl.r3 === "number" ? kl.r3 : R2 * 1.01;
+      R2 = typeof kl.r2 === "number" && kl.r2 > 0 ? kl.r2 : R1 * 1.008;
+      R3 = typeof kl.r3 === "number" && kl.r3 > 0 ? kl.r3 : R2 * 1.008;
       S1 = kl.s1;
-      S2 = typeof kl.s2 === "number" ? kl.s2 : S1 * 0.99;
-      if (typeof kl.pivot === "number") {
+      S2 = typeof kl.s2 === "number" && kl.s2 > 0 ? kl.s2 : S1 * 0.992;
+      if (typeof kl.pivot === "number" && kl.pivot > 0) {
         zLo = Math.min(kl.pivot, S1);
         zHi = Math.max(kl.pivot, R1);
       } else {
@@ -319,7 +325,7 @@ export function computeStockSession(
     const stop = bull ? S1 : R1;
     const tgt = bull ? R2 : S2;
     const rr = Math.abs(tgt - entry) / (Math.abs(entry - stop) || 1);
-    const dist = (Math.abs(px - entry) / px) * 100;
+    const dist = (Math.abs(px - entry) / (px || 1)) * 100;
     const score = chop
       ? 0
       : Math.min(
@@ -336,6 +342,7 @@ export function computeStockSession(
       ...b,
       sh,
       marketCap: mcap ?? (sh * px),
+      dayVolume: ov?.dayVolume ?? undefined,
       k,
       mv,
       px,
@@ -366,15 +373,26 @@ export function computeCandles(s: StockSession): OHLCVBar[] {
   let cv = 0;
   let cpv = 0;
 
-  for (let i = 0; i <= s.k; i++) {
-    const o = P(i ? s.path[i - 1] : s.path[0] - 0.05);
-    const cl = P(s.path[i]);
-    const w = s.wick[i];
-    const h = Math.max(o, cl) + w[0] * s.p0 * 0.0012;
-    const l = Math.min(o, cl) - w[1] * s.p0 * 0.0012;
-    cv += s.vb[i];
-    cpv += (s.vb[i] * (h + l + cl)) / 3;
+  const path = s.path && s.path.length ? s.path : [s.mv || 0];
+  const wick = s.wick && s.wick.length ? s.wick : path.map(() => [0.5, 0.5]);
+  const vb = s.vb && s.vb.length ? s.vb : path.map(() => 1 / Math.max(1, path.length));
+  const kLimit = Math.min(s.k ?? 78, path.length - 1);
+
+  for (let i = 0; i <= kLimit; i++) {
+    const o = P(i ? path[i - 1] : path[0] - 0.05);
+    const cl = P(path[i]);
+    const w = wick[i] || [0.5, 0.5];
+    const h = Math.max(o, cl) + (w[0] ?? 0.5) * s.p0 * 0.0012;
+    const l = Math.min(o, cl) - (w[1] ?? 0.5) * s.p0 * 0.0012;
+    const vbi = vb[i] ?? (1 / 78);
+    cv += vbi;
+    cpv += (vbi * (h + l + cl)) / 3;
     c.push({ o, c: cl, h, l, vw: cpv / (cv || 1) });
+  }
+
+  if (c.length === 0) {
+    const fallbackPx = s.px || s.p0 || 100;
+    c.push({ o: fallbackPx, c: fallbackPx, h: fallbackPx * 1.001, l: fallbackPx * 0.999, vw: fallbackPx });
   }
 
   return c;
@@ -458,9 +476,18 @@ export function computeDollarFlow(
   ];
   const hv = grp.map(() => 0);
 
+  // Daily traded share volume baseline:
+  // Active S&P 500 stocks turn over ~0.4% - 1.2% of total shares per day.
+  // Using actual dayVolume if available, otherwise shares * realistic daily turnover rate.
+  const estDayShares = (x.dayVolume && x.dayVolume > 0)
+    ? x.dayVolume
+    : (x.sh * 0.006 * Math.max(0.5, x.vol || 1));
+
   c.forEach((b, i) => {
-    const d = x.px * x.sh * x.vb[i] * x.vol;
-    const sg = Math.max(-1, Math.min(1, ((b.c - b.o) / b.o) * 350)) * 0.35;
+    const vbi = (x.vb && x.vb[i] != null) ? x.vb[i] : (1 / 78);
+    const candleShareVol = estDayShares * vbi;
+    const d = x.px * candleShareVol;
+    const sg = Math.max(-1, Math.min(1, ((b.c - b.o) / (b.o || 1)) * 350)) * 0.35;
     net += d * sg;
     gross += d * 0.35;
     const g = grp.findIndex(([a, z]) => i >= a && i < z);
