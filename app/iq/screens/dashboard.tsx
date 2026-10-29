@@ -520,10 +520,11 @@ export function DashboardScreen() {
   // most recent prior day, so when nothing has reported today the widget is
   // empty rather than showing stale rows. (`earnings` above stays the full list
   // for popover name/EPS lookups.)
+  const todayEt = etTodayIso();
   const earningsToday = mergeEarningsData(
     liveEarnings.filter(
       (e) =>
-        e.date === etTodayIso() &&
+        e.date === todayEt &&
         (!companyByTicker.get(e.ticker) || isCommonEquity(companyByTicker.get(e.ticker))),
     ),
   );
