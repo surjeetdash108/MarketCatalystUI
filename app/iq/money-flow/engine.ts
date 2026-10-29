@@ -368,7 +368,11 @@ export function computeStockSession(
 }
 
 export function computeCandles(s: StockSession): OHLCVBar[] {
-  const P = (v: number) => s.p0 * (1 + v / 100);
+  const baseP0 =
+    s.px && Number.isFinite(s.px) && s.px > 0 && s.mv != null && s.mv !== -100
+      ? s.px / (1 + s.mv / 100)
+      : s.p0 || 100;
+  const P = (v: number) => baseP0 * (1 + v / 100);
   const c: OHLCVBar[] = [];
   let cv = 0;
   let cpv = 0;
@@ -382,8 +386,8 @@ export function computeCandles(s: StockSession): OHLCVBar[] {
     const o = P(i ? path[i - 1] : path[0] - 0.05);
     const cl = P(path[i]);
     const w = wick[i] || [0.5, 0.5];
-    const h = Math.max(o, cl) + (w[0] ?? 0.5) * s.p0 * 0.0012;
-    const l = Math.min(o, cl) - (w[1] ?? 0.5) * s.p0 * 0.0012;
+    const h = Math.max(o, cl) + (w[0] ?? 0.5) * baseP0 * 0.0012;
+    const l = Math.min(o, cl) - (w[1] ?? 0.5) * baseP0 * 0.0012;
     const vbi = vb[i] ?? (1 / 78);
     cv += vbi;
     cpv += (vbi * (h + l + cl)) / 3;
@@ -391,7 +395,7 @@ export function computeCandles(s: StockSession): OHLCVBar[] {
   }
 
   if (c.length === 0) {
-    const fallbackPx = s.px || s.p0 || 100;
+    const fallbackPx = s.px || baseP0;
     c.push({ o: fallbackPx, c: fallbackPx, h: fallbackPx * 1.001, l: fallbackPx * 0.999, vw: fallbackPx });
   }
 

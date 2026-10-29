@@ -160,9 +160,11 @@ export function MoneyFlowScreen() {
     // Enrich with live quotes when available
     return raw.map((s) => {
       const q = liveQuotesMap.get(s.t);
-      if (q && q.price != null && q.pctChange != null) {
+      if (q && q.price != null && q.pctChange != null && q.price > 0) {
+        const computedP0 = q.price / (1 + q.pctChange / 100);
         return {
           ...s,
+          p0: computedP0,
           px: q.price,
           mv: q.pctChange,
           bull: q.pctChange > 0,
@@ -750,22 +752,6 @@ export function MoneyFlowScreen() {
               />
               {mkt.label || "Pre-Market"}
             </span>
-            <div
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: "50%",
-                background: "#3b5bdb",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 700,
-                color: "#fff",
-                fontSize: 13,
-              }}
-            >
-              {initials}
-            </div>
           </div>
         </div>
       </div>
@@ -1086,6 +1072,7 @@ export function MoneyFlowScreen() {
                   display: "flex",
                   gap: 8,
                   alignItems: "stretch",
+                  position: "relative",
                 }}
               >
                 <div
@@ -1096,19 +1083,27 @@ export function MoneyFlowScreen() {
                     gap: 6,
                     justifyContent: "center",
                     minWidth: 0,
+                    position: "relative",
                   }}
                 >
                   {noneInTop15Txt && (
                     <div
                       style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        zIndex: 30,
+                        pointerEvents: "none",
                         fontFamily: "'JetBrains Mono', monospace",
                         fontSize: 10,
                         color: "#f0d68c",
-                        background: "rgba(8,9,10,0.92)",
+                        background: "rgba(11,13,14,0.96)",
                         border: "1px solid #5a4a22",
                         borderRadius: 6,
                         padding: "5px 7px",
                         lineHeight: 1.3,
+                        boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
                       }}
                     >
                       {noneInTop15Txt}
@@ -2543,7 +2538,8 @@ export function MoneyFlowScreen() {
           }}
           onMouseLeave={handleTileLeave}
           style={(() => {
-            const POPOVER_W = 460;
+            const POPOVER_W = 440;
+            const POPOVER_EST_H = 500;
             const isMobileScreen = typeof window !== "undefined" && window.innerWidth < 640;
             let popLeft: number | string = 12;
             let popTop: number | string = 16;
@@ -2558,28 +2554,30 @@ export function MoneyFlowScreen() {
               const spaceRight = window.innerWidth - rect.right;
               const spaceLeft = rect.left;
 
-              // If enough space on right and not in the right half of the screen, place to the right of tile:
-              if (spaceRight >= POPOVER_W + 20 && rect.left < window.innerWidth / 2) {
-                popLeft = rect.right + 14;
-              } else if (spaceLeft >= POPOVER_W + 20) {
-                // Otherwise place strictly to the left of the hovered stock tile
-                popLeft = rect.left - POPOVER_W - 14;
-              } else if (spaceRight >= POPOVER_W + 20) {
-                popLeft = rect.right + 14;
-              } else {
-                // If neither side has 480px, place on whichever side has more space
-                if (spaceLeft > spaceRight) {
+              // Place beside the stock tile, NEVER on top of it:
+              const isTileInRightHalf = (rect.left + rect.width / 2) > (window.innerWidth / 2);
+
+              if (isTileInRightHalf) {
+                if (spaceLeft >= POPOVER_W + 16) {
+                  popLeft = rect.left - POPOVER_W - 14;
+                } else if (spaceRight >= POPOVER_W + 16) {
+                  popLeft = rect.right + 14;
+                } else {
                   popLeft = Math.max(12, rect.left - POPOVER_W - 14);
+                }
+              } else {
+                if (spaceRight >= POPOVER_W + 16) {
+                  popLeft = rect.right + 14;
+                } else if (spaceLeft >= POPOVER_W + 16) {
+                  popLeft = rect.left - POPOVER_W - 14;
                 } else {
                   popLeft = Math.min(window.innerWidth - POPOVER_W - 12, rect.right + 14);
                 }
               }
 
-              // Vertical positioning: align near tile's top, clamped within window bounds
-              popTop = Math.max(
-                16,
-                Math.min(window.innerHeight - 540, rect.top - 20)
-              );
+              // Vertical positioning: clamp within window bounds so action buttons NEVER cut off
+              const maxTop = Math.max(12, window.innerHeight - POPOVER_EST_H - 16);
+              popTop = Math.max(12, Math.min(maxTop, rect.top - 10));
             }
 
             return {
@@ -2589,7 +2587,7 @@ export function MoneyFlowScreen() {
               top: popTop,
               transform: popTransform,
               width: isMobileScreen ? "calc(100vw - 24px)" : POPOVER_W,
-              maxHeight: "calc(100vh - 32px)",
+              maxHeight: "calc(100vh - 24px)",
               overflowY: "auto" as const,
               pointerEvents: "auto" as const,
               background: "#0b0d0e",
@@ -2601,10 +2599,10 @@ export function MoneyFlowScreen() {
                 }`,
               borderRadius: 12,
               boxShadow: "0 24px 60px rgba(0,0,0,.75)",
-              padding: 14,
+              padding: "12px 14px",
               display: "flex",
               flexDirection: "column" as const,
-              gap: 10,
+              gap: 8,
             };
           })()}
         >
@@ -2921,7 +2919,7 @@ export function MoneyFlowScreen() {
           {/* Full Interactive Chart */}
           <div
             style={{
-              height: 240,
+              height: 200,
               borderRadius: 8,
               border: "1px solid #171c1e",
               background: "#08090a",
@@ -2939,8 +2937,8 @@ export function MoneyFlowScreen() {
               )}
               layers={popLayers}
               tf={popTf}
-              width={460}
-              height={238}
+              width={440}
+              height={198}
             />
           </div>
 

@@ -4721,14 +4721,14 @@ table.tbl tr:hover td {
 
 .profile-dropdown {
   position: fixed;
-  top: 54px;
-  right: 12px;
-  width: 220px;
+  top: 56px;
+  right: 14px;
+  width: 224px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, .55);
-  z-index: 30;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .6);
+  z-index: 100;
   overflow: hidden;
   animation: iq-dropdownIn .15s ease both;
   transform-origin: top right;
@@ -4747,12 +4747,12 @@ table.tbl tr:hover td {
 }
 
 .pd-user {
-  padding: 16px 14px 14px;
+  padding: 18px 14px 14px;
   border-bottom: 1px solid var(--border-soft);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   text-align: center;
 }
 
@@ -4770,6 +4770,8 @@ table.tbl tr:hover td {
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  overflow: hidden;
+  margin: 0 auto;
 }
 
 .pd-avatar img {
@@ -4779,6 +4781,7 @@ table.tbl tr:hover td {
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
+  display: block;
 }
 
 .pd-name {

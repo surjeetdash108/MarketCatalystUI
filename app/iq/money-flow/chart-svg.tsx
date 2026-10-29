@@ -246,11 +246,24 @@ export function FullChartSvg({
     .flatMap((x) => [x.h, x.l, x.o, x.c])
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
 
-  const levelVals = lv.map((x) => x[1]);
-  const allVals = candleVals.length ? candleVals.concat(levelVals) : [safeStockPx * 0.99, safeStockPx * 1.01];
+  const candleMin = candleVals.length ? Math.min(...candleVals) : safeStockPx * 0.985;
+  const candleMax = candleVals.length ? Math.max(...candleVals) : safeStockPx * 1.015;
+  const candleRange = Math.max(candleMax - candleMin, safeStockPx * 0.008);
 
-  let mx = Math.max(...allVals) * 1.0008;
-  let mn = Math.min(...allVals) * 0.9992;
+  const levelVals = lv.map((x) => x[1]);
+  // Filter out extreme pivot levels so they don't crush the intraday candles into a flat line
+  const relevantLevels = levelVals.filter(
+    (lvl) => lvl >= candleMin - candleRange * 1.6 && lvl <= candleMax + candleRange * 1.6
+  );
+
+  const displayVals = candleVals.concat(relevantLevels.length ? relevantLevels : [safeStockPx]);
+
+  let mx = Math.max(...displayVals, safeStockPx);
+  let mn = Math.min(...displayVals, safeStockPx);
+  const pad = Math.max((mx - mn) * 0.08, safeStockPx * 0.003);
+  mx += pad;
+  mn -= pad;
+
   if (!Number.isFinite(mx) || !Number.isFinite(mn) || mx <= mn) {
     mx = safeStockPx * 1.015;
     mn = safeStockPx * 0.985;
