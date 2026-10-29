@@ -31,6 +31,7 @@ import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
+import { useLiveQuotes } from "../live-quotes-context";
 
 /** Board refresh: the backend rebuilds every 30s from 15-minute-delayed bars. */
 const BOARD_POLL_MS = 30_000;
@@ -180,6 +181,38 @@ export function MoneyFlowScreen() {
       ? "Money Flow is unavailable right now."
       : "Building the board…";
 
+  const boardWrapRef = useRef<HTMLDivElement>(null);
+
+  // Subscribe all stocks on board to live quotes for after-hours pricing
+  const allBoardTickers = useMemo(() => onBoard.map((s) => s.t), [onBoard]);
+  const liveQuotes = useLiveQuotes(allBoardTickers);
+  const isAfterHours = mkt.phase === "after";
+
+  const getDisplayQuote = (stock: BoardStock) => {
+    if (!isAfterHours) {
+      return {
+        priceStr: formatCurrency(stock.price),
+        pctStr: formatPct(stock.pctChange),
+        isUp: stock.pctChange >= 0,
+        isAH: false,
+      };
+    }
+    const q = liveQuotes.get(stock.t);
+    const ahPrice = q?.price ?? stock.price;
+    const regPrice = q?.regularClose ?? stock.price;
+    let ahPct = q?.latePct ?? null;
+    if (ahPct == null && ahPrice != null && regPrice > 0 && Math.abs(ahPrice - regPrice) > 0.001) {
+      ahPct = ((ahPrice - regPrice) / regPrice) * 100;
+    }
+    const pctVal = ahPct ?? 0;
+    return {
+      priceStr: `AH ${formatCurrency(ahPrice)}`,
+      pctStr: formatPct(pctVal),
+      isUp: pctVal >= 0,
+      isAH: true,
+    };
+  };
+
   const handleTileEnter = (stock: BoardStock, e: React.MouseEvent) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     const rect = e.currentTarget.getBoundingClientRect();
@@ -268,9 +301,10 @@ export function MoneyFlowScreen() {
         .mf-desc-text {
           flex: 1;
           min-width: 0;
-          font-size: 13.5px;
-          line-height: 1.5;
-          color: var(--si-text-dim, #aab3b0);
+          font-size: 15px;
+          font-weight: 600;
+          line-height: 1.4;
+          color: #ffffff;
         }
         .mf-glossary-btn {
           flex: none;
@@ -360,13 +394,15 @@ export function MoneyFlowScreen() {
         .mf-mid-cards-col {
           flex: 1 1 0;
           min-height: 0;
+          overflow: hidden;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 6px;
         }
         .mf-mid-card {
           flex: 1 1 0;
           min-height: 0;
+          overflow: hidden;
         }
         .mf-treemap-box {
           flex: 1 1 0;
@@ -622,17 +658,6 @@ export function MoneyFlowScreen() {
         <div className="mf-desc-row">
           <div className="mf-desc-text">
             Follow today&apos;s money: hot and cold sectors, the top 15 movers each way, and the key price levels to watch.
-            <span
-              style={{
-                display: "block",
-                marginTop: 2,
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 11,
-                color: boardError && !board ? "#f0565a" : "#7a8481",
-              }}
-            >
-              {boardLoading && !board ? "Building the board…" : sessionLine}
-            </span>
           </div>
           <button
             type="button"
@@ -658,7 +683,7 @@ export function MoneyFlowScreen() {
         </div>
 
         {/* ── Main Dashboard Container ── */}
-        <div className="mf-board-wrap">
+        <div className="mf-board-wrap" ref={boardWrapRef}>
           {/* ── Left Column: Indices & Sectors ── */}
           <div
             className="mf-col-left"
@@ -1332,9 +1357,10 @@ export function MoneyFlowScreen() {
               style={{
                 flex: "1 1 0",
                 minHeight: 0,
+                overflow: "hidden",
                 display: "flex",
                 flexDirection: "column",
-                gap: 8,
+                gap: 6,
               }}
             >
               {top3Bull.length === 0 ? (
@@ -1361,6 +1387,7 @@ export function MoneyFlowScreen() {
                   const confScore = fc.confidence?.score ?? null;
                   const isSecMatch = Boolean(activeSector && fc.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
+                  const cardQuote = getDisplayQuote(fc);
                   return (
                     <button
                       key={fc.t}
@@ -1385,10 +1412,10 @@ export function MoneyFlowScreen() {
                         opacity: isDimmed ? 0.25 : 1,
                         background:
                           "linear-gradient(150deg,rgba(61,220,132,.18),rgba(61,220,132,.04) 60%,rgba(8,9,10,.6))",
-                        padding: "8px 10px",
+                        padding: "5px 8px",
                         display: "flex",
                         flexDirection: "column",
-                        gap: 6,
+                        gap: 3,
                         overflow: "hidden",
                         transition: "border-color 0.15s, opacity 0.2s, box-shadow 0.2s",
                       }}
@@ -1461,10 +1488,10 @@ export function MoneyFlowScreen() {
                               fontWeight: 700,
                             }}
                           >
-                            {formatCurrency(fc.price)}
+                            {cardQuote.priceStr}
                           </span>
-                          <span style={{ fontSize: 10.5, color: "#3ddc84" }}>
-                            {formatPct(fc.pctChange)}
+                          <span style={{ fontSize: 10.5, color: cardQuote.isUp ? "#3ddc84" : "#f0565a" }}>
+                            {cardQuote.pctStr}
                           </span>
                         </span>
                         <span
@@ -1517,7 +1544,7 @@ export function MoneyFlowScreen() {
                         style={{
                           position: "relative",
                           flex: "1 1 0",
-                          minHeight: 24,
+                          minHeight: 18,
                           borderRadius: 6,
                           background: "rgba(8,9,10,.55)",
                           border: "1px solid rgba(61,220,132,.18)",
@@ -1550,10 +1577,11 @@ export function MoneyFlowScreen() {
                           flex: "none",
                           display: "grid",
                           gridTemplateColumns:
-                            "minmax(0,1.5fr) repeat(5,minmax(0,1fr))",
-                          gap: 4,
-                          borderTop: "1px solid rgba(61,220,132,.2)",
-                          paddingTop: 5,
+                            "1.7fr 1fr 1fr 1fr 1fr 1fr",
+                          gap: 3,
+                          borderTop: "1px solid rgba(61,220,132,.25)",
+                          paddingTop: 3,
+                          marginTop: 1,
                         }}
                       >
                         {[
@@ -1573,7 +1601,7 @@ export function MoneyFlowScreen() {
                             style={{
                               display: "flex",
                               flexDirection: "column",
-                              gap: 1,
+                              gap: 2,
                               minWidth: 0,
                             }}
                           >
@@ -1581,8 +1609,9 @@ export function MoneyFlowScreen() {
                               style={{
                                 fontSize: 9,
                                 fontWeight: 700,
-                                letterSpacing: ".08em",
+                                letterSpacing: ".06em",
                                 color: "#7a8481",
+                                lineHeight: 1,
                               }}
                             >
                               {l.k}
@@ -1590,13 +1619,15 @@ export function MoneyFlowScreen() {
                             <span
                               style={{
                                 fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: 10,
+                                fontSize: 9.5,
                                 fontWeight: 700,
                                 color: l.c,
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
+                                lineHeight: 1.2,
                               }}
+                              title={String(l.v)}
                             >
                               {l.v}
                             </span>
@@ -1657,9 +1688,10 @@ export function MoneyFlowScreen() {
               style={{
                 flex: "1 1 0",
                 minHeight: 0,
+                overflow: "hidden",
                 display: "flex",
                 flexDirection: "column",
-                gap: 8,
+                gap: 6,
               }}
             >
               {top3Bear.length === 0 ? (
@@ -1686,6 +1718,7 @@ export function MoneyFlowScreen() {
                   const confScore = fc.confidence?.score ?? null;
                   const isSecMatch = Boolean(activeSector && fc.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
+                  const cardQuote = getDisplayQuote(fc);
                   return (
                     <button
                       key={fc.t}
@@ -1710,10 +1743,10 @@ export function MoneyFlowScreen() {
                         opacity: isDimmed ? 0.25 : 1,
                         background:
                           "linear-gradient(150deg,rgba(240,86,90,.18),rgba(240,86,90,.04) 60%,rgba(8,9,10,.6))",
-                        padding: "8px 10px",
+                        padding: "5px 8px",
                         display: "flex",
                         flexDirection: "column",
-                        gap: 6,
+                        gap: 3,
                         overflow: "hidden",
                         transition: "border-color 0.15s, opacity 0.2s, box-shadow 0.2s",
                       }}
@@ -1786,10 +1819,10 @@ export function MoneyFlowScreen() {
                               fontWeight: 700,
                             }}
                           >
-                            {formatCurrency(fc.price)}
+                            {cardQuote.priceStr}
                           </span>
-                          <span style={{ fontSize: 10.5, color: "#f0565a" }}>
-                            {formatPct(fc.pctChange)}
+                          <span style={{ fontSize: 10.5, color: cardQuote.isUp ? "#3ddc84" : "#f0565a" }}>
+                            {cardQuote.pctStr}
                           </span>
                         </span>
                         <span
@@ -1842,7 +1875,7 @@ export function MoneyFlowScreen() {
                         style={{
                           position: "relative",
                           flex: "1 1 0",
-                          minHeight: 24,
+                          minHeight: 18,
                           borderRadius: 6,
                           background: "rgba(8,9,10,.55)",
                           border: "1px solid rgba(240,86,90,.18)",
@@ -1875,10 +1908,11 @@ export function MoneyFlowScreen() {
                           flex: "none",
                           display: "grid",
                           gridTemplateColumns:
-                            "minmax(0,1.5fr) repeat(5,minmax(0,1fr))",
-                          gap: 4,
-                          borderTop: "1px solid rgba(240,86,90,.2)",
-                          paddingTop: 5,
+                            "1.7fr 1fr 1fr 1fr 1fr 1fr",
+                          gap: 3,
+                          borderTop: "1px solid rgba(240,86,90,.25)",
+                          paddingTop: 3,
+                          marginTop: 1,
                         }}
                       >
                         {[
@@ -1898,7 +1932,7 @@ export function MoneyFlowScreen() {
                             style={{
                               display: "flex",
                               flexDirection: "column",
-                              gap: 1,
+                              gap: 2,
                               minWidth: 0,
                             }}
                           >
@@ -1906,8 +1940,9 @@ export function MoneyFlowScreen() {
                               style={{
                                 fontSize: 9,
                                 fontWeight: 700,
-                                letterSpacing: ".08em",
+                                letterSpacing: ".06em",
                                 color: "#7a8481",
+                                lineHeight: 1,
                               }}
                             >
                               {l.k}
@@ -1915,13 +1950,15 @@ export function MoneyFlowScreen() {
                             <span
                               style={{
                                 fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: 10,
+                                fontSize: 9.5,
                                 fontWeight: 700,
                                 color: l.c,
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
+                                lineHeight: 1.2,
                               }}
+                              title={String(l.v)}
                             >
                               {l.v}
                             </span>
@@ -1980,6 +2017,7 @@ export function MoneyFlowScreen() {
                   const candles = boardCandles(fullStock);
                   const isSecMatch = Boolean(activeSector && fullStock?.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
+                  const tileQuote = fullStock ? getDisplayQuote(fullStock) : null;
                   return (
                     <button
                       key={x.t}
@@ -2154,14 +2192,14 @@ export function MoneyFlowScreen() {
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10.5,
-                              color: "#3ddc84",
+                              color: tileQuote ? (tileQuote.isUp ? "#3ddc84" : "#f0565a") : "#3ddc84",
                               whiteSpace: "nowrap",
                             }}
                           >
                             <span style={{ fontSize: 9, color: "#7a8481" }}>
                               #{x.rank}{" "}
                             </span>
-                            {x.chg}
+                            {tileQuote?.isAH ? `AH ${tileQuote.pctStr}` : x.chg}
                           </span>
                         </div>
                       </div>
@@ -2215,6 +2253,7 @@ export function MoneyFlowScreen() {
                   const candles = boardCandles(fullStock);
                   const isSecMatch = Boolean(activeSector && fullStock?.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
+                  const tileQuote = fullStock ? getDisplayQuote(fullStock) : null;
                   return (
                     <button
                       key={x.t}
@@ -2389,14 +2428,14 @@ export function MoneyFlowScreen() {
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10.5,
-                              color: "#f0565a",
+                              color: tileQuote ? (tileQuote.isUp ? "#3ddc84" : "#f0565a") : "#f0565a",
                               whiteSpace: "nowrap",
                             }}
                           >
                             <span style={{ fontSize: 9, color: "#7a8481" }}>
                               #{x.rank}{" "}
                             </span>
-                            {x.chg}
+                            {tileQuote?.isAH ? `AH ${tileQuote.pctStr}` : x.chg}
                           </span>
                         </div>
                       </div>
@@ -2417,46 +2456,58 @@ export function MoneyFlowScreen() {
           }}
           onMouseLeave={handleTileLeave}
           style={(() => {
-            const POPOVER_W = 440;
-            const POPOVER_EST_H = 500;
-            const isMobileScreen = typeof window !== "undefined" && window.innerWidth < 640;
+            const boardRect = boardWrapRef.current?.getBoundingClientRect();
+            const isMobileScreen = typeof window !== "undefined" && window.innerWidth < 768;
             let popLeft: number | string = 12;
             let popTop: number | string = 16;
+            let popWidth: number | string = "50vw";
+            let popHeight: number | string = "auto";
             let popTransform = "none";
 
             if (isMobileScreen) {
               popLeft = 12;
               popTop = "50%";
               popTransform = "translateY(-50%)";
+              popWidth = "calc(100vw - 24px)";
+              popHeight = "calc(100vh - 40px)";
             } else if (typeof window !== "undefined") {
-              const rect = hoveredStock.rect;
-              const spaceRight = window.innerWidth - rect.right;
-              const spaceLeft = rect.left;
+              // Popover width: half the screen size
+              const calculatedPopW = Math.round(window.innerWidth * 0.5);
+              popWidth = calculatedPopW;
 
-              // Place beside the stock tile, NEVER on top of it:
+              // Height: starts 20px below borderline above Top 3 Bullish Stocks (boardRect.top + 20)
+              // and ends 20px above borderline at bottom (boardRect.bottom - 20)
+              const topAnchor = boardRect ? boardRect.top + 20 : 100;
+              const bottomAnchor = boardRect ? boardRect.bottom - 20 : window.innerHeight - 20;
+              popTop = Math.max(10, topAnchor);
+              popHeight = Math.max(340, bottomAnchor - popTop);
+
+              // Horizontal positioning: beside the stock tile, NEVER on top of it
+              const rect = hoveredStock.rect;
               const isTileInRightHalf = (rect.left + rect.width / 2) > (window.innerWidth / 2);
 
               if (isTileInRightHalf) {
-                if (spaceLeft >= POPOVER_W + 16) {
-                  popLeft = rect.left - POPOVER_W - 14;
-                } else if (spaceRight >= POPOVER_W + 16) {
-                  popLeft = rect.right + 14;
-                } else {
-                  popLeft = Math.max(12, rect.left - POPOVER_W - 14);
+                // Place to the left of the hovered stock
+                popLeft = rect.left - calculatedPopW - 16;
+                if (boardRect && popLeft < boardRect.left + 8) {
+                  popLeft = Math.max(12, boardRect.left + 8);
+                }
+                // If it overlaps the stock, push further left
+                if (popLeft + calculatedPopW > rect.left) {
+                  popLeft = Math.max(12, rect.left - calculatedPopW - 8);
                 }
               } else {
-                if (spaceRight >= POPOVER_W + 16) {
-                  popLeft = rect.right + 14;
-                } else if (spaceLeft >= POPOVER_W + 16) {
-                  popLeft = rect.left - POPOVER_W - 14;
-                } else {
-                  popLeft = Math.min(window.innerWidth - POPOVER_W - 12, rect.right + 14);
+                // Place to the right of the hovered stock
+                popLeft = rect.right + 16;
+                const rightBoundary = (boardRect ? boardRect.right - 8 : window.innerWidth - 12) - calculatedPopW;
+                if (popLeft > rightBoundary) {
+                  popLeft = Math.min(window.innerWidth - calculatedPopW - 12, rightBoundary);
+                }
+                // If it overlaps the stock, push further right
+                if (popLeft < rect.right) {
+                  popLeft = Math.min(window.innerWidth - calculatedPopW - 12, rect.right + 8);
                 }
               }
-
-              // Vertical positioning: clamp within window bounds so action buttons NEVER cut off
-              const maxTop = Math.max(12, window.innerHeight - POPOVER_EST_H - 16);
-              popTop = Math.max(12, Math.min(maxTop, rect.top - 10));
             }
 
             return {
@@ -2465,7 +2516,8 @@ export function MoneyFlowScreen() {
               left: popLeft,
               top: popTop,
               transform: popTransform,
-              width: isMobileScreen ? "calc(100vw - 24px)" : POPOVER_W,
+              width: popWidth,
+              height: popHeight,
               maxHeight: "calc(100vh - 24px)",
               overflowY: "auto" as const,
               pointerEvents: "auto" as const,
@@ -2478,10 +2530,11 @@ export function MoneyFlowScreen() {
                 }`,
               borderRadius: 12,
               boxShadow: "0 24px 60px rgba(0,0,0,.75)",
-              padding: "12px 14px",
+              padding: "14px 16px",
               display: "flex",
               flexDirection: "column" as const,
               gap: 8,
+              boxSizing: "border-box" as const,
             };
           })()}
         >
@@ -2537,26 +2590,31 @@ export function MoneyFlowScreen() {
                 {hoveredStock.stock.name ?? hoveredStock.stock.t} · {hoveredStock.stock.sector ?? "—"}
               </span>
             </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
-                fontFamily: "'JetBrains Mono', monospace",
-              }}
-            >
-              <span style={{ fontSize: 18, fontWeight: 700, color: "#eef2f4" }}>
-                {formatCurrency(hoveredStock.stock.price)}
-              </span>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: (hoveredStock.stock.pctChange >= 0) ? "#3ddc84" : "#f0565a",
-                }}
-              >
-                {formatPct(hoveredStock.stock.pctChange)}
-              </span>
-            </div>
+            {(() => {
+              const q = getDisplayQuote(hoveredStock.stock);
+              return (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >
+                  <span style={{ fontSize: 18, fontWeight: 700, color: "#eef2f4" }}>
+                    {q.priceStr}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: q.isUp ? "#3ddc84" : "#f0565a",
+                    }}
+                  >
+                    {q.pctStr}
+                  </span>
+                </div>
+              );
+            })()}
             <button
               type="button"
               onClick={(e) => {
@@ -2793,17 +2851,20 @@ export function MoneyFlowScreen() {
           {/* Full Interactive Chart */}
           <div
             style={{
-              height: 200,
+              flex: "1 1 auto",
+              minHeight: 280,
               borderRadius: 8,
               border: "1px solid #171c1e",
               background: "#08090a",
               overflowX: "auto",
               overflowY: "hidden",
               scrollbarWidth: "thin",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
             {popBarsLoading && popCandles.length === 0 ? (
-              <div style={{ height: "100%", display: "grid", placeItems: "center", color: "#7a8481", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
+              <div style={{ height: "100%", display: "grid", placeItems: "center", color: "#7a8481", fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
                 Loading {hoveredStock.stock.t} 1-minute bars…
               </div>
             ) : (
@@ -2812,14 +2873,14 @@ export function MoneyFlowScreen() {
               candles={popCandles}
               layers={popLayers}
               tf={popTf}
-              width={440}
-              height={198}
+              width={typeof window !== "undefined" && window.innerWidth >= 768 ? Math.max(560, Math.round(window.innerWidth * 0.5) - 36) : 440}
+              height={typeof window !== "undefined" && boardWrapRef.current ? Math.max(280, Math.round(boardWrapRef.current.getBoundingClientRect().height - 40 - 200)) : 320}
             />
             )}
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+          {/* Action buttons — single line, half width each */}
+          <div style={{ display: "flex", flexDirection: "row", gap: 8, marginTop: 6, flex: "none" }}>
             <button
               type="button"
               onClick={() => {
@@ -2828,8 +2889,9 @@ export function MoneyFlowScreen() {
                 exitToMC(sym);
               }}
               style={{
-                width: "100%",
-                padding: "8px 0",
+                flex: "1 1 0",
+                width: "50%",
+                padding: "9px 8px",
                 borderRadius: 6,
                 background: "#4ade80",
                 border: "1px solid #22c55e",
@@ -2838,6 +2900,10 @@ export function MoneyFlowScreen() {
                 fontSize: 12,
                 fontWeight: 700,
                 cursor: "pointer",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               Open {hoveredStock.stock.t} in Market Catalyst →
@@ -2850,8 +2916,9 @@ export function MoneyFlowScreen() {
                 enterSI(sym);
               }}
               style={{
-                width: "100%",
-                padding: "8px 0",
+                flex: "1 1 0",
+                width: "50%",
+                padding: "9px 8px",
                 borderRadius: 6,
                 background: "#161b1d",
                 border: "1px solid #233038",
@@ -2860,6 +2927,10 @@ export function MoneyFlowScreen() {
                 fontSize: 12,
                 fontWeight: 700,
                 cursor: "pointer",
+                textAlign: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
               Open {hoveredStock.stock.t} in Stock Intelligence →

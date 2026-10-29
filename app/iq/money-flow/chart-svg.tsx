@@ -217,11 +217,11 @@ export function FullChartSvg({
   const W = width;
   const H = height;
   const PL = 6;
-  const PR = 62;
+  const PR = 72;
   const PT = 10;
   const PB = 22;
   const cw = (W - PL - PR) / (NB || 1);
-  const fz = 11;
+  const fz = 13.5;
 
   const lastPx = candles.length ? candles[candles.length - 1].c : stock.price;
   const safeStockPx = Number.isFinite(lastPx) && lastPx > 0 ? lastPx : stock.price;
@@ -245,7 +245,7 @@ export function FullChartSvg({
   if (!candles || candles.length === 0) {
     return (
       <svg viewBox={`0 0 ${width} ${height}`} style={{ display: "block", width: "100%", height: "100%" }}>
-        <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={11} fill="#7a8481" fontFamily="'JetBrains Mono', monospace">
+        <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={13} fill="#7a8481" fontFamily="'JetBrains Mono', monospace">
           No regular-session bars yet
         </text>
       </svg>
@@ -356,8 +356,8 @@ export function FullChartSvg({
                 {!b.mit && (
                   <text
                     x={x1 + 3}
-                    y={b.bull ? y(b.lo) + 11 : y(b.hi) - 4}
-                    fontSize={9.5}
+                    y={b.bull ? y(b.lo) + 12 : y(b.hi) - 4}
+                    fontSize={11.5}
                     fill={`rgb(${col})`}
                     fontFamily="'JetBrains Mono', monospace"
                     fontWeight={700}
@@ -471,8 +471,8 @@ export function FullChartSvg({
               {end == null && (
                 <text
                   x={x1 + 2}
-                  y={y(g.hi) - 3}
-                  fontSize={9}
+                  y={y(g.hi) - 4}
+                  fontSize={11}
                   fill={`rgb(${col})`}
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
@@ -512,8 +512,8 @@ export function FullChartSvg({
             {sw == null ? (
               <text
                 x={W - PR - 4}
-                y={y(p.p) + (p.hi ? -3 : 10)}
-                fontSize={9}
+                y={y(p.p) + (p.hi ? -4 : 12)}
+                fontSize={11}
                 fill={col}
                 fontFamily="'JetBrains Mono', monospace"
                 fontWeight={700}
@@ -524,8 +524,8 @@ export function FullChartSvg({
             ) : (
               <text
                 x={x2}
-                y={y(p.p) + (p.hi ? -3 : 10)}
-                fontSize={9}
+                y={y(p.p) + (p.hi ? -4 : 12)}
+                fontSize={11}
                 fill={col}
                 fontFamily="'JetBrains Mono', monospace"
                 fontWeight={700}
@@ -631,8 +631,8 @@ export function FullChartSvg({
             />
             <text
               x={W - PR - 4}
-              y={y(eq) - 3}
-              fontSize={9}
+              y={y(eq) - 4}
+              fontSize={11}
               fill="#aab3b0"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
@@ -642,8 +642,8 @@ export function FullChartSvg({
             </text>
             <text
               x={W - PR - 4}
-              y={y(hiAll) + 10}
-              fontSize={9}
+              y={y(hiAll) + 12}
+              fontSize={11}
               fill="rgba(240,86,90,.7)"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
@@ -653,8 +653,8 @@ export function FullChartSvg({
             </text>
             <text
               x={W - PR - 4}
-              y={y(loAll) - 4}
-              fontSize={9}
+              y={y(loAll) - 5}
+              fontSize={11}
               fill="rgba(61,220,132,.7)"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
@@ -677,8 +677,8 @@ export function FullChartSvg({
                 />
                 <text
                   x={PL + 4}
-                  y={y(pdh) - 3}
-                  fontSize={9}
+                  y={y(pdh) - 4}
+                  fontSize={11}
                   fill="#9aa7ff"
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
@@ -701,8 +701,8 @@ export function FullChartSvg({
                 />
                 <text
                   x={PL + 4}
-                  y={y(pdl) + 10}
-                  fontSize={9}
+                  y={y(pdl) + 12}
+                  fontSize={11}
                   fill="#9aa7ff"
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
@@ -739,8 +739,8 @@ export function FullChartSvg({
             />
             <text
               x={W - PR - 4}
-              y={y(orh) - 3}
-              fontSize={9}
+              y={y(orh) - 4}
+              fontSize={11}
               fill="#9aa7ff"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
@@ -750,8 +750,8 @@ export function FullChartSvg({
             </text>
             <text
               x={W - PR - 4}
-              y={y(orl) + 10}
-              fontSize={9}
+              y={y(orl) + 12}
+              fontSize={11}
               fill="#9aa7ff"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
@@ -768,8 +768,8 @@ export function FullChartSvg({
                 />
                 <text
                   x={xi(ih)}
-                  y={y(hiAll) - 12}
-                  fontSize={9}
+                  y={y(hiAll) - 13}
+                  fontSize={11}
                   fill="#e0bb5e"
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
@@ -787,8 +787,8 @@ export function FullChartSvg({
                 />
                 <text
                   x={xi(il)}
-                  y={y(loAll) + 20}
-                  fontSize={9}
+                  y={y(loAll) + 22}
+                  fontSize={11}
                   fill="#e0bb5e"
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
@@ -819,8 +819,8 @@ export function FullChartSvg({
                 <text
                   key={`sw_${pi}`}
                   x={cx}
-                  y={p.hi ? y(p.p) - 6 : y(p.p) + 13}
-                  fontSize={9}
+                  y={p.hi ? y(p.p) - 7 : y(p.p) + 15}
+                  fontSize={11}
                   fill={col}
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
@@ -848,8 +848,8 @@ export function FullChartSvg({
                   />
                   <text
                     x={(x1 + x2) / 2}
-                    y={y(e.p.p) + (up ? -3 : 10)}
-                    fontSize={9}
+                    y={y(e.p.p) + (up ? -4 : 12)}
+                    fontSize={11}
                     fill={col}
                     fontFamily="'JetBrains Mono', monospace"
                     fontWeight={700}
@@ -866,16 +866,16 @@ export function FullChartSvg({
                 <rect
                   x={PL + 4}
                   y={PT + 2}
-                  width={pattern.length * 6.2 + 12}
-                  height={15}
+                  width={pattern.length * 7.5 + 14}
+                  height={18}
                   rx={3}
                   fill="rgba(8,9,10,.85)"
                   stroke="#5a4a22"
                 />
                 <text
                   x={PL + 10}
-                  y={PT + 13}
-                  fontSize={9}
+                  y={PT + 15}
+                  fontSize={11}
                   fill="#f0d68c"
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
@@ -935,7 +935,7 @@ export function FullChartSvg({
       <text
         x={W - PR + 4}
         y={y(safeStockPx) + 4}
-        fontSize={10}
+        fontSize={12}
         fill="#ffffff"
         fontFamily="'JetBrains Mono', monospace"
         fontWeight={700}
