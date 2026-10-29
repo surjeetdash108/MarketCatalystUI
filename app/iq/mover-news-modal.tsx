@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { apiGet } from "./backend";
-import { StockLogo, fmt, sign, VendorTag, cleanCatalystText, formatUsDate } from "./utils";
+import { StockLogo, fmt, sign, VendorTag, cleanCatalystText, formatUsDate, useShowVendorTags, vendorText } from "./utils";
 import type { MoverCatalystDoc, NewsArticleDoc } from "./types";
 
 interface MoverNewsModalProps {
@@ -358,6 +358,7 @@ export function MoverNewsModal({
   direction,
   onClose,
 }: MoverNewsModalProps) {
+  const showVendor = useShowVendorTags();
   const [catalystDoc, setCatalystDoc] = useState<MoverCatalystDoc | null>(null);
   const [newsList, setNewsList] = useState<NewsArticleDoc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -532,7 +533,7 @@ export function MoverNewsModal({
           {loading ? (
             <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-dim-solid, #A6AEB5)" }}>
               <div style={{ fontSize: "1.1rem", marginBottom: 8 }}>Fetching latest news & catalyst data…</div>
-              <div style={{ fontSize: ".8rem" }}>Checking Benzinga WIIM, Polygon & AI synthesis</div>
+              <div style={{ fontSize: ".8rem" }}>{showVendor ? "Checking Benzinga WIIM, Polygon & AI synthesis" : "Checking Benzinga WIIM & AI synthesis"}</div>
             </div>
           ) : activeTab === "catalyst" ? (
             (() => {
@@ -605,8 +606,12 @@ export function MoverNewsModal({
                             gap: 8,
                           }}
                         >
-                          <span style={{ fontWeight: 600 }}>{item.source}</span>
-                          <span>·</span>
+                          {vendorText(item.source, showVendor) && (
+                            <>
+                              <span style={{ fontWeight: 600 }}>{item.source}</span>
+                              <span>·</span>
+                            </>
+                          )}
                           <span>{item.publishedAt ? formatUsDate(item.publishedAt) : ""}</span>
                         </div>
                       </a>
@@ -651,7 +656,7 @@ export function MoverNewsModal({
                         }}
                       >
                         <div style={{ fontSize: ".72rem", color: "var(--brand, #4ADE80)", fontWeight: 600 }}>
-                          {item.source}
+                          {vendorText(item.source, showVendor)}
                         </div>
                         <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid, #A6AEB5)" }}>
                           {item.publishedAt ? `${new Date(item.publishedAt).toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET` : ""}

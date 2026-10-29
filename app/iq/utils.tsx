@@ -13,9 +13,10 @@ import { useAppSelector } from "../store/hooks";
 // Search the codebase for "VendorTag" to find them all.
 
 /**
- * The only accounts that see vendor attribution (every <VendorTag/> pill and
- * the "live · FMP / Polygon" vendor names). Everyone else — and anyone signed
- * out — sees the widgets without them. Compared case-insensitively.
+ * The only accounts that see vendor attribution — every <VendorTag/> pill and
+ * any "FMP" / "Polygon" mention in labels, tooltips or news sources. Everyone
+ * else — and anyone signed out — sees the app without them. Compared
+ * case-insensitively.
  *
  * NEXT_PUBLIC_VENDOR_TAG_EMAILS (comma-separated) replaces this list at build
  * time, the same way NEXT_PUBLIC_ADMIN_EMAIL overrides admin-email.ts.
@@ -37,6 +38,23 @@ const VENDOR_TAG_ALLOWED = new Set(
 export function useShowVendorTags(): boolean {
   const email = useAppSelector((s) => s.auth.user?.email);
   return !!email && VENDOR_TAG_ALLOWED.has(email.trim().toLowerCase());
+}
+
+/**
+ * `s` unchanged when vendor names may show; otherwise null when `s` names the
+ * vendor ("fmp", "Polygon", "polygon-ondemand", "financialmodelingprep.com") —
+ * what news `source` / `vendor` fields fall back to when an article has no real
+ * publisher.
+ */
+export function vendorText(s: string | null | undefined, show: boolean): string | null {
+  if (!s) return null;
+  return show || !/^(fmp|polygon)\b|financialmodelingprep|polygon\.io/i.test(s.trim()) ? s : null;
+}
+
+/** Prose with any "FMP" / "Polygon" mention dropped unless vendor names may
+ *  show — for server-written text such as the options-chain note. */
+export function withoutVendorNames(text: string, show: boolean): string {
+  return show ? text : text.replace(/\b(?:FMP|Polygon)\b,?\s*/gi, "");
 }
 
 export type VendorKey = "polygon" | "fmp" | "fred" | "sec" | "firebase";

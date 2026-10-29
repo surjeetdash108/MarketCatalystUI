@@ -4,7 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
-import { cls, sign, StockLogo, DataState, NotAvailable, VendorTag, titleCaseLabel} from "../utils";
+import { cls, sign, StockLogo, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, titleCaseLabel} from "../utils";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { useTapeStream } from "../hooks/useTapeStream";
@@ -51,12 +51,12 @@ const DL_ICON = (
 
 // Real download: a plain-text digest built from the live data already on
 // screen (date, headlines, earnings surprises) — no fabricated narrative.
-function downloadRecap(dateLabel: string, headlines: NewsArticleDoc[], surprises: EarnSurprise[], grades: RatingChange[], which: string) {
+function downloadRecap(dateLabel: string, headlines: NewsArticleDoc[], surprises: EarnSurprise[], grades: RatingChange[], which: string, showVendor: boolean) {
   const lines = [
     `MarketCatalyst ${which} Recap — ${dateLabel}`,
     "",
     "Headlines:",
-    ...(headlines.length ? headlines.map(n => `- ${n.ticker}: ${n.headline} (${n.source})`) : ["  (none synced)"]),
+    ...(headlines.length ? headlines.map(n => `- ${n.ticker}: ${n.headline}` + (vendorText(n.source, showVendor) ? ` (${n.source})` : "")) : ["  (none synced)"]),
     "",
     "Earnings surprises:",
     ...(surprises.length ? surprises.slice(0, 10).map(e => `- ${e.ticker}: EPS $${e.epsEstimate.toFixed(2)} → $${e.epsActual.toFixed(2)} (${e.surp >= 0 ? "+" : ""}${e.surp.toFixed(1)}%)`) : ["  (none synced)"]),
@@ -88,6 +88,7 @@ function earnSurprises(events: LiveEarningsDoc[]): EarnSurprise[] {
 
 // ---- Main screen ----
 export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
+  const showVendor = useShowVendorTags();
   const router = useRouter();
   const { openStock, openSector } = useIQActions();
   // Daily vs weekly is a toggle on the page; `mode` (from the route — the old
@@ -320,7 +321,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
             <StockLogo sym={n.ticker} size={20} />
             <span className="mid" style={{ whiteSpace: "normal", lineHeight: 1.4 }}>
               <b style={{ color: "var(--text-hi)" }}>{n.ticker}</b> {n.headline}
-              <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{n.source}</div>
+              <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}>{vendorText(n.source, showVendor)}</div>
             </span>
           </a>
         ))}
@@ -541,9 +542,9 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
               DOWNLOAD:
             </span>
             {isWeek ? (
-              <button className="btn" onClick={() => downloadRecap(weekRangeLabel, weekHeadlines, weekSurprises, weekGrades, "this-week")}>{DL_ICON} This Week</button>
+              <button className="btn" onClick={() => downloadRecap(weekRangeLabel, weekHeadlines, weekSurprises, weekGrades, "this-week", showVendor)}>{DL_ICON} This Week</button>
             ) : (
-              <button className="btn" onClick={() => downloadRecap(dateLabel, todayHeadlines, todaySurprises, todayGrades, "today")}>{DL_ICON} Today (EOD)</button>
+              <button className="btn" onClick={() => downloadRecap(dateLabel, todayHeadlines, todaySurprises, todayGrades, "today", showVendor)}>{DL_ICON} Today (EOD)</button>
             )}
           </div>
           <div className="recap-hero" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.9fr) minmax(0, 1fr)", gap: 22, marginTop: 14 }}>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { firebaseAuth } from "../firebase";
 import { apiGet, apiPost } from "./backend";
+import { useShowVendorTags, vendorText } from "./utils";
 
 /**
  * Written server-side by news.job.ts when scoreImportance() flags an article.
@@ -40,6 +41,7 @@ function timeAgo(iso: string): string {
 }
 
 export function NotificationBell() {
+  const showVendor = useShowVendorTags();
   // Per-user subcollection: the backend only writes a notification to a user
   // whose watchlist or portfolio contains one of the story's tickers, so there
   // is nothing to filter client-side.
@@ -156,7 +158,7 @@ export function NotificationBell() {
                           {(n.matchedTickers?.length ? n.matchedTickers : n.tickers)
                           .slice(0, 4)
                           .map(t => <span key={t} className="notif-tkr">{t}</span>)}
-                          {n.source && <span className="notif-src">{n.source}</span>}
+                          {vendorText(n.source, showVendor) && <span className="notif-src">{n.source}</span>}
                         </span>
                       )}
                       <span className="notif-time">{timeAgo(n.publishedAt)}</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { StockLogo, DataState, NotAvailable, VendorTag, useShowVendorTags } from "../utils";
+import { StockLogo, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText } from "../utils";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
@@ -620,7 +620,7 @@ export function MacroScreen() {
                   </div>
                 )}
                 <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-soft)", fontSize: ".68rem", color: "var(--text-dim-solid)", fontFamily: "var(--f-mono)" }}>
-                  {d.seriesId} · source: {d.source}
+                  {d.seriesId}{vendorText(d.source, showVendor) && <> · source: {d.source}</>}
                 </div>
               </div>
             </div>

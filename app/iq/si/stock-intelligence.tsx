@@ -43,7 +43,7 @@ import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex } from "../calendar-range";
-import { StockLogo, VendorTag, useShowVendorTags } from "../utils";
+import { StockLogo, VendorTag, useShowVendorTags, vendorText, withoutVendorNames } from "../utils";
 import { resolveActionMeta } from "../analyst-actions-engine";
 import { useHeadlineQuote } from "../quote-headline";
 import { range52 } from "../range52";
@@ -1513,7 +1513,7 @@ export function StockIntelligenceScreen() {
   const statsRow = [
     { k: "MARKET CAP", v: realMcap || "—", sub: liveCompany?.sector || stock.sector || "Equity" },
     { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },
-    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
+    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? (showVendor ? "y/y, FMP reported" : "y/y, reported") : "y/y, latest qtr" },
     { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, GAAP diluted" : "y/y, latest qtr" },
     { k: "52W HIGH / LOW", v: `${hi52 != null ? usd(hi52) : "—"} / ${lo52 != null ? usd(lo52) : "—"}`, sub: "Range" },
   ];
@@ -3471,7 +3471,7 @@ export function StockIntelligenceScreen() {
               ev: isPast && hasActual && actualVal != null
                 ? `Reported EPS $${actualVal.toFixed(2)}${e.epsEstimate != null ? ` vs $${e.epsEstimate.toFixed(2)} est` : ""}`
                 : `Upcoming Q earnings · consensus EPS ${e.epsEstimate != null ? '$' + e.epsEstimate.toFixed(2) : 'TBD'}`,
-              note: `${e.session ? e.session + " · " : ""}${e.revenueEstimate ? `Rev Est $${(e.revenueEstimate / 1e9).toFixed(2)}B · ` : ""}${isPast ? "FMP reported quarterly print." : "FMP consensus earnings calendar"}`,
+              note: `${e.session ? e.session + " · " : ""}${e.revenueEstimate ? `Rev Est $${(e.revenueEstimate / 1e9).toFixed(2)}B · ` : ""}${isPast ? (showVendor ? "FMP reported quarterly print." : "Reported quarterly print.") : (showVendor ? "FMP consensus earnings calendar" : "Consensus earnings calendar")}`,
               imp: "HIGH",
               dir,
               dd,
@@ -3586,7 +3586,7 @@ export function StockIntelligenceScreen() {
               date: fmtDateShort(art.publishedAt),
               cat,
               ev: art.headline,
-              note: `${art.source || "Newswire"} · ${art.summary ? art.summary.slice(0, 110) + "…" : "Live news dispatch."}`,
+              note: `${vendorText(art.source, showVendor) || "Newswire"} · ${art.summary ? art.summary.slice(0, 110) + "…" : "Live news dispatch."}`,
               imp: "MED",
               dir,
               dd,
@@ -4666,7 +4666,7 @@ export function StockIntelligenceScreen() {
                         {TT.src.map((sr: any, idx: number) => (
                           <div key={idx} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                             <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {sr[0]} <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)" }}>· {sr[1]}</span>
+                              {sr[0]} <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)" }}>· {withoutVendorNames(sr[1], showVendor)}</span>
                             </span>
                             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
                               {usd(sr[2])}

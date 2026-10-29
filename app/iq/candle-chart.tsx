@@ -23,7 +23,7 @@ import { createPortal } from "react-dom";
 import { mapEarningsToBars, type ChartEarnings } from "./chart-earnings";
 import type { KeyMoment } from "./key-moments";
 import { useBackendBars } from "./hooks/useBackendBars";
-import { DataState } from "./utils";
+import { DataState, useShowVendorTags, vendorText } from "./utils";
 import { atr, boll, ema, etSessionDate, macd, rsi, sma, stoch, vwap, type Num } from "./indicators";
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -1115,6 +1115,7 @@ function CandleChartInner({
   height, toolbarStart, toolbarEnd,
 }: CandleChartProps) {
   const prefs = useChartPrefs();
+  const showVendor = useShowVendorTags();
   const { studies } = prefs;
 
   /* ── data ─────────────────────────────────────────────────────────── */
@@ -1647,7 +1648,7 @@ function CandleChartInner({
     const { km } = kmMarks[kmOpen.k];
     const sgn = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
     const dt = new Date(`${km.date}T12:00:00Z`);
-    const sources = [...new Set(km.articles.map(a => a.source).filter(Boolean))];
+    const sources = [...new Set(km.articles.map(a => a.source).filter((s) => vendorText(s, showVendor)))];
     const CARD_W = 300, CARD_H = 300;
     const left = Math.max(CARD_W / 2 + 4, Math.min(size.w - CARD_W / 2 - 4, kmOpen.x));
     const below = kmOpen.y + KM_R + 8;

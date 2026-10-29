@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { sign, cls, arr, fmt, StockLogo, DataState, NotAvailable, VendorTag } from "../utils";
+import { sign, cls, arr, fmt, StockLogo, DataState, NotAvailable, VendorTag, useShowVendorTags, withoutVendorNames } from "../utils";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
 import { OptionsChainDoc, OPTIONS_UNIVERSE } from "../types";
@@ -31,6 +31,7 @@ function buildChainRows(chain: OptionsChainDoc, expiry: string): ChainRow[] {
 }
 
 export function OptionsScreen() {
+  const showVendor = useShowVendorTags();
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const stockList = useMemo(
     () => [...companies]
@@ -196,7 +197,7 @@ export function OptionsScreen() {
               </div>
 
               <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 10 }}>
-                {liveChain?.note ?? "Bid/ask, IV and open interest need a live quotes/greeks feed — not on the current plan. Last price and volume are real (Polygon, delayed) where synced."}
+                {withoutVendorNames(liveChain?.note ?? "Bid/ask, IV and open interest need a live quotes/greeks feed — not on the current plan. Last price and volume are real (Polygon, delayed) where synced.", showVendor)}
               </div>
             </>
           )}

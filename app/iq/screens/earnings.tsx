@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { forwardAnnualEstimates } from "../eps-sales-data";
 import { useIQActions, ExpandBtn } from "../shell";
-import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
+import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useShowVendorTags, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
 import { StockScreenEmbed } from "../stock-panel";
 import { useApiList } from "../hooks/useApiList";
@@ -1333,6 +1333,7 @@ function compareGlance(a: EarnCalItem, b: EarnCalItem, k: GlanceSortKey, dir: 1 
 }
 
 function GlanceTable({ title, items, showDate, onSelect }: { title: string; items: EarnCalItem[]; showDate: boolean; onSelect: (s: string, date: string) => void }) {
+  const showVendor = useShowVendorTags();
   const [expanded, setExpanded] = useState(false);
   const [sortKey, setSortKey] = useState<GlanceSortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -1401,7 +1402,7 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
               {sortTh("consRev", "Cons. Rev")}
               {sortTh("yoyRev", "Yr/Yr Rev")}
               <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-market</th>
-              <th className="r" title="After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close.">Post-market</th>
+              <th className="r" title={showVendor ? "After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close." : "After-hours move (16:00–20:00 ET): latest extended-hours trade vs the regular-session close."}>Post-market</th>
               {sortTh("guidance", "Guidance")}
             </tr>
           </thead>
