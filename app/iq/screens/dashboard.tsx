@@ -140,8 +140,10 @@ function DpRow({ label, children }: { label: string; children: React.ReactNode }
 
 /**
  * Live-only: a mover row exists here only if a real `market_movers` doc
- * exists for it. `rvolRatio`/`relativeStrength` come from `companies.rvol`/
- * `rsRating` when synced; `maPosture` from `companies.aboveSma50/aboveSma200`
+ * exists for it. `rvolRatio` is the mover doc's own `rvol` (volume-leaders,
+ * same as the Movers screen) so it doesn't wait on the multi-MB `companies`
+ * list, falling back to `companies.rvol`; `relativeStrength` comes from
+ * `companies.rsRating` when synced; `maPosture` from `companies.aboveSma50/aboveSma200`
  * (technical-indicators.job), "—" until synced. (Catalyst was removed — Polygon
  * has no catalyst feed, so it only ever showed "—".)
  */
@@ -153,7 +155,7 @@ function mergeMoversData(live: LiveMoverDoc[], companies: CompanyDoc[]): Mover[]
     const c = companyByTicker.get(l.ticker);
     return {
       ticker: l.ticker, name: l.name ?? l.ticker, price: l.price, pctChange: l.pctChange,
-      rvolRatio: c?.rvol ?? 0, relativeStrength: c?.rsRating ?? 0,
+      rvolRatio: l.rvol ?? c?.rvol ?? 0, relativeStrength: c?.rsRating ?? 0,
       maPosture: maPostureLabel(c?.aboveSma50, c?.aboveSma200), owned: false,
       sector: l.sector ?? c?.sector ?? "—", cap: (l.cap as Mover["cap"]) ?? "Mid",
       marketCap: l.marketCap ?? c?.marketCap ?? null, weekPct: c?.week5ChangePct ?? null, weekBase: c?.week5BaseClose ?? null,
@@ -385,7 +387,7 @@ export function DashboardScreen() {
   // (Phase 1) — not a direct market_indices Firestore listener.
   const { frame: tapeFrame } = useTapeStream();
   const liveIndices = tapeFrame ? tapeItemsToIndexDocs(tapeFrame.items) : [];
-  const { data: liveMovers } = useApiList<LiveMoverDoc>("/market-data/movers");
+  const { data: liveMovers, loading: moversLoading } = useApiList<LiveMoverDoc>("/market-data/movers");
   const { data: liveEarnings, loading: earningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
   // Next scheduled report per ticker (earliest calendar date from today on).
   const nextErByTicker = useMemo(() => {
@@ -748,16 +750,22 @@ export function DashboardScreen() {
             </div>
           </div>
 
-          {heatingUp.length > 0 && (
-            <Link className="alpha-bar" href="/menu/movers" title="Open Movers">
+          {/* Shown (with placeholder chips) while movers load, so the bar holds
+              its slot instead of popping in and pushing the cards below down. */}
+          {(heatingUp.length > 0 || moversLoading) && (
+            <Link className="alpha-bar" href="/menu/screener" title="Open Alpha Signals">
               <div className="alpha-ic">
                 <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M19.07 4.93A10 10 0 1 0 22 12" /><path d="M16.24 7.76A6 6 0 1 0 18 12" /><circle cx="12" cy="12" r="1.6" /><path d="M12 12l6-6" /></svg>
               </div>
-              <div className="alpha-txt"><b>Alpha Signals</b><span>{heatingUp.length} stocks heating up · up on the day with above-average volume</span></div>
+              <div className="alpha-txt"><b>Alpha Signals</b><span>{heatingUp.length > 0
+                ? `${heatingUp.length} stocks heating up · up on the day with above-average volume`
+                : "Scanning today’s movers…"}</span></div>
               <div className="alpha-chips">
-                {heatingUp.map(m => (
-                  <span key={m.ticker} className="alpha-chip">{m.ticker} <span className="up">{sign(m.pctChange)}</span></span>
-                ))}
+                {heatingUp.length > 0
+                  ? heatingUp.map(m => (
+                    <span key={m.ticker} className="alpha-chip">{m.ticker} <span className="up">{sign(m.pctChange)}</span></span>
+                  ))
+                  : [0, 1, 2, 3].map(i => <span key={i} className="alpha-chip ph" aria-hidden="true">&nbsp;</span>)}
               </div>
               <span className="alpha-go" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
