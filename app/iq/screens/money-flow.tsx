@@ -837,6 +837,8 @@ export function MoneyFlowScreen() {
                       display: "flex",
                       flexDirection: "column",
                       gap: 2,
+                      minWidth: 0,
+                      overflow: "hidden",
                       boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
                       transition: "border-color 0.15s, background 0.15s",
                     }}
@@ -856,6 +858,9 @@ export function MoneyFlowScreen() {
                         letterSpacing: ".08em",
                         textTransform: "uppercase",
                         color: "#7a8481",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
                       }}
                     >
                       {ix.n}
@@ -865,7 +870,10 @@ export function MoneyFlowScreen() {
                         display: "flex",
                         alignItems: "baseline",
                         justifyContent: "space-between",
-                        gap: 4,
+                        flexWrap: "wrap",
+                        columnGap: 6,
+                        rowGap: 0,
+                        minWidth: 0,
                       }}
                     >
                       <span
@@ -1351,7 +1359,7 @@ export function MoneyFlowScreen() {
                   <div
                     style={{
                       width: 8,
-                      height: 340,
+                      height: 400,
                       borderRadius: 4,
                       overflow: "hidden",
                       display: "flex",
