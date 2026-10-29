@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { NotAvailable, VendorTag } from "./utils";
+import { NotAvailable, VendorTag, useShowVendorTags } from "./utils";
 import type { FinancialsDoc, AnnualFinancials, QuarterFinancials, EpsHistoryRow } from "./types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, estimatedAnnualEps, ADJUSTED_SURPRISE_LABEL } from "./types";
 import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type AnnualRow } from "./eps-sales-data";
@@ -135,6 +135,7 @@ const chgCls = (s: string) => s.startsWith("+") ? " up" : s.startsWith("-") ? " 
  * per-quarter epsEstimate), and degrade to "—" for tickers not yet synced.
  */
 export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc | null }) {
+  const showVendor = useShowVendorTags();
   const [period, setPeriod] = useState<"Q" | "A">("Q");
   const series = epsSalesSeries(period, financialsDoc);
   const annualRows = annualEpsSalesRows(financialsDoc?.annual ?? [], financialsDoc?.epsHistory ?? []);
@@ -278,7 +279,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
             <div style={{ overflowX: "auto" }}>
               <table className="tbl">
                 <thead>
-                  <tr><th>Quarter</th><th className="num" title="GAAP diluted EPS">EPS (GAAP)</th><th className="num">%chg</th><th className="num" title="FMP adjusted EPS — the basis of the estimate">Adj. EPS</th><th className="num">Est. (adj.)</th><th className="num" title={ADJUSTED_SURPRISE_LABEL}>Adj. vs est.</th><th className="num">Sales (M)</th><th className="num">%chg</th><th className="num">%surp</th></tr>
+                  <tr><th>Quarter</th><th className="num" title="GAAP diluted EPS">EPS (GAAP)</th><th className="num">%chg</th><th className="num" title={showVendor ? "FMP adjusted EPS — the basis of the estimate" : "Adjusted EPS — the basis of the estimate"}>Adj. EPS</th><th className="num">Est. (adj.)</th><th className="num" title={ADJUSTED_SURPRISE_LABEL}>Adj. vs est.</th><th className="num">Sales (M)</th><th className="num">%chg</th><th className="num">%surp</th></tr>
                 </thead>
                 <tbody>
                   {/* Newest quarter first. */}

@@ -6,7 +6,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, type VendorKey, titleCaseLabel, type ChartEarnings, type BarInterval, formatUsDate } from "../utils";
+import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, useShowVendorTags, vendorText, type VendorKey, titleCaseLabel, type ChartEarnings, type BarInterval, formatUsDate } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
 import { StockChart } from "../stock-panel";
 import { exchangeLabel } from "../exchange";
@@ -685,6 +685,7 @@ export function StockScreen({
 } = {}) {
   const { openStock, openStockDetail, openSector } = useIQActions();
   const { enterSI } = useSI();
+  const showVendor = useShowVendorTags();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
     if (typeof window !== "undefined") return localStorage.getItem("iq-stock") || "NVDA";
@@ -1834,7 +1835,7 @@ export function StockScreen({
                 )}
                 {isLiveStock && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".52rem", padding: "1px 5px" }}>
-                    live quote · {vendorLabel(liveCompany?.source)}
+                    {showVendor ? `live quote · ${vendorLabel(liveCompany?.source)}` : "live quote"}
                   </span>
                 )}
               </div>
@@ -2054,7 +2055,7 @@ export function StockScreen({
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <VendorTag v={["fmp", "polygon"]} />
                     {financialsDoc && (
-                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · FMP</span>
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>{showVendor ? "live · FMP" : "live"}</span>
                     )}
                     <div className="tf-pills">
                       <button
@@ -2413,7 +2414,7 @@ export function StockScreen({
                     </>) : (
                       <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>None</span>
                     )}
-                    {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · FMP</span>}
+                    {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>{showVendor ? "live · FMP" : "live"}</span>}
                     <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                   </div>
                 </div>
@@ -2647,8 +2648,8 @@ export function StockScreen({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: ".8rem", color: "var(--text)" }}>{n.headline}</div>
                     <div style={{ fontSize: ".68rem", color: "var(--text-dim-solid)", marginTop: 3, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span>{n.source} · {new Date(n.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}</span>
-                      {n.vendor && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
+                      <span>{vendorText(n.source, showVendor) && <>{n.source} · </>}{new Date(n.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}</span>
+                      {vendorText(n.vendor, showVendor) && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
                       {n.sentiment && <span className="pill" style={{ fontSize: ".54rem", textTransform: "capitalize", background: "var(--surface-3)", color: n.sentiment === "positive" ? "var(--up)" : n.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>{n.sentiment}</span>}
                     </div>
                   </div>
@@ -3316,8 +3317,8 @@ export function StockScreen({
                       <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="sd-news">
                         <h4>{n.headline}</h4>
                         <p>
-                          <span>{n.source} · {formatUsDate(n.publishedAt || ms)}</span>
-                          {n.vendor && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
+                          <span>{vendorText(n.source, showVendor) && <>{n.source} · </>}{formatUsDate(n.publishedAt || ms)}</span>
+                          {vendorText(n.vendor, showVendor) && <span className="pill" style={{ fontSize: ".54rem", background: "var(--surface-3)", textTransform: "uppercase", letterSpacing: ".03em" }}>{n.vendor}</span>}
                           {n.sentiment && <span className="pill" style={{ fontSize: ".54rem", textTransform: "capitalize", background: "var(--surface-3)", color: n.sentiment === "positive" ? "var(--up)" : n.sentiment === "negative" ? "var(--down)" : "var(--text-dim-solid)" }}>{n.sentiment}</span>}
                         </p>
                       </a>
@@ -3671,7 +3672,7 @@ export function StockScreen({
                   <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-hi)" }}>Peers · {sym}</div>
                   <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
                     {peersTotal} peer{peersTotal === 1 ? "" : "s"} with live data
-                    {rawPeerTickers.length > peersTotal ? ` · ${rawPeerTickers.length} returned by Polygon` : ""}
+                    {rawPeerTickers.length > peersTotal ? ` · ${rawPeerTickers.length} returned${showVendor ? " by Polygon" : ""}` : ""}
                   </div>
                 </div>
                 <VendorTag v={["fmp", "polygon"]} />
@@ -3887,7 +3888,7 @@ export function StockScreen({
                           <tr>
                             <th>Quarter</th>
                             <th className="num" title="GAAP diluted EPS">EPS (GAAP)</th>
-                            <th className="num" title="FMP adjusted EPS — the basis of the estimate">Adj. EPS</th>
+                            <th className="num" title={showVendor ? "FMP adjusted EPS — the basis of the estimate" : "Adjusted EPS — the basis of the estimate"}>Adj. EPS</th>
                             <th className="num">Est. (adj.)</th>
                             <th className="num" title={ADJUSTED_SURPRISE_LABEL}>{ADJUSTED_SURPRISE_LABEL}</th>
                           </tr>

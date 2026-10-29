@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { StockLogo, DataState, NotAvailable, VendorTag } from "../utils";
+import { StockLogo, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText } from "../utils";
 import { useApiList } from "../hooks/useApiList";
 import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
@@ -227,6 +227,7 @@ function DividendDrawer({ stock, onClose }: { stock: DivStock; onClose: () => vo
 
 // ── Main screen ──────────────────────────────────────────────────────────────
 export function MacroScreen() {
+  const showVendor = useShowVendorTags();
   const { data: macroLive, loading: macroLoading } = useApiList<MacroEventDoc>("/market-data/macro-events");
 
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
@@ -364,7 +365,7 @@ export function MacroScreen() {
             <div className="card-h">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>VIX</h3>{liveVix?.source && <VendorTag v={liveVix.source} />}</div>
               <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>
-                {liveVix?.source ? `live · ${TAPE_SOURCE_NAME[liveVix.source]}` : "live"}
+                {showVendor && liveVix?.source ? `live · ${TAPE_SOURCE_NAME[liveVix.source]}` : "live"}
               </span>
             </div>
             <div className="card-b">
@@ -619,7 +620,7 @@ export function MacroScreen() {
                   </div>
                 )}
                 <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-soft)", fontSize: ".68rem", color: "var(--text-dim-solid)", fontFamily: "var(--f-mono)" }}>
-                  {d.seriesId} · source: {d.source}
+                  {d.seriesId}{vendorText(d.source, showVendor) && <> · source: {d.source}</>}
                 </div>
               </div>
             </div>

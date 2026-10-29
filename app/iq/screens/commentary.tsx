@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StockLogo, DataState, VendorTag, cls, sign, fmt, titleCaseLabel, headlineLeadsWithTicker } from "../utils";
+import { StockLogo, DataState, VendorTag, useShowVendorTags, vendorText, cls, sign, fmt, titleCaseLabel, headlineLeadsWithTicker } from "../utils";
 import { useIQActions } from "../shell";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useApiList } from "../hooks/useApiList";
@@ -392,6 +392,7 @@ function FeedItem({ item, i, total, isOpen, onToggle, onTicker, onStockOpen, onA
   highlight: string;
 }) {
   const panelId = useId();
+  const showVendor = useShowVendorTags();
   // Only http(s) links are offered as "Read article" — feed rows come from
   // vendor data, so a non-web scheme is never turned into a link.
   const safeUrl = item.url && /^https?:\/\//i.test(item.url) ? item.url : null;
@@ -637,7 +638,7 @@ function FeedItem({ item, i, total, isOpen, onToggle, onTicker, onStockOpen, onA
               fontWeight: 500,
             }}
           >
-            {item.source ?? item.vendor ?? "QQuartr"}
+            {vendorText(item.source ?? item.vendor ?? "QQuartr", showVendor)}
           </span>
 
           <span style={{ color: "var(--border-soft)" }}>·</span>

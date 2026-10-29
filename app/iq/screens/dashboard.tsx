@@ -6,7 +6,7 @@ import { firebaseAuth } from "../../firebase";
 import { apiGet } from "../backend";
 import { useIQActions, ExpandBtn } from "../shell";
 import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchItem, maPostureLabel, isLeveragedProduct } from "../data";
-import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, cleanCatalystText, headlineLeadsWithTicker } from "../utils";
+import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, cleanCatalystText, headlineLeadsWithTicker } from "../utils";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
@@ -206,6 +206,7 @@ function DashPopContent({
   /** Live price/change shown on the Most Searched tile, so the popup matches it. */
   searchedQuote?: { price: number | null; pctChange: number | null };
 }) {
+  const showVendor = useShowVendorTags();
   // Latest headline: bulk news first (instant), else the on-demand fetch result
   // (which covers ANY ticker), else still loading.
   const bulkNews = news
@@ -268,7 +269,7 @@ function DashPopContent({
         {catalyst?.catalyst
           ? <><b style={{ color: "var(--text-hi)" }}>{isAi ? <>Market<span style={{ color: "var(--brand)" }}>Catalyst</span>:</> : "News catalyst:"}</b> {cleanCatalystText(catalyst.catalyst)}</>
           : latestNews
-          ? <><b style={{ color: "var(--text-hi)" }}>Latest:</b> {latestNews.headline}{latestNews.source ? <span style={{ color: "var(--text-dim-solid)" }}> · {latestNews.source}</span> : null}</>
+          ? <><b style={{ color: "var(--text-hi)" }}>Latest:</b> {latestNews.headline}{vendorText(latestNews.source, showVendor) ? <span style={{ color: "var(--text-dim-solid)" }}> · {latestNews.source}</span> : null}</>
           : !catalystResolved || !newsResolved ? "Loading news…" : "News not available."}
       </div>
     </>;
@@ -335,7 +336,7 @@ function DashPopContent({
       {an && <DpRow label="Consensus"><b style={{ color: "var(--text-hi)" }}>{an.consensus}</b></DpRow>}
       <div className="dp-note">
         {latestNews
-          ? <><b style={{ color: "var(--text-hi)" }}>Latest:</b> {latestNews.headline}{latestNews.source ? <span style={{ color: "var(--text-dim-solid)" }}> · {latestNews.source}</span> : null}</>
+          ? <><b style={{ color: "var(--text-hi)" }}>Latest:</b> {latestNews.headline}{vendorText(latestNews.source, showVendor) ? <span style={{ color: "var(--text-dim-solid)" }}> · {latestNews.source}</span> : null}</>
           : !newsResolved ? "Loading news…" : "News not available."}
       </div>
     </>;
@@ -1647,6 +1648,7 @@ export function DashboardScreen() {
 
 /** Live Market Feed — real synced news only; honest empty state when none are synced. */
 function LiveFeedList({ companyByTicker }: { companyByTicker: Map<string, CompanyDoc> }) {
+  const showVendor = useShowVendorTags();
   const { data: news, loading } = useApiList<NewsArticleDoc>("/market-data/news", 30000);
   // Same sort + dedupe as the Live Feed screen (news-feed.ts), so these four
   // rows are exactly the top four there, under the same ticker.
@@ -1672,7 +1674,7 @@ function LiveFeedList({ companyByTicker }: { companyByTicker: Map<string, Compan
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: ".66rem", color: "var(--text-dim-solid)", flexWrap: "wrap" }}>
             <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>{catLabel(storyKind(f))}</span>
             <span className="mono">{etTimeLabel(f.publishedAt)} ET</span>
-            <span>· {f.source}</span>
+            {vendorText(f.source, showVendor) && <span>· {f.source}</span>}
           </div>
         </div>
       </div>

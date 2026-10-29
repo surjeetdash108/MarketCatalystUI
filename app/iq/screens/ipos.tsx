@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { cls, sign, StockLogo, DataState, VendorTag, titleCaseLabel} from "../utils";
+import { cls, sign, StockLogo, DataState, VendorTag, useShowVendorTags, titleCaseLabel} from "../utils";
 
 // Same embedded stock detail the Movers drawer uses.
 const StockScreenEmbed = dynamic<{ initialSym?: string }>(
@@ -66,6 +66,7 @@ const ipoStatusLabel = (s: string): string =>
   IPO_STATUS_LABEL[s] ?? s.replace(/_/g, " ");
 
 export function IPOsScreen() {
+  const showVendor = useShowVendorTags();
   const [selectedSym, setSelectedSym] = useState<string | null>(null);
   const [sector, setSector] = useState("All");
   const [query, setQuery] = useState("");
@@ -483,7 +484,7 @@ export function IPOsScreen() {
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Live IPO Calendar</h3><VendorTag v={["fmp", "polygon"]} /></div>
-            <span className="pill ai" style={{ fontSize: ".68rem" }}>live · FMP</span>
+            <span className="pill ai" style={{ fontSize: ".68rem" }}>{showVendor ? "live · FMP" : "live"}</span>
           </div>
           <div className="tbl-wrap">
             <table className="tbl">
