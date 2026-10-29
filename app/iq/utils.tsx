@@ -4,12 +4,41 @@ import type { ChartEarnings } from "./chart-earnings";
 export type { ChartEarnings };
 import { useState, useCallback } from "react";
 import { backendUrl } from "./backend";
+import { useAppSelector } from "../store/hooks";
 
 // ---- TEMPORARY data-source attribution tag ----
 // Shows which upstream vendor supplies a widget's data (Polygon / FMP / FRED /
-// SEC EDGAR), so anyone can visually identify the source. This is a temporary
+// SEC EDGAR), so the team can visually identify the source. This is a temporary
 // diagnostic aid — remove every <VendorTag .../> usage (and this block) later.
 // Search the codebase for "VendorTag" to find them all.
+
+/**
+ * The only accounts that see vendor attribution (every <VendorTag/> pill and
+ * the "live · FMP / Polygon" vendor names). Everyone else — and anyone signed
+ * out — sees the widgets without them. Compared case-insensitively.
+ *
+ * NEXT_PUBLIC_VENDOR_TAG_EMAILS (comma-separated) replaces this list at build
+ * time, the same way NEXT_PUBLIC_ADMIN_EMAIL overrides admin-email.ts.
+ */
+const VENDOR_TAG_EMAILS: readonly string[] = [
+  "vinay@conyxit.com",
+  "likhith@conyxit.com",
+  "arvind@inc108.com",
+  "sanjay.halle@inc108.com",
+];
+
+const VENDOR_TAG_ALLOWED = new Set(
+  (process.env.NEXT_PUBLIC_VENDOR_TAG_EMAILS?.split(",") ?? VENDOR_TAG_EMAILS)
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+/** True when the signed-in account may see data-source attribution. */
+export function useShowVendorTags(): boolean {
+  const email = useAppSelector((s) => s.auth.user?.email);
+  return !!email && VENDOR_TAG_ALLOWED.has(email.trim().toLowerCase());
+}
+
 export type VendorKey = "polygon" | "fmp" | "fred" | "sec" | "firebase";
 
 const VENDOR_META: Record<VendorKey, { label: string; bg: string; fg: string }> = {
@@ -28,6 +57,8 @@ const VENDOR_META: Record<VendorKey, { label: string; bg: string; fg: string }> 
  *   <VendorTag v={["fmp", "polygon"]} />
  */
 export function VendorTag({ v }: { v: VendorKey | VendorKey[] }) {
+  const show = useShowVendorTags();
+  if (!show) return null;
   const list = Array.isArray(v) ? v : [v];
   return (
     <span

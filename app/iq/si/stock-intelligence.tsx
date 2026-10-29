@@ -43,7 +43,7 @@ import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex } from "../calendar-range";
-import { StockLogo, VendorTag } from "../utils";
+import { StockLogo, VendorTag, useShowVendorTags } from "../utils";
 import { resolveActionMeta } from "../analyst-actions-engine";
 import { useHeadlineQuote } from "../quote-headline";
 import { range52 } from "../range52";
@@ -398,6 +398,7 @@ function trendRead(price: number | null, sma50: number | null, sma200: number | 
 const CAT_PAGE_SIZE = 100;
 
 export function StockIntelligenceScreen() {
+  const showVendor = useShowVendorTags();
   const { theme, setTheme } = useIQActions();
   const isLight = theme === "light";
   // The shell's setTheme persists to localStorage + backend, keeping MC in sync.
@@ -3738,7 +3739,7 @@ export function StockIntelligenceScreen() {
                         >
                           {cItem.cat}
                         </span>
-                        {cItem.sourceBadge && (
+                        {cItem.sourceBadge && (showVendor || !/FMP|POLYGON/.test(cItem.sourceBadge)) && (
                           <span
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",

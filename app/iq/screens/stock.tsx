@@ -6,7 +6,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useIQActions, ExpandBtn } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { WatchlistPicker } from "../watchlist-picker";
-import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, type VendorKey, titleCaseLabel, type ChartEarnings, type BarInterval, formatUsDate } from "../utils";
+import { fmt, cls, arr, sign, intervalLabel, TrGauge, RATING_VAL, EarnQ, EarningsGrowthChart, CHART_SCALE, DataState, NotAvailable, StockLogo, VendorTag, useShowVendorTags, type VendorKey, titleCaseLabel, type ChartEarnings, type BarInterval, formatUsDate } from "../utils";
 import { buildChartEarnings } from "../chart-earnings";
 import { StockChart } from "../stock-panel";
 import { exchangeLabel } from "../exchange";
@@ -685,6 +685,7 @@ export function StockScreen({
 } = {}) {
   const { openStock, openStockDetail, openSector } = useIQActions();
   const { enterSI } = useSI();
+  const showVendor = useShowVendorTags();
   const [sym, setSym] = useState(() => {
     if (initialSym) return initialSym;
     if (typeof window !== "undefined") return localStorage.getItem("iq-stock") || "NVDA";
@@ -1834,7 +1835,7 @@ export function StockScreen({
                 )}
                 {isLiveStock && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".52rem", padding: "1px 5px" }}>
-                    live quote · {vendorLabel(liveCompany?.source)}
+                    {showVendor ? `live quote · ${vendorLabel(liveCompany?.source)}` : "live quote"}
                   </span>
                 )}
               </div>
@@ -2054,7 +2055,7 @@ export function StockScreen({
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <VendorTag v={["fmp", "polygon"]} />
                     {financialsDoc && (
-                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · FMP</span>
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>{showVendor ? "live · FMP" : "live"}</span>
                     )}
                     <div className="tf-pills">
                       <button
@@ -2413,7 +2414,7 @@ export function StockScreen({
                     </>) : (
                       <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>None</span>
                     )}
-                    {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · FMP</span>}
+                    {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>{showVendor ? "live · FMP" : "live"}</span>}
                     <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                   </div>
                 </div>
