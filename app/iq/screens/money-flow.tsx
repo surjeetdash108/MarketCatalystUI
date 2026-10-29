@@ -2931,18 +2931,39 @@ export function MoneyFlowScreen() {
               </button>
             </div>
 
-            {/* Glossary Sections */}
+            {/* Glossary Sections — each entry states the basis the backend uses (board.basis) */}
             {[
+              {
+                title: "Data",
+                rows: [
+                  {
+                    term: "Universe",
+                    desc: "S&P 500 and Nasdaq-100 constituents (FMP); a stock in both counts once.",
+                  },
+                  {
+                    term: "Price · % move",
+                    desc: "FMP quote: last price and % change from the previous official close — the same quote the rest of the app shows.",
+                  },
+                  {
+                    term: "Candles",
+                    desc: "Polygon 5-minute bars, regular session 9:30–4:00 ET, 15 minutes delayed. Before the open the board shows the last completed session.",
+                  },
+                ],
+              },
               {
                 title: "Sector Money Flow",
                 rows: [
                   {
                     term: "Money flow ($)",
-                    desc: "For every 5-minute candle of every stock: dollar volume (price × shares traded) × candle direction. A strong green candle counts as buying, a strong red candle as selling, small candles count partially. Sum across the day = the stock’s net flow. A sector’s flow is the sum of its stocks.",
+                    desc: "Money Flow Index method on every 5-minute bar: typical price (high + low + close) ÷ 3 × volume counts as inflow when the typical price rose from the bar before and as outflow when it fell (the first bar compares with the previous close). Net flow = inflow − outflow. A sector’s flow is the sum of its stocks.",
                   },
                   {
                     term: "Sector % (grey)",
-                    desc: "Average % move of the stocks in that sector today.",
+                    desc: "Equal-weighted average % move of the sector’s stocks.",
+                  },
+                  {
+                    term: "Sector",
+                    desc: "The app’s sector for the stock (as on Stock Detail).",
                   },
                   {
                     term: "Bar length",
@@ -2950,11 +2971,11 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Sectors column",
-                    desc: "All 19 sectors, inflows first (biggest at top), then outflows. Every stock belongs to exactly one sector.",
+                    desc: "Every sector with at least one stock in the universe, inflows first (biggest at top), then outflows, minus the ones pulled into the Top 2 boxes.",
                   },
                   {
                     term: "Top 2 boxes",
-                    desc: "The two sectors with the most money flowing in (green) and the two with the most flowing out (red), pulled out of the column into large boxes.",
+                    desc: "The two sectors with the largest positive net flow (green) and the two with the largest negative net flow (red). On a one-sided day there can be fewer.",
                   },
                   {
                     term: "Click / hover",
@@ -2967,15 +2988,11 @@ export function MoneyFlowScreen() {
                 rows: [
                   {
                     term: "S&P · Nasdaq · Oil · Gold",
-                    desc: "Index level and % change for the session. Green = up, red = down.",
-                  },
-                  {
-                    term: "Universe",
-                    desc: "The board scans S&P 500 and Nasdaq-100 stocks together; a stock in both is counted once.",
+                    desc: "S&P 500 (^GSPC), Nasdaq Composite (^IXIC), WTI crude and gold futures from the FMP tape: level and % change. A dash means the tape has no value yet.",
                   },
                   {
                     term: "Breadth bar",
-                    desc: "S&P 500 stocks up vs down for the session (e.g. 135 ▲ / 365 ▼ = 27% advancing). Green share = advancers, red = decliners.",
+                    desc: "S&P 500 constituents up vs down from the previous close (e.g. 387 ▲ / 116 ▼); the % is advancers ÷ all constituents priced.",
                   },
                 ],
               },
@@ -2984,7 +3001,7 @@ export function MoneyFlowScreen() {
                 rows: [
                   {
                     term: "Ranking",
-                    desc: "Top 15 each side by size of the % move. #1–#3 are the Top 3 Bullish / Bearish Stocks cards; #4–#15 are tiles, #15 (smallest move) at top-left.",
+                    desc: "Top 15 each side by % move. #1–#3 are the Top 3 Bullish / Bearish Stocks cards; #4–#15 are tiles, #15 (smallest move) at top-left.",
                   },
                   {
                     term: "Box size",
@@ -2992,23 +3009,23 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Ring number",
-                    desc: "Confidence score 0–100 (see below).",
+                    desc: "Confidence score 1–99 (see below). A dash means no regular-session bars yet.",
                   },
                   {
                     term: "Volume profile",
-                    desc: "Horizontal bars inside a tile: how much volume traded at each price today. Green = buying volume, red = selling volume.",
+                    desc: "Horizontal bars inside a tile: volume traded at each price today (each 5-minute bar’s volume at its mid price). Green = up bars, red = down bars.",
                   },
                   {
                     term: "POC",
-                    desc: "Point of control — the price where the most volume traded today. Acts as a magnet / pivot.",
+                    desc: "Point of control — the price band with the most volume today.",
                   },
                   {
                     term: "Purple dashed line",
-                    desc: "VWAP — volume-weighted average price. Above it buyers are in control for the day, below it sellers.",
+                    desc: "VWAP — regular-session volume-weighted average price.",
                   },
                   {
                     term: "White line + arrow",
-                    desc: "Current price.",
+                    desc: "Last 5-minute close.",
                   },
                   {
                     term: "vs sector",
@@ -3016,52 +3033,56 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "30m",
-                    desc: "Price change over the last 30 minutes — is it still pushing or fading?",
+                    desc: "Change over the last 30 minutes (six 5-minute bars), in % of the previous close.",
                   },
                   {
                     term: "Tag",
-                    desc: "ACCUMULATION / DISTRIBUTION = strong move on heavy volume (≥1.4× normal). MOMENTUM UP / DOWN = moving on normal volume.",
+                    desc: "ACCUMULATION / DISTRIBUTION = relative volume ≥ 1.4×. MOMENTUM UP / DOWN = below that.",
+                  },
+                  {
+                    term: "Relative volume",
+                    desc: "Day volume ÷ (20-session average daily volume × share of the regular session elapsed).",
                   },
                 ],
               },
               {
-                title: "Confidence score (0–100)",
+                title: "Confidence score (1–99)",
                 rows: [
                   {
                     term: "Trend · 30",
-                    desc: "Where the move ranks among stocks moving the same way today (biggest mover ≈ full marks).",
+                    desc: "Where the move ranks among the universe’s stocks moving the same way today (biggest mover = full marks).",
                   },
                   {
                     term: "Rel. volume · 15",
-                    desc: "Volume vs normal pace. Full marks at ~2.2×.",
+                    desc: "0 at 0.8× normal pace, full marks at 2.2×.",
                   },
                   {
                     term: "VWAP · 15",
-                    desc: "On the right side of VWAP for its direction = 9+, more the further it holds. Wrong side = 0–3.",
+                    desc: "Last close on the right side of VWAP for its direction = 9+, more the further it holds (full at 0.6%). Wrong side = 0–3.",
                   },
                   {
                     term: "30m momentum · 10",
-                    desc: "Is the last 30 minutes still moving in the trend direction?",
+                    desc: "Last 30 minutes still moving in the trend direction (5 = flat, full at 0.2%).",
                   },
                   {
                     term: "Structure · 10",
-                    desc: "Recent swings making higher highs/lows (bull) or lower highs/lows (bear).",
+                    desc: "Share of the last three swing highs and lows stepping in the trend direction (0 with no swings yet).",
                   },
                   {
                     term: "Sector flow · 10",
-                    desc: "Its sector’s money flowing the same way.",
+                    desc: "Its sector’s net flow in the same direction, relative to the largest sector flow.",
                   },
                   {
                     term: "Big money · 10",
-                    desc: "Share of buying vs selling flow in the stock.",
+                    desc: "The stock’s inflow share of money flow (5 at 50%, full at 70% for longs / 30% for shorts).",
                   },
                   {
                     term: "Order block · +5",
-                    desc: "Bonus for an unfilled order block close to price.",
+                    desc: "Bonus for an unmitigated order block on its side: 5 with price at the block, easing to 1.5 at 1.5% away or more; 0 with none.",
                   },
                   {
                     term: "Adjustment",
-                    desc: "×0.88 if the stock is choppy (light volume or tiny move).",
+                    desc: "×0.88 if the stock is choppy: relative volume under 1.05×, or a move smaller than 0.6% × min(1, 0.35 + share of session elapsed).",
                   },
                 ],
               },
@@ -3069,57 +3090,32 @@ export function MoneyFlowScreen() {
                 title: "Hover box & levels",
                 rows: [
                   {
-                    term: "Rank",
-                    desc: "Position among the 15 gainers or losers by % move.",
+                    term: "Setup",
+                    desc: "Choppy (see Adjustment above), otherwise Bullish or Bearish by the direction of the move.",
                   },
                   {
-                    term: "Vol · % buy",
-                    desc: "Volume vs normal, and share of up-volume.",
+                    term: "Mkt Cap",
+                    desc: "Polygon weighted shares outstanding × price, as on Stock Detail.",
                   },
                   {
-                    term: "Δ",
-                    desc: "Net shares bought minus sold today.",
+                    term: "Net Flow",
+                    desc: "The stock’s money flow today (see Money flow above).",
                   },
                   {
-                    term: "OB / Zone",
-                    desc: "Order block: the last opposite candle before a strong move — where big orders sat. The zone is the one price would most likely react at.",
+                    term: "R1 · R2 · S1 · S2",
+                    desc: "Classic pivot levels from the previous session’s high and low and its official close.",
                   },
                   {
-                    term: "R1 · R2",
-                    desc: "Resistance levels above price (first and second target for longs).",
-                  },
-                  {
-                    term: "S1 · S2",
-                    desc: "Support levels below price (first and second target for shorts).",
-                  },
-                  {
-                    term: "Z/S1 · Z/R1",
-                    desc: "Entry at the zone and the stop level.",
+                    term: "Zone",
+                    desc: "The most recent unmitigated order block on the side of the move (5-minute bars): the last opposite candle before a move of more than 0.18%. A dash means none today.",
                   },
                   {
                     term: "R:R",
-                    desc: "Reward-to-risk: distance to target ÷ distance to stop.",
-                  },
-                  {
-                    term: "Rule (3 types)",
-                    desc: (
-                      <>
-                        Every stock gets one of three.{" "}
-                        <b style={{ color: "#e6ebe8" }}>PICK</b> — trending with
-                        real volume and price within 1.2% of its order zone:
-                        actionable now. <b style={{ color: "#eef2f4" }}>WATCH</b>{" "}
-                        — trending, but price is more than 1.2% from the zone:
-                        wait for a pullback.{" "}
-                        <b style={{ color: "#eef2f4" }}>NO SETUP</b> — choppy
-                        (move too small for the time of day, or volume under
-                        1.05× normal): stay out. The #number after PICK/WATCH is
-                        its rank among the 15 on its side.
-                      </>
-                    ),
+                    desc: "Entry at the zone edge nearest price, stop at its far edge, target at the first pivot level beyond both: |target − entry| ÷ |entry − stop|. A dash means no zone, or price is already past every pivot level.",
                   },
                   {
                     term: "Timeframe",
-                    desc: "1m · 3m · 5m · 15m candles for the chart.",
+                    desc: "1m · 3m · 5m · 15m candles for the chart, grouped from Polygon 1-minute bars.",
                   },
                 ],
               },
@@ -3128,34 +3124,27 @@ export function MoneyFlowScreen() {
                 rows: [
                   {
                     term: "Order blocks",
-                    desc: "Green (bull) / red (bear) boxes from the last opposite candle before a strong move. Faded once price closes back through.",
+                    desc: "Green (bull) / red (bear) boxes from the last opposite candle before a strong move, on the chart’s timeframe. Faded once price trades back through. The gold box is the board’s zone.",
                   },
                   {
                     term: "VWAP",
-                    desc: "Purple dashed line.",
+                    desc: "Purple dashed line: regular-session VWAP.",
                   },
                   {
                     term: "FVG",
-                    desc: "Fair value gap — a 3-candle price gap the market often comes back to fill. Fades once filled.",
+                    desc: "Fair value gap — a 3-candle price gap. Fades once filled.",
                   },
                   {
                     term: "Liquidity",
-                    desc: 'BSL (above swing highs) and SSL (below swing lows) — where stop orders cluster. “✕ swept” once price has taken them.',
+                    desc: "BSL (above swing highs) and SSL (below swing lows) — where stop orders cluster. “✕ swept” once price has taken them.",
                   },
                   {
                     term: "Structure",
                     desc: (
                       <>
-                        Everything market-structure in one toggle:{" "}
                         <b style={{ color: "#eef2f4" }}>HH / HL / LH / LL</b>{" "}
                         swing labels · <b style={{ color: "#eef2f4" }}>BOS</b>{" "}
-                        (break of structure, trend continues) and{" "}
-                        <b style={{ color: "#eef2f4" }}>CHoCH</b> (change of
-                        character, trend flips) ·{" "}
-                        <b style={{ color: "#eef2f4" }}>EQH / EQL</b> equal
-                        highs/lows (liquidity pools) ·{" "}
-                        <b style={{ color: "#eef2f4" }}>Double top / bottom</b>{" "}
-                        once the neckline breaks ·{" "}
+                        (a close beyond a prior swing) ·{" "}
                         <b style={{ color: "#eef2f4" }}>Trendlines</b> through the
                         last two swing highs and lows, with the pattern they form
                         (ascending / descending / symmetrical triangle, rising /
@@ -3164,12 +3153,11 @@ export function MoneyFlowScreen() {
                         low of day ·{" "}
                         <b style={{ color: "#eef2f4" }}>ORH / ORL</b> opening-range
                         high/low (first 30 min) ·{" "}
-                        <b style={{ color: "#eef2f4" }}>PDH / PDL</b> previous day
-                        high/low ·{" "}
+                        <b style={{ color: "#eef2f4" }}>PDH / PDL</b> previous
+                        session high/low ·{" "}
                         <b style={{ color: "#eef2f4" }}>Premium / Discount</b>{" "}
                         halves of today’s range split at{" "}
-                        <b style={{ color: "#eef2f4" }}>EQ 50%</b> — longs are
-                        better taken in discount, shorts in premium.
+                        <b style={{ color: "#eef2f4" }}>EQ 50%</b>.
                       </>
                     ),
                   },
