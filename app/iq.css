@@ -13646,6 +13646,7 @@ h6.sd-sec {
 .iq-root .alpha-txt span { font-size: .78rem; color: var(--text-dim-solid); }
 .iq-root .alpha-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .iq-root .alpha-chip { font-family: var(--f-mono); font-size: .72rem; padding: 4px 8px; border-radius: 6px; background: var(--surface-0); border: 1px solid var(--border); color: var(--text-hi); }
+.iq-root .alpha-chip.ph { width: 96px; opacity: .55; }
 .iq-root .alpha-go { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; border: 1px solid rgba(139, 124, 246, .35); color: #b3a8ff; }
 
 /* Screener hub: sub-tabs */
