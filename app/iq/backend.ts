@@ -204,8 +204,19 @@ function sectorReviver(key: string, value: unknown): unknown {
   return value;
 }
 
+/**
+ * GETs already on the wire, by path. The shell and the dashboard both mount
+ * useApiList("/market-data/companies") (and sectors/earnings) at load; without
+ * this each fires its own request at an already-saturated backend.
+ */
+const inflightGets = new Map<string, Promise<unknown>>();
+
 export function apiGet<T>(path: string): Promise<T> {
-  return request<T>(path);
+  const running = inflightGets.get(path);
+  if (running) return running as Promise<T>;
+  const p = request<T>(path).finally(() => inflightGets.delete(path));
+  inflightGets.set(path, p);
+  return p;
 }
 
 export function apiPost<T>(path: string, body?: unknown): Promise<T> {
