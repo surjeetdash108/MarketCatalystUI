@@ -1,88 +1,225 @@
 /**
- * Money Flow Engine
- * Pure TypeScript implementation of the institutional Money Flow and Order Block calculations
- * ported from MarketCatalystDashboard.html
+ * Money Flow — view helpers over the backend board (GET /live/money-flow).
+ *
+ * Every number comes from the board: the backend computes flows, levels and
+ * scores from Polygon bars and FMP quotes (money-flow.calc.ts, where each basis
+ * is documented and returned as `board.basis`). This file only formats, maps
+ * and lays out; the popover chart's 1/3/5/15-minute candles are grouped here
+ * from real 1-minute bars.
  */
 
-import {
-  SP500_CONSTITUENTS,
-  SECTORS_LIST,
-  SECTOR_BIAS,
-  type SectorName,
-} from "./data";
+// ── Board payload (mirrors the backend's MoneyFlowBoard) ────────────────────
 
-export interface StockBase {
-  t: string;
-  name: string;
-  grp: string;
-  sec: string;
-  p0: number;
-  fm: number;
-  vol: number;
-  trend: number;
-  path: number[];
-  vb: number[];
-  wick: number[][];
-  sh: number;
+export interface PivotLevels {
+  pivot: number | null;
+  r1: number | null;
+  r2: number | null;
+  r3: number | null;
+  s1: number | null;
+  s2: number | null;
+  s3: number | null;
 }
 
-export interface CompanyMarketData {
-  marketCap?: number | null;
-  price?: number | null;
-  pctChange?: number | null;
-  rvol?: number | null;
-  dayVolume?: number | null;
-  keyLevels?: {
-    daily?: {
-      pivot?: number | null;
-      r1?: number | null;
-      r2?: number | null;
-      r3?: number | null;
-      s1?: number | null;
-      s2?: number | null;
-      s3?: number | null;
-    } | null;
-  } | null;
-}
-
-export interface StockSession extends StockBase {
-  k: number;
-  mv: number;
-  px: number;
-  bull: boolean;
-  chop: boolean;
-  marketCap?: number;
-  dayVolume?: number;
-  zi: number;
-  zLo: number;
-  zHi: number;
-  R1: number;
-  R2: number;
-  R3: number;
-  S1: number;
-  S2: number;
-  entry: number;
-  stop: number;
-  tgt: number;
-  rr: number;
-  dist: number;
-  score: number;
-}
-
-export interface OHLCVBar {
+export interface BoardBar {
+  t: number;
   o: number;
-  c: number;
   h: number;
   l: number;
+  c: number;
+  v: number;
+  vwap: number;
+}
+
+export interface BoardStock {
+  t: string;
+  name: string | null;
+  sector: string | null;
+  inSp500: boolean;
+  inNasdaq100: boolean;
+  price: number;
+  prevClose: number;
+  pctChange: number;
+  marketCap: number | null;
+  dayVolume: number | null;
+  avgVolume20: number | null;
+  rvol: number | null;
+  vwap: number | null;
+  netFlow: number;
+  buyPct: number | null;
+  m30: number | null;
+  vsSector: number | null;
+  chop: boolean;
+  pivots: PivotLevels | null;
+  prevHigh: number | null;
+  prevLow: number | null;
+  zone: { lo: number; hi: number; startT: number } | null;
+  entry: number | null;
+  stop: number | null;
+  target: number | null;
+  rr: number | null;
+  confidence: { score: number; parts: Array<[string, number, number]> } | null;
+  bars: BoardBar[];
+}
+
+export interface BoardSector {
+  name: string;
+  netFlow: number;
+  inflow: number;
+  outflow: number;
+  buyPct: number | null;
+  avgPct: number;
+  count: number;
+}
+
+export interface MoneyFlowBoard {
+  asOf: string;
+  sessionDate: string;
+  prevSessionDate: string | null;
+  sessionComplete: boolean;
+  barsThrough: number | null;
+  delayMinutes: number;
+  universe: { sp500: number; nasdaq100: number; total: number; priced: number; withBars: number };
+  breadth: { advancers: number; decliners: number; unchanged: number; total: number };
+  sectors: BoardSector[];
+  gainers: BoardStock[];
+  losers: BoardStock[];
+  basis: Record<string, string>;
+}
+
+// ── Formatting ──────────────────────────────────────────────────────────────
+
+export function formatCurrency(n: number): string {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/** Signed flow: +$840M, −$2.4B, +$1.05T. */
+export function formatCompactDollars(v: number): string {
+  const abs = Math.abs(v);
+  const sign = v >= 0 ? "+$" : "−$";
+  if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(1)}B`;
+  return `${sign}${(abs / 1e6).toFixed(0)}M`;
+}
+
+/** Unsigned size: $5.11T, $75.3B, $840M. */
+export function formatMarketCap(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v) || v <= 0) return "—";
+  return formatCompactDollars(v).replace(/^\+/, "");
+}
+
+export function formatPct(v: number): string {
+  const s = v > 0 ? "+" : v < 0 ? "−" : "";
+  return `${s}${Math.abs(v).toFixed(2)}%`;
+}
+
+/** An index card's level and move from the tape, or dashes when the tape has none. */
+export function indexCard(
+  item: { value: number; pctChange: number } | undefined,
+  fmt: (v: number) => string,
+): { px: string; chg: string; isUp: boolean | null } {
+  if (!item || !Number.isFinite(item.value) || !Number.isFinite(item.pctChange)) {
+    return { px: "—", chg: "—", isUp: null };
+  }
+  const isUp = item.pctChange >= 0;
+  return { px: fmt(item.value), chg: `${isUp ? "+" : ""}${item.pctChange.toFixed(2)}%`, isUp };
+}
+
+/** A price, or an em dash when the level does not exist. */
+export function formatLevel(v: number | null | undefined, dp = 2): string {
+  return v == null || !Number.isFinite(v) ? "—" : v.toFixed(dp);
+}
+
+// ── Candles ─────────────────────────────────────────────────────────────────
+
+export interface OHLCVBar {
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+  /** Regular-session VWAP through this bar. */
   vw: number;
 }
 
-export interface DollarFlowResult {
-  net: number;
-  netTxt: string;
-  buy: number;
-  hours: Array<{ l: string; h: string; c: string }>;
+export function boardCandles(s: BoardStock): OHLCVBar[] {
+  return s.bars.map((b) => ({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v, vw: b.vwap }));
 }
+
+const ET_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/** ET calendar date and minutes after midnight of an instant (DST-aware). */
+export function etClock(ms: number): { date: string; minutes: number } {
+  const p = Object.fromEntries(ET_FMT.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, minutes: (Number(p.hour) % 24) * 60 + Number(p.minute) };
+}
+
+/** "1:25 PM" in ET. */
+export function etTimeLabel(ms: number): string {
+  return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+}
+
+/** "Oct 29" for a YYYY-MM-DD session date. */
+export function sessionDateLabel(iso: string): string {
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+const OPEN_MIN = 9 * 60 + 30;
+const CLOSE_MIN = 16 * 60;
+
+/**
+ * `tf`-minute candles of `sessionDate`'s regular session from 1-minute bars,
+ * grouped on the clock (09:30, 09:35, … for 5m) with the running session VWAP.
+ */
+export function sessionCandles(
+  bars1m: Array<{ t: number; o: number; h: number; l: number; c: number; v: number; vw?: number | null }>,
+  sessionDate: string,
+  tf: number,
+): OHLCVBar[] {
+  const out: OHLCVBar[] = [];
+  let pv = 0;
+  let vol = 0;
+  let slot = -1;
+  for (const b of [...bars1m].sort((a, z) => a.t - z.t)) {
+    const { date, minutes } = etClock(b.t);
+    if (date !== sessionDate || minutes < OPEN_MIN || minutes >= CLOSE_MIN) continue;
+    const v = Number.isFinite(b.v) && b.v > 0 ? b.v : 0;
+    pv += (b.vw != null && Number.isFinite(b.vw) ? b.vw : (b.h + b.l + b.c) / 3) * v;
+    vol += v;
+    const vw = vol > 0 ? pv / vol : b.c;
+    const s = Math.floor((minutes - OPEN_MIN) / tf);
+    if (s !== slot) {
+      slot = s;
+      out.push({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v, vw });
+    } else {
+      const cur = out[out.length - 1];
+      cur.h = Math.max(cur.h, b.h);
+      cur.l = Math.min(cur.l, b.l);
+      cur.c = b.c;
+      cur.v += v;
+      cur.vw = vw;
+    }
+  }
+  return out;
+}
+
+/** Index of the first candle at or after `t` (the zone's start), else -1. */
+export function candleIndexAt(c: Array<{ t: number }>, t: number): number {
+  return c.findIndex((x) => x.t >= t);
+}
+
+// ── Structure (chart layers) ────────────────────────────────────────────────
 
 export interface OrderBlock {
   i: number;
@@ -99,11 +236,49 @@ export interface SwingPoint {
   hi: boolean;
 }
 
-export interface ConfidenceResult {
-  sc: number;
-  parts: Array<[string, number, number]>;
-  pen: number;
+/** Same definition as the backend: strict swing high/low over `n` bars each side. */
+export function computeSwings(c: Array<Pick<OHLCVBar, "h" | "l">>, n: number = 3): SwingPoint[] {
+  const S: SwingPoint[] = [];
+  for (let i = n; i < c.length - n; i++) {
+    let H = true;
+    let L = true;
+    for (let j = i - n; j <= i + n; j++) {
+      if (j === i) continue;
+      if (c[j].h >= c[i].h) H = false;
+      if (c[j].l <= c[i].l) L = false;
+    }
+    if (H) S.push({ i, p: c[i].h, hi: true });
+    if (L) S.push({ i, p: c[i].l, hi: false });
+  }
+  return S;
 }
+
+/** Same definition as the backend: last opposite candle before a >0.18% displacement. */
+export function computeOrderBlocks(c: Array<Pick<OHLCVBar, "o" | "h" | "l" | "c">>): OrderBlock[] {
+  const OB: OrderBlock[] = [];
+  for (let i = 2; i < c.length - 2; i++) {
+    const bar = c[i];
+    const nxt1 = c[i + 1];
+    const nxt2 = c[i + 2];
+    const bullImb = bar.c < bar.o && nxt1.c > nxt1.o && (nxt2.c - bar.h) / bar.h > 0.0018;
+    const bearImb = bar.c > bar.o && nxt1.c < nxt1.o && (bar.l - nxt2.c) / bar.l > 0.0018;
+    if (bullImb || bearImb) {
+      let mit = false;
+      let end = c.length - 1;
+      for (let j = i + 2; j < c.length; j++) {
+        if (bullImb ? c[j].l <= bar.l : c[j].h >= bar.h) {
+          mit = true;
+          end = j;
+          break;
+        }
+      }
+      OB.push({ i, hi: bar.h, lo: bar.l, bull: bullImb, mit, end });
+    }
+  }
+  return OB.slice(-6);
+}
+
+// ── Sectors ─────────────────────────────────────────────────────────────────
 
 export interface SectorFlowItem {
   name: string;
@@ -111,11 +286,63 @@ export interface SectorFlowItem {
   flowFormatted: string;
   avgPct: number;
   avgPctFormatted: string;
+  buyPct: number | null;
   barWidthPct: string;
   color: string;
   stockCount: number;
   isPositive: boolean;
 }
+
+/**
+ * Sector list (inflows first), the two largest inflows, the two largest
+ * outflows, and the rest. A sector is an inflow only with net flow > 0 and an
+ * outflow only with net flow < 0, so a one-sided day shows fewer boxes rather
+ * than mislabelling a sector.
+ */
+export function sectorView(sectors: BoardSector[]): {
+  sectors: SectorFlowItem[];
+  top2Inflow: SectorFlowItem[];
+  top2Outflow: SectorFlowItem[];
+  remaining: SectorFlowItem[];
+} {
+  const maxAbs = Math.max(1, ...sectors.map((s) => Math.abs(s.netFlow)));
+  const list: SectorFlowItem[] = [...sectors]
+    .sort((a, b) => b.netFlow - a.netFlow)
+    .map((s) => ({
+      name: s.name,
+      flowVal: s.netFlow,
+      flowFormatted: formatCompactDollars(s.netFlow),
+      avgPct: s.avgPct,
+      avgPctFormatted: formatPct(s.avgPct),
+      buyPct: s.buyPct,
+      barWidthPct: `${Math.max(4, Math.min(100, (Math.abs(s.netFlow) / maxAbs) * 100))}%`,
+      color: s.netFlow >= 0 ? "#3ddc84" : "#f0565a",
+      stockCount: s.count,
+      isPositive: s.netFlow >= 0,
+    }));
+  const top2Inflow = list.filter((s) => s.flowVal > 0).slice(0, 2);
+  const top2Outflow = list.filter((s) => s.flowVal < 0).slice(-2).reverse();
+  const pulled = new Set([...top2Inflow, ...top2Outflow].map((s) => s.name));
+  return { sectors: list, top2Inflow, top2Outflow, remaining: list.filter((s) => !pulled.has(s.name)) };
+}
+
+/**
+ * Notice when the highlighted sector has no stock among the 15 gainers or 15
+ * losers, so its highlight would otherwise show nothing.
+ */
+export function sectorNotOnBoardText(
+  sector: string | null,
+  sectors: BoardSector[],
+  onBoard: BoardStock[],
+): string {
+  if (!sector) return "";
+  const row = sectors.find((s) => s.name === sector);
+  if (!row || row.count === 0 || onBoard.some((s) => s.sector === sector)) return "";
+  const n = row.count;
+  return `No ${sector} stock is in today’s top 15 gainers or losers — its ${n} stock${n > 1 ? "s are" : " is"} counted in the sector flow only.`;
+}
+
+// ── Tiles (#4–#15 each side) ────────────────────────────────────────────────
 
 export interface TileLayout {
   t: string;
@@ -126,7 +353,7 @@ export interface TileLayout {
   rank: string;
   chg: string;
   px: string;
-  conf: number;
+  conf: number | null;
   confC: string;
   confDeg: string;
   ringS: string;
@@ -145,596 +372,38 @@ export interface TileLayout {
   volx: string;
   bg: string;
   bd: string;
-  glow: string;
-  prof: Array<{ h: string; w: string; c: string }>;
-  lbls: Array<{ l: string; r: string; top: string; c: string; txt: string }>;
 }
 
-export function zRng(seed: string): () => number {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  }
-  return () => {
-    h ^= h << 13;
-    h ^= h >>> 17;
-    h ^= h << 5;
-    return ((h >>> 0) % 10000) / 10000;
-  };
-}
-
-export function formatCurrency(n: number): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-export function formatCompactDollars(v: number): string {
-  const abs = Math.abs(v);
-  const sign = v >= 0 ? "+$" : "−$";
-  if (abs >= 1e9) {
-    return `${sign}${(abs / 1e9).toFixed(1)}B`;
-  }
-  return `${sign}${(abs / 1e6).toFixed(0)}M`;
-}
-
-export function formatPct(v: number): string {
-  const s = v > 0 ? "+" : v < 0 ? "−" : "";
-  return `${s}${Math.abs(v).toFixed(2)}%`;
-}
-
-let cachedBase: StockBase[] | null = null;
-
-export function getBaseUniverse(): StockBase[] {
-  if (cachedBase) return cachedBase;
-
-  cachedBase = SP500_CONSTITUENTS.map(([t, name, sec, p0x, realMv, realVol]) => {
-    const r = zRng(t);
-    const bias = SECTOR_BIAS[sec] ?? 0;
-    const fm = realMv ?? +(bias + (r() - 0.5) * 4.4).toFixed(2);
-    const p = realMv != null ? p0x / (1 + fm / 100) : p0x;
-    const vol = +(
-      realVol ?? (0.85 + Math.min(1.5, Math.abs(fm) * 0.28) + r() * 0.25)
-    ).toFixed(2);
-    const trend = 0.35 + r() * 0.65;
-
-    const pr = zRng(t + "path");
-    const N = 79;
-    const path: number[] = [(pr() - 0.5) * 0.5];
-    let v = path[0];
-    const rev = trend < 0.22;
-
-    for (let i = 1; i < N; i++) {
-      const left = N - 1 - i;
-      const goal = rev && i < 40 ? -fm * 0.5 : fm;
-      v +=
-        ((goal - v) / (Math.max(1, rev && i < 40 ? 40 - i : left) + 1)) *
-          (0.5 + pr()) +
-        (pr() - 0.5) * 0.26 * (1 + Math.abs(fm) / 3);
-      path.push(i === N - 1 ? fm : v);
-    }
-
-    const vb = path.map((x, i) => {
-      const u = 1 + 0.9 * Math.exp(-i / 8) + 0.5 * Math.exp(-(78 - i) / 6);
-      return u * (0.6 + pr() * 0.8) * (1 + Math.abs(x - (path[i - 1] ?? x)) * 2);
-    });
-    const vs = vb.reduce((a, b) => a + b, 0);
-
-    const cr = zRng(t + "cand");
-    const wick = path.map(() => [cr(), cr()]);
-    const sh = (1.5e9 + zRng(t + "m")() * 5e9) / p;
-
-    return {
-      t,
-      name,
-      grp: sec,
-      sec,
-      p0: p,
-      fm,
-      vol,
-      trend,
-      path,
-      vb: vb.map((x) => x / vs),
-      wick,
-      sh,
-    };
-  });
-
-  return cachedBase;
-}
-
-export function computeSessionK(progress01: number): number {
-  return Math.max(1, Math.min(78, Math.round(progress01 * 78)));
-}
-
-export function computeStockSession(
-  progress01: number,
-  companyOverrides?: Map<string, CompanyMarketData>
-): StockSession[] {
-  const k = computeSessionK(progress01);
-  const thr = 0.6 * Math.min(1, 0.35 + k / 78);
-
-  return getBaseUniverse().map((b) => {
-    const P = (v: number) => b.p0 * (1 + v / 100);
-    const seg = b.path && b.path.length ? b.path.slice(0, k + 1) : [0];
-    const mv = +(seg[Math.min(k, seg.length - 1)] ?? 0).toFixed(2);
-    const px = P(mv);
-    const bull = mv > 0;
-
-    // FMP overrides for market cap, volume, RVOL, and key levels
-    const ov = companyOverrides?.get(b.t);
-    const mcap = ov?.marketCap != null && ov.marketCap > 0 ? ov.marketCap : undefined;
-    const sh = mcap != null ? mcap / (px || b.p0) : b.sh;
-    const realRvol = ov?.rvol != null && ov.rvol > 0 ? ov.rvol : null;
-    const vol = realRvol != null
-      ? +realRvol.toFixed(2)
-      : +Math.max(
-          0.6,
-          Math.min(3, b.vol * (0.85 + 0.3 * Math.sin(k / 9 + b.p0)))
-        ).toFixed(2);
-    const chop = Math.abs(mv) < thr || vol < 1.05;
-
-    let zi = 0;
-    let zLo = 0;
-    let zHi = 0;
-    let R1 = 0;
-    let R2 = 0;
-    let R3 = 0;
-    let S1 = 0;
-    let S2 = 0;
-
-    if (bull) {
-      zi = seg.indexOf(Math.min(...seg));
-      zLo = P(seg[zi]) * (1 - 0.0008);
-      zHi = zLo * 1.003;
-      S1 = zLo * 0.997;
-      S2 = S1 * 0.996;
-      R1 = Math.max(P(Math.max(...seg)), px * 1.002);
-      R2 = R1 * 1.005;
-      R3 = R2 * 1.006;
-    } else {
-      zi = seg.indexOf(Math.max(...seg));
-      zHi = P(seg[zi]) * (1 + 0.0008);
-      zLo = zHi * 0.997;
-      R1 = zHi * 1.003;
-      R2 = R1 * 1.004;
-      R3 = R2 * 1.005;
-      S1 = Math.min(P(Math.min(...seg)), px * 0.998);
-      S2 = S1 * 0.995;
-    }
-
-    // Accurate FMP Support & Resistance Classic Pivot Levels when available
-    const kl = ov?.keyLevels?.daily;
-    if (kl && typeof kl.r1 === "number" && typeof kl.s1 === "number" && kl.r1 > 0 && kl.s1 > 0) {
-      R1 = kl.r1;
-      R2 = typeof kl.r2 === "number" && kl.r2 > 0 ? kl.r2 : R1 * 1.008;
-      R3 = typeof kl.r3 === "number" && kl.r3 > 0 ? kl.r3 : R2 * 1.008;
-      S1 = kl.s1;
-      S2 = typeof kl.s2 === "number" && kl.s2 > 0 ? kl.s2 : S1 * 0.992;
-      if (typeof kl.pivot === "number" && kl.pivot > 0) {
-        zLo = Math.min(kl.pivot, S1);
-        zHi = Math.max(kl.pivot, R1);
-      } else {
-        zLo = S1;
-        zHi = R1;
-      }
-    }
-
-    const entry = bull ? zHi : zLo;
-    const stop = bull ? S1 : R1;
-    const tgt = bull ? R2 : S2;
-    const rr = Math.abs(tgt - entry) / (Math.abs(entry - stop) || 1);
-    const dist = (Math.abs(px - entry) / (px || 1)) * 100;
-    const score = chop
-      ? 0
-      : Math.min(
-          99,
-          Math.round(
-            Math.abs(mv) * 15 +
-              (vol - 1) * 18 +
-              b.trend * 14 +
-              Math.max(0, 8 - dist * 6)
-          )
-        );
-
-    return {
-      ...b,
-      sh,
-      marketCap: mcap ?? (sh * px),
-      dayVolume: ov?.dayVolume ?? undefined,
-      k,
-      mv,
-      px,
-      bull,
-      chop,
-      vol,
-      zi,
-      zLo,
-      zHi,
-      R1,
-      R2,
-      R3,
-      S1,
-      S2,
-      entry,
-      stop,
-      tgt,
-      rr,
-      dist,
-      score,
-    };
-  });
-}
-
-export function computeCandles(s: StockSession): OHLCVBar[] {
-  const baseP0 =
-    s.px && Number.isFinite(s.px) && s.px > 0 && s.mv != null && s.mv !== -100
-      ? s.px / (1 + s.mv / 100)
-      : s.p0 || 100;
-  const P = (v: number) => baseP0 * (1 + v / 100);
-  const c: OHLCVBar[] = [];
-  let cv = 0;
-  let cpv = 0;
-
-  const path = s.path && s.path.length ? s.path : [s.mv || 0];
-  const wick = s.wick && s.wick.length ? s.wick : path.map(() => [0.5, 0.5]);
-  const vb = s.vb && s.vb.length ? s.vb : path.map(() => 1 / Math.max(1, path.length));
-  const kLimit = Math.min(s.k ?? 78, path.length - 1);
-
-  for (let i = 0; i <= kLimit; i++) {
-    const o = P(i ? path[i - 1] : path[0] - 0.05);
-    const cl = P(path[i]);
-    const w = wick[i] || [0.5, 0.5];
-    const h = Math.max(o, cl) + (w[0] ?? 0.5) * baseP0 * 0.0012;
-    const l = Math.min(o, cl) - (w[1] ?? 0.5) * baseP0 * 0.0012;
-    const vbi = vb[i] ?? (1 / 78);
-    cv += vbi;
-    cpv += (vbi * (h + l + cl)) / 3;
-    c.push({ o, c: cl, h, l, vw: cpv / (cv || 1) });
-  }
-
-  if (c.length === 0) {
-    const fallbackPx = s.px || baseP0;
-    c.push({ o: fallbackPx, c: fallbackPx, h: fallbackPx * 1.001, l: fallbackPx * 0.999, vw: fallbackPx });
-  }
-
-  return c;
-}
-
-export function computeTfCandles(
-  s: StockSession,
-  c: OHLCVBar[],
-  tf: number
-): OHLCVBar[] {
-  if (!tf || tf === 5) return c;
-  const agg = (a: OHLCVBar[], n: number) => {
-    const o: OHLCVBar[] = [];
-    for (let i = 0; i < a.length; i += n) {
-      const g = a.slice(i, i + n);
-      o.push({
-        o: g[0].o,
-        c: g[g.length - 1].c,
-        h: Math.max(...g.map((x) => x.h)),
-        l: Math.min(...g.map((x) => x.l)),
-        vw: g[g.length - 1].vw,
-      });
-    }
-    return o;
-  };
-
-  if (tf === 15) return agg(c, 3);
-
-  // 1m candles: interpolate 5 sub-bars per 5m candle
-  const r = zRng(s.t + "1m");
-  const m: OHLCVBar[] = [];
-  c.forEach((b, bi) => {
-    const pv = c[bi - 1] ? c[bi - 1].vw : b.vw;
-    const hiAt = 1 + Math.floor(r() * 3);
-    const loAt = 1 + Math.floor(r() * 3);
-    const pts = [b.o];
-    for (let j = 1; j < 5; j++) {
-      const base = b.o + ((b.c - b.o) * j) / 5 + (r() - 0.5) * (b.h - b.l) * 0.35;
-      pts.push(
-        j === hiAt && hiAt !== loAt
-          ? b.h
-          : j === loAt
-          ? b.l
-          : Math.min(b.h, Math.max(b.l, base))
-      );
-    }
-    pts.push(b.c);
-
-    for (let j = 0; j < 5; j++) {
-      const o = pts[j];
-      const cl = pts[j + 1];
-      const w = (b.h - b.l) * 0.12 * r();
-      m.push({
-        o,
-        c: cl,
-        h: Math.min(b.h, Math.max(o, cl) + w),
-        l: Math.max(b.l, Math.min(o, cl) - w),
-        vw: pv + ((b.vw - pv) * (j + 1)) / 5,
-      });
-    }
-  });
-
-  return tf === 1 ? m : agg(m, 3);
-}
-
-export function computeDollarFlow(
-  x: StockSession,
-  candles?: OHLCVBar[]
-): DollarFlowResult {
-  const c = candles ?? computeCandles(x);
-  let net = 0;
-  let gross = 0;
-  const grp = [
-    [0, 6],
-    [6, 18],
-    [18, 30],
-    [30, 42],
-    [42, 54],
-    [54, 66],
-    [66, 79],
-  ];
-  const hv = grp.map(() => 0);
-
-  // Daily traded share volume baseline:
-  // Active S&P 500 stocks turn over ~0.4% - 1.2% of total shares per day.
-  // Using actual dayVolume if available, otherwise shares * realistic daily turnover rate.
-  const estDayShares = (x.dayVolume && x.dayVolume > 0)
-    ? x.dayVolume
-    : (x.sh * 0.006 * Math.max(0.5, x.vol || 1));
-
-  c.forEach((b, i) => {
-    const vbi = (x.vb && x.vb[i] != null) ? x.vb[i] : (1 / 78);
-    const candleShareVol = estDayShares * vbi;
-    const d = x.px * candleShareVol;
-    const sg = Math.max(-1, Math.min(1, ((b.c - b.o) / (b.o || 1)) * 350)) * 0.35;
-    net += d * sg;
-    gross += d * 0.35;
-    const g = grp.findIndex(([a, z]) => i >= a && i < z);
-    if (g >= 0) hv[g] += d * sg;
-  });
-
-  const buy = Math.round(
-    Math.max(10, Math.min(90, 50 + (50 * net) / (gross || 1)))
-  );
-  const mx = Math.max(...hv.map(Math.abs)) || 1;
-
-  const hours = ["9:30", "10", "11", "12", "1", "2", "3"].map((l, j) => {
-    const on = grp[j][0] <= x.k;
-    return {
-      l,
-      h: on ? `${Math.max(8, (Math.abs(hv[j]) / mx) * 100)}%` : "6%",
-      c: on ? (hv[j] >= 0 ? "#3ddc84" : "#f0565a") : "#1a2328",
-    };
-  });
-
-  return {
-    net,
-    netTxt: `${formatCompactDollars(net)} ${net >= 0 ? "in" : "out"}`,
-    buy,
-    hours,
-  };
-}
-
-export function computeSwings(c: OHLCVBar[], n: number = 3): SwingPoint[] {
-  const S: SwingPoint[] = [];
-  for (let i = n; i < c.length - n; i++) {
-    let H = true;
-    let L = true;
-    for (let j = i - n; j <= i + n; j++) {
-      if (j === i) continue;
-      if (c[j].h >= c[i].h) H = false;
-      if (c[j].l <= c[i].l) L = false;
-    }
-    if (H) S.push({ i, p: c[i].h, hi: true });
-    if (L) S.push({ i, p: c[i].l, hi: false });
-  }
-  return S;
-}
-
-export function computeOrderBlocks(s: StockSession, c: OHLCVBar[]): OrderBlock[] {
-  const OB: OrderBlock[] = [];
-  for (let i = 2; i < c.length - 2; i++) {
-    const bar = c[i];
-    const nxt1 = c[i + 1];
-    const nxt2 = c[i + 2];
-    const bullImb =
-      bar.c < bar.o && nxt1.c > nxt1.o && (nxt2.c - bar.h) / bar.h > 0.0018;
-    const bearImb =
-      bar.c > bar.o && nxt1.c < nxt1.o && (bar.l - nxt2.c) / bar.l > 0.0018;
-
-    if (bullImb || bearImb) {
-      let mit = false;
-      let end = c.length - 1;
-      for (let j = i + 2; j < c.length; j++) {
-        if (bullImb ? c[j].l <= bar.l : c[j].h >= bar.h) {
-          mit = true;
-          end = j;
-          break;
-        }
-      }
-      OB.push({
-        i,
-        hi: bullImb ? bar.h : bar.h * 1.0005,
-        lo: bullImb ? bar.l * 0.9995 : bar.l,
-        bull: bullImb,
-        mit,
-        end,
-      });
-    }
-  }
-  return OB.slice(-6);
-}
-
-export function computeConfidence(
-  x: StockSession,
-  all: StockSession[]
-): ConfidenceResult {
-  const cl = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
-  const dir = x.mv >= 0 ? 1 : -1;
-  const c = computeCandles(x);
-  const vw = c[c.length - 1].vw;
-  const f = computeDollarFlow(x, c);
-
-  // Sector flows
-  const sf: Record<string, number> = {};
-  all.forEach((q) => {
-    sf[q.sec] = (sf[q.sec] || 0) + computeDollarFlow(q).net;
-  });
-  const sfMax = Math.max(...Object.values(sf).map(Math.abs)) || 1;
-
-  // Trend
-  const side = all.filter((q) => (q.mv >= 0) === (dir > 0)).map((q) => Math.abs(q.mv)).sort((a, b) => a - b);
-  let pctl = 1;
-  if (side.length >= 2) {
-    let idx = 0;
-    while (idx < side.length && side[idx] < Math.abs(x.mv)) idx++;
-    pctl = idx / (side.length - 1);
-  }
-  const trend = 30 * Math.pow(pctl, 0.8);
-  const vol = 15 * cl((x.vol - 0.8) / 1.4, 0, 1);
-  const vd = ((dir * (x.px - vw)) / vw) * 100;
-  const vwap = vd <= 0 ? 3 * cl(1 + vd / 0.3, 0, 1) : 9 + 6 * cl(vd / 0.6, 0, 1);
-  const m30 = (x.path[x.k] - x.path[Math.max(0, x.k - 6)]) * dir;
-  const mom = 10 * cl(0.5 + m30 / 0.4, 0, 1);
-
-  const sw = computeSwings(c, 3);
-  const hs = sw.filter((p) => p.hi).slice(-3);
-  const ls = sw.filter((p) => !p.hi).slice(-3);
-  let st = 0;
-  let n = 0;
-  for (let i = 1; i < hs.length; i++) {
-    n++;
-    if ((hs[i].p - hs[i - 1].p) * dir > 0) st++;
-  }
-  for (let i = 1; i < ls.length; i++) {
-    n++;
-    if ((ls[i].p - ls[i - 1].p) * dir > 0) st++;
-  }
-  const strc = n ? (10 * st) / n : 6;
-  const sec = 10 * cl(0.5 + (dir * (sf[x.sec] || 0)) / sfMax * 0.6, 0, 1);
-  const money = 10 * cl(0.5 + (dir > 0 ? f.buy - 50 : 50 - f.buy) / 40, 0, 1);
-
-  const obs = computeOrderBlocks(x, c).filter((b) => !b.mit && b.bull === (dir > 0)).slice(-1)[0];
-  const obd = obs ? Math.max(0, ((dir > 0 ? x.px - obs.hi : obs.lo - x.px) / x.px) * 100) : null;
-  const obScore = obs && obd != null ? 5 * cl(1 - obd / 1.5, 0.3, 1) : 0;
-
-  let sc = trend + vol + vwap + mom + strc + sec + money + obScore;
-  if (x.chop) sc *= 0.88;
-  sc = Math.round(cl(sc, 1, 99));
-
-  return {
-    sc,
-    parts: [
-      ["Trend", trend, 30],
-      ["Rel. volume", vol, 15],
-      ["VWAP", vwap, 15],
-      ["30m momentum", mom, 10],
-      ["Structure", strc, 10],
-      ["Sector flow", sec, 10],
-      ["Big money", money, 10],
-      ["Order block bonus", obScore, 5],
-    ],
-    pen: 0,
-  };
-}
-
-export function computeSectorFlows(all: StockSession[]): {
-  sectors: SectorFlowItem[];
-  top2Inflow: SectorFlowItem[];
-  top2Outflow: SectorFlowItem[];
-  maxAbsFlow: number;
-} {
-  const map: Record<string, { flow: number; pcts: number[]; count: number }> = {};
-  SECTORS_LIST.forEach((s) => {
-    map[s] = { flow: 0, pcts: [], count: 0 };
-  });
-
-  all.forEach((stock) => {
-    const f = computeDollarFlow(stock);
-    if (!map[stock.sec]) {
-      map[stock.sec] = { flow: 0, pcts: [], count: 0 };
-    }
-    map[stock.sec].flow += f.net;
-    map[stock.sec].pcts.push(stock.mv);
-    map[stock.sec].count++;
-  });
-
-  const list = Object.entries(map).map(([name, val]) => {
-    const avg = val.pcts.length
-      ? val.pcts.reduce((a, b) => a + b, 0) / val.pcts.length
-      : 0;
-    return {
-      name,
-      flowVal: val.flow,
-      flowFormatted: formatCompactDollars(val.flow),
-      avgPct: avg,
-      avgPctFormatted: formatPct(avg),
-      barWidthPct: "0%",
-      color: val.flow >= 0 ? "#3ddc84" : "#f0565a",
-      stockCount: val.count,
-      isPositive: val.flow >= 0,
-    };
-  });
-
-  list.sort((a, b) => b.flowVal - a.flowVal);
-
-  const maxAbsFlow = Math.max(1, ...list.map((s) => Math.abs(s.flowVal)));
-  list.forEach((s) => {
-    s.barWidthPct = `${Math.max(4, Math.min(100, (Math.abs(s.flowVal) / maxAbsFlow) * 100))}%`;
-  });
-
-  const top2Inflow = list.slice(0, 2);
-  const top2Outflow = list.slice(-2).reverse();
-
-  return {
-    sectors: list,
-    top2Inflow,
-    top2Outflow,
-    maxAbsFlow,
-  };
-}
-
-export function computeSquarifiedTiles(
-  items: StockSession[],
-  bull: boolean,
-  secAverages: Record<string, number>,
-  allStocks: StockSession[]
-): TileLayout[] {
+/** Squarified treemap of the movers ranked #4–#15; area ∝ ⌊|% move|⌋ + 1. */
+export function computeSquarifiedTiles(items: BoardStock[], bull: boolean): TileLayout[] {
   if (!items.length) return [];
-
+  const weight = (s: BoardStock) => Math.floor(Math.abs(s.pctChange)) + 1;
   const asc = items.map((x, i) => ({ x, i }));
-  const tot = asc.reduce((a, o) => a + (Math.floor(Math.abs(o.x.mv)) + 1), 0);
+  const tot = asc.reduce((a, o) => a + weight(o.x), 0);
   const AR = 0.8;
   const rect: Record<string, { L: number; T: number; W: number; H: number }> = {};
 
   const worst = (row: typeof asc, s: number) => {
     const h = s / tot;
-    const ws = row.map((o) => (Math.floor(Math.abs(o.x.mv)) + 1) / s);
-    return Math.max(...ws.map((w) => {
-      const r = (w * AR) / h;
-      return Math.max(r, 1 / r);
-    }));
+    return Math.max(
+      ...row.map((o) => {
+        const r = ((weight(o.x) / s) * AR) / h;
+        return Math.max(r, 1 / r);
+      }),
+    );
   };
 
-  let rows: Array<[typeof asc, number]> = [];
+  const rows: Array<[typeof asc, number]> = [];
   let cur: typeof asc = [];
   let cs = 0;
-
   asc.forEach((o) => {
-    const v = Math.floor(Math.abs(o.x.mv)) + 1;
+    const v = weight(o.x);
     if (!cur.length) {
       cur = [o];
       cs = v;
       return;
     }
-    const nw = worst(cur.concat([o]), cs + v);
-    const ow = worst(cur, cs);
-    if (nw <= ow && cur.length < 3) {
+    if (worst(cur.concat([o]), cs + v) <= worst(cur, cs) && cur.length < 3) {
       cur.push(o);
       cs += v;
     } else {
@@ -757,7 +426,7 @@ export function computeSquarifiedTiles(
     const h = (s / tot) * 100;
     let x0 = 0;
     row.forEach((o) => {
-      const w = ((Math.floor(Math.abs(o.x.mv)) + 1) / s) * 100;
+      const w = (weight(o.x) / s) * 100;
       rect[o.x.t] = { L: y, T: x0, W: h, H: w };
       x0 += w;
     });
@@ -767,25 +436,9 @@ export function computeSquarifiedTiles(
   return asc.map(({ x, i }) => {
     const R0 = rect[x.t] || { L: 0, T: 0, W: 20, H: 20 };
     const area = (R0.W * R0.H) / 100;
-    const rs = area >= 12 ? 2 : 1;
-    const big = area >= 12;
-    const rr = zRng(x.t + "p");
-    const n = rs * 5;
-    const poc = Math.floor(rr() * n);
     const c = bull ? "61,220,132" : "240,86,90";
-
     const wide = R0.W >= 24;
-    const secAvg = secAverages[x.sec] ?? 0;
-    const rsDiff = x.mv - secAvg;
-    const m30Diff = x.path[x.k] - x.path[Math.max(0, x.k - 6)];
-    const conf = computeConfidence(x, allStocks).sc;
-
-    const prof = Array.from({ length: n }, (_, j) => ({
-      h: big ? "3px" : "2px",
-      w: `${j === poc ? 100 : 18 + rr() * 70}%`,
-      c: `rgba(${c},${j === poc ? 0.95 : 0.28 + rr() * 0.3})`,
-    }));
-
+    const conf = x.confidence?.score ?? null;
     return {
       t: x.t,
       L: `${R0.L.toFixed(2)}%`,
@@ -793,11 +446,11 @@ export function computeSquarifiedTiles(
       W: `${R0.W.toFixed(2)}%`,
       H: `${R0.H.toFixed(2)}%`,
       rank: String(i + 4),
-      chg: formatPct(x.mv),
-      px: formatCurrency(x.px),
+      chg: formatPct(x.pctChange),
+      px: formatCurrency(x.price),
       conf,
       confC: bull ? "#3ddc84" : "#f0565a",
-      confDeg: `${conf * 3.6}deg`,
+      confDeg: `${(conf ?? 0) * 3.6}deg`,
       ringS: wide ? "22px" : "14px",
       ringI: wide ? "17px" : "11px",
       ringF: wide ? "8.5px" : "6.5px",
@@ -807,16 +460,13 @@ export function computeSquarifiedTiles(
       rowD: R0.H >= 22 ? "flex" : "none",
       miniB: R0.H >= 22 ? "32px" : "5px",
       fs: area >= 16 ? "18px" : area >= 9 ? "15px" : "12px",
-      rsTxt: `${rsDiff >= 0 ? "+" : "−"}${Math.abs(rsDiff).toFixed(2)}%`,
-      rsC: rsDiff >= 0 ? "#3ddc84" : "#f0565a",
-      m30: `${m30Diff >= 0 ? "▲" : "▼"}${Math.abs(m30Diff).toFixed(2)}%`,
-      m30C: m30Diff >= 0 ? "#3ddc84" : "#f0565a",
-      volx: `${x.vol.toFixed(1)}×`,
+      rsTxt: x.vsSector == null ? "—" : `${x.vsSector >= 0 ? "+" : "−"}${Math.abs(x.vsSector).toFixed(2)}%`,
+      rsC: (x.vsSector ?? 0) >= 0 ? "#3ddc84" : "#f0565a",
+      m30: x.m30 == null ? "—" : `${x.m30 >= 0 ? "▲" : "▼"}${Math.abs(x.m30).toFixed(2)}%`,
+      m30C: (x.m30 ?? 0) >= 0 ? "#3ddc84" : "#f0565a",
+      volx: x.rvol == null ? "—" : `${x.rvol.toFixed(1)}×`,
       bg: `linear-gradient(160deg,rgba(${c},${Math.max(0.06, 0.2 - i * 0.012)}),rgba(${c},0.03))`,
       bd: `rgba(${c},0.32)`,
-      glow: "none",
-      prof,
-      lbls: [],
     };
   });
 }

@@ -2,18 +2,21 @@
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
-  computeStockSession,
-  computeSectorFlows,
-  computeCandles,
-  computeTfCandles,
-  computeConfidence,
-  computeDollarFlow,
+  boardCandles,
   computeSquarifiedTiles,
-  formatCurrency,
-  formatPct,
+  etTimeLabel,
   formatCompactDollars,
-  type StockSession,
-  type SectorFlowItem,
+  formatCurrency,
+  formatLevel,
+  formatMarketCap,
+  formatPct,
+  indexCard,
+  sectorNotOnBoardText,
+  sectorView,
+  sessionCandles,
+  sessionDateLabel,
+  type BoardStock,
+  type MoneyFlowBoard,
   type TileLayout,
 } from "../money-flow/engine";
 import {
@@ -21,56 +24,28 @@ import {
   MiniProfileSvg,
   FullChartSvg,
 } from "../money-flow/chart-svg";
-import { SP500_TICKERS } from "../money-flow/data";
-import { useLiveQuotes } from "../live-quotes-context";
 import { useIQActions } from "../shell";
 import { ModuleSwitcher } from "../module-switcher";
 import { useSI } from "../si/si-context";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
-import { useAppSelector } from "../../store/hooks";
-import { useApiList } from "../hooks/useApiList";
+import { useApiResource } from "../hooks/useApiResource";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
-import type { CompanyDoc } from "../types/companies";
-import { VendorTag, type VendorKey } from "../utils";
-import type { CompanyMarketData } from "../money-flow/engine";
+
+/** Board refresh: the backend rebuilds every 30s from 15-minute-delayed bars. */
+const BOARD_POLL_MS = 30_000;
+
+interface BarsResponse {
+  bars: Array<{ t: number; o: number; h: number; l: number; c: number; v: number; vw: number | null }>;
+}
 
 export function MoneyFlowScreen() {
   const { openStock, openIndex } = useIQActions();
   const { exitToMC, enterSI } = useSI();
-  const liveQuotesMap = useLiveQuotes(SP500_TICKERS);
 
-  // Live FMP company data for accurate Support, Resistance and Market Cap
-  const { data: companies } = useApiList<CompanyDoc>("/market-data/companies", 15_000);
-  const companyMap = useMemo(() => {
-    const m = new Map<string, CompanyMarketData>();
-    for (const c of companies) {
-      if (c.ticker) {
-        m.set(c.ticker.toUpperCase(), {
-          marketCap: c.marketCap,
-          price: c.price,
-          pctChange: c.pctChange,
-          rvol: c.rvol ?? null,
-          dayVolume: c.dayVolume ?? null,
-          keyLevels: c.keyLevels,
-        });
-      }
-    }
-    return m;
-  }, [companies]);
-
-  // User info for topbar avatar
-  const user = useAppSelector((s) => s.auth.user);
-  const initials = user?.displayName
-    ? user.displayName
-      .split(" ")
-      .map((n: string) => n[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase()
-    : user?.email
-      ? user.email[0].toUpperCase()
-      : "D";
+  // The whole board — flows, movers, levels, scores — from GET /live/money-flow.
+  const { data: board, loading: boardLoading, error: boardError } =
+    useApiResource<MoneyFlowBoard>("/live/money-flow", BOARD_POLL_MS);
 
   // Real-time market status and ET clock
   const mkt = useBackendMarketStatus();
@@ -122,7 +97,7 @@ export function MoneyFlowScreen() {
 
   // Hover state for detail popover
   const [hoveredStock, setHoveredStock] = useState<{
-    stock: StockSession;
+    stock: BoardStock;
     rect: DOMRect;
   } | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -137,190 +112,75 @@ export function MoneyFlowScreen() {
     str: false,
   });
 
-  // Current session progress (0 to 1 across 390 trading minutes)
-  const [progress, setProgress] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const now = new Date();
-      // Estimate ET time
-      const utcHours = now.getUTCHours();
-      const utcMins = now.getUTCMinutes();
-      const etTotalMins = (utcHours - 4) * 60 + utcMins;
-      const marketOpenMins = 9 * 60 + 30; // 9:30 AM ET
-      const marketCloseMins = 16 * 60; // 4:00 PM ET
-      if (etTotalMins <= marketOpenMins) return 0.15;
-      if (etTotalMins >= marketCloseMins) return 1.0;
-      return Math.max(0.05, Math.min(1.0, (etTotalMins - marketOpenMins) / 390));
-    }
-    return 0.85;
-  });
+  // Popover chart: the hovered stock's real 1-minute bars, grouped to the
+  // chosen timeframe for the board's session.
+  const popSym = hoveredStock?.stock.t ?? null;
+  const { data: popBars, loading: popBarsLoading } = useApiResource<BarsResponse>(
+    popSym ? `/live/bars?ticker=${encodeURIComponent(popSym)}&interval=1m` : null,
+  );
+  const popCandles = useMemo(
+    () => (popBars?.bars && board ? sessionCandles(popBars.bars, board.sessionDate, popTf) : []),
+    [popBars, board, popTf],
+  );
 
-  // Re-run session calculation whenever progress, live quotes, or company data change
-  const allStocks = useMemo(() => {
-    const raw = computeStockSession(progress, companyMap);
-    // Enrich with live quotes when available
-    return raw.map((s) => {
-      const q = liveQuotesMap.get(s.t);
-      if (q && q.price != null && q.pctChange != null && q.price > 0) {
-        const computedP0 = q.price / (1 + q.pctChange / 100);
-        return {
-          ...s,
-          p0: computedP0,
-          px: q.price,
-          mv: q.pctChange,
-          bull: q.pctChange > 0,
-        };
-      }
-      return s;
-    });
-  }, [progress, liveQuotesMap, companyMap]);
+  const gainers = useMemo(() => board?.gainers ?? [], [board]);
+  const losers = useMemo(() => board?.losers ?? [], [board]);
+  const onBoard = useMemo(() => [...gainers, ...losers], [gainers, losers]);
 
-  // Sector calculations
-  const sectorData = useMemo(() => {
-    return computeSectorFlows(allStocks);
-  }, [allStocks]);
-
-  // Sector averages for Relative Strength
-  const secAverages = useMemo(() => {
-    const m: Record<string, number> = {};
-    sectorData.sectors.forEach((s) => {
-      m[s.name] = s.avgPct;
-    });
-    return m;
-  }, [sectorData]);
+  // Sector calculations (inflow / outflow boxes, remaining list)
+  const sectorData = useMemo(() => sectorView(board?.sectors ?? []), [board]);
+  const remainingSectors = sectorData.remaining;
 
   // Active sector to highlight: either hovered or selected
   const activeSector = hoveredSector || selectedSector;
 
-  // Rank 15 Bullish and 15 Bearish (overall market top 15 gainers & losers)
-  const { top3Bull, next12Bull, top3Bear, next12Bear, marketTop15Set } = useMemo(() => {
-    const sortedBull = [...allStocks]
-      .filter((s) => s.mv > 0)
-      .sort((a, b) => b.mv - a.mv)
-      .slice(0, 15);
+  // #1–#3 are cards, #4–#15 tiles, on each side
+  const top3Bull = gainers.slice(0, 3);
+  const next12Bull = gainers.slice(3, 15);
+  const top3Bear = losers.slice(0, 3);
+  const next12Bear = losers.slice(3, 15);
 
-    const sortedBear = [...allStocks]
-      .filter((s) => s.mv < 0)
-      .sort((a, b) => a.mv - b.mv)
-      .slice(0, 15);
+  // Notice when the highlighted sector has no stock on either board
+  const noneInTop15Txt = useMemo(
+    () => sectorNotOnBoardText(activeSector, board?.sectors ?? [], onBoard),
+    [activeSector, board, onBoard],
+  );
 
-    const set = new Set([...sortedBull, ...sortedBear].map((s) => s.t));
+  const bullTiles: TileLayout[] = useMemo(() => computeSquarifiedTiles(next12Bull, true), [next12Bull]);
+  const bearTiles: TileLayout[] = useMemo(() => computeSquarifiedTiles(next12Bear, false), [next12Bear]);
+  const stockByT = useMemo(() => new Map(onBoard.map((s) => [s.t, s])), [onBoard]);
 
-    return {
-      top3Bull: sortedBull.slice(0, 3),
-      next12Bull: sortedBull.slice(3, 15),
-      top3Bear: sortedBear.slice(0, 3),
-      next12Bear: sortedBear.slice(3, 15),
-      marketTop15Set: set,
-    };
-  }, [allStocks]);
-
-  // Notice when active (hovered or selected) sector has no stocks in overall top 15 gainers or losers
-  const noneInTop15Txt = useMemo(() => {
-    if (!activeSector) return "";
-    const secStocks = allStocks.filter((s) => s.sec === activeSector);
-    if (secStocks.length === 0) return "";
-    const hasAnyInTop15 = secStocks.some((s) => marketTop15Set.has(s.t));
-    if (!hasAnyInTop15) {
-      const len = secStocks.length;
-      return `No ${activeSector} stock is in today’s top 15 gainers or losers — its ${len} stock${len > 1 ? "s are" : " is"} shown in the flow only.`;
-    }
-    return "";
-  }, [activeSector, allStocks, marketTop15Set]);
-
-  // Compute squarified tiles for the 12 tiles
-  const bullTiles: TileLayout[] = useMemo(() => {
-    return computeSquarifiedTiles(next12Bull, true, secAverages, allStocks);
-  }, [next12Bull, secAverages, allStocks]);
-
-  const bearTiles: TileLayout[] = useMemo(() => {
-    return computeSquarifiedTiles(next12Bear, false, secAverages, allStocks);
-  }, [next12Bear, secAverages, allStocks]);
-
-  // Live S&P 500 from FMP tape stream (identical to Dashboard Market Pulse)
+  // Index cards from the FMP tape stream (identical to Dashboard Market Pulse)
   const { frame: tapeFrame } = useTapeStream();
   const liveIndices = useMemo(
     () => (tapeFrame ? tapeItemsToIndexDocs(tapeFrame.items) : []),
     [tapeFrame]
   );
-  // 4 Live Market Summary Cards from FMP tape stream
-  const spxIndex = useMemo(
-    () => liveIndices.find((i) => i.id === "SPX" || i.label === "S&P 500"),
-    [liveIndices]
-  );
-  const spxQuote = liveQuotesMap.get("SPY");
-  const rawSpxPrice =
-    spxIndex?.value ??
-    (spxQuote?.price != null ? spxQuote.price * 10 : 5864.67);
-  const rawSpxChange =
-    spxIndex?.pctChange ??
-    (spxQuote?.pctChange != null ? spxQuote.pctChange : 0.45);
-  const spxDisplayPrice = rawSpxPrice.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  const spxIsUp = rawSpxChange >= 0;
-  const spxDisplayChange = `${spxIsUp ? "+" : ""}${rawSpxChange.toFixed(2)}%`;
+  const find = (ids: string[]) => liveIndices.find((i) => ids.includes(i.id));
+  const num = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const spx = indexCard(find(["SPX"]), num);
+  const ndx = indexCard(find(["NDX"]), num);
+  const wti = indexCard(find(["WTI"]), (v) => `$${v.toFixed(2)}`);
+  const gold = indexCard(find(["GOLD"]), (v) => `$${num(v)}`);
 
-  const ndxIndex = useMemo(
-    () => liveIndices.find((i) => i.id === "NDX" || i.id === "COMP" || i.label === "NASDAQ"),
-    [liveIndices]
-  );
-  const qqqQuote = liveQuotesMap.get("QQQ");
-  const rawNdxPrice =
-    ndxIndex?.value ??
-    (qqqQuote?.price != null ? qqqQuote.price * 40 : 20245.80);
-  const rawNdxChange =
-    ndxIndex?.pctChange ??
-    (qqqQuote?.pctChange != null ? qqqQuote.pctChange : 0.62);
-  const ndxDisplayPrice = rawNdxPrice.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  const ndxIsUp = rawNdxChange >= 0;
-  const ndxDisplayChange = `${ndxIsUp ? "+" : ""}${rawNdxChange.toFixed(2)}%`;
+  // S&P 500 breadth: constituents up / down vs the previous close
+  const breadth = board?.breadth ?? { advancers: 0, decliners: 0, unchanged: 0, total: 0 };
+  const advCount = breadth.advancers;
+  const decCount = breadth.decliners;
+  const advPct = breadth.total > 0 ? Math.round((advCount / breadth.total) * 100) : null;
 
-  const wtiIndex = useMemo(
-    () => liveIndices.find((i) => i.id === "CL" || i.id === "WTI" || i.label === "WTI Crude"),
-    [liveIndices]
-  );
-  const rawWtiPrice = wtiIndex?.value ?? 71.85;
-  const rawWtiChange = wtiIndex?.pctChange ?? 1.24;
-  const wtiDisplayPrice = `$${rawWtiPrice.toFixed(2)}`;
-  const wtiIsUp = rawWtiChange >= 0;
-  const wtiDisplayChange = `${wtiIsUp ? "+" : ""}${rawWtiChange.toFixed(2)}%`;
+  // What the board covers and how fresh its bars are
+  const sessionLine = board
+    ? `${sessionDateLabel(board.sessionDate)} session · ${
+        board.barsThrough != null
+          ? `flows through ${etTimeLabel(board.barsThrough)} ET (${board.delayMinutes}-min delayed)`
+          : `flows start at 9:${30 + board.delayMinutes} AM ET (${board.delayMinutes}-min delayed)`
+      } · ${board.universe.priced} of ${board.universe.total} S&P 500 / Nasdaq-100 stocks`
+    : boardError
+      ? "Money Flow is unavailable right now."
+      : "Building the board…";
 
-  const goldIndex = useMemo(
-    () => liveIndices.find((i) => i.id === "GC" || i.id === "GOLD" || i.label === "Gold"),
-    [liveIndices]
-  );
-  const rawGoldPrice = goldIndex?.value ?? 2748.10;
-  const rawGoldChange = goldIndex?.pctChange ?? -0.38;
-  const goldDisplayPrice = `$${rawGoldPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const goldIsUp = rawGoldChange >= 0;
-  const goldDisplayChange = `${goldIsUp ? "+" : ""}${rawGoldChange.toFixed(2)}%`;
-
-  // Dynamic 16 Sectors: Exclude top 2 inflow and top 2 outflow sectors
-  const excludedSectorNames = useMemo(() => {
-    const set = new Set<string>();
-    sectorData.top2Inflow.forEach((s) => set.add(s.name));
-    sectorData.top2Outflow.forEach((s) => set.add(s.name));
-    return set;
-  }, [sectorData]);
-
-  const remainingSectors = useMemo(() => {
-    return sectorData.sectors.filter((s) => !excludedSectorNames.has(s.name));
-  }, [sectorData, excludedSectorNames]);
-
-  // S&P 500 breadth scaled to the full 500 constituent universe
-  const total500 = 500;
-  const rawAdv = allStocks.filter((s) => s.mv > 0).length;
-  const rawDec = allStocks.filter((s) => s.mv < 0).length;
-  const rawTotal = rawAdv + rawDec || 1;
-  const advCount = Math.round((rawAdv / rawTotal) * total500);
-  const decCount = total500 - advCount;
-  const advPct = Math.round((advCount / total500) * 100);
-
-  const handleTileEnter = (stock: StockSession, e: React.MouseEvent) => {
+  const handleTileEnter = (stock: BoardStock, e: React.MouseEvent) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     const rect = e.currentTarget.getBoundingClientRect();
     hoverTimeoutRef.current = setTimeout(() => {
@@ -750,7 +610,7 @@ export function MoneyFlowScreen() {
                   background: "#f2b33d",
                 }}
               />
-              {mkt.label || "Pre-Market"}
+              {mkt.label}
             </span>
           </div>
         </div>
@@ -762,6 +622,17 @@ export function MoneyFlowScreen() {
         <div className="mf-desc-row">
           <div className="mf-desc-text">
             Follow today&apos;s money: hot and cold sectors, the top 15 movers each way, and the key price levels to watch.
+            <span
+              style={{
+                display: "block",
+                marginTop: 2,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11,
+                color: boardError && !board ? "#f0565a" : "#7a8481",
+              }}
+            >
+              {boardLoading && !board ? "Building the board…" : sessionLine}
+            </span>
           </div>
           <button
             type="button"
@@ -788,7 +659,7 @@ export function MoneyFlowScreen() {
 
         {/* ── Main Dashboard Container ── */}
         <div className="mf-board-wrap">
-          {/* ── Left Column: Indices & Sectors (19 Sectors) ── */}
+          {/* ── Left Column: Indices & Sectors ── */}
           <div
             className="mf-col-left"
             style={{
@@ -812,12 +683,12 @@ export function MoneyFlowScreen() {
               }}
             >
               {[
-                { n: "S&P 500", px: spxDisplayPrice, chg: spxDisplayChange, isUp: spxIsUp, action: () => openIndex?.("S&P 500") },
-                { n: "NASDAQ", px: ndxDisplayPrice, chg: ndxDisplayChange, isUp: ndxIsUp, action: () => openIndex?.("NASDAQ") },
-                { n: "WTI CRUDE", px: wtiDisplayPrice, chg: wtiDisplayChange, isUp: wtiIsUp, action: () => openIndex?.("WTI Crude") },
-                { n: "GOLD", px: goldDisplayPrice, chg: goldDisplayChange, isUp: goldIsUp, action: () => openIndex?.("Gold") },
+                { n: "S&P 500", ...spx, action: () => openIndex?.("S&P 500") },
+                { n: "NASDAQ", ...ndx, action: () => openIndex?.("NASDAQ") },
+                { n: "WTI CRUDE", ...wti, action: () => openIndex?.("WTI Crude") },
+                { n: "GOLD", ...gold, action: () => openIndex?.("Gold") },
               ].map((ix) => {
-                const col = ix.isUp ? "#3ddc84" : "#f0565a";
+                const col = ix.isUp == null ? "#7a8481" : ix.isUp ? "#3ddc84" : "#f0565a";
                 return (
                   <div
                     key={ix.n}
@@ -896,7 +767,7 @@ export function MoneyFlowScreen() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {ix.isUp ? "▲ " : "▼ "}{ix.chg}
+                        {ix.isUp == null ? "" : ix.isUp ? "▲ " : "▼ "}{ix.chg}
                       </span>
                     </div>
                   </div>
@@ -904,7 +775,7 @@ export function MoneyFlowScreen() {
               })}
             </div>
 
-            {/* 2. Sectors Split: Sectors (Remaining 16) + Top 2 In/Out + Breadth */}
+            {/* 2. Sectors Split: remaining sectors + Top 2 In/Out + Breadth */}
             <div
               className="mf-sectors-split"
               style={{
@@ -914,7 +785,7 @@ export function MoneyFlowScreen() {
                 display: "flex",
               }}
             >
-              {/* Remaining 16 Sectors Vertical List (Dynamically excludes Top 2 In/Out) */}
+              {/* Remaining sectors (excludes the Top 2 In/Out boxes) */}
               <div
                 className="mf-sectors-list"
                 style={{
@@ -1390,10 +1261,10 @@ export function MoneyFlowScreen() {
                     style={{
                       fontSize: 9,
                       fontWeight: 800,
-                      color: advPct >= 50 ? "#3ddc84" : "#f0565a",
+                      color: advPct == null ? "#7a8481" : advPct >= 50 ? "#3ddc84" : "#f0565a",
                     }}
                   >
-                    {advPct}%
+                    {advPct == null ? "—" : `${advPct}%`}
                     <span
                       style={{
                         display: "block",
@@ -1482,13 +1353,13 @@ export function MoneyFlowScreen() {
                     textAlign: "center",
                   }}
                 >
-                  No bullish stocks today
+                  {board ? "No bullish stocks this session" : sessionLine}
                 </div>
               ) : (
                 top3Bull.map((fc, i) => {
-                  const candles = computeCandles(fc);
-                  const conf = computeConfidence(fc, allStocks);
-                  const isSecMatch = Boolean(activeSector && fc.sec === activeSector);
+                  const candles = boardCandles(fc);
+                  const confScore = fc.confidence?.score ?? null;
+                  const isSecMatch = Boolean(activeSector && fc.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
                   return (
                     <button
@@ -1558,7 +1429,7 @@ export function MoneyFlowScreen() {
                           }}
                         >
                           <img
-                            src={`https://financialmodelingprep.com/image-stock/${fc.t}.png`}
+                            src={`https://financialmodelingprep.com/image-stock/${fc.t.replace(".", "-")}.png`}
                             alt=""
                             style={{ width: 19, height: 19, objectFit: "contain" }}
                           />
@@ -1590,10 +1461,10 @@ export function MoneyFlowScreen() {
                               fontWeight: 700,
                             }}
                           >
-                            {formatCurrency(fc.px)}
+                            {formatCurrency(fc.price)}
                           </span>
                           <span style={{ fontSize: 10.5, color: "#3ddc84" }}>
-                            {formatPct(fc.mv)}
+                            {formatPct(fc.pctChange)}
                           </span>
                         </span>
                         <span
@@ -1617,7 +1488,7 @@ export function MoneyFlowScreen() {
                             width: 28,
                             height: 28,
                             borderRadius: "50%",
-                            background: `conic-gradient(#3ddc84 ${conf.sc * 3.6}deg, #1a2328 0)`,
+                            background: `conic-gradient(#3ddc84 ${(confScore ?? 0) * 3.6}deg, #1a2328 0)`,
                             display: "grid",
                             placeItems: "center",
                           }}
@@ -1636,7 +1507,7 @@ export function MoneyFlowScreen() {
                               color: "#3ddc84",
                             }}
                           >
-                            {conf.sc}
+                            {confScore ?? "—"}
                           </span>
                         </span>
                       </div>
@@ -1669,7 +1540,7 @@ export function MoneyFlowScreen() {
                             padding: "0 4px",
                           }}
                         >
-                          {fc.vol >= 1.4 ? "ACCUMULATION" : "MOMENTUM UP"}
+                          {(fc.rvol ?? 0) >= 1.4 ? "ACCUMULATION" : "MOMENTUM UP"}
                         </span>
                       </div>
 
@@ -1688,14 +1559,14 @@ export function MoneyFlowScreen() {
                         {[
                           {
                             k: "ZONE",
-                            v: `${fc.zLo.toFixed(1)}–${fc.zHi.toFixed(1)}`,
+                            v: fc.zone ? `${fc.zone.lo.toFixed(1)}–${fc.zone.hi.toFixed(1)}` : "—",
                             c: "#e0bb5e",
                           },
-                          { k: "R2", v: fc.R2.toFixed(1), c: "#e0bb5e" },
-                          { k: "R1", v: fc.R1.toFixed(1), c: "#e0bb5e" },
-                          { k: "S1", v: fc.S1.toFixed(1), c: "#e6ebe8" },
-                          { k: "S2", v: fc.S2.toFixed(1), c: "#f0565a" },
-                          { k: "R:R", v: `1:${fc.rr.toFixed(1)}`, c: "#e6ebe8" },
+                          { k: "R2", v: formatLevel(fc.pivots?.r2, 1), c: "#e0bb5e" },
+                          { k: "R1", v: formatLevel(fc.pivots?.r1, 1), c: "#e0bb5e" },
+                          { k: "S1", v: formatLevel(fc.pivots?.s1, 1), c: "#e6ebe8" },
+                          { k: "S2", v: formatLevel(fc.pivots?.s2, 1), c: "#f0565a" },
+                          { k: "R:R", v: fc.rr == null ? "—" : `1:${fc.rr.toFixed(1)}`, c: "#e6ebe8" },
                         ].map((l) => (
                           <span
                             key={l.k}
@@ -1807,13 +1678,13 @@ export function MoneyFlowScreen() {
                     textAlign: "center",
                   }}
                 >
-                  No bearish stocks today
+                  {board ? "No bearish stocks this session" : sessionLine}
                 </div>
               ) : (
                 top3Bear.map((fc, i) => {
-                  const candles = computeCandles(fc);
-                  const conf = computeConfidence(fc, allStocks);
-                  const isSecMatch = Boolean(activeSector && fc.sec === activeSector);
+                  const candles = boardCandles(fc);
+                  const confScore = fc.confidence?.score ?? null;
+                  const isSecMatch = Boolean(activeSector && fc.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
                   return (
                     <button
@@ -1883,7 +1754,7 @@ export function MoneyFlowScreen() {
                           }}
                         >
                           <img
-                            src={`https://financialmodelingprep.com/image-stock/${fc.t}.png`}
+                            src={`https://financialmodelingprep.com/image-stock/${fc.t.replace(".", "-")}.png`}
                             alt=""
                             style={{ width: 19, height: 19, objectFit: "contain" }}
                           />
@@ -1915,10 +1786,10 @@ export function MoneyFlowScreen() {
                               fontWeight: 700,
                             }}
                           >
-                            {formatCurrency(fc.px)}
+                            {formatCurrency(fc.price)}
                           </span>
                           <span style={{ fontSize: 10.5, color: "#f0565a" }}>
-                            {formatPct(fc.mv)}
+                            {formatPct(fc.pctChange)}
                           </span>
                         </span>
                         <span
@@ -1942,7 +1813,7 @@ export function MoneyFlowScreen() {
                             width: 28,
                             height: 28,
                             borderRadius: "50%",
-                            background: `conic-gradient(#f0565a ${conf.sc * 3.6}deg, #1a2328 0)`,
+                            background: `conic-gradient(#f0565a ${(confScore ?? 0) * 3.6}deg, #1a2328 0)`,
                             display: "grid",
                             placeItems: "center",
                           }}
@@ -1961,7 +1832,7 @@ export function MoneyFlowScreen() {
                               color: "#f0565a",
                             }}
                           >
-                            {conf.sc}
+                            {confScore ?? "—"}
                           </span>
                         </span>
                       </div>
@@ -1994,7 +1865,7 @@ export function MoneyFlowScreen() {
                             padding: "0 4px",
                           }}
                         >
-                          {fc.vol >= 1.4 ? "DISTRIBUTION" : "MOMENTUM DOWN"}
+                          {(fc.rvol ?? 0) >= 1.4 ? "DISTRIBUTION" : "MOMENTUM DOWN"}
                         </span>
                       </div>
 
@@ -2013,14 +1884,14 @@ export function MoneyFlowScreen() {
                         {[
                           {
                             k: "ZONE",
-                            v: `${fc.zLo.toFixed(1)}–${fc.zHi.toFixed(1)}`,
+                            v: fc.zone ? `${fc.zone.lo.toFixed(1)}–${fc.zone.hi.toFixed(1)}` : "—",
                             c: "#e0bb5e",
                           },
-                          { k: "R2", v: fc.R2.toFixed(1), c: "#e0bb5e" },
-                          { k: "R1", v: fc.R1.toFixed(1), c: "#e0bb5e" },
-                          { k: "S1", v: fc.S1.toFixed(1), c: "#e6ebe8" },
-                          { k: "S2", v: fc.S2.toFixed(1), c: "#f0565a" },
-                          { k: "R:R", v: `1:${fc.rr.toFixed(1)}`, c: "#e6ebe8" },
+                          { k: "R2", v: formatLevel(fc.pivots?.r2, 1), c: "#e0bb5e" },
+                          { k: "R1", v: formatLevel(fc.pivots?.r1, 1), c: "#e0bb5e" },
+                          { k: "S1", v: formatLevel(fc.pivots?.s1, 1), c: "#e6ebe8" },
+                          { k: "S2", v: formatLevel(fc.pivots?.s2, 1), c: "#f0565a" },
+                          { k: "R:R", v: fc.rr == null ? "—" : `1:${fc.rr.toFixed(1)}`, c: "#e6ebe8" },
                         ].map((l) => (
                           <span
                             key={l.k}
@@ -2101,13 +1972,13 @@ export function MoneyFlowScreen() {
                     textAlign: "center",
                   }}
                 >
-                  No bullish stocks
+                  {board ? "No more bullish stocks" : ""}
                 </div>
               ) : (
                 bullTiles.map((x) => {
-                  const fullStock = allStocks.find((s) => s.t === x.t)!;
-                  const candles = computeCandles(fullStock);
-                  const isSecMatch = Boolean(activeSector && fullStock?.sec === activeSector);
+                  const fullStock = stockByT.get(x.t)!;
+                  const candles = boardCandles(fullStock);
+                  const isSecMatch = Boolean(activeSector && fullStock?.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
                   return (
                     <button
@@ -2171,7 +2042,7 @@ export function MoneyFlowScreen() {
                             color: x.confC,
                           }}
                         >
-                          {x.conf}
+                          {x.conf ?? "—"}
                         </span>
                       </span>
 
@@ -2259,7 +2130,7 @@ export function MoneyFlowScreen() {
                               }}
                             >
                               <img
-                                src={`https://financialmodelingprep.com/image-stock/${x.t}.png`}
+                                src={`https://financialmodelingprep.com/image-stock/${x.t.replace(".", "-")}.png`}
                                 alt=""
                                 style={{ width: 13, height: 13, objectFit: "contain" }}
                               />
@@ -2336,13 +2207,13 @@ export function MoneyFlowScreen() {
                     textAlign: "center",
                   }}
                 >
-                  No bearish stocks
+                  {board ? "No more bearish stocks" : ""}
                 </div>
               ) : (
                 bearTiles.map((x) => {
-                  const fullStock = allStocks.find((s) => s.t === x.t)!;
-                  const candles = computeCandles(fullStock);
-                  const isSecMatch = Boolean(activeSector && fullStock?.sec === activeSector);
+                  const fullStock = stockByT.get(x.t)!;
+                  const candles = boardCandles(fullStock);
+                  const isSecMatch = Boolean(activeSector && fullStock?.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
                   return (
                     <button
@@ -2406,7 +2277,7 @@ export function MoneyFlowScreen() {
                             color: x.confC,
                           }}
                         >
-                          {x.conf}
+                          {x.conf ?? "—"}
                         </span>
                       </span>
 
@@ -2494,7 +2365,7 @@ export function MoneyFlowScreen() {
                               }}
                             >
                               <img
-                                src={`https://financialmodelingprep.com/image-stock/${x.t}.png`}
+                                src={`https://financialmodelingprep.com/image-stock/${x.t.replace(".", "-")}.png`}
                                 alt=""
                                 style={{ width: 13, height: 13, objectFit: "contain" }}
                               />
@@ -2599,11 +2470,11 @@ export function MoneyFlowScreen() {
               overflowY: "auto" as const,
               pointerEvents: "auto" as const,
               background: "#0b0d0e",
-              border: `1px solid ${hoveredStock.stock.bull
+              border: `1px solid ${(hoveredStock.stock.pctChange >= 0)
                 ? "rgba(61,220,132,.45)"
                 : "rgba(240,86,90,.45)"
                 }`,
-              borderBottom: `2px solid ${hoveredStock.stock.bull ? "#3ddc84" : "#f0565a"
+              borderBottom: `2px solid ${(hoveredStock.stock.pctChange >= 0) ? "#3ddc84" : "#f0565a"
                 }`,
               borderRadius: 12,
               boxShadow: "0 24px 60px rgba(0,0,0,.75)",
@@ -2626,12 +2497,12 @@ export function MoneyFlowScreen() {
                 display: "grid",
                 placeItems: "center",
                 overflow: "hidden",
-                boxShadow: `0 0 0 1px ${hoveredStock.stock.bull ? "#3ddc84" : "#f0565a"
+                boxShadow: `0 0 0 1px ${(hoveredStock.stock.pctChange >= 0) ? "#3ddc84" : "#f0565a"
                   }`,
               }}
             >
               <img
-                src={`https://financialmodelingprep.com/image-stock/${hoveredStock.stock.t}.png`}
+                src={`https://financialmodelingprep.com/image-stock/${hoveredStock.stock.t.replace(".", "-")}.png`}
                 alt=""
                 style={{ width: 30, height: 30, objectFit: "contain" }}
               />
@@ -2663,7 +2534,7 @@ export function MoneyFlowScreen() {
                   letterSpacing: ".05em",
                 }}
               >
-                {hoveredStock.stock.name} · {hoveredStock.stock.sec}
+                {hoveredStock.stock.name ?? hoveredStock.stock.t} · {hoveredStock.stock.sector ?? "—"}
               </span>
             </div>
             <div
@@ -2675,15 +2546,15 @@ export function MoneyFlowScreen() {
               }}
             >
               <span style={{ fontSize: 18, fontWeight: 700, color: "#eef2f4" }}>
-                {formatCurrency(hoveredStock.stock.px)}
+                {formatCurrency(hoveredStock.stock.price)}
               </span>
               <span
                 style={{
                   fontSize: 12,
-                  color: hoveredStock.stock.bull ? "#3ddc84" : "#f0565a",
+                  color: (hoveredStock.stock.pctChange >= 0) ? "#3ddc84" : "#f0565a",
                 }}
               >
-                {formatPct(hoveredStock.stock.mv)}
+                {formatPct(hoveredStock.stock.pctChange)}
               </span>
             </div>
             <button
@@ -2727,64 +2598,59 @@ export function MoneyFlowScreen() {
             {[
               {
                 k: "Confidence",
-                v: String(
-                  computeConfidence(hoveredStock.stock, allStocks).sc
-                ),
-                c: hoveredStock.stock.bull ? "#3ddc84" : "#f0565a",
+                v: hoveredStock.stock.confidence ? String(hoveredStock.stock.confidence.score) : "—",
+                c: (hoveredStock.stock.pctChange >= 0) ? "#3ddc84" : "#f0565a",
                 b: true,
               },
               {
                 k: "Setup",
                 v: hoveredStock.stock.chop
                   ? "Choppy"
-                  : hoveredStock.stock.bull
+                  : (hoveredStock.stock.pctChange >= 0)
                     ? "Bullish"
                     : "Bearish",
                 c: hoveredStock.stock.chop
                   ? "#7a8481"
-                  : hoveredStock.stock.bull
+                  : (hoveredStock.stock.pctChange >= 0)
                     ? "#3ddc84"
                     : "#f0565a",
                 b: false,
               },
               {
                 k: "Mkt Cap",
-                v: (hoveredStock.stock.marketCap
-                  ? formatCompactDollars(hoveredStock.stock.marketCap)
-                  : formatCompactDollars(hoveredStock.stock.px * hoveredStock.stock.sh)
-                ).replace(/^\+/, ""),
+                v: formatMarketCap(hoveredStock.stock.marketCap),
                 c: "#eef2f4",
                 b: false,
               },
               {
                 k: "Net Flow",
-                v: computeDollarFlow(hoveredStock.stock).netTxt,
-                c: hoveredStock.stock.bull ? "#3ddc84" : "#f0565a",
+                v: `${formatCompactDollars(hoveredStock.stock.netFlow)} ${hoveredStock.stock.netFlow >= 0 ? "in" : "out"}`,
+                c: hoveredStock.stock.netFlow >= 0 ? "#3ddc84" : "#f0565a",
                 b: false,
               },
               {
                 k: "Support (S1)",
-                v: formatCurrency(hoveredStock.stock.S1),
+                v: formatLevel(hoveredStock.stock.pivots?.s1),
                 c: "#3ddc84",
                 b: false,
               },
               {
                 k: "Resistance (R1)",
-                v: formatCurrency(hoveredStock.stock.R1),
+                v: formatLevel(hoveredStock.stock.pivots?.r1),
                 c: "#f0565a",
                 b: false,
               },
               {
                 k: "Order Zone",
-                v: `${formatCurrency(hoveredStock.stock.zLo)}–${formatCurrency(
-                  hoveredStock.stock.zHi
-                )}`,
+                v: hoveredStock.stock.zone
+                  ? `${formatCurrency(hoveredStock.stock.zone.lo)}–${formatCurrency(hoveredStock.stock.zone.hi)}`
+                  : "—",
                 c: "#e0bb5e",
                 b: false,
               },
               {
                 k: "Vol & R:R",
-                v: `${hoveredStock.stock.vol.toFixed(1)}× · 1:${hoveredStock.stock.rr.toFixed(1)}`,
+                v: `${hoveredStock.stock.rvol == null ? "—" : `${hoveredStock.stock.rvol.toFixed(1)}×`} · ${hoveredStock.stock.rr == null ? "—" : `1:${hoveredStock.stock.rr.toFixed(1)}`}`,
                 c: "#e6ebe8",
                 b: false,
               },
@@ -2936,18 +2802,20 @@ export function MoneyFlowScreen() {
               scrollbarWidth: "thin",
             }}
           >
+            {popBarsLoading && popCandles.length === 0 ? (
+              <div style={{ height: "100%", display: "grid", placeItems: "center", color: "#7a8481", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
+                Loading {hoveredStock.stock.t} 1-minute bars…
+              </div>
+            ) : (
             <FullChartSvg
               stock={hoveredStock.stock}
-              candles={computeTfCandles(
-                hoveredStock.stock,
-                computeCandles(hoveredStock.stock),
-                popTf
-              )}
+              candles={popCandles}
               layers={popLayers}
               tf={popTf}
               width={440}
               height={198}
             />
+            )}
           </div>
 
           {/* Action buttons */}

@@ -1,92 +1,92 @@
 /**
- * Money Flow Chart SVG Components
- * Sparklines, Volume Profiles, and Multi-layer Order Block Charts
+ * Money Flow chart SVGs — sparkline, volume profile and the hover chart — drawn
+ * from real bars and the board's levels (pivots, order-block zone, previous
+ * day high/low). A level that does not exist is not drawn.
  */
 
 import React from "react";
-import type { StockSession, OHLCVBar, OrderBlock, SwingPoint } from "./engine";
-import { computeOrderBlocks, computeSwings, formatCurrency } from "./engine";
+import type { BoardStock, OHLCVBar, SwingPoint } from "./engine";
+import { candleIndexAt, computeOrderBlocks, computeSwings, formatCurrency } from "./engine";
 
-export function SparklineSvg({
-  stock,
-  candles,
-}: {
-  stock: StockSession;
-  candles: OHLCVBar[];
-}) {
-  const cl = candles.map((x) => x.c);
-  const lv = [stock.zLo, stock.zHi, stock.S1, stock.R1, stock.R2];
-  const mx = Math.max(...cl, ...lv);
-  const mn = Math.min(...cl, ...lv);
+/** Levels close enough to the day's candles to plot without flattening them. */
+function levelsInView(levels: Array<number | null | undefined>, lo: number, hi: number): number[] {
+  const range = Math.max(hi - lo, hi * 0.004);
+  return levels.filter(
+    (v): v is number => v != null && Number.isFinite(v) && v >= lo - range * 1.6 && v <= hi + range * 1.6,
+  );
+}
+
+export function SparklineSvg({ stock, candles }: { stock: BoardStock; candles: OHLCVBar[] }) {
   const W = 200;
   const H = 80;
+  if (candles.length === 0) return null;
+  const cl = candles.map((x) => x.c);
+  const cMin = Math.min(...candles.map((x) => x.l));
+  const cMax = Math.max(...candles.map((x) => x.h));
+  const zone = stock.zone;
+  const pv = stock.pivots;
+  const lv = levelsInView([zone?.lo, zone?.hi, pv?.s1, pv?.r1, pv?.r2], cMin, cMax);
+  const mx = Math.max(cMax, ...lv);
+  const mn = Math.min(cMin, ...lv);
   const y = (v: number) => 4 + ((mx - v) / (mx - mn || 1)) * (H - 8);
-  const col = stock.bull ? "#3ddc84" : "#f0565a";
+  const col = stock.pctChange >= 0 ? "#3ddc84" : "#f0565a";
+  // x spans the full 78-bar session, so the line's length shows time elapsed.
   const x = (i: number) => (i / 78) * W;
-
-  const points = cl.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+  const k = candles.length - 1;
+  const zi = zone ? candleIndexAt(candles, zone.startT) : -1;
+  const inView = (v: number | null | undefined): v is number => v != null && lv.includes(v);
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      style={{ display: "block", width: "100%", height: "100%" }}
-    >
-      <rect
-        x={x(stock.zi)}
-        y={y(stock.zHi)}
-        width={W - x(stock.zi)}
-        height={Math.max(2, y(stock.zLo) - y(stock.zHi))}
-        fill="rgba(201,162,74,.22)"
-        stroke="#c9a24a"
-        vectorEffect="non-scaling-stroke"
-      />
-      {[
-        ["s", stock.S1, "rgba(230,235,232,.45)"],
-        ["r1", stock.R1, "rgba(224,187,94,.6)"],
-        ["r2", stock.R2, "rgba(224,187,94,.6)"],
-      ].map(([k, v, cc]) => (
-        <line
-          key={k as string}
-          x1={0}
-          x2={W}
-          y1={y(v as number)}
-          y2={y(v as number)}
-          stroke={cc as string}
-          strokeDasharray="3 3"
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", height: "100%" }}>
+      {zone && zi >= 0 && inView(zone.hi) && inView(zone.lo) && (
+        <rect
+          x={x(zi)}
+          y={y(zone.hi)}
+          width={W - x(zi)}
+          height={Math.max(2, y(zone.lo) - y(zone.hi))}
+          fill="rgba(201,162,74,.22)"
+          stroke="#c9a24a"
           vectorEffect="non-scaling-stroke"
         />
-      ))}
+      )}
+      {(
+        [
+          ["s", pv?.s1, "rgba(230,235,232,.45)"],
+          ["r1", pv?.r1, "rgba(224,187,94,.6)"],
+          ["r2", pv?.r2, "rgba(224,187,94,.6)"],
+        ] as Array<[string, number | null | undefined, string]>
+      )
+        .filter(([, v]) => inView(v))
+        .map(([key, v, cc]) => (
+          <line
+            key={key}
+            x1={0}
+            x2={W}
+            y1={y(v as number)}
+            y2={y(v as number)}
+            stroke={cc}
+            strokeDasharray="3 3"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
       <polyline
-        points={points}
+        points={cl.map((v, i) => `${x(i)},${y(v)}`).join(" ")}
         fill="none"
         stroke={col}
         strokeWidth={1.5}
         vectorEffect="non-scaling-stroke"
       />
-      <line
-        x1={x(stock.k)}
-        x2={x(stock.k)}
-        y1={0}
-        y2={H}
-        stroke="rgba(255,255,255,.15)"
-        vectorEffect="non-scaling-stroke"
-      />
-      <circle cx={x(stock.k)} cy={y(stock.px)} r={2.5} fill="#fff" />
+      <line x1={x(k)} x2={x(k)} y1={0} y2={H} stroke="rgba(255,255,255,.15)" vectorEffect="non-scaling-stroke" />
+      <circle cx={x(k)} cy={y(cl[k])} r={2.5} fill="#fff" />
     </svg>
   );
 }
 
-export function MiniProfileSvg({
-  stock,
-  candles,
-}: {
-  stock: StockSession;
-  candles: OHLCVBar[];
-}) {
+export function MiniProfileSvg({ stock, candles }: { stock: BoardStock; candles: OHLCVBar[] }) {
   const W = 120;
   const H = 60;
-  const obs = computeOrderBlocks(stock, candles).filter((b) => !b.mit);
+  if (candles.length === 0) return null;
+  const obs = computeOrderBlocks(candles).filter((b) => !b.mit);
   const hi = Math.max(...candles.map((x) => x.h));
   const lo = Math.min(...candles.map((x) => x.l));
   const NB = 14;
@@ -95,10 +95,10 @@ export function MiniProfileSvg({
     .fill(0)
     .map(() => ({ u: 0, d: 0 }));
 
-  candles.forEach((x, i) => {
-    const v = stock.vb[i] || 0;
+  // Volume at price: each bar's volume in the bin of its mid price, split by candle colour.
+  candles.forEach((x) => {
     const j = Math.min(NB - 1, Math.max(0, Math.floor(((x.h + x.l) / 2 - lo) / bs)));
-    bins[j][x.c >= x.o ? "u" : "d"] += v;
+    bins[j][x.c >= x.o ? "u" : "d"] += x.v;
   });
 
   const tot = bins.map((b) => b.u + b.d);
@@ -108,9 +108,10 @@ export function MiniProfileSvg({
   const bh = (H - 4) / NB;
   const LW = 78;
 
-  const vw = candles[candles.length - 1]?.vw ?? stock.px;
-  const ly = y(stock.px);
-  const lc = stock.bull ? "#3ddc84" : "#f0565a";
+  const last = candles[candles.length - 1];
+  const vw = last.vw;
+  const ly = y(last.c);
+  const lc = stock.pctChange >= 0 ? "#3ddc84" : "#f0565a";
 
   return (
     <svg
@@ -202,7 +203,7 @@ export function FullChartSvg({
   width = 900,
   height = 340,
 }: {
-  stock: StockSession;
+  stock: BoardStock;
   candles: OHLCVBar[];
   layers: { ob: boolean; vwap: boolean; fvg: boolean; liq: boolean; str: boolean };
   tf?: number;
@@ -210,7 +211,8 @@ export function FullChartSvg({
   height?: number;
 }) {
   const NB = Math.round(390 / tf) + 1;
-  const ZI = Math.floor((stock.zi * 5) / tf);
+  const zone = stock.zone;
+  const ZI = zone ? candleIndexAt(candles, zone.startT) : -1;
   const KI = candles.length - 1;
   const W = width;
   const H = height;
@@ -221,13 +223,15 @@ export function FullChartSvg({
   const cw = (W - PL - PR) / (NB || 1);
   const fz = 11;
 
-  const safeStockPx = Number.isFinite(stock.px) && stock.px > 0 ? stock.px : (stock.p0 || 100);
+  const lastPx = candles.length ? candles[candles.length - 1].c : stock.price;
+  const safeStockPx = Number.isFinite(lastPx) && lastPx > 0 ? lastPx : stock.price;
+  const pv = stock.pivots;
 
-  const rawLevels: Array<[string, number]> = [
-    ["R2", stock.R2],
-    ["R1", stock.R1],
-    ["S1", stock.S1],
-    ["S2", stock.S2],
+  const rawLevels: Array<[string, number | null]> = [
+    ["R2", pv?.r2 ?? null],
+    ["R1", pv?.r1 ?? null],
+    ["S1", pv?.s1 ?? null],
+    ["S2", pv?.s2 ?? null],
   ];
 
   const lv: Array<[string, number]> = rawLevels.filter(
@@ -238,9 +242,16 @@ export function FullChartSvg({
       Math.abs(x[1] - safeStockPx) / safeStockPx < 0.25
   );
 
-  const safeCandles = (candles && candles.length > 0)
-    ? candles
-    : [{ o: safeStockPx, c: safeStockPx, h: safeStockPx * 1.002, l: safeStockPx * 0.998, vw: safeStockPx }];
+  if (!candles || candles.length === 0) {
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ display: "block", width: "100%", height: "100%" }}>
+        <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={11} fill="#7a8481" fontFamily="'JetBrains Mono', monospace">
+          No regular-session bars yet
+        </text>
+      </svg>
+    );
+  }
+  const safeCandles = candles;
 
   const candleVals = safeCandles
     .flatMap((x) => [x.h, x.l, x.o, x.c])
@@ -274,8 +285,8 @@ export function FullChartSvg({
     return PT + ((mx - val) / (mx - mn || 1)) * (H - PT - PB);
   };
 
-  const zx = PL + ZI * cw;
-  const obs = layers.ob ? computeOrderBlocks(stock, safeCandles) : [];
+  const zx = PL + Math.max(0, ZI) * cw;
+  const obs = layers.ob ? computeOrderBlocks(safeCandles) : [];
   const swings = layers.liq || layers.str ? computeSwings(safeCandles, tf <= 3 ? 4 : tf >= 15 ? 2 : 3) : [];
 
   return (
@@ -302,25 +313,29 @@ export function FullChartSvg({
       {/* Order Block Base Zone */}
       {layers.ob && (
         <>
+          {zone && ZI >= 0 && (
+          <>
           <rect
             x={zx}
-            y={y(stock.zHi)}
+            y={y(zone.hi)}
             width={Math.max(2, W - PR - zx)}
-            height={Math.max(2, y(stock.zLo) - y(stock.zHi))}
+            height={Math.max(2, y(zone.lo) - y(zone.hi))}
             fill="rgba(201,162,74,.16)"
             stroke="#c9a24a"
             strokeWidth={1}
           />
           <text
             x={Math.min(zx + 5, W - PR - 150)}
-            y={y(stock.zHi) - 5}
+            y={y(zone.hi) - 5}
             fontSize={fz - 0.5}
             fill="#e0bb5e"
             fontFamily="'JetBrains Mono', monospace"
             fontWeight={700}
           >
-            {`OB ${formatCurrency(stock.zLo)}–${formatCurrency(stock.zHi)}`}
+            {`ZONE ${formatCurrency(zone.lo)}–${formatCurrency(zone.hi)}`}
           </text>
+          </>
+          )}
 
           {obs.map((b, bi) => {
             const x1 = PL + b.i * cw;
@@ -530,8 +545,8 @@ export function FullChartSvg({
         const hiAll = Math.max(...safeCandles.map((q) => q.h));
         const loAll = Math.min(...safeCandles.map((q) => q.l));
         const eq = (hiAll + loAll) / 2;
-        const pdh = stock.p0 * 1.0065;
-        const pdl = stock.p0 * 0.9938;
+        const pdh = stock.prevHigh ?? NaN;
+        const pdl = stock.prevLow ?? NaN;
 
         const orn = Math.max(1, Math.round(30 / tf));
         const orb = safeCandles.slice(0, Math.min(N, orn));
@@ -579,9 +594,9 @@ export function FullChartSvg({
               ? "FALLING WEDGE"
               : s1 > 0 && s2 > 0 && s2 > s1
               ? "RISING WEDGE"
-              : Math.abs(s1) < stock.p0 * 0.00002 && s2 > 0
+              : Math.abs(s1) < safeStockPx * 0.00002 && s2 > 0
               ? "ASCENDING TRIANGLE"
-              : s1 < 0 && Math.abs(s2) < stock.p0 * 0.00002
+              : s1 < 0 && Math.abs(s2) < safeStockPx * 0.00002
               ? "DESCENDING TRIANGLE"
               : s1 > 0 && s2 > 0
               ? "ASCENDING CHANNEL"
@@ -911,21 +926,21 @@ export function FullChartSvg({
       <line
         x1={PL}
         x2={W - PR}
-        y1={y(stock.px)}
-        y2={y(stock.px)}
+        y1={y(safeStockPx)}
+        y2={y(safeStockPx)}
         stroke="#ffffff"
         strokeWidth={0.8}
         strokeDasharray="2 2"
       />
       <text
         x={W - PR + 4}
-        y={y(stock.px) + 4}
+        y={y(safeStockPx) + 4}
         fontSize={10}
         fill="#ffffff"
         fontFamily="'JetBrains Mono', monospace"
         fontWeight={700}
       >
-        {formatCurrency(stock.px)}
+        {formatCurrency(safeStockPx)}
       </text>
     </svg>
   );
