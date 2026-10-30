@@ -724,6 +724,104 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .chan{display:inline-flex;gap:5px;align-items:center}
 .chan .ci{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;color:#fff}
 
+/* ===== Jobs & API Docs tabs =====================================================
+   Everything is prefixed ops-/jb-/sa- so it cannot collide with the older tabs. */
+.ops-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+.ops-chip{display:inline-flex;gap:6px;align-items:center;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 10px;color:var(--dim);white-space:nowrap}
+.ops-chip b{font-family:var(--f-mono);font-weight:600;color:var(--hi)}
+button.ops-chip{cursor:pointer;font-family:inherit}
+button.ops-chip:hover{border-color:var(--border2);color:var(--text)}
+button.ops-chip.on{border-color:var(--brand);color:var(--hi);background:#4ADE800f}
+.ops-spacer{flex:1}
+.ops-btn{font:600 12px var(--f-body);color:var(--on-brand);background:var(--brand);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+.ops-btn:hover{filter:brightness(1.08)}
+.ops-btn[disabled]{opacity:.45;cursor:not-allowed;filter:none}
+.ops-btn.ghost{background:var(--surface);color:var(--text);border:1px solid var(--border2)}
+.ops-btn.ghost:hover{border-color:var(--brand);color:var(--hi)}
+.ops-btn.sm{padding:6px 11px;font-size:11.5px}
+.ops-btn.warn{background:var(--warn)}
+.ops-btn.danger{background:var(--down);color:#fff}
+.ops-pl{display:inline-flex;align-items:center;gap:5px;font:600 10.5px var(--f-mono);padding:2px 8px;border-radius:20px;letter-spacing:.02em;white-space:nowrap}
+.ops-pl i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;flex:none}
+.ops-ok{color:var(--up);background:#4ADE8016}
+.ops-warn{color:var(--warn);background:#F5B5441a}
+.ops-bad{color:var(--down);background:#F8717116}
+.ops-miss{color:#C084FC;background:#C084FC1a}
+.ops-dim{color:var(--dim);background:#ffffff0d}
+.ops-info{color:var(--info);background:#2FB6A814}
+.ops-mono{font-family:var(--f-mono)}
+.ops-dimtx{color:var(--dim)}
+.ops-dim2tx{color:var(--dim2)}
+.ops-note{font-size:12.5px;line-height:1.55;color:var(--dim);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin:0 0 14px}
+.ops-note.warn{border-color:#F5B54455;background:#F5B5440d;color:#e8c88a}
+.ops-note.bad{border-color:#F8717155;background:#F871710d;color:#f3a6a6}
+.ops-note b{color:var(--hi)}
+.ops-empty{padding:34px 20px;text-align:center;color:var(--dim);font-size:13px}
+.ops-search{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font:13px var(--f-body);outline:none;min-width:230px}
+.ops-search:focus{border-color:var(--brand)}
+.ops-tbl{width:100%;border-collapse:collapse}
+.ops-tbl td{vertical-align:top}
+.ops-tbl tbody tr.ops-row{cursor:pointer}
+.ops-tbl tbody tr.ops-detail{cursor:default;background:#ffffff05}
+.ops-tbl tbody tr.ops-detail:hover{background:#ffffff05}
+.ops-tbl tbody tr.ops-detail td{padding:14px 18px 18px;border-bottom:1px solid var(--border)}
+.ops-kv{display:grid;grid-template-columns:150px 1fr;gap:7px 14px;font-size:12.5px}
+.ops-kv .k{color:var(--dim2);font:600 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;padding-top:2px}
+.ops-kv .v{color:var(--text);min-width:0;word-break:break-word}
+.ops-trunc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ops-err{font:11.5px var(--f-mono);color:var(--down);word-break:break-all;margin-top:4px}
+.ops-err.old{color:#8a7a4a}
+
+/* Jobs */
+.jb-name{font:600 13px var(--f-mono);color:var(--hi)}
+.jb-sub{font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.45}
+.jb-cron{font:11px var(--f-mono);color:var(--brand2)}
+.jb-runs{border-top:1px solid var(--border)}
+.jb-run{display:grid;grid-template-columns:minmax(120px,1.1fr) minmax(130px,1fr) 108px minmax(0,2fr);gap:12px;align-items:baseline;padding:10px 16px;border-bottom:1px solid #14181B;font-size:12.5px}
+.jb-run:last-child{border-bottom:0}
+.jb-lock{font-size:11.5px;color:var(--warn);margin-top:5px}
+.jb-modal-box{border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin:0 0 12px;font-size:12.5px;line-height:1.55;background:var(--surface2)}
+.jb-modal-box.warn{border-color:#F5B54466;background:#F5B54410;color:#e8c88a}
+.jb-modal-box.bad{border-color:#F8717166;background:#F8717112;color:#f3a6a6}
+.jb-modal-box b{color:var(--hi)}
+.jb-modal-box label{display:flex;gap:9px;align-items:flex-start;cursor:pointer;margin-top:8px;color:var(--text)}
+.jb-modal-box input[type=checkbox]{margin-top:3px;accent-color:var(--brand)}
+
+/* API Docs */
+.sa-wrap{display:grid;grid-template-columns:292px minmax(0,1fr);gap:16px;align-items:start}
+.sa-side{position:sticky;top:76px;max-height:calc(100vh - 100px);overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px}
+.sa-side .ops-search{width:100%;min-width:0;margin-bottom:8px}
+.sa-grp{font:600 9.5px var(--f-mono);letter-spacing:.16em;color:var(--dim2);text-transform:uppercase;padding:12px 8px 5px}
+.sa-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;color:var(--dim);font-size:13px}
+.sa-item:hover{background:#ffffff08;color:var(--text)}
+.sa-item.on{background:linear-gradient(90deg,#4ADE8022,#4ADE8008);color:var(--hi)}
+.sa-item .sa-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sa-item .sa-n{font:600 10.5px var(--f-mono);color:var(--dim2)}
+.sa-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--dim2)}
+.sa-dot.ok{background:var(--up)} .sa-dot.degraded{background:var(--warn)} .sa-dot.down{background:var(--down)} .sa-dot.missing{background:#C084FC} .sa-dot.unknown{background:var(--dim2);opacity:.6}
+.sa-main{min-width:0}
+.sa-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 4px}
+.sa-title h2{font:600 18px var(--f-disp);color:var(--hi);margin:0}
+.sa-meta{font-size:12px;color:var(--dim);margin:0 0 8px}
+.sa-meta code{font:11.5px var(--f-mono);color:var(--brand2)}
+.sa-sum{font-size:13px;line-height:1.55;color:var(--text);margin:0 0 12px;max-width:900px}
+.sa-method{font:700 10.5px var(--f-mono);letter-spacing:.02em}
+.sa-path{font:12.5px var(--f-mono);color:var(--hi);word-break:break-all}
+.sa-api-sum{font-size:12px;color:var(--dim);margin-top:3px;line-height:1.45}
+.sa-store{font:11px var(--f-mono);color:var(--dim2);margin-top:3px;word-break:break-all}
+.sa-job{display:inline-flex;align-items:center;gap:5px;font:600 10.5px var(--f-mono);padding:2px 8px;border-radius:20px;background:#ffffff0d;color:var(--text);border:0;cursor:pointer;margin:0 4px 4px 0}
+.sa-job:hover{background:#ffffff18}
+.sa-job i{width:6px;height:6px;border-radius:50%;background:var(--dim2);display:inline-block}
+.sa-job.ok i{background:var(--up)} .sa-job.failing i{background:var(--down)} .sa-job.late i{background:var(--warn)} .sa-job.never-run i{background:var(--dim2)} .sa-job.manual i{background:var(--info)} .sa-job.unknown i{background:var(--dim2)}
+.sa-scr{display:inline-block;font:600 10.5px var(--f-body);padding:2px 8px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--dim);cursor:pointer;margin:0 4px 4px 0}
+.sa-scr:hover{border-color:var(--brand);color:var(--hi)}
+.sa-chk{font:11.5px var(--f-mono);white-space:nowrap}
+.sa-reasons{margin:0;padding-left:18px;font-size:12px;color:var(--dim);line-height:1.6}
+.sa-sec{font:600 10px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim2);margin:16px 0 8px}
+@media(max-width:1180px){.sa-wrap{grid-template-columns:1fr}.sa-side{position:static;max-height:260px}}
+.sa-wrap.one{grid-template-columns:1fr}
+.sa-wrap.one .sa-side{display:none}
+
 </style>
 </head>
 <body>
@@ -734,6 +832,8 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
     <div class="nav-sec" data-sec="Operate">
     <button type="button" class="navlbl" data-sec="Operate" aria-expanded="false"><span class="sec-name">Operate</span><span class="sec-dot" aria-hidden="true"></span><svg class="sec-caret" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="nav" data-view="monitor"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Monitor</div>
+    <div class="nav" data-view="jobs"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Jobs</div>
+    <div class="nav" data-view="apidocs"><svg viewBox="0 0 24 24" fill="none"><path d="M5 4h10l4 4v12H5V4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M15 4v4h4M8.5 12h7M8.5 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>API Docs</div>
     <div class="nav on" data-view="overview">
       <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="5" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="12" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="16" width="7" height="5" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>Overview</div>
     <div class="nav" data-view="revenue"><svg viewBox="0 0 24 24" fill="none"><path d="M4 15l4-4 3 3 5-6 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Revenue</div>
@@ -876,19 +976,51 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
       </section>
 
       <section class="view" id="monitor">
-        <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px">
-          <div class="card-h" style="padding:14px 16px">
-            <h3>Jobs &amp; scheduler</h3>
-            <span class="sub">what runs, and what actually triggers it</span>
-          </div>
-          <div id="jobsWrap" style="padding:14px 16px"></div>
-        </div>
         <div class="card" style="padding:0;overflow:hidden">
           <div class="card-h" style="padding:14px 16px">
             <h3>Backend services</h3>
             <span class="sub" id="monitorSrc">market-catalyst-backend</span>
           </div>
           <div id="monitorWrap" style="height:calc(100vh - 190px);min-height:460px;padding:14px 16px"></div>
+        </div>
+      </section>
+
+      <!-- JOBS: every scheduled job, its health, and Run now -->
+      <section class="view" id="jobs">
+        <div id="jbHead"></div>
+        <div class="ops-bar">
+          <input class="ops-search" id="jbSearch" type="search" placeholder="Filter jobs…" autocomplete="off" aria-label="Filter jobs">
+          <span class="ops-bar" id="jbFilters" style="margin:0"></span>
+          <span class="ops-spacer"></span>
+          <span class="ops-dim2tx" id="jbStamp" style="font-size:11.5px"></span>
+          <button class="ops-btn ghost sm" id="jbRefresh" type="button">Refresh</button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table class="ops-tbl">
+            <thead><tr><th style="width:34%">Job</th><th style="width:22%">Schedule (declared)</th><th style="width:13%">Next run</th><th style="width:20%">Last run</th><th style="width:11%"></th></tr></thead>
+            <tbody id="jbBody"></tbody>
+          </table>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;margin-top:14px">
+          <div class="card-h" style="padding:14px 16px;margin:0"><h3>Manual runs</h3><span class="sub">started from this tab · newest first</span></div>
+          <div class="jb-runs" id="jbRuns"></div>
+        </div>
+      </section>
+
+      <!-- API DOCS: which screen calls which API, and whether it is healthy -->
+      <section class="view" id="apidocs">
+        <div id="saChips"></div>
+        <div class="ops-bar">
+          <input class="ops-search" id="saSearch" type="search" placeholder="Search screens and APIs…" autocomplete="off" aria-label="Search screens and APIs">
+          <span class="ops-bar" id="saModes" style="margin:0"></span>
+          <span class="ops-spacer"></span>
+          <span class="ops-dim2tx" id="saStamp" style="font-size:11.5px"></span>
+          <button class="ops-btn ghost sm" id="saCheckAll" type="button" title="Call every API that is safe to call from this browser, as you">Check all</button>
+          <button class="ops-btn ghost sm" id="saRefresh" type="button" title="Re-run the health probe and re-read job status">Refresh status</button>
+        </div>
+        <div class="sa-wrap" id="saWrap">
+          <aside class="sa-side"><div id="saList"></div></aside>
+          <div class="sa-main" id="saMain"></div>
         </div>
       </section>
 
@@ -1104,6 +1236,17 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
     </div>
   </div>
   <div class="mf"><button class="btn-pub" style="flex:none;padding:11px 20px" onclick="closeMcpCreated()">Done</button></div>
+</div>
+
+<!-- JOB: confirm a manual run -->
+<div class="scrim" id="jbScrim" onclick="jbCloseRun()"></div>
+<div class="modal" id="jbModal" style="width:min(560px,94vw)" role="dialog" aria-modal="true" aria-labelledby="jbModalTitle">
+  <div class="mh"><h3 id="jbModalTitle">Run job</h3><button class="x" type="button" onclick="jbCloseRun()" aria-label="Close"><svg viewBox="0 0 24 24" width="16" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div class="mb">
+    <div id="jbModalBody"></div>
+    <div class="mstatus err" id="jbStatus" role="alert" style="display:none"></div>
+  </div>
+  <div class="mf"><button class="ops-btn ghost" type="button" style="padding:10px 18px;font-size:13px" onclick="jbCloseRun()">Cancel</button><button class="ops-btn" type="button" id="jbGo" style="padding:10px 20px;font-size:13px" disabled>Run now</button></div>
 </div>
 
 <!-- ARTICLE PREVIEW -->
@@ -3737,7 +3880,7 @@ function initBlogs(){
 initBlogs();
 
 /* ---------- nav ---------- */
-const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>',blogs:'Blogs <span>· publish articles to your site</span>',mcpkeys:'MCP Keys <span>· connect Claude to your blog</span>'};
+const TITLES={overview:'Overview <span>· last 30 days</span>',users:'Users',subs:'Subscriptions',revenue:'Revenue',usage:'Usage &amp; API',monitor:'Monitor <span>· backend services</span>',jobs:'Jobs <span>· scheduled work, and run it now</span>',apidocs:'API Docs <span>· which screen calls which API</span>',studio:'Social Studio <span>· push to Instagram &amp; more</span>',blogs:'Blogs <span>· publish articles to your site</span>',mcpkeys:'MCP Keys <span>· connect Claude to your blog</span>'};
 /* The Monitor tab lists the backend's API surface (GET /admin/api-health,
    staged in REAL.apiHealth) and health-checks the safely-probeable endpoints.
    The iframe has no Firebase token, so a live Re-check is delegated to the
@@ -3841,131 +3984,480 @@ function paintApiHealth(){
   if (btn) btn.onclick = function(){ btn.textContent='Checking…'; btn.disabled=true; parent.postMessage({ type:'admin:apiHealth' }, '*'); };
 }
 
-/* ── Jobs & scheduler ────────────────────────────────────────────────────────
-   What actually runs, and what actually triggers it. Reads GET
-   /api/admin/jobs (live service) which joins Firestore `sync_meta` run history
-   onto the JOB_MANIFEST — see MarketCatalystBackEnd/src/common/job-manifest.ts.
+/* ── Jobs ────────────────────────────────────────────────────────────────────
+   Every sync job: when it is declared to run, when it last did, whether that
+   went well, and a Run now button. Reads GET /api/admin/jobs, which joins the
+   manifest (src/common/job-manifest.ts) onto Firestore sync_meta, the job
+   leases and the manual-run log — see api-health.controller.ts.
 
-   The distinction this panel exists to make: a job's `cronExpression` in the
-   registry schedules NOTHING. Only a Cloud Scheduler entry or a premarket phase
-   actually fires one, so jobs are grouped by that and never by their declared
-   cron. */
-var JOBS = null;          /* last payload from the parent bridge */
-var JOBS_ERR = null;
-var JOBS_LOADING = false;
+   Two things worth knowing before reading the table:
+   - Schedules are the DECLARED ones, transcribed from Cloud Scheduler into the
+     manifest. They are documentation of the deploy, not a read of it.
+   - Run now starts a Cloud Run Job execution and returns at once; the job runs
+     for as long as it needs to and reports back into "Manual runs" below.
+   The iframe holds no backend token, so every call goes through the parent
+   (admin:jobs / admin:jobRuns / admin:jobRun). */
+var JB = {
+  data: null, err: null, loading: false,
+  runs: null, runsErr: null,
+  filter: 'all', q: '', open: {},
+  pending: null,          /* the run dialog: { name, stale, locked } */
+  submitting: false,
+  pollT: null, lastJobs: 0
+};
 
-var AH_TRIGGERS = [
-  { key:'scheduler', label:'Cloud Scheduler', color:'#4ADE80',
-    hint:'own scheduler entry POSTs /sync/&lt;name&gt;/run' },
-  { key:'premarket', label:'Via premarket job', color:'#F0A33C',
-    hint:'no entry of its own — runs as a phase of premarket-job' },
-  { key:'none',      label:'Not triggered',    color:'#F87171',
-    hint:'nothing fires this — reachable by manual run only' }
-];
+var JB_TRIG = {
+  scheduler: { label: 'Scheduler', cls: 'ops-ok',   hint: 'Its own Cloud Scheduler entry fires it.' },
+  premarket: { label: 'Premarket', cls: 'ops-warn', hint: 'It has no entry of its own: it runs as a phase of the premarket job.' },
+  none:      { label: 'Manual only', cls: 'ops-dim', hint: 'Nothing fires it. It runs only when someone starts it.' }
+};
+var JB_TZ = { 'America/New_York': 'ET', 'America/Chicago': 'CT' };
+var JB_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function ahAgo(iso){
-  if (!iso) return 'never';
+function jbFromParent(e){ return e.source === window.parent; }
+function jbPad(n){ return (n < 10 ? '0' : '') + n; }
+function jbTz(tz){ return JB_TZ[tz] || tz || ''; }
+function jbFind(name){
+  var l = (JB.data && JB.data.jobs) || [];
+  for (var i = 0; i < l.length; i++) if (l[i].name === name) return l[i];
+  return null;
+}
+function jbActive(){ var v = document.getElementById('jobs'); return !!(v && v.classList.contains('on')); }
+
+/* "in 8m" / "12m ago". */
+function jbRel(iso){
   var t = Date.parse(iso);
-  if (!isFinite(t)) return ahEsc(iso);
-  var s = Math.max(0, (Date.now() - t) / 1000);
-  if (s < 90) return Math.round(s) + 's ago';
-  if (s < 5400) return Math.round(s/60) + 'm ago';
-  if (s < 172800) return Math.round(s/3600) + 'h ago';
-  return Math.round(s/86400) + 'd ago';
+  if (!isFinite(t)) return '';
+  var s = (t - Date.now()) / 1000, a = Math.abs(s), txt;
+  if (a < 45) txt = 'a moment';
+  else if (a < 5400) txt = Math.round(a / 60) + 'm';
+  else if (a < 172800) txt = Math.round(a / 3600) + 'h';
+  else txt = Math.round(a / 86400) + 'd';
+  return s >= 0 ? 'in ' + txt : (txt === 'a moment' ? 'just now' : txt + ' ago');
 }
-function ahJobRow(j){
-  var mono = 'font-family:var(--f-mono,ui-monospace,monospace)';
-  var stale = j.lastStatus === 'error';
-  var never = !j.lastSyncedAt;
-  var statusColor = never ? 'var(--dim)' : stale ? '#F87171' : '#4ADE80';
-  var statusText  = never ? 'never run'
-                  : stale ? 'error'
-                  : 'ok' + (j.lastCount != null ? ' · ' + j.lastCount : '');
-  var sched = (j.schedules && j.schedules.length)
-    ? j.schedules.map(function(c){ return '<code style="'+mono+';font-size:11px;color:#A7F3C0">'+ahEsc(c)+'</code>'; }).join(' <span style="color:var(--dim)">+</span> ')
-    : '<span style="color:var(--dim);font-size:11px">no schedule</span>';
-  /* lastError is the last error EVER recorded, not the current state — a job
-     that failed once and has succeeded since still carries it. Painting it red
-     beside a green "ok" badge reads as broken. Red only when the job is
-     actually failing now; otherwise amber and labelled as historical. */
-  var err = j.lastError
-    ? '<div style="'+mono+';font-size:11px;color:'+(stale?'#F87171':'#8a7a4a')+';margin-top:4px;'
-      + 'word-break:break-all;max-height:34px;overflow:hidden">'
-      + (stale ? '↳ ' : '<span style="font-family:var(--f-disp),system-ui">last error · recovered</span> ↳ ')
-      + ahEsc(j.lastError)+'</div>'
-    : '';
-  var note = j.note
-    ? '<div style="font-size:11px;color:var(--dim);margin-top:3px">'+ahEsc(j.note)+'</div>'
-    : '';
-  return '<div style="padding:10px 12px;border-bottom:1px solid #14181B;font-size:12.5px">'
-    + '<div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) auto;gap:12px;align-items:baseline">'
-    + '<span style="min-width:0"><b style="color:var(--hi);'+mono+'">'+ahEsc(j.name)+'</b></span>'
-    + '<span style="min-width:0">'+sched+'</span>'
-    + '<span style="text-align:right;white-space:nowrap;color:'+statusColor+'">● '+statusText
-    + ' <span style="color:var(--dim)">· '+ahAgo(j.lastSyncedAt)+'</span></span>'
-    + '</div>' + note + err + '</div>';
+/* "Fri 10:15 AM EDT" in the job's own zone — schedules are written in it. */
+function jbAbs(iso, tz){
+  var t = Date.parse(iso);
+  if (!isFinite(t)) return '';
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: tz || undefined, weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(new Date(t));
+  } catch (e) { return new Date(t).toLocaleString(); }
 }
-function ahJobsHtml(p){
-  var jobs = p.jobs || [], c = p.counts || {};
-  var head = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 0 12px">'
-    + ahChip('jobs', c.total||0)
-    + ahChip('scheduler', c.scheduler||0, '#4ADE80')
-    + ahChip('via premarket', c.premarket||0, '#F0A33C')
-    + ahChip('not triggered', c.none||0, (c.none?'#F87171':'var(--dim)'))
-    + ahChip('failing', c.failing||0, (c.failing?'#F87171':'var(--dim)'))
-    + ahChip('never run', c.neverRun||0, (c.neverRun?'#F5B544':'var(--dim)'))
-    + '<span style="flex:1"></span>'
-    + '<button id="jobsRecheck" style="font:600 12px/1 var(--f-disp),system-ui;color:#0E1013;'
-    + 'background:#2FB6A8;border:0;border-radius:8px;padding:8px 14px;cursor:pointer">Refresh</button>'
-    + '</div>';
-  var groups = AH_TRIGGERS.map(function(g){
-    var rows = jobs.filter(function(j){ return j.trigger === g.key; });
-    if (!rows.length) return '';
-    rows.sort(function(a,b){ return a.name < b.name ? -1 : 1; });
-    return '<div style="margin:0 0 14px">'
-      + '<div style="display:flex;align-items:center;gap:8px;margin:0 0 6px">'
-      + '<span style="font:700 12px/1 var(--f-disp),system-ui;color:'+g.color+'">'+g.label+'</span>'
-      + '<span style="font-size:11px;color:var(--dim)">'+rows.length+' · '+g.hint+'</span></div>'
-      + '<div style="border:1px solid #14181B;border-radius:10px;background:#0B0D10;overflow:hidden">'
-      + rows.map(ahJobRow).join('') + '</div></div>';
-  }).join('');
-  var warn = p.metaError
-    ? '<div style="font-size:11.5px;color:#F5B544;padding:0 0 10px">Run history unavailable ('
-      + ahEsc(p.metaError) + ') — schedules below are still accurate.</div>'
-    : '';
-  return head + warn + groups;
+function jbAbsFull(iso){
+  var t = Date.parse(iso);
+  return isFinite(t) ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '';
 }
-function paintJobs(){
-  var wrap = document.getElementById('jobsWrap');
-  if (!wrap) return;
-  if (JOBS_LOADING && !JOBS){ wrap.innerHTML = '<div style="padding:18px;color:var(--dim);font-size:12.5px">Loading jobs…</div>'; return; }
-  if (!JOBS){
-    wrap.innerHTML = '<div style="padding:18px;color:var(--dim);font-size:12.5px">'
-      + (JOBS_ERR ? 'Could not load jobs: ' + ahEsc(JOBS_ERR) : 'Sign in as the admin to load the job inventory.')
-      + '<br><button id="jobsRecheck" style="margin-top:10px;font:600 12px/1 var(--f-disp),system-ui;'
-      + 'color:#0E1013;background:#2FB6A8;border:0;border-radius:8px;padding:8px 14px;cursor:pointer">Retry</button>'
-      + '</div>';
-  } else {
-    wrap.innerHTML = ahJobsHtml(JOBS);
+
+/* A 5-field cron expression in words, or null when it is not one of the simple
+   shapes the manifest uses (the raw text is shown either way). */
+function jbDays(f){
+  if (f === '*') return 'daily';
+  var set = {}, parts = f.split(',');
+  for (var i = 0; i < parts.length; i++){
+    var m = /^([0-7])(?:-([0-7]))?$/.exec(parts[i]);
+    if (!m) return null;
+    var a = +m[1], b = m[2] === undefined ? a : +m[2];
+    if (b < a) return null;
+    for (var d = a; d <= b; d++) set[d % 7] = true;
   }
-  var b = document.getElementById('jobsRecheck');
-  if (b) b.onclick = function(){ b.textContent='Loading…'; b.disabled=true; requestJobs(); };
+  var days = [0, 1, 2, 3, 4, 5, 6].filter(function(d){ return set[d]; });
+  if (days.length === 7) return 'daily';
+  var key = days.join('');
+  if (key === '12345') return 'Mon–Fri';
+  if (key === '06') return 'Sat & Sun';
+  return days.map(function(d){ return JB_DOW[d]; }).join(', ');
 }
-function requestJobs(){
-  JOBS_LOADING = true;
-  parent.postMessage({ type:'admin:jobs' }, '*');
+function jbHours(f){
+  if (f === '*') return { all: true };
+  var s = /^\*\/(\d+)$/.exec(f);
+  if (s) return { step: +s[1] };
+  var ranges = [], parts = f.split(',');
+  for (var i = 0; i < parts.length; i++){
+    var r = /^(\d{1,2})(?:-(\d{1,2}))?$/.exec(parts[i]);
+    if (!r) return null;
+    var a = +r[1], b = r[2] === undefined ? a : +r[2];
+    if (a > 23 || b > 23 || b < a) return null;
+    ranges.push([a, b]);
+  }
+  return { ranges: ranges };
 }
+function jbCron(expr){
+  var f = String(expr || '').trim().split(/\s+/);
+  if (f.length !== 5 || f[2] !== '*' || f[3] !== '*') return null;
+  var days = jbDays(f[4]), h = jbHours(f[1]);
+  if (days === null || !h) return null;
+  var tail = days === 'daily' ? '' : ', ' + days;
+  var stepM = /^\*\/(\d+)$/.exec(f[0]);
+  var every = f[0] === '*' ? 1 : (stepM ? +stepM[1] : 0);
+  if (every){
+    if (every > 59) return null;
+    var head = 'Every ' + every + ' min';
+    if (h.all) return head + tail;
+    if (!h.ranges) return null;
+    var last = Math.floor(59 / every) * every;
+    return head + ', ' + h.ranges.map(function(r){ return jbPad(r[0]) + ':00–' + jbPad(r[1]) + ':' + jbPad(last); }).join(' and ') + tail + (days === 'daily' ? ' daily' : '');
+  }
+  if (!/^\d{1,2}$/.test(f[0]) || +f[0] > 59) return null;
+  var M = +f[0];
+  if (h.all) return 'Hourly at :' + jbPad(M) + tail;
+  if (h.step) return (h.step === 1 ? 'Hourly' : 'Every ' + h.step + ' h') + (M ? ' at :' + jbPad(M) : '') + tail;
+  var times = [];
+  h.ranges.forEach(function(r){ for (var x = r[0]; x <= r[1]; x++) times.push(jbPad(x) + ':' + jbPad(M)); });
+  if (times.length > 6) return null;
+  return times.join(', ') + (days === 'daily' ? ' daily' : tail);
+}
+
+/* ── state helpers ── */
+function jbInflightRun(name){
+  var l = (JB.runs || []);
+  for (var i = 0; i < l.length; i++) if (l[i].job === name && (l[i].status === 'queued' || l[i].status === 'running')) return l[i];
+  var j = jbFind(name), a = j && j.lastAdminRun;
+  return a && (a.status === 'queued' || a.status === 'running') ? a : null;
+}
+function jbLeaseLive(j){ return !!(j.lock && !j.lock.probablyStale); }
+function jbRunning(j){ return !!jbInflightRun(j.name) || jbLeaseLive(j); }
+function jbRank(j){ return j.health === 'failing' ? 0 : j.health === 'late' ? 1 : jbRunning(j) ? 2 : 3; }
+function jbHasInflight(){
+  var l = (JB.runs || []);
+  for (var i = 0; i < l.length; i++) if (l[i].status === 'queued' || l[i].status === 'running') return true;
+  return false;
+}
+function jbMatches(j){
+  if (JB.q){
+    var q = JB.q.toLowerCase();
+    if (j.name.toLowerCase().indexOf(q) < 0 && String(j.note || '').toLowerCase().indexOf(q) < 0) return false;
+  }
+  switch (JB.filter){
+    case 'scheduler': return j.trigger === 'scheduler';
+    case 'premarket': return j.trigger === 'premarket';
+    case 'none':      return j.trigger === 'none';
+    case 'attention': return j.health === 'failing' || j.health === 'late';
+    case 'running':   return jbRunning(j);
+  }
+  return true;
+}
+
+/* ── rendering ── */
+function jbSchedCell(j){
+  if (!j.schedules || !j.schedules.length) return '<span class="ops-dimtx">no schedule</span>';
+  return j.schedules.map(function(c){
+    var words = jbCron(c);
+    return '<div>' + (words ? ahEsc(words) : '<span class="jb-cron">' + ahEsc(c) + '</span>') + '</div>'
+      + (words ? '<div class="jb-cron">' + ahEsc(c) + '</div>' : '');
+  }).join('') + '<div class="jb-sub">' + ahEsc(jbTz(j.timeZone)) + '</div>';
+}
+function jbNextCell(j){
+  if (!j.nextRunAt) return '<span class="ops-dimtx">—</span>';
+  return '<div title="' + ahEsc(jbAbsFull(j.nextRunAt)) + '">' + ahEsc(jbRel(j.nextRunAt)) + '</div><div class="jb-sub">' + ahEsc(jbAbs(j.nextRunAt, j.timeZone)) + '</div>';
+}
+function jbLastCell(j){
+  if (!j.lastSyncedAt) return '<span class="ops-dimtx">never run</span>';
+  var bad = j.lastStatus === 'error';
+  var txt = bad ? 'error' : 'ok' + (j.lastCount != null ? ' · ' + j.lastCount : '');
+  var out = '<span class="ops-pl ' + (bad ? 'ops-bad' : 'ops-ok') + '"><i></i>' + ahEsc(txt) + '</span> '
+    + '<span class="ops-dimtx" title="' + ahEsc(jbAbsFull(j.lastSyncedAt)) + '">' + ahEsc(jbRel(j.lastSyncedAt)) + '</span>';
+  if (j.health === 'late') out += '<div class="jb-lock">late — was due ' + ahEsc(jbAbs(j.expectedBy, j.timeZone)) + '</div>';
+  return out;
+}
+function jbActionCell(j){
+  var r = JB.data && JB.data.runner;
+  if (jbRunning(j)) return '<button class="ops-btn ghost sm" type="button" disabled>Running…</button>';
+  var off = !(r && r.available);
+  return '<button class="ops-btn sm" type="button" data-act="run" data-job="' + ahEsc(j.name) + '"'
+    + (off ? ' disabled title="' + ahEsc((r && r.reason) || 'Run now is not available here.') + '"' : '') + '>Run now</button>';
+}
+function jbNameCell(j){
+  var t = JB_TRIG[j.trigger] || JB_TRIG.none;
+  var out = '<div><span class="jb-name">' + ahEsc(j.name) + '</span> <span class="ops-pl ' + t.cls + '" title="' + ahEsc(t.hint) + '">' + t.label + '</span>';
+  if (j.health === 'failing') out += ' <span class="ops-pl ops-bad">failing</span>';
+  else if (j.health === 'late') out += ' <span class="ops-pl ops-warn">late</span>';
+  if (j.risk) out += ' <span class="ops-pl ' + (j.risk.level === 'destructive' ? 'ops-bad' : 'ops-warn') + '" title="' + ahEsc(j.risk.note) + '">' + (j.risk.level === 'destructive' ? 'deletes data' : 'caution') + '</span>';
+  out += '</div>';
+  if (j.note) out += '<div class="jb-sub ops-trunc">' + ahEsc(j.note) + '</div>';
+  if (jbLeaseLive(j)) out += '<div class="jb-lock">running now — lease until ' + ahEsc(jbAbs(j.lock.heldUntil, j.timeZone)) + '</div>';
+  else if (j.lock) out += '<div class="jb-lock">a finished run left its lease in place until ' + ahEsc(jbAbs(j.lock.heldUntil, j.timeZone)) + '</div>';
+  var run = jbInflightRun(j.name);
+  if (run) out += '<div class="jb-lock">manual run ' + ahEsc(run.status) + ' — started by ' + ahEsc(run.requestedBy) + ' ' + ahEsc(jbRel(run.requestedAt)) + '</div>';
+  return out;
+}
+function jbDetail(j){
+  var t = JB_TRIG[j.trigger] || JB_TRIG.none;
+  var kv = [['Trigger', ahEsc(t.hint)]];
+  kv.push(['Declared schedule', j.schedules.length
+    ? j.schedules.map(function(c){ return '<span class="jb-cron">' + ahEsc(c) + '</span>'; }).join('<br>') + ' <span class="ops-dimtx">(' + ahEsc(j.timeZone) + ')</span>'
+    : '<span class="ops-dimtx">none</span>']);
+  if (j.note) kv.push(['Notes', ahEsc(j.note)]);
+  if (j.risk) kv.push(['Run risk', '<span class="' + (j.risk.level === 'destructive' ? 'ops-err' : 'jb-lock') + '" style="margin:0">' + ahEsc(j.risk.note) + '</span>']);
+  kv.push(['Runs recorded', (j.runCount == null ? '—' : j.runCount) + (j.errorCount ? ' · <span class="ops-err" style="display:inline;margin:0">' + j.errorCount + ' errors</span>' : '')]);
+  if (j.lastSuccessAt) kv.push(['Last success', ahEsc(jbAbsFull(j.lastSuccessAt)) + ' <span class="ops-dimtx">(' + ahEsc(jbRel(j.lastSuccessAt)) + ')</span>']);
+  if (j.lastFailedAt) kv.push(['Last failure', ahEsc(jbAbsFull(j.lastFailedAt)) + ' <span class="ops-dimtx">(' + ahEsc(jbRel(j.lastFailedAt)) + ')</span>']);
+  if (j.lastError){
+    /* lastError is the last error EVER recorded, not the current state: a job
+       that failed once and has succeeded since still carries it. Red only when
+       the job is failing now. */
+    var now = j.lastStatus === 'error';
+    kv.push([now ? 'Last error' : 'Last error (recovered)', '<div class="ops-err' + (now ? '' : ' old') + '" style="margin:0">' + ahEsc(j.lastError) + '</div>']);
+  }
+  if (j.lock) kv.push(['Lease', 'held by <span class="ops-mono">' + ahEsc(j.lock.owner) + '</span> since ' + ahEsc(jbAbsFull(j.lock.acquiredAt)) + ', until ' + ahEsc(jbAbsFull(j.lock.heldUntil))
+    + (j.lock.probablyStale ? ' — <b>stale</b>: the job has recorded a run since, so nothing is running' : '')]);
+  if (j.lastAdminRun) kv.push(['Latest manual run', jbRunLine(j.lastAdminRun, true)]);
+  return '<tr class="ops-detail"><td colspan="5"><div class="ops-kv">'
+    + kv.map(function(p){ return '<div class="k">' + p[0] + '</div><div class="v">' + p[1] + '</div>'; }).join('') + '</div></td></tr>';
+}
+function jbRow(j){
+  var open = !!JB.open[j.name];
+  return '<tr class="ops-row" data-name="' + ahEsc(j.name) + '" tabindex="0" aria-expanded="' + open + '">'
+    + '<td>' + jbNameCell(j) + '</td><td>' + jbSchedCell(j) + '</td><td>' + jbNextCell(j) + '</td><td>' + jbLastCell(j) + '</td>'
+    + '<td style="text-align:right">' + jbActionCell(j) + '</td></tr>' + (open ? jbDetail(j) : '');
+}
+
+var JB_RUN_ST = {
+  queued: ['ops-info', 'queued'], running: ['ops-info', 'running'], succeeded: ['ops-ok', 'succeeded'],
+  failed: ['ops-bad', 'failed'], skipped: ['ops-warn', 'skipped'], 'dispatch-failed': ['ops-bad', 'not started'], lost: ['ops-dim', 'lost']
+};
+function jbRunLine(r, inline){
+  var st = JB_RUN_ST[r.status] || ['ops-dim', r.status];
+  var detail = r.error ? '<span class="ops-err" style="display:inline;margin:0">' + ahEsc(r.error) + '</span>'
+    : r.summary ? ahEsc(r.summary)
+    : r.status === 'lost' ? '<span class="ops-dimtx">No result ever arrived — the execution may have died, or it runs an image that predates run reporting.</span>'
+    : '';
+  if (inline) return '<span class="ops-pl ' + st[0] + '"><i></i>' + st[1] + '</span> ' + ahEsc(r.requestedBy) + ' <span class="ops-dimtx">' + ahEsc(jbRel(r.requestedAt)) + '</span>' + (detail ? '<div style="margin-top:4px">' + detail + '</div>' : '');
+  return '<div class="jb-run"><span class="jb-name">' + ahEsc(r.job) + '</span>'
+    + '<span>' + ahEsc(r.requestedBy) + ' <span class="ops-dimtx" title="' + ahEsc(jbAbsFull(r.requestedAt)) + '">' + ahEsc(jbRel(r.requestedAt)) + '</span></span>'
+    + '<span><span class="ops-pl ' + st[0] + '"><i></i>' + st[1] + '</span></span>'
+    + '<span class="ops-dimtx" style="min-width:0">' + (detail || '') + (r.executionName ? '<div class="jb-sub ops-mono">' + ahEsc(r.executionName) + (r.attempt ? ' · attempt ' + (r.attempt + 1) : '') + '</div>' : '')
+    + (r.clearedStaleLock ? '<div class="jb-sub">cleared a stale lease to start</div>' : '') + '</span></div>';
+}
+
+function jbPaintHead(){
+  var el = document.getElementById('jbHead');
+  if (!JB.data){ el.innerHTML = ''; return; }
+  var d = JB.data, c = d.counts || {}, h = '';
+  var chip = function(label, val, color){ return '<span class="ops-chip"><b' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</b>' + label + '</span>'; };
+  h += '<div class="ops-bar">' + chip('jobs', c.total || 0)
+    + chip('scheduler', c.scheduler || 0, '#4ADE80') + chip('via premarket', c.premarket || 0, '#F0A33C') + chip('manual only', c.none || 0)
+    + chip('failing', c.failing || 0, c.failing ? '#F87171' : '') + chip('late', c.late || 0, c.late ? '#F5B544' : '')
+    + chip('never run', c.neverRun || 0, c.neverRun ? '#F5B544' : '') + chip('running now', c.running || 0, c.running ? '#2FB6A8' : '') + '</div>';
+  if (d.runner && !d.runner.available) h += '<div class="ops-note warn"><b>Run now is not available on this service.</b> ' + ahEsc(d.runner.reason || '') + '</div>';
+  var warn = [];
+  if (d.metaError) warn.push('Run history is unavailable (' + d.metaError + ') — schedules below are still accurate.');
+  if (d.lockError) warn.push('Lease state is unavailable (' + d.lockError + ') — a running job will not show as running.');
+  if (d.runsError) warn.push('Manual-run history is unavailable (' + d.runsError + ').');
+  if (warn.length) h += '<div class="ops-note warn">' + warn.map(ahEsc).join('<br>') + '</div>';
+  h += '<div class="ops-note">Schedules are the <b>declared</b> ones, transcribed from Cloud Scheduler into <span class="ops-mono">job-manifest.ts</span> — documentation of the deploy, not a live read of it. <span class="ops-mono">gcloud scheduler jobs list</span> shows what is really deployed.</div>';
+  el.innerHTML = h;
+}
+function jbPaintFilters(){
+  var l = (JB.data && JB.data.jobs) || [], c = JB.data && JB.data.counts || {};
+  var f = [['all', 'All', l.length], ['scheduler', 'Scheduler', c.scheduler || 0], ['premarket', 'Premarket', c.premarket || 0], ['none', 'Manual only', c.none || 0],
+           ['attention', 'Needs attention', (c.failing || 0) + (c.late || 0)], ['running', 'Running', c.running || 0]];
+  document.getElementById('jbFilters').innerHTML = f.map(function(x){
+    return '<button type="button" class="ops-chip' + (JB.filter === x[0] ? ' on' : '') + '" data-filter="' + x[0] + '">' + x[1] + ' <b>' + x[2] + '</b></button>';
+  }).join('');
+}
+function jbPaint(){
+  var body = document.getElementById('jbBody'), runsEl = document.getElementById('jbRuns'), stamp = document.getElementById('jbStamp');
+  var msg = function(t, retry){ return '<tr><td colspan="5" class="ops-empty">' + t + (retry ? '<br><button class="ops-btn ghost sm" type="button" data-act="refresh" style="margin-top:10px">Retry</button>' : '') + '</td></tr>'; };
+  if (!JB.data){
+    body.innerHTML = JB.loading ? msg('Loading jobs…') : msg(JB.err ? 'Could not load jobs: ' + ahEsc(JB.err) : (IS_DEMO ? 'Sign in as the admin to load the job inventory.' : 'Loading jobs…'), !!JB.err);
+    runsEl.innerHTML = ''; stamp.textContent = ''; jbPaintHead(); jbPaintFilters();
+    return;
+  }
+  jbPaintHead(); jbPaintFilters();
+  var rows = JB.data.jobs.filter(jbMatches).sort(function(a, b){ return jbRank(a) - jbRank(b) || (a.name < b.name ? -1 : 1); });
+  body.innerHTML = rows.length ? rows.map(jbRow).join('') : msg(JB.q || JB.filter !== 'all' ? 'No jobs match that filter.' : 'No jobs.');
+  var runs = JB.runs || [];
+  runsEl.innerHTML = runs.length ? runs.map(function(r){ return jbRunLine(r, false); }).join('')
+    : '<div class="ops-empty">' + (JB.runsErr ? 'Could not load manual runs: ' + ahEsc(JB.runsErr) : 'No manual runs yet. Use <b>Run now</b> on any job above.') + '</div>';
+  stamp.textContent = 'updated ' + new Date(JB.data.generatedAt).toLocaleTimeString();
+}
+
+/* ── talking to the parent ── */
+function jbFetch(){
+  if (IS_DEMO) { JB.err = null; jbPaint(); return; }
+  JB.loading = !JB.data;
+  JB.lastJobs = Date.now();
+  parent.postMessage({ type: 'admin:jobs' }, location.origin);
+}
+function jbFetchRuns(){ if (!IS_DEMO) parent.postMessage({ type: 'admin:jobRuns', limit: 25 }, location.origin); }
+
 window.addEventListener('message', function(e){
   var d = e.data || {};
-  if (d.type !== 'admin:jobsResult') return;
-  JOBS_LOADING = false;
-  if (d.ok && d.data){ JOBS = d.data; JOBS_ERR = null; }
-  else { JOBS_ERR = d.error || 'error'; }
-  paintJobs();
+  if (!jbFromParent(e)) return;
+  if (d.type === 'admin:jobsResult'){
+    JB.loading = false;
+    if (d.ok && d.data){ JB.data = d.data; JB.err = null; } else { JB.err = d.error || 'error'; }
+    jbPaint();
+  } else if (d.type === 'admin:jobRunsResult'){
+    if (d.ok && d.data){ JB.runs = d.data.runs || []; JB.runsErr = null; } else { JB.runsErr = d.error || 'error'; }
+    jbPaint();
+    if (JB.pending) jbSyncGo();
+  } else if (d.type === 'admin:jobRunResult'){
+    jbRunResult(d);
+  }
 });
 
-/* Monitor paints both panels; jobs are fetched once per visit. */
-function renderMonitor(){ paintApiHealth(); paintJobs(); if (!JOBS && !JOBS_LOADING) requestJobs(); }
+/* While the tab is open: quick polling when a run is in flight, a slow refresh
+   otherwise. Stops the moment the tab is left. */
+function jbPoll(){
+  JB.pollT = null;
+  if (!jbActive()) return;
+  var busy = jbHasInflight() || (JB.data && JB.data.counts && JB.data.counts.running > 0);
+  jbFetchRuns();
+  if (busy || Date.now() - JB.lastJobs > 45000) jbFetch();
+  JB.pollT = setTimeout(jbPoll, busy ? 5000 : 30000);
+}
+function jbStartPolling(){ if (!JB.pollT) JB.pollT = setTimeout(jbPoll, 5000); }
+function jbStopPolling(){ if (JB.pollT){ clearTimeout(JB.pollT); JB.pollT = null; } }
+function renderJobs(){
+  jbPaint();
+  if (!IS_DEMO){ jbFetch(); jbFetchRuns(); jbStartPolling(); }
+}
+
+/* ── the Run dialog ── */
+function jbBox(cls, html){ return '<div class="jb-modal-box ' + cls + '">' + html + '</div>'; }
+function jbRunBody(j){
+  var r = (JB.data && JB.data.runner) || {}, p = JB.pending, h = '';
+  document.getElementById('jbModalTitle').textContent = 'Run ' + j.name + ' now?';
+  h += '<p style="margin:0 0 12px;font-size:13px;line-height:1.55;color:var(--text)">' + (j.note ? ahEsc(j.note) : 'No notes are recorded for this job.') + '</p>';
+  h += '<div class="ops-kv" style="margin-bottom:14px"><div class="k">Declared</div><div class="v">'
+    + (j.schedules.length ? j.schedules.map(function(c){ return ahEsc(jbCron(c) || c); }).join(' + ') + ' ' + ahEsc(jbTz(j.timeZone)) : 'not scheduled — manual only') + '</div>'
+    + '<div class="k">Where it runs</div><div class="v">' + ahEsc(r.target || 'unknown') + '</div></div>';
+  if (j.risk) h += jbBox(j.risk.level === 'destructive' ? 'bad' : 'warn', '<b>' + (j.risk.level === 'destructive' ? 'This job deletes data.' : 'Heads up.') + '</b> ' + ahEsc(j.risk.note));
+  var live = (j.lock && !j.lock.probablyStale) || p.locked, stale = (j.lock && j.lock.probablyStale) || p.stale;
+  if (live && !stale){
+    h += jbBox('bad', '<b>It is running now.</b> ' + (j.lock ? 'Its lease is held until ' + ahEsc(jbAbs(j.lock.heldUntil, j.timeZone)) + '. ' : '') + 'A second copy would double every vendor call and interleave writes, so it cannot be started until the first finishes.');
+  } else if (stale){
+    h += jbBox('warn', '<b>A finished run left its lease in place</b>' + (j.lock ? ' until ' + ahEsc(jbAbs(j.lock.heldUntil, j.timeZone)) : '') + '. Nothing is running — the job has recorded a run since the lease was taken — but the lease would make this run refuse to start.'
+      + '<label><input type="checkbox" id="jbClear"> Clear the stale lease and run</label>');
+  }
+  if (j.risk && j.risk.level === 'destructive'){
+    h += '<label class="fl" for="jbConfirm">Type <b style="color:var(--hi)">' + ahEsc(j.name) + '</b> to confirm</label><input id="jbConfirm" class="inp" autocomplete="off" spellcheck="false" placeholder="' + ahEsc(j.name) + '">';
+  }
+  h += '<p style="font-size:12px;color:var(--dim);margin:12px 0 0;line-height:1.5">The run happens in the background and can take minutes. It appears under <b>Manual runs</b> with who started it and how it ended.</p>';
+  document.getElementById('jbModalBody').innerHTML = h;
+  ['jbClear', 'jbConfirm'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.addEventListener(id === 'jbClear' ? 'change' : 'input', jbSyncGo);
+  });
+  jbSyncGo();
+}
+function jbSyncGo(){
+  var go = document.getElementById('jbGo');
+  if (!JB.pending){ return; }
+  var j = jbFind(JB.pending.name);
+  if (!j){ go.disabled = true; return; }
+  var live = ((j.lock && !j.lock.probablyStale) || JB.pending.locked) && !((j.lock && j.lock.probablyStale) || JB.pending.stale);
+  var needsClear = (j.lock && j.lock.probablyStale) || JB.pending.stale;
+  var clr = document.getElementById('jbClear'), conf = document.getElementById('jbConfirm');
+  var ok = !live && !JB.submitting && (!needsClear || (clr && clr.checked)) && (!conf || conf.value === j.name) && !jbInflightRun(j.name);
+  go.disabled = !ok;
+  go.textContent = JB.submitting ? 'Starting…' : 'Run now';
+  go.className = 'ops-btn' + (j.risk && j.risk.level === 'destructive' ? ' danger' : '');
+}
+function jbStatus(text){
+  var s = document.getElementById('jbStatus');
+  s.style.display = text ? 'block' : 'none';
+  s.textContent = text || '';
+}
+function jbOpenRun(name){
+  var j = jbFind(name);
+  if (!j) return;
+  JB.pending = { name: name, stale: false, locked: false };
+  JB.submitting = false;
+  jbStatus('');
+  jbRunBody(j);
+  document.getElementById('jbScrim').classList.add('on');
+  document.getElementById('jbModal').classList.add('on');
+  setTimeout(function(){
+    var f = document.getElementById('jbConfirm') || document.getElementById('jbClear') || document.getElementById('jbGo');
+    if (f && !f.disabled) f.focus();
+  }, 40);
+}
+function jbCloseRun(){
+  JB.pending = null; JB.submitting = false;
+  document.getElementById('jbScrim').classList.remove('on');
+  document.getElementById('jbModal').classList.remove('on');
+}
+function jbSubmitRun(){
+  var p = JB.pending;
+  if (!p || JB.submitting) return;
+  var msg = { type: 'admin:jobRun', job: p.name }, conf = document.getElementById('jbConfirm'), clr = document.getElementById('jbClear');
+  if (conf) msg.confirm = conf.value;
+  if (clr && clr.checked) msg.clearStaleLock = true;
+  JB.submitting = true;
+  jbStatus('');
+  jbSyncGo();
+  parent.postMessage(msg, location.origin);
+}
+function jbRunResult(d){
+  JB.submitting = false;
+  if (d.ok){
+    jbCloseRun();
+    toast('Started ' + d.job + (d.run && d.run.transport === 'cloud-run-job' ? ' — it reports back under Manual runs' : ''));
+    if (d.run){ JB.runs = [d.run].concat((JB.runs || []).filter(function(r){ return r.id !== d.run.id; })); }
+    jbPaint(); jbFetchRuns(); jbFetch(); jbStartPolling();
+    return;
+  }
+  var p = JB.pending;
+  if (p){
+    /* The server is the authority on the lease: believe it over a stale view. */
+    if (d.code === 'JOB_LOCK_STALE') p.stale = true;
+    if (d.code === 'JOB_LOCKED' || d.code === 'ALREADY_REQUESTED') p.locked = true;
+    var j = jbFind(p.name);
+    if (j) jbRunBody(j);
+    jbStatus(d.error || 'Could not start the job.');
+  } else {
+    toast('Could not start ' + d.job + ': ' + (d.error || 'error'));
+  }
+  jbFetch(); jbFetchRuns();
+}
+
+/* ── wiring ── */
+(function(){
+  var body = document.getElementById('jbBody');
+  body.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-act]');
+    if (btn){
+      e.stopPropagation();
+      if (btn.dataset.act === 'run') jbOpenRun(btn.dataset.job);
+      else if (btn.dataset.act === 'refresh') { JB.err = null; jbFetch(); jbFetchRuns(); }
+      return;
+    }
+    var row = e.target.closest('tr.ops-row');
+    if (row){ var n = row.dataset.name; JB.open[n] = !JB.open[n]; jbPaint(); }
+  });
+  body.addEventListener('keydown', function(e){
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('tr.ops-row')){
+      e.preventDefault();
+      var n = e.target.dataset.name; JB.open[n] = !JB.open[n]; jbPaint();
+      var again = body.querySelector('tr.ops-row[data-name="' + n + '"]'); if (again) again.focus();
+    }
+  });
+  document.getElementById('jbFilters').addEventListener('click', function(e){
+    var b = e.target.closest('[data-filter]');
+    if (b){ JB.filter = b.dataset.filter; jbPaint(); }
+  });
+  document.getElementById('jbSearch').addEventListener('input', function(e){ JB.q = e.target.value.trim(); jbPaint(); });
+  document.getElementById('jbRefresh').addEventListener('click', function(){ JB.err = null; jbFetch(); jbFetchRuns(); });
+  document.getElementById('jbGo').addEventListener('click', jbSubmitRun);
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && JB.pending) jbCloseRun();
+    if (e.key === 'Enter' && JB.pending && e.target && e.target.id === 'jbConfirm'){ e.preventDefault(); if (!document.getElementById('jbGo').disabled) jbSubmitRun(); }
+  });
+  /* Keep "in 8m" honest between fetches. */
+  setInterval(function(){ if (jbActive() && JB.data && !JB.pending) jbPaint(); }, 30000);
+})();
+
+/* Jump here from the API Docs tab, showing one job. */
+function jbFocus(name){
+  JB.filter = 'all'; JB.q = name; JB.open[name] = true;
+  var s = document.getElementById('jbSearch'); if (s) s.value = name;
+  switchView('jobs');
+}
+
+/* The Monitor tab paints the backend-services panel; jobs have their own tab. */
+function renderMonitor(){ paintApiHealth(); }
 window.addEventListener('message', function(e){
   const d = e.data || {};
   if (d.type !== 'admin:apiHealthResult') return;
@@ -3973,6 +4465,358 @@ window.addEventListener('message', function(e){
   paintApiHealth();
   if (!d.ok) document.getElementById('monitorSrc').textContent = 'Re-check failed: ' + (d.error || 'error');
 });
+
+/* ── API Docs ────────────────────────────────────────────────────────────────
+   Which screen calls which API, and whether each is healthy. The catalogue is
+   src/api-health/screen-api.registry.ts, joined server-side with the live route
+   table, the health probe and the status of the jobs that fill each API's data
+   (GET /api/admin/screen-apis). It is served only to the admin and never
+   shipped in this file, because it maps the internal API surface.
+
+   Status means "nothing KNOWN is wrong" — see screen-api.service.ts:
+     ok          the route is there and what is known about it is fine
+     degraded    a job that fills its data failed, is late, or never ran
+     down        the health probe, or a live check, could not reach it
+     missing     the service does not have the route: this doc or the deploy is off
+     not monitored  nothing checks it unattended (it needs a signed-in user)
+   "Run checks" upgrades the last kind: it calls the safe GET APIs from this
+   browser, as the admin, the way a real page would. */
+var SA = {
+  data: null, err: null, loading: false,
+  sel: null, mode: 'screen', q: '', st: 'all', open: {},
+  checks: {}, runId: 0, running: null, note: ''
+};
+var SA_ST = {
+  ok:       { l: 'OK',            c: 'ops-ok'   },
+  degraded: { l: 'Degraded',      c: 'ops-warn' },
+  down:     { l: 'Down',          c: 'ops-bad'  },
+  missing:  { l: 'Missing',       c: 'ops-miss' },
+  unknown:  { l: 'Not monitored', c: 'ops-dim'  }
+};
+var SA_ORDER = ['down', 'missing', 'degraded', 'unknown', 'ok'];
+var SA_AUTH = { 'public': ['Public', 'ops-dim'], login: ['Login', 'ops-info'], admin: ['Admin', 'ops-bad'], 'mcp-key': ['MCP key', 'ops-miss'] };
+
+function saFromParent(e){ return e.source === window.parent; }
+function saPl(st){ var m = SA_ST[st] || SA_ST.unknown; return '<span class="ops-pl ' + m.c + '"><i></i>' + m.l + '</span>'; }
+function saActive(){ var v = document.getElementById('apidocs'); return !!(v && v.classList.contains('on')); }
+function saScreen(id){
+  var l = (SA.data && SA.data.screens) || [];
+  for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i];
+  return null;
+}
+
+/* A live check can only add information: a failure marks the API down or
+   degraded; a success promotes "not monitored" to ok. It never hides a
+   problem the server already found. */
+function saEff(key){
+  var row = SA.data.apis[key], c = SA.checks[key], s = row.status;
+  if (c && !c.skipped){
+    if (c.ok === false) return (c.status >= 500 || c.status === 0) ? 'down' : 'degraded';
+    if (c.ok === true && s === 'unknown') return 'ok';
+  }
+  return s;
+}
+function saWorst(list){
+  if (!list.length) return 'unknown';
+  for (var i = 0; i < 3; i++) if (list.indexOf(SA_ORDER[i]) >= 0) return SA_ORDER[i];
+  return list.indexOf('ok') >= 0 ? 'ok' : 'unknown';
+}
+function saScreenStatus(s){ return saWorst(s.apiKeys.map(saEff)); }
+function saCounts(keys){
+  var c = { ok: 0, degraded: 0, down: 0, missing: 0, unknown: 0 };
+  keys.forEach(function(k){ c[saEff(k)] += 1; });
+  return c;
+}
+
+/* ── search ── */
+function saScreenMatches(s){
+  if (!SA.q) return true;
+  var q = SA.q.toLowerCase();
+  if ((s.label + ' ' + s.route + ' ' + s.summary + ' ' + s.group).toLowerCase().indexOf(q) >= 0) return true;
+  return s.apiKeys.some(function(k){ return k.toLowerCase().indexOf(q) >= 0; });
+}
+function saApiMatches(key){
+  var row = SA.data.apis[key], st = saEff(key);
+  if (SA.st === 'unused') { if (row.screens.length) return false; }
+  else if (SA.st !== 'all' && st !== SA.st) return false;
+  if (!SA.q) return true;
+  var q = SA.q.toLowerCase();
+  return (key + ' ' + row.summary + ' ' + row.store.join(' ') + ' ' + row.producers.map(function(p){ return p.job; }).join(' ')).toLowerCase().indexOf(q) >= 0;
+}
+
+/* ── pieces ── */
+function saJobChip(p){
+  var tip = p.job + ' — ' + p.health + (p.lastSyncedAt ? ', last ran ' + jbRel(p.lastSyncedAt) : '');
+  return '<button type="button" class="sa-job ' + ahEsc(p.health) + '" data-act="job" data-job="' + ahEsc(p.job) + '" title="' + ahEsc(tip) + '"><i></i>' + ahEsc(p.job) + '</button>';
+}
+function saCheckCell(key){
+  var c = SA.checks[key], plan = SA.data.apis[key].check;
+  if (c){
+    if (c.skipped) return '<span class="ops-dim2tx" title="' + ahEsc(c.skipped) + '">skipped</span>';
+    if (c.ok) return '<span class="sa-chk" style="color:' + (c.rows === 0 ? 'var(--warn)' : 'var(--up)') + '">200 · ' + c.ms + ' ms' + (c.rows != null ? ' · ' + c.rows + ' rows' : '') + '</span>';
+    return '<span class="sa-chk" style="color:var(--down)">' + (c.status || 'ERR') + ' · ' + c.ms + ' ms</span><div class="ops-err">' + ahEsc(c.error || '') + '</div>';
+  }
+  if (SA.running && plan && plan.url) return '<span class="ops-dim2tx">checking…</span>';
+  return '<span class="ops-dim2tx"' + (plan && plan.skip ? ' title="' + ahEsc('Not checked: ' + plan.skip) + '"' : '') + '>—</span>';
+}
+function saEndpointCell(key){
+  var row = SA.data.apis[key];
+  return '<span class="sa-method" style="color:' + ahMethodColor(row.method) + '">' + (row.sse ? 'SSE' : ahEsc(row.method)) + '</span> '
+    + '<span class="sa-path">' + ahEsc(row.path) + '</span>'
+    + '<div class="sa-api-sum">' + ahEsc(row.summary) + '</div>'
+    + (row.params ? '<div class="sa-store">inputs: ' + ahEsc(row.params) + '</div>' : '');
+}
+function saAuthCell(row){
+  if (!row.auth) return '<span class="ops-dim2tx">—</span>';
+  var a = SA_AUTH[row.auth] || [row.auth, 'ops-dim'];
+  return '<span class="ops-pl ' + a[1] + '">' + a[0] + '</span>';
+}
+function saDataCell(row){
+  var h = '';
+  if (row.store.length) h += '<div class="sa-store" style="margin:0 0 5px">' + row.store.map(ahEsc).join(' · ') + '</div>';
+  h += row.producers.map(saJobChip).join('');
+  if (!h) h = '<span class="ops-dim2tx">—</span>';
+  return h;
+}
+function saScreensCell(row){
+  if (!row.screens.length) return '<span class="ops-dim2tx">no screen</span>';
+  return row.screens.map(function(id){
+    var s = saScreen(id);
+    return '<button type="button" class="sa-scr" data-act="screen" data-id="' + ahEsc(id) + '">' + ahEsc(s ? s.label : id) + '</button>';
+  }).join('');
+}
+function saEvidence(key, cols){
+  var row = SA.data.apis[key], kv = [];
+  var vend = {};
+  (SA.data.vendors || []).forEach(function(v){ vend[v.name] = v; });
+  kv.push(['Does', ahEsc(row.summary)]);
+  if (row.params) kv.push(['Inputs', ahEsc(row.params)]);
+  if (row.store.length) kv.push(['Reads', '<span class="ops-mono">' + row.store.map(ahEsc).join(' · ') + '</span>']);
+  if (row.producers.length) kv.push(['Fed by', row.producers.map(function(p){
+    return '<div style="margin-bottom:4px">' + saJobChip(p) + ' <span class="ops-dimtx">' + ahEsc(p.health === 'never-run' ? 'never recorded a run' : p.health)
+      + (p.lastSyncedAt ? ' · last ran ' + jbRel(p.lastSyncedAt) : '') + (p.nextRunAt ? ' · next ' + jbRel(p.nextRunAt) : '') + '</span>'
+      + (p.health === 'failing' && p.lastError ? '<div class="ops-err">' + ahEsc(p.lastError) + '</div>' : '') + '</div>';
+  }).join('')]);
+  if (row.alsoWrittenBy.length) kv.push(['Also written by', row.alsoWrittenBy.map(function(j){ return '<button type="button" class="sa-job" data-act="job" data-job="' + ahEsc(j) + '"><i></i>' + ahEsc(j) + '</button>'; }).join('') + ' <span class="ops-dim2tx">(its loss would not stale this API)</span>']);
+  if (row.vendors.length) kv.push(['Calls', row.vendors.map(function(n){
+    var v = vend[n];
+    return '<span class="ops-pl ops-dim"' + (v ? ' title="' + ahEsc(n + (v.online ? ' is reachable' : (v.keyPresent ? ' is not responding' : ' has no key configured'))) + '"' : '') + '>'
+      + (v ? '<i style="color:' + (v.online ? 'var(--up)' : 'var(--down)') + '"></i>' : '') + ahEsc(n) + '</span> ';
+  }).join('') + ' <span class="ops-dim2tx">vendors are shown for context; one being offline does not change this API\'s status, because most routes fall back</span>']);
+  if (row.controller) kv.push(['Handler', '<span class="ops-mono">' + ahEsc(row.controller) + '</span>']);
+  kv.push(['Used by', saScreensCell(row)]);
+  kv.push(['Run checks', row.check.url ? 'would call <span class="ops-mono">GET ' + ahEsc(row.check.url) + '</span>' : '<span class="ops-dimtx">not checked — ' + ahEsc(row.check.skip) + '</span>']);
+  if (row.notes) kv.push(['Notes', ahEsc(row.notes)]);
+  return '<tr class="ops-detail"><td colspan="' + cols + '">'
+    + '<ul class="sa-reasons">' + row.reasons.map(function(r){ return '<li>' + ahEsc(r) + '</li>'; }).join('') + '</ul>'
+    + '<div class="ops-kv" style="margin-top:10px">' + kv.map(function(p){ return '<div class="k">' + p[0] + '</div><div class="v">' + p[1] + '</div>'; }).join('') + '</div></td></tr>';
+}
+
+/* One table serves both modes; only the last two columns differ. */
+function saTable(keys, mode){
+  var head = mode === 'screen'
+    ? '<th>Status</th><th>Endpoint</th><th>Access</th><th>Data & freshness</th><th>Live check</th>'
+    : '<th>Status</th><th>Endpoint</th><th>Access</th><th>Used by</th><th>Fed by</th>';
+  var rows = keys.map(function(k){
+    var row = SA.data.apis[k], st = saEff(k), open = !!SA.open[k];
+    return '<tr class="ops-row" data-key="' + ahEsc(k) + '" tabindex="0" aria-expanded="' + open + '">'
+      + '<td style="white-space:nowrap">' + saPl(st) + '</td><td>' + saEndpointCell(k) + '</td><td>' + saAuthCell(row) + '</td>'
+      + (mode === 'screen' ? '<td>' + saDataCell(row) + '</td><td>' + saCheckCell(k) + '</td>'
+                           : '<td>' + saScreensCell(row) + '</td><td>' + (row.producers.map(saJobChip).join('') || '<span class="ops-dim2tx">—</span>') + '</td>')
+      + '</tr>' + (open ? saEvidence(k, 5) : '');
+  }).join('');
+  return '<div class="card" style="padding:0;overflow:hidden"><table class="ops-tbl"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+/* ── painting ── */
+function saPaintChips(){
+  var el = document.getElementById('saChips'), d = SA.data;
+  if (!d){ el.innerHTML = ''; return; }
+  var all = Object.keys(d.apis), c = saCounts(all);
+  var chip = function(label, val, color, st){
+    var on = SA.mode === 'api' && SA.st === st;
+    return '<button type="button" class="ops-chip' + (on ? ' on' : '') + '" data-st="' + st + '"><b' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</b>' + label + '</button>';
+  };
+  var h = '<div class="ops-bar"><span class="ops-chip"><b>' + d.counts.screens + '</b>screens</span>'
+    + chip('APIs', d.counts.apis, '', 'all')
+    + chip('OK', c.ok, '#4ADE80', 'ok') + chip('degraded', c.degraded, c.degraded ? '#F5B544' : '', 'degraded')
+    + chip('down', c.down, c.down ? '#F87171' : '', 'down') + chip('missing', c.missing, c.missing ? '#C084FC' : '', 'missing')
+    + chip('not monitored', c.unknown, '', 'unknown') + chip('not used by a screen', d.counts.unusedApis, '', 'unused')
+    + (d.counts.undocumented ? '<button type="button" class="ops-chip' + (SA.mode === 'api' && SA.st === 'undoc' ? ' on' : '') + '" data-st="undoc"><b style="color:#C084FC">' + d.counts.undocumented + '</b>routes not documented</button>' : '')
+    + '</div>';
+  var notes = [];
+  if (d.probeError) notes.push('The health probe could not run (' + d.probeError + ') — statuses rely on job health only.');
+  if (d.metaError) notes.push('Job run history could not be read (' + d.metaError + ') — the freshness of job-fed data is not judged.');
+  if (notes.length) h += '<div class="ops-note warn">' + notes.map(ahEsc).join('<br>') + '</div>';
+  h += '<div class="ops-note"><b>OK</b> means nothing known is wrong, not that every call was tried. An API is <b>degraded</b> when a job that fills its data failed, is late or never ran; <b>not monitored</b> when nothing checks it unattended (it needs a signed-in user). <b>Check all</b> or <b>Run checks</b> calls the safe read-only APIs from this browser, as you.</div>';
+  el.innerHTML = h;
+}
+function saPaintModes(){
+  document.getElementById('saModes').innerHTML = [['screen', 'By screen'], ['api', 'By API']].map(function(m){
+    return '<button type="button" class="ops-chip' + (SA.mode === m[0] ? ' on' : '') + '" data-mode="' + m[0] + '">' + m[1] + '</button>';
+  }).join('');
+}
+function saPaintList(){
+  var list = document.getElementById('saList'), d = SA.data;
+  if (!d){ list.innerHTML = ''; return; }
+  var groups = d.groups.map(function(g){
+    var items = d.screens.filter(function(s){ return s.group === g && saScreenMatches(s); });
+    if (!items.length) return '';
+    return '<div class="sa-grp">' + ahEsc(g) + '</div>' + items.map(function(s){
+      return '<div class="sa-item' + (SA.sel === s.id ? ' on' : '') + '" data-act="screen" data-id="' + ahEsc(s.id) + '" tabindex="0">'
+        + '<span class="sa-dot ' + saScreenStatus(s) + '"></span><span class="sa-name">' + ahEsc(s.label) + '</span><span class="sa-n">' + s.apiKeys.length + '</span></div>';
+    }).join('');
+  }).join('');
+  list.innerHTML = groups || '<div class="ops-empty">No screen matches.</div>';
+}
+function saScreenPane(s){
+  var st = saScreenStatus(s), c = saCounts(s.apiKeys), h = '';
+  h += '<div class="sa-title"><h2>' + ahEsc(s.label) + '</h2>' + saPl(st) + '</div>';
+  h += '<p class="sa-meta"><code>' + ahEsc(s.route) + '</code> · <span class="ops-mono ops-dim2tx">' + ahEsc(s.repo + '/' + s.source) + '</span></p>';
+  h += '<p class="sa-sum">' + ahEsc(s.summary) + '</p>';
+  var checkable = s.apiKeys.filter(function(k){ return SA.data.apis[k].check.url; });
+  h += '<div class="ops-bar">'
+    + '<span class="ops-chip"><b>' + s.apiKeys.length + '</b>APIs</span>'
+    + SA_ORDER.map(function(k){ return c[k] ? '<span class="ops-chip"><b>' + c[k] + '</b>' + SA_ST[k].l.toLowerCase() + '</span>' : ''; }).join('')
+    + '<span class="ops-spacer"></span>'
+    + (SA.running && SA.running.screen === s.id ? '<span class="ops-dimtx" style="font-size:12px">checking ' + SA.running.done + ' of ' + SA.running.total + '…</span>' : (SA.note && SA.noteFor === s.id ? '<span class="ops-dimtx" style="font-size:12px">' + ahEsc(SA.note) + '</span>' : ''))
+    + '<button type="button" class="ops-btn sm" data-act="check" data-id="' + ahEsc(s.id) + '"' + (SA.running || !checkable.length ? ' disabled' : '') + ' title="' + ahEsc(checkable.length ? 'Call the ' + checkable.length + ' safe read-only APIs on this screen from this browser, as you' : 'None of this screen\'s APIs can be called safely from the browser') + '">Run checks' + (checkable.length ? ' (' + checkable.length + ')' : '') + '</button></div>';
+  if (s.id !== 'shell' && (s.group !== 'Admin' && s.group !== 'Other consumers')){
+    var shell = saScreen('shell');
+    if (shell) h += '<div class="ops-note">Like every signed-in screen, this one also loads the <button type="button" class="sa-scr" data-act="screen" data-id="shell">app shell\'s</button> ' + shell.apiKeys.length + ' APIs (header, search, notifications, live prices). They are listed there once.</div>';
+  }
+  h += s.apiKeys.length ? saTable(s.apiKeys, 'screen') : '<div class="ops-note">This screen makes no backend calls of its own.</div>';
+  return h;
+}
+function saApiPane(){
+  var d = SA.data, h = '';
+  if (SA.st === 'undoc'){
+    h += '<div class="ops-note warn"><b>' + d.undocumented.length + ' route' + (d.undocumented.length === 1 ? '' : 's') + '</b> ' + (d.undocumented.length === 1 ? 'exists' : 'exist') + ' on this service but ' + (d.undocumented.length === 1 ? 'is' : 'are') + ' not in the catalogue (<span class="ops-mono">screen-api.registry.ts</span>). Add each to <span class="ops-mono">API_CATALOG</span>, and to the screens that call it.</div>';
+    h += '<div class="card" style="padding:0;overflow:hidden"><table class="ops-tbl"><thead><tr><th>Endpoint</th><th>Access</th><th>Handler</th></tr></thead><tbody>'
+      + d.undocumented.map(function(u){
+        var a = SA_AUTH[u.auth] || [u.auth, 'ops-dim'];
+        return '<tr><td><span class="sa-method" style="color:' + ahMethodColor(u.method) + '">' + ahEsc(u.method) + '</span> <span class="sa-path">' + ahEsc(u.path) + '</span></td><td><span class="ops-pl ' + a[1] + '">' + a[0] + '</span></td><td class="ops-mono ops-dimtx">' + ahEsc(u.controller) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    return h;
+  }
+  var keys = Object.keys(d.apis).filter(saApiMatches).sort(function(a, b){
+    return SA_ORDER.indexOf(saEff(a)) - SA_ORDER.indexOf(saEff(b)) || (d.apis[a].path < d.apis[b].path ? -1 : d.apis[a].path > d.apis[b].path ? 1 : 0);
+  });
+  h += '<p class="sa-meta">' + keys.length + ' API' + (keys.length === 1 ? '' : 's') + (SA.st !== 'all' ? ' · ' + (SA.st === 'unused' ? 'not used by any screen' : SA_ST[SA.st].l.toLowerCase()) : '') + (SA.q ? ' · matching “' + ahEsc(SA.q) + '”' : '') + ' · problems first</p>';
+  h += keys.length ? saTable(keys, 'api') : '<div class="ops-note">Nothing matches.</div>';
+  if (SA.st === 'unused') h += '<div class="ops-note" style="margin-top:12px">These are diagnostics, legacy routes, ops-only and admin routes, or APIs the UI used to call — candidates for removal if nothing external depends on them.</div>';
+  return h;
+}
+function saPaint(){
+  var main = document.getElementById('saMain'), wrap = document.getElementById('saWrap'), stamp = document.getElementById('saStamp');
+  saPaintModes();
+  if (!SA.data){
+    document.getElementById('saChips').innerHTML = ''; document.getElementById('saList').innerHTML = ''; stamp.textContent = '';
+    wrap.classList.add('one');
+    main.innerHTML = '<div class="card"><div class="ops-empty">' + (SA.loading ? 'Loading the API catalogue…'
+      : SA.err ? 'Could not load the catalogue: ' + ahEsc(SA.err) + '<br><button class="ops-btn ghost sm" type="button" data-act="retry" style="margin-top:10px">Retry</button>'
+      : (IS_DEMO ? 'Sign in as the admin to load the API catalogue.' : 'Loading the API catalogue…')) + '</div></div>';
+    return;
+  }
+  var d = SA.data;
+  if (!SA.sel || !saScreen(SA.sel)) SA.sel = (d.screens.filter(function(s){ return s.id !== 'shell'; })[0] || d.screens[0] || {}).id || null;
+  saPaintChips(); saPaintList();
+  wrap.classList.toggle('one', SA.mode === 'api');
+  stamp.textContent = 'status as of ' + new Date(d.generatedAt).toLocaleTimeString() + (d.probeAt ? ' · probe ' + jbRel(d.probeAt) : '');
+  var s = saScreen(SA.sel);
+  main.innerHTML = SA.mode === 'api' ? saApiPane() : (s ? saScreenPane(s) : '<div class="ops-note">No screens.</div>');
+  document.getElementById('saCheckAll').disabled = !!SA.running;
+}
+
+/* ── talking to the parent ── */
+function saReq(fresh){
+  if (IS_DEMO){ saPaint(); return; }
+  SA.loading = !SA.data;
+  parent.postMessage({ type: 'admin:screenApis', fresh: !!fresh }, location.origin);
+  if (SA.loading) saPaint();
+}
+window.addEventListener('message', function(e){
+  var d = e.data || {};
+  if (!saFromParent(e)) return;
+  if (d.type === 'admin:screenApisResult'){
+    SA.loading = false;
+    if (d.ok && d.data){ SA.data = d.data; SA.err = null; } else { SA.err = d.error || 'error'; }
+    saPaint();
+  } else if (d.type === 'admin:apiCheckResult'){
+    if (!SA.running || d.runId !== SA.running.id) return;
+    SA.checks[d.key] = d;
+    if (!d.skipped){ SA.running.done += 1; if (d.ok === false) SA.running.failed += 1; }
+    saPaint();
+  } else if (d.type === 'admin:apiCheckDone'){
+    if (!SA.running || d.runId !== SA.running.id) return;
+    SA.note = 'checked ' + SA.running.done + (SA.running.failed ? ' · ' + SA.running.failed + ' failed' : ' · all answered');
+    SA.noteFor = SA.running.screen;
+    SA.running = null;
+    saPaint();
+  }
+});
+function renderApiDocs(){
+  saPaint();
+  if (!SA.data && !SA.loading) saReq(false);
+  else if (SA.data && Date.now() - Date.parse(SA.data.generatedAt) > 60000) saReq(false);
+}
+
+/* Run the safe GETs of one screen, or of every API. The parent receives KEYS and
+   looks the URLs up in the catalogue it fetched itself. */
+function saRunChecks(ids, screenId){
+  if (SA.running || !SA.data) return;
+  var keys = ids.filter(function(k){ return SA.data.apis[k] && SA.data.apis[k].check.url; });
+  if (!keys.length){ toast('Nothing there can be checked from the browser'); return; }
+  SA.runId += 1;
+  SA.running = { id: SA.runId, total: keys.length, done: 0, failed: 0, screen: screenId || '*' };
+  SA.note = '';
+  keys.forEach(function(k){ delete SA.checks[k]; });
+  parent.postMessage({ type: 'admin:apiCheck', runId: SA.runId, keys: keys }, location.origin);
+  saPaint();
+}
+
+/* ── wiring ── */
+(function(){
+  function toggleRow(row){
+    var k = row.dataset.key;
+    if (!k) return;
+    SA.open[k] = !SA.open[k];
+    saPaint();
+    var again = document.querySelector('#saMain tr.ops-row[data-key="' + k.replace(/"/g, '\\"') + '"]');
+    if (again) again.focus();
+  }
+  function act(btn){
+    var a = btn.dataset.act;
+    if (a === 'screen'){ SA.sel = btn.dataset.id; SA.mode = 'screen'; saPaint(); var m = document.querySelector('.main'); if (m) m.scrollTo({ top: 0 }); }
+    else if (a === 'job') jbFocus(btn.dataset.job);
+    else if (a === 'check'){ var s = saScreen(btn.dataset.id); if (s) saRunChecks(s.apiKeys, s.id); }
+    else if (a === 'retry'){ SA.err = null; saReq(false); }
+  }
+  var view = document.getElementById('apidocs');
+  view.addEventListener('click', function(e){
+    var chip = e.target.closest('[data-st]');
+    if (chip){ SA.mode = 'api'; SA.st = chip.dataset.st; saPaint(); return; }
+    var mode = e.target.closest('[data-mode]');
+    if (mode){ SA.mode = mode.dataset.mode; if (SA.mode === 'api' && SA.st === 'undoc' && SA.data && !SA.data.undocumented.length) SA.st = 'all'; saPaint(); return; }
+    var btn = e.target.closest('[data-act]');
+    if (btn){ e.stopPropagation(); act(btn); return; }
+    var row = e.target.closest('tr.ops-row');
+    if (row) toggleRow(row);
+  });
+  view.addEventListener('keydown', function(e){
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var t = e.target;
+    if (t.matches && t.matches('tr.ops-row')){ e.preventDefault(); toggleRow(t); }
+    else if (t.matches && t.matches('.sa-item')){ e.preventDefault(); act(t); }
+  });
+  document.getElementById('saSearch').addEventListener('input', function(e){ SA.q = e.target.value.trim(); saPaint(); });
+  document.getElementById('saRefresh').addEventListener('click', function(){ SA.err = null; saReq(true); toast('Re-running the health probe…'); });
+  document.getElementById('saCheckAll').addEventListener('click', function(){
+    if (!SA.data) return;
+    saRunChecks(Object.keys(SA.data.apis), '*');
+    if (SA.running) { SA.mode = 'api'; SA.st = 'all'; saPaint(); }
+  });
+})();
 
 /* ── MCP server keys ────────────────────────────────────────────────────────
    Same shape as the Monitor panel above: the iframe holds no backend token,
@@ -4102,7 +4946,7 @@ window.addEventListener('message', function(e){
    console is a same-origin iframe, so it drives the PARENT's URL/history so each
    screen deep-links (/admin/users, /admin/subs, …). All parent access is wrapped
    in try/catch — standalone review of console.html has no parent. */
-const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','studio','blogs','mcpkeys'];
+const KNOWN_VIEWS = ['overview','users','subs','revenue','usage','monitor','jobs','apidocs','studio','blogs','mcpkeys'];
 
 function viewFromParentPath(){
   try{
@@ -4127,6 +4971,8 @@ function switchView(name, opts){
 })();
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id===name));
   if (name === 'monitor') renderMonitor();
+  if (name === 'jobs') renderJobs();
+  if (name === 'apidocs') renderApiDocs();
   if (name === 'mcpkeys') renderMcpKeys();
   document.getElementById('pageTitle').innerHTML=TITLES[name]||name;
   document.querySelector('.main').scrollTo({top:0});
