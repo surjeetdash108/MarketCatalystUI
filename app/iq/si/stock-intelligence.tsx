@@ -439,11 +439,11 @@ export function StockIntelligenceScreen() {
   const sharedQuote = currentTicker ? liveQuotesMap.get(currentTicker) : undefined;
 
   // Live vendor & MC backend data
-  const { data: liveCompany } = useApiResource<CompanyDoc>(
+  const { data: liveCompany, loading: liveCompanyLoading } = useApiResource<CompanyDoc>(
     currentTicker ? `/live/company?ticker=${encodeURIComponent(currentTicker)}` : null,
     30000
   );
-  const { data: financialsDoc } = useApiResource<FinancialsDoc>(
+  const { data: financialsDoc, loading: financialsLoading, error: financialsError } = useApiResource<FinancialsDoc>(
     currentTicker ? `/live/financials?ticker=${encodeURIComponent(currentTicker)}` : null
   );
   const { data: tickerNews } = useApiResource<NewsArticleDoc[]>(
@@ -462,7 +462,7 @@ export function StockIntelligenceScreen() {
     currentTicker ? `/market-data/insider-transactions?ticker=${encodeURIComponent(currentTicker)}` : null,
   );
   const { data: liveEarningsList } = useApiList<LiveEarningsDoc>("/market-data/earnings");
-  const { data: companiesList } = useApiList<CompanyDoc>("/market-data/companies");
+  const { data: companiesList, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: aiAnalysisDoc } = useApiResource<AiAnalysisDoc>(
     currentTicker ? `/live/ai-analysis?ticker=${encodeURIComponent(currentTicker)}` : null,
     // Re-check: a slow model outlives the request timeout; the backend still
@@ -784,6 +784,8 @@ export function StockIntelligenceScreen() {
   }>>(new Map());
 
   const missingPeersKey = missingPeers.join(",");
+  // Key of the peer set whose summary request has settled (success or failure).
+  const [peersSettledKey, setPeersSettledKey] = useState("");
   useEffect(() => {
     if (!missingPeersKey) return;
     let active = true;
@@ -809,9 +811,17 @@ export function StockIntelligenceScreen() {
           return next;
         });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (active) setPeersSettledKey(missingPeersKey); });
     return () => { active = false; };
   }, [missingPeersKey]);
+
+  // Hold the table back until company, universe and peer summaries have landed,
+  // so rows don't render as dashes (or sector-fallback tickers) and then fill in.
+  const peersPending =
+    liveCompanyLoading ||
+    companiesLoading ||
+    (missingPeersKey !== "" && peersSettledKey !== missingPeersKey);
 
   type PeerRowItem = {
     t: string;
@@ -2953,6 +2963,11 @@ export function StockIntelligenceScreen() {
           }
 
           if (!hasFmp && (!fsr[0] || fsr[0].length === 0)) {
+            // Financials still in flight (data is null until the fetch resolves):
+            // show a quiet placeholder instead of flashing "Not Available".
+            if (financialsLoading || (!financialsDoc && !financialsError)) {
+              return <div style={{ minHeight: 240 }} aria-busy="true" />;
+            }
             return (
               <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--si-text-dim, #5a6876)" }}>
                 <div style={{ fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #f0f4f8)", marginBottom: 8 }}>
@@ -3152,7 +3167,13 @@ export function StockIntelligenceScreen() {
                     <span style={{ textAlign: "right" }}>P/E</span>
                     <span style={{ textAlign: "right" }}>RS RANK</span>
                   </div>
-                  {peersAll.length === 0 ? (
+                  {peersPending ? (
+                    <div aria-busy="true" style={{ padding: "8px 0" }}>
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} style={{ height: 38, margin: "8px 0", borderRadius: 6, background: "rgba(147,161,175,0.08)" }} />
+                      ))}
+                    </div>
+                  ) : peersAll.length === 0 ? (
                     <div style={{ padding: "18px 0", textAlign: "center", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 13 }}>
                       No peer companies reported for {stock.t}.
                     </div>
