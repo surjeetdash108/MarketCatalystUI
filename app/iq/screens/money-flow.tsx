@@ -5,12 +5,17 @@ import {
   boardCandles,
   computeSquarifiedTiles,
   etTimeLabel,
-  formatCompactDollars,
   formatCurrency,
   formatLevel,
-  formatMarketCap,
   formatPct,
   indexCard,
+  popoverChartWidth,
+  popoverLiveScroll,
+  popoverPlacement,
+  popoverScale,
+  popoverStats,
+  POPOVER,
+  type PopTone,
   sectorNotOnBoardText,
   sectorView,
   sessionCandles,
@@ -102,6 +107,8 @@ export function MoneyFlowScreen() {
     rect: DOMRect;
   } | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Which stock + timeframe the popover chart was last scrolled to the live candle for
+  const popScrollKey = useRef("");
 
   // Chart options in popover
   const [popTf, setPopTf] = useState<number>(5);
@@ -233,6 +240,7 @@ export function MoneyFlowScreen() {
     <div className="mf-page-wrap">
       <style>{`
         /* ── Base Money Flow Styles ── */
+        .mf-pop-layer:hover { border-color: #c9a24a !important; }
         .mf-page-wrap {
           display: flex;
           flex-direction: column;
@@ -2448,496 +2456,337 @@ export function MoneyFlowScreen() {
         </div>
       </div>
 
-      {/* ── Interactive Hover Popover ── */}
-      {hoveredStock && (
-        <div
-          onMouseEnter={() => {
-            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-          }}
-          onMouseLeave={handleTileLeave}
-          style={(() => {
-            const boardRect = boardWrapRef.current?.getBoundingClientRect();
-            const isMobileScreen = typeof window !== "undefined" && window.innerWidth < 768;
-            let popLeft: number | string = 12;
-            let popTop: number | string = 16;
-            let popWidth: number | string = "50vw";
-            let popHeight: number | string = "auto";
-            let popTransform = "none";
-
-            if (isMobileScreen) {
-              popLeft = 12;
-              popTop = "50%";
-              popTransform = "translateY(-50%)";
-              popWidth = "calc(100vw - 24px)";
-              popHeight = "calc(100vh - 40px)";
-            } else if (typeof window !== "undefined") {
-              // Popover width: half the screen size
-              const calculatedPopW = Math.round(window.innerWidth * 0.5);
-              popWidth = calculatedPopW;
-
-              // Height: starts 20px below borderline above Top 3 Bullish Stocks (boardRect.top + 20)
-              // and ends 20px above borderline at bottom (boardRect.bottom - 20)
-              const topAnchor = boardRect ? boardRect.top + 20 : 100;
-              const bottomAnchor = boardRect ? boardRect.bottom - 20 : window.innerHeight - 20;
-              popTop = Math.max(10, topAnchor);
-              popHeight = Math.max(340, bottomAnchor - popTop);
-
-              // Horizontal positioning: beside the stock tile, NEVER on top of it
-              const rect = hoveredStock.rect;
-              const isTileInRightHalf = (rect.left + rect.width / 2) > (window.innerWidth / 2);
-
-              if (isTileInRightHalf) {
-                // Place to the left of the hovered stock
-                popLeft = rect.left - calculatedPopW - 16;
-                if (boardRect && popLeft < boardRect.left + 8) {
-                  popLeft = Math.max(12, boardRect.left + 8);
-                }
-                // If it overlaps the stock, push further left
-                if (popLeft + calculatedPopW > rect.left) {
-                  popLeft = Math.max(12, rect.left - calculatedPopW - 8);
-                }
-              } else {
-                // Place to the right of the hovered stock
-                popLeft = rect.right + 16;
-                const rightBoundary = (boardRect ? boardRect.right - 8 : window.innerWidth - 12) - calculatedPopW;
-                if (popLeft > rightBoundary) {
-                  popLeft = Math.min(window.innerWidth - calculatedPopW - 12, rightBoundary);
-                }
-                // If it overlaps the stock, push further right
-                if (popLeft < rect.right) {
-                  popLeft = Math.min(window.innerWidth - calculatedPopW - 12, rect.right + 8);
-                }
-              }
-            }
-
-            return {
-              position: "fixed" as const,
+      {/* ── Interactive Hover Popover ──
+          Laid out at its design size (POPOVER) and scaled with the window, so
+          it keeps the same proportions on every screen. */}
+      {hoveredStock && typeof window !== "undefined" && (() => {
+        const s = hoveredStock.stock;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const scale = popoverScale(vw, vh);
+        const bull = !board?.losers.some((l) => l.t === s.t) && (board?.gainers.some((g) => g.t === s.t) || s.pctChange >= 0);
+        const G = "#3ddc84";
+        const R = "#f0565a";
+        const c = bull ? G : R;
+        const toneColor: Record<PopTone, string> = { up: G, down: R, zone: "#e0bb5e", muted: "#7a8481", plain: "#e6ebe8" };
+        const stats = popoverStats(s, board ?? { gainers: [], losers: [] });
+        const q = getDisplayQuote(s);
+        const dChg = s.price - s.prevClose;
+        const chartW = popoverChartWidth(popTf);
+        const rect = hoveredStock.rect;
+        const scrollToLive = (el: HTMLDivElement) =>
+          el.scrollTo({ left: popoverLiveScroll(chartW, popTf, popCandles.length, el.clientWidth), behavior: "smooth" });
+        return (
+          <div
+            onMouseEnter={() => {
+              if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+            }}
+            onMouseLeave={handleTileLeave}
+            ref={(el) => {
+              // Vertical position needs the rendered height.
+              if (!el) return;
+              el.style.top = `${popoverPlacement(rect, vw, vh, scale, el.offsetHeight * scale).top}px`;
+            }}
+            style={{
+              position: "fixed",
               zIndex: 9999,
-              left: popLeft,
-              top: popTop,
-              transform: popTransform,
-              width: popWidth,
-              height: popHeight,
-              maxHeight: "calc(100vh - 24px)",
-              overflowY: "auto" as const,
-              pointerEvents: "auto" as const,
-              background: "#0b0d0e",
-              border: `1px solid ${(hoveredStock.stock.pctChange >= 0)
-                ? "rgba(61,220,132,.45)"
-                : "rgba(240,86,90,.45)"
-                }`,
-              borderBottom: `2px solid ${(hoveredStock.stock.pctChange >= 0) ? "#3ddc84" : "#f0565a"
-                }`,
+              left: popoverPlacement(rect, vw, vh, scale, 0).left,
+              width: POPOVER.w,
+              maxHeight: (vh - 16) / scale,
+              overflowY: vw < 768 ? "auto" : "hidden",
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              pointerEvents: "auto",
+              background: `linear-gradient(180deg, ${bull ? "rgba(61,220,132,.10)" : "rgba(240,86,90,.10)"}, transparent 110px), #0b0d0e`,
+              border: `1px solid ${bull ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)"}`,
+              borderBottom: `2px solid ${c}`,
               borderRadius: 12,
-              boxShadow: "0 24px 60px rgba(0,0,0,.75)",
-              padding: "14px 16px",
+              boxShadow: `0 24px 60px rgba(0,0,0,.65), 0 0 34px ${bull ? "rgba(61,220,132,.12)" : "rgba(240,86,90,.12)"}`,
+              padding: 14,
               display: "flex",
-              flexDirection: "column" as const,
-              gap: 8,
-              boxSizing: "border-box" as const,
-            };
-          })()}
-        >
-          {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span
-              style={{
-                width: 38,
-                height: 38,
-                flex: "none",
-                borderRadius: 8,
-                background: "#fff",
-                display: "grid",
-                placeItems: "center",
-                overflow: "hidden",
-                boxShadow: `0 0 0 1px ${(hoveredStock.stock.pctChange >= 0) ? "#3ddc84" : "#f0565a"
-                  }`,
-              }}
-            >
-              <img
-                src={`https://financialmodelingprep.com/image-stock/${hoveredStock.stock.t.replace(".", "-")}.png`}
-                alt=""
-                style={{ width: 30, height: 30, objectFit: "contain" }}
-              />
-            </span>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                minWidth: 0,
-                flex: 1,
-              }}
-            >
+              flexDirection: "column",
+              gap: 10,
+              boxSizing: "border-box",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span
                 style={{
-                  fontFamily: "'Barlow Condensed', Manrope, sans-serif",
-                  fontWeight: 600,
-                  fontSize: 24,
-                  lineHeight: 1,
-                  color: "#eef2f4",
+                  width: 38,
+                  height: 38,
+                  flex: "none",
+                  borderRadius: 8,
+                  background: "#fff",
+                  display: "grid",
+                  placeItems: "center",
+                  overflow: "hidden",
+                  boxShadow: `0 0 0 1px ${c}`,
                 }}
               >
-                {hoveredStock.stock.t}
+                <img
+                  src={`https://financialmodelingprep.com/image-stock/${s.t.replace(".", "-")}.png`}
+                  alt=""
+                  style={{ width: 30, height: 30, objectFit: "contain" }}
+                />
               </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "#7a8481",
-                  textTransform: "uppercase",
-                  letterSpacing: ".05em",
-                }}
-              >
-                {hoveredStock.stock.name ?? hoveredStock.stock.t} · {hoveredStock.stock.sector ?? "—"}
-              </span>
-            </div>
-            {(() => {
-              const q = getDisplayQuote(hoveredStock.stock);
-              return (
-                <div
+              <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                <span
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "'Barlow Condensed', Manrope, sans-serif",
+                    fontWeight: 600,
+                    fontSize: 24,
+                    lineHeight: 1,
+                    color: "#eef2f4",
                   }}
                 >
-                  <span style={{ fontSize: 18, fontWeight: 700, color: "#eef2f4" }}>
-                    {q.priceStr}
+                  {s.t}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "#7a8481",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    textTransform: "uppercase",
+                    letterSpacing: ".05em",
+                  }}
+                >
+                  {s.name ?? s.t} · {s.sector ?? "—"}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  flex: "none",
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                <span style={{ fontSize: 18, fontWeight: 700, color: "#eef2f4", lineHeight: 1.1 }}>{q.priceStr}</span>
+                <span style={{ fontSize: 12, color: q.isUp ? G : R }}>
+                  {q.pctStr}
+                  {!q.isAH && ` · ${dChg >= 0 ? "+" : "−"}${Math.abs(dChg).toFixed(2)}`}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: "#1a2328" }} />
+
+            {/* Stats: two columns, divider before the right one */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "7px 0" }}>
+              {stats.map((st, i) => (
+                <div
+                  key={st.k}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                    minWidth: 0,
+                    padding: "0 12px",
+                    borderLeft: i % 2 === 1 ? "1px solid #1a2328" : "none",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: ".12em",
+                      textTransform: "uppercase",
+                      color: "#7a8481",
+                      flex: "none",
+                    }}
+                  >
+                    {st.k}
                   </span>
                   <span
                     style={{
-                      fontSize: 12,
-                      color: q.isUp ? "#3ddc84" : "#f0565a",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11.5,
+                      color: toneColor[st.tone],
+                      fontWeight: st.bold ? 800 : 400,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
                     }}
                   >
-                    {q.pctStr}
+                    {st.v}
                   </span>
                 </div>
-              );
-            })()}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setHoveredStock(null);
-              }}
-              style={{
-                marginLeft: 4,
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid #2a3439",
-                borderRadius: 6,
-                color: "#cfd6d3",
-                width: 28,
-                height: 28,
-                display: "grid",
-                placeItems: "center",
-                cursor: "pointer",
-                fontSize: 14,
-                fontWeight: 700,
-                flex: "none",
-              }}
-              aria-label="Close details"
-              title="Close"
-            >
-              ✕
-            </button>
-          </div>
+              ))}
+            </div>
 
-          <div style={{ height: 1, background: "#1a2328" }} />
-
-          {/* Stats Grid */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "6px 12px",
-            }}
-          >
-            {[
-              {
-                k: "Confidence",
-                v: hoveredStock.stock.confidence ? String(hoveredStock.stock.confidence.score) : "—",
-                c: (hoveredStock.stock.pctChange >= 0) ? "#3ddc84" : "#f0565a",
-                b: true,
-              },
-              {
-                k: "Setup",
-                v: hoveredStock.stock.chop
-                  ? "Choppy"
-                  : (hoveredStock.stock.pctChange >= 0)
-                    ? "Bullish"
-                    : "Bearish",
-                c: hoveredStock.stock.chop
-                  ? "#7a8481"
-                  : (hoveredStock.stock.pctChange >= 0)
-                    ? "#3ddc84"
-                    : "#f0565a",
-                b: false,
-              },
-              {
-                k: "Mkt Cap",
-                v: formatMarketCap(hoveredStock.stock.marketCap),
-                c: "#eef2f4",
-                b: false,
-              },
-              {
-                k: "Net Flow",
-                v: `${formatCompactDollars(hoveredStock.stock.netFlow)} ${hoveredStock.stock.netFlow >= 0 ? "in" : "out"}`,
-                c: hoveredStock.stock.netFlow >= 0 ? "#3ddc84" : "#f0565a",
-                b: false,
-              },
-              {
-                k: "Support (S1)",
-                v: formatLevel(hoveredStock.stock.pivots?.s1),
-                c: "#3ddc84",
-                b: false,
-              },
-              {
-                k: "Resistance (R1)",
-                v: formatLevel(hoveredStock.stock.pivots?.r1),
-                c: "#f0565a",
-                b: false,
-              },
-              {
-                k: "Order Zone",
-                v: hoveredStock.stock.zone
-                  ? `${formatCurrency(hoveredStock.stock.zone.lo)}–${formatCurrency(hoveredStock.stock.zone.hi)}`
-                  : "—",
-                c: "#e0bb5e",
-                b: false,
-              },
-              {
-                k: "Vol & R:R",
-                v: `${hoveredStock.stock.rvol == null ? "—" : `${hoveredStock.stock.rvol.toFixed(1)}×`} · ${hoveredStock.stock.rr == null ? "—" : `1:${hoveredStock.stock.rr.toFixed(1)}`}`,
-                c: "#e6ebe8",
-                b: false,
-              },
-            ].map((stat) => (
-              <div
-                key={stat.k}
+            {/* Timeframe */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 11,
-                  padding: "2px 0",
-                  borderBottom: "1px solid #141a1d",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: ".12em",
+                  textTransform: "uppercase",
+                  color: "#7a8481",
                 }}
               >
-                <span
-                  style={{
-                    color: "#7a8481",
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    fontSize: 9.5,
-                  }}
-                >
-                  {stat.k}
-                </span>
-                <span
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontWeight: stat.b ? 800 : 600,
-                    color: stat.c,
-                  }}
-                >
-                  {stat.v}
-                </span>
+                Timeframe
+              </span>
+              <div
+                style={{
+                  display: "flex",
+                  background: "#0f1213",
+                  border: "1px solid #1e2427",
+                  borderRadius: 7,
+                  padding: 2,
+                  gap: 2,
+                }}
+              >
+                {[1, 3, 5, 15].map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => setPopTf(tf)}
+                    style={{
+                      border: 0,
+                      borderRadius: 5,
+                      padding: "3px 10px",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      background: popTf === tf ? "#c9a24a" : "transparent",
+                      color: popTf === tf ? "#08090a" : "#aab3b0",
+                    }}
+                  >
+                    {tf}m
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
 
-          {/* Timeframe Bar */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              marginTop: 4,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: ".12em",
-                textTransform: "uppercase",
-                color: "#7a8481",
-              }}
-            >
-              Timeframe
-            </span>
+            {/* Layer toggles: one row */}
+            <div style={{ display: "flex", flexWrap: "nowrap", gap: 4 }}>
+              {[
+                { k: "ob", l: "Order blocks", c: "#e0bb5e" },
+                { k: "vwap", l: "VWAP", c: "#8b7cf6" },
+                { k: "fvg", l: "FVG", c: "#5aa9e6" },
+                { k: "liq", l: "Liquidity", c: "#f0a24a" },
+                { k: "str", l: "Structure", c: "#3ddc84" },
+              ].map((ly) => {
+                const active = popLayers[ly.k as keyof typeof popLayers];
+                return (
+                  <button
+                    key={ly.k}
+                    type="button"
+                    className="mf-pop-layer"
+                    onClick={() =>
+                      setPopLayers((prev) => ({
+                        ...prev,
+                        [ly.k]: !prev[ly.k as keyof typeof popLayers],
+                      }))
+                    }
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 5,
+                      flex: "1 1 auto",
+                      border: `1px solid ${active ? ly.c : "#233038"}`,
+                      background: active ? "rgba(255,255,255,.04)" : "transparent",
+                      color: active ? ly.c : "#7a8481",
+                      borderRadius: 5,
+                      padding: "4px 6px",
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: 2, background: active ? ly.c : "#3a4448" }} />
+                    {ly.l}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Chart: a full session at readable candle width, opened on the live candle */}
             <div
+              ref={(el) => {
+                if (!el || popCandles.length === 0) return;
+                const key = `${s.t}|${popTf}`;
+                if (popScrollKey.current === key) return;
+                popScrollKey.current = key;
+                el.scrollLeft = popoverLiveScroll(chartW, popTf, popCandles.length, el.clientWidth);
+              }}
+              onDoubleClick={(e) => scrollToLive(e.currentTarget)}
+              title="Double-click to jump back to the live candle"
               style={{
-                display: "flex",
-                background: "#0f1213",
-                border: "1px solid #1e2427",
-                borderRadius: 7,
-                padding: 2,
-                gap: 2,
+                flex: "none",
+                cursor: "grab",
+                borderRadius: 8,
+                border: "1px solid #171c1e",
+                background: "#08090a",
+                overflowX: "auto",
+                overflowY: "hidden",
+                scrollbarWidth: "thin",
               }}
             >
-              {[1, 3, 5, 15].map((tf) => (
-                <button
-                  key={tf}
-                  type="button"
-                  onClick={() => setPopTf(tf)}
+              {popBarsLoading && popCandles.length === 0 ? (
+                <div
                   style={{
-                    border: 0,
-                    borderRadius: 5,
-                    padding: "3px 10px",
+                    height: POPOVER.chartH,
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#7a8481",
+                    fontSize: 12,
                     fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >
+                  Loading {s.t} 1-minute bars…
+                </div>
+              ) : (
+                <FullChartSvg stock={s} candles={popCandles} layers={popLayers} tf={popTf} width={chartW} height={POPOVER.chartH} />
+              )}
+            </div>
+
+            {/* Open the stock elsewhere */}
+            <div style={{ display: "flex", gap: 6, flex: "none" }}>
+              {[
+                { l: `Open ${s.t} in Market Catalyst →`, go: () => exitToMC(s.t), bg: "#4ade80", bd: "#22c55e", fg: "#05210f" },
+                { l: `Open ${s.t} in Stock Intelligence →`, go: () => enterSI(s.t), bg: "#161b1d", bd: "#233038", fg: "#7fa8d0" },
+              ].map((b) => (
+                <button
+                  key={b.l}
+                  type="button"
+                  onClick={() => {
+                    setHoveredStock(null);
+                    b.go();
+                  }}
+                  style={{
+                    flex: "1 1 0",
+                    minWidth: 0,
+                    padding: "6px 8px",
+                    borderRadius: 6,
+                    background: b.bg,
+                    border: `1px solid ${b.bd}`,
+                    color: b.fg,
+                    fontFamily: "Manrope, sans-serif",
                     fontSize: 11,
                     fontWeight: 700,
                     cursor: "pointer",
-                    background: popTf === tf ? "#c9a24a" : "transparent",
-                    color: popTf === tf ? "#08090a" : "#aab3b0",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
-                  {tf}m
+                  {b.l}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Layer Toggles */}
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {[
-              { k: "ob", l: "Order blocks", c: "#e0bb5e" },
-              { k: "vwap", l: "VWAP", c: "#8b7cf6" },
-              { k: "fvg", l: "FVG", c: "#5aa9e6" },
-              { k: "liq", l: "Liquidity", c: "#f0a24a" },
-              { k: "str", l: "Structure", c: "#3ddc84" },
-            ].map((ly) => {
-              const active = popLayers[ly.k as keyof typeof popLayers];
-              return (
-                <button
-                  key={ly.k}
-                  type="button"
-                  onClick={() =>
-                    setPopLayers((prev) => ({
-                      ...prev,
-                      [ly.k]: !prev[ly.k as keyof typeof popLayers],
-                    }))
-                  }
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                    border: `1px solid ${active ? ly.c : "#233038"}`,
-                    background: active ? "rgba(255,255,255,.04)" : "transparent",
-                    color: active ? ly.c : "#7a8481",
-                    borderRadius: 5,
-                    padding: "3px 6px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 2,
-                      background: active ? ly.c : "#3a4448",
-                    }}
-                  />
-                  {ly.l}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Full Interactive Chart */}
-          <div
-            style={{
-              flex: "1 1 auto",
-              minHeight: 280,
-              borderRadius: 8,
-              border: "1px solid #171c1e",
-              background: "#08090a",
-              overflowX: "auto",
-              overflowY: "hidden",
-              scrollbarWidth: "thin",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {popBarsLoading && popCandles.length === 0 ? (
-              <div style={{ height: "100%", display: "grid", placeItems: "center", color: "#7a8481", fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
-                Loading {hoveredStock.stock.t} 1-minute bars…
-              </div>
-            ) : (
-            <FullChartSvg
-              stock={hoveredStock.stock}
-              candles={popCandles}
-              layers={popLayers}
-              tf={popTf}
-              width={typeof window !== "undefined" && window.innerWidth >= 768 ? Math.max(560, Math.round(window.innerWidth * 0.5) - 36) : 440}
-              height={typeof window !== "undefined" && boardWrapRef.current ? Math.max(280, Math.round(boardWrapRef.current.getBoundingClientRect().height - 40 - 200)) : 320}
-            />
-            )}
-          </div>
-
-          {/* Action buttons — single line, half width each */}
-          <div style={{ display: "flex", flexDirection: "row", gap: 8, marginTop: 6, flex: "none" }}>
-            <button
-              type="button"
-              onClick={() => {
-                const sym = hoveredStock.stock.t;
-                setHoveredStock(null);
-                exitToMC(sym);
-              }}
-              style={{
-                flex: "1 1 0",
-                width: "50%",
-                padding: "9px 8px",
-                borderRadius: 6,
-                background: "#4ade80",
-                border: "1px solid #22c55e",
-                color: "#05210f",
-                fontFamily: "Manrope, sans-serif",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                textAlign: "center",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              Open {hoveredStock.stock.t} in Market Catalyst →
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const sym = hoveredStock.stock.t;
-                setHoveredStock(null);
-                enterSI(sym);
-              }}
-              style={{
-                flex: "1 1 0",
-                width: "50%",
-                padding: "9px 8px",
-                borderRadius: 6,
-                background: "#161b1d",
-                border: "1px solid #233038",
-                color: "#7fa8d0",
-                fontFamily: "Manrope, sans-serif",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                textAlign: "center",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              Open {hoveredStock.stock.t} in Stock Intelligence →
-            </button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Glossary Drawer Modal (Exact match to HTML) ── */}
       {glossaryOpen && (
@@ -3165,12 +3014,28 @@ export function MoneyFlowScreen() {
                     desc: "Choppy (see Adjustment above), otherwise Bullish or Bearish by the direction of the move.",
                   },
                   {
-                    term: "Mkt Cap",
-                    desc: "Polygon weighted shares outstanding × price, as on Stock Detail.",
+                    term: "Size",
+                    desc: "The box is drawn for a 1920 × 960 window and scaled by the smaller of width ÷ 1920 and height ÷ 960, so it keeps its proportions on any screen.",
                   },
                   {
-                    term: "Net Flow",
-                    desc: "The stock’s money flow today (see Money flow above).",
+                    term: "Rank",
+                    desc: "Position on its own board (gainers or losers) by today’s move, out of the stocks shown there.",
+                  },
+                  {
+                    term: "Vol",
+                    desc: "Relative volume (see RVOL above) · the share of today’s flow that was buying (see Money flow above).",
+                  },
+                  {
+                    term: "Δ",
+                    desc: "Net shares: the stock’s money flow today ÷ its price, and whether price is above or below VWAP.",
+                  },
+                  {
+                    term: "VWAP",
+                    desc: "Regular-session volume-weighted average price through the latest bar.",
+                  },
+                  {
+                    term: "OB · Entry/Stop",
+                    desc: "OB is the zone (below). Entry is its edge nearest price, stop its far edge.",
                   },
                   {
                     term: "R1 · R2 · S1 · S2",
@@ -3183,6 +3048,10 @@ export function MoneyFlowScreen() {
                   {
                     term: "R:R",
                     desc: "Entry at the zone edge nearest price, stop at its far edge, target at the first pivot level beyond both: |target − entry| ÷ |entry − stop|. A dash means no zone, or price is already past every pivot level.",
+                  },
+                  {
+                    term: "Rule",
+                    desc: "NO SETUP if the stock is choppy or has no zone. Otherwise PICK when price is within 1.2% of the entry, WATCH when further away, with the side and rank.",
                   },
                   {
                     term: "Timeframe",

@@ -24,14 +24,14 @@ import {
 // Types & Constants
 // ============================================================================
 
-const G = "#4ade80"; // Bullish Green
-const R = "#f87171"; // Bearish Red
-const A = "#fbbf24"; // Amber / Warning
-const DIM = "#94a39b"; // Legible Dim Gray
-const TEXT_HI = "#ffffff"; // Crisp White
-const TEXT_MUTED = "#c1ccc6"; // High contrast secondary text
-/** Floor for the "Moving the needle" section on very short windows. */
-const NEEDLE_SECTION_MIN_HEIGHT = 360;
+const G = "var(--up, #4ade80)"; // Bullish Green
+const R = "var(--down, #f87171)"; // Bearish Red
+const A = "var(--warn, #fbbf24)"; // Amber / Warning
+const DIM = "var(--text-dim-solid, #94a39b)"; // Legible Dim Gray
+const TEXT_HI = "var(--text-hi, #ffffff)"; // Crisp Primary Text
+const TEXT_MUTED = "var(--text-dim-solid, #c1ccc6)"; // Secondary / Muted Text
+/** Floor for the "Moving the needle" section on short windows to fit right deep-dive comfortably. */
+const NEEDLE_SECTION_MIN_HEIGHT = 740;
 /** Space kept between the section and the bottom of the screen. */
 const NEEDLE_SECTION_BOTTOM_GAP = 16;
 
@@ -64,9 +64,9 @@ function fillRemainingHeight(el: HTMLDivElement | null) {
     ro.disconnect();
   };
 }
-const BORDER_DARK = "#1f2523";
-const BG_SURFACE = "#0e1110";
-const BG_CARD = "#121615";
+const BORDER_DARK = "var(--border, #1f2523)";
+const BG_SURFACE = "var(--surface-1, #0e1110)";
+const BG_CARD = "var(--surface-2, #121615)";
 
 const FACTORS = [
   ["Firm accuracy", 35, "This firm's 12-month hit rate on the stock and its sector"],
@@ -102,9 +102,9 @@ const CAPS_LIST = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
 
 /** Fixed column widths shared by each table's header and rows. The header and every
  *  row are separate grids, so content-sized columns would not line up. */
-const STOCK_CALL_COLS = "86px minmax(120px, 1.3fr) 112px minmax(130px, 1fr) 160px";
-const HIST_COLS = "86px 70px minmax(120px, 1fr) 84px 160px 100px";
-const FIRM_CALL_COLS = "86px minmax(110px, 1.2fr) 112px 160px 96px";
+const STOCK_CALL_COLS = "82px minmax(110px, 1.1fr) minmax(145px, 1.2fr) minmax(110px, 1fr) 85px";
+const HIST_COLS = "82px 65px minmax(130px, 1.1fr) 80px 100px 90px";
+const FIRM_CALL_COLS = "82px minmax(105px, 1.1fr) minmax(130px, 1.2fr) 95px 85px";
 
 type MainTab = "Analyst Actions" | "Top Firms" | "All Actions";
 type FilterChip = "All" | "My stocks" | "High signal" | "Upgrades" | "Downgrades" | "Clusters";
@@ -235,7 +235,8 @@ function getNextCstRefreshDelayMs(): number {
 // ============================================================================
 
 export function AnalystScreen() {
-  const { openStockFull } = useIQActions();
+  const { openStockFull, theme } = useIQActions();
+  const isLight = theme === "light";
   const wlContext = useContext(WatchlistsContext);
 
   // Data fetching
@@ -858,7 +859,7 @@ export function AnalystScreen() {
       const h = Math.round(18 + (i / 7) * 22);
       return {
         h: `${h}px`,
-        c: i === 7 ? (up >= 0 ? G : R) : "#2a312e",
+        c: i === 7 ? (up >= 0 ? G : R) : (isLight ? "var(--border-strong, #A6AEB5)" : "#2a312e"),
         tip: `Week ${i + 1}: $${val.toFixed(2)}`,
       };
     });
@@ -869,13 +870,13 @@ export function AnalystScreen() {
       rows,
       trend,
     };
-  }, [selectedStock, liveConsensus]);
+  }, [selectedStock, liveConsensus, isLight]);
 
   return (
-    <div className="analyst-screen-root" style={{ minHeight: "100vh", background: "#0a0c0b", color: TEXT_HI, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>
+    <div className="analyst-screen-root" style={{ minHeight: "100vh", background: "transparent", color: TEXT_HI, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>
       {/* ── Top Global Sub-Nav & Indices Tape ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px 12px", borderBottom: `1px solid ${BORDER_DARK}` }}>
-        <div style={{ display: "inline-flex", gap: 4, padding: 4, border: `1px solid ${BORDER_DARK}`, borderRadius: 12, background: BG_SURFACE }}>
+        <div style={{ display: "inline-flex", gap: 4, padding: 4, border: `1px solid ${BORDER_DARK}`, borderRadius: 12, background: isLight ? "var(--surface-2, #F4F6F5)" : BG_SURFACE }}>
           {(["Analyst Actions", "Top Firms", "All Actions"] as MainTab[]).map(t => (
             <button
               key={t}
@@ -887,8 +888,9 @@ export function AnalystScreen() {
                 fontWeight: tab === t ? 700 : 500,
                 border: 0,
                 cursor: "pointer",
-                background: tab === t ? "#1b201e" : "transparent",
+                background: tab === t ? (isLight ? "var(--surface-1, #FFFFFF)" : "#1b201e") : "transparent",
                 color: tab === t ? TEXT_HI : TEXT_MUTED,
+                boxShadow: tab === t && isLight ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                 transition: "all .15s ease",
               }}
             >
@@ -928,7 +930,7 @@ export function AnalystScreen() {
                   height: 17,
                   borderRadius: "50%",
                   border: `1px solid ${BORDER_DARK}`,
-                  background: "#161b19",
+                  background: isLight ? "var(--surface-2, #F4F6F5)" : "#161b19",
                   color: TEXT_MUTED,
                   font: "italic 700 11px/1 Georgia, serif",
                   cursor: "pointer",
@@ -958,26 +960,26 @@ export function AnalystScreen() {
                 <span style={{ fontSize: 18, fontWeight: 800, color: G }}>{summaryMetrics.bullPct}% Bullish</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: R }}>{summaryMetrics.bearPct}% Bearish</span>
               </div>
-              <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", background: "#1b201e" }}>
+              <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", background: isLight ? "var(--surface-3, #E4E9E6)" : "#1b201e" }}>
                 <div style={{ width: `${summaryMetrics.bullPct}%`, background: G }} />
                 <div style={{ width: `${summaryMetrics.bearPct}%`, background: R }} />
               </div>
 
               {/* Tooltip Popup */}
               {activeTip === "sent" && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 280, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: "0 14px 36px rgba(0,0,0,.7)" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Sentiments across recent calls</div>
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 280, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.1)" : "0 14px 36px rgba(0,0,0,.7)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: TEXT_HI, marginBottom: 6 }}>Sentiments across recent calls</div>
                   <div style={{ fontSize: 12, color: TEXT_MUTED, lineHeight: 1.5, marginBottom: 10 }}>
                     Calculated from all upgrades, downgrades, and target revisions in the active feed.
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: G }}>Upgrades / PT Raises</span>
-                      <span style={{ fontWeight: 700 }}>{summaryMetrics.bullishCount}</span>
+                      <span style={{ fontWeight: 700, color: TEXT_HI }}>{summaryMetrics.bullishCount}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: R }}>Downgrades / PT Cuts</span>
-                      <span style={{ fontWeight: 700 }}>{summaryMetrics.bearishCount}</span>
+                      <span style={{ fontWeight: 700, color: TEXT_HI }}>{summaryMetrics.bearishCount}</span>
                     </div>
                   </div>
                 </div>
@@ -995,7 +997,7 @@ export function AnalystScreen() {
                 <>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <span style={{ fontSize: 18, fontWeight: 800, color: TEXT_HI }}>{summaryMetrics.topCluster.t}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: G, background: "rgba(74,222,128,.14)", padding: "2px 7px", borderRadius: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: G, background: isLight ? "rgba(31,122,70,.12)" : "rgba(74,222,128,.14)", padding: "2px 7px", borderRadius: 4 }}>
                       {summaryMetrics.topCluster.cluster}× CLUSTER
                     </span>
                   </div>
@@ -1007,8 +1009,8 @@ export function AnalystScreen() {
 
               {/* Tooltip Popup */}
               {activeTip === "clus" && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 290, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: "0 14px 36px rgba(0,0,0,.7)" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Multi-firm cluster on {summaryMetrics.topCluster?.t}</div>
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 290, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.1)" : "0 14px 36px rgba(0,0,0,.7)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: TEXT_HI, marginBottom: 6 }}>Multi-firm cluster on {summaryMetrics.topCluster?.t}</div>
                   <div style={{ fontSize: 12, color: TEXT_MUTED, lineHeight: 1.5, marginBottom: 10 }}>
                     {summaryMetrics.topCluster?.cluster} independent Wall Street research desks made same-direction calls within 72 hours.
                   </div>
@@ -1044,8 +1046,8 @@ export function AnalystScreen() {
 
               {/* Tooltip Popup */}
               {activeTip === "sect" && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 280, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: "0 14px 36px rgba(0,0,0,.7)" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Net Sector Revisions</div>
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 280, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.1)" : "0 14px 36px rgba(0,0,0,.7)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: TEXT_HI, marginBottom: 6 }}>Net Sector Revisions</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
                     {summaryMetrics.sortedSectors.slice(0, 5).map(([sec, net]) => (
                       <div key={sec} style={{ display: "flex", justifyContent: "space-between" }}>
@@ -1067,7 +1069,7 @@ export function AnalystScreen() {
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED, marginBottom: 8 }}>PORTFOLIO</div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ fontSize: 18, fontWeight: 800, color: TEXT_HI }}>{summaryMetrics.portCalls.length} Calls</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: G, background: "rgba(74,222,128,.14)", padding: "2px 7px", borderRadius: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: G, background: isLight ? "rgba(31,122,70,.12)" : "rgba(74,222,128,.14)", padding: "2px 7px", borderRadius: 4 }}>
                   TOUCHING HOLDINGS
                 </span>
               </div>
@@ -1082,8 +1084,8 @@ export function AnalystScreen() {
 
               {/* Tooltip Popup */}
               {activeTip === "port" && summaryMetrics.portCalls.length > 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 300, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: "0 14px 36px rgba(0,0,0,.7)" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Calls on your portfolio holdings</div>
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 300, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.1)" : "0 14px 36px rgba(0,0,0,.7)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: TEXT_HI, marginBottom: 6 }}>Calls on your portfolio holdings</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
                     {summaryMetrics.portCalls.map(c => (
                       <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1105,7 +1107,7 @@ export function AnalystScreen() {
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED, marginBottom: 8 }}>WATCHLIST</div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ fontSize: 18, fontWeight: 800, color: TEXT_HI }}>{summaryMetrics.watchCalls.length} Calls</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#38bdf8", background: "rgba(56,189,248,.14)", padding: "2px 7px", borderRadius: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: isLight ? "#0284c7" : "#38bdf8", background: isLight ? "rgba(2,132,199,.12)" : "rgba(56,189,248,.14)", padding: "2px 7px", borderRadius: 4 }}>
                   WATCHLIST
                 </span>
               </div>
@@ -1120,8 +1122,8 @@ export function AnalystScreen() {
 
               {/* Tooltip Popup */}
               {activeTip === "watch" && summaryMetrics.watchCalls.length > 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 300, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: "0 14px 36px rgba(0,0,0,.7)" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Calls on your watchlist</div>
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 50, width: 300, padding: 14, borderRadius: 10, background: BG_CARD, border: `1px solid ${BORDER_DARK}`, boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.1)" : "0 14px 36px rgba(0,0,0,.7)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: TEXT_HI, marginBottom: 6 }}>Calls on your watchlist</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
                     {summaryMetrics.watchCalls.map(c => (
                       <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1136,7 +1138,7 @@ export function AnalystScreen() {
           </div>
 
           {/* Master / Detail Two-Column Layout — fills the screen below the summary; each column scrolls inside it */}
-          <div ref={fillRemainingHeight} style={{ display: "grid", gridTemplateColumns: "minmax(340px, 1fr) minmax(420px, 1.25fr)", gap: 24, alignItems: "stretch", minHeight: 0 }}>
+          <div ref={fillRemainingHeight} style={{ display: "grid", gridTemplateColumns: "minmax(300px, 1fr) minmax(520px, 1.45fr)", gap: 24, alignItems: "stretch", minHeight: 0 }}>
             {/* ── LEFT COLUMN: Moving the needle today ── */}
             <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "16px 18px 12px" }}>
@@ -1151,8 +1153,8 @@ export function AnalystScreen() {
 
               {/* Search input with clear button */}
               <div style={{ padding: "0 18px 12px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 10px", height: 32, border: `1px solid ${BORDER_DARK}`, borderRadius: 8, background: "#0d100f" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b938f" strokeWidth="2" strokeLinecap="round">
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 10px", height: 32, border: `1px solid ${BORDER_DARK}`, borderRadius: 8, background: isLight ? "var(--surface-2, #F4F6F5)" : "#0d100f" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isLight ? "var(--text-dim-solid, #6C747C)" : "#8b938f"} strokeWidth="2" strokeLinecap="round">
                     <circle cx="11" cy="11" r="7" />
                     <path d="m20 20-3.5-3.5" />
                   </svg>
@@ -1179,25 +1181,25 @@ export function AnalystScreen() {
                   onClick={() => { setSortKey("t"); setSortDir(d => (sortKey === "t" ? (d === -1 ? 1 : -1) : 1)); }}
                   style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 0", border: 0, background: "transparent", font: "inherit", letterSpacing: "inherit", textTransform: "uppercase", color: sortKey === "t" ? TEXT_HI : TEXT_MUTED, cursor: "pointer", whiteSpace: "nowrap" }}
                 >
-                  NAME <span style={{ fontSize: 9, color: sortKey === "t" ? G : "#3d4542" }}>{sortKey === "t" ? (sortDir === -1 ? "▼" : "▲") : "↕"}</span>
+                  NAME <span style={{ fontSize: 9, color: sortKey === "t" ? G : (isLight ? "var(--border-strong, #8b938f)" : "#3d4542") }}>{sortKey === "t" ? (sortDir === -1 ? "▼" : "▲") : "↕"}</span>
                 </button>
                 <button
                   onClick={() => { setSortKey("up"); setSortDir(d => (sortKey === "up" ? (d === -1 ? 1 : -1) : -1)); }}
                   style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 4, padding: "4px 0", border: 0, background: "transparent", font: "inherit", letterSpacing: "inherit", textTransform: "uppercase", color: sortKey === "up" ? TEXT_HI : TEXT_MUTED, cursor: "pointer", whiteSpace: "nowrap" }}
                 >
-                  PRICE <span style={{ fontSize: 9, color: sortKey === "up" ? G : "#3d4542" }}>{sortKey === "up" ? (sortDir === -1 ? "▼" : "▲") : "↕"}</span>
+                  PRICE <span style={{ fontSize: 9, color: sortKey === "up" ? G : (isLight ? "var(--border-strong, #8b938f)" : "#3d4542") }}>{sortKey === "up" ? (sortDir === -1 ? "▼" : "▲") : "↕"}</span>
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end" }}>
                   <button
                     onClick={() => { setSortKey("score"); setSortDir(d => (sortKey === "score" ? (d === -1 ? 1 : -1) : -1)); }}
                     style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 0", border: 0, background: "transparent", font: "inherit", letterSpacing: "inherit", textTransform: "uppercase", color: sortKey === "score" ? TEXT_HI : TEXT_MUTED, cursor: "pointer", whiteSpace: "nowrap" }}
                   >
-                    SIGNAL <span style={{ fontSize: 9, color: sortKey === "score" ? G : "#3d4542" }}>{sortKey === "score" ? (sortDir === -1 ? "▼" : "▲") : "↕"}</span>
+                    SIGNAL <span style={{ fontSize: 9, color: sortKey === "score" ? G : (isLight ? "var(--border-strong, #8b938f)" : "#3d4542") }}>{sortKey === "score" ? (sortDir === -1 ? "▼" : "▲") : "↕"}</span>
                   </button>
                   <button
                     onClick={() => setShowSigModal(true)}
                     title="How the signal score works"
-                    style={{ width: 16, height: 16, flex: "none", borderRadius: "50%", border: `1px solid ${BORDER_DARK}`, background: "transparent", color: TEXT_MUTED, font: "italic 700 11px/1 Georgia, serif", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+                    style={{ width: 16, height: 16, flex: "none", borderRadius: "50%", border: `1px solid ${BORDER_DARK}`, background: isLight ? "var(--surface-2)" : "transparent", color: TEXT_MUTED, font: "italic 700 11px/1 Georgia, serif", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
                   >
                     i
                   </button>
@@ -1222,9 +1224,9 @@ export function AnalystScreen() {
                           gap: 10,
                           alignItems: "center",
                           padding: "12px 18px",
-                          borderBottom: "1px solid #161a18",
-                          background: isSelected ? "#141917" : "transparent",
-                          boxShadow: isSelected ? "inset 3px 0 0 #4ade80" : "none",
+                          borderBottom: "1px solid var(--border-soft, #161a18)",
+                          background: isSelected ? (isLight ? "rgba(31, 122, 70, 0.08)" : "#141917") : "transparent",
+                          boxShadow: isSelected ? `inset 3px 0 0 ${G}` : "none",
                           transition: "background .12s ease",
                         }}
                       >
@@ -1239,7 +1241,7 @@ export function AnalystScreen() {
                               <button
                                 onClick={e => handleToggleStar(e, action.t)}
                                 title={action.watched ? "Remove from watchlist" : "Add to watchlist"}
-                                style={{ flex: "none", width: 22, height: 22, padding: 0, border: 0, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: action.watched ? G : DIM }}
+                                style={{ flex: "none", width: 22, height: 22, padding: 0, border: 0, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: action.watched ? G : (isLight ? "var(--border-strong, #8b938f)" : DIM) }}
                               >
                                 {action.watched ? "★" : "☆"}
                               </button>
@@ -1287,23 +1289,23 @@ export function AnalystScreen() {
 
             {/* ── RIGHT COLUMN: Focus Stock Deep Dive (Sticky Aside) ── */}
             {selectedStock && (
-              <aside style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, padding: 22, display: "flex", flexDirection: "column", gap: 18, height: "100%", minHeight: 0, overflowY: "auto", boxSizing: "border-box" }}>
+              <aside style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0, overflowY: "auto", boxSizing: "border-box" }}>
                 {/* Header Row */}
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                     <StockLogo sym={selectedStock.t} size={44} />
                     <div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 26, fontWeight: 800, color: "#ffffff" }}>{selectedStock.t}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 26, fontWeight: 800, color: TEXT_HI }}>{selectedStock.t}</span>
                         <button
                           onClick={e => handleToggleStar(e, selectedStock.t)}
-                          style={{ background: "transparent", border: 0, color: selectedStock.watched ? G : "#ffffff", cursor: "pointer", fontSize: 18, padding: 0 }}
+                          style={{ background: "transparent", border: 0, color: selectedStock.watched ? G : (isLight ? "var(--border-strong, #8b938f)" : "#ffffff"), cursor: "pointer", fontSize: 18, padding: 0 }}
                           title={selectedStock.watched ? "Following (alerts enabled)" : "Follow stock"}
                         >
                           {selectedStock.watched ? "★" : "☆"}
                         </button>
-                        {/* Latest stock price and day's change beside heading (Task 6) */}
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 800, color: "#ffffff", marginLeft: 4 }}>
+                        {/* Latest stock price and day's change beside heading */}
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 800, color: TEXT_HI, marginLeft: 4 }}>
                           ${selectedStock.px.toFixed(2)}
                         </span>
                         {(() => {
@@ -1318,7 +1320,7 @@ export function AnalystScreen() {
                           );
                         })()}
                       </div>
-                      <div style={{ fontSize: 14, color: "#ffffff", marginTop: 2 }}>
+                      <div style={{ fontSize: 14, color: TEXT_MUTED, marginTop: 2 }}>
                         {selectedStock.co}
                       </div>
                     </div>
@@ -1337,8 +1339,8 @@ export function AnalystScreen() {
                         height: 20,
                         borderRadius: "50%",
                         border: `1px solid ${calcOpen ? G : BORDER_DARK}`,
-                        background: calcOpen ? G : "transparent",
-                        color: calcOpen ? "#06120a" : TEXT_MUTED,
+                        background: calcOpen ? G : (isLight ? "var(--surface-2)" : "transparent"),
+                        color: calcOpen ? (isLight ? "#ffffff" : "#06120a") : TEXT_MUTED,
                         font: "italic 700 12px/1 Georgia, serif",
                         cursor: "pointer",
                         display: "flex",
@@ -1353,7 +1355,7 @@ export function AnalystScreen() {
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 24, lineHeight: 1, color: selectedStock.score >= 75 ? G : selectedStock.score >= 50 ? A : DIM }}>
                         {selectedStock.score}
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "#ffffff", marginTop: 2 }}>SIGNAL</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginTop: 2 }}>SIGNAL</div>
                     </div>
 
                     {/* Factor Breakdown Popover */}
@@ -1370,24 +1372,24 @@ export function AnalystScreen() {
                           borderRadius: 12,
                           background: BG_CARD,
                           border: `1px solid ${BORDER_DARK}`,
-                          boxShadow: "0 18px 48px rgba(0,0,0,.8)",
+                          boxShadow: isLight ? "0 12px 36px rgba(0,0,0,.15)" : "0 18px 48px rgba(0,0,0,.8)",
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 4 }}>Signal Score Breakdown</div>
-                        <div style={{ fontSize: 12, color: "#ffffff", marginBottom: 12 }}>Five factors weighted into a 0–100 institutional credibility score:</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: TEXT_HI, marginBottom: 4 }}>Signal Score Breakdown</div>
+                        <div style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 12 }}>Five factors weighted into a 0–100 institutional credibility score:</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           {FACTORS.map(([factorName, maxPts, desc], fIdx) => {
                             const pts = selectedStock.comp[fIdx];
                             return (
                               <div key={factorName}>
                                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
-                                  <span style={{ fontWeight: 600, color: "#ffffff" }}>{factorName}</span>
+                                  <span style={{ fontWeight: 600, color: TEXT_HI }}>{factorName}</span>
                                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: G }}>{pts}/{maxPts}</span>
                                 </div>
-                                <div style={{ height: 4, borderRadius: 2, background: "#1f2523", overflow: "hidden", marginBottom: 3 }}>
+                                <div style={{ height: 4, borderRadius: 2, background: isLight ? "var(--surface-3, #E4E9E6)" : "#1f2523", overflow: "hidden", marginBottom: 3 }}>
                                   <div style={{ height: 4, width: `${(pts / maxPts) * 100}%`, background: G }} />
                                 </div>
-                                <div style={{ fontSize: 11, color: "#ffffff" }}>{desc}</div>
+                                <div style={{ fontSize: 11, color: TEXT_MUTED }}>{desc}</div>
                               </div>
                             );
                           })}
@@ -1399,7 +1401,7 @@ export function AnalystScreen() {
 
                 {/* Holdings / Watchlist Banner */}
                 {(selectedStock.held || selectedStock.watched) && (
-                  <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(74,222,128,.08)", border: "1px solid rgba(74,222,128,.2)", display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: G }}>
+                  <div style={{ padding: "8px 12px", borderRadius: 8, background: isLight ? "rgba(31,122,70,.1)" : "rgba(74,222,128,.08)", border: isLight ? "1px solid rgba(31,122,70,.25)" : "1px solid rgba(74,222,128,.2)", display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: G }}>
                     <span>●</span>
                     <span>{selectedStock.held ? "You hold this position in your portfolio" : "This stock is in your active watchlist"}</span>
                   </div>
@@ -1408,40 +1410,40 @@ export function AnalystScreen() {
                 {/* 3-Col Key Metrics */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${BORDER_DARK}`, borderRadius: 10 }}>
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: "#ffffff" }}>RATING</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: "#ffffff" }}>{selectedStock.to}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>RATING</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>{selectedStock.to}</div>
                   </div>
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: "#ffffff" }}>TARGET</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: "#ffffff" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>TARGET</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>
                       {fmtMoney(selectedStock.pt1)}
                     </div>
                   </div>
                   <div style={{ padding: "10px 12px" }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: "#ffffff" }}>IMPLIED UPSIDE</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>IMPLIED UPSIDE</div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: selectedStock.upPct && selectedStock.upPct >= 0 ? G : R }}>
                       {selectedStock.upPct != null ? `${selectedStock.upPct >= 0 ? "+" : ""}${selectedStock.upPct.toFixed(1)}%` : "—"}
                     </div>
                   </div>
                 </div>
 
-                {/* WHERE THIS TARGET SITS - Visual Slider (Task 12: Text white and clearly readable) */}
+                {/* WHERE THIS TARGET SITS - Visual Slider */}
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "#ffffff", marginBottom: 8 }}>WHERE THIS TARGET SITS</div>
-                  <div style={{ position: "relative", height: 86, margin: "0 18px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: TEXT_MUTED, marginBottom: 8 }}>WHERE THIS TARGET SITS</div>
+                  <div style={{ position: "relative", height: 72, margin: "0 14px" }}>
                     {/* Horizontal rail */}
-                    <div style={{ position: "absolute", left: 0, right: 0, top: 40, height: 2, background: BORDER_DARK }} />
+                    <div style={{ position: "absolute", left: 0, right: 0, top: 32, height: 2, background: BORDER_DARK }} />
                     {/* Connection colored band */}
-                    <div style={{ position: "absolute", top: 40, height: 2, left: sliderCalc.bandL, width: sliderCalc.bandW, background: selectedStock.dir >= 0 ? G : R, opacity: 0.6 }} />
+                    <div style={{ position: "absolute", top: 32, height: 2, left: sliderCalc.bandL, width: sliderCalc.bandW, background: selectedStock.dir >= 0 ? G : R, opacity: 0.6 }} />
 
                     {/* Street ticks */}
                     {sliderCalc.ticks.map((t, idx) => (
-                      <div key={idx} style={{ position: "absolute", top: 34, left: t.left, width: 2, height: 14, background: "#ffffff" }} />
+                      <div key={idx} style={{ position: "absolute", top: 26, left: t.left, width: 2, height: 14, background: isLight ? "var(--border-strong, #8b938f)" : "#ffffff" }} />
                     ))}
 
                     {/* Current Price Marker */}
-                    <div style={{ position: "absolute", top: 48, left: `${sliderCalc.pL}%`, transform: "translateX(-50%)", textAlign: "center", fontSize: 12.5, fontFamily: "'JetBrains Mono', monospace", color: "#ffffff" }}>
-                      <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "6px solid #ffffff", margin: "0 auto 2px" }} />
+                    <div style={{ position: "absolute", top: 38, left: `${sliderCalc.pL}%`, transform: "translateX(-50%)", textAlign: "center", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: TEXT_HI }}>
+                      <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: `6px solid ${isLight ? "var(--text-hi, #07080A)" : "#ffffff"}`, margin: "0 auto 2px" }} />
                       {fmtMoneyCompact(selectedStock.px)}
                     </div>
 
@@ -1449,7 +1451,7 @@ export function AnalystScreen() {
                     <div
                       style={{
                         position: "absolute",
-                        top: 32,
+                        top: 24,
                         left: `${sliderCalc.nL}%`,
                         transform: "translateX(-50%)",
                         width: 18,
@@ -1457,16 +1459,16 @@ export function AnalystScreen() {
                         borderRadius: "50%",
                         border: `3px solid ${selectedStock.dir >= 0 ? G : R}`,
                         background: BG_SURFACE,
-                        boxShadow: `0 0 0 4px ${selectedStock.dir >= 0 ? "rgba(74,222,128,.15)" : "rgba(248,113,113,.15)"}`,
+                        boxShadow: `0 0 0 4px ${selectedStock.dir >= 0 ? (isLight ? "rgba(31,122,70,.2)" : "rgba(74,222,128,.15)") : (isLight ? "rgba(138,46,21,.2)" : "rgba(248,113,113,.15)")}`,
                       }}
                     />
-                    <div style={{ position: "absolute", top: 10, left: `${sliderCalc.nL}%`, transform: "translateX(-50%)", fontSize: 12.5, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R, whiteSpace: "nowrap" }}>
+                    <div style={{ position: "absolute", top: 4, left: `${sliderCalc.nL}%`, transform: "translateX(-50%)", fontSize: 12, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R, whiteSpace: "nowrap" }}>
                       New {fmtMoneyCompact(selectedStock.pt1)}
                     </div>
 
                     {/* Min / Max bounds */}
-                    <div style={{ position: "absolute", top: 68, left: -10, fontSize: 12, color: "#ffffff", fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.lo}</div>
-                    <div style={{ position: "absolute", top: 68, right: -10, fontSize: 12, color: "#ffffff", fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.hi}</div>
+                    <div style={{ position: "absolute", top: 56, left: -10, fontSize: 11, color: TEXT_MUTED, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.lo}</div>
+                    <div style={{ position: "absolute", top: 56, right: -10, fontSize: 11, color: TEXT_MUTED, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.hi}</div>
                   </div>
                 </div>
 
@@ -1475,7 +1477,7 @@ export function AnalystScreen() {
                   <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: G, marginBottom: 8 }}>WHY IT MATTERS</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {selectedStock.why.map((bullet, idx) => (
-                      <div key={idx} style={{ display: "flex", gap: 8, fontSize: 14, lineHeight: 1.45, color: "#ffffff" }}>
+                      <div key={idx} style={{ display: "flex", gap: 8, fontSize: 13.5, lineHeight: 1.45, color: TEXT_HI }}>
                         <span style={{ color: selectedStock.dir >= 0 ? G : R }}>•</span>
                         <span>{bullet}</span>
                       </div>
@@ -1485,9 +1487,9 @@ export function AnalystScreen() {
 
                 {/* Every analyst action on this stock, newest first by default; Date sorts. */}
                 <div>
-                  <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: "#0d100f", overflowX: "auto" }}>
-                    <div style={{ minWidth: 640 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: STOCK_CALL_COLS, gap: 12, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: "#ffffff" }}>
+                  <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: isLight ? "var(--surface-2, #F4F6F5)" : "#0d100f", overflowX: "auto" }}>
+                    <div style={{ minWidth: 540 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: STOCK_CALL_COLS, gap: 12, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
                         <span
                           role="button"
                           onClick={() => setStockCallDir(d => (d === -1 ? 1 : -1))}
@@ -1499,9 +1501,9 @@ export function AnalystScreen() {
                         <span>Firm</span>
                         <span>Action</span>
                         <span>Rating</span>
-                        <span>Price Target</span>
+                        <span style={{ textAlign: "right" }}>Price Target</span>
                       </div>
-                      <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                      <div style={{ maxHeight: 180, overflowY: "auto" }}>
                         {stockCalls.length === 0 && (
                           <div style={{ padding: "14px", fontSize: 12.5, color: TEXT_MUTED }}>
                             {stockHistoryLoading ? "Loading analyst history…" : "No analyst actions on record."}
@@ -1510,29 +1512,35 @@ export function AnalystScreen() {
                         {stockCalls.map((r) => (
                           <div
                             key={r.key}
-                            style={{ display: "grid", gridTemplateColumns: STOCK_CALL_COLS, gap: 12, alignItems: "center", padding: "10px 14px", borderBottom: "1px solid #161a18", fontSize: 12.5 }}
+                            style={{ display: "grid", gridTemplateColumns: STOCK_CALL_COLS, gap: 12, alignItems: "center", padding: "9px 14px", borderBottom: "1px solid var(--border-soft, #161a18)", fontSize: 12.5 }}
                           >
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", color: "#ffffff", whiteSpace: "nowrap" }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", color: TEXT_HI, whiteSpace: "nowrap" }}>
                               {formatUsDate(r.date)}
                             </span>
                             <span
                               onClick={() => handleGoToFirm(r.firm)}
                               title={r.firm}
-                              style={{ fontWeight: 700, color: "#ffffff", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(74,222,128,.4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                              style={{ fontWeight: 700, color: TEXT_HI, cursor: "pointer", textDecoration: "underline", textDecorationColor: isLight ? "rgba(31,122,70,.4)" : "rgba(74,222,128,.4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                             >
                               {r.firm}
                             </span>
-                            <span style={{ fontWeight: 700, color: r.dir > 0 ? G : r.dir < 0 ? R : "#ffffff", whiteSpace: "nowrap" }}>
+                            <span
+                              title={r.act}
+                              style={{ fontWeight: 700, color: r.dir > 0 ? G : r.dir < 0 ? R : TEXT_HI, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                            >
                               {r.dir > 0 ? "▲ " : r.dir < 0 ? "▼ " : ""}{r.act}
                             </span>
-                            <span style={{ color: "#ffffff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            <span
+                              title={r.from && r.from !== "—" && r.from !== r.to ? `${r.from} → ${r.to}` : r.to}
+                              style={{ color: TEXT_HI, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                            >
                               {r.from && r.from !== "—" && r.from !== r.to ? (
                                 <span>{r.from} → <b>{r.to}</b></span>
                               ) : (
                                 <b>{r.to}</b>
                               )}
                             </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: "#ffffff", whiteSpace: "nowrap" }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: TEXT_HI, whiteSpace: "nowrap", textAlign: "right" }}>
                               <PtValue pt={r.pt} ptDate={r.ptDate} callDate={r.date} />
                             </span>
                           </div>
@@ -1545,8 +1553,8 @@ export function AnalystScreen() {
                   )}
                 </div>
 
-                {/* Action Buttons (Task 11: Alert me merged into Follow) */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: "auto", paddingTop: 8 }}>
+                {/* Action Buttons */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: "auto", paddingTop: 8 }}>
                   <button
                     onClick={e => handleToggleStar(e, selectedStock.t)}
                     style={{
@@ -1556,8 +1564,10 @@ export function AnalystScreen() {
                       lineHeight: 1.25,
                       border: `1px solid ${selectedStock.watched ? G : BORDER_DARK}`,
                       borderRadius: 8,
-                      background: selectedStock.watched ? "rgba(74,222,128,.14)" : "transparent",
-                      color: selectedStock.watched ? G : "#ffffff",
+                      background: selectedStock.watched
+                        ? (isLight ? "rgba(31,122,70,.12)" : "rgba(74,222,128,.14)")
+                        : (isLight ? "var(--surface-2)" : "transparent"),
+                      color: selectedStock.watched ? G : TEXT_HI,
                       cursor: "pointer",
                     }}
                   >
@@ -1571,9 +1581,9 @@ export function AnalystScreen() {
                       fontSize: 13,
                       fontWeight: 700,
                       lineHeight: 1.25,
-                      border: "1px solid #5a80a8",
+                      border: isLight ? "1px solid #1d4ed8" : "1px solid #5a80a8",
                       borderRadius: 8,
-                      background: "#5a80a8",
+                      background: isLight ? "#2563eb" : "#5a80a8",
                       color: "#ffffff",
                       cursor: "pointer",
                       whiteSpace: "nowrap",
@@ -1603,7 +1613,7 @@ export function AnalystScreen() {
                 width: 260,
                 padding: "8px 12px",
                 borderRadius: 8,
-                background: "#141816",
+                background: isLight ? "var(--surface-2)" : "#141816",
                 border: `1px solid ${BORDER_DARK}`,
                 color: TEXT_HI,
                 fontSize: 13,
@@ -1628,7 +1638,7 @@ export function AnalystScreen() {
                     fontWeight: firmSortKey === k ? 700 : 500,
                     border: 0,
                     cursor: "pointer",
-                    background: firmSortKey === k ? "#1b201e" : "transparent",
+                    background: firmSortKey === k ? (isLight ? "var(--surface-3)" : "#1b201e") : "transparent",
                     color: firmSortKey === k ? G : TEXT_MUTED,
                   }}
                 >
@@ -1686,9 +1696,9 @@ export function AnalystScreen() {
                           gap: 10,
                           alignItems: "center",
                           padding: "12px 16px",
-                          borderBottom: "1px solid #161a18",
-                          background: isSel ? "#141917" : "transparent",
-                          boxShadow: isSel ? "inset 3px 0 0 #4ade80" : "none",
+                          borderBottom: "1px solid var(--border-soft, #161a18)",
+                          background: isSel ? (isLight ? "rgba(31, 122, 70, 0.08)" : "#141917") : "transparent",
+                          boxShadow: isSel ? `inset 3px 0 0 ${G}` : "none",
                           fontSize: 13,
                         }}
                       >
@@ -1700,7 +1710,7 @@ export function AnalystScreen() {
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 2 }}>
                             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: f.hit == null ? DIM : f.hit >= 70 ? G : f.hit >= 55 ? A : DIM }}>{f.hitTxt}</span>
                           </div>
-                          <div style={{ height: 4, borderRadius: 2, background: "#1b201e", overflow: "hidden" }}>
+                          <div style={{ height: 4, borderRadius: 2, background: isLight ? "var(--surface-3)" : "#1b201e", overflow: "hidden" }}>
                             <div style={{ height: 4, width: `${f.hit ?? 0}%`, background: f.hit == null ? DIM : f.hit >= 70 ? G : f.hit >= 55 ? A : DIM }} />
                           </div>
                         </div>
@@ -1710,7 +1720,7 @@ export function AnalystScreen() {
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", color: TEXT_HI }}>
                           {f.calls ?? "—"}
                         </span>
-                        <div style={{ display: "flex", height: 5, borderRadius: 2, overflow: "hidden", background: "#1b201e" }}>
+                        <div style={{ display: "flex", height: 5, borderRadius: 2, overflow: "hidden", background: isLight ? "var(--surface-3)" : "#1b201e" }}>
                           {f.bull != null && (<>
                             <div style={{ width: `${f.bull}%`, background: G }} />
                             <div style={{ width: `${100 - f.bull}%`, background: R }} />
@@ -1733,7 +1743,7 @@ export function AnalystScreen() {
                     <h3 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: TEXT_HI }}>{selectedFirm.name}</h3>
                     <div style={{ fontSize: 12, color: TEXT_MUTED }}>Wall Street Research Desk · Ranked #{selectedFirm.rank}</div>
                   </div>
-                  {/* Task 11: Merged Alert me into Follow button */}
+                  {/* Follow button */}
                   <button
                     onClick={() => handleToggleFollow(selectedFirm.name)}
                     style={{
@@ -1743,7 +1753,7 @@ export function AnalystScreen() {
                       fontWeight: 700,
                       border: `1px solid ${G}`,
                       background: (followedFirms[selectedFirm.name] || firmAlerts[selectedFirm.name]) ? "transparent" : G,
-                      color: (followedFirms[selectedFirm.name] || firmAlerts[selectedFirm.name]) ? G : "#06120a",
+                      color: (followedFirms[selectedFirm.name] || firmAlerts[selectedFirm.name]) ? G : (isLight ? "#ffffff" : "#06120a"),
                       cursor: "pointer",
                     }}
                   >
@@ -1781,8 +1791,8 @@ export function AnalystScreen() {
                     </button>
                   </div>
 
-                  <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: "#0d100f", overflowX: "auto" }}>
-                    <div style={{ minWidth: 620 }}>
+                  <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: isLight ? "var(--surface-2)" : "#0d100f", overflowX: "auto" }}>
+                    <div style={{ minWidth: 500 }}>
                       <div style={{ display: "grid", gridTemplateColumns: FIRM_CALL_COLS, gap: 12, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
                         <span>Date</span>
                         <span>Ticker</span>
@@ -1804,7 +1814,7 @@ export function AnalystScreen() {
                               if (fullAct) setSingleCallModal({ action: fullAct, firmCall: c });
                               else openStockFull(c.t);
                             }}
-                            style={{ cursor: "pointer", display: "grid", gridTemplateColumns: FIRM_CALL_COLS, gap: 12, alignItems: "center", padding: "9px 14px", borderBottom: "1px solid #161a18", fontSize: 12.5 }}
+                            style={{ cursor: "pointer", display: "grid", gridTemplateColumns: FIRM_CALL_COLS, gap: 12, alignItems: "center", padding: "9px 14px", borderBottom: "1px solid var(--border-soft, #161a18)", fontSize: 12.5 }}
                           >
                             <span style={{ fontFamily: "'JetBrains Mono', monospace", color: TEXT_MUTED, whiteSpace: "nowrap" }}>
                               {formatUsDate(c.when)}
@@ -1852,7 +1862,7 @@ export function AnalystScreen() {
                 width: 240,
                 padding: "8px 12px",
                 borderRadius: 8,
-                background: "#141816",
+                background: isLight ? "var(--surface-2)" : "#141816",
                 border: `1px solid ${BORDER_DARK}`,
                 color: TEXT_HI,
                 fontSize: 13,
@@ -1872,7 +1882,7 @@ export function AnalystScreen() {
                   padding: "0 12px",
                   borderRadius: 8,
                   border: `1px solid ${sectorFilter !== "All" ? G : BORDER_DARK}`,
-                  background: "#0d100f",
+                  background: isLight ? "var(--surface-2)" : "#0d100f",
                   color: sectorFilter !== "All" ? G : TEXT_MUTED,
                   fontSize: 12,
                   display: "flex",
@@ -1898,7 +1908,7 @@ export function AnalystScreen() {
                     borderRadius: 10,
                     background: BG_CARD,
                     border: `1px solid ${BORDER_DARK}`,
-                    boxShadow: "0 14px 36px rgba(0,0,0,.7)",
+                    boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.12)" : "0 14px 36px rgba(0,0,0,.7)",
                   }}
                 >
                   {SECTORS_LIST.map(s => (
@@ -1913,7 +1923,7 @@ export function AnalystScreen() {
                         padding: "7px 10px",
                         border: 0,
                         borderRadius: 6,
-                        background: sectorFilter === s ? "#1b201e" : "transparent",
+                        background: sectorFilter === s ? (isLight ? "var(--surface-3)" : "#1b201e") : "transparent",
                         color: sectorFilter === s ? G : TEXT_HI,
                         fontSize: 12,
                         textAlign: "left",
@@ -1939,7 +1949,7 @@ export function AnalystScreen() {
                   padding: "0 12px",
                   borderRadius: 8,
                   border: `1px solid ${capFilter !== "All" ? G : BORDER_DARK}`,
-                  background: "#0d100f",
+                  background: isLight ? "var(--surface-2)" : "#0d100f",
                   color: capFilter !== "All" ? G : TEXT_MUTED,
                   fontSize: 12,
                   display: "flex",
@@ -1963,7 +1973,7 @@ export function AnalystScreen() {
                     borderRadius: 10,
                     background: BG_CARD,
                     border: `1px solid ${BORDER_DARK}`,
-                    boxShadow: "0 14px 36px rgba(0,0,0,.7)",
+                    boxShadow: isLight ? "0 10px 30px rgba(0,0,0,.12)" : "0 14px 36px rgba(0,0,0,.7)",
                   }}
                 >
                   {CAPS_LIST.map(c => (
@@ -1978,7 +1988,7 @@ export function AnalystScreen() {
                         padding: "7px 10px",
                         border: 0,
                         borderRadius: 6,
-                        background: capFilter === c ? "#1b201e" : "transparent",
+                        background: capFilter === c ? (isLight ? "var(--surface-3)" : "#1b201e") : "transparent",
                         color: capFilter === c ? G : TEXT_HI,
                         fontSize: 12,
                         textAlign: "left",
@@ -2005,7 +2015,7 @@ export function AnalystScreen() {
                     fontWeight: filterChip === chip ? 700 : 500,
                     border: 0,
                     cursor: "pointer",
-                    background: filterChip === chip ? "#1b201e" : "transparent",
+                    background: filterChip === chip ? (isLight ? "var(--surface-3)" : "#1b201e") : "transparent",
                     color: filterChip === chip ? G : TEXT_MUTED,
                   }}
                 >
@@ -2052,7 +2062,7 @@ export function AnalystScreen() {
                       gap: 12,
                       alignItems: "center",
                       padding: "12px 18px",
-                      borderBottom: "1px solid #161a18",
+                      borderBottom: "1px solid var(--border-soft, #161a18)",
                       fontSize: 14,
                     }}
                   >
@@ -2083,7 +2093,7 @@ export function AnalystScreen() {
                         e.stopPropagation();
                         handleGoToFirm(r.firm);
                       }}
-                      style={{ color: "#d3d9d6", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(74,222,128,.3)" }}
+                      style={{ color: TEXT_HI, cursor: "pointer", textDecoration: "underline", textDecorationColor: isLight ? "rgba(31,122,70,.4)" : "rgba(74,222,128,.3)" }}
                     >
                       {r.firm}
                     </span>
@@ -2114,7 +2124,7 @@ export function AnalystScreen() {
                     </span>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-                      <div style={{ width: 44, height: 4, borderRadius: 2, background: "#1b201e", overflow: "hidden" }}>
+                      <div style={{ width: 44, height: 4, borderRadius: 2, background: isLight ? "var(--surface-3)" : "#1b201e", overflow: "hidden" }}>
                         <div style={{ height: 4, width: `${r.score}%`, background: r.score >= 75 ? G : r.score >= 50 ? A : DIM }} />
                       </div>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: r.score >= 75 ? G : r.score >= 50 ? A : DIM }}>
@@ -2126,14 +2136,14 @@ export function AnalystScreen() {
               )}
 
               {allActionsShown < filteredActions.length && (
-                <div style={{ padding: "14px 18px", textAlign: "center", borderTop: `1px solid ${BORDER_DARK}`, background: "#0d100f" }}>
+                <div style={{ padding: "14px 18px", textAlign: "center", borderTop: `1px solid ${BORDER_DARK}`, background: isLight ? "var(--surface-2)" : "#0d100f" }}>
                   <button
                     onClick={() => setAllActionsShown(prev => prev + 50)}
                     style={{
                       padding: "8px 22px",
                       borderRadius: 8,
                       border: `1px solid ${BORDER_DARK}`,
-                      background: "#161b19",
+                      background: isLight ? "var(--surface-1)" : "#161b19",
                       color: G,
                       fontWeight: 700,
                       fontSize: 13,
@@ -2154,8 +2164,8 @@ export function AnalystScreen() {
       {/* MODAL 1: SIGNAL SCORE EXPLAINER MODAL                                */}
       {/* ==================================================================== */}
       {showSigModal && (
-        <div onClick={() => setShowSigModal(false)} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "min(640px, 100%)", maxHeight: "90vh", overflowY: "auto", background: BG_CARD, border: `1px solid ${BORDER_DARK}`, borderRadius: 16, padding: 26, boxShadow: "0 24px 60px rgba(0,0,0,.8)" }}>
+        <div onClick={() => setShowSigModal(false)} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "min(640px, 100%)", maxHeight: "90vh", overflowY: "auto", background: BG_CARD, border: `1px solid ${BORDER_DARK}`, borderRadius: 16, padding: 26, boxShadow: isLight ? "0 20px 50px rgba(0,0,0,.18)" : "0 24px 60px rgba(0,0,0,.8)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: TEXT_HI }}>How Signal Score Works</h3>
               <button onClick={() => setShowSigModal(false)} style={{ background: "transparent", border: 0, color: TEXT_MUTED, fontSize: 20, cursor: "pointer" }}>✕</button>
@@ -2166,7 +2176,7 @@ export function AnalystScreen() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14, margin: "20px 0" }}>
               {FACTORS.map(([title, maxPts, desc]) => (
-                <div key={title} style={{ padding: 12, borderRadius: 8, background: "#0d100f", border: `1px solid ${BORDER_DARK}` }}>
+                <div key={title} style={{ padding: 12, borderRadius: 8, background: isLight ? "var(--surface-1)" : "#0d100f", border: `1px solid ${BORDER_DARK}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: TEXT_HI, marginBottom: 4 }}>
                     <span>{title}</span>
                     <span style={{ color: G, fontFamily: "'JetBrains Mono', monospace" }}>max {maxPts} pts</span>
@@ -2201,8 +2211,8 @@ export function AnalystScreen() {
       {/* MODAL 3: FIRM CALL HISTORY MODAL                                     */}
       {/* ==================================================================== */}
       {firmHistModal && (
-        <div onClick={() => setFirmHistModal(null)} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "min(860px, 100%)", maxHeight: "88vh", overflowY: "auto", background: BG_CARD, border: `1px solid ${BORDER_DARK}`, borderRadius: 16, padding: 24, boxShadow: "0 24px 60px rgba(0,0,0,.85)" }}>
+        <div onClick={() => setFirmHistModal(null)} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "min(860px, 100%)", maxHeight: "88vh", overflowY: "auto", background: BG_CARD, border: `1px solid ${BORDER_DARK}`, borderRadius: 16, padding: 24, boxShadow: isLight ? "0 20px 50px rgba(0,0,0,.18)" : "0 24px 60px rgba(0,0,0,.85)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div>
                 <h3 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: TEXT_HI }}>{firmHistModal.name} Call History</h3>
@@ -2224,7 +2234,7 @@ export function AnalystScreen() {
                     fontWeight: firmHistFilter === flt ? 700 : 500,
                     border: 0,
                     cursor: "pointer",
-                    background: firmHistFilter === flt ? "#1b201e" : "transparent",
+                    background: firmHistFilter === flt ? (isLight ? "var(--surface-3)" : "#1b201e") : "transparent",
                     color: firmHistFilter === flt ? G : TEXT_MUTED,
                   }}
                 >
@@ -2234,7 +2244,7 @@ export function AnalystScreen() {
             </div>
 
             {/* Table */}
-            <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: "#0d100f", overflowX: "auto" }}>
+            <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: isLight ? "var(--surface-2)" : "#0d100f", overflowX: "auto" }}>
               <div style={{ minWidth: 700 }}>
                 <div style={{ display: "grid", gridTemplateColumns: HIST_COLS, gap: 12, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
                   <span>Date</span>
@@ -2256,7 +2266,7 @@ export function AnalystScreen() {
                     .map(c => (
                       <div
                         key={c.key}
-                        style={{ display: "grid", gridTemplateColumns: HIST_COLS, gap: 12, alignItems: "center", padding: "9px 14px", borderBottom: "1px solid #161a18", fontSize: 12 }}
+                        style={{ display: "grid", gridTemplateColumns: HIST_COLS, gap: 12, alignItems: "center", padding: "9px 14px", borderBottom: "1px solid var(--border-soft, #161a18)", fontSize: 12 }}
                       >
                         <span style={{ color: TEXT_MUTED, fontFamily: "'JetBrains Mono', monospace", whiteSpace: "nowrap" }}>{formatUsDate(c.when)}</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: TEXT_HI }}>{c.t}</span>
@@ -2283,8 +2293,8 @@ export function AnalystScreen() {
       {/* MODAL 4: SINGLE CALL DETAILS MODAL                                   */}
       {/* ==================================================================== */}
       {singleCallModal && (
-        <div onClick={() => setSingleCallModal(null)} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "min(500px, 100%)", background: BG_CARD, border: `1px solid ${BORDER_DARK}`, borderRadius: 16, padding: 24, boxShadow: "0 24px 60px rgba(0,0,0,.85)" }}>
+        <div onClick={() => setSingleCallModal(null)} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "min(500px, 100%)", background: BG_CARD, border: `1px solid ${BORDER_DARK}`, borderRadius: 16, padding: 24, boxShadow: isLight ? "0 20px 50px rgba(0,0,0,.18)" : "0 24px 60px rgba(0,0,0,.85)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: TEXT_HI }}>Call Details</h3>
               <button onClick={() => setSingleCallModal(null)} style={{ background: "transparent", border: 0, color: TEXT_MUTED, fontSize: 20, cursor: "pointer" }}>✕</button>
@@ -2305,7 +2315,7 @@ export function AnalystScreen() {
                   </span>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: 12, borderRadius: 8, background: "#0d100f", border: `1px solid ${BORDER_DARK}` }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: 12, borderRadius: 8, background: isLight ? "var(--surface-1)" : "#0d100f", border: `1px solid ${BORDER_DARK}` }}>
                   <div>
                     <div style={{ fontSize: 10, color: TEXT_MUTED }}>TARGET</div>
                     <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: TEXT_HI }}>
@@ -2320,7 +2330,7 @@ export function AnalystScreen() {
                   </div>
                 </div>
 
-                <p style={{ fontSize: 13, color: "#d3d9d6", lineHeight: 1.5, margin: 0 }}>
+                <p style={{ fontSize: 13, color: TEXT_HI, lineHeight: 1.5, margin: 0 }}>
                   {singleCallModal.action.headline}
                 </p>
 
@@ -2331,7 +2341,7 @@ export function AnalystScreen() {
                       setSingleCallModal(null);
                       if (act) openStockFull(act.t);
                     }}
-                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: G, border: 0, color: "#06120a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, background: G, border: 0, color: isLight ? "#ffffff" : "#06120a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                   >
                     Stock Intelligence ↗
                   </button>
@@ -2352,13 +2362,13 @@ export function AnalystScreen() {
             right: 24,
             bottom: 24,
             zIndex: 1000,
-            background: "#151a18",
+            background: isLight ? "var(--surface-1)" : "#151a18",
             border: `1px solid ${G}`,
             color: TEXT_HI,
             padding: "12px 18px",
             borderRadius: 10,
             fontSize: 14,
-            boxShadow: "0 14px 36px rgba(0,0,0,.6)",
+            boxShadow: isLight ? "0 8px 24px rgba(0,0,0,.12)" : "0 14px 36px rgba(0,0,0,.6)",
             display: "flex",
             alignItems: "center",
             gap: 14,

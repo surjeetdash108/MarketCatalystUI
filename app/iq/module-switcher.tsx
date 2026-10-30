@@ -13,12 +13,12 @@ const ACTIVE: Record<AppModule, { bg: string; fg: string; glow: string; hover: s
 const SEGMENTS: Array<[AppModule, string]> = [
   ["MC", "Market Catalyst"],
   ["SI", "Stock Intelligence"],
-  // ["SL", "Strategy Lab"], // Commented out for now; uncomment to re-enable
+  ["SL", "Strategy Lab"],
   ["MF", "Money Flow"],
 ];
 
-/** Toggle width (410px for MC + SI + MF). */
-const WIDTH = 410;
+/** Toggle width (530px for MC + SI + SL + MF). */
+const WIDTH = 530;
 /** From this viewport width the toggle is pinned to one spot on every module. */
 const PIN_MIN = 1024;
 

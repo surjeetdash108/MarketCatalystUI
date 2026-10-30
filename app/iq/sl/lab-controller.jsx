@@ -1,27 +1,25 @@
 "use client";
-/* eslint-disable */
-// Strategy Lab — logic ported from the Strategy AI Lab prototype
-// ("Strategy AI Lab - MarketCatalyst.html") by scripts/strategy-lab/build.sh (assemble_logic.py).
-// Differences from the prototype, all deliberate:
-//  - price data comes from GET /live/strategy-lab/bars (FMP, server-side key)
-//    instead of a browser-side FMP key or the bundled sample file;
-//  - the hard-coded sample results table and the synthetic "example data"
-//    chart are removed — every number is computed from real bars;
-//  - strategy text → rules uses POST /live/strategy-lab/ai-rules (our LLM
-//    gateway) instead of window.claude, with the same JSON contract and the
-//    same deterministic-parser fallback;
-//  - broker automation is not implemented (no broker OAuth apps / signal runner);
-//  - scrolling targets the lab's scroll container instead of the window.
+// Strategy Lab (standalone /sl module). Originally ported from the Strategy AI
+// Lab prototype; maintained by hand. Every number comes from the backtest
+// engine (engine.js) on FMP bars served by the backend:
+//  - one engine config per strategy: valCfg() in lab-config.js, used by the
+//    multi-stock run, the single-stock report, chart levels, the stale
+//    signature and Save / Edit;
+//  - the multi-stock run backtests the 50 largest S&P 500 stocks
+//    (GET /live/strategy-lab/universe) in a Web Worker, on the same bars the
+//    report then uses, so a report's numbers equal its table row;
+//  - saved strategies live in the user's account (/live/strategy-lab/saved),
+//    localStorage is only an offline cache;
+//  - broker automation is behind STRATEGY_LAB_AUTOMATION (off).
 import React, { Component } from "react";
 import * as Engine from "./engine";
 import LabView, { LAB_HOVER_CSS } from "./lab-view";
-import { apiGet, apiPost, backendUrl } from "../backend";
+import { apiDelete, apiGet, apiPost, backendUrl } from "../backend";
+import { COST_OPTS, IPER, YEAR_OPTS, exitPlanKeys, exitPlanSummary, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
+import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, computeRow, engineCfg, fetchSpan, periodOfCfg, prepBars, sortRows, summarize } from "./lab-run";
+import { STRATEGY_LAB_AUTOMATION } from "./flags";
 
 const _o=(ind,n,mult)=>{const o={ind};if(n!=null)o.n=n;if(mult!=null)o.mult=mult;return o},_v=v=>({ind:'num',v}),_c=(a,op,b)=>({a,op,b}),CL=_o('close');
-const LAB_UNIV=[{"t":"AAPL","n":"Apple"},{"t":"MSFT","n":"Microsoft"},{"t":"NVDA","n":"NVIDIA"},{"t":"AMZN","n":"Amazon"},{"t":"GOOGL","n":"Alphabet"},{"t":"META","n":"Meta Platforms"},{"t":"AVGO","n":"Broadcom"},{"t":"TSLA","n":"Tesla"},{"t":"JPM","n":"JPMorgan Chase"},{"t":"LLY","n":"Eli Lilly"},{"t":"V","n":"Visa"},{"t":"UNH","n":"UnitedHealth"},{"t":"XOM","n":"Exxon Mobil"},{"t":"MA","n":"Mastercard"},{"t":"COST","n":"Costco"},{"t":"HD","n":"Home Depot"},{"t":"PG","n":"Procter & Gamble"},{"t":"JNJ","n":"Johnson & Johnson"},{"t":"WMT","n":"Walmart"},{"t":"NFLX","n":"Netflix"},{"t":"ABBV","n":"AbbVie"},{"t":"BAC","n":"Bank of America"},{"t":"CRM","n":"Salesforce"},{"t":"ORCL","n":"Oracle"},{"t":"AMD","n":"Advanced Micro Devices"},{"t":"KO","n":"Coca-Cola"},{"t":"CVX","n":"Chevron"},{"t":"MRK","n":"Merck"},{"t":"PEP","n":"PepsiCo"},{"t":"ADBE","n":"Adobe"},{"t":"TMO","n":"Thermo Fisher"},{"t":"LIN","n":"Linde"},{"t":"CSCO","n":"Cisco"},{"t":"ACN","n":"Accenture"},{"t":"MCD","n":"McDonald's"},{"t":"ABT","n":"Abbott"},{"t":"WFC","n":"Wells Fargo"},{"t":"IBM","n":"IBM"},{"t":"GE","n":"GE Aerospace"},{"t":"QCOM","n":"Qualcomm"},{"t":"CAT","n":"Caterpillar"},{"t":"DIS","n":"Disney"},{"t":"INTU","n":"Intuit"},{"t":"TXN","n":"Texas Instruments"},{"t":"AMGN","n":"Amgen"},{"t":"VZ","n":"Verizon"},{"t":"PFE","n":"Pfizer"},{"t":"NOW","n":"ServiceNow"},{"t":"GS","n":"Goldman Sachs"},{"t":"ISRG","n":"Intuitive Surgical"}];
-const IPER={'1m':[1,2,5,7],'5m':[7,14,21,30],'15m':[14,30,60,90],'30m':[30,60,90,180],'1h':[30,90,180,365],'4h':[90,180,365,730]};
-const MWIN={'1m':[5,15,30,60,120,240,390],'5m':[15,30,60,120,180,240,390],'15m':[30,60,90,120,180,240,390],'30m':[60,90,120,180,240,300,390]};
-const RWIN={d:[7,14,30,60,90,180,365],'1w':[30,60,90,180,365,730,1095],'1m':[1,2,3,4,5,6,7],'5m':[1,2,3,7,14,21,30],'15m':[1,2,7,14,30,60,90],'30m':[2,7,14,30,60,90,180],'1h':[7,14,30,60,90,180,365],'4h':[14,30,60,90,180,365,730]};
 const HOLDS=['Intraday','Days','Days–weeks','Weeks','Weeks–months','Months'];
 const LIB=[
  {k:'turtle20',fam:'Breakout',name:'Turtle 20-Day Breakout',hold:'Weeks',src:'Richard Dennis · Curtis Faith, Way of the Turtle (2007)',what:'The original Turtle System 1: buy when price closes above its highest close of the prior 20 days, exit on a close below the 10-day low. Catches the start of trends and cuts losers fast; most trades lose small, a few trends pay for everything.',cond:{entry:[_c(CL,'crosses above',_o('hh',20))],exit:[_c(CL,'<',_o('ll',10))]}},
@@ -53,8 +51,8 @@ const LIB=[
  {k:'pb21',fam:'Pullback',name:'Pullback to 21-EMA',hold:'Days–weeks',src:'Trend pullback entry',what:'In an uptrend (50-day above 200-day), buys when the day\'s low tags the 21-day EMA but the close holds above it. Exits below the 50-day or after 15 sessions.',cond:{entry:[_c(_o('low'),'≤',_o('ema',21)),_c(CL,'>',_o('ema',21)),_c(_o('sma',50),'>',_o('sma',200))],exit:[_c(CL,'<',_o('sma',50)),_c(_o('bars'),'≥',_v(15))]}},
  {k:'bbup',fam:'Volatility',name:'Bollinger Band Breakout',hold:'Weeks',src:'John Bollinger, Bollinger on Bollinger Bands (2001)',what:'A close above the upper band on 1.5× normal volume signals expanding volatility in the up direction. Rides it until price loses the 20-day middle band.',cond:{entry:[_c(CL,'crosses above',_o('bbu',20)),_c(_o('volume'),'≥',_o('avgvol',50,1.5))],exit:[_c(CL,'<',_o('sma',20))]}},
  {k:'quiet',fam:'Volatility',name:'Quiet-Trend Breakout',hold:'Weeks',src:'Low-volatility breakout',what:'Buys a new 20-day high only when daily range (ATR) is under 2.5% of price and the stock is above its 50-day — calm, orderly uptrends rather than spikes.',cond:{entry:[_c(CL,'crosses above',_o('hh',20)),_c(_o('atr',14),'<',_o('close',null,0.025)),_c(CL,'>',_o('sma',50))],exit:[_c(CL,'<',_o('sma',50))]}},
- {k:'gapgo',fam:'Event',name:'Gap and Go',hold:'Days',src:'Opening-gap continuation',what:'A 3%+ gap up on at least double normal volume that closes above its open shows real demand. Holds five sessions.',cond:{entry:[_c(_o('gap'),'≥',_v(3)),_c(_o('volume'),'≥',_o('avgvol',50,2)),_c(CL,'>',_o('open'))],exit:[_c(_o('bars'),'≥',_v(5))]}},
- {k:'gapdn',fam:'Event',name:'Gap-Down Reversal',hold:'Days',src:'Opening-gap mean reversion',what:'Buys a 3%+ gap down that recovers to close above its open in a stock above the 200-day — sellers exhausted at the open. Holds three sessions.',cond:{entry:[_c(_o('gap'),'≤',_v(-3)),_c(CL,'>',_o('open')),_c(CL,'>',_o('sma',200))],exit:[_c(_o('bars'),'≥',_v(3))]}},
+ {k:'gapgo',fam:'Event',name:'Gap and Go',hold:'Days',src:'Opening-gap continuation',what:'A 3%+ gap up on at least double normal volume that closes above its open shows real demand. Holds five sessions. Signals use the close, so the entry fills at the next morning\'s open.',cond:{entry:[_c(_o('gap'),'≥',_v(3)),_c(_o('volume'),'≥',_o('avgvol',50,2)),_c(CL,'>',_o('open'))],exit:[_c(_o('bars'),'≥',_v(5))]}},
+ {k:'gapdn',fam:'Event',name:'Gap-Down Reversal',hold:'Days',src:'Opening-gap mean reversion',what:'Buys a 3%+ gap down that recovers to close above its open in a stock above the 200-day — sellers exhausted at the open. Holds three sessions. Signals use the close, so the entry fills at the next morning\'s open.',cond:{entry:[_c(_o('gap'),'≤',_v(-3)),_c(CL,'>',_o('open')),_c(CL,'>',_o('sma',200))],exit:[_c(_o('bars'),'≥',_v(3))]}},
  {k:'volsurge',fam:'Volume',name:'Volume Surge Accumulation',hold:'Weeks',src:'Volume-price accumulation signal',what:'A day with 2.5× normal volume and a 2%+ gain above the 50-day average suggests institutional buying. Holds 20 sessions unless price loses the 50-day.',cond:{entry:[_c(_o('volume'),'≥',_o('avgvol',50,2.5)),_c(_o('roc',1),'≥',_v(2)),_c(CL,'>',_o('sma',50))],exit:[_c(CL,'<',_o('sma',50)),_c(_o('bars'),'≥',_v(20))]}},
  {k:'offlow',fam:'Reversal',name:'Off-the-Lows Reversal',hold:'Weeks',src:'Bottom-reversal entry',what:'Buys the first close back above the 50-day average while price is still within 20% of its 52-week low — an early turn from a beaten-down level. Exits below the 20-day or after 40 sessions.',cond:{entry:[_c(CL,'crosses above',_o('sma',50)),_c(CL,'≤',_o('ll',252,1.2))],exit:[_c(CL,'<',_o('sma',20)),_c(_o('bars'),'≥',_v(40))]}},
  {k:'orb30',tf:'5m',fam:'Intraday',name:'30-Min Opening Range Breakout',hold:'Intraday',src:'Toby Crabel, Day Trading with Short Term Price Patterns and Opening Range Breakout (1990)',what:'Marks the high of the first 30 minutes (six 5-min bars) and buys the first close above it within the first two hours. Exits on a close back below VWAP; any open position is closed at the session close.',cond:{entry:[_c(CL,'crosses above',_o('orh',6)),_c(_o('tod'),'≤',_v(120))],exit:[_c(CL,'<',_o('vwap'))]}},
@@ -66,189 +64,26 @@ const LIB=[
  {k:'gapdrive',tf:'5m',fam:'Intraday',name:'Gap-Up Opening Drive',hold:'Intraday',src:'Opening-drive continuation',what:'On a 2%+ gap-up open, buys the break of the first 15-minute high in the first hour while above VWAP. Exits on a close below VWAP.',cond:{entry:[_c(_o('dayopen'),'≥',_o('pdc',null,1.02)),_c(CL,'crosses above',_o('orh',3)),_c(CL,'>',_o('vwap')),_c(_o('tod'),'≤',_v(60))],exit:[_c(CL,'<',_o('vwap'))]}},
  {k:'iema',tf:'5m',fam:'Intraday',name:'5-Min EMA 9 / 20 Trend',hold:'Intraday',src:'Intraday moving-average crossover',what:'Long while the 9-bar EMA is above the 20-bar EMA on 5-minute bars and price is above VWAP. Exits on the reverse cross or at the session close.',cond:{entry:[_c(_o('ema',9),'crosses above',_o('ema',20)),_c(CL,'>',_o('vwap'))],exit:[_c(_o('ema',9),'crosses below',_o('ema',20))]}},
  {k:'irsi',tf:'5m',fam:'Intraday',name:'Intraday RSI Oversold Bounce',hold:'Intraday',src:'Intraday mean reversion',what:'On a day that opened above yesterday\'s close, buys when 5-min RSI(14) climbs back above 30. Exits when RSI reaches 60 or after one hour.',cond:{entry:[_c(_o('rsi',14),'crosses above',_v(30)),_c(_o('dayopen'),'>',_o('pdc'))],exit:[_c(_o('rsi',14),'>',_v(60)),_c(_o('bars'),'≥',_v(12))]}},
- {k:'power',tf:'5m',fam:'Intraday',name:'Power-Hour Breakout',hold:'Intraday',src:'Late-session trend continuation',what:'In the last 90 minutes, buys a new one-hour closing high while price is above VWAP and the opening-range high. Positions close at the bell.',cond:{entry:[_c(_o('tod'),'≥',_v(300)),_c(CL,'crosses above',_o('hh',12)),_c(CL,'>',_o('vwap')),_c(CL,'>',_o('orh',6))],exit:[_c(CL,'<',_o('ema',9))]}},
+ {k:'power',tf:'5m',fam:'Intraday',name:'Power-Hour Breakout',hold:'Intraday',src:'Late-session trend continuation',what:'In the last 90 minutes, buys a new one-hour closing high while price is above VWAP and the opening-range high. Exits on a close below the 9-bar EMA; any open position closes at the bell.',cond:{entry:[_c(_o('tod'),'≥',_v(300)),_c(CL,'crosses above',_o('hh',12)),_c(CL,'>',_o('vwap')),_c(CL,'>',_o('orh',6))],exit:[_c(CL,'<',_o('ema',9))]}},
  {k:'isqz',tf:'5m',fam:'Intraday',name:'5-Min Bollinger Squeeze',hold:'Intraday',src:'John Bollinger — applied to 5-minute bars',what:'When 5-min band width hits its lowest in 60 bars, a close above the upper band starts the move. Exits below the 20-bar average.',cond:{entry:[_c(_o('sqz',60),'>',_v(0)),_c(CL,'crosses above',_o('bbu',20))],exit:[_c(CL,'<',_o('sma',20))]}},
  {k:'f_ema',tf:'15m',fam:'Intraday',name:'15-Min EMA 9 / 21 Cross',hold:'Intraday',src:'Intraday moving-average crossover on 15-minute bars',what:'Buys when the 9-bar EMA crosses above the 21-bar EMA on 15-minute bars while price is above VWAP. Exits on the reverse cross or at the session close.',cond:{entry:[_c(_o('ema',9),'crosses above',_o('ema',21)),_c(CL,'>',_o('vwap'))],exit:[_c(_o('ema',9),'crosses below',_o('ema',21))]}},
  {k:'f_orb',tf:'15m',fam:'Intraday',name:'15-Min Opening Bar Breakout',hold:'Intraday',src:'Opening range breakout, first 15-minute bar',what:'Buys the first 15-min close above the opening 15-minute bar\'s high on 1.5× the recent 15-min volume. Exits on a close back below VWAP or at the session close.',cond:{entry:[_c(CL,'crosses above',_o('orh',1)),_c(_o('volume'),'≥',_o('avgvol',20,1.5))],exit:[_c(CL,'<',_o('vwap'))]}},
- {k:'f_vwap',tf:'15m',fam:'Intraday',name:'15-Min VWAP Trend Pullback',hold:'Intraday',src:'Trend-day pullback entry on 15-minute bars',what:'On a day trading above its open and above the 50-bar EMA, buys a 15-min bar that dips to VWAP but closes above it. Exits on a close below VWAP or after 2 hours.',cond:{entry:[_c(CL,'crosses above',_o('vwap')),_c(CL,'>',_o('dayopen')),_c(CL,'>',_o('ema',50))],exit:[_c(CL,'<',_o('vwap')),_c(_o('bars'),'≥',_v(8))]}},
+ {k:'f_vwap',tf:'15m',fam:'Intraday',name:'15-Min VWAP Trend Pullback',hold:'Intraday',src:'Trend-day pullback entry on 15-minute bars',what:'On a day trading above its open and above the 50-bar EMA, buys a 15-min bar that dips to VWAP but closes above it. Exits on a close below VWAP or after 2 hours.',cond:{entry:[_c(_o('low'),'≤',_o('vwap')),_c(CL,'>',_o('vwap')),_c(CL,'>',_o('dayopen')),_c(CL,'>',_o('ema',50))],exit:[_c(CL,'<',_o('vwap')),_c(_o('bars'),'≥',_v(8))]}},
  {k:'f_rsi',tf:'15m',fam:'Intraday',name:'15-Min RSI(2) Pullback in Uptrend',hold:'Intraday',src:'Connors RSI(2) adapted to 15-minute bars',what:'When price is above the 50-bar EMA, buys a 15-min RSI(2) dip below 10. Exits when RSI(2) rises above 70 or after 90 minutes.',cond:{entry:[_c(_o('rsi',2),'<',_v(10)),_c(CL,'>',_o('ema',50))],exit:[_c(_o('rsi',2),'>',_v(70)),_c(_o('bars'),'≥',_v(6))]}},
  {k:'f_macd',tf:'15m',fam:'Intraday',name:'15-Min MACD Momentum',hold:'Intraday',src:'Gerald Appel MACD on 15-minute bars',what:'Buys when MACD crosses above its signal line on 15-minute bars with price above VWAP. Exits on the reverse cross or at the session close.',cond:{entry:[_c(_o('macd'),'crosses above',_o('macds')),_c(CL,'>',_o('vwap'))],exit:[_c(_o('macd'),'crosses below',_o('macds'))]}},
  {k:'f_pdh',tf:'15m',fam:'Intraday',name:'15-Min Prior-Day High Break',hold:'Intraday',src:'Floor-trader reference levels on 15-minute bars',what:'Buys the first 15-min close above yesterday\'s high on 1.5× recent volume. Exits on a close back below yesterday\'s high or at the session close.',cond:{entry:[_c(CL,'crosses above',_o('pdh')),_c(_o('volume'),'≥',_o('avgvol',20,1.5))],exit:[_c(CL,'<',_o('pdh'))]}},
 ];
+
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-const LOGO=t=>backendUrl('/live/logo?ticker='+encodeURIComponent(t));
-const HIDE=e=>{e.currentTarget.style.display='none'};
-/** FMP bars for one symbol via the backend, in the prototype's row shape. */
-async function labBars(s,tf,span){const q='symbols='+encodeURIComponent(s)+'&tf='+tf+(span.days!=null?'&days='+span.days:'&years='+span.years);
-  const r=await apiGet('/live/strategy-lab/bars?'+q);const rows=r&&r.bars&&r.bars[s];if(!rows||!rows.length)throw new Error('FMP has no '+(tf==='d'?'daily':tf)+' bars for '+s);
-  return rows.map(([date,open,high,low,close,volume])=>({date,open,high,low,close,volume}))}
-const DEFAULT_SYMS=['AAPL','NVDA','MSFT'];
-const SAVED_KEY='mc_lab_saved_v1';
-const BASE_CSS=`.sl-root{font-family:Manrope,system-ui,sans-serif;font-size:13px;color:#e6ebe8;-webkit-font-smoothing:antialiased}
-.sl-root *{box-sizing:border-box}
-.sl-root button{font-family:inherit}
-.sl-root input,.sl-root select{font-family:inherit}
-.sl-root button:focus-visible,.sl-root select:focus-visible,.sl-root input:focus-visible{outline:2px solid #c9a24a;outline-offset:2px}
-.sl-main-scroll::-webkit-scrollbar{width:8px;height:8px}.sl-main-scroll::-webkit-scrollbar-track{background:#15130c}.sl-main-scroll::-webkit-scrollbar-thumb{background:#c9a24a;border-radius:8px;border:2px solid #15130c}.sl-main-scroll::-webkit-scrollbar-thumb:hover{background:#f0d68c}`;
-
-export default class StrategyLab extends Component {
-  libRef=React.createRef();aiRef=React.createRef();detRef=React.createRef();
-  BT=Engine;refsObj={aiRef:this.aiRef,libRef:this.libRef,detRef:this.detRef};
-  state={labSaved:[]};
-  scrollEl(){return typeof document!=='undefined'?document.querySelector('.sl-main-scroll'):null}
-  scrollY(){const c=this.scrollEl();return c?c.scrollTop-c.getBoundingClientRect().top:0}
-  scrollWin(a,b){const c=this.scrollEl();if(!c)return;if(typeof a==='object')c.scrollTo(a);else c.scrollTo(a||0,b||0)}
-  componentDidMount(){try{const sv=JSON.parse(localStorage.getItem(SAVED_KEY)||'[]');if(Array.isArray(sv)&&sv.length)this.setState({labSaved:sv})}catch(e){}this.loadDaily(DEFAULT_SYMS)}
-  componentWillUnmount(){clearTimeout(this.tt)}
-  /** 6 years of FMP daily bars for the stocks the Backtest step tests on. */
-  async loadDaily(syms){this.setState({fmpLoading:true,barsErr:''});const out={};let asOf='';const fails=[];
-    await Promise.all(syms.map(async s=>{try{out[s]=await labBars(s,'d',{years:6});const L=out[s][out[s].length-1].date;if(L>asOf)asOf=L}catch(e){fails.push(s)}}));
-    if(!Object.keys(out).length){this.setState({fmpLoading:false,barsErr:'Couldn\'t load FMP daily bars ('+fails.join(', ')+'). Try again shortly.'});return}
-    this._btc={};this.setState(s=>({bars:{...(s.bars||{}),...out},barsAsOf:asOf,fmpLoading:false}));if(fails.length)this.toastMsg('FMP has no daily bars for '+fails.join(', '))}
-  async fetchOne(s){const rows=await labBars(s,'d',{years:6});const bars={...(this.state.bars||{}),[s]:rows};const asOf=this.state.barsAsOf||rows[rows.length-1].date;this._btc={};this.setState({bars,barsAsOf:asOf});return bars[s]}
-  async aiRun(q,mode,S,runSpec){const st=this.state,BT=this.BT,set=p=>this.setState(p);q=(q||'').trim();if(!q){this.toastMsg('Describe a strategy first');return}if(!BT){this.toastMsg('Engine still loading');return}
-    set({ai:{mode,q,loading:true}});this.toAi();
-    const IND=BT.IND;let spec=null,src='Rule parser',why='',risk={stop:0.08,tp:null,trail:null};
-    // The prototype asked window.claude; here the backend's LLM gateway answers with the same JSON contract.
-    try{const res=await apiPost('/live/strategy-lab/ai-rules',{q});const raw=res&&res.raw;if(raw){
-        const j=JSON.parse(raw.slice(raw.indexOf('{'),raw.lastIndexOf('}')+1));const ok=o=>o&&IND[o.ind]&&(o.ind!=='num'||isFinite(+o.v));const one=c=>c&&ok(c.a)&&ok(c.b)&&BT.OPS.includes(c.op)?{a:c.a,op:c.op,b:c.b}:null;const cl=a=>(a||[]).map(c=>{if(c&&Array.isArray(c.any)){const s=c.any.map(one).filter(Boolean);return s.length>1?{any:s}:s[0]||null}return one(c)}).filter(Boolean);
-        spec={entry:cl(j.entry),exit:cl(j.exit),name:j.name,tf:BT.TF[j.timeframe]?j.timeframe:null};why=j.why||'';risk={stop:j.stop??0.08,tp:j.tp??null,trail:j.trail??null};src='AI → rule engine';if(!spec.entry.length)spec=null}}catch(e){spec=null}
-    if(!spec){const r=BT.parseRules(q);if(!r.entry.length){set({ai:{mode,q,err:'Couldn\'t turn that into an entry rule. Try “buy when RSI(2) is below 10 and close is above the 200-day SMA”.'}});return}spec={entry:r.entry,exit:r.exit,name:null,unparsed:r.unparsed}}
-    const near=(v,o)=>o.reduce((a,x)=>Math.abs(+x-v)<Math.abs(+a-v)?x:a);
-    const cfg={...(st.labCfg||{}),stop:risk.stop?near(risk.stop*100,['5','8','12']):'none',tp:risk.tp?near(risk.tp*100,['10','20']):'none',trail:risk.trail?near(risk.trail*100,['10','15']):'none'};
-    this._btc={};set({labConds:{...(st.labConds||{}),custom:{entry:spec.entry,exit:spec.exit}},labK:'custom',aiHold:null,labCustomTf:(()=>{const p=BT.parseTimeframe(q);return p!=='d'?p:(spec.tf||'d')})(),vals:{...(st.vals||{}),custom:null},labCustomName:spec.name||'Your strategy',labUnparsed:spec.unparsed||[],labCfg:cfg,ai:{mode,q,src,name:spec.name||'Your strategy',why,spec,risk:cfg}});this.toAi();setTimeout(()=>{const s2=this.state;this.runValidate('custom',s2.labConds&&s2.labConds.custom,s2.labCustomTf||'d')},0)}
-  toDet(){setTimeout(()=>{const el=this.detRef.current;if(!el)return;const r=el.getBoundingClientRect();if(r.top<110||r.top>window.innerHeight*0.5)this.scrollWin({top:r.top+this.scrollY()-110,behavior:'smooth'})},40)}
-  toAi(){setTimeout(()=>{const el=this.aiRef.current;if(el)this.scrollWin({top:el.getBoundingClientRect().top+this.scrollY()-110,behavior:'smooth'})},80)}
-  toastMsg(m){clearTimeout(this.tt);this.setState({toast:m});this.tt=setTimeout(()=>this.setState({toast:null}),2200)}
-  iDays(tf){const T=this.BT&&this.BT.TF[tf];if(!T||!T.fmp)return null;const o=IPER[tf]||[T.days],v=+((this.state.labCfg||{})['idays_'+tf]);return o.includes(v)?v:T.days}
-  valCfg(){const c={stop:'8',tp:'none',trail:'none',cost:'5',yrs:'5',...(this.state.labCfg||{})};return{stop:c.stop==='none'?0:+c.stop/100,tp:c.tp==='none'?null:+c.tp/100,trail:c.trail==='none'?null:+c.trail/100,costBps:+c.cost,years:+c.yrs,iper:Object.keys(c).filter(k=>k.startsWith('idays_')).map(k=>k+'='+c[k]).join(',')}}
-  async fetchLong(s,key,yrs=5){this._sb=this._sb||{};const ck=s+'|'+(yrs+1)+'y';if(this._sb[ck])return this._sb[ck];
-    const j=await labBars(s,'d',{years:yrs+1});
-    return(this._sb[ck]=this.BT.normalizeFmp(j))}
-  async runValidate(k,spec,tf){const BT=this.BT;if(!BT||!spec)return;
-    const cfg=this.valCfg(),sig=JSON.stringify([spec,cfg]),put=p=>this.setState(s=>({vals:{...(s.vals||{}),[k]:{...((s.vals||{})[k]||{}),...p}}}));
-    if(BT.checkRules(spec).length){put({err:'These rules need '+BT.checkRules(spec).join(', ')+' — swap them for price-based conditions to backtest.',busy:false,sig});return}
-    put({busy:true,err:'',rows:[],sig,tf});
-    try{const r=await apiPost('/live/strategy-lab/validate',{spec:{entry:spec.entry,exit:spec.exit},tf,cfg:{stop:cfg.stop,tp:cfg.tp,trail:cfg.trail,costBps:cfg.costBps,years:cfg.years,idays:this.iDays(tf)}});
-      put({busy:false,rows:r.rows||[],fail:r.unavailable||0,total:r.universe,tested:r.tested,asOf:r.asOf,at:Date.now()})}
-    catch(e){const m=(()=>{try{return JSON.parse(e.message).message}catch(x){return e&&e.message}})();put({busy:false,err:m||'Backtest unavailable right now.',rows:null})}}
-  /** Chart for one stock from a universe run: its own bars + the same engine and settings as the server's row. */
-  async openChartFor(o){const BT=this.BT,cfg=this.valCfg(),T=BT.TF[o.tf]||{};
-    try{let b0=BT.normalizeFmp(T.fmp?await labBars(o.t,o.tf,{days:this.iDays(o.tf)}):await labBars(o.t,'d',{years:(cfg.years||5)+1}));
-      if(T.fmp)b0=b0.filter(x=>{const t=String(x.date).slice(11,16);return t>='09:30'&&t<'16:00'});
-      const b=o.tf==='1w'?BT.toWeekly(b0):b0;const c={...cfg};if(T.fmp){c.intraday=true;c.flatEOD=T.flat}else{const d=new Date(b[b.length-1].date);d.setFullYear(d.getFullYear()-(cfg.years||5));c.startDate=d.toISOString().slice(0,10)}
-      const r=BT.runRules(b,o.spec,c);if(!r){this.toastMsg('Not enough '+o.t+' history to chart');return}this.openChart({t:o.t,n:o.n,k:o.k,tf:o.tf,bars:b,trades:r.trades})}
-    catch(e){this.toastMsg('Chart for '+o.t+' unavailable: '+(e&&e.message||'error'))}}
-  valVals(st,set,k,spec,tf,show){const v=(st.vals||{})[k],BT=this.BT;if(!show)return{show:false};
-    const p=x=>(x>=0?'+':'−')+Math.abs(x*100).toFixed(1)+'%',n=(this._univ||[]).length,stale=!!(v&&v.at&&v.sig!==JSON.stringify([spec,this.valCfg()])),isI=!!(BT&&(BT.TF[tf]||{}).fmp),tfL=BT&&BT.TF[tf]?BT.TF[tf].l:'Daily';
-    const rows=v&&v.rows?v.rows.map(x=>({...x,ev:{status:x.st,ago:x.ago},r:{m:{sharpe:x.sh,tot:x.tot,cagr:x.cagr},mb:{cagr:x.bcagr}},cl:[],ex:x.cagr-x.bcagr,wins:x.w})):[];
-    const rank=s=>s==='ready'?0:s==='setup'?1:2;rows.sort((a,b)=>rank(a.ev&&a.ev.status)-rank(b.ev&&b.ev.status)||b.r.m.sharpe-a.r.m.sharpe);
-    const RR=rows.filter(x=>x.ev&&x.ev.ago===0),tot=RR.reduce((a,x)=>a+x.cl.length,0),wins=RR.reduce((a,x)=>a+x.w,0),beat=RR.filter(x=>x.ex>0).length,pos=RR.filter(x=>x.r.m.tot>0).length,ready=RR.length;
-    const sh=RR.map(x=>x.r.m.sharpe).sort((a,b)=>a-b),med=sh.length?sh[Math.floor(sh.length/2)]:0,LOGO=this._LOGO||(()=>'');
-    const yc=(st.labCfg||{}).yrs||'5',idc=isI?String(this.iDays(tf)):null,periodOpts=isI?(IPER[tf]||[]).map(dn=>({l:dn>=365?Math.round(dn/365)+'Y':dn>=30?Math.round(dn/30)+'M':dn+'D',bg:idc===String(dn)?'#2e2614':'transparent',c:idc===String(dn)?'#fbefc9':'#8b9592',onClick:()=>this.setState(s=>({labCfg:{...(s.labCfg||{}),['idays_'+tf]:String(dn)}}))})):[['1','1Y'],['3','3Y'],['5','5Y'],['10','10Y']].map(([y,l])=>({l,bg:yc===y?'#2e2614':'transparent',c:yc===y?'#fbefc9':'#8b9592',onClick:()=>this.setState(s=>({labCfg:{...(s.labCfg||{}),yrs:y}}))})),hasPeriod=true;
-    const isMin=!!(this.BT&&(this.BT.TF[tf]||{}).flat);
-    const WL=d=>isMin?(d>=390?'1D':d>=60?(d/60)+'H':d+'m'):d==='all'?'Full':d%365===0?(d/365)+'Y':d%30===0?(d/30)+'M':d%7===0?(d/7)+'W':d+'D';
-    const WOPT=isMin?(MWIN[tf]||MWIN['5m']):(RWIN[tf]||RWIN.d),wk=(st.retWins||{})[tf||'d'],rw=WOPT.map(String).includes(String(wk))?String(wk):String(WOPT[Math.min(2,WOPT.length-1)]);
-    const cutOf=eq=>{if(isMin){const L=String(eq[eq.length-1].date);if(+rw>=390)return L.slice(0,10);const t=new Date(L.replace(' ','T').slice(0,19)+'Z');t.setUTCMinutes(t.getUTCMinutes()-(+rw));return t.toISOString().slice(0,19).replace('T',' ')}const c=new Date(eq[eq.length-1].date.slice(0,10)+'T00:00:00Z');c.setUTCDate(c.getUTCDate()-(+rw));return c.toISOString().slice(0,10)};
-    const winOpts=WOPT.map(d=>({l:WL(d),bg:rw===String(d)?'#2e2614':'transparent',c:rw===String(d)?'#fbefc9':'#8b9592',onClick:()=>this.setState(s=>({retWins:{...(s.retWins||{}),[tf||'d']:String(d)}}))})),retHdr='RETURN · '+WL(rw==='all'?'all':+rw).toUpperCase();
-    const wret=(eq)=>{const L=eq[eq.length-1],cs=cutOf(eq);const s0=eq.find(x=>(isMin?String(x.date):x.date.slice(0,10))>=cs)||eq[0];return L.v/s0.v-1};
-    const wstat=x=>{const s=(x.wins||{})[rw]||[0,0,0,0];return{a:s[0],b:s[1],n:s[2],w:s[3]}};
-    const WS=RR.map(wstat),wTot=WS.reduce((s,q)=>s+q.n,0),wWins=WS.reduce((s,q)=>s+q.w,0),wPos=WS.filter(q=>q.a>0).length,wBeat=WS.filter(q=>q.a>q.b).length;
-    const run=()=>{if(v&&v.busy)return;this.runValidate(k,spec,tf)};
-    const fresh=!!(v&&v.at&&!v.busy&&!stale);
-    return{winOpts,retHdr,periodOpts,hasPeriod,show:true,primary:!fresh,secondary:fresh,busy:!!(v&&v.busy),pct:'100%',err:v&&v.err||'',stale:stale&&!(v&&v.busy),run,btn:v&&v.busy?'Running…':v&&v.at?'Re-run backtest →':'Run backtest →',
-      idle:!v||(!v.busy&&!v.at&&!v.err),idleT:'Run backtest to see the result.',sample:false,
-      head:v&&v.busy?'Backtesting every tracked stock…':v&&v.at?ready+(ready===1?' stock meets':' stocks meet')+' the rules now':'',
-      meta:v&&v.at?(isI?'Last '+this.iDays(tf)+' days · '+tfL:tf==='1w'?this.valCfg().years+'Y weekly':this.valCfg().years+'Y daily')+' · '+(v.tested||0)+' of '+(v.total||0)+' stocks tested · FMP · as of '+(v.asOf||'—')+(v.fail?' · '+v.fail+' without data':''):'',
-      hasSum:!!(v&&v.at&&ready),sum:[['PROFITABLE',wPos+' / '+ready,wPos>ready/2?'#3ddc84':'#e6ebe8'],['BEAT BUY & HOLD',wBeat+' / '+ready,'#e6ebe8'],['WIN RATE',wTot?Math.round(100*wWins/wTot)+'%':'—','#e6ebe8'],['MEDIAN SHARPE',med.toFixed(2).replace('-','−'),med>0?'#3ddc84':'#f0565a'],['TRADES',String(wTot),'#e6ebe8']].map(([k2,v2,c])=>({k:k2,v:v2,c})),
-      hasRows:!!(v&&!v.busy&&rows.some(x=>x.ev&&x.ev.ago===0)),noneReady:!!(v&&v.at&&!v.busy&&rows.length&&!rows.some(x=>x.ev&&x.ev.ago===0)),
-      rows:rows.filter(x=>x.ev&&x.ev.ago===0).sort((a,b)=>a.ev.ago-b.ev.ago).map(x=>{const ago=x.ev.ago;return{t:x.t,n:x.n,ini:x.t.slice(0,4),logo:LOGO(x.t),s:ago===0?(isI?'THIS BAR':'TODAY'):isI?ago+' BARS AGO':ago+(ago===1?' DAY AGO':' DAYS AGO'),sC:'#3ddc84',sBd:'#1f4a33',
-        ...(()=>{const q=wstat(x),d=q.a-q.b;return{cagr:p(q.a),ex:p(d),exC:d>=0?'#3ddc84':'#f0565a',win:q.n?Math.round(100*q.w/q.n)+'%':'—',tr:String(q.n)}})(),
-        onClick:()=>this.openChartFor({t:x.t,n:x.n,k,tf,spec})}})}}
-  openChart(o){this._chart=o;this.setState({chartOpen:o.t+'|'+o.k+'|'+Date.now()})}
-  chartData(o){if(o.bars&&o.trades){const pts=o.bars.map(b=>({d:String(b.date),c:b.close}));return{pts,trades:o.trades.map(t=>({inD:String(t.inDate),outD:String(t.outDate),inPx:t.inPx,outPx:t.outPx,ret:t.ret,open:t.why==='Still open'})),sample:false}}
-    return null}
-  chartVals(st,set){const o=st.chartOpen&&this._chart;if(!o)return{chOpen:false};const D=this._chartKey===st.chartOpen?this._chartD:(this._chartKey=st.chartOpen,this._chartD=this.chartData(o));if(!D)return{chOpen:false};
-    const pts=D.pts,N=pts.length,cs=pts.map(x=>x.c),lo=Math.min(...cs),hi=Math.max(...cs),pad=(hi-lo)*.08||1,L=lo-pad,H=hi+pad,X=i=>i/(N-1)*1000,Y=c=>(1-(c-L)/(H-L))*300;
-    const idx={};pts.forEach((x,i)=>{idx[x.d]=i});const fi=d=>{if(d in idx)return idx[d];let b=0;for(let i=0;i<N;i++)if(pts[i].d<=d)b=i;return b};
-    const line='M'+pts.map((x,i)=>X(i).toFixed(1)+','+Y(x.c).toFixed(1)).join('L');
-    const P=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+'%',fd=d=>{const t=new Date(d.slice(0,10)+'T00:00:00Z');return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][t.getUTCMonth()]+' '+t.getUTCDate()+(d.length>10?' '+d.slice(11,16):'')};
-    const fdy=d=>fd(d.slice(0,10))+', '+d.slice(0,4);
-    const tr=D.trades.map((t,n)=>{const a=fi(t.inD),b=fi(t.outD),win=t.ret>0;return{n:n+1,x:X(a).toFixed(1),w:Math.max(2,X(b)-X(a)).toFixed(1),fill:win?'rgba(61,220,132,.16)':'rgba(240,86,90,.16)',stroke:win?'rgba(61,220,132,.55)':'rgba(240,86,90,.55)',inL:(a/(N-1)*100).toFixed(2)+'%',inT:(Y(t.inPx)/3).toFixed(2)+'%',outL:(b/(N-1)*100).toFixed(2)+'%',outT:(Y(t.outPx)/3).toFixed(2)+'%',lblL:((a+b)/2/(N-1)*100).toFixed(2)+'%',c:win?'#3ddc84':'#f0565a',ret:P(t.ret),inD:fd(t.inD),outD:t.open?'Open':fd(t.outD),inPx:t.inPx.toFixed(2),outPx:t.outPx.toFixed(2),days:String(b-a)}});
-    const tot=D.trades.reduce((a,t)=>a*(1+t.ret),1)-1,bh=cs[N-1]/cs[0]-1,wn=D.trades.filter(t=>t.ret>0).length,tfL=((this.BT&&this.BT.TF[o.tf||'d'])||{l:'Daily'}).l;
-    return{chOpen:true,chT:o.t,chN:o.n||'',chSample:D.sample,chSub:tfL+' candles'+(o.rw?' · return over '+(o.isMin?(o.rw<60?o.rw+' min':(o.rw/60)+'h'):o.rw<30?Math.round(o.rw/7)+'W':o.rw<365?Math.round(o.rw/30)+'M':Math.round(o.rw/365)+'Y'):'')+' · '+fdy(pts[0].d)+' – '+fdy(pts[N-1].d)+(D.sample?' · example data':''),chLine:line,chArea:line+'L1000,300L0,300Z',chTr:tr,
-      chStats:[['STRATEGY',P(tot),tot>=0?'#3ddc84':'#f0565a'],['BUY & HOLD',P(bh),bh>=0?'#3ddc84':'#f0565a'],['TRADES',String(D.trades.length),'#e6ebe8'],['WIN RATE',D.trades.length?Math.round(100*wn/D.trades.length)+'%':'—','#e6ebe8']].map(([k,v,c])=>({k,v,c})),
-      chHi:hi.toFixed(2),chLo:lo.toFixed(2),chD0:fdy(pts[0].d),chD1:fdy(pts[N-1].d),chClose:()=>{this._chart=null;set({chartOpen:null})},chStop:e=>e.stopPropagation()}}
-  exitPlan(cfg){const g=(k,d)=>cfg[k]??d,sM=g('stopM',g('stop','8')==='none'?'none':'pct'),sP=g('stop','8')==='none'?'8':g('stop','8'),sA=g('stopA','2'),hasStop=sM!=='none';
-    let tM=g('tpM',g('tp','none')==='none'?'none':'pct');if(tM==='r'&&!hasStop)tM='none';const tP=g('tp','none')==='none'?'10':g('tp','10'),tR=g('tpR','2');
-    const trA=g('trA',g('trail','none')==='none'?'never':'entry'),trD=g('trD',g('trail','none')==='none'?'5':g('trail','5')),trAe=trA==='1r'&&!hasStop?'never':trA,be=g('be','off')==='on'&&hasStop,mb=g('maxB','none');
-    const eng={stop:sM==='pct'?+sP/100:0,stopAtr:sM==='atr'?+sA:null,tp:tM==='pct'?+tP/100:null,tpR:tM==='r'?+tR:null,trail:trAe==='never'||trD==='atr2'?null:+trD/100,trailAtr:trAe!=='never'&&trD==='atr2'?2:null,trailAct:trAe==='never'?null:trAe==='entry'?0:trAe==='1r'?0:+trAe/100,trailActR:trAe==='1r'?1:null,be,maxBars:mb==='none'?null:+mb};
-    const parts=[sM==='pct'?'Stop '+sP+'% below entry':sM==='atr'?'Stop '+sA+'× ATR below entry':'No stop',tM==='pct'?'target +'+tP+'%':tM==='r'?'target '+tR+'R':'no target'];
-    if(be)parts.push('stop to breakeven at +1R');if(trAe!=='never')parts.push('trail '+(trD==='atr2'?'2× ATR':trD+'%')+' below the high '+(trAe==='entry'?'from entry':'once up '+(trAe==='1r'?'1R':'+'+trAe+'%')));if(mb!=='none')parts.push('exit after '+mb+' bars');
-    const sum='After entry: '+parts.join(' · ');
-    const rows=(cfg,set)=>{const S=p=>set({labCfg:{...cfg,...p}}),seg=(cur,opts,dis)=>({opts:opts.map(([k,l,p])=>{const off=dis&&dis(k);return{l,bg:cur===k?'#2e2614':'transparent',c:off?'#3c4446':cur===k?'#fbefc9':'#8b9592',cur:off?'not-allowed':'pointer',onClick:()=>{if(!off)S(p)}}})});
-      const sK=sM==='none'?'none':sM==='atr'?'a'+sA:'p'+sP,tK=tM==='none'?'none':tM==='r'?'r'+tR:'p'+tP,more=!!cfg.xpMore;
-      const R=[{t:'STOP',segs:[seg(sK,[['p5','5%',{stopM:'pct',stop:'5'}],['p8','8%',{stopM:'pct',stop:'8'}],['p12','12%',{stopM:'pct',stop:'12'}],['a2','2× ATR',{stopM:'atr',stopA:'2'}],['none','None',{stopM:'none'}]])],note:''},
-        {t:'TARGET',segs:[seg(tK,[['p10','+10%',{tpM:'pct',tp:'10'}],['p20','+20%',{tpM:'pct',tp:'20'}],['r2','2R',{tpM:'r',tpR:'2'}],['none','None',{tpM:'none'}]],k=>k==='r2'&&!hasStop)],note:''},
-        {t:'TRAIL',segs:[seg(trAe,[['never','Off',{trA:'never'}],['entry','From entry',{trA:'entry'}],['10','Once up +10%',{trA:'10'}],['1r','Once up 1R',{trA:'1r'}]],k=>k==='1r'&&!hasStop)].concat(trAe!=='never'?[seg(trD,[['5','5%',{trD:'5'}],['8','8%',{trD:'8'}],['atr2','2× ATR',{trD:'atr2'}]])]:[]),note:''}];
-      if(more)R.push({t:'BREAKEVEN',segs:[seg(be?'on':'off',[['off','Off',{be:'off'}],['on','At +1R',{be:'on'}]],k=>k==='on'&&!hasStop)],note:hasStop?'':'Needs a stop'},{t:'MAX HOLD',segs:[seg(mb,[['none','None',{maxB:'none'}],['10','10 bars',{maxB:'10'}],['20','20 bars',{maxB:'20'}],['40','40 bars',{maxB:'40'}]])],note:''});
-      return R};
-    const moreBtn=(cfg,set)=>({l:cfg.xpMore?'Fewer options':'More options',onClick:()=>set({labCfg:{...cfg,xpMore:!cfg.xpMore}})});
-    return{eng,sum,rows,moreBtn}}
-  aiVals(st,set,S,runSpec,specOf){const mode='create',ai=st.ai&&st.ai.mode===mode?st.ai:null,BT=this.BT,P=v=>v==null?'—':(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+'%',Pc=v=>v==null?'#8b9592':v>=0?'#3ddc84':'#f0565a';
-    const q=st.aiQ||'',go=(qq)=>{const v=qq??q;if(qq!=null)set({aiQ:qq});this.aiRun(v,mode,S,runSpec)};
-    const chips=mode==='create'?['Buy when RSI(2) is below 10 and close is above the 200-day SMA, exit when close crosses above the 5-day SMA','Buy breakouts above the 52-week high on 1.5x average volume, exit below the 20-day SMA','Buy when MACD crosses above its signal line and RSI(14) is under 70, exit when RSI is above 75','Buy when the 20-day EMA crosses above the 50-day EMA, hold 30 days, 8% stop']:['Is NVDA extended after its run?','How strong is AAPL\'s trend right now?','Which strategy works best on MSFT?','Is AMD near a breakout?'];
-    const F=ai&&ai.F;
-    return{
-      aiHeadline:mode==='create'?'Describe a strategy. We\'ll build the rules and backtest it.':'Ask about any US stock.',
-      aiModes:[['create','Create a strategy'],['ask','Ask about a stock']].map(([k,l])=>({l,bg:mode===k?'#2e2614':'transparent',c:mode===k?'#fbefc9':'#7a8481',onClick:()=>set({aiMode:k})})),
-      aiQ:q,onAiQ:e=>set({aiQ:e.target.value}),onAiKey:e=>{if(e.key==='Enter')go()},aiGo:()=>go(),
-      aiPh:mode==='create'?'e.g. buy when price breaks the 52-week high on heavy volume, exit below the 20-day average':'e.g. Is NVDA extended? Which strategy fits TSLA?',
-      aiBtn:ai&&ai.loading?'Working…':mode==='create'?'Build & test':'Ask',
-      aiChips:chips.map(l=>({l,onClick:()=>go(l)})),
-      aiHas:!!ai,aiLoading:!!(ai&&ai.loading),aiLoadingT:ai&&ai.loadingT||'Building rules…',aiErr:ai&&ai.err||'',
-      aiKind:mode==='create'?'STRATEGY':'STOCK',aiTitle:ai?(mode==='create'?(ai.name||'Building…'):(ai.sym||'')):'',aiSrc:ai&&ai.src||'',
-      aiParas:ai?(mode==='create'?(ai.why?[ai.why]:[]):(ai.text||'').split(/\n\s*\n/).filter(Boolean)):[],
-      aiHasFacts:!!F,aiFacts:F?[['CLOSE',F.close.toFixed(2),'#e6ebe8'],['1M',P(F.r1m),Pc(F.r1m)],['3M',P(F.r3m),Pc(F.r3m)],['1Y',P(F.r1y),Pc(F.r1y)],['FROM 52W HIGH',P(F.fromHi),Pc(F.fromHi)],['VS SMA50',P(F.vsSma50),Pc(F.vsSma50)],['VS SMA200',P(F.vsSma200),Pc(F.vsSma200)],['RSI 14',F.rsi14.toFixed(1),'#e6ebe8'],['30D VOL',(F.vol30*100).toFixed(1)+'%','#e6ebe8'],['VOL 20/50D',F.volRatio?F.volRatio.toFixed(2)+'×':'—','#e6ebe8']].map(([k,v,c])=>({k,v,c})):[],
-      aiHasRules:!!(ai&&ai.spec&&BT),aiEntry:ai&&ai.spec&&BT?(st.labConds&&st.labConds.custom||ai.spec).entry.map(BT.label).join('  AND  '):'',aiExit:ai&&ai.spec&&BT?((st.labConds&&st.labConds.custom||ai.spec).exit.map(BT.label).join('  OR  ')||'Stops only'):'',
-      aiRisk:ai&&ai.spec?this.exitPlan(st.labCfg||{}).sum.replace('After entry: ',''):'',
-      hv:this.valVals(st,set,'custom',st.labConds&&st.labConds.custom,st.labCustomTf||'d',!!(ai&&ai.spec)),libRef:this.libRef,aiRef:this.aiRef,auOpen:false,aiCandleOpts:(()=>{const c=st.labConds&&st.labConds.custom,ID=BT?BT.IND:{},ni=!!(c&&[...c.entry,...c.exit].some(x=>[x.a,x.b].some(o=>o&&ID[o.ind]&&ID[o.ind].intraday))),C=ni?['1m','5m','15m','30m','1h']:['5m','15m','30m','1h','4h','d','1w'],cur=st.labCustomTf||'d';return C.map(x=>({l:((BT&&BT.TF[x])||{l:x}).l,bg:x===cur?'#2e2614':'transparent',c:x===cur?'#fbefc9':'#8b9592',onClick:()=>{this._btc={};set({labCustomTf:x})}}))})(),aiTf:(()=>{const T=BT&&BT.TF[st.labCustomTf||'d'];return T?T.l:'Daily'})(),holdOpts:HOLDS,aiHold:st.aiHold||this.inferHold(st.labConds&&st.labConds.custom),onAiHold:e=>set({aiHold:e.target.value}),aiEditOpen:!!st.aiEdit,aiEditing:!!st.editSvId,aiEditTitle:st.editSvId?(st.labCustomName||'Saved strategy'):(ai?(ai.name||'Your strategy'):'Your strategy'),aiEditName:st.labCustomName||'',onAiEditName:e=>set({labCustomName:e.target.value}),aiDoneL:st.editSvId?'Save changes':'Done',aiRunL:st.editSvId?'Save & run backtest':'Done & run backtest',
-      aiEditCancel:()=>{if(st.editSvId)this.endEditSaved(false);else set({aiEdit:false})},
-      aiEditClose:()=>{if(st.editSvId)this.endEditSaved(true);else set({aiEdit:false})},aiEditRun:()=>{if(st.editSvId){const id=st.editSvId;this.endEditSaved(true);setTimeout(()=>{const s2=this.state,sv=(s2.labSaved||[]).find(x=>x.id===id);if(sv)this.runValidate('sv_'+id,sv.cond,sv.tf||'d')},0);return}set({aiEdit:false,labK:'custom'});setTimeout(()=>this.runValidate('custom',this.state.labConds&&this.state.labConds.custom,this.state.labCustomTf||'d'),0)},stop:e=>e.stopPropagation(),
-      aiSym:ai&&ai.sym||'',aiHasFit:!!(ai&&ai.fit&&ai.fit.length),aiFit:ai&&ai.fit?ai.fit.map(x=>({name:x.name,cagr:P(x.r.m.cagr),sh:x.r.m.sharpe.toFixed(2).replace('-','−'),dd:P(x.r.m.dd),onClick:()=>{set({labK:x.k,labCfg:{...(st.labCfg||{}),sym:ai.sym},labStep:3});this.scrollWin(0,0)}})):[],
-      aiHasActs:!!(ai&&!ai.loading&&!ai.err&&(ai.spec||ai.fit)),
-      aiActs:ai&&ai.spec?[{...(()=>{const cv=(st.vals||{}).custom||{},done=!!cv.at&&cv.sig===JSON.stringify([st.labConds&&st.labConds.custom,this.valCfg()]);return done?{l:'Re-run backtest',bg:'transparent',c:'#fbefc9',bd:'#5a4a22'}:{l:cv.busy?'Running…':cv.at?'Re-run backtest →':'Run backtest →',bg:'#c9a24a',c:'#08090a',bd:'#c9a24a'}})(),onClick:()=>{if(!((this.state.vals||{}).custom||{}).busy)this.runValidate('custom',this.state.labConds&&this.state.labConds.custom,this.state.labCustomTf||'d')}},{l:'Edit rules',bg:'transparent',c:'#fbefc9',bd:'#5a4a22',onClick:()=>set({aiEdit:true,labK:'custom'})},{l:'Save strategy',bg:'transparent',c:'#fbefc9',bd:'#5a4a22',onClick:()=>this.saveStrategy()}]:ai&&ai.fit&&ai.fit[0]?[{l:'Backtest '+ai.fit[0].name+' on '+ai.sym+' →',bg:'#c9a24a',c:'#08090a',bd:'#c9a24a',onClick:()=>{set({labK:ai.fit[0].k,labCfg:{...(st.labCfg||{}),sym:ai.sym},labStep:3});this.scrollWin(0,0)}},{l:'Create a strategy for '+ai.sym,bg:'transparent',c:'#fbefc9',bd:'#5a4a22',onClick:()=>set({aiMode:'create',labCfg:{...(st.labCfg||{}),sym:ai.sym}})}]:[]}}
-  async fetchScan(s,key,tf,days){this._sb=this._sb||{};const T=this.BT.TF[tf]||{},iv=T.fmp,dd=days||T.days;const ck=s+'|'+(tf||'d')+'|'+dd;if(this._sb[ck])return this._sb[ck];
-    const j=await labBars(s,iv?tf:'d',iv?{days:dd}:{years:20/12});
-    return(this._sb[ck]=(iv?(a=>a.filter(x=>{const t=x.date.slice(11,16);return t>='09:30'&&t<'16:00'})):(a=>a))(this.BT.normalizeFmp(j)))}
-  async fetchIntra(s,tf='5m'){const key='',ik=s+'|'+tf;this._iReq=this._iReq||{};if(this._iReq[ik])return;this._iReq[ik]=1;try{const b=await this.fetchScan(s,key,tf);this._btc={};this.setState(st=>({ibars:{...(st.ibars||{}),[ik]:b}}))}catch(e){this.toastMsg('FMP intraday bars for '+s+': '+e.message)}}
-  async runScan(k,spec,univ,tf){const BT=this.BT,key='',put=p=>this.setState(s=>({scan:{...(s.scan||{}),[k]:{...((s.scan||{})[k]||{}),...p}}}));
-    if(!BT)return;
-    const rows=[];let done=0,fail=0,asOf='';put({busy:true,done:0,total:univ.length,err:'',rows:[]});
-    const q=[...univ];const work=async()=>{while(q.length){const u=q.shift();try{const b=await this.fetchScan(u.t,key,tf);const ev=BT.evalLast(b,spec,(BT.TF[tf]||{}).fmp?6:5);if(b.length&&b[b.length-1].date>asOf)asOf=b[b.length-1].date;
-      if(ev&&ev.status){const L=b[b.length-1],P=b[b.length-2];rows.push({t:u.t,n:u.n,px:L.close,ch:P?L.close/P.close-1:0,ev})}}catch(e){fail++}done++;put({done})}};
-    await Promise.all([work(),work(),work(),work()]);put({busy:false,rows,asOf,fail,at:Date.now()})}
-  inferHold(spec,tf){if(tf==='5m'||!spec)return tf==='5m'?'Intraday':'Weeks';let mx=0;const fl=c=>c&&c.any?c.any.flatMap(fl):[c];for(const c of spec.exit.flatMap(fl))for(const o of [c&&c.a,c&&c.b]){if(!o||o.ind==='bars'||o.ind==='num')continue;const n=o.n??(this.BT&&this.BT.IND[o.ind]&&this.BT.IND[o.ind].n)??0;mx=Math.max(mx,n)}
-    const be=spec.exit.find(c=>c&&c.a&&c.b&&c.a.ind==='bars'&&c.b.ind==='num'),bn=be?+be.b.v:null;const d=bn!=null&&(!mx||bn<mx)?bn:mx;return d<=7?'Days':d<=25?'Days–weeks':d<=60?'Weeks':d<=120?'Weeks–months':'Months'}
-  saveStrategy(){const st=this.state,c=st.labConds&&st.labConds.custom;if(!c){this.toastMsg('Build a strategy first');return}const d=new Date(),id=d.getTime().toString(36);
-    const v={id,tf:st.labCustomTf||'d',name:st.labCustomName||'Your strategy',cond:c,hold:st.aiHold||this.inferHold(c),why:st.ai&&st.ai.why||'',q:st.ai&&st.ai.q||'',risk:st.labCfg?{stop:st.labCfg.stop,tp:st.labCfg.tp,trail:st.labCfg.trail}:null,savedAt:MON[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear()};
-    const arr=[v,...(st.labSaved||[])];this.setState({labSaved:arr});try{localStorage.setItem('mc_lab_saved_v1',JSON.stringify(arr))}catch(e){}this.toastMsg('Saved “'+v.name+'” — find it under Saved below')}
-  setHold(id,hold){const arr=(this.state.labSaved||[]).map(v=>v.id===id?{...v,hold}:v);this.setState({labSaved:arr});try{localStorage.setItem('mc_lab_saved_v1',JSON.stringify(arr))}catch(e){}}
-  editSaved(id){const st=this.state,sv=(st.labSaved||[]).find(x=>x.id===id);if(!sv)return;const bk={c:st.labConds&&st.labConds.custom,name:st.labCustomName,tf:st.labCustomTf,hold:st.aiHold,cfg:st.labCfg,k:st.labK};
-    this._btc={};this.setState({editSvId:id,editBk:bk,aiEdit:true,labK:'custom',labConds:{...(st.labConds||{}),custom:JSON.parse(JSON.stringify(sv.cond))},labCustomName:sv.name,labCustomTf:sv.tf||'d',aiHold:sv.hold||null,labCfg:{...(st.labCfg||{}),...(sv.risk||{})}})}
-  endEditSaved(save){const st=this.state,id=st.editSvId,bk=st.editBk||{};let arr=st.labSaved||[];
-    if(save){const c=st.labConds&&st.labConds.custom;if(!c||!c.entry||!c.entry.length){this.toastMsg('Add at least one entry condition');return}arr=arr.map(v=>v.id===id?{...v,cond:c,name:(st.labCustomName||'').trim()||v.name,tf:st.labCustomTf||v.tf||'d',hold:st.aiHold||v.hold,risk:st.labCfg?{stop:st.labCfg.stop,tp:st.labCfg.tp,trail:st.labCfg.trail}:v.risk}:v);try{localStorage.setItem('mc_lab_saved_v1',JSON.stringify(arr))}catch(e){}}
-    const vals={...(st.vals||{})};Object.keys(vals).forEach(k=>{if(k==='sv_'+id||k.startsWith('sv_'+id+'@'))delete vals[k]});
-    this._btc={};this.setState({labSaved:arr,vals,editSvId:null,editBk:null,aiEdit:false,labK:bk.k||'custom',labConds:{...(st.labConds||{}),custom:bk.c},labCustomName:bk.name,labCustomTf:bk.tf,aiHold:bk.hold,labCfg:bk.cfg,labPick:'sv_'+id});if(save)this.toastMsg('Updated “'+((st.labCustomName||'').trim()||'strategy')+'”')}
-  delStrategy(id){const arr=(this.state.labSaved||[]).filter(v=>v.id!==id);this.setState({labSaved:arr,labPick:null});try{localStorage.setItem('mc_lab_saved_v1',JSON.stringify(arr))}catch(e){}}
-  pickVals(st,set,S,specOf,all,LOGO){this._univ=LAB_UNIV;this._LOGO=LOGO;const BT=this.BT,tab=st.libTab||'build',nSaved=(st.labSaved||[]).length;
-    const tabs={libTabs:[['build','Custom',''],['saved','Saved',String(nSaved)]].map(([k,l,n])=>({l,n,bd:tab===k?'#c9a24a':'transparent',c:tab===k?'#eef2f4':'#7a8481',onClick:()=>set({libTab:k,labPick:null})})),libSub:tab==='build'?'Proven rule sets, run by the same engine':'Strategies you saved from the search above',libEmpty:tab==='saved'&&!nSaved,libHas:!(tab==='saved'&&!nSaved)};
-    const P0=S.filter(x=>tab==='saved'?x.k.startsWith('sv_'):!x.k.startsWith('sv_')&&x.k!=='custom');
-    const lq=(st.libQ||'').trim().toLowerCase(),P=lq?P0.filter(x=>[x.name,x.fam,x.what,x.src,x.entry,x.exit].join(' ').toLowerCase().includes(lq)):P0;
-    tabs.libQ=st.libQ||'';tabs.onLibQ=e=>set({libQ:e.target.value,labPick:null});tabs.libCount=(lq?P.length+' of '+P0.length:P0.length)+' strategies';tabs.libNone=!!lq&&!P.length;tabs.libClear=()=>set({libQ:''});
-    const pk=P.find(x=>x.k===st.labPick);tabs.libNoPick=!pk&&!!P.length;tabs.detRef=this.detRef;if(!pk)return{...tabs,libShowDetail:false,pickList:P.map(x=>({tfL:((this.BT&&this.BT.TF[x.tf||'d'])||{l:'Daily'}).l,auto:'',name:x.name,fam:x.fam,hold:x.hold,bl:'transparent',bg:'transparent',c:'#cfd6d3',onClick:()=>{set({labPick:x.k});this.toDet()}})),pk:{},scGroups:[],dv:{show:false}};tabs.libShowDetail=true;
-    const WHAT={hi52:'Buys a stock the day it closes at a new 52-week high on at least 1.5× normal volume — the 52-week-high momentum effect (George & Hwang, 2004). Stocks near their highs tend to keep outperforming because investors anchor to the old high. It rides the move until price loses the 20-day average.',
+const CORE=[
+      {k:'hi52',cond:{"entry":[{"a":{"ind":"close"},"op":"crosses above","b":{"ind":"hh","n":252}},{"a":{"ind":"volume"},"op":"≥","b":{"ind":"avgvol","n":50,"mult":1.5}}],"exit":[{"a":{"ind":"close"},"op":"<","b":{"ind":"sma","n":20}}]},fam:'Momentum',name:'52-Week High Breakout',hold:'2–8 wks',entry:'Close at a new 52-week high on volume ≥ 1.5× its 50-day average',exit:'Close below the 20-day average',data:'Daily OHLCV bars, adjusted',src:'George & Hwang (2004), Journal of Finance'},
+      {k:'rsi2',cond:{"entry":[{"a":{"ind":"rsi","n":2},"op":"<","b":{"ind":"num","v":10}},{"a":{"ind":"close"},"op":">","b":{"ind":"sma","n":200}}],"exit":[{"a":{"ind":"close"},"op":">","b":{"ind":"sma","n":5}}]},fam:'Mean reversion',name:'RSI(2) Pullback',hold:'2–7 days',entry:'RSI(2) below 10 while the close is above the 200-day average',exit:'Close above the 5-day average',data:'Daily OHLCV bars, adjusted',src:'Connors & Alvarez, Short Term Trading Strategies That Work (2008)'},
+      {k:'mom',cond:{"entry":[{"a":{"ind":"mom_rank"},"op":"≤","b":{"ind":"num","v":10}}],"exit":[{"a":{"ind":"mom_rank"},"op":">","b":{"ind":"num","v":10}}]},fam:'Momentum',name:'12-1 Momentum Rotation',hold:'1–3 months',entry:'Monthly: buy the top decile by 12-month return, skipping the latest month',exit:'Rebalance monthly; sell names that leave the top decile',data:'Monthly total returns',src:'Jegadeesh & Titman (1993), Journal of Finance'},
+      {k:'pead',cond:{"entry":[{"a":{"ind":"eps_surprise"},"op":"≥","b":{"ind":"num","v":5}},{"a":{"ind":"gap"},"op":"≥","b":{"ind":"num","v":2}},{"a":{"ind":"days_er"},"op":"≤","b":{"ind":"num","v":1}}],"exit":[{"a":{"ind":"bars"},"op":"≥","b":{"ind":"num","v":40}}]},fam:'Event',name:'Post-Earnings Drift',hold:'~8 wks',entry:'Day after earnings: EPS surprise ≥ +5% and an opening gap ≥ +2%',exit:'After 40 trading days',data:'Daily bars + earnings surprises',src:'Bernard & Thomas (1989), Journal of Accounting Research'},
+      {k:'sqz',cond:{"entry":[{"a":{"ind":"sqz","n":126},"op":">","b":{"ind":"num","v":0}},{"a":{"ind":"close"},"op":"crosses above","b":{"ind":"bbu","n":20}}],"exit":[{"a":{"ind":"close"},"op":"<","b":{"ind":"sma","n":20}}]},fam:'Volatility',name:'Volatility Squeeze Breakout',hold:'1–4 wks',entry:'Bollinger Band width at a 6-month low, then a close above the upper band',exit:'Close below the 20-day average',data:'Daily OHLCV bars, adjusted',src:'Bollinger, Bollinger on Bollinger Bands (2001)'},
+      {k:'gc',cond:{"entry":[{"a":{"ind":"sma","n":50},"op":"crosses above","b":{"ind":"sma","n":200}}],"exit":[{"a":{"ind":"sma","n":50},"op":"crosses below","b":{"ind":"sma","n":200}}]},fam:'Trend',name:'Golden Cross',hold:'Months',entry:'50-day average crosses above the 200-day average',exit:'50-day average crosses back below the 200-day',data:'Daily OHLCV bars, adjusted',src:'Brock, Lakonishok & LeBaron (1992), Journal of Finance'}
+];
+const WHAT={hi52:'Buys a stock the day it closes at a new 52-week high on at least 1.5× normal volume — the 52-week-high momentum effect (George & Hwang, 2004). Stocks near their highs tend to keep outperforming because investors anchor to the old high. It rides the move until price loses the 20-day average.',
       rsi2:'Short-term mean reversion inside an uptrend (Larry Connors). When a stock above its 200-day average sells off hard for two days (RSI(2) under 10), it tends to snap back. Exits on the first close above the 5-day average — trades last days, not weeks.',
       mom:'Cross-sectional momentum (Jegadeesh & Titman, 1993): hold the top 10% of stocks ranked by 12-month return, skipping the most recent month, and rebalance monthly. Winners over the past year tend to keep winning for the next few months.',
       pead:'Post-earnings announcement drift (Bernard & Thomas, 1989): stocks that beat estimates and gap up on the report tend to keep drifting the same way for weeks as the market slowly prices in the surprise. Holds about 8 weeks.',
@@ -256,152 +91,624 @@ export default class StrategyLab extends Component {
       gc:'Classic trend filter: buy when the 50-day average crosses above the 200-day, sell on the reverse cross. Few trades, slow signals — aims to sit through major uptrends and step aside in bear markets.',
       mc:'MarketCatalyst\'s own signal: enter when a stock\'s Emergence Score reaches 75, exit when it drops below 60 or after 30 trading days.',
       custom:'Built from your description and translated into the rules below.'};
-    const spec=specOf(pk.k),need=BT?BT.checkRules(spec):[],sc=(st.scan||{})[pk.k]||{},univ=LAB_UNIV;
-    const isI=pk.tf==='5m',go=()=>this.runScan(pk.k,spec,univ,pk.tf);
-    
-    const p=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(2)+'%',f=v=>v==null?'—':Math.abs(v)>=1e5?(v/1e6).toFixed(1)+'M':v.toFixed(2);
-    const toRow=r=>({t:r.t,n:r.n,ini:r.t.slice(0,4),logo:LOGO(r.t),px:r.px.toFixed(2),ch:p(r.ch),chC:r.ch>=0?'#3ddc84':'#f0565a',
-      when:r.ev.status==='ready'?(r.ev.ago===0?(isI?'Triggered this bar':'Triggered today'):'Triggered '+(isI?r.ev.ago*5+' min ago':r.ev.ago+(r.ev.ago===1?' day ago':' days ago'))):r.ev.met+'/'+r.ev.total+' met',whenC:r.ev.status==='ready'?'#3ddc84':'#f08a4b',
-      conds:r.ev.conds.map(c=>({l:c.label,mark:c.ok?'✓':c.near?'≈':'✗',col:c.ok?'#cfe9d9':c.near?'#f7c9a8':'#7a8481',bd:c.ok?'#1f4a33':c.near?'#6b3a1c':'#233038',tip:f(c.a)+' vs '+f(c.b)})),
-      onTest:()=>{set({labK:pk.k,labCfg:{...(st.labCfg||{}),sym:r.t},labStep:3});if(!(st.bars&&st.bars[r.t]))this.fetchOne(r.t).catch(()=>{});this.scrollWin(0,0)}});
-    let groups=[],empty=false,emptyT='';
-    if(need.length){groups=[];empty=true;emptyT='Needs '+need.join(', ')+' — not available in Strategy Lab yet, so it can\'t be backtested.'}
-    else if(sc.at){const R=(sc.rows||[]).filter(r=>r.ev.status==='ready').sort((a,b)=>a.ev.ago-b.ev.ago),U=(sc.rows||[]).filter(r=>r.ev.status==='setup').sort((a,b)=>b.ev.met-a.ev.met);
-      groups=[R.length&&{label:'READY',sub:isI?'All entry conditions met in the last 30 minutes':'All entry conditions met in the last 5 sessions',c:'#3ddc84',rows:R.map(toRow)},U.length&&{label:'SETTING UP',sub:'One condition away, or within 3% of triggering',c:'#f08a4b',rows:U.map(toRow)}].filter(Boolean);
-      empty=!groups.length;emptyT='No stock in the '+univ.length+'-stock large-cap list meets or is close to the entry rules as of '+(sc.asOf||'the last close')+'.'}
-    const nR=(sc.rows||[]).filter(r=>r.ev.status==='ready').length;
-    const IDX=this.BT?this.BT.IND:{},needsI=!!(spec&&[...spec.entry,...spec.exit].some(c=>[c.a,c.b].some(o=>o&&IDX[o.ind]&&IDX[o.ind].intraday)));
-    const CAN=needsI?['1m','5m','15m','30m','1h']:['5m','15m','15m','30m','1h','4h','d','1w'].filter((x,i,a)=>a.indexOf(x)===i),ctf0=(st.candles||{})[pk.k],ctf=CAN.includes(ctf0)?ctf0:(pk.tf||'d'),kk=ctf===(pk.tf||'d')?pk.k:pk.k+'@'+ctf;
-    const dv=this.valVals(st,set,kk,spec,ctf,true);
-    dv.candleOpts=CAN.map(x=>({l:((this.BT&&this.BT.TF[x])||{l:x}).l,bg:x===ctf?'#2e2614':'transparent',c:x===ctf?'#fbefc9':'#8b9592',onClick:()=>set({candles:{...(st.candles||{}),[pk.k]:x}})}));dv.candleNote=needsI?'Uses session levels (VWAP, opening range, prior-day) — intraday candles only':'';
-    return{...tabs,detRef:this.detRef,dv,holdOpts:HOLDS,scShow:false,
-      pickList:P.map(x=>({tfL:((this.BT&&this.BT.TF[x.tf||'d'])||{l:'Daily'}).l,auto:'',name:x.name,fam:x.fam,hold:x.hold,bl:x.k===pk.k?'#5a4a22':'transparent',bg:x.k===pk.k?'#1a160c':'transparent',c:x.k===pk.k?'#eef2f4':'#cfd6d3',onClick:()=>{set({labPick:x.k});this.toDet()}})),
-      pk:{whatOpen:st.whatOpen===pk.k,whatBg:st.whatOpen===pk.k?'#2e2614':'transparent',toggleWhat:()=>set({whatOpen:st.whatOpen===pk.k?null:pk.k}),whatIn:()=>{if(this.state.whatOpen!==pk.k)set({whatOpen:pk.k})},whatOut:()=>{if(this.state.whatOpen)set({whatOpen:null})},tfL:((this.BT&&this.BT.TF[ctf])||{l:'Daily'}).l.toUpperCase()+' CANDLES',name:pk.name,fam:pk.fam,hold:pk.hold,entry:pk.entry,exit:pk.exit,src:pk.src,what:pk.what||WHAT[pk.k]||pk.src,canSave:pk.k==='custom',onSave:()=>this.saveStrategy(),showFam:!pk.k.startsWith('sv_'),canDel:pk.k.startsWith('sv_'),canEdit:pk.k.startsWith('sv_'),onEdit:()=>this.editSaved(pk.k.slice(3)),canAuto:false,canHold:pk.k.startsWith('sv_'),noHold:!pk.k.startsWith('sv_'),onHold:e=>this.setHold(pk.k.slice(3),e.target.value),onDel:()=>set({delAsk:pk.k}),delAsk:st.delAsk===pk.k,delIdle:st.delAsk!==pk.k,delNo:()=>set({delAsk:null}),delYes:()=>{set({delAsk:null});this.delStrategy(pk.k.slice(3))},onBacktest:()=>{set({labK:pk.k,labStep:2});this.scrollWin(0,0)}},
-      scHead:need.length?'Not testable yet':sc.busy?'Scanning…':sc.at?nR+' ready · '+((sc.rows||[]).length-nR)+' setting up':sc.err?'Scan unavailable':'Waiting to scan',
-      scMeta:need.length?'':sc.busy?(sc.done||0)+' / '+(sc.total||univ.length)+' stocks':sc.at?univ.length+' stocks · FMP '+(isI?'5-min':'daily')+' bars · as of '+(sc.asOf||'—')+(sc.fail?' · '+sc.fail+' failed':''):'',
-      scBtn:sc.busy?'Scanning…':'Rescan',scRun:()=>{if(!sc.busy&&!need.length)go()},scBusy:!!sc.busy,scPct:sc.total?Math.round(100*(sc.done||0)/sc.total)+'%':'0%',
-      scErr:need.length?'':sc.err||'',scEmpty:empty&&!sc.busy,scEmptyT:emptyT,scGroups:sc.busy?[]:groups}}
-  labVals(st,set,all){
-    const SPY=[11.96,21.83,-4.38,31.49,18.40,28.71,-18.11,26.29,25.02];
-    const S=[
-      {k:'hi52',cond:{"entry":[{"a":{"ind":"close"},"op":"crosses above","b":{"ind":"hh","n":252}},{"a":{"ind":"volume"},"op":"≥","b":{"ind":"avgvol","n":50,"mult":1.5}}],"exit":[{"a":{"ind":"close"},"op":"<","b":{"ind":"sma","n":20}}]},fam:'Momentum',name:'52-Week High Breakout',hold:'2–8 wks',entry:'Close at a new 52-week high on volume ≥ 1.5× its 50-day average',exit:'Close below the 20-day average or 8% trailing stop',data:'Daily OHLCV bars, adjusted',src:'George & Hwang (2004), Journal of Finance',match:s=>s.cc.m>=75&&s.cc.rs>=70,why:s=>`Momentum ${s.cc.m} and relative strength ${s.cc.rs} — pressing highs with leadership.`},
-      {k:'rsi2',cond:{"entry":[{"a":{"ind":"rsi","n":2},"op":"<","b":{"ind":"num","v":10}},{"a":{"ind":"close"},"op":">","b":{"ind":"sma","n":200}}],"exit":[{"a":{"ind":"close"},"op":">","b":{"ind":"sma","n":5}}]},fam:'Mean reversion',name:'RSI(2) Pullback',hold:'2–7 days',entry:'RSI(2) below 10 while the close is above the 200-day average',exit:'Close above the 5-day average',data:'Daily OHLCV bars, adjusted',src:'Connors & Alvarez, Short Term Trading Strategies That Work (2008)',match:s=>s.cc.rs>=60&&s.cc.m<55,why:s=>`Relative strength ${s.cc.rs} holds while momentum cools to ${s.cc.m} — a dip in a leader.`},
-      {k:'mom',cond:{"entry":[{"a":{"ind":"mom_rank"},"op":"≤","b":{"ind":"num","v":10}}],"exit":[{"a":{"ind":"mom_rank"},"op":">","b":{"ind":"num","v":10}}]},fam:'Momentum',name:'12-1 Momentum Rotation',hold:'1–3 months',entry:'Monthly: buy the top decile by 12-month return, skipping the latest month',exit:'Rebalance monthly; sell names that leave the top decile',data:'Monthly total returns',src:'Jegadeesh & Titman (1993), Journal of Finance',match:s=>s.cc.rs>=75,why:s=>`Relative strength ${s.cc.rs} — among the strongest 12-month performers.`},
-      {k:'pead',cond:{"entry":[{"a":{"ind":"eps_surprise"},"op":"≥","b":{"ind":"num","v":5}},{"a":{"ind":"gap"},"op":"≥","b":{"ind":"num","v":2}},{"a":{"ind":"days_er"},"op":"≤","b":{"ind":"num","v":1}}],"exit":[{"a":{"ind":"bars"},"op":"≥","b":{"ind":"num","v":40}}]},fam:'Event',name:'Post-Earnings Drift',hold:'~8 wks',entry:'Day after earnings: EPS surprise ≥ +5% and an opening gap ≥ +2%',exit:'After 40 trading days or a 10% stop',data:'Daily bars + earnings surprises',src:'Bernard & Thomas (1989), Journal of Accounting Research',match:s=>s.cc.c>=70&&s.cc.f>=60,why:s=>`Catalyst ${s.cc.c} with fundamentals ${s.cc.f} — positive surprise still being priced in.`},
-      {k:'sqz',cond:{"entry":[{"a":{"ind":"sqz","n":126},"op":">","b":{"ind":"num","v":0}},{"a":{"ind":"close"},"op":"crosses above","b":{"ind":"bbu","n":20}}],"exit":[{"a":{"ind":"close"},"op":"<","b":{"ind":"sma","n":20}}]},fam:'Volatility',name:'Volatility Squeeze Breakout',hold:'1–4 wks',entry:'Bollinger Band width at a 6-month low, then a close above the upper band',exit:'Close below the 20-day average',data:'Daily OHLCV bars, adjusted',src:'Bollinger, Bollinger on Bollinger Bands (2001)',match:s=>s.status==='Stable'&&s.cc.conf>=60,why:s=>`Stable score with confluence ${s.cc.conf} — coiled, waiting for a range break.`},
-      {k:'gc',cond:{"entry":[{"a":{"ind":"sma","n":50},"op":"crosses above","b":{"ind":"sma","n":200}}],"exit":[{"a":{"ind":"sma","n":50},"op":"crosses below","b":{"ind":"sma","n":200}}]},fam:'Trend',name:'Golden Cross',hold:'Months',entry:'50-day average crosses above the 200-day average',exit:'50-day average crosses back below the 200-day',data:'Daily OHLCV bars, adjusted',src:'Brock, Lakonishok & LeBaron (1992), Journal of Finance',match:s=>s.cc.m>=60&&s.cc.rs>=60,why:s=>`Momentum ${s.cc.m} and RS ${s.cc.rs} — established uptrend.`},
+
+const ALL_TF = ["1m", "5m", "15m", "30m", "1h", "4h", "d", "1w"];
+const INTRA_TF = ["1m", "5m", "15m", "30m", "1h", "4h"];
+const LOGO = (t) => backendUrl("/live/logo?ticker=" + encodeURIComponent(t));
+const SAVED_CACHE = "mc_lab_saved_v2", OLD_SAVED = "mc_lab_saved_v1", MIGRATED = "mc_lab_saved_migrated_v1", AUTO_KEY = "mc_lab_auto_v1";
+const tfL = (tf) => (Engine.TF[tf] || Engine.TF.d).l;
+const p1 = (v) => (v == null || !Number.isFinite(v) ? "n/a" : (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(1) + "%");
+const fx = (v) => (v == null ? "—" : Number.isFinite(v) ? v.toFixed(2).replace("-", "−") : "∞");
+const sc = (v) => (v > 0 ? "#3ddc84" : v < 0 ? "#f0565a" : "#8b9592");
+const fmtDt = (d) => { const s = String(d), [y, m, dd] = s.slice(0, 10).split("-"); return `${MON[+m - 1]} ${+dd}, ${y}` + (s.length > 10 ? " " + s.slice(11, 16) : ""); };
+const money = (v) => "$" + Math.round(v).toLocaleString("en-US");
+const newId = () => (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).slice(0, 20);
+const errMsg = (e) => { const m = (e && e.message) || String(e || ""); try { const j = JSON.parse(m); return j.message || m; } catch { return m; } };
+const copy = (o) => JSON.parse(JSON.stringify(o));
+const etDayNow = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+const IDESC = {close:'Last traded price of the candle.',open:'First traded price of the candle.',high:'Highest price reached during the candle.',low:'Lowest price reached during the candle.',volume:'Shares traded during the candle.',
+  sma:'Simple moving average — the plain average of the last N closes.',ema:'Exponential moving average — weights recent closes more, so it reacts faster.',rsi:'Relative Strength Index (0–100, Wilder). Below 30 = oversold, above 70 = overbought.',
+  roc:'Rate of change — % move in close versus N candles ago.',atr:'Average True Range (Wilder smoothing) — the typical candle range over N candles.',
+  hh:'Highest close over the previous N candles, excluding this one. 52W = 252 trading days.',ll:'Lowest close over the previous N candles, excluding this one.',
+  avgvol:'Average volume per candle over the last N candles.',bbu:'Upper Bollinger Band — N-candle SMA plus 2 standard deviations.',bbl:'Lower Bollinger Band — N-candle SMA minus 2 standard deviations.',
+  sqz:'Squeeze — 1 when the Bollinger Band width is near its lowest in N candles, else 0.',macd:'MACD line — 12-candle EMA minus 26-candle EMA.',macds:'MACD signal — 9-candle EMA of the MACD line.',
+  bars:'Candles held in the trade, entry candle included. “≥ 5” exits after holding 5 candles.',num:'A fixed number you type in.',gap:'Opening gap — this open versus the previous close, in %.',eps_surprise:'Reported EPS versus estimate. Needs earnings data.',days_er:'Candles since the last earnings report. Needs earnings dates.',mom_rank:'Rank of 12-month return across a universe. Needs multi-stock ranking.',
+  vwap:'Volume-weighted average price for the session.',orh:'Opening-range high — highest price in the first N candles of the session.',orl:'Opening-range low — lowest price in the first N candles of the session.',pdh:'Previous session high.',pdl:'Previous session low.',pdc:'Previous session close.',dayopen:'The session’s first price.',tod:'Minutes since the 9:30 ET open.',emergence:'MarketCatalyst Emergence Score. Needs score history.'};
+const ODESC = {'>':'Left side is greater than right side on this candle.','<':'Left side is less than right side on this candle.','≥':'Left side is greater than or equal to right side.','≤':'Left side is less than or equal to right side.','crosses above':'Left was at or below right on the previous candle and is above it now — fires once, on the cross.','crosses below':'Left was at or above right on the previous candle and is below it now — fires once, on the cross.'};
+const LOOK = [["20","20D"],["50","50D"],["63","3M"],["126","6M"],["252","52W"]];
+const BASE_CSS = `.sl-root{font-family:Manrope,system-ui,sans-serif;font-size:13px;color:#e6ebe8;-webkit-font-smoothing:antialiased}
+.sl-root *{box-sizing:border-box}
+.sl-root button{font-family:inherit}
+.sl-root input,.sl-root select{font-family:inherit}
+.sl-root button:focus-visible,.sl-root select:focus-visible,.sl-root input:focus-visible{outline:2px solid #c9a24a;outline-offset:2px}
+.sl-main-scroll::-webkit-scrollbar{width:8px;height:8px}.sl-main-scroll::-webkit-scrollbar-track{background:#15130c}.sl-main-scroll::-webkit-scrollbar-thumb{background:#c9a24a;border-radius:8px;border:2px solid #15130c}.sl-main-scroll::-webkit-scrollbar-thumb:hover{background:#f0d68c}`;
+
+/** Bars of history the data layer can serve per candle, and bars a test window uses. */
+function barBudget(tf, cfg) {
+  if (tf === "d") return { avail: Math.floor((MAX_DAILY_DAYS * 252) / 365.25), test: Math.ceil(cfg.years * 252) };
+  if (tf === "1w") return { avail: Math.floor(MAX_DAILY_DAYS / 7), test: Math.ceil(cfg.years * 52) };
+  const per = Math.ceil(390 / Engine.TF[tf].min);
+  return { avail: Math.floor(((MAX_INTRADAY_DAYS * 5) / 7) * per), test: Math.ceil(((cfg.idays * 5) / 7) * per) };
+}
+
+/** Old v1 saved risk ({stop:'8'|'none', tp, trail}) → exit-plan keys. */
+function migrateRisk(risk) {
+  const r = risk || {}, out = { stopM: "none", tpM: "none", trA: "never", be: "off", maxB: "none" };
+  if (r.stop && r.stop !== "none") Object.assign(out, { stopM: "pct", stop: String(r.stop) });
+  if (r.tp && r.tp !== "none") Object.assign(out, { tpM: "pct", tp: String(r.tp) });
+  if (r.trail && r.trail !== "none") Object.assign(out, { trA: "entry", trD: String(r.trail) });
+  return out;
+}
+
+export default class StrategyLab extends Component {
+  libRef = React.createRef(); aiRef = React.createRef(); detRef = React.createRef(); resRef = React.createRef();
+  refsObj = { aiRef: this.aiRef, libRef: this.libRef, detRef: this.detRef };
+  state = { labSaved: [], labConds: {}, cfgs: {}, candles: {}, vals: {}, quotes: {}, sorts: {}, xpMore: {}, cmp: {}, vari: {}, libTab: "library", savedNote: "" };
+  _bars = new Map(); _rows = new Map(); _rep = new Map(); _runTok = {}; _wk = undefined; _wq = new Map(); _wid = 0;
+
+  // ── lifecycle ────────────────────────────────────────────────────────────
+  componentDidMount() { this.loadSaved(); }
+  componentWillUnmount() { clearTimeout(this.tt); if (this._wk) this._wk.terminate(); }
+  scrollEl() { return typeof document !== "undefined" ? document.querySelector(".sl-main-scroll") : null; }
+  scrollTo(el) { const c = this.scrollEl(); if (!c || !el) return; c.scrollTo({ top: el.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop - 90, behavior: "smooth" }); }
+  scrollTop() { const c = this.scrollEl(); if (c) c.scrollTo(0, 0); }
+  toastMsg(m) { clearTimeout(this.tt); this.setState({ toast: m }); this.tt = setTimeout(() => this.setState({ toast: null }), 2600); }
+
+  // ── strategies ───────────────────────────────────────────────────────────
+  strategies() {
+    const st = this.state, S = [...CORE, ...LIB.filter((x) => !CORE.some((c) => c.k === x.k))].map((x) => ({ ...x, lib: true }));
+    if (st.custom) S.unshift({ k: "custom", tf: "d", cond: st.custom.cond, fam: "Custom", name: st.custom.name || "Your strategy", hold: "—", src: st.custom.src || "Built from your description", what: st.custom.why || "", custom: true });
+    for (const v of st.labSaved) S.push({ k: "sv_" + v.id, sv: v, tf: v.tf || "d", cond: v.cond, fam: "Saved", name: v.name, hold: v.hold || "—", src: "Saved " + (v.savedAt ? fmtDt(v.savedAt) : ""), what: v.why || (v.q ? "Built from: “" + v.q + "”" : ""), cfg: v.cfg });
+    return S;
+  }
+  strategyOf(k) { return this.strategies().find((x) => x.k === k) || null; }
+  specOf(k) { return this.state.labConds[k] || (this.strategyOf(k) || {}).cond || { entry: [], exit: [] }; }
+  candleOpts(spec) { const ID = Engine.IND, ni = [...spec.entry, ...spec.exit].some(function f(c) { return c.any ? c.any.some(f) : [c.a, c.b].some((o) => o && ID[o.ind] && ID[o.ind].intraday); }); return ni ? INTRA_TF : ALL_TF; }
+  tfOf(k) { const x = this.strategyOf(k) || {}, want = this.state.candles[k] || x.tf || "d", ok = this.candleOpts(this.specOf(k)); return ok.includes(want) ? want : ok.includes(x.tf) ? x.tf : ok[0]; }
+  defaultCfg(x) { return x && x.cfg ? { ...x.cfg } : { ...riskToCfg((x && x.risk) || {}), cost: "5", yrs: "5" }; }
+  cfgOf(k) { return this.state.cfgs[k] || this.defaultCfg(this.strategyOf(k)); }
+  engCfg(k) { return valCfg(this.cfgOf(k), this.tfOf(k)); }
+  setCfg(k, patch) { this.setState((s) => ({ cfgs: { ...s.cfgs, [k]: { ...(s.cfgs[k] || this.defaultCfg(this.strategyOf(k))), ...patch } } })); }
+  needsOf(k) { return Engine.checkRules(this.specOf(k), this.tfOf(k)); }
+  sigOf(k) { const tf = this.tfOf(k); return runSig(this.specOf(k), tf, valCfg(this.cfgOf(k), tf)); }
+  blockedOf(k) {
+    const n = this.needsOf(k);
+    if (n.length) return "Needs " + n.join(", ") + " — not available in Strategy Lab, so it can't be backtested.";
+    if (k === "custom" && this.state.custom && (this.state.custom.unparsed || []).length && !this.state.unparsedAck) return "Review the part that wasn't translated (edit the rules or dismiss it) before running.";
+    return "";
+  }
+
+  // ── data ─────────────────────────────────────────────────────────────────
+  async loadUniverse() {
+    if (this._univ && Date.now() - this._univ.at < 6 * 3600e3) return this._univ.stocks;
+    const r = await apiGet("/live/strategy-lab/universe");
+    if (!r || !Array.isArray(r.stocks) || !r.stocks.length) throw new Error("The stock universe is unavailable.");
+    this._univ = { at: Date.now(), stocks: r.stocks, source: r.source };
+    return r.stocks;
+  }
+  barsKey(t, span) { return `${t}|${span.tf}|${span.days}|${span.tf === "d" ? etDayNow() : Math.floor(Date.now() / 300e3)}`; }
+  cachedBars(t, span) { const k = this.barsKey(t, span); return this._bars.has(k) ? this._bars.get(k) : undefined; }
+  async fetchBars(symbols, span) {
+    const need = symbols.filter((t) => !this._bars.has(this.barsKey(t, span)));
+    if (need.length) {
+      const r = await apiGet(`/live/strategy-lab/bars?symbols=${encodeURIComponent(need.join(","))}&tf=${span.tf}&days=${span.days}`);
+      for (const t of need) {
+        const rows = r && r.bars && r.bars[t];
+        this._bars.set(this.barsKey(t, span), rows && rows.length ? rows.map(([date, open, high, low, close, volume]) => ({ date, open, high, low, close, volume })) : null);
+      }
+    }
+    return Object.fromEntries(symbols.map((t) => [t, this._bars.get(this.barsKey(t, span))]));
+  }
+  worker() {
+    if (this._wk !== undefined) return this._wk;
+    try {
+      const w = new Worker(new URL("./lab-worker.js", import.meta.url), { type: "module" });
+      w.onmessage = (e) => { const p = this._wq.get(e.data.id); if (p) { this._wq.delete(e.data.id); p.res(e.data.row); } };
+      w.onerror = () => { this._wk = null; for (const [id, p] of this._wq) { this._wq.delete(id); p.res(computeRow(...p.args)); } };
+      this._wk = w;
+    } catch { this._wk = null; }
+    return this._wk;
+  }
+  computeAsync(u, bars, spec, cfg, tf) {
+    const args = [u.t, u.n, bars, spec, cfg, tf], w = this.worker();
+    if (!w) return Promise.resolve(computeRow(...args));
+    return new Promise((res) => { const id = ++this._wid; this._wq.set(id, { res, args }); w.postMessage({ id, t: u.t, n: u.n, bars, spec, cfg, tf }); });
+  }
+
+  /** Multi-stock run: every universe stock, same rules and engine config; progress as each finishes. */
+  async runValidate(k) {
+    const spec = copy(this.specOf(k)), tf = this.tfOf(k), cfg = this.engCfg(k), sig = runSig(spec, tf, cfg), tok = (this._runTok[k] = (this._runTok[k] || 0) + 1);
+    const put = (p) => this.setState((s) => ({ vals: { ...s.vals, [k]: { ...(s.vals[k] || {}), ...p } } }));
+    const blocked = this.blockedOf(k);
+    if (blocked) { put({ err: blocked, busy: false, sig, tf, cfg }); return; }
+    put({ busy: true, done: 0, total: 0, err: "", rows: [], fail: 0, insuf: 0, asOf: "", sig, tf, cfg, at: null });
+    let univ;
+    try { univ = await this.loadUniverse(); } catch (e) { put({ busy: false, err: "Can't load the stock universe: " + errMsg(e) }); return; }
+    if (this._runTok[k] !== tok) return;
+    put({ total: univ.length });
+    const span = fetchSpan(spec, tf, cfg), B = Engine.isIntradayTf(tf) ? 4 : 10, q = [...univ], rows = [];
+    let fail = 0, insuf = 0, asOf = "", lastErr = "";
+    const work = async () => {
+      while (q.length) {
+        const chunk = q.splice(0, B);
+        let data = {};
+        try { data = await this.fetchBars(chunk.map((u) => u.t), span); } catch (e) { lastErr = errMsg(e); }
+        await Promise.all(chunk.map(async (u) => {
+          const raw = data[u.t], bars = raw ? prepBars(raw, tf) : null;
+          let row;
+          if (!bars || !bars.length) row = { t: u.t, n: u.n, status: "unavailable" };
+          else {
+            const L = bars[bars.length - 1], ck = `${u.t}|${sig}|${L.date}|${L.close}`;
+            row = this._rows.get(ck) || (await this.computeAsync(u, bars, spec, cfg, tf));
+            this._rows.set(ck, row);
+          }
+          if (this._runTok[k] !== tok) return;
+          if (row.status === "unavailable") fail++; else if (row.status === "insufficient") insuf++; else rows.push(row);
+          if (row.asOf && row.asOf > asOf) asOf = row.asOf;
+          this.setState((s) => ({ vals: { ...s.vals, [k]: { ...(s.vals[k] || {}), done: ((s.vals[k] || {}).done || 0) + 1 } } }));
+        }));
+      }
+    };
+    await Promise.all([work(), work(), work(), work()]);
+    if (this._runTok[k] !== tok) return;
+    if (!rows.length && fail === univ.length) { put({ busy: false, err: "Price data unavailable" + (lastErr ? ": " + lastErr : "") + ". No results were computed.", rows: [], fail, insuf }); return; }
+    put({ busy: false, rows, fail, insuf, asOf, at: Date.now(), total: univ.length, err: lastErr && fail ? "Some stocks couldn't be loaded: " + lastErr : "" });
+    this.loadQuotes(rows.map((r) => r.t));
+  }
+  async loadQuotes(tickers) {
+    if (!tickers.length) return;
+    try {
+      const r = await apiGet("/live/snapshot?tickers=" + encodeURIComponent(tickers.slice(0, 250).join(",")));
+      const q = {};
+      for (const x of (r && r.quotes) || []) if (x && x.ticker && Number.isFinite(x.price) && x.price > 0) q[x.ticker] = x.price;
+      this.setState((s) => ({ quotes: { ...s.quotes, ...q } }));
+    } catch { /* no live quote → the column shows "—" */ }
+  }
+
+  // ── saved strategies ─────────────────────────────────────────────────────
+  readCache() { try { const v = JSON.parse(localStorage.getItem(SAVED_CACHE) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }
+  writeCache(arr) { try { localStorage.setItem(SAVED_CACHE, JSON.stringify(arr)); } catch { /* offline cache only */ } }
+  async loadSaved() {
+    try {
+      const r = await apiGet("/live/strategy-lab/saved");
+      let arr = (r && r.strategies) || [];
+      arr = await this.migrateOld(arr);
+      this.writeCache(arr);
+      this.setState({ labSaved: arr, savedNote: "" });
+    } catch (e) {
+      const cached = this.readCache();
+      const note = "Saved strategies couldn't be loaded from your account (" + errMsg(e) + ")" + (cached.length ? " — showing the copy on this device." : ".");
+      this.setState({ labSaved: cached, savedNote: note });
+      this.toastMsg(note);
+    }
+  }
+  async migrateOld(arr) {
+    let old = [];
+    try { if (localStorage.getItem(MIGRATED)) return arr; old = JSON.parse(localStorage.getItem(OLD_SAVED) || "[]"); } catch { return arr; }
+    if (!Array.isArray(old) || !old.length) { try { localStorage.setItem(MIGRATED, "1"); } catch { /* ignore */ } return arr; }
+    const have = new Set(arr.map((x) => x.id)), out = [...arr];
+    for (const v of old) {
+      if (!v || !v.cond || have.has(v.id)) continue;
+      const id = /^[a-z0-9]{4,24}$/.test(String(v.id)) ? v.id : newId(), tf = v.tf || "d";
+      const doc = { name: v.name || "Saved strategy", tf, cond: v.cond, cfg: savedCfgOf({ ...migrateRisk(v.risk), cost: "5", yrs: "5" }, tf), hold: v.hold || "", q: v.q || "", why: v.why || "" };
+      try { out.unshift(await apiPost("/live/strategy-lab/saved/" + id, doc)); } catch { return arr; }
+    }
+    try { localStorage.setItem(MIGRATED, "1"); } catch { /* ignore */ }
+    return out;
+  }
+  async persist(id, doc) {
+    const saved = await apiPost("/live/strategy-lab/saved/" + id, doc);
+    const arr = [saved, ...this.state.labSaved.filter((x) => x.id !== id)];
+    this.writeCache(arr);
+    this.setState({ labSaved: arr });
+    return saved;
+  }
+  docOf(k, name) {
+    const x = this.strategyOf(k) || {}, tf = this.tfOf(k), c = this.state.custom || {};
+    return { name: (name || x.name || "Your strategy").slice(0, 80), tf, cond: copy(this.specOf(k)), cfg: savedCfgOf(this.cfgOf(k), tf), hold: (x.sv && x.sv.hold) || "", q: (x.sv && x.sv.q) || (k === "custom" ? c.q || "" : ""), why: (x.sv && x.sv.why) || (k === "custom" ? c.why || "" : "") };
+  }
+  async saveStrategy() {
+    const st = this.state;
+    if (!st.custom) { this.toastMsg("Build a strategy first"); return; }
+    const id = st.customSvId || newId(), upd = !!st.customSvId;
+    try {
+      await this.persist(id, this.docOf("custom", st.custom.name));
+      this.setState({ customSvId: id });
+      this.toastMsg((upd ? "Updated “" : "Saved “") + (st.custom.name || "Your strategy") + "” — find it under Saved");
+    } catch (e) { this.toastMsg("Couldn't save: " + errMsg(e)); }
+  }
+  async saveExisting(k) {
+    const x = this.strategyOf(k);
+    if (!x || !x.sv) return;
+    try { await this.persist(x.sv.id, this.docOf(k, x.name)); this.toastMsg("Updated “" + x.name + "”"); } catch (e) { this.toastMsg("Couldn't save: " + errMsg(e)); }
+  }
+  async setHold(k, hold) {
+    const x = this.strategyOf(k);
+    if (!x || !x.sv) return;
+    try { await this.persist(x.sv.id, { ...this.docOf(k, x.name), hold }); } catch (e) { this.toastMsg("Couldn't save: " + errMsg(e)); }
+  }
+  async delStrategy(k) {
+    const x = this.strategyOf(k);
+    if (!x || !x.sv) return;
+    try {
+      await apiDelete("/live/strategy-lab/saved/" + x.sv.id);
+      const arr = this.state.labSaved.filter((v) => v.id !== x.sv.id);
+      this.writeCache(arr);
+      try { const a = JSON.parse(localStorage.getItem(AUTO_KEY) || "{}"); delete a[x.sv.id]; delete a[k]; localStorage.setItem(AUTO_KEY, JSON.stringify(a)); } catch { /* ignore */ }
+      this.setState((s) => {
+        const drop = (o) => { const n = { ...o }; delete n[k]; return n; };
+        return { labSaved: arr, labPick: null, vals: drop(s.vals), cfgs: drop(s.cfgs), labConds: drop(s.labConds), candles: drop(s.candles), customSvId: s.customSvId === x.sv.id ? null : s.customSvId, rep: s.rep && s.rep.k === k ? null : s.rep };
+      });
+      this.toastMsg("Deleted “" + x.name + "”");
+    } catch (e) { this.toastMsg("Couldn't delete: " + errMsg(e)); }
+  }
+
+  // ── strategy text → rules ────────────────────────────────────────────────
+  async aiRun(q) {
+    q = (q || "").trim();
+    if (!q) { this.toastMsg("Describe a strategy first"); return; }
+    const BT = Engine, IND = BT.IND;
+    this.setState({ ai: { q, loading: true } });
+    setTimeout(() => this.scrollTo(this.aiRef.current), 80);
+    let spec = null, src = "Rule parser", why = "", risk = {}, unparsed = [];
+    try {
+      const res = await apiPost("/live/strategy-lab/ai-rules", { q });
+      const raw = res && res.raw;
+      if (raw) {
+        const j = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+        const ok = (o) => o && IND[o.ind] && (o.ind !== "num" || Number.isFinite(+o.v));
+        const one = (c) => (c && ok(c.a) && ok(c.b) && BT.OPS.includes(c.op) ? { a: c.a, op: c.op, b: c.b } : null);
+        const cl = (a) => (a || []).map((c) => { if (c && Array.isArray(c.any)) { const s = c.any.map(one).filter(Boolean); return s.length > 1 ? { any: s } : s[0] || null; } return one(c); }).filter(Boolean);
+        spec = { entry: cl(j.entry), exit: cl(j.exit), name: j.name, tf: BT.TF[j.timeframe] ? j.timeframe : null };
+        why = j.why || "";
+        risk = { stop: j.stop ?? null, tp: j.tp ?? null, trail: j.trail ?? null };
+        src = "AI → rule engine";
+        if (!spec.entry.length) spec = null;
+      }
+    } catch { spec = null; }
+    if (!spec) {
+      const r = BT.parseRules(q);
+      if (!r.entry.length) { this.setState({ ai: { q, err: "Couldn't turn that into an entry rule. Try “buy when RSI(2) is below 10 and close is above the 200-day SMA”." + (r.unparsed.length ? " Not translated: " + r.unparsed.join(" · ") : "") } }); return; }
+      spec = { entry: r.entry, exit: r.exit, name: null };
+      unparsed = r.unparsed;
+      risk = r.risk || {};
+    }
+    const p = BT.parseTimeframe(q), tf = p !== "d" ? p : spec.tf || "d";
+    this.setState((s) => {
+      const drop = (o) => { const n = { ...o }; delete n.custom; return n; };
+      return {
+        custom: { cond: { entry: spec.entry, exit: spec.exit }, name: spec.name || "Your strategy", q, why, src, unparsed },
+        unparsedAck: false, customSvId: null, labConds: drop(s.labConds), vals: drop(s.vals),
+        cfgs: { ...s.cfgs, custom: { ...riskToCfg(risk), cost: "5", yrs: "5" } }, candles: { ...s.candles, custom: tf },
+        ai: { q, src, name: spec.name || "Your strategy", why },
+      };
+    }, () => { if (!this.blockedOf("custom")) this.runValidate("custom"); });
+  }
+
+  // ── view-model pieces ────────────────────────────────────────────────────
+  riskRows(k) {
+    const K = exitPlanKeys(this.cfgOf(k)), hasStop = K.stopM !== "none", S = (p) => this.setCfg(k, p), more = !!this.state.xpMore[k];
+    const seg = (cur, opts, dis) => ({ opts: opts.map(([key, l, p]) => { const off = !!(dis && dis(key)); return { l, on: cur === key, off, offT: "Needs a stop", onClick: () => S(p) }; }) });
+    const withCur = (opts, cur, l) => (opts.some((o) => o[0] === cur) ? opts : [...opts, [cur, l, {}]]);
+    const sK = K.stopM === "none" ? "none" : K.stopM === "atr" ? "a" + K.stopA : "p" + K.stop;
+    const tK = K.tpM === "none" ? "none" : K.tpM === "r" ? "r" + K.tpR : "p" + K.tp;
+    const R = [
+      { t: "Stop", segs: [seg(sK, withCur([["p5", "5%", { stopM: "pct", stop: "5" }], ["p8", "8%", { stopM: "pct", stop: "8" }], ["p12", "12%", { stopM: "pct", stop: "12" }], ["a2", "2× ATR", { stopM: "atr", stopA: "2" }], ["none", "None", { stopM: "none" }]], sK, K.stopM === "atr" ? K.stopA + "× ATR" : K.stop + "%"))] },
+      { t: "Target", segs: [seg(tK, withCur([["p10", "+10%", { tpM: "pct", tp: "10" }], ["p20", "+20%", { tpM: "pct", tp: "20" }], ["r2", "2R", { tpM: "r", tpR: "2" }], ["none", "None", { tpM: "none" }]], tK, K.tpM === "r" ? K.tpR + "R" : "+" + K.tp + "%"), (x) => x[0] === "r" && !hasStop)] },
+      { t: "Trail", segs: [seg(K.trA, withCur([["never", "Off", { trA: "never" }], ["entry", "From entry", { trA: "entry" }], ["10", "Once up +10%", { trA: "10" }], ["1r", "Once up 1R", { trA: "1r" }]], K.trA, "Once up +" + K.trA + "%"), (x) => x === "1r" && !hasStop)].concat(K.trA !== "never" ? [seg(K.trD, withCur([["5", "5%", { trD: "5" }], ["8", "8%", { trD: "8" }], ["atr2", "2× ATR", { trD: "atr2" }]], K.trD, K.trD + "%"))] : []) },
     ];
-    const BTm=this.BT;LIB.forEach(x=>{if(!S.some(y=>y.k===x.k))S.push({...x,data:'Daily OHLCV bars',entry:BTm?x.cond.entry.map(BTm.label).join(' AND '):'',exit:BTm?x.cond.exit.map(BTm.label).join(' OR '):'',match:()=>false,why:()=>''})});
-    if(st.labConds&&st.labConds.custom&&BTm)S.unshift({k:'custom',tf:st.labCustomTf||'d',cond:st.labConds.custom,fam:'Custom',name:st.labCustomName||'Your strategy',hold:'—',entry:st.labConds.custom.entry.map(BTm.label).join(' AND ')||'—',exit:st.labConds.custom.exit.map(BTm.label).join(' OR ')||'Stops only',data:'Daily OHLCV bars',src:'Built from your description',match:()=>false,why:()=>''});
-    if(BTm)(st.labSaved||[]).forEach(v=>S.push({k:'sv_'+v.id,tf:v.tf||'d',cond:v.cond,fam:'Saved',name:v.name,hold:v.hold||'—',entry:v.cond.entry.map(BTm.label).join(' AND ')||'—',exit:v.cond.exit.map(BTm.label).join(' OR ')||'Stops only',data:'Daily OHLCV bars',src:'Saved '+v.savedAt,what:v.why||(v.q?'Built from: “'+v.q+'”':''),risk:v.risk,match:()=>false,why:()=>''}));
-    const step=st.labStep||1,cur=S.find(x=>x.k===st.labK)||S[0],cfg={dir:'long',tf:'d',univ:'sp',period:'9y',size:'10',stop:'8',tp:'none',trail:'none',cost:'5',...(st.labCfg||{})};
-    const BT=this.BT,SYMS=[...new Set(['AAPL','NVDA','MSFT',...Object.keys(st.bars||{})])],sym=cfg.sym||'AAPL',ctf=cur.tf||'d',isI=!!(BT&&(BT.TF[ctf]||{}).fmp),raw=isI?(st.ibars&&st.ibars[sym+'|'+ctf]):(st.bars&&st.bars[sym]);if(isI&&!raw&&BT)setTimeout(()=>this.fetchIntra(sym,ctf),0);
-    const bars=BT&&raw?(ctf==='1w'?BT.toWeekly(BT.normalizeFmp(raw)):BT.normalizeFmp(raw)):null;
-    const start=bars&&bars.length&&!isI?(()=>{const d=new Date(bars[bars.length-1].date);d.setFullYear(d.getFullYear()-5);return d.toISOString().slice(0,10)})():null;
-    const XP=this.exitPlan(cfg);const bcfg={startDate:start,...XP.eng,costBps:+cfg.cost,intraday:isI,flatEOD:isI?BT.TF[ctf].flat:true};
-    const specOf=k=>((st.labConds||{})[k])||(S.find(x=>x.k===k)||{}).cond;
-    const needOf=k=>BT?BT.checkRules(specOf(k)):[];
-    this._btc=this._btc||{};const runSpec=(spec,c,bs,s)=>{if(!bs||!BT||BT.checkRules(spec).length)return null;const key=s+'|'+JSON.stringify(spec)+'|'+JSON.stringify(c)+'|'+bs.length;if(!(key in this._btc))this._btc[key]=BT.runRules(bs,spec,c);return this._btc[key]};
-    const runK=k=>runSpec(specOf(k),bcfg,bars,sym);
-    const res=runK(cur.k),curNeed=needOf(cur.k);
-    const evd=res&&BT.buildEvidence?BT.buildEvidence(res,{symbol:sym,strategy:cur.k,cfg:bcfg,bars}):null;
-    const ST={supported:['#3ddc84','#1f4a33','SUPPORTED'],contradicted:['#f0565a','#5a2224','CONTRADICTED'],unknown:['#8b9592','#2a3236','UNKNOWN']};
-    const cs=specOf(cur.k);
-    const setC=p=>{this._btc={};set({labConds:{...(st.labConds||{}),[cur.k]:{...cs,...p}}})};
-    const IND=BT?BT.IND:{},indOpts=Object.entries(IND).filter(([v])=>v!=='emergence').map(([v,d])=>({v,l:d.l+(d.data?' — needs data':'')}));
-    const fresh=ind=>ind==='num'?{ind,v:0}:IND[ind]&&IND[ind].n?{ind,n:IND[ind].n}:{ind};
-    const nv=e=>{const v=parseFloat(e.target.value);return isNaN(v)?0:v},ha=o=>!!(IND[o.ind]&&IND[o.ind].n),NEWC=()=>({a:{ind:'close'},op:'>',b:{ind:'sma',n:50}});
-const IDESC={close:'Last traded price of the candle.',open:'First traded price of the candle.',high:'Highest price reached during the candle.',low:'Lowest price reached during the candle.',volume:'Shares traded during the candle.',
-      sma:'Simple moving average — the plain average of the last N closes. Smooths noise to show trend.',ema:'Exponential moving average — like SMA but weights recent closes more, so it reacts faster.',rsi:'Relative Strength Index (0–100). Below 30 = oversold, above 70 = overbought. N = lookback.',
-      roc:'Rate of change — % move in close versus N candles ago.',atr:'Average True Range — the typical candle range over N candles. Measures volatility in price terms.',
-      hh:'Highest close over the previous N candles, excluding today. 52W = 252 trading days, so “Close > 52W high” means a new 52-week high.',ll:'Lowest close over the previous N candles, excluding today. 52W = 252 trading days.',
-      avgvol:'Average shares traded per candle over the last N candles. “Volume > 1.5 × Avg volume” = 50% above normal.',bbu:'Upper Bollinger Band — N-candle SMA plus 2 standard deviations. Closing above it signals a strong push.',bbl:'Lower Bollinger Band — N-candle SMA minus 2 standard deviations. Closing below it signals a stretched move down.',
-      sqz:'Squeeze — 1 when the Bollinger Band width is at its lowest in N candles (volatility compressed), else 0.',macd:'MACD line — 12-candle EMA minus 26-candle EMA. Above 0 = short-term trend stronger than long-term.',macds:'MACD signal — 9-candle EMA of the MACD line. MACD crossing above it is a bullish trigger.',
-      bars:'How many candles you have held the trade. Use with ≥ to exit after a fixed time.',num:'A fixed number you type in.',gap:'Opening gap — today’s open versus yesterday’s close, in %.',eps_surprise:'Reported EPS versus analyst estimate, in %. Needs earnings data.',days_er:'Candles since the last earnings report. Needs earnings dates.',mom_rank:'Rank of 12-month return (skipping the last month) across a universe of stocks. Needs multi-stock data.',
-      vwap:'Volume-weighted average price for the session — the average price weighted by volume since the open.',orh:'Opening-range high — highest price in the first minutes of the session.',orl:'Opening-range low — lowest price in the first minutes of the session.',pdh:'Previous day’s high.',pdl:'Previous day’s low.',pdc:'Previous day’s close.'};
-    const ODESC={'>':'Left side is greater than right side on this candle.','<':'Left side is less than right side on this candle.','≥':'Left side is greater than or equal to right side.','≤':'Left side is less than or equal to right side.','crosses above':'Left was at or below right on the previous candle and is above it now — fires once, on the cross.','crosses below':'Left was at or above right on the previous candle and is below it now — fires once, on the cross.'};
-    const LOOK=[['20','20D'],['50','50D'],['63','3M'],['126','6M'],['252','52W']];let tipN=0;
-    const tipOf=(id,txt)=>({open:st.indTip===id,txt,on:()=>set({indTip:id}),off:()=>{if(this.state.indTip===id)set({indTip:null})}});
-    const rowObj=(c,up,del,join)=>{const id=++tipN,isL=o=>o.ind==='hh'||o.ind==='ll',ld=o=>(IND[o.ind]||{}).l||o.ind;return{join,indOpts,lookOpts:LOOK.map(([v,l])=>({v,l})),aLook:isL(c.a),bLook:isL(c.b),aNs:String(c.a.n??252),bNs:String(c.b.n??252),
-        aTip:tipOf(id+'a',ld(c.a)+' — '+(IDESC[c.a.ind]||'')),oTip:tipOf(id+'o',c.op+' — '+(ODESC[c.op]||'')),bTip:tipOf(id+'b',ld(c.b)+' — '+(IDESC[c.b.ind]||'')),opOpts:BT?BT.OPS:[],aInd:c.a.ind,aHasN:ha(c.a)&&!isL(c.a),aN:c.a.n??'',op:c.op,bInd:c.b.ind,bHasN:ha(c.b)&&!isL(c.b),bN:c.b.n??'',bIsNum:c.b.ind==='num',bV:c.b.v??'',bHasMult:c.b.ind!=='num'&&c.b.ind!=='bars',bMult:c.b.mult??1,
-        warn:!!((IND[c.a.ind]||{}).data||(IND[c.b.ind]||{}).data),
-        onA:e=>up(x=>({...x,a:fresh(e.target.value)})),onAN:e=>up(x=>({...x,a:{...x.a,n:Math.max(1,Math.round(nv(e)))}})),onOp:e=>up(x=>({...x,op:e.target.value})),
-        onB:e=>up(x=>({...x,b:fresh(e.target.value)})),onBN:e=>up(x=>({...x,b:{...x.b,n:Math.max(1,Math.round(nv(e)))}})),onBV:e=>up(x=>({...x,b:{...x.b,v:nv(e)}})),onBMult:e=>up(x=>({...x,b:{...x.b,mult:nv(e)||1}})),onDel:del}};
-    const rows=(arr,key,j)=>arr.map((c,i)=>{const setI=v=>setC({[key]:arr.map((x,y)=>y===i?v:x)}),delI=()=>setC({[key]:arr.filter((_,x)=>x!==i)});
-      if(c.any){const subs=c.any.map((s,k)=>rowObj(s,f=>setI({any:c.any.map((x,y)=>y===k?f(x):x)}),()=>{const rest=c.any.filter((_,y)=>y!==k);setI(rest.length===1?rest[0]:{any:rest})},k?'OR':'EITHER'));
-        return{single:false,isGroup:true,join:i?j:'IF',subs,onAddOr:()=>setI({any:[...c.any,NEWC()]}),onDelGroup:delI}}
-      return{single:true,isGroup:false,...rowObj(c,f=>setI(f(c)),delI,i?j:'IF'),onOr:()=>setI({any:[c,NEWC()]})}});
-    
-    const pc0=(v,d=1)=>(v>=0?'+':'−')+Math.abs(v).toFixed(d)+'%';
-    const opt=(key,opts)=>opts.map(([k,l])=>({label:l,bg:cfg[key]===k?'#2e2614':'transparent',color:cfg[key]===k?'#fbefc9':'#8b9592',onClick:()=>set({labCfg:{...cfg,[key]:k}})}));
-    const L={dir:{long:'Long',short:'Short'},tf:{d:'Daily',w:'Weekly'},tp:{'10':'+10%','20':'+20%',none:'None'},trail:{'5':'5%','10':'10%',none:'None'},univ:{sp:'S&P 500',ndx:'Nasdaq-100',r1k:'Russell 1000'},period:{'3y':'2022–2024','5y':'2020–2024','9y':'2016–2024'},size:{'5':'5%','10':'10%','20':'20%'},stop:{'5':'5%','8':'8%','12':'12%','none':'None'},cost:{'0':'0 bps','5':'5 bps','10':'10 bps'}};
-    const ds=a=>{const step=Math.max(1,Math.floor(a.length/150));return a.filter((_,i)=>i%step===0||i===a.length-1)};
-    const es=res?ds(res.eq).map(x=>x.v):[10000],eb=res?ds(res.bh).map(x=>x.v):[10000],nn=Math.max(es.length-1,1),mx=Math.max(...es,...eb),mn=Math.min(...es,...eb);
-    const X=i=>i*600/nn,Y=v=>190-(v-mn)/((mx-mn)||1)*175;
-    const line=a=>a.map((v,i)=>`${i?'L':'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
-    const fx=v=>isFinite(v)?v.toFixed(2).replace('-','−'):'∞';
-    const p1=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+'%';
-    const fmtDt=d=>{const [y,m,dd]=d.slice(0,10).split('-');return `${MON[+m-1]} ${+dd}, ${y}`};
-    const money=v=>'$'+Math.round(v).toLocaleString('en-US');
-    const titles=[['Choose','Pick a proven rule set'],['Backtest','Set rules, stock, risk'],['Read the evidence','Returns, risk, unknowns'],['Act','Today\'s matching stocks']];
-    const matches=[];
-    const sc=v=>v>0?'#3ddc84':v<0?'#f0565a':'#8b9592';
-    return{
-      ...this.aiVals(st,set,S,runSpec,specOf),...this.chartVals(st,set),
-      labNotS1:step!==1,labHome:()=>{set({labStep:1});this.scrollWin(0,0)},
-      ...this.pickVals(st,set,S,specOf,all,LOGO),
-      labS1:step===1,labS2:step===2,labS3:step===3,labS4:step===4,
-      labSteps:titles.map(([t,s],i)=>({n:i+1,title:t,sub:s,bd:step===i+1?'#c9a24a':'#233038',bg:step===i+1?'#1a160c':'#0b0e10',numC:step===i+1?'#f0d68c':'#5f6966',onClick:()=>{if(i===0||st.labK)set({labStep:i+1})}})),
-      labStrats:S.map(x=>{const r=runK(x.k);return{...x,cagr:r?p1(r.m.cagr):'—',sharpe:r?fx(r.m.sharpe):'—',dd:r?p1(r.m.dd):'—',on:needOf(x.k).length?'Needs '+needOf(x.k).join(', '):r?`Backtested on ${sym} · last 5 years`:'Load price data to backtest',onC:r?'#f0d68c':'#5f6966',onPick:()=>{set({labK:x.k,labStep:2});this.scrollWin(0,0)}}}),
-      lab:{name:cur.name,entry:cur.entry,exit:cur.exit,data:cur.data,dir:L.dir[cfg.dir],tf:L.tf[cfg.tf],tp:L.tp[cfg.tp],trail:L.trail[cfg.trail],xpLine:XP.sum.replace('After entry: ',''),ruleCnt:cs.entry.length+' entry · '+cs.exit.length+' exit',univ:L.univ[cfg.univ],size:L.size[cfg.size],stop:L.stop[cfg.stop],cost:L.cost[cfg.cost],lineS:line(es),lineB:line(eb),areaS:line(es)+' L600,200 L0,200 Z',endS:money(es[es.length-1]),endB:money(eb[eb.length-1]),sym,bench:sym+' buy & hold',period:res?fmtDt(res.eq[0].date)+' – '+fmtDt(res.eq[res.eq.length-1].date):'Last 5 years'},
-      cfgDir:opt('dir',[['long','Long'],['short','Short']]),cfgTf:opt('tf',[['d','Daily'],['w','Weekly']]),
-      cfgTp:opt('tp',[['10','+10%'],['20','+20%'],['none','None']]),cfgTrail:opt('trail',[['5','5%'],['10','10%'],['none','None']]),
-      labEntry:rows(cs.entry,'entry','AND'),labExit:rows(cs.exit,'exit','OR'),
-      labAddEntry:()=>setC({entry:[...cs.entry,{a:{ind:'close'},op:'>',b:{ind:'sma',n:50}}]}),labAddExit:()=>setC({exit:[...cs.exit,{a:{ind:'bars'},op:'≥',b:{ind:'num',v:20}}]}),
-      labReset:()=>{const c={...(st.labConds||{})};delete c[cur.k];this._btc={};set({labConds:c})},labEdited:!!((st.labConds||{})[cur.k])&&cur.k!=='custom',
-      labAsk:st.labAsk||'',onLabAsk:e=>set({labAsk:e.target.value}),
-      labBuild:()=>{const q=(st.labAsk||'').trim();if(!q){this.toastMsg('Describe a strategy first');return}if(!BT){this.toastMsg('Engine still loading');return}const r=BT.parseRules(q);if(!r.entry.length){this.toastMsg('Couldn\'t find an entry rule — try “buy when RSI(2) is below 10”');return}this._btc={};set({labConds:{...(st.labConds||{}),custom:{entry:r.entry,exit:r.exit}},labK:'custom',labUnparsed:r.unparsed});this.toastMsg(r.unparsed.length?'Built '+(r.entry.length+r.exit.length)+' rules · couldn\'t translate: '+r.unparsed.join(' / '):'Built '+(r.entry.length+r.exit.length)+' rules from your description')},
-      labUnparsed:(st.labK==='custom'&&st.labUnparsed&&st.labUnparsed.length)?'Not translated: '+st.labUnparsed.join(' · '):'',
-      labAlert:()=>this.toastMsg('Alert set: new '+cur.name+' matches after each close'),
-      cmpHead:[['STRATEGY','name','left'],['CAGR','cagr','right'],['SHARPE','sh','right'],['SORTINO','so','right'],['MAX DD','dd','right'],['WIN %','win','right'],['REWARD:RISK','rr','right']].map(([l,k,al])=>({l:l+((st.labSort||'sh')===k?' ↓':''),al,color:(st.labSort||'sh')===k?'#f0d68c':'#5f6966',onClick:()=>set({labSort:k})})),
-      cmpRows:S.map(x=>({x,r:runK(x.k)})).filter(o=>o.r).map(({x,r})=>({x,v:{name:x.name,cagr:r.m.cagr,sh:r.m.sharpe,so:r.m.sortino,dd:r.m.dd,win:r.m.win,rr:r.m.rr}})).sort((p,q)=>{const k=st.labSort||'sh';return k==='name'?p.v.name.localeCompare(q.v.name):q.v[k]-p.v[k]}).map(({x,v})=>({name:x.name,cagr:p1(v.cagr),sh:fx(v.sh),so:fx(v.so),dd:p1(v.dd),win:Math.round(v.win*100)+'%',rr:(v.rr===0?'—':fx(v.rr)),bg:x.k===cur.k?'#1a160c':'transparent',nc:x.k===cur.k?'#f0d68c':'#e6ebe8',onClick:()=>set({labK:x.k})})),
-      cfgUniv:opt('univ',[['sp','S&P 500'],['ndx','Nasdaq-100'],['r1k','Russell 1000']]),
-      cfgSym:SYMS.map(t=>({label:t,bg:sym===t?'#2e2614':'transparent',color:sym===t?'#fbefc9':'#8b9592',onClick:()=>set({labCfg:{...cfg,sym:t}})})),
-      cfgSize:opt('size',[['5','5%'],['10','10%'],['20','20%']]),
-      cfgStop:opt('stop',[['5','5%'],['8','8%'],['12','12%'],['none','None']]),xpRows:XP.rows(cfg,set),xpSum:XP.sum.replace('After entry: ',''),xpMore:XP.moreBtn(cfg,set),
-      cfgCost:opt('cost',[['0','0 bps'],['5','5 bps'],['10','10 bps']]),
-      runLab:()=>{set({labStep:3});this.scrollWin(0,0)},
-      labRefine:()=>{set({labStep:2});this.scrollWin(0,0)},
-      labAct:()=>{set({labStep:1,libTab:cur.k.startsWith('sv_')?'saved':'build',labPick:cur.k,libQ:''});this.scrollWin(0,0);const sp=specOf(cur.k);setTimeout(()=>this.runValidate(cur.k,sp,cur.tf),0)},
-      labAxis:res?[...new Set(res.eq.map(x=>x.date.slice(0,4)))]:[],
-      labHasRes:!!res,labNoRes:!res,
-      ...(()=>{if(!res)return{varRows:[],grpRows:[]};const stops=[['5','5%'],['8','8%'],['12','12%'],['none','None']],tps=[['none','No target'],['10','+10%'],['20','+20%']];
-        const cells=stops.map(([sk,sl])=>({sl,cells:tps.map(([tk])=>{const c={...bcfg,stopAtr:null,tpR:null,stop:sk==='none'?0:+sk/100,tp:tk==='none'?null:+tk/100};const r=runSpec(cs,c,bars,sym);return{sk,tk,r}})}));
-        const all2=cells.flatMap(x=>x.cells).map(x=>x.r?x.r.m.sharpe:0),hi=Math.max(...all2),lo=Math.min(...all2);
-        return{varHead:tps.map(([,l])=>l),varRows:cells.map(row=>({sl:row.sl,cells:row.cells.map(({sk,tk,r})=>{const s=r?r.m.sharpe:0,f=hi>lo?(s-lo)/(hi-lo):.5,on=cfg.stop===sk&&cfg.tp===tk;return{sh:r?fx(s):'—',cg:r?p1(r.m.cagr):'',bg:`rgba(201,162,74,${(.08+f*.5).toFixed(2)})`,bd:on?'#f0d68c':'transparent',onClick:()=>set({labCfg:{...cfg,stop:sk,tp:tk}})}})})),
-          grpRows:SYMS.map(s=>{const bs=isI?(st.ibars&&st.ibars[s+'|'+ctf]||null):(st.bars&&st.bars[s]?(ctf==='1w'?BT.toWeekly(BT.normalizeFmp(st.bars[s])):BT.normalizeFmp(st.bars[s])):null);if(isI&&!bs&&BT)setTimeout(()=>this.fetchIntra(s,ctf),0);const st2=bs&&bs.length&&!isI?(()=>{const d=new Date(bs[bs.length-1].date);d.setFullYear(d.getFullYear()-5);return d.toISOString().slice(0,10)})():null;const r=bs?runSpec(cs,{...bcfg,startDate:st2},bs,s):null;return{t:s,cagr:r?p1(r.m.cagr):'—',bh:r?p1(r.mb.cagr):'—',ex:r?p1(r.m.cagr-r.mb.cagr):'—',exC:r?sc(r.m.cagr-r.mb.cagr):'#8b9592',sh:r?fx(r.m.sharpe):'—',dd:r?p1(r.m.dd):'—',tr:r?String(r.m.trades):'—',bg:s===sym?'#1a160c':'transparent',onClick:()=>set({labCfg:{...cfg,sym:s}})}})}})(),
-      evSummary:evd?`${evd.summary.supported} supported · ${evd.summary.contradicted} contradicted · ${evd.summary.unknown} unknown`:'',evId:evd?evd.evidence_id:'',
-      evCov:evd?evd.coverage.status:'',evCovC:evd&&evd.coverage.status==='complete'?'#3ddc84':'#f08a4b',evCovD:evd?`${evd.coverage.scope} · ${evd.coverage.bars} bars · ${evd.coverage.from} → ${evd.coverage.to} · max gap ${evd.coverage.max_calendar_gap_days}d`:'',
-      evClaims:evd?evd.claims.map(c=>({text:c.text,ev:c.reason?c.evidence+' · '+c.reason:c.evidence,status:ST[c.status][2],col:ST[c.status][0],bd:ST[c.status][1]})):[],
-      evLims:evd?evd.limitations:[],evUnk:evd?evd.unknowns:[],
-      evExport:()=>{if(!evd)return;const b=new Blob([JSON.stringify(evd,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=evd.evidence_id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)},
-      labNoResT:curNeed.length?cur.name+' can\'t run on price data alone':!st.bars?(st.barsErr?'Price data unavailable':'Loading price data…'):!BT?'Loading engine…':'Not enough history for '+sym,
-      labNoResD:curNeed.length?'Needs '+curNeed.join(', ')+'. Swap those conditions for price-based ones, or pick 52-Week High, RSI(2), Squeeze or Golden Cross.':!st.bars?(st.barsErr||'Fetching 6 years of FMP daily bars for AAPL, NVDA and MSFT. Results compute in your browser.'):'',
-      labMetrics:res?[['CAGR',p1(res.m.cagr),'Buy & hold '+p1(res.mb.cagr),'#e6ebe8'],['TOTAL RETURN',p1(res.m.tot),'Buy & hold '+p1(res.mb.tot),res.m.tot>=0?'#3ddc84':'#f0565a'],['SHARPE',fx(res.m.sharpe),'Buy & hold '+fx(res.mb.sharpe),'#e6ebe8'],['SORTINO',fx(res.m.sortino),'Downside-only risk','#e6ebe8'],['MAX DRAWDOWN',p1(res.m.dd),'Buy & hold '+p1(res.mb.dd),'#f0565a'],['WIN RATE',Math.round(res.m.win*100)+'%','Of closed trades','#e6ebe8'],['PROFIT FACTOR',isFinite(res.m.pf)?res.m.pf.toFixed(2):'∞','Gross win ÷ gross loss','#e6ebe8'],['REWARD:RISK',(res.m.rr===0?'—':fx(res.m.rr)),'Avg win ÷ avg loss','#e6ebe8'],['TRADES',String(res.m.trades),'Avg hold '+Math.round(res.m.hold)+' days','#e6ebe8'],['EXPOSURE',Math.round(res.m.exposure*100)+'%','Time invested','#e6ebe8']].map(([l,v,s,c])=>({l,v,s,c})):[],
-      labYears:res?res.m.yr.map((o,i)=>{const b=res.mb.yr[i]?res.mb.yr[i].r:0;return{y:o.y+(i===0||i===res.m.yr.length-1?'*':''),s:p1(o.r),sc:sc(o.r),b:p1(b),bc:sc(b),e:p1(o.r-b),ec:sc(o.r-b)}}):[],
-      tradeHead:[['ENTRY','left'],['PRICE','right'],['EXIT','left'],['PRICE','right'],['RETURN','right'],['DAYS','right'],['REASON','right']].map(([l,al])=>({l,al})),
-      labTrades:res?res.trades.slice().reverse().slice(0,15).map(t=>({inD:fmtDt(t.inDate),inP:'$'+t.inPx.toFixed(2),outD:t.why==='Still open'?'Open':fmtDt(t.outDate),outP:'$'+t.outPx.toFixed(2),r:p1(t.ret),rc:sc(t.ret),d:String(t.days),why:t.why})):[],
-      labTradeCnt:res?(res.trades.length>15?'Latest 15 of '+res.trades.length+' trades':res.trades.length+(res.trades.length===1?' trade':' trades'))+' · * partial year':'',
-      labUnknowns:['Fills assume the next open; real slippage widens in fast markets','Single-stock test — results depend heavily on the name chosen','Fully invested per signal; no position sizing or diversification','Taxes, dividends and borrow costs are excluded'],
-      labMatches:matches.map(s=>({t:s.t,n:s.n,score:s.score,ini:s.t.slice(0,4),logo:LOGO(s.t),hideImg:HIDE,why:cur.why(s),onOpen:()=>{set({module:'si',si:{t:s.t,score:s.score,status:s.status,from:false}});this.scrollWin(0,0)}})),
-      labMatchCnt:matches.length+(matches.length===1?' stock':' stocks'),labNoMatch:step===4&&!matches.length
+    if (more || K.be === "on" || K.maxB !== "none") R.push(
+      { t: "Breakeven", segs: [seg(K.be, [["off", "Off", { be: "off" }], ["on", "At +1R", { be: "on" }]], (x) => x === "on" && !hasStop)], note: hasStop ? "" : "Needs a stop" },
+      { t: "Max hold", segs: [seg(K.maxB, withCur([["none", "None", { maxB: "none" }], ["10", "10 bars", { maxB: "10" }], ["20", "20 bars", { maxB: "20" }], ["40", "40 bars", { maxB: "40" }]], K.maxB, K.maxB + " bars"))] },
+    );
+    return { riskRows: R, riskSum: exitPlanSummary(this.cfgOf(k)), more: { l: more || K.be === "on" || K.maxB !== "none" ? "Fewer options" : "More options", onClick: () => this.setState((s) => ({ xpMore: { ...s.xpMore, [k]: !more } })) } };
+  }
+  facts(k) {
+    const x = this.strategyOf(k);
+    if (!x) return null;
+    const spec = this.specOf(k), tf = this.tfOf(k), cfg = this.cfgOf(k), opts = this.candleOpts(spec), BT = Engine;
+    const ni = opts === INTRA_TF, p = periodOf(cfg, tf), needs = this.needsOf(k);
+    const custom = k === "custom" && this.state.custom, un = custom && (custom.unparsed || []).length && !this.state.unparsedAck ? "Not translated: " + custom.unparsed.join(" · ") : "";
+    return {
+      entry: spec.entry.map(BT.label).join("  AND  ") || "—",
+      exit: spec.exit.map(BT.label).join("  OR  ") || "Exit plan only (stop / target / trail / max hold)",
+      ...this.riskRows(k),
+      costOpts: COST_OPTS.map((c) => ({ l: c + " bps", on: String(cfg.cost ?? "5") === c, onClick: () => this.setCfg(k, { cost: c }) })),
+      candleOpts: ALL_TF.map((t) => ({ l: tfL(t), on: t === tf, off: !opts.includes(t), offT: "These rules use session levels — intraday candles only", onClick: () => this.setState((s) => ({ candles: { ...s.candles, [k]: t } })) })),
+      candleNote: ni ? "Uses session levels (VWAP, opening range, prior day) — intraday candles only" : "",
+      periodOpts: p.years != null ? YEAR_OPTS.map((y) => ({ l: y + "Y", on: String(p.years) === y, onClick: () => this.setCfg(k, { yrs: y }) })) : (IPER[tf] || []).map((d) => ({ l: periodLabel({ days: d }), on: p.days === d, onClick: () => this.setCfg(k, { ["idays_" + tf]: String(d) }) })),
+      src: x.custom ? "" : x.src,
+      needs: needs.length ? "Needs " + needs.join(", ") + " — not available in Strategy Lab, so Run is disabled." : "",
+      unparsed: un, onDismiss: un ? () => this.setState({ unparsedAck: true }) : null, onEdit: un ? () => this.openEdit(k) : null,
+    };
+  }
+  resultsVm(k, show) {
+    if (!show) return { show: false };
+    const st = this.state, v = st.vals[k] || {}, sig = this.sigOf(k), blocked = this.blockedOf(k), fresh = !!(v.at && v.sig === sig);
+    const rows = v.rows || [], S = summarize(rows), annual = S.annual, sort = st.sorts[k] || { key: "sig", desc: true };
+    const isI = Engine.isIntradayTf(v.tf || this.tfOf(k));
+    const sorted = sortRows(rows.map((r) => ({ ...r, px: st.quotes[r.t] })), sort.key, sort.desc, annual);
+    const setSort = (key) => this.setState((s) => { const cur = s.sorts[k] || { key: "sig", desc: true }; return { sorts: { ...s.sorts, [k]: { key, desc: cur.key === key ? !cur.desc : key !== "t" } } }; });
+    const col = (l, key, al, title) => ({ l, key, al, title, on: sort.key === key, desc: sort.desc, onClick: () => setSort(key) });
+    const pctRow = (a) => (a == null ? "n/a" : p1(a));
+    return {
+      show: true,
+      head: v.busy ? "Backtesting " + (v.total || "…") + " stocks…" : v.at ? S.tested + " stocks tested · " + rows.filter((r) => r.ago === 0).length + " triggered on the last bar" : "",
+      run: { l: v.busy ? "Running…" : v.at ? "Re-run backtest" : "Run backtest →", primary: !fresh, disabled: !!v.busy || !!blocked, title: blocked, onClick: () => this.runValidate(k) },
+      busy: !!v.busy, progressT: "Tested " + (v.done || 0) + " / " + (v.total || "…") + " stocks", progressPct: v.total ? Math.round((100 * (v.done || 0)) / v.total) + "%" : "0%",
+      err: v.err || (!v.at && !v.busy ? blocked : "") || "",
+      stale: !!(v.at && !v.busy && v.sig !== sig), onRerun: () => this.runValidate(k),
+      idle: !v.at && !v.busy && !v.err && !blocked, idleT: "Run the backtest to test these rules on the 50 largest S&P 500 stocks, with the settings above.",
+      meta: v.at ? `${tfL(v.tf)} · ${periodLabel(periodOfCfg(v.cfg))} · as of ${v.asOf ? fmtDt(v.asOf) : "—"} · ${v.fail || 0} unavailable · ${v.insuf || 0} insufficient history` : "",
+      sum: v.at ? [
+        ["TESTED", S.tested + " / " + (v.total || S.tested)], ["PROFITABLE", S.profitable + " / " + S.tested, S.profitable > S.tested / 2 ? "#3ddc84" : null], ["BEAT B&H", S.beat + " / " + S.tested],
+        [annual ? "MEDIAN CAGR" : "MEDIAN RETURN", pctRow(S.medRet), sc(S.medRet)], ["MEDIAN SHARPE", fx(S.medSharpe), sc(S.medSharpe)], ["MEDIAN MAX DD", pctRow(S.medDd), "#f0565a"],
+        ["WIN RATE", S.win == null ? "—" : Math.round(S.win * 100) + "%"], ["TRADES", String(S.trades)],
+      ].map(([kk, vv, c]) => ({ k: kk, v: vv, c })) : [],
+      cols: [col("Signal", "sig", "left", "Triggered on the last bar, N bars ago, setting up (one condition away or within 3%), or none"), col("Stock", "t", "left"), col("Price", "px", "right", "Live quote"), col(annual ? "CAGR" : "Return", "ret"), col(annual ? "B&H CAGR" : "B&H return", "bret"), col("Excess", "ex"), col("Sharpe", "sh"), col("Max DD", "dd"), col("Win %", "win"), col("Trades", "tr")],
+      rows: v.at ? sorted.map((r) => {
+        const ret = annual ? r.cagr : r.tot, bret = annual ? r.bcagr : r.btot, ex = ret - bret;
+        const sigT = r.ago === 0 ? (isI ? "This bar" : "Today") : r.ago != null ? r.ago + (r.ago === 1 ? " bar ago" : " bars ago") : r.sig === "setup" ? "Setting up" : "—";
+        return { t: r.t, n: r.n, logo: LOGO(r.t), sig: sigT, sigC: r.ago != null ? "#3ddc84" : r.sig === "setup" ? "#f08a4b" : "#5f6966", sigBd: r.ago != null ? "#1f4a33" : r.sig === "setup" ? "#6b3a1c" : "#233038",
+          px: r.px ? r.px.toFixed(2) : "—", ret: p1(ret), retC: sc(ret), bret: p1(bret), ex: p1(ex), exC: sc(ex), sh: fx(r.sh), dd: p1(r.dd), win: r.closed ? Math.round(r.win * 100) + "%" : "—", tr: String(r.trades),
+          onClick: () => this.openReport(k, r.t, r.n) };
+      }) : [],
+    };
+  }
+  openReport(k, t, n) { this.setState({ rep: { k, t, n } }); this.scrollTop(); }
+
+  ruleRows(k, side) {
+    const st = this.state, spec = this.specOf(k), arr = spec[side], IND = Engine.IND, tf = this.tfOf(k), cfg = valCfg(this.cfgOf(k), tf);
+    const bud = barBudget(tf, cfg), maxN = Math.max(2, bud.avail - bud.test - 40);
+    const setC = (p) => this.setState((s) => ({ labConds: { ...s.labConds, [k]: { ...this.specOf(k), ...p } } }));
+    const indOpts = Object.entries(IND).filter(([v]) => v !== "emergence").map(([v, d]) => ({ v, l: d.l + (d.data ? " — needs data" : d.intraday ? " — intraday" : "") }));
+    const fresh = (ind) => (ind === "num" ? { ind, v: 0 } : IND[ind] && IND[ind].n ? { ind, n: IND[ind].n } : { ind });
+    const nv = (e) => { const v = parseFloat(e.target.value); return Number.isNaN(v) ? 0 : v; };
+    const NEWC = () => ({ a: { ind: "close" }, op: ">", b: { ind: "sma", n: 50 } });
+    let tip = 0;
+    const tipOf = (id, txt) => ({ open: st.indTip === id, txt, on: () => this.setState({ indTip: id }), off: () => { if (this.state.indTip === id) this.setState({ indTip: null }); } });
+    const sideOf = (o, set, id) => {
+      const d = IND[o.ind] || {}, isL = o.ind === "hh" || o.ind === "ll", n = o.n ?? d.n;
+      const lookOpts = LOOK.map(([v, l]) => ({ v, l })); if (isL && !LOOK.some(([v]) => +v === n)) lookOpts.push({ v: String(n), l: n + " bars" });
+      const onN = (e) => { const raw = Math.max(1, Math.round(nv(e))); set({ ...o, n: Math.min(raw, maxN) }); if (raw > maxN) this.toastMsg("Capped at " + maxN + " — the most bars available before a " + periodLabel(periodOfCfg(cfg)) + " " + tfL(tf) + " test window."); };
+      return { ind: o.ind, onInd: (e) => set(fresh(e.target.value)), tip: tipOf(id, (d.l || o.ind) + " — " + (IDESC[o.ind] || "")), look: isL, lookOpts, n: n == null ? "" : String(n), onN, hasN: !!d.n && !isL, isNum: o.ind === "num", v: o.v ?? "", onV: (e) => set({ ...o, v: nv(e) }), hasMult: o.ind !== "num" && o.ind !== "bars", mult: o.mult ?? 1, onMult: (e) => set({ ...o, mult: nv(e) || 1 }) };
+    };
+    const condObj = (c, up, del, join, onOr) => {
+      const id = ++tip, big = [c.a, c.b].some((o) => (o.n ?? 0) > maxN);
+      return { join, indOpts, opOpts: Engine.OPS, op: c.op, onOp: (e) => up({ ...c, op: e.target.value }), oTip: tipOf(id + "o", c.op + " — " + (ODESC[c.op] || "")), maxN,
+        a: sideOf(c.a, (a) => up({ ...c, a }), id + "a"), b: sideOf(c.b, (b) => up({ ...c, b }), id + "b"),
+        warn: !!((IND[c.a.ind] || {}).data || (IND[c.b.ind] || {}).data), capMsg: big ? "Period above " + maxN + " — more than the bars available for this candle and period" : "", onDel: del, onOr };
+    };
+    return arr.map((c, i) => {
+      const setI = (v) => setC({ [side]: arr.map((x, y) => (y === i ? v : x)) }), delI = () => setC({ [side]: arr.filter((_, y) => y !== i) }), join = i ? (side === "entry" ? "AND" : "OR") : "IF";
+      if (c.any) return { group: true, join, subs: c.any.map((s, j) => condObj(s, (f) => setI({ any: c.any.map((x, y) => (y === j ? f : x)) }), () => { const rest = c.any.filter((_, y) => y !== j); setI(rest.length === 1 ? rest[0] : { any: rest }); }, j ? "OR" : "EITHER", null)), onAddOr: () => setI({ any: [...c.any, NEWC()] }), onDelGroup: delI };
+      return condObj(c, setI, delI, join, () => setI({ any: [c, NEWC()] }));
+    });
+  }
+  openEdit(k) {
+    const st = this.state, x = this.strategyOf(k);
+    if (!x) return;
+    this.setState({ edit: { k, bk: { cond: st.labConds[k] ? copy(st.labConds[k]) : null, cfg: st.cfgs[k] ? { ...st.cfgs[k] } : null, tf: st.candles[k] || null, name: x.custom ? (st.custom || {}).name : x.sv ? x.sv.name : null }, name: x.name } });
+  }
+  closeEdit(mode) {
+    const st = this.state, e = st.edit;
+    if (!e) return;
+    const k = e.k, x = this.strategyOf(k);
+    if (mode === "cancel") {
+      const put = (o, v) => { const n = { ...o }; if (v == null) delete n[k]; else n[k] = v; return n; };
+      this.setState((s) => ({ edit: null, labConds: put(s.labConds, e.bk.cond), cfgs: put(s.cfgs, e.bk.cfg), candles: put(s.candles, e.bk.tf) }));
+      return;
+    }
+    if (!this.specOf(k).entry.length) { this.toastMsg("Add at least one entry condition"); return; }
+    const name = (e.name || "").trim() || (x && x.name) || "Your strategy";
+    if (k === "custom") this.setState((s) => ({ custom: { ...s.custom, name }, unparsedAck: true }));
+    this.setState({ edit: null });
+    const after = () => { if (mode === "run") this.runValidate(k); };
+    if (x && x.sv) {
+      this.persist(x.sv.id, this.docOf(k, name)).then(() => { this.toastMsg("Updated “" + name + "”"); after(); }).catch((err) => this.toastMsg("Couldn't save: " + errMsg(err)));
+    } else this.setState({}, after);
+  }
+  editVm() {
+    const st = this.state, e = st.edit;
+    if (!e) return { open: false };
+    const k = e.k, x = this.strategyOf(k) || {}, f = this.facts(k) || {}, needs = this.needsOf(k);
+    const NEW = { entry: { a: { ind: "close" }, op: ">", b: { ind: "sma", n: 50 } }, exit: { a: { ind: "bars" }, op: "≥", b: { ind: "num", v: 20 } } };
+    const add = (side) => () => this.setState((s) => ({ labConds: { ...s.labConds, [k]: { ...this.specOf(k), [side]: [...this.specOf(k)[side], NEW[side]] } } }));
+    return {
+      open: true, title: x.name, nameEditable: !!(x.custom || x.sv), name: e.name, onName: (ev) => this.setState({ edit: { ...e, name: ev.target.value } }),
+      entry: this.ruleRows(k, "entry"), exit: this.ruleRows(k, "exit"), addEntry: add("entry"), addExit: add("exit"),
+      riskRows: f.riskRows, riskSum: f.riskSum, more: f.more, costOpts: f.costOpts, candleOpts: f.candleOpts, periodOpts: f.periodOpts,
+      needs: needs.length ? "Needs " + needs.join(", ") + " — can't be backtested." : "",
+      reset: x.lib && st.labConds[k] ? () => this.setState((s) => { const n = { ...s.labConds }; delete n[k]; return { labConds: n }; }) : null,
+      cancel: () => this.closeEdit("cancel"), close: () => this.closeEdit("done"), done: () => this.closeEdit("done"), run: () => this.closeEdit("run"),
+      doneL: x.sv ? "Save changes" : "Done", runL: x.sv ? "Save & run backtest" : "Done & run backtest", runDisabled: !!needs.length,
     };
   }
 
-  render(){const set=p=>this.setState(p);const vm=this.labVals(this.state,set,[]);
-    return(<div className="sl-root">
-      <style>{BASE_CSS+'\n'+LAB_HOVER_CSS}</style>
-      <div style={{flex:1,minWidth:0,padding:'14px 24px 40px'}}><LabView vm={vm} refs={this.refsObj}/></div>
-      {this.state.toast?<div style={{position:'fixed',bottom:22,left:'50%',transform:'translateX(-50%)',zIndex:60,background:'#1a1f21',border:'1px solid #2a3235',borderRadius:10,padding:'10px 16px',fontWeight:600,boxShadow:'0 10px 30px rgba(0,0,0,.4)'}}>{this.state.toast}</div>:null}
-    </div>)}
+  /** Single-stock report: the same bars and engine config as the stock's results row. */
+  reportVm() {
+    const st = this.state, rp = st.rep;
+    if (!rp) return { show: false };
+    const BT = Engine, k = rp.k, t = rp.t, x = this.strategyOf(k) || { name: k }, spec = this.specOf(k), tf = this.tfOf(k), cfg = this.engCfg(k), sig = runSig(spec, tf, cfg), span = fetchSpan(spec, tf, cfg), period = periodOfCfg(cfg);
+    const base = {
+      show: true, t, title: x.name + " · " + t, sub: (rp.n ? rp.n + " · " : "") + "Long-only · " + tfL(tf) + " candles · " + periodLabel(period) + " · " + exitPlanSummary(this.cfgOf(k)) + " · costs " + cfg.costBps + " bps",
+      onEdit: () => this.openEdit(k), onMatches: () => this.showMatches(k),
+      settings: [["Entry", spec.entry.map(BT.label).join(" AND ") || "—"], ["Exit", spec.exit.map(BT.label).join(" OR ") || "exit plan only"]],
+    };
+    const raw = this.cachedBars(t, span);
+    if (raw === undefined) {
+      if (this._repLoading !== t + span.days) { this._repLoading = t + span.days; this.fetchBars([t], span).then(() => this.forceUpdate(), (e) => { this._repErr = errMsg(e); this.forceUpdate(); }).finally(() => { this._repLoading = null; }); }
+      return { ...base, busy: this._repErr ? "" : "Loading " + t + " " + tfL(tf).toLowerCase() + " bars…", err: this._repErr || "" };
+    }
+    this._repErr = null;
+    if (raw === null) return { ...base, err: "No " + tfL(tf).toLowerCase() + " bars for " + t + " from the data provider." };
+    const needs = BT.checkRules(spec, tf);
+    if (needs.length) return { ...base, err: "These rules need " + needs.join(", ") + "." };
+    const bars = prepBars(raw, tf), L = bars[bars.length - 1], key = `${t}|${sig}|${L.date}|${L.close}`;
+    let R = this._rep.get(key);
+    if (!R) { const ec = engineCfg(cfg, bars); R = { r: BT.runRules(bars, spec, ec), bars, ec }; this._rep.set(key, R); }
+    const r = R.r;
+    if (!r) { const hc = BT.historyCheck(bars, spec, R.ec); return { ...base, err: `Not enough ${tfL(tf).toLowerCase()} history for ${t}: the rules need ${hc.warm} bars before the window and at least ${BT.MIN_TEST_BARS} in it (have ${hc.start} before, ${hc.testBars} in).` }; }
+    const ev = BT.buildEvidence(r, { symbol: t, strategy: k, spec, cfg, bars, tf, period });
+    const ST = { supported: ["#3ddc84", "#1f4a33", "SUPPORTED"], contradicted: ["#f0565a", "#5a2224", "CONTRADICTED"], unknown: ["#8b9592", "#2a3236", "UNKNOWN"] };
+    const ds = (a) => { const step = Math.max(1, Math.floor(a.length / 300)); return a.filter((_, i) => i % step === 0 || i === a.length - 1); };
+    const es = ds(r.eq).map((q) => q.v), eb = ds(r.bh).map((q) => q.v), nn = Math.max(es.length - 1, 1), mx = Math.max(...es, ...eb), mn = Math.min(...es, ...eb);
+    const X = (i) => (i * 600) / nn, Y = (v) => 190 - ((v - mn) / (mx - mn || 1)) * 175, line = (a) => a.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+    const m = r.m, mb = r.mb;
+    const metrics = [
+      ["CAGR", m.cagr == null ? "n/a" : p1(m.cagr), m.cagr == null ? "Under a year — see total return" : "Buy & hold " + p1(mb.cagr)], ["TOTAL RETURN", p1(m.tot), "Buy & hold " + p1(mb.tot), sc(m.tot)],
+      ["SHARPE", fx(m.sharpe), "Buy & hold " + fx(mb.sharpe) + (tf === "1w" ? " · ×√52" : " · ×√252")], ["SORTINO", fx(m.sortino), "Downside-only risk"], ["MAX DRAWDOWN", p1(m.dd), "Buy & hold " + p1(mb.dd), "#f0565a"],
+      ["WIN RATE", m.trades ? Math.round(m.win * 100) + "%" : "—", "Of closed trades"], ["PROFIT FACTOR", Number.isFinite(m.pf) ? m.pf.toFixed(2) : "∞", "Gross win ÷ gross loss"], ["REWARD:RISK", m.rr === 0 ? "—" : fx(m.rr), "Avg win ÷ avg loss"],
+      ["TRADES", String(m.trades), "Avg hold " + Math.round(m.hold) + " bars"], ["EXPOSURE", Math.round(m.exposure * 100) + "%", "Bars in a position"],
+    ].map(([l, v, s, c]) => ({ l, v, s, c }));
+    // Price chart over the test window only, so its buy & hold matches the report.
+    const tb = bars.slice(r.start), step = Math.max(1, Math.ceil(tb.length / 1200)), pts = tb.filter((_, i) => i % step === 0 || i === tb.length - 1);
+    const N = pts.length, cs = pts.map((q) => q.close), lo = Math.min(...tb.map((q) => q.low)), hi = Math.max(...tb.map((q) => q.high)), pad = (hi - lo) * 0.06 || 1, LL = lo - pad, HH = hi + pad;
+    const CX = (i) => (i / Math.max(N - 1, 1)) * 1000, CY = (c) => (1 - (c - LL) / (HH - LL)) * 300, idx = new Map(tb.map((q, i) => [String(q.date), i])), atr = cfg.stopAtr ? BT.series(bars, { ind: "atr", n: 14 }) : null;
+    const xi = (d) => { const i = idx.get(String(d)); return i == null ? null : CX(i / step); };
+    const levels = [], bands = [];
+    for (const tr of r.trades) {
+      const a = xi(tr.inDate), b = xi(tr.outDate);
+      if (a == null || b == null) continue;
+      const win = tr.ret > 0, w = Math.max(2, b - a);
+      bands.push({ x: a.toFixed(1), w: w.toFixed(1), fill: win ? "rgba(61,220,132,.14)" : "rgba(240,86,90,.14)", stroke: win ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)" });
+      const ei = bars.findIndex((q) => String(q.date) === String(tr.inDate)), A = atr && ei > 0 ? atr[ei - 1] : null;
+      const sl = cfg.stopAtr && A ? tr.inPx - cfg.stopAtr * A : cfg.stop ? tr.inPx * (1 - cfg.stop) : null, risk = sl ? tr.inPx - sl : null;
+      const tp = cfg.tpR && risk ? tr.inPx + cfg.tpR * risk : cfg.tp ? tr.inPx * (1 + cfg.tp) : null;
+      if (sl) levels.push({ x1: a, x2: a + w, y: CY(sl), c: "rgba(240,86,90,.8)" });
+      if (tp) levels.push({ x1: a, x2: a + w, y: CY(tp), c: "rgba(61,220,132,.8)" });
+    }
+    const cline = "M" + cs.map((c, i) => CX(i).toFixed(1) + "," + CY(c).toFixed(1)).join("L");
+    const vari = st.vari[key] ? this.varianceCells(k, bars, spec) : null;
+    return {
+      ...base, has: true,
+      meta: tfL(tf) + " · " + periodLabel(period) + " · " + fmtDt(r.eq[0].date) + " – " + fmtDt(r.eq[r.eq.length - 1].date) + " · as of " + fmtDt(L.date) + " · warm-up " + r.warm + " bars before the window",
+      metrics,
+      growth: { lineS: line(es), lineB: line(eb), areaS: line(es) + " L600,200 L0,200 Z", endS: money(es[es.length - 1]), endB: money(eb[eb.length - 1]), bench: t + " buy & hold", axis: [...new Set(r.eq.map((q) => String(q.date).slice(0, 4)))] },
+      chart: { sub: tfL(tf) + " candles · " + fmtDt(tb[0].date) + " – " + fmtDt(L.date) + " · test window only", trades: bands, levels, line: cline, area: cline + "L1000,300L0,300Z", hi: hi.toFixed(2), lo: lo.toFixed(2), d0: fmtDt(tb[0].date), d1: fmtDt(L.date), legend: "bands = trades (green win, red loss) · dashed = stop / target from the exit plan" },
+      years: { title: "Year by year", note: "* partial year", rows: m.yr.map((o, i) => { const b = mb.yr[i] ? mb.yr[i].r : 0; return { y: o.y + (i === 0 || i === m.yr.length - 1 ? "*" : ""), s: p1(o.r), sc: sc(o.r), b: p1(b), bc: sc(b), e: p1(o.r - b), ec: sc(o.r - b) }; }) },
+      trades: { cnt: (r.trades.length > 200 ? "Latest 200 of " : "") + r.trades.length + (r.trades.length === 1 ? " trade" : " trades"), rows: r.trades.slice().reverse().slice(0, 200).map((q) => ({ inD: fmtDt(q.inDate), inP: "$" + q.inPx.toFixed(2), outD: q.why === "Still open" ? "Open" : fmtDt(q.outDate), outP: "$" + q.outPx.toFixed(2), r: p1(q.ret), rc: sc(q.ret), d: String(q.days), why: q.why })) },
+      vari: { run: () => this.setState((s) => ({ vari: { ...s.vari, [key]: true } })), head: vari ? vari.head : [], rows: vari ? vari.rows : null },
+      cmp: this.compareVm(k, t, tf, cfg, key),
+      ev: {
+        summary: `${ev.summary.supported} supported · ${ev.summary.contradicted} contradicted · ${ev.summary.unknown} unknown`, id: ev.evidence_id, cov: ev.coverage.status, covC: ev.coverage.status === "complete" ? "#3ddc84" : "#f08a4b",
+        covD: `${ev.coverage.bars} bars · ${ev.coverage.from} → ${ev.coverage.to} · span ${ev.coverage.span_days} of ${ev.coverage.requested_days} days · max gap ${ev.coverage.max_calendar_gap_days}d` + (ev.coverage.missing_sessions ? ` · ${ev.coverage.missing_sessions} missing sessions` : ""),
+        claims: ev.claims.map((c) => ({ text: c.text, ev: c.reason ? c.evidence + " · " + c.reason : c.evidence, status: ST[c.status][2], col: ST[c.status][0], bd: ST[c.status][1] })),
+        lims: ev.limitations, unk: ev.unknowns,
+        onExport: () => { const b = new Blob([JSON.stringify(ev, null, 2)], { type: "application/json" }), a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = ev.evidence_id + ".json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); },
+      },
+    };
+  }
+  varianceCells(k, bars, spec) {
+    const base = this.cfgOf(k), tf = this.tfOf(k), K = exitPlanKeys(base);
+    const stops = [["p5", "5%", { stopM: "pct", stop: "5" }], ["p8", "8%", { stopM: "pct", stop: "8" }], ["p12", "12%", { stopM: "pct", stop: "12" }], ["a2", "2× ATR", { stopM: "atr", stopA: "2" }], ["none", "None", { stopM: "none" }]];
+    const tps = [["none", "No target", { tpM: "none" }], ["p10", "+10%", { tpM: "pct", tp: "10" }], ["p20", "+20%", { tpM: "pct", tp: "20" }], ["r2", "2R", { tpM: "r", tpR: "2" }]];
+    const sK = K.stopM === "none" ? "none" : K.stopM === "atr" ? "a" + K.stopA : "p" + K.stop, tK = K.tpM === "none" ? "none" : K.tpM === "r" ? "r" + K.tpR : "p" + K.tp;
+    const cells = stops.map(([sk, sl, sp]) => ({ sl, cells: tps.map(([tk, , tp]) => { const c = valCfg({ ...base, ...sp, ...tp }, tf), r = tk === "r2" && sk === "none" ? null : Engine.runRules(bars, spec, engineCfg(c, bars)); return { sk, tk, r, patch: { ...sp, ...tp } }; }) }));
+    const all = cells.flatMap((x) => x.cells).filter((x) => x.r).map((x) => x.r.m.sharpe), hiS = Math.max(...all), loS = Math.min(...all);
+    return {
+      head: tps.map(([, l]) => l),
+      rows: cells.map((row) => ({ sl: row.sl, cells: row.cells.map(({ sk, tk, r, patch }) => { const s = r ? r.m.sharpe : 0, f = hiS > loS ? (s - loS) / (hiS - loS) : 0.5; return { sh: r ? fx(s) : "—", cg: r ? p1(r.m.cagr ?? r.m.tot) : tk === "r2" ? "needs a stop" : "", bg: r ? `rgba(201,162,74,${(0.08 + f * 0.5).toFixed(2)})` : "#12171a", bd: sk === sK && tk === tK ? "#f0d68c" : "transparent", onClick: () => { if (r) this.setCfg(k, patch); } }; }) })),
+    };
+  }
+  compareVm(k, t, tf, cfg, key) {
+    const st = this.state, c = st.cmp[key];
+    const run = async () => {
+      this.setState((s) => ({ cmp: { ...s.cmp, [key]: { busy: true } } }));
+      const S = this.strategies().filter((x) => x.k === k || Engine.checkRules(this.specOf(x.k), tf).length === 0);
+      const all = { entry: S.flatMap((x) => this.specOf(x.k).entry), exit: S.flatMap((x) => this.specOf(x.k).exit) }, span = fetchSpan(all, tf, cfg);
+      try {
+        const raw = (await this.fetchBars([t], span))[t];
+        if (!raw) throw new Error("no bars");
+        const bars = prepBars(raw, tf), ec = engineCfg(cfg, bars);
+        const rows = S.map((x) => ({ x, r: Engine.runRules(bars, this.specOf(x.k), ec) }));
+        this.setState((s) => ({ cmp: { ...s.cmp, [key]: { rows, skipped: this.strategies().length - S.length } } }));
+      } catch (e) { this.setState((s) => ({ cmp: { ...s.cmp, [key]: { err: errMsg(e) } } })); }
+    };
+    if (!c || c.err) return { run, busy: c && c.err ? "Couldn't compare: " + c.err : "", rows: null };
+    if (c.busy) return { run, busy: "Running every strategy on " + t + "…", rows: null };
+    const sk = (st.sorts["cmp|" + key] || "sh"), annual = c.rows.every((o) => !o.r || o.r.m.cagr != null);
+    const val = (o) => (!o.r ? -Infinity : sk === "name" ? 0 : sk === "ret" ? (annual ? o.r.m.cagr : o.r.m.tot) : o.r.m[sk]);
+    const rows = [...c.rows].sort((a, b) => (sk === "name" ? a.x.name.localeCompare(b.x.name) : val(b) - val(a)));
+    const H = [["Strategy", "name", "left"], [annual ? "CAGR" : "Return", "ret"], ["Sharpe", "sharpe"], ["Sortino", "sortino"], ["Max DD", "dd"], ["Win %", "win"], ["Trades", "trades"]];
+    return {
+      run, rows: rows.map(({ x, r }) => ({ name: x.name, ret: r ? p1(annual ? r.m.cagr : r.m.tot) : "insufficient history", sh: r ? fx(r.m.sharpe) : "—", so: r ? fx(r.m.sortino) : "—", dd: r ? p1(r.m.dd) : "—", win: r && r.m.trades ? Math.round(r.m.win * 100) + "%" : "—", tr: r ? String(r.m.trades) : "—", bg: x.k === k ? "#1a160c" : "transparent", nc: x.k === k ? "#f0d68c" : "#e6ebe8", onClick: () => this.openReport(x.k, t, this.state.rep && this.state.rep.n) })),
+      head: H.map(([l, kk, al]) => ({ l: l + (sk === kk ? " ↓" : ""), k: kk, al: al || "right", on: sk === kk, onClick: () => this.setState((s) => ({ sorts: { ...s.sorts, ["cmp|" + key]: kk } })) })),
+      note: c.skipped ? c.skipped + " strategies need data or candles this test doesn't have and were left out." : "",
+    };
+  }
+  showMatches(k) {
+    const x = this.strategyOf(k);
+    this.setState((s) => ({ rep: null, sorts: { ...s.sorts, [k]: { key: "sig", desc: true } }, libTab: x && x.sv ? "saved" : s.libTab, labPick: k === "custom" ? s.labPick : k, libQ: "" }));
+    setTimeout(() => this.scrollTo(k === "custom" ? this.aiRef.current : this.detRef.current), 60);
+  }
+
+  aiVals() {
+    const st = this.state, ai = st.ai, q = st.aiQ || "", go = (qq) => { const v = qq ?? q; if (qq != null) this.setState({ aiQ: qq }); this.aiRun(v); };
+    const chips = ["Buy when RSI(2) is below 10 and close is above the 200-day SMA, exit when close crosses above the 5-day SMA", "Buy breakouts above the 52-week high on 1.5x average volume, exit below the 20-day SMA", "Buy when MACD crosses above its signal line and RSI(14) is under 70, exit when RSI is above 75", "Buy when the 20-day EMA crosses above the 50-day EMA, hold 30 days, 8% stop"];
+    const has = !!(ai && st.custom && !ai.loading && !ai.err);
+    return {
+      aiHeadline: "Describe a strategy. We'll build the rules and backtest it.", aiQ: q, onAiQ: (e) => this.setState({ aiQ: e.target.value }), onAiKey: (e) => { if (e.key === "Enter") go(); }, aiGo: () => go(),
+      aiPh: "e.g. buy when price breaks the 52-week high on heavy volume, exit below the 20-day average", aiBtn: ai && ai.loading ? "Working…" : "Build & test", aiChips: chips.map((l) => ({ l, onClick: () => go(l) })),
+      aiHas: !!ai, aiLoading: !!(ai && ai.loading), aiLoadingT: "Building rules…", aiErr: (ai && ai.err) || "", aiKind: "STRATEGY", aiTitle: ai ? (st.custom && has ? st.custom.name : ai.loading ? "Building…" : "") : "", aiSrc: (ai && ai.src) || "",
+      aiParas: has && st.custom.why ? [st.custom.why] : [], aiF: has ? this.facts("custom") : null, hv: this.resultsVm("custom", has),
+      aiHasActs: has, aiActs: has ? [{ l: "Edit rules", bg: "transparent", c: "#fbefc9", bd: "#5a4a22", onClick: () => this.openEdit("custom") }, { l: st.customSvId ? "Update saved strategy" : "Save strategy", bg: "transparent", c: "#fbefc9", bd: "#5a4a22", onClick: () => this.saveStrategy() }] : [],
+    };
+  }
+  pickVals() {
+    const st = this.state, BT = Engine, tab = st.libTab || "library", S = this.strategies(), nSaved = st.labSaved.length;
+    const tabs = { libTabs: [["library", "Library", ""], ["saved", "Saved", String(nSaved)]].map(([k, l, n]) => ({ l, n, bd: tab === k ? "#c9a24a" : "transparent", c: tab === k ? "#eef2f4" : "#7a8481", onClick: () => this.setState({ libTab: k, labPick: null }) })), libEmpty: tab === "saved" && !nSaved, libHas: !(tab === "saved" && !nSaved) };
+    if (st.savedNote && tab === "saved") tabs.libNote = st.savedNote;
+    const P0 = S.filter((x) => (tab === "saved" ? x.k.startsWith("sv_") : x.lib));
+    const lq = (st.libQ || "").trim().toLowerCase(), P = lq ? P0.filter((x) => [x.name, x.fam, x.what, x.src].join(" ").toLowerCase().includes(lq)) : P0;
+    Object.assign(tabs, { libQ: st.libQ || "", onLibQ: (e) => this.setState({ libQ: e.target.value, labPick: null }), libCount: (lq ? P.length + " of " + P0.length : P0.length) + " strategies", libNone: !!lq && !P.length, libClear: () => this.setState({ libQ: "" }), detRef: this.detRef });
+    const pk = P.find((x) => x.k === st.labPick);
+    const item = (x) => { const need = BT.checkRules(this.specOf(x.k), this.tfOf(x.k)).length, on = pk && x.k === pk.k; return { tfL: tfL(this.tfOf(x.k)), auto: need ? "NOT TESTABLE" : "", name: x.name, fam: x.fam, hold: x.hold, bl: on ? "#5a4a22" : "transparent", bg: on ? "#1a160c" : "transparent", c: on ? "#eef2f4" : need ? "#5f6966" : "#cfd6d3", onClick: () => { this.setState({ labPick: x.k }); setTimeout(() => this.scrollTo(this.detRef.current), 40); } }; };
+    tabs.libNoPick = !pk && !!P.length;
+    tabs.pickList = P.map(item);
+    if (!pk) return { ...tabs, libShowDetail: false, pk: {}, dv: { show: false }, pkF: null };
+    const k = pk.k, needs = this.needsOf(k), isSv = k.startsWith("sv_");
+    return {
+      ...tabs, libShowDetail: true, holdOpts: HOLDS, pkF: this.facts(k), dv: this.resultsVm(k, true),
+      pk: {
+        whatOpen: st.whatOpen === k, whatBg: st.whatOpen === k ? "#2e2614" : "transparent", toggleWhat: () => this.setState({ whatOpen: st.whatOpen === k ? null : k }), whatIn: () => { if (this.state.whatOpen !== k) this.setState({ whatOpen: k }); }, whatOut: () => { if (this.state.whatOpen) this.setState({ whatOpen: null }); },
+        tfL: tfL(this.tfOf(k)).toUpperCase() + " CANDLES", name: pk.name, fam: pk.fam, hold: pk.hold, src: pk.src, what: pk.what || WHAT[k] || pk.src,
+        canSave: false, showFam: !isSv, canDel: isSv, canEdit: true, onEdit: () => this.openEdit(k),
+        canAuto: STRATEGY_LAB_AUTOMATION && !needs.length, onAuto: () => this.setState({ auOpen: k }), autoL: "Automate with broker", autoBd: "#5a4a22", autoC: "#fbefc9",
+        canHold: isSv, noHold: !isSv, onHold: (e) => this.setHold(k, e.target.value),
+        onDel: () => this.setState({ delAsk: k }), delAsk: st.delAsk === k, delIdle: st.delAsk !== k, delNo: () => this.setState({ delAsk: null }), delYes: () => { this.setState({ delAsk: null }); this.delStrategy(k); },
+      },
+    };
+  }
+  autoVals() {
+    // Broker automation is behind STRATEGY_LAB_AUTOMATION (off). Nothing is sent
+    // anywhere; see docs/strategy-lab-automation-todo.md for what's missing.
+    const st = this.state;
+    if (!STRATEGY_LAB_AUTOMATION || !st.auOpen) return { auOpen: false };
+    const x = this.strategyOf(st.auOpen) || {}, close = () => this.setState({ auOpen: null });
+    return { auOpen: true, auName: x.name, auClose: close, stop: (e) => e.stopPropagation(), auBrokers: [], auHasBroker: false, auModes: [], auTypes: [], auSends: [], auSize: "", onAuSize: () => {}, auPayload: "", auMsg: "Broker automation isn't available yet: it needs a server-side OAuth callback, a bar-close signal runner and an order audit log.", auMsgC: "#f08a4b", auIsOn: false, auTest: close, auSave: close, auSaveL: "Close" };
+  }
+  buildVm() {
+    const st = this.state;
+    return {
+      ...this.aiVals(), ...this.pickVals(), ...this.autoVals(),
+      libRef: this.libRef, aiRef: this.aiRef,
+      labS1: !st.rep, labNotS1: !!st.rep, labS3: !!st.rep, labHome: () => { this.setState({ rep: null }); this.scrollTop(); },
+      rep: this.reportVm(), edit: this.editVm(),
+    };
+  }
+  render() {
+    const vm = this.buildVm();
+    return (
+      <div className="sl-root">
+        <style>{BASE_CSS + "\n" + LAB_HOVER_CSS}</style>
+        <div style={{ flex: 1, minWidth: 0, padding: "14px 24px 40px" }}><LabView vm={vm} refs={this.refsObj} /></div>
+        {st_toast(this.state.toast)}
+      </div>
+    );
+  }
+}
+
+function st_toast(t) {
+  return t ? <div style={{ position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", zIndex: 80, background: "#1a1f21", border: "1px solid #2a3235", borderRadius: 10, padding: "10px 16px", fontWeight: 600, boxShadow: "0 10px 30px rgba(0,0,0,.4)" }}>{t}</div> : null;
 }

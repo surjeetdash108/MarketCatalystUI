@@ -1,0 +1,62 @@
+{
+  "symbol": "PLTR",
+  "strategy": "custom",
+  "rules": {
+    "entry": [
+      {
+        "a": {
+          "ind": "rsi",
+          "n": 2
+        },
+        "op": "<",
+        "b": {
+          "ind": "num",
+          "v": 10
+        }
+      },
+      {
+        "a": {
+          "ind": "close"
+        },
+        "op": ">",
+        "b": {
+          "ind": "sma",
+          "n": 200
+        }
+      }
+    ],
+    "exit": [
+      {
+        "a": {
+          "ind": "close"
+        },
+        "op": "crosses above",
+        "b": {
+          "ind": "sma",
+          "n": 5
+        }
+      }
+    ]
+  },
+  "timeframe": "d",
+  "period": {
+    "years": 5
+  },
+  "cfg": {
+    "stop": 0,
+    "stopAtr": null,
+    "tp": null,
+    "tpR": null,
+    "trail": null,
+    "trailAtr": null,
+    "trailAct": null,
+    "trailActR": null,
+    "be": false,
+    "maxBars": null,
+    "costBps": 5,
+    "tf": "d",
+    "intraday": false,
+    "flatEOD": true,
+    "years": 5
+  }
+}

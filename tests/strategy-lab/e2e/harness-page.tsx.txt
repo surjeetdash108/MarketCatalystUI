@@ -1,0 +1,11 @@
+"use client";
+// TEMPORARY verification harness — delete after the Playwright run.
+import StrategyLab from "../iq/sl/lab-controller";
+
+export default function Harness() {
+  return (
+    <div className="sl-main-scroll" style={{ height: "100vh", overflowY: "auto", background: "#08090a" }}>
+      <StrategyLab />
+    </div>
+  );
+}

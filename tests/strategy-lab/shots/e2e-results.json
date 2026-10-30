@@ -1,0 +1,121 @@
+{
+  "results": [
+    {
+      "id": "U1 chip 1",
+      "pass": true,
+      "detail": "rules shown; not-translated=false; run 177 ms"
+    },
+    {
+      "id": "U2 chip 1",
+      "pass": true,
+      "detail": "meta=\"Daily · 5Y · as of Oct 29, 2026 · 0 unavailable · 0 insufficient history\" summary tiles=true rows=50 bars requests=5"
+    },
+    {
+      "id": "U3",
+      "pass": true,
+      "detail": "cols=SIGNAL,STOCK,PRICE,CAGR,B&H CAGR,EXCESS,SHARPE,MAX DD,WIN %,TRADES; 50 rows; sharpe sorted desc=true; live prices=50/50; first rows before sort=LIN LIN Linde plc COST COST Costco MRK MRK Merck & Co."
+    },
+    {
+      "id": "U4",
+      "pass": true,
+      "detail": "PLTR: row CAGR +24.9% vs report CAGR +24.9%; sections=true; evidence params rules+cfg ok=true (stop=0, tp=null, period={\"years\":5}); opened in 50 ms"
+    },
+    {
+      "id": "U7 back",
+      "pass": true,
+      "detail": "← Back to Strategy Lab returns to the results with the run intact"
+    },
+    {
+      "id": "U1 chip 2",
+      "pass": true,
+      "detail": "rules shown; not-translated=false; run 128 ms"
+    },
+    {
+      "id": "U2 chip 2",
+      "pass": true,
+      "detail": "meta=\"Daily · 5Y · as of Oct 29, 2026 · 0 unavailable · 0 insufficient history\" summary tiles=true rows=50 bars requests=5"
+    },
+    {
+      "id": "U1 chip 3",
+      "pass": true,
+      "detail": "rules shown; not-translated=false; run 117 ms"
+    },
+    {
+      "id": "U2 chip 3",
+      "pass": true,
+      "detail": "meta=\"Daily · 5Y · as of Oct 29, 2026 · 0 unavailable · 0 insufficient history\" summary tiles=true rows=50 bars requests=5"
+    },
+    {
+      "id": "U1 chip 4",
+      "pass": true,
+      "detail": "rules shown; not-translated=false; run 127 ms"
+    },
+    {
+      "id": "U2 chip 4",
+      "pass": true,
+      "detail": "meta=\"Daily · 5Y · as of Oct 29, 2026 · 0 unavailable · 0 insufficient history\" summary tiles=true rows=50 bars requests=5"
+    },
+    {
+      "id": "U5",
+      "pass": true,
+      "detail": "run 183 ms, meta=\"Daily · 5Y · as of Oct 29, 2026 · 0 unavailable · 0 insufficient history\"; stale banner=true; trade log has \"Stop loss\"=false"
+    },
+    {
+      "id": "D7/F4 batches",
+      "pass": true,
+      "detail": "variance 54 ms, compare-all 152 ms, both behind buttons"
+    },
+    {
+      "id": "Step 4 matches",
+      "pass": true,
+      "detail": "“See today's matches” returns to the Signal-sorted results"
+    },
+    {
+      "id": "U6",
+      "pass": true,
+      "detail": "weekly 3Y: 50 rows \"Weekly · 3Y · as of Oct 29, 2026 · 0 unavailable · 0 insufficient history\" (123 ms); 1-hour 30D: 50 rows \"1-hour · 1M · as of Oct 30, 2026 10:30 · 0 unavailable · 0 insufficient history\" (52 ms); ORB daily/weekly disabled=true/true; ORB 5-min 21D: 50 rows \"5-min · 21D · as of Oct 30, 2026 11:20 · 0 unavailable · 0 insufficient history\" (210 ms)"
+    },
+    {
+      "id": "D8",
+      "pass": true,
+      "detail": "mom Run disabled=true; reason shown=true"
+    },
+    {
+      "id": "D4/D5",
+      "pass": true,
+      "detail": "saved via account API: 1 doc after saving twice (cfg={\"stopM\":\"atr\",\"stop\":\"8\",\"stopA\":\"2\",\"tpM\":\"r\",\"tp\":\"10\",\"tpR\":\"2\",\"trA\":\"never\",\"trD\":\"5\",\"be\":\"off\",\"maxB\":\"none\",\"cost\":\"10\",\"idays_15m\":\"60\"}); after reload settings restored=true; edit shows identical=true; Save & run 1694 ms"
+    },
+    {
+      "id": "U8",
+      "pass": true,
+      "detail": "error shown=true; percent numbers in panel=0"
+    },
+    {
+      "id": "U9",
+      "pass": true,
+      "detail": "no Automate button / badges with the flag off"
+    },
+    {
+      "id": "U10",
+      "pass": true,
+      "detail": "no hard-coded period / candle copy"
+    }
+  ],
+  "errors": [],
+  "timings": {
+    "chip1": 385,
+    "reportOpen": 50,
+    "chip1Warm": 85,
+    "chip2": 316,
+    "chip3": 309,
+    "chip4": 289,
+    "turtleDaily5Y": 183,
+    "weekly3Y": 123,
+    "hour30D": 52,
+    "orb5m21D": 210
+  },
+  "longTasks": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+  ]
+}
