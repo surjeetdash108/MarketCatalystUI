@@ -1643,7 +1643,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     that open in a new tab rather than router navigations, and a
                     signed-in reader keeps their session here. */}
                 <nav className="disclaimer-links">
-                  <a href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">Research</a>
+                  <a href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">Resources</a>
                   <a href="https://marketcatalyst.ai/faqs" target="_blank" rel="noopener noreferrer">FAQs</a>
                 </nav>
               </footer>
