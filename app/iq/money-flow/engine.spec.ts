@@ -10,6 +10,12 @@ import {
   formatMarketCap,
   formatPct,
   indexCard,
+  popoverChartWidth,
+  popoverLiveScroll,
+  popoverPlacement,
+  popoverScale,
+  popoverStats,
+  POPOVER,
   sectorNotOnBoardText,
   sectorView,
   sessionCandles,
@@ -124,5 +130,80 @@ describe("Money Flow view helpers", () => {
   it("ET clock is DST-aware (EST from Nov 1, 2026)", () => {
     assert.deepStrictEqual(etClock(Date.parse("2026-11-02T14:30:00Z")), { date: "2026-11-02", minutes: 570 });
     assert.deepStrictEqual(etClock(Date.parse("2026-10-29T13:30:00Z")), { date: "2026-10-29", minutes: 570 });
+  });
+});
+
+describe("Money Flow hover box", () => {
+  const val = (stats: ReturnType<typeof popoverStats>, k: string) => stats.find((x) => x.k === k)?.v;
+
+  it("bullish stock: rank on its side, flow in shares vs VWAP, entry/stop and R1/R2", () => {
+    const s = board.gainers[0]; // CVNA 68.73, entry 68.07, VWAP 67.85
+    const st = popoverStats(s, board);
+    assert.deepStrictEqual(st.map((x) => x.k), [
+      "Confidence", "Setup", "Rank", "Vol", "Δ", "VWAP", "OB", "Entry/Stop", "R1/R2", "R:R", "Rule",
+    ]);
+    assert.strictEqual(val(st, "Confidence"), "84");
+    assert.strictEqual(val(st, "Setup"), "Bullish");
+    assert.strictEqual(val(st, "Rank"), `#1 / ${board.gainers.length} gainers`);
+    assert.strictEqual(val(st, "Vol"), "2.6× · 62% buy");
+    assert.strictEqual(val(st, "Δ"), "+3.1M · ▲ above VWAP");
+    assert.strictEqual(val(st, "VWAP"), "67.85");
+    assert.strictEqual(val(st, "OB"), "67.81–68.07");
+    assert.strictEqual(val(st, "Entry/Stop"), "68.07 · 67.81");
+    assert.strictEqual(val(st, "R1/R2"), "60.35 · 61.66");
+    assert.strictEqual(val(st, "R:R"), "—");
+    assert.strictEqual(val(st, "Rule"), "PICK · BULLISH #1"); // 0.96% from entry
+  });
+
+  it("bearish stock uses S1/S2, net selling and WATCH when price is over 1.2% from entry", () => {
+    const now = popoverStats(board.losers[0], board); // NOW −$1.74B at 110.65
+    assert.strictEqual(val(now, "Rank"), `#1 / ${board.losers.length} losers`);
+    assert.strictEqual(val(now, "Δ"), "−16M · ▼ below VWAP");
+    assert.strictEqual(val(now, "S1/S2"), "147.18 · 144.24");
+    assert.strictEqual(val(now, "Rule"), "PICK · BEARISH #1");
+    const alny = popoverStats(board.losers[1], board); // 172.84 vs entry 175.56 = 1.57%
+    assert.strictEqual(val(alny, "Rule"), "WATCH · BEARISH #2");
+  });
+
+  it("choppy or zone-less stocks have no setup", () => {
+    const s = board.gainers[0];
+    assert.strictEqual(val(popoverStats({ ...s, chop: true }, board), "Rule"), "NO SETUP");
+    assert.strictEqual(val(popoverStats({ ...s, chop: true }, board), "Setup"), "Choppy");
+    const bare = { ...s, zone: null, entry: null, stop: null, vwap: null, rvol: null, buyPct: null };
+    const st = popoverStats(bare, board);
+    assert.strictEqual(val(st, "Rule"), "NO SETUP");
+    assert.strictEqual(val(st, "OB"), "—");
+    assert.strictEqual(val(st, "Vol"), "— · — buy");
+    assert.strictEqual(val(st, "VWAP"), "—");
+  });
+
+  it("scales with the window, keeping the box's proportions", () => {
+    assert.strictEqual(popoverScale(POPOVER.baseW, POPOVER.baseH), 1);
+    assert.strictEqual(popoverScale(1440, 900), 0.75);
+    assert.strictEqual(popoverScale(960, 480), 0.5);
+    assert.strictEqual(popoverScale(2560, 1600), 4 / 3);
+    assert.strictEqual(popoverScale(390, 844), (390 - 24) / POPOVER.w); // phone: fit the width
+  });
+
+  it("sits beside the tile, never on it, and stays on screen", () => {
+    const right = popoverPlacement({ left: 1500, right: 1620, top: 250 }, 1920, 960, 1, 780);
+    assert.strictEqual(right.left, 1500 - POPOVER.w - 12);
+    assert.strictEqual(right.top, 250 - 120);
+    const left = popoverPlacement({ left: 300, right: 420, top: 900 }, 1920, 960, 1, 780);
+    assert.strictEqual(left.left, 432);
+    assert.strictEqual(left.top, 960 - 780 - 8);
+    const half = popoverPlacement({ left: 750, right: 810, top: 450 }, 960, 480, 0.5, 390);
+    assert.strictEqual(half.left, 750 - POPOVER.w * 0.5 - 12);
+    assert.strictEqual(half.top, 480 - 390 - 8);
+  });
+
+  it("chart width gives each timeframe readable candles and opens on the live one", () => {
+    assert.strictEqual(popoverChartWidth(5), 79 * 8 + 78);
+    assert.strictEqual(popoverChartWidth(15), 27 * 16 + 78);
+    assert.strictEqual(popoverChartWidth(1), 391 * 5 + 78);
+    const W = popoverChartWidth(5);
+    const x = popoverLiveScroll(W, 5, 50, 430);
+    assert.strictEqual(x, Math.max(0, 6 + 49.5 * ((W - 78) / 79) - 430 * 0.75));
+    assert.strictEqual(popoverLiveScroll(W, 5, 0, 430), 0);
   });
 });

@@ -470,3 +470,119 @@ export function computeSquarifiedTiles(items: BoardStock[], bull: boolean): Tile
     };
   });
 }
+
+// ── Hover box ───────────────────────────────────────────────────────────────
+
+/**
+ * Hover box design size. It is laid out at this size for a `baseW × baseH`
+ * window and scaled by the window, so it keeps its proportions on any screen.
+ */
+export const POPOVER = { w: 460, chartH: 440, baseW: 1920, baseH: 960 } as const;
+
+/** A zone entry further than this from price is a WATCH, not a PICK. */
+export const WATCH_DIST_PCT = 1.2;
+
+export type PopTone = "up" | "down" | "zone" | "muted" | "plain";
+export interface PopStat {
+  k: string;
+  v: string;
+  tone: PopTone;
+  bold?: boolean;
+}
+
+/** Signed share count: +280K, +3.1M, −16M. */
+function formatShares(n: number): string {
+  const a = Math.abs(n);
+  const s = n >= 0 ? "+" : "−";
+  if (a >= 1e7) return `${s}${Math.round(a / 1e6)}M`;
+  if (a >= 1e6) return `${s}${(a / 1e6).toFixed(1)}M`;
+  return `${s}${Math.round(a / 1e3)}K`;
+}
+
+/** The hover box's stats, in two-column order, from the board's own fields. */
+export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers" | "losers">): PopStat[] {
+  const onGainers = board.gainers.some((g) => g.t === s.t);
+  const bull = onGainers || (!board.losers.some((l) => l.t === s.t) && s.pctChange >= 0);
+  const side = bull ? board.gainers : board.losers;
+  const i = side.findIndex((x) => x.t === s.t);
+  const rank = i >= 0 ? `#${i + 1}` : "#—";
+  const dir: PopTone = bull ? "up" : "down";
+  const above = s.vwap != null ? s.price > s.vwap : null;
+  const flow =
+    s.price > 0
+      ? `${formatShares(s.netFlow / s.price)}${above == null ? "" : above ? " · ▲ above VWAP" : " · ▼ below VWAP"}`
+      : "—";
+  const pv = s.pivots;
+  const noSetup = s.chop || s.entry == null;
+  const dist = s.entry != null && s.price > 0 ? (Math.abs(s.price - s.entry) / s.price) * 100 : null;
+  const rule = noSetup
+    ? "NO SETUP"
+    : `${dist != null && dist > WATCH_DIST_PCT ? "WATCH" : "PICK"} · ${bull ? "BULLISH" : "BEARISH"}${i >= 0 ? ` #${i + 1}` : ""}`;
+  return [
+    { k: "Confidence", v: s.confidence ? String(s.confidence.score) : "—", tone: dir, bold: true },
+    { k: "Setup", v: s.chop ? "Choppy" : bull ? "Bullish" : "Bearish", tone: s.chop ? "muted" : dir },
+    { k: "Rank", v: `${rank} / ${side.length} ${bull ? "gainers" : "losers"}`, tone: "plain" },
+    {
+      k: "Vol",
+      v: `${s.rvol == null ? "—" : `${s.rvol.toFixed(1)}×`} · ${s.buyPct == null ? "—" : `${Math.round(s.buyPct)}%`} buy`,
+      tone: "plain",
+    },
+    { k: "Δ", v: flow, tone: s.netFlow >= 0 ? "up" : "down" },
+    { k: "VWAP", v: formatLevel(s.vwap), tone: "plain" },
+    { k: "OB", v: s.zone ? `${formatLevel(s.zone.lo)}–${formatLevel(s.zone.hi)}` : "—", tone: "zone" },
+    { k: "Entry/Stop", v: `${formatLevel(s.entry)} · ${formatLevel(s.stop)}`, tone: "zone" },
+    bull
+      ? { k: "R1/R2", v: `${formatLevel(pv?.r1)} · ${formatLevel(pv?.r2)}`, tone: "up" }
+      : { k: "S1/S2", v: `${formatLevel(pv?.s1)} · ${formatLevel(pv?.s2)}`, tone: "down" },
+    { k: "R:R", v: s.rr == null ? "—" : `1 : ${s.rr.toFixed(1)}`, tone: "plain" },
+    { k: "Rule", v: rule, tone: noSetup ? "muted" : dir, bold: true },
+  ];
+}
+
+/** Scale for the window; phones fit the box to their width instead. */
+export function popoverScale(vw: number, vh: number): number {
+  if (vw < 768) return Math.min(1, (vw - 24) / POPOVER.w);
+  return Math.min(vw / POPOVER.baseW, vh / POPOVER.baseH);
+}
+
+/**
+ * Screen position for the scaled box (height `h`, already scaled): right of
+ * the tile when it fits, otherwise left of it, a little above the tile's top
+ * and inside the window.
+ */
+export function popoverPlacement(
+  tile: { left: number; right: number; top: number },
+  vw: number,
+  vh: number,
+  scale: number,
+  h: number,
+): { left: number; top: number } {
+  const w = POPOVER.w * scale;
+  const left =
+    vw < 768
+      ? Math.max(8, (vw - w) / 2)
+      : tile.right + w + 16 < vw
+        ? tile.right + 12
+        : Math.max(8, tile.left - w - 12);
+  const top = Math.max(8, Math.min(vh - h - 8, tile.top - 120 * scale));
+  return { left, top };
+}
+
+/** Candle width per timeframe, px. */
+const POP_CANDLE_PX: Record<number, number> = { 1: 5, 3: 7, 5: 8, 15: 16 };
+/** FullChartSvg's left + right padding. */
+const POP_CHART_PAD = 78;
+
+/** The chart is a full session wide at a readable candle width; it scrolls. */
+export function popoverChartWidth(tf: number): number {
+  const nb = Math.round(390 / tf) + 1;
+  return Math.max(430, nb * (POP_CANDLE_PX[tf] ?? 8) + POP_CHART_PAD);
+}
+
+/** scrollLeft that puts the live candle three quarters across the view. */
+export function popoverLiveScroll(width: number, tf: number, nCandles: number, viewW: number): number {
+  if (nCandles <= 0) return 0;
+  const nb = Math.round(390 / tf) + 1;
+  const cw = (width - POP_CHART_PAD) / nb;
+  return Math.max(0, 6 + (nCandles - 0.5) * cw - viewW * 0.75);
+}
