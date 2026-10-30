@@ -6,6 +6,7 @@ import { firebaseAuth } from "../firebase";
 import { apiGet, apiPost, apiPatch, apiDelete, apiUpload } from "../iq/backend";
 import { buildAdminDataset, fetchAdminBlogs, ADMIN_DATA_KEY, ADMIN_EMAIL } from "./admin-data";
 import type { ConsoleBlogRow } from "./admin-data";
+import { createOpsBridge, isOpsMessage } from "./admin-ops-bridge";
 
 /**
  * Admin console gate. The console itself is the exact static HTML at
@@ -81,8 +82,23 @@ export function AdminConsole() {
 
   // Bridge: handle logout / password-change coming from the iframe.
   useEffect(() => {
+    // Jobs and API Docs tabs. Replies go to our own origin only, not "*".
+    const ops = createOpsBridge({
+      get: apiGet,
+      post: apiPost,
+      reply: (m) => iframeRef.current?.contentWindow?.postMessage(m, window.location.origin),
+    });
     const onMsg = async (e: MessageEvent) => {
       const d = e.data || {};
+      if (isOpsMessage(d.type)) {
+        // These can start a production job or fire a burst of authenticated
+        // reads, so unlike the handlers below they act only for the console
+        // iframe itself. Any other window holding a reference to this one (an
+        // opener, say) can post a message but is not allowed to cause these.
+        if (e.source !== iframeRef.current?.contentWindow || e.origin !== window.location.origin) return;
+        await ops(d);
+        return;
+      }
       if (d.type === "admin:logout") {
         delete (window as unknown as { __ADMIN_DATA__?: unknown }).__ADMIN_DATA__;
         sessionStorage.removeItem(ADMIN_DATA_KEY);
