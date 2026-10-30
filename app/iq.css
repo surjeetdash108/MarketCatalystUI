@@ -13740,9 +13740,10 @@ h6.sd-sec {
   color: var(--text-hi);
   cursor: pointer;
   box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
-  transition: left .3s cubic-bezier(.65, 0, .35, 1), border-radius .3s, color .18s, border-color .18s;
+  /* No `left`/transform transition: the grid areas swap instantly on collapse (they
+     can't animate), so an animated `left` made the arrow lag behind the layout. */
+  transition: color .18s, border-color .18s;
 }
-.iq-root .nav-float-toggle svg { transition: transform .3s cubic-bezier(.65, 0, .35, 1); }
 .iq-root .nav-float-toggle:hover { color: var(--brand); border-color: var(--brand); }
 .iq-root .app.nav-collapsed .nav-float-toggle { left: calc(3.875rem - 12px); }
 .iq-root .app.nav-collapsed .nav-float-toggle svg { transform: rotate(180deg); }
