@@ -2,6 +2,14 @@
 # Regenerate Strategy Lab (app/iq/sl/{engine.js,lab-view.jsx,lab-controller.jsx})
 # from the prototype HTML at the repo root. Run from MarketCatalystUI/.
 set -euo pipefail
+# RETIRED: the prototype HTML this reads is no longer in the workspace, and the
+# port in app/iq/sl/ is now maintained by hand (engine fixes, results panel,
+# saved strategies). Regenerating would overwrite that work. To copy the engine
+# to the backend use scripts/strategy-lab/sync-engine.sh.
+if [ "${STRATEGY_LAB_FORCE_REGENERATE:-}" != "1" ]; then
+  echo "build.sh is retired (see header). Use sync-engine.sh for the backend engine copy." >&2
+  exit 1
+fi
 HTML="${1:-../Strategy AI Lab - MarketCatalyst.html}"
 WORK="$(mktemp -d)"
 DIR="$(cd "$(dirname "$0")" && pwd)"

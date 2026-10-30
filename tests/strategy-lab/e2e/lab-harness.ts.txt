@@ -1,0 +1,45 @@
+// TEMPORARY verification harness (not committed): serves the Strategy Lab
+// endpoints on :4400 with REAL FMP data through the backend's own services,
+// without auth, so the UI can be driven in a local browser.
+import "dotenv/config";
+import * as http from "http";
+import { ConfigService } from "@nestjs/config";
+import { FmpService } from "../src/vendors/fmp/fmp.service";
+import { StrategyLabService } from "../src/live/strategy-lab.service";
+import { validateSaved } from "../src/live/strategy-lab.controller";
+
+const config = new ConfigService(process.env);
+const fmp = new FmpService(config);
+const lab = new StrategyLabService(fmp, { enabled: false } as never);
+const saved = new Map<string, Record<string, unknown>>();
+let failBars = false;
+const send = (res: http.ServerResponse, code: number, body: unknown) => {
+  res.writeHead(code, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,DELETE,PATCH,OPTIONS" });
+  res.end(JSON.stringify(body));
+};
+const log: string[] = [];
+http.createServer(async (req, res) => {
+  if (req.method === "OPTIONS") return send(res, 204, {});
+  const u = new URL(req.url ?? "/", "http://x"), p = u.pathname;
+  log.push(`${req.method} ${p}${u.search}`);
+  let body: any = null;
+  if (req.method === "POST") { const chunks: Buffer[] = []; for await (const c of req) chunks.push(c as Buffer); try { body = JSON.parse(Buffer.concat(chunks).toString() || "null"); } catch { body = null; } }
+  try {
+    if (p === "/__fail") { failBars = u.searchParams.get("on") === "1"; return send(res, 200, { failBars }); }
+    if (p === "/__log") return send(res, 200, log.splice(0));
+    if (p === "/live/strategy-lab/universe") return send(res, 200, await lab.universe());
+    if (p === "/live/strategy-lab/bars") {
+      if (failBars) return send(res, 500, { statusCode: 500, message: "Data provider unavailable (harness)" });
+      const syms = (u.searchParams.get("symbols") ?? "").split(",").filter(Boolean), tf = u.searchParams.get("tf") ?? "d", days = Number(u.searchParams.get("days"));
+      return send(res, 200, await lab.bars(syms, tf, { days }));
+    }
+    if (p === "/live/strategy-lab/ai-rules") return send(res, 200, { raw: null });
+    if (p === "/live/strategy-lab/saved" && req.method === "GET") return send(res, 200, { strategies: [...saved.entries()].map(([id, d]) => ({ id, ...d })) });
+    const m = p.match(/^\/live\/strategy-lab\/saved\/([a-z0-9]{4,24})$/);
+    if (m && req.method === "POST") { const doc = validateSaved(body), now = new Date().toISOString(); const prev = saved.get(m[1]); const d = { ...doc, savedAt: (prev?.savedAt as string) ?? now, updatedAt: now }; saved.set(m[1], d); return send(res, 200, { id: m[1], ...d }); }
+    if (m && req.method === "DELETE") { saved.delete(m[1]); return send(res, 200, { id: m[1], deleted: true }); }
+    if (p === "/live/snapshot") { const t = (u.searchParams.get("tickers") ?? "").split(",").filter(Boolean); const q = await fmp.getQuotes(t.map((x) => x.replace(/\.([A-Z])$/, "-$1"))); return send(res, 200, { quotes: q.map((x) => ({ ticker: x.symbol.replace(/-([A-Z])$/, ".$1"), price: x.price })) }); }
+    if (p === "/live/market-status") return send(res, 200, { phase: "open", label: "Market open" });
+    return send(res, 404, { statusCode: 404, message: "not in harness: " + p });
+  } catch (e) { return send(res, (e as { status?: number }).status ?? 500, { message: (e as Error).message }); }
+}).listen(4400, () => console.log("lab harness on :4400"));
