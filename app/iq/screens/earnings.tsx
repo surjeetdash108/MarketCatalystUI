@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useIQActions, ExpandBtn } from "../shell";
-import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
+import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useShowVendorTags, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
 import { StockScreenEmbed } from "../stock-panel";
 import { useApiList } from "../hooks/useApiList";
@@ -47,6 +47,8 @@ interface EarnCalItem {
   guideRange: string | null;
   /** The sentence the direction came from — shown as the cell's tooltip. */
   guideSnippet: string | null;
+  /** The release talked about guidance, even if it gave no direction or range. */
+  guideMentioned: boolean;
   react: number | null;
 }
 
@@ -72,6 +74,7 @@ function toEarnCalItem(d: LiveEarningsDoc): EarnCalItem {
     guide: null,
     guideRange: null,
     guideSnippet: null,
+    guideMentioned: false,
     react: null,
   };
 }
@@ -1006,21 +1009,31 @@ const SESSION_QUOTE_CAP = 120;
 
 /** One row of the at-a-glance snapshot — the Earnings-Hub "results" layout:
  *  actual vs consensus EPS + surprise, revenue actual/consensus, and the
- *  same-quarter-a-year-ago comparables. Everything comes from Polygon + FMP;
- *  Guidance is intentionally absent (no vendor feed for it). */
+ *  same-quarter-a-year-ago comparables. EPS / revenue come from Polygon + FMP;
+ *  Guidance comes from the company's own 8-K press release (EDGAR
+ *  earnings_announcements feed), not a market-data vendor. */
 /**
  * Guidance the company issued in its own 8-K press release — NOT analyst
  * consensus, and not derived from news headlines (measured: 22 guidance
  * headlines per month across the whole feed, most misattributed by Polygon's
- * multi-ticker tagging). A dash means the release did not state a direction,
- * which is the honest answer for roughly half of reporters.
+ * multi-ticker tagging). Raised / Cut / Mixed / Reaffirmed when the release
+ * says which way it moved; the stated range when only a range was given;
+ * "Provided" when guidance was mentioned with no direction or range. A dash
+ * means no filing for this reporting date carries guidance (an upcoming
+ * reporter has no 8-K yet — the previous quarter's is deliberately not shown).
  */
 function GuidanceCell({ it }: { it: EarnCalItem }) {
   if (!it.guide) {
     // A stored range with no direction still tells the reader something.
-    return it.guideRange
-      ? <span style={{ color: "var(--text-dim-solid)" }} title={`Guidance issued: ${it.guideRange}`}>{it.guideRange}</span>
-      : <span style={{ color: "var(--text-dim-solid)" }}>—</span>;
+    if (it.guideRange) {
+      return <span style={{ color: "var(--text-dim-solid)" }} title={`Guidance issued: ${it.guideRange}`}>{it.guideRange}</span>;
+    }
+    // Guidance was in the release but it never said which way it moved (real
+    // for ~44% of filings) — say so rather than showing it as missing data.
+    if (it.guideMentioned || it.guideSnippet) {
+      return <span style={{ color: "var(--text-dim-solid)" }} title={it.guideSnippet ?? "Guidance provided in the earnings release"}>Provided</span>;
+    }
+    return <span style={{ color: "var(--text-dim-solid)" }}>—</span>;
   }
   const label = { raised: "Raised", cut: "Cut", mixed: "Mixed", reaffirmed: "Reaffirmed" }[it.guide];
   const arrow = it.guide === "raised" ? "\u25B2" : it.guide === "cut" ? "\u25BC" : "";
@@ -1171,8 +1184,10 @@ function GlanceQuarters({ ticker, colSpan }: { ticker: string; colSpan: number }
 }
 
 function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: EarnCalItem; showDate: boolean; onSelect: (s: string, date: string) => void; colSpan: number; prePct: number | null; postPct: number | null }) {
+  const epsPct = surprise(it.epsAYearAgo, it.epsA);   // YoY EPS growth: (eps - yearAgo)/|yearAgo|
+  const salesPct = surprise(it.revYearAgo, it.revA);  // YoY sales growth
   const epsSurp = surprise(it.epsE, it.epsA);
-  const yoyRev = surprise(it.revYearAgo, it.revA); // (rev - yearAgo)/|yearAgo|
+  const salesSurp = surprise(it.revE, it.revA);
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -1200,13 +1215,14 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
         </div>
       </td>
       {showDate && <td className="r ecal-num" style={{ whiteSpace: "nowrap", color: "var(--text-dim-solid)" }}>{it.date ? it.date.slice(5) : "—"}</td>}
-      <td className={`r ecal-num ${fmtUpDn(epsSurp)}`}>{fmtPctSigned(epsSurp)}</td>
+      <td className={`r ecal-num ${fmtUpDn(epsPct)}`}>{fmtPctSigned(epsPct, 1)}</td>
+      <td className={`r ecal-num ${fmtUpDn(salesPct)}`}>{fmtPctSigned(salesPct, 1)}</td>
+      <td className={`r ecal-num ${fmtUpDn(epsSurp)}`}>{fmtPctSigned(epsSurp, 1)}</td>
+      <td className={`r ecal-num ${fmtUpDn(salesSurp)}`}>{fmtPctSigned(salesSurp, 1)}</td>
       <td className="r ecal-num">{it.epsA != null ? `$${it.epsA.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{it.epsE != null ? `$${it.epsE.toFixed(2)}` : "—"}</td>
-      <td className="r ecal-num" style={{ color: "var(--text-dim-solid)" }}>{it.epsAYearAgo != null ? `$${it.epsAYearAgo.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{fmtRev(it.revA)}</td>
       <td className="r ecal-num">{fmtRev(it.revE)}</td>
-      <td className={`r ecal-num ${fmtUpDn(yoyRev)}`}>{fmtPctSigned(yoyRev)}</td>
       {/* Today's pre-market move. The vendor keeps this populated through the
           regular session rather than clearing it at the open — measured with the
           market open, AAPL read 0.047, DELL 0.399, MDB -2.20 — so the column
@@ -1226,39 +1242,78 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
 }
 
 type GlanceSortKey =
-  | "company" | "date" | "surprise" | "actual" | "consensus"
-  | "yearAgo" | "actualRev" | "consRev" | "yoyRev" | "guidance";
+  | "company" | "date" | "epsPct" | "salesPct" | "epsSurp" | "salesSurp"
+  | "actual" | "consensus" | "actualRev" | "consRev" | "guidance";
 
 /** Direction a column starts in on first click — text ascends (A→Z), numbers
  *  and dates descend (biggest / most recent first). Mirrors movers.tsx. */
 const GLANCE_FIRST_DIR: Record<GlanceSortKey, "asc" | "desc"> = {
-  company: "asc", date: "desc", surprise: "desc", actual: "desc",
-  consensus: "desc", yearAgo: "desc", actualRev: "desc", consRev: "desc",
-  yoyRev: "desc", guidance: "desc",
+  company: "asc", date: "desc", epsPct: "desc", salesPct: "desc",
+  epsSurp: "desc", salesSurp: "desc", actual: "desc",
+  consensus: "desc", actualRev: "desc", consRev: "desc",
+  guidance: "desc",
 };
 
 /** Guidance ordered by how favourable it is, so a descending sort surfaces
- *  raises first and cuts last. A range with no stated direction ranks above
- *  nothing at all; a blank cell has no value and sorts to the end either way. */
+ *  raises first and cuts last. A range / "Provided" with no stated direction
+ *  ranks above nothing at all; a blank cell has no value and sorts to the end
+ *  either way. */
 const GUIDANCE_RANK: Record<string, number> = {
   raised: 5, reaffirmed: 4, mixed: 3, cut: 2,
 };
 function guidanceValue(it: EarnCalItem): number | null {
   if (it.guide) return GUIDANCE_RANK[it.guide] ?? null;
-  return it.guideRange ? 1 : null;
+  return it.guideRange || it.guideMentioned || it.guideSnippet ? 1 : null;
+}
+
+/** An 8-K can land a day or two off the calendar's reporting date (after-close
+ *  reports filed the next morning, weekends). Within this many days counts as
+ *  the same report; further out it is a different quarter. */
+const GUIDANCE_MATCH_DAYS = 3;
+
+function isoDayNumber(iso: string): number {
+  return Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86_400_000;
+}
+
+function hasGuidanceInfo(a: EarningsAnnouncementDoc): boolean {
+  return !!(a.guidanceDirection || a.guidanceRange || a.guidanceSnippet || a.guidanceMentioned);
+}
+
+/** The announcement for one ticker nearest to a calendar reporting date, within
+ *  ±GUIDANCE_MATCH_DAYS — or null. Null is deliberate for an upcoming report
+ *  that has no 8-K yet: the feed still holds the PREVIOUS quarter's filing for
+ *  that ticker, and showing its Raised/Cut as this quarter's would be wrong. */
+function nearestAnnouncement(
+  list: EarningsAnnouncementDoc[] | undefined,
+  date: string,
+): EarningsAnnouncementDoc | null {
+  if (!list) return null;
+  const target = isoDayNumber(date);
+  let best: EarningsAnnouncementDoc | null = null;
+  let bestGap = Infinity;
+  for (const a of list) {
+    const gap = Math.abs(isoDayNumber(a.announceDate) - target);
+    if (!(gap <= GUIDANCE_MATCH_DAYS)) continue; // also drops NaN (unparseable dates)
+    if (gap < bestGap || (gap === bestGap && best && hasGuidanceInfo(a) && !hasGuidanceInfo(best))) {
+      best = a;
+      bestGap = gap;
+    }
+  }
+  return best;
 }
 
 function glanceValue(it: EarnCalItem, k: GlanceSortKey): number | string | null {
   switch (k) {
     case "company":   return it.s;
     case "date":      return it.date || null;
-    case "surprise":  return surprise(it.epsE, it.epsA);
+    case "epsPct":    return surprise(it.epsAYearAgo, it.epsA);
+    case "salesPct":  return surprise(it.revYearAgo, it.revA);
+    case "epsSurp":   return surprise(it.epsE, it.epsA);
+    case "salesSurp": return surprise(it.revE, it.revA);
     case "actual":    return it.epsA;
     case "consensus": return it.epsE;
-    case "yearAgo":   return it.epsAYearAgo;
     case "actualRev": return it.revA;
     case "consRev":   return it.revE;
-    case "yoyRev":    return surprise(it.revYearAgo, it.revA);
     case "guidance":  return guidanceValue(it);
   }
 }
@@ -1277,6 +1332,7 @@ function compareGlance(a: EarnCalItem, b: EarnCalItem, k: GlanceSortKey, dir: 1 
 }
 
 function GlanceTable({ title, items, showDate, onSelect }: { title: string; items: EarnCalItem[]; showDate: boolean; onSelect: (s: string, date: string) => void }) {
+  const showVendor = useShowVendorTags();
   const [expanded, setExpanded] = useState(false);
   const [sortKey, setSortKey] = useState<GlanceSortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -1312,10 +1368,10 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
     : items;
   const shown = expanded ? ordered : ordered.slice(0, GLANCE_MAX);
   const canExpand = items.length > GLANCE_MAX;
-  // Company, Surprise, Actual, Consensus, 1 Yr Ago, Actual Rev, Cons. Rev,
-  // Yr/Yr Rev, Guidance — plus Date when it is shown. Kept next to the header
-  // it counts so the two move together.
-  const colCount = 11 + (showDate ? 1 : 0);
+  // Company, EPS %, Sales %, EPS Surp, Sales Surp, Actual, Consensus, Actual
+  // Rev, Cons. Rev, Pre-market, Post-market, Guidance — plus Date when it is
+  // shown. Kept next to the header it counts so the two move together.
+  const colCount = 12 + (showDate ? 1 : 0);
 
   // PRE-MARKET reaction for the rows on screen. Uses the app-wide shared poll,
   // so a ticker here reads exactly as it does on the movers board and drawer.
@@ -1337,15 +1393,16 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
             <tr>
               {sortTh("company", "Company", false)}
               {showDate && sortTh("date", "Date")}
-              {sortTh("surprise", "Surprise")}
+              {sortTh("epsPct", "EPS %")}
+              {sortTh("salesPct", "Sales %")}
+              {sortTh("epsSurp", "EPS Surp")}
+              {sortTh("salesSurp", "Sales Surp")}
               {sortTh("actual", "Actual")}
               {sortTh("consensus", "Consensus")}
-              {sortTh("yearAgo", "1 Yr Ago")}
               {sortTh("actualRev", "Actual Rev")}
               {sortTh("consRev", "Cons. Rev")}
-              {sortTh("yoyRev", "Yr/Yr Rev")}
               <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-market</th>
-              <th className="r" title="After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close.">Post-market</th>
+              <th className="r" title={showVendor ? "After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close." : "After-hours move (16:00–20:00 ET): latest extended-hours trade vs the regular-session close."}>Post-market</th>
               {sortTh("guidance", "Guidance")}
             </tr>
           </thead>
@@ -1386,7 +1443,7 @@ export function EarningsScreen() {
   const { data: analystActions } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const liveEarningsData = liveEarnings;
 
-  const [mode, setMode]     = useState<"week" | "month">("month");
+  const [mode, setMode]     = useState<"day" | "week" | "month">("month");
   const [anchor, setAnchor] = useState<string>(() => etTodayIso());
   // At-a-glance snapshot: a Nasdaq-style results table (actual vs consensus,
   // surprise, revenue, year-ago) for the selected day/week/month, toggled from
@@ -1446,13 +1503,17 @@ export function EarningsScreen() {
    * rather than being placed on a coin-flip.
    */
   const annUsualSession = new Map<string, "BMO" | "AMC">();
-  // Guidance rides the same 8-K feed and the same ticker|date key as session.
-  const annGuidanceByKey = new Map<string, EarningsAnnouncementDoc>();
+  // Guidance rides the same 8-K feed, but is joined by ticker + NEAREST date
+  // (±GUIDANCE_MATCH_DAYS) rather than an exact ticker|date key — an after-close
+  // report is often filed the next day, so the exact join missed it and the cell
+  // showed empty.
+  const annByTicker = new Map<string, EarningsAnnouncementDoc[]>();
   for (const a of earningsAnnouncements) {
     if (a.session === "BMO" || a.session === "AMC") {
       annSessionByKey.set(`${a.ticker}|${a.announceDate}`, a.session);
     }
-    annGuidanceByKey.set(`${a.ticker}|${a.announceDate}`, a);
+    const list = annByTicker.get(a.ticker);
+    if (list) list.push(a); else annByTicker.set(a.ticker, [a]);
   }
   {
     const tally = new Map<string, { BMO: number; AMC: number }>();
@@ -1472,11 +1533,17 @@ export function EarningsScreen() {
   // Rows dated after today cannot be classified by their move — see
   // inferredSession. Computed once so every consumer agrees on "today".
   const todayIso = etTodayIso();
+  // The calendar has no Sat/Sun, so on a weekend "Today" lands on the next Monday.
+  const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
+  const todayIsWeekend = todayDow === 0 || todayDow === 6;
+  const todayTradingIso = todayIsWeekend ? isoDay(addDays(new Date(`${todayIso}T00:00:00Z`), todayDow === 6 ? 2 : 1)) : todayIso;
   const dayRows = rowsForDate(anchor, liveEarningsData).map(toCalRow);
   const glanceRaw: EarnCalItem[] =
     mode === "month"
       ? liveEarningsData.filter(d => d.date.slice(0, 7) === anchor.slice(0, 7)).map(toEarnCalItem)
-      : weekDays5.flatMap(iso => rowsForDate(iso, liveEarningsData));
+      : mode === "day"
+        ? rowsForDate(anchor, liveEarningsData)
+        : weekDays5.flatMap(iso => rowsForDate(iso, liveEarningsData));
 
   // Quotes for every reporter ON SCREEN, so a row can be placed by where its
   // move landed.
@@ -1522,9 +1589,17 @@ export function EarningsScreen() {
         ?? null,
     }))
     .map(it => {
-      const a = annGuidanceByKey.get(`${it.s}|${it.date}`);
+      // No filing within the window (e.g. an upcoming report) -> leave guidance
+      // empty; the previous quarter's direction must not pass as this one's.
+      const a = nearestAnnouncement(annByTicker.get(it.s), it.date);
       return a
-        ? { ...it, guide: a.guidanceDirection ?? null, guideRange: a.guidanceRange ?? null, guideSnippet: a.guidanceSnippet ?? null }
+        ? {
+            ...it,
+            guide: a.guidanceDirection ?? null,
+            guideRange: a.guidanceRange ?? null,
+            guideSnippet: a.guidanceSnippet ?? null,
+            guideMentioned: a.guidanceMentioned ?? false,
+          }
         : it;
     })
     .filter(it => session === "both" || it.sess === session)
@@ -1559,6 +1634,11 @@ export function EarningsScreen() {
   const step = (dir: 1 | -1) => {
     if (mode === "month") {
       goToDate(isoDay(new Date(Date.UTC(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth() + dir, 1))));
+    } else if (mode === "day") {
+      // Step weekday to weekday — the calendar has no Sat/Sun.
+      let d = addDays(anchorDate, dir);
+      while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d = addDays(d, dir);
+      goToDate(isoDay(d));
     } else {
       goToDate(isoDay(addDays(anchorDate, dir * 7)));
     }
@@ -1569,7 +1649,40 @@ export function EarningsScreen() {
 
   let calNode: React.ReactNode;
 
-  if (mode === "week") {
+  if (mode === "day") {
+    const items = filterSortRows(rowsForDate(anchor, liveEarningsData).map(toCalRow), { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: anchor, usual: annUsualSession });
+    const isToday = anchor === todayIso;
+    calNode = (
+      <>
+      {todayIsWeekend && anchor === todayTradingIso && (
+        <div
+          role="note"
+          style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 10px", padding: "9px 12px", fontSize: ".82rem", color: "var(--text-hi)", background: "var(--surface-1)", border: "1px solid var(--border)", borderLeft: "3px solid var(--brand)", borderRadius: 10 }}
+        >
+          <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden style={{ flexShrink: 0, color: "var(--brand)" }}><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+          <span>
+            <strong>Markets are closed today</strong> ({new Date(`${todayIso}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}), so there are no earnings to show.
+            {" "}Showing {new Date(`${todayTradingIso}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}, the next trading day.
+          </span>
+        </div>
+      )}
+      <div className={`ec-day${isToday ? " is-today" : ""}`}>
+        <div className="ec-dh">{dateLabel}{isToday ? " · Today" : ""} · {items.length} reporting</div>
+        {items.length === 0 ? (
+          <div className="emc-none">No earnings</div>
+        ) : (
+          <div className="emc-logos">
+            {items.map(r => (
+              <button key={r.s} className={`emc-logo${sel === r.s ? " on" : ""}`} title={r.s} onClick={() => openStockDetail(r.s, anchor)}>
+                <StockLogo sym={r.s} size={30} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      </>
+    );
+  } else if (mode === "week") {
     calNode = (
       <div className="ec-grid">
         {weekDays5.map((iso, di) => {
@@ -1767,6 +1880,7 @@ export function EarningsScreen() {
           <div className="ecal-seg">
             <button className={`ecal-segbtn${mode === "month" ? " on" : ""}`} onClick={() => setMode("month")}>Month</button>
             <button className={`ecal-segbtn${mode === "week" ? " on" : ""}`} onClick={() => setMode("week")}>Week</button>
+            <button className={`ecal-segbtn${mode === "day" ? " on" : ""}`} onClick={() => { goToDate(todayTradingIso); setMode("day"); }} title={todayIsWeekend ? "Weekend — jump to the next trading day's reporters" : "Jump to today's reporters"}>Today</button>
           </div>
           {/* Session filter — splits the day's reporters by WHERE THEIR MOVE
               LANDED, not by an announced schedule.
@@ -1789,8 +1903,8 @@ export function EarningsScreen() {
           {SESSION_FILTER_ENABLED && (
             <div className="ecal-seg">
               <button className={`ecal-segbtn${session === "both" ? " on" : ""}`} onClick={() => setSession("both")} title="Every reporter for this day">All</button>
-              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Moved pre-market</button>
-              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">Moved post-market</button>
+              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Pre-market</button>
+              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">After hours</button>
             </div>
           )}
           <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 10 }}>
@@ -1811,8 +1925,8 @@ export function EarningsScreen() {
         {atGlance ? (
           glanceItems.length > 0 ? (
             <div>
-              <GlanceTable title="Moved pre-market" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
-              <GlanceTable title="Moved post-market" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Pre-market" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="After hours" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
               <GlanceTable title="Time not specified" items={glanceTbd} showDate onSelect={(s, d) => openStockDetail(s, d)} />
             </div>
           ) : (
