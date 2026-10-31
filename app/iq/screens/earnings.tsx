@@ -1188,10 +1188,12 @@ function GlanceQuarters({ ticker, colSpan }: { ticker: string; colSpan: number }
 }
 
 function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: EarnCalItem; showDate: boolean; onSelect: (s: string, date: string) => void; colSpan: number; prePct: number | null; postPct: number | null }) {
+  const epsPct = surprise(it.epsAYearAgo, it.epsA);   // YoY EPS growth: (eps - yearAgo)/|yearAgo|
+  const salesPct = surprise(it.revYearAgo, it.revA);  // YoY sales growth
   const epsSurp = surprise(it.epsE, it.epsA);
   const epsSurpStr = formatEpsSurprise(it.epsA, it.epsE);
-  const yoyRev = surprise(it.revYearAgo, it.revA); // (rev - yearAgo)/|yearAgo|
   const isUp = it.epsA != null && it.epsE != null ? it.epsA >= it.epsE : (epsSurp != null ? epsSurp >= 0 : null);
+  const salesSurp = surprise(it.revE, it.revA);
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -1219,13 +1221,14 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
         </div>
       </td>
       {showDate && <td className="r ecal-num" style={{ whiteSpace: "nowrap", color: "var(--text-dim-solid)" }}>{it.date ? it.date.slice(5) : "—"}</td>}
+      <td className={`r ecal-num ${fmtUpDn(epsPct)}`}>{fmtPctSigned(epsPct, 1)}</td>
+      <td className={`r ecal-num ${fmtUpDn(salesPct)}`}>{fmtPctSigned(salesPct, 1)}</td>
       <td className={`r ecal-num ${isUp == null ? "" : isUp ? "up" : "dn"}`}>{epsSurpStr}</td>
+      <td className={`r ecal-num ${fmtUpDn(salesSurp)}`}>{fmtPctSigned(salesSurp, 1)}</td>
       <td className="r ecal-num">{it.epsA != null ? `$${it.epsA.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{it.epsE != null ? `$${it.epsE.toFixed(2)}` : "—"}</td>
-      <td className="r ecal-num" style={{ color: "var(--text-dim-solid)" }}>{it.epsAYearAgo != null ? `$${it.epsAYearAgo.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{fmtRev(it.revA)}</td>
       <td className="r ecal-num">{fmtRev(it.revE)}</td>
-      <td className={`r ecal-num ${fmtUpDn(yoyRev)}`}>{fmtPctSigned(yoyRev)}</td>
       {/* Today's pre-market move. The vendor keeps this populated through the
           regular session rather than clearing it at the open — measured with the
           market open, AAPL read 0.047, DELL 0.399, MDB -2.20 — so the column
@@ -1245,15 +1248,16 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
 }
 
 type GlanceSortKey =
-  | "company" | "date" | "surprise" | "actual" | "consensus"
-  | "yearAgo" | "actualRev" | "consRev" | "yoyRev" | "guidance";
+  | "company" | "date" | "epsPct" | "salesPct" | "epsSurp" | "salesSurp"
+  | "actual" | "consensus" | "actualRev" | "consRev" | "guidance";
 
 /** Direction a column starts in on first click — text ascends (A→Z), numbers
  *  and dates descend (biggest / most recent first). Mirrors movers.tsx. */
 const GLANCE_FIRST_DIR: Record<GlanceSortKey, "asc" | "desc"> = {
-  company: "asc", date: "desc", surprise: "desc", actual: "desc",
-  consensus: "desc", yearAgo: "desc", actualRev: "desc", consRev: "desc",
-  yoyRev: "desc", guidance: "desc",
+  company: "asc", date: "desc", epsPct: "desc", salesPct: "desc",
+  epsSurp: "desc", salesSurp: "desc", actual: "desc",
+  consensus: "desc", actualRev: "desc", consRev: "desc",
+  guidance: "desc",
 };
 
 /** Guidance ordered by how favourable it is, so a descending sort surfaces
@@ -1308,13 +1312,14 @@ function glanceValue(it: EarnCalItem, k: GlanceSortKey): number | string | null 
   switch (k) {
     case "company":   return it.s;
     case "date":      return it.date || null;
-    case "surprise":  return surprise(it.epsE, it.epsA);
+    case "epsPct":    return surprise(it.epsAYearAgo, it.epsA);
+    case "salesPct":  return surprise(it.revYearAgo, it.revA);
+    case "epsSurp":   return surprise(it.epsE, it.epsA);
+    case "salesSurp": return surprise(it.revE, it.revA);
     case "actual":    return it.epsA;
     case "consensus": return it.epsE;
-    case "yearAgo":   return it.epsAYearAgo;
     case "actualRev": return it.revA;
     case "consRev":   return it.revE;
-    case "yoyRev":    return surprise(it.revYearAgo, it.revA);
     case "guidance":  return guidanceValue(it);
   }
 }
@@ -1369,10 +1374,10 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
     : items;
   const shown = expanded ? ordered : ordered.slice(0, GLANCE_MAX);
   const canExpand = items.length > GLANCE_MAX;
-  // Company, Surprise, Actual, Consensus, 1 Yr Ago, Actual Rev, Cons. Rev,
-  // Yr/Yr Rev, Guidance — plus Date when it is shown. Kept next to the header
-  // it counts so the two move together.
-  const colCount = 11 + (showDate ? 1 : 0);
+  // Company, EPS %, Sales %, EPS Surp, Sales Surp, Actual, Consensus, Actual
+  // Rev, Cons. Rev, Pre-market, Post-market, Guidance — plus Date when it is
+  // shown. Kept next to the header it counts so the two move together.
+  const colCount = 12 + (showDate ? 1 : 0);
 
   // PRE-MARKET reaction for the rows on screen. Uses the app-wide shared poll,
   // so a ticker here reads exactly as it does on the movers board and drawer.
@@ -1394,13 +1399,14 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
             <tr>
               {sortTh("company", "Company", false)}
               {showDate && sortTh("date", "Date")}
-              {sortTh("surprise", "Surprise")}
+              {sortTh("epsPct", "EPS %")}
+              {sortTh("salesPct", "Sales %")}
+              {sortTh("epsSurp", "EPS Surp")}
+              {sortTh("salesSurp", "Sales Surp")}
               {sortTh("actual", "Actual")}
               {sortTh("consensus", "Consensus")}
-              {sortTh("yearAgo", "1 Yr Ago")}
               {sortTh("actualRev", "Actual Rev")}
               {sortTh("consRev", "Cons. Rev")}
-              {sortTh("yoyRev", "Yr/Yr Rev")}
               <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-market</th>
               <th className="r" title={showVendor ? "After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close." : "After-hours move (16:00–20:00 ET): latest extended-hours trade vs the regular-session close."}>Post-market</th>
               {sortTh("guidance", "Guidance")}
@@ -1902,8 +1908,8 @@ export function EarningsScreen() {
           {SESSION_FILTER_ENABLED && (
             <div className="ecal-seg">
               <button className={`ecal-segbtn${session === "both" ? " on" : ""}`} onClick={() => setSession("both")} title="Every reporter for this day">All</button>
-              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Moved pre-market</button>
-              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">Moved post-market</button>
+              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Pre-market</button>
+              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">After hours</button>
             </div>
           )}
           <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 10 }}>
@@ -1924,8 +1930,8 @@ export function EarningsScreen() {
         {atGlance ? (
           glanceItems.length > 0 ? (
             <div>
-              <GlanceTable title="Moved pre-market" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
-              <GlanceTable title="Moved post-market" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Pre-market" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="After hours" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
               <GlanceTable title="Time not specified" items={glanceTbd} showDate onSelect={(s, d) => openStockDetail(s, d)} />
             </div>
           ) : (
