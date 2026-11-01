@@ -563,6 +563,51 @@ export function DashboardScreen() {
       }));
   })();
 
+  // What Matters Now slides: the AI digest first, then its key developments,
+  // then a few live reads (volatility, sentiment, top gainer). Every slide is
+  // built from data we already hold; a slide with no data behind it is skipped.
+  const wmnWhen = wmn?.generatedAt
+    ? new Date(wmn.generatedAt).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(/, (\d{1,2}:\d{2})/, " · $1") + " ET"
+    : undefined;
+  const wmnSlides: WmnSlide[] = [];
+  if (wmn?.summary) {
+    wmnSlides.push({
+      tag: "AI DIGEST", tone: "brand", name: "MarketCatalyst AI", when: wmnWhen,
+      lead: wmn.summary, body: wmn.overallAssessment, point: wmn.keyDevelopments?.[0],
+    });
+    (wmn.keyDevelopments ?? []).slice(1, 5).forEach((k, idx) => {
+      wmnSlides.push({ tag: "KEY DEVELOPMENT", tone: "info", name: `#${idx + 2}`, when: wmnWhen, lead: k });
+    });
+  }
+  const vixP = pulse.find(x => x.label === "VIX");
+  if (vixP) {
+    wmnSlides.push({
+      tag: "VOLATILITY", tone: "warn", name: "VIX",
+      lead: `The VIX is at ${fmt(vixP.value, 2)}, ${vixP.change >= 0 ? "up" : "down"} ${Math.abs(vixP.change).toFixed(2)}%.`,
+      point: `VIX ${fmt(vixP.value, 2)} · ${sign(vixP.change)}`,
+    });
+  }
+  if (fgVal != null) {
+    wmnSlides.push({
+      tag: "SENTIMENT", tone: fgVal < 45 ? "down" : fgVal > 55 ? "up" : "warn", name: "Fear & Greed",
+      lead: `The Fear & Greed index sits at ${Math.round(fgVal)}${fgLabel ? ` — ${fgLabel}` : ""}.`,
+      point: fgAsOf ? `As of ${fgAsOf}` : undefined,
+    });
+  }
+  // "Heating up": green on the day with volume running well above normal.
+  const heatingUp = movers
+    .filter(m => m.pctChange >= 1 && m.rvolRatio >= 1.5)
+    .sort((a, b) => b.pctChange - a.pctChange)
+    .slice(0, 4);
+  const topGainer = [...movers].sort((a, b) => b.pctChange - a.pctChange)[0];
+  if (topGainer) {
+    wmnSlides.push({
+      tag: "MOVER", tone: "up", name: topGainer.ticker,
+      lead: `${topGainer.name && topGainer.name !== topGainer.ticker ? `${topGainer.name} (${topGainer.ticker})` : topGainer.ticker} is the day’s top gainer, up ${topGainer.pctChange.toFixed(2)}%.`,
+      point: `${topGainer.ticker} ${sign(topGainer.pctChange)} · top gainer`,
+    });
+  }
+
   // Real watchlist/portfolio (signed-in user). No demo fallback: an empty
   // list renders DataState instead of a fabricated $128,430 showcase.
   const uid = firebaseAuth.currentUser?.uid ?? null;
@@ -811,6 +856,14 @@ export function DashboardScreen() {
                         }}
                       >
                         <StockLogo sym={ticker} size={28} />
+              {wmnSlides.length > 0 && (
+                <span className="wmn-live"><span className="dot" />Live</span>
+              )}
+            </div>
+            <div className="wmnc-wrap">
+              {wmnSlides.length > 0
+                ? <WmnCarousel slides={wmnSlides} />
+                : <DataState loading={!wmn} label="No market-moving activity to summarise yet." />}
                         {/* The only flexible column, and the only one allowed to
                             shrink — the logo, price and count keep their natural
                             width, so a long company name truncates instead of
@@ -846,7 +899,7 @@ export function DashboardScreen() {
             <div className="card-h">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Earnings Today</h3><VendorTag v={["fmp", "polygon"]} /></div>
               <Link className="link" href="/menu/earnings">View all →</Link>
-            </div>
+            </div>}
             <div className="card-b" style={{ paddingTop: 4, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
               {earningsToday.length === 0
                 ? <DataState loading={earningsLoading} label="No earnings reported today." height={100} />
@@ -883,6 +936,10 @@ export function DashboardScreen() {
                                 : "var(--text-hi)",
                               whiteSpace: "nowrap",
                             }}>
+        </div>
+        <div className="col-4 cpulse-col" style={{ minWidth: 0, display: "flex" }}>
+          <CommunityPulse />
+        </div>
                               EPS ${e.epsActual.toFixed(2)}
                             </span>
                           ) : e.epsEstimate != null ? (

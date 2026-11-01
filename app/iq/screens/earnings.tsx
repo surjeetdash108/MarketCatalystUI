@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { forwardAnnualEstimates } from "../eps-sales-data";
 import { useIQActions, ExpandBtn } from "../shell";
-import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
+import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useShowVendorTags, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
 import { useNarrationVoice, applyNarrationVoice, pickNarrationVoice } from "../speech";
 import { StockScreenEmbed } from "../stock-panel";
 import { useApiList } from "../hooks/useApiList";
@@ -1188,6 +1188,8 @@ function GlanceQuarters({ ticker, colSpan }: { ticker: string; colSpan: number }
 }
 
 function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: EarnCalItem; showDate: boolean; onSelect: (s: string, date: string) => void; colSpan: number; prePct: number | null; postPct: number | null }) {
+  const epsPct = surprise(it.epsAYearAgo, it.epsA);   // YoY EPS growth: (eps - yearAgo)/|yearAgo|
+  const salesPct = surprise(it.revYearAgo, it.revA);  // YoY sales growth
   const epsSurp = surprise(it.epsE, it.epsA);
   const epsSurpStr = formatEpsSurprise(it.epsA, it.epsE);
   const yoyRev = surprise(it.revYearAgo, it.revA); // (rev - yearAgo)/|yearAgo|
@@ -1222,10 +1224,8 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
       <td className={`r ecal-num ${isUp == null ? "" : isUp ? "up" : "dn"}`}>{epsSurpStr}</td>
       <td className="r ecal-num">{it.epsA != null ? `$${it.epsA.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{it.epsE != null ? `$${it.epsE.toFixed(2)}` : "—"}</td>
-      <td className="r ecal-num" style={{ color: "var(--text-dim-solid)" }}>{it.epsAYearAgo != null ? `$${it.epsAYearAgo.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{fmtRev(it.revA)}</td>
       <td className="r ecal-num">{fmtRev(it.revE)}</td>
-      <td className={`r ecal-num ${fmtUpDn(yoyRev)}`}>{fmtPctSigned(yoyRev)}</td>
       {/* Today's pre-market move. The vendor keeps this populated through the
           regular session rather than clearing it at the open — measured with the
           market open, AAPL read 0.047, DELL 0.399, MDB -2.20 — so the column
@@ -1245,15 +1245,16 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
 }
 
 type GlanceSortKey =
-  | "company" | "date" | "surprise" | "actual" | "consensus"
-  | "yearAgo" | "actualRev" | "consRev" | "yoyRev" | "guidance";
+  | "company" | "date" | "epsPct" | "salesPct" | "epsSurp" | "salesSurp"
+  | "actual" | "consensus" | "actualRev" | "consRev" | "guidance";
 
 /** Direction a column starts in on first click — text ascends (A→Z), numbers
  *  and dates descend (biggest / most recent first). Mirrors movers.tsx. */
 const GLANCE_FIRST_DIR: Record<GlanceSortKey, "asc" | "desc"> = {
-  company: "asc", date: "desc", surprise: "desc", actual: "desc",
-  consensus: "desc", yearAgo: "desc", actualRev: "desc", consRev: "desc",
-  yoyRev: "desc", guidance: "desc",
+  company: "asc", date: "desc", epsPct: "desc", salesPct: "desc",
+  epsSurp: "desc", salesSurp: "desc", actual: "desc",
+  consensus: "desc", actualRev: "desc", consRev: "desc",
+  guidance: "desc",
 };
 
 /** Guidance ordered by how favourable it is, so a descending sort surfaces
@@ -1308,13 +1309,14 @@ function glanceValue(it: EarnCalItem, k: GlanceSortKey): number | string | null 
   switch (k) {
     case "company":   return it.s;
     case "date":      return it.date || null;
-    case "surprise":  return surprise(it.epsE, it.epsA);
+    case "epsPct":    return surprise(it.epsAYearAgo, it.epsA);
+    case "salesPct":  return surprise(it.revYearAgo, it.revA);
+    case "epsSurp":   return surprise(it.epsE, it.epsA);
+    case "salesSurp": return surprise(it.revE, it.revA);
     case "actual":    return it.epsA;
     case "consensus": return it.epsE;
-    case "yearAgo":   return it.epsAYearAgo;
     case "actualRev": return it.revA;
     case "consRev":   return it.revE;
-    case "yoyRev":    return surprise(it.revYearAgo, it.revA);
     case "guidance":  return guidanceValue(it);
   }
 }
@@ -1333,6 +1335,7 @@ function compareGlance(a: EarnCalItem, b: EarnCalItem, k: GlanceSortKey, dir: 1 
 }
 
 function GlanceTable({ title, items, showDate, onSelect }: { title: string; items: EarnCalItem[]; showDate: boolean; onSelect: (s: string, date: string) => void }) {
+  const showVendor = useShowVendorTags();
   const [expanded, setExpanded] = useState(false);
   const [sortKey, setSortKey] = useState<GlanceSortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -1368,10 +1371,10 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
     : items;
   const shown = expanded ? ordered : ordered.slice(0, GLANCE_MAX);
   const canExpand = items.length > GLANCE_MAX;
-  // Company, Surprise, Actual, Consensus, 1 Yr Ago, Actual Rev, Cons. Rev,
-  // Yr/Yr Rev, Guidance — plus Date when it is shown. Kept next to the header
-  // it counts so the two move together.
-  const colCount = 11 + (showDate ? 1 : 0);
+  // Company, EPS %, Sales %, EPS Surp, Sales Surp, Actual, Consensus, Actual
+  // Rev, Cons. Rev, Pre-market, Post-market, Guidance — plus Date when it is
+  // shown. Kept next to the header it counts so the two move together.
+  const colCount = 12 + (showDate ? 1 : 0);
 
   // PRE-MARKET reaction for the rows on screen. Uses the app-wide shared poll,
   // so a ticker here reads exactly as it does on the movers board and drawer.
@@ -1393,15 +1396,16 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
             <tr>
               {sortTh("company", "Company", false)}
               {showDate && sortTh("date", "Date")}
-              {sortTh("surprise", "Surprise")}
+              {sortTh("epsPct", "EPS %")}
+              {sortTh("salesPct", "Sales %")}
+              {sortTh("epsSurp", "EPS Surp")}
+              {sortTh("salesSurp", "Sales Surp")}
               {sortTh("actual", "Actual")}
               {sortTh("consensus", "Consensus")}
-              {sortTh("yearAgo", "1 Yr Ago")}
               {sortTh("actualRev", "Actual Rev")}
               {sortTh("consRev", "Cons. Rev")}
-              {sortTh("yoyRev", "Yr/Yr Rev")}
               <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-market</th>
-              <th className="r" title="After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close.">Post-market</th>
+              <th className="r" title={showVendor ? "After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close." : "After-hours move (16:00–20:00 ET): latest extended-hours trade vs the regular-session close."}>Post-market</th>
               {sortTh("guidance", "Guidance")}
             </tr>
           </thead>
@@ -1442,7 +1446,7 @@ export function EarningsScreen() {
   const { data: analystActions } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const liveEarningsData = liveEarnings;
 
-  const [mode, setMode]     = useState<"week" | "month">("month");
+  const [mode, setMode]     = useState<"day" | "week" | "month">("month");
   const [anchor, setAnchor] = useState<string>(() => etTodayIso());
   // At-a-glance snapshot: a Nasdaq-style results table (actual vs consensus,
   // surprise, revenue, year-ago) for the selected day/week/month, toggled from
@@ -1532,11 +1536,17 @@ export function EarningsScreen() {
   // Rows dated after today cannot be classified by their move — see
   // inferredSession. Computed once so every consumer agrees on "today".
   const todayIso = etTodayIso();
+  // The calendar has no Sat/Sun, so on a weekend "Today" lands on the next Monday.
+  const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
+  const todayIsWeekend = todayDow === 0 || todayDow === 6;
+  const todayTradingIso = todayIsWeekend ? isoDay(addDays(new Date(`${todayIso}T00:00:00Z`), todayDow === 6 ? 2 : 1)) : todayIso;
   const dayRows = rowsForDate(anchor, liveEarningsData).map(toCalRow);
   const glanceRaw: EarnCalItem[] =
     mode === "month"
       ? liveEarningsData.filter(d => d.date.slice(0, 7) === anchor.slice(0, 7)).map(toEarnCalItem)
-      : weekDays5.flatMap(iso => rowsForDate(iso, liveEarningsData));
+      : mode === "day"
+        ? rowsForDate(anchor, liveEarningsData)
+        : weekDays5.flatMap(iso => rowsForDate(iso, liveEarningsData));
 
   // Quotes for every reporter ON SCREEN, so a row can be placed by where its
   // move landed.
@@ -1627,6 +1637,11 @@ export function EarningsScreen() {
   const step = (dir: 1 | -1) => {
     if (mode === "month") {
       goToDate(isoDay(new Date(Date.UTC(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth() + dir, 1))));
+    } else if (mode === "day") {
+      // Step weekday to weekday — the calendar has no Sat/Sun.
+      let d = addDays(anchorDate, dir);
+      while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d = addDays(d, dir);
+      goToDate(isoDay(d));
     } else {
       goToDate(isoDay(addDays(anchorDate, dir * 7)));
     }
@@ -1637,7 +1652,40 @@ export function EarningsScreen() {
 
   let calNode: React.ReactNode;
 
-  if (mode === "week") {
+  if (mode === "day") {
+    const items = filterSortRows(rowsForDate(anchor, liveEarningsData).map(toCalRow), { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: anchor, usual: annUsualSession });
+    const isToday = anchor === todayIso;
+    calNode = (
+      <>
+      {todayIsWeekend && anchor === todayTradingIso && (
+        <div
+          role="note"
+          style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 10px", padding: "9px 12px", fontSize: ".82rem", color: "var(--text-hi)", background: "var(--surface-1)", border: "1px solid var(--border)", borderLeft: "3px solid var(--brand)", borderRadius: 10 }}
+        >
+          <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden style={{ flexShrink: 0, color: "var(--brand)" }}><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+          <span>
+            <strong>Markets are closed today</strong> ({new Date(`${todayIso}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}), so there are no earnings to show.
+            {" "}Showing {new Date(`${todayTradingIso}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}, the next trading day.
+          </span>
+        </div>
+      )}
+      <div className={`ec-day${isToday ? " is-today" : ""}`}>
+        <div className="ec-dh">{dateLabel}{isToday ? " · Today" : ""} · {items.length} reporting</div>
+        {items.length === 0 ? (
+          <div className="emc-none">No earnings</div>
+        ) : (
+          <div className="emc-logos">
+            {items.map(r => (
+              <button key={r.s} className={`emc-logo${sel === r.s ? " on" : ""}`} title={r.s} onClick={() => openStockDetail(r.s, anchor)}>
+                <StockLogo sym={r.s} size={30} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      </>
+    );
+  } else if (mode === "week") {
     calNode = (
       <div className="ec-grid">
         {weekDays5.map((iso, di) => {
@@ -1834,6 +1882,7 @@ export function EarningsScreen() {
           <div className="ecal-seg">
             <button className={`ecal-segbtn${mode === "month" ? " on" : ""}`} onClick={() => setMode("month")}>Month</button>
             <button className={`ecal-segbtn${mode === "week" ? " on" : ""}`} onClick={() => setMode("week")}>Week</button>
+            <button className={`ecal-segbtn${mode === "day" ? " on" : ""}`} onClick={() => { goToDate(todayTradingIso); setMode("day"); }} title={todayIsWeekend ? "Weekend — jump to the next trading day's reporters" : "Jump to today's reporters"}>Today</button>
           </div>
           {/* Session filter — splits the day's reporters by WHERE THEIR MOVE
               LANDED, not by an announced schedule.
@@ -1856,8 +1905,8 @@ export function EarningsScreen() {
           {SESSION_FILTER_ENABLED && (
             <div className="ecal-seg">
               <button className={`ecal-segbtn${session === "both" ? " on" : ""}`} onClick={() => setSession("both")} title="Every reporter for this day">All</button>
-              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Moved pre-market</button>
-              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">Moved post-market</button>
+              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Pre-market</button>
+              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">After hours</button>
             </div>
           )}
           <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 10 }}>
@@ -1878,8 +1927,8 @@ export function EarningsScreen() {
         {atGlance ? (
           glanceItems.length > 0 ? (
             <div>
-              <GlanceTable title="Moved pre-market" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
-              <GlanceTable title="Moved post-market" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Pre-market" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="After hours" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
               <GlanceTable title="Time not specified" items={glanceTbd} showDate onSelect={(s, d) => openStockDetail(s, d)} />
             </div>
           ) : (
