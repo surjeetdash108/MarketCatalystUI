@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useIQActions } from "../shell";
 import { sign, heatCol, fmt, StockLogo, NotAvailable, DataState, VendorTag } from "../utils";
+import { tilePctLabel } from "../heatmap-label";
 import { useApiList } from "../hooks/useApiList";
 import { useLiveQuotes } from "../live-quotes-context";
 import { buildSectorList } from "../live-market-indices";
@@ -398,7 +399,6 @@ function HeatmapInner() {
                           const cellPxH = (sr.h / 100) * (sectPxH - HEADER_H);
                           const minDim  = Math.min(cellPxW, cellPxH);
                           const showText   = minDim > 16 && cellPxW > 20;
-                          const showChange = (minDim > 20 && cellPxW > 24) || (cellPxW >= 24 && cellPxH >= 20);
                           const fs = Math.max(0.56, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 72));
 
                           return (
@@ -427,11 +427,11 @@ function HeatmapInner() {
                                     color: hc.fg, fontSize: `${fs}rem`,
                                     lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
                                   }}>{sym}</span>
-                                  {showChange && (
+                                  {tilePctLabel(chg, cellPxW, cellPxH) != null && (
                                     <span style={{
                                       fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
                                       fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 3,
-                                    }}>{sign(chg)}</span>
+                                    }}>{tilePctLabel(chg, cellPxW, cellPxH)}</span>
                                   )}
                                 </>
                               )}
@@ -525,7 +525,6 @@ function HeatmapInner() {
                 const cellPxW = (sr.w / 100) * (APPROX_W - 32);
                 const cellPxH = (sr.h / 100) * (APPROX_H - 24);
                 const showText   = cellPxW >= Math.max(13, sym.length * 4) && cellPxH >= 10;
-                const showChange = (cellPxW >= 24 && cellPxH >= 18) || (cellPxW >= 20 && cellPxH >= 20);
                 const fs = Math.max(0.48, Math.min(1.05, Math.sqrt(cellPxW * cellPxH) / 70));
 
                 return (
@@ -554,11 +553,11 @@ function HeatmapInner() {
                           color: hc.fg, fontSize: `${fs}rem`,
                           lineHeight: 1, textAlign: "center", whiteSpace: "nowrap",
                         }}>{sym}</span>
-                        {showChange && (
+                        {tilePctLabel(chg, cellPxW, cellPxH) != null && (
                           <span style={{
                             fontFamily: "var(--f-mono)", color: hc.fg, opacity: .82,
                             fontSize: `${fs * 0.82}rem`, lineHeight: 1, marginTop: 2,
-                          }}>{sign(chg)}</span>
+                          }}>{tilePctLabel(chg, cellPxW, cellPxH)}</span>
                         )}
                       </>
                     )}

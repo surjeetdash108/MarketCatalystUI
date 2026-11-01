@@ -16,10 +16,15 @@ export interface DividendHistoryDoc {
   ttmTotal: number | null;
   ttmPayments: number;
   yieldPct: number | null;
+  forwardYieldPct?: number | null;
+  forwardPerShare?: number | null;
+  trailingYieldPct?: number | null;
+  trailingPerShare?: number | null;
   yieldBasisPrice: number | null;
   cagr5yPct: number | null;
   increaseStreakYears: number;
   frequency: number | null;
-  isPayer: boolean;
+  /** Absent on docs written before the grace-window flag existed. */
+  isPayer?: boolean;
   source: string;
 }

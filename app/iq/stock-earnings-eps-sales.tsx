@@ -5,7 +5,7 @@ import { DataState } from "./utils";
 import { useApiResource } from "./hooks/useApiResource";
 import { fmtDate } from "./calendar-range";
 import type { FinancialsDoc } from "./types";
-import { annualEpsSalesRows, epsSalesSeries, pctChangeStr, quarterlyEpsSalesRows } from "./eps-sales-data";
+import { annualEpsSalesRows, epsSalesSeries, forwardAnnualEstimates, pctChangeStr, quarterlyEpsSalesRows } from "./eps-sales-data";
 
 /** GET /live/estimates — FMP quarterly analyst consensus (oldest first). */
 interface QuarterlyEstimate {
@@ -14,6 +14,45 @@ interface QuarterlyEstimate {
   revenueAvg: number | null;
   numAnalystsEps: number | null;
   numAnalystsRevenue: number | null;
+}
+
+/** GET /live/estimates `next` — consensus for the next report on the calendar. */
+interface NextReportEstimate {
+  date: string;
+  epsEstimate: number | null;
+  revenueEstimate: number | null;
+}
+
+/**
+ * Forward quarters with the next one taken from the earnings calendar.
+ *
+ * The calendar's estimate for the next report is the one Stock Intelligence
+ * shows and the one that matches the report; FMP's quarterly estimates can
+ * file it under the wrong quarter-end (KR: two quarters early). When one of
+ * those rows carries the calendar's revenue figure, the run of rows from it
+ * on is used in order, so later quarters line up too; otherwise only the
+ * first forward quarter takes the calendar's numbers.
+ */
+export function alignForwardQuarters(
+  all: QuarterlyEstimate[],
+  fwd: QuarterlyEstimate[],
+  next: NextReportEstimate | null | undefined,
+): QuarterlyEstimate[] {
+  if (!next || fwd.length === 0) return fwd;
+  const rev = next.revenueEstimate;
+  const m = rev != null && rev !== 0
+    ? all.findIndex((q) => q.revenueAvg != null && Math.abs(q.revenueAvg - rev) / Math.abs(rev) < 0.002)
+    : -1;
+  if (m !== -1) {
+    fwd = fwd.map((q, i) => {
+      const src = all[m + i];
+      return src ? { ...src, date: q.date } : { ...q, epsAvg: null, revenueAvg: null };
+    });
+  }
+  // The next quarter always shows the calendar's figures (as SI does).
+  return fwd.map((q, i) => i === 0
+    ? { ...q, epsAvg: next.epsEstimate ?? q.epsAvg, revenueAvg: next.revenueEstimate ?? q.revenueAvg }
+    : q);
 }
 
 type Bar = { label: string; eps: number | null; sales: number | null; est: boolean };
@@ -86,7 +125,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
   const [period, setPeriod] = useState<"Q" | "A">("Q");
   const [note, setNote] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const { data: est } = useApiResource<{ quarterly: QuarterlyEstimate[] }>(
+  const { data: est } = useApiResource<{ quarterly: QuarterlyEstimate[]; next?: NextReportEstimate | null }>(
     sym ? `/live/estimates?ticker=${encodeURIComponent(sym)}` : null,
   );
 
@@ -118,7 +157,8 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
     // Quarters ending after the last reported one (20-day slack: FMP dates
     // fiscal quarter ends loosely, e.g. 12-30 vs 12-31).
     const after = Date.parse(lastEnd) + 20 * 86_400_000;
-    return (est?.quarterly ?? []).filter((q) => Date.parse(q.date) > after).slice(0, FORWARD_Q);
+    const all = est?.quarterly ?? [];
+    return alignForwardQuarters(all, all.filter((q) => Date.parse(q.date) > after).slice(0, FORWARD_Q), est?.next);
   }, [est, lastEnd]);
   const epsByMonth = new Map(qRows.map((r) => [r.monthLabel, r.eps]));
   const salesByMonth = new Map(qRows.map((r) => [r.monthLabel, r.sales]));
@@ -147,9 +187,8 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
   );
   const reportedA = aRows.filter((r) => r.eps != null || r.sales != null).slice(-REPORTED_A);
   const lastYear = reportedA.at(-1)?.year ?? null;
-  const fwdA = (financialsDoc?.annualEstimates ?? [])
+  const fwdA = forwardAnnualEstimates(financialsDoc)
     .filter((e) => lastYear == null || Number(e.fiscalYear) > Number(lastYear))
-    .sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear))
     .slice(0, FORWARD_A);
   const fwdARows = fwdA.map((e, i) => {
     const prev = i === 0 ? reportedA.at(-1) : null;

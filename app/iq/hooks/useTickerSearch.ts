@@ -15,35 +15,50 @@ interface SearchResponse {
   results: Array<{ ticker: string; name: string | null }>;
 }
 
-const DEBOUNCE_MS = 200;
+const DEBOUNCE_MS = 100;
+
+// Client-side query cache: backspacing or repeating queries resolves instantly in 0ms
+const queryCache = new Map<string, TickerSearchResult[]>();
 
 /**
- * On-demand ticker search via GET /live/search — an in-memory ~10,000-ticker
+ * On-demand ticker search via GET /live/search — an in-memory ~13,000-ticker
  * universe (src/live/ticker-search.service.ts), zero Firestore reads.
  * Replaces three parallel Firestore prefix-range queries against the
  * `tickers` collection (ticker prefix, nameLower prefix, searchTokens
  * array-contains).
- *
- * The backend's in-memory universe carries no live quote, so `price`/
- * `pctChange` are always null here — callers already handle that gracefully
- * (shell.tsx's curated fallback list has never had a price either).
  */
 export function useTickerSearch(rawQuery: string): TickerSearchResult[] {
-  const [results, setResults] = useState<TickerSearchResult[]>([]);
+  const trimmed = rawQuery.trim();
+  const cacheKey = trimmed.toLowerCase();
+  const [results, setResults] = useState<TickerSearchResult[]>(() => queryCache.get(cacheKey) ?? []);
 
   useEffect(() => {
-    const trimmed = rawQuery.trim();
     if (!trimmed) {
       setResults([]);
       return;
     }
+
+    // Cache hit: instant 0ms update, no network call or debounce delay
+    const cached = queryCache.get(cacheKey);
+    if (cached) {
+      setResults(cached);
+      return;
+    }
+
     let cancelled = false;
 
     const handle = setTimeout(() => {
       apiGet<SearchResponse>(`/live/search?q=${encodeURIComponent(trimmed)}`)
         .then((data) => {
           if (cancelled) return;
-          setResults(data.results.map((r) => ({ ticker: r.ticker, name: r.name, price: null, pctChange: null })));
+          const mapped = data.results.map((r) => ({
+            ticker: r.ticker,
+            name: r.name,
+            price: null,
+            pctChange: null,
+          }));
+          queryCache.set(cacheKey, mapped);
+          setResults(mapped);
         })
         .catch((err) => {
           if (cancelled) return;
@@ -56,7 +71,7 @@ export function useTickerSearch(rawQuery: string): TickerSearchResult[] {
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [rawQuery]);
+  }, [trimmed, cacheKey]);
 
   return results;
 }

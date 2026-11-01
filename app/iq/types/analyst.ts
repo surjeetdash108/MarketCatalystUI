@@ -16,6 +16,9 @@ export interface AnalystRatingChange {
    * backend began storing it, so absent must read as "unknown", never 0%. */
   previousPriceTarget?: number | null;
   previousPriceTargetDate?: string | null;
+  /** Direction of the target change made with this call, when the firm's
+   * headline states it or both figures are known; null/absent when unknown. */
+  priceTargetChange?: "raise" | "cut" | null;
 }
 
 /** Mirrors backend's `analyst_actions` collection (src/market-data/analyst-actions.controller.ts) — GET /market-data/analyst-actions. */

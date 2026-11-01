@@ -14,16 +14,20 @@
  */
 import type {
   FinancialsDoc,
+  AnnualEstimate,
   AnnualFinancials,
   QuarterFinancials,
   EpsHistoryRow,
 } from "./types";
 import {
   reportedQuarterEps,
+  gaapQuarterEps,
   quarterEpsSurprisePct,
+  quarterEpsSurpriseStr,
   reportedAnnualEps,
   estimatedAnnualEps,
   surprisePct,
+  formatEpsSurprise,
 } from "./types";
 import { fmtDate } from "./calendar-range";
 
@@ -63,7 +67,10 @@ export type QuarterRow = {
   /** Period-end date (ISO) and its "Sep-24" month label. */
   end: string;
   monthLabel: string;
+  /** GAAP diluted EPS. */
   eps: number | null;
+  /** FMP adjusted EPS — the basis of epsEst and epsSurp. */
+  epsAdj: number | null;
   epsEst: number | null;
   epsChg: string;
   epsSurp: string;
@@ -138,7 +145,8 @@ export function epsSalesSeries(
       .slice(-12)
       .map(r => ({
         label: fmtDate(r.endDate, { month: "short", year: "2-digit" }).replace(" ", "-"),
-        eps: reportedQuarterEps(r),
+        // GAAP diluted (see gaapQuarterEps); the adjusted figure is only the surprise basis.
+        eps: gaapQuarterEps(r),
         sales: r.revenue != null ? r.revenue / 1e6 : null,
         end: r.endDate as string,
       }));
@@ -178,7 +186,7 @@ export function annualEpsSalesRows(
       eps,
       epsEst,
       epsChg: pctChangeStr(eps, prevEps),
-      epsSurp: pctCell(surp),
+      epsSurp: formatEpsSurprise(eps, epsEst),
       sales: r.revenue != null ? r.revenue / 1e6 : null,
       salesChg: pctChangeStr(r.revenue, prev?.revenue),
     };
@@ -195,9 +203,16 @@ export function quarterlyEpsSalesRows(
   epsHistory: EpsHistoryRow[] = [],
 ): QuarterRow[] {
   const src = quarters.length > 0 ? quarters : quartersFromEpsHistory(epsHistory);
-  const asc = [...src]
-    .filter(r => r.endDate)
-    .sort((a, b) => (a.endDate as string).localeCompare(b.endDate as string));
+  const dedupedMap = new Map<string, QuarterFinancials>();
+  for (const r of src) {
+    if (!r.endDate) continue;
+    const key = r.fiscalPeriod && r.fiscalYear ? `${r.fiscalYear}-${r.fiscalPeriod}` : r.endDate;
+    const existing = dedupedMap.get(key);
+    if (!existing || (r.revenue != null && existing.revenue == null)) {
+      dedupedMap.set(key, r);
+    }
+  }
+  const asc = [...dedupedMap.values()].sort((a, b) => (a.endDate as string).localeCompare(b.endDate as string));
 
   // Year-ago comparison matched on FISCAL LABELS, not by stepping back four
   // rows. "Four back" assumes four filings a year, which is two YEARS back for
@@ -218,7 +233,7 @@ export function quarterlyEpsSalesRows(
 
   return asc.map((r, i) => {
     const yoy = yearAgoOf(r, i);
-    const eps = reportedQuarterEps(r);
+    const eps = gaapQuarterEps(r);
     return {
       // Always show fiscal quarter + year (e.g. "Q3 2026"); fall back to the
       // period-end month/year only when the fiscal labels are missing.
@@ -229,9 +244,11 @@ export function quarterlyEpsSalesRows(
       end: r.endDate as string,
       monthLabel: fmtDate(r.endDate, { month: "short", year: "2-digit" }).replace(" ", "-"),
       eps,
+      // Adjusted actual: the basis of the estimate and the surprise beside it.
+      epsAdj: r.epsActualReported ?? null,
       epsEst: r.epsEstimateReported ?? null,
-      epsChg: pctChangeStr(eps, yoy ? reportedQuarterEps(yoy) : null),
-      epsSurp: pctCell(quarterEpsSurprisePct(r)),
+      epsChg: pctChangeStr(eps, yoy ? gaapQuarterEps(yoy) : null),
+      epsSurp: quarterEpsSurpriseStr(r),
       sales: r.revenue != null ? r.revenue / 1e6 : null,
       salesChg: pctChangeStr(r.revenue, yoy?.revenue),
       salesSurp: pctCell(
@@ -241,4 +258,32 @@ export function quarterlyEpsSalesRows(
       ),
     };
   });
+}
+
+/**
+ * Forward annual estimates for the fiscal years AFTER the last reported one,
+ * labelled the way the reported years are.
+ *
+ * Estimates are keyed by the calendar year their fiscal year ENDS in (FMP
+ * `analyst-estimates` date), while FMP's statements label a fiscal year that
+ * ends in January by the year it started: HD's year ending 2026-02-01 is
+ * "2025" in the statements and "2026" in the estimates. Comparing the labels
+ * treated an already-reported year as the year in progress, so the forward
+ * P/E was on the wrong year for every January year-end company (HD 21.3 vs
+ * 20.0, KR 12.9 vs 12.2, ZUMZ 30.9 vs 16.0). Years are matched on the last
+ * reported period's END date instead, and the estimates are relabelled with
+ * the statements' offset so "*2026" follows "2025".
+ */
+export function forwardAnnualEstimates(doc: Pick<FinancialsDoc, "annual" | "annualEstimates"> | null | undefined): AnnualEstimate[] {
+  const est = [...(doc?.annualEstimates ?? [])].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
+  const reported = (doc?.annual ?? [])
+    .filter((a) => (a.epsActual != null || a.revenue != null) && a.endDate)
+    .sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)))[0];
+  if (!reported) return est;
+  const endYear = Number(String(reported.endDate).slice(0, 4));
+  const label = Number(reported.fiscalYear);
+  const offset = Number.isFinite(label) && label > 0 ? label - endYear : 0;
+  return est
+    .filter((e) => Number(e.fiscalYear) > endYear)
+    .map((e) => (offset === 0 ? e : { ...e, fiscalYear: String(Number(e.fiscalYear) + offset) }));
 }

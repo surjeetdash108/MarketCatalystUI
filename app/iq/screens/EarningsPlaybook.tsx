@@ -5,7 +5,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useBackendBars } from "../hooks/useBackendBars";
 import type { OHLCBar } from "../utils";
 import { DataState, VendorTag } from "../utils";
-import { surprisePct as calcSurprisePct } from "../types";
+import { surprisePct as calcSurprisePct, formatEpsSurprise } from "../types";
 import type { FinancialsDoc } from "../types";
 
 /** One reported quarter: report date (SEC filing date) + EPS actual/estimate.
@@ -111,6 +111,7 @@ type Row = {
   filed: string;
   beat: boolean | null;
   surprisePct: number | null;
+  surpriseStr?: string;
   epsAct: number | null;
   epsEst: number | null;
   gap: number | null;
@@ -280,8 +281,9 @@ function buildModel(reports: PlaybookReport[], bars: OHLCBar[] | undefined, maxR
       quarter: e.period ? fmtDate(e.period, { month: "short", year: "2-digit" }) : null,
       announced: e.announceDate ?? null,
       filed: e.date,
-      beat: surprisePct == null ? null : surprisePct >= 0,
+      beat: reported != null && estReported != null ? reported >= estReported : (surprisePct == null ? null : surprisePct >= 0),
       surprisePct,
+      surpriseStr: formatEpsSurprise(reported, estReported),
       epsAct: reported ?? null,
       epsEst: estReported ?? null,
       gap,
@@ -452,7 +454,12 @@ export function EarningsPlaybook({ sym, reports }: { sym: string; reports: Playb
                   </td>
                   {hasBeatMiss && (
                     <td style={{ whiteSpace: "nowrap", color: r.beat == null ? "var(--text-dim-solid)" : r.beat ? "var(--up)" : "var(--down)" }}>
-                      {r.beat == null ? "—" : `${r.beat ? "Beat" : "Miss"} ${pct(r.surprisePct)}`}
+                      {(() => {
+                        const s = r.surpriseStr ?? formatEpsSurprise(r.epsAct, r.epsEst);
+                        if (s === "—") return "—";
+                        if (s.includes("vs est")) return `${r.beat ? "Beat" : "Miss"} ${s}`;
+                        return `${r.beat ? "Beat" : "Miss"} ${pct(r.surprisePct)}`;
+                      })()}
                     </td>
                   )}
                   {hasBeatMiss && <td className="num">{r.epsAct != null ? `$${r.epsAct.toFixed(2)}` : "—"}</td>}
@@ -580,7 +587,12 @@ export function EarningsPlaybookCards({ sym, reports, onViewAll }: {
                 </td>
                 {hasBeatMiss && (
                   <td style={{ color: r.beat == null ? "var(--text-dim-solid)" : r.beat ? "var(--up)" : "var(--down)" }}>
-                    {r.beat == null ? "—" : `${r.beat ? "Beat" : "Miss"} ${pct(r.surprisePct)}`}
+                    {(() => {
+                      const s = r.surpriseStr ?? formatEpsSurprise(r.epsAct, r.epsEst);
+                      if (s === "—") return "—";
+                      if (s.includes("vs est")) return `${r.beat ? "Beat" : "Miss"} ${s}`;
+                      return `${r.beat ? "Beat" : "Miss"} ${pct(r.surprisePct)}`;
+                    })()}
                   </td>
                 )}
                 {hasBeatMiss && <td>{r.epsAct != null ? `$${r.epsAct.toFixed(2)}` : "—"}</td>}

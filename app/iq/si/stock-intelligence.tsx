@@ -38,11 +38,16 @@ import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
 import { StockChart } from "../stock-panel";
 import { buildChartEarnings, type ChartEarnings } from "../chart-earnings";
+import { nextEarningsDate, withOneUpcomingReport } from "../next-earnings";
 import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex } from "../calendar-range";
 import { StockLogo, VendorTag } from "../utils";
+import { resolveActionMeta } from "../analyst-actions-engine";
+import { useHeadlineQuote } from "../quote-headline";
+import { range52 } from "../range52";
+import { forwardAnnualEstimates } from "../eps-sales-data";
 import { ModuleSwitcher } from "../module-switcher";
 import { useApiResource } from "../hooks/useApiResource";
 import { useApiList } from "../hooks/useApiList";
@@ -57,7 +62,7 @@ import type {
   LiveEarningsDoc,
   AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps, computeTtmFcf } from "../types";
+import { computeTtmFcf, computeQuarterFcf, computeOperatingIncomeSeries, gaapQuarterEps, quarterYoY } from "../types";
 import { useIQActions } from "../shell";
 import type { Stock13FResponse } from "../stock-13f-view";
 
@@ -433,11 +438,11 @@ export function StockIntelligenceScreen() {
   const sharedQuote = currentTicker ? liveQuotesMap.get(currentTicker) : undefined;
 
   // Live vendor & MC backend data
-  const { data: liveCompany } = useApiResource<CompanyDoc>(
+  const { data: liveCompany, loading: liveCompanyLoading } = useApiResource<CompanyDoc>(
     currentTicker ? `/live/company?ticker=${encodeURIComponent(currentTicker)}` : null,
     30000
   );
-  const { data: financialsDoc } = useApiResource<FinancialsDoc>(
+  const { data: financialsDoc, loading: financialsLoading, error: financialsError } = useApiResource<FinancialsDoc>(
     currentTicker ? `/live/financials?ticker=${encodeURIComponent(currentTicker)}` : null
   );
   const { data: tickerNews } = useApiResource<NewsArticleDoc[]>(
@@ -456,7 +461,7 @@ export function StockIntelligenceScreen() {
     currentTicker ? `/market-data/insider-transactions?ticker=${encodeURIComponent(currentTicker)}` : null,
   );
   const { data: liveEarningsList } = useApiList<LiveEarningsDoc>("/market-data/earnings");
-  const { data: companiesList } = useApiList<CompanyDoc>("/market-data/companies");
+  const { data: companiesList, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: aiAnalysisDoc } = useApiResource<AiAnalysisDoc>(
     currentTicker ? `/live/ai-analysis?ticker=${encodeURIComponent(currentTicker)}` : null,
     // Re-check: a slow model outlives the request timeout; the backend still
@@ -513,8 +518,17 @@ export function StockIntelligenceScreen() {
   }, [financialsDoc, liveEarningsList, currentTicker]);
 
   // Real-time price and change from live tick, quotes context, or backend company resource
-  const currentPrice = live.tick?.price ?? sharedQuote?.price ?? liveCompany?.price ?? undefined;
-  const currentChange = live.pct ?? sharedQuote?.pctChange ?? liveCompany?.pctChange ?? undefined;
+  // Same headline rule as the stock page (useHeadlineQuote): outside regular
+  // hours the price is the last REGULAR close with that session's change; the
+  // extended-hours move is separate. Taking the after-hours trade with a % that
+  // still included the regular session mixed the two (E2E Oct 23: BAC −0.90%
+  // vs −0.79%, EPM, GE, JACK).
+  const headline = useHeadlineQuote(currentTicker || "", live, {
+    price: liveCompany?.price ?? null,
+    pctChange: liveCompany?.pctChange ?? null,
+  });
+  const currentPrice = (headline.regPrice > 0 ? headline.regPrice : null) ?? live.tick?.price ?? sharedQuote?.price ?? liveCompany?.price ?? undefined;
+  const currentChange = (headline.regPrice > 0 ? headline.regPct : null) ?? live.pct ?? sharedQuote?.pctChange ?? liveCompany?.pctChange ?? undefined;
 
   // Every input the Stock Intelligence engine reasons from — all real data
   // loaded above. Missing inputs stay null; the engine drops what needs them.
@@ -531,17 +545,11 @@ export function StockIntelligenceScreen() {
     const margin = (q: typeof latest | undefined, field: "grossProfit" | "operatingIncome") =>
       q && q.revenue && q[field] != null ? ((q[field] as number) / q.revenue) * 100 : null;
     const last4 = qs.slice(0, 4).filter((q) => q.epsActualReported != null && q.epsEstimateReported != null);
-    const est = [...(financialsDoc?.annualEstimates ?? [])].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
-    // The fiscal year in progress is the one after the last REPORTED year (a
-    // calendar-year rule picked NVDA's already-reported FY2026 as "current").
-    const lastReportedFy = Math.max(
-      0,
-      ...(financialsDoc?.annual ?? [])
-        .filter((a) => a.epsActual != null || a.revenue != null)
-        .map((a) => Number(a.fiscalYear) || 0),
-    );
-    const thisYear = lastReportedFy > 0 ? lastReportedFy + 1 : new Date().getFullYear();
-    const curEst = est.find((e) => Number(e.fiscalYear) >= thisYear && e.epsEstimate != null) ?? null;
+    // The fiscal year in progress is the first after the last REPORTED year,
+    // matched on period end dates (see forwardAnnualEstimates — label
+    // comparison put January year-ends one year behind).
+    const est = forwardAnnualEstimates(financialsDoc);
+    const curEst = est[0]?.epsEstimate != null ? est[0] : null;
     const nextEst = curEst ? est.find((e) => Number(e.fiscalYear) === Number(curEst.fiscalYear) + 1 && e.epsEstimate != null) ?? null : null;
     const cons = (Array.isArray(liveConsensusList) ? liveConsensusList : []).find((c) => c.ticker === currentTicker) ?? null;
     // Windows anchored on today's ET date (render-pure, no clock read).
@@ -556,12 +564,11 @@ export function StockIntelligenceScreen() {
     // Next report on or after today: the stored date when it is still ahead,
     // else the earnings calendar (a stored date can be a report already made).
     const todayIso = etTodayIso();
-    const storedEr = liveCompany?.nextEarningsDate && liveCompany.nextEarningsDate >= todayIso ? liveCompany.nextEarningsDate : null;
-    const calEr = (Array.isArray(liveEarningsList) ? liveEarningsList : [])
-      .filter((e) => e.ticker === currentTicker && e.date >= todayIso)
-      .map((e) => e.date)
-      .sort()[0] ?? null;
-    const erDate = [storedEr, calEr].filter((d): d is string => !!d && d >= todayIso).sort()[0] ?? null;
+    const erDate = nextEarningsDate(
+      liveCompany?.nextEarningsDate,
+      (Array.isArray(liveEarningsList) ? liveEarningsList : []).filter((e) => e.ticker === currentTicker),
+      todayIso,
+    );
     const erDays = erDate ? Math.round((Date.parse(erDate + "T00:00:00Z") - todayMs) / 86_400_000) : null;
     const pivots = liveCompany?.keyLevels?.daily ?? null;
     const isBank = /bank|savings|thrift|financial/i.test(liveCompany?.industry ?? "") || /financial/i.test(liveCompany?.sector ?? "");
@@ -660,11 +667,9 @@ export function StockIntelligenceScreen() {
       .filter((e) => e.ticker === stock.t)
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const upcomingEr = symEvents.find((e) => e.date >= todayStr) ?? null;
-    // A stored nextEarningsDate can be a report that already happened (MSFT
-    // showed Jul 29 after it reported); only a future date counts.
-    const storedEr = liveCompany?.nextEarningsDate && liveCompany.nextEarningsDate >= todayStr ? liveCompany.nextEarningsDate : null;
-    const realErDate = [storedEr, upcomingEr?.date].filter((d): d is string => !!d && d >= todayStr).sort()[0] ?? null;
+    // One next-report date for every card (next-earnings.ts).
+    const realErDate = nextEarningsDate(liveCompany?.nextEarningsDate, symEvents, todayStr);
+    const upcomingEr = withOneUpcomingReport(symEvents, realErDate, todayStr).find((e) => e.date >= todayStr) ?? null;
 
     const items: UpcomingEvent[] = [];
 
@@ -683,8 +688,13 @@ export function StockIntelligenceScreen() {
         ? `Consensus: ${[epsEst ? `EPS ${epsEst}` : "", revEst ? `Rev ${revEst}` : ""].filter(Boolean).join(" · ")}`
         : `Consensus quarterly revenue and EPS report for ${stock.t}`;
 
+      const isConfirmed = Boolean(
+        (upcomingEr as any)?.confirmed ?? (liveCompany as any)?.earningsConfirmed
+      );
+      const estBadge = !isConfirmed ? " (Estimated)" : "";
+
       items.push({
-        date: fmtDateStr,
+        date: `${fmtDateStr}${estBadge}`,
         days: daysStr,
         n: upcomingEr?.session ? `Earnings Release (${upcomingEr.session})` : "Quarterly Earnings Release",
         txt: `${estTxt}; historical event volatility window`,
@@ -773,6 +783,8 @@ export function StockIntelligenceScreen() {
   }>>(new Map());
 
   const missingPeersKey = missingPeers.join(",");
+  // Key of the peer set whose summary request has settled (success or failure).
+  const [peersSettledKey, setPeersSettledKey] = useState("");
   useEffect(() => {
     if (!missingPeersKey) return;
     let active = true;
@@ -798,9 +810,17 @@ export function StockIntelligenceScreen() {
           return next;
         });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (active) setPeersSettledKey(missingPeersKey); });
     return () => { active = false; };
   }, [missingPeersKey]);
+
+  // Hold the table back until company, universe and peer summaries have landed,
+  // so rows don't render as dashes (or sector-fallback tickers) and then fill in.
+  const peersPending =
+    liveCompanyLoading ||
+    companiesLoading ||
+    (missingPeersKey !== "" && peersSettledKey !== missingPeersKey);
 
   type PeerRowItem = {
     t: string;
@@ -926,7 +946,7 @@ export function StockIntelligenceScreen() {
     title: string;
     target: number;
     stop: number;
-    confAtSave: number;
+    confAtSave: number | null;
     savedDate: string;
     wO?: Record<string, number> | null;
   } | null>(null);
@@ -1023,19 +1043,8 @@ export function StockIntelligenceScreen() {
   // Check if we have real revenue and EPS growth from financialsDoc (FMP)
   const realFundGrowth = useMemo(() => {
     if (!financialsDoc?.quarters || financialsDoc.quarters.length < 5) return null;
-    const latest = financialsDoc.quarters[0];
-    const yearAgo = financialsDoc.quarters[4];
-    let revYoy: number | null = null;
-    let epsYoy: number | null = null;
-    if (latest.revenue != null && yearAgo.revenue != null && yearAgo.revenue > 0) {
-      revYoy = ((latest.revenue - yearAgo.revenue) / yearAgo.revenue) * 100;
-    }
-    const latestEps = reportedQuarterEps(latest) ?? latest.epsActual;
-    const yearAgoEps = reportedQuarterEps(yearAgo) ?? yearAgo.epsActual;
-    if (latestEps != null && yearAgoEps != null && Math.abs(yearAgoEps) > 0.05) {
-      epsYoy = ((latestEps - yearAgoEps) / Math.abs(yearAgoEps)) * 100;
-    }
-    return { revYoy, epsYoy };
+    // Revenue and GAAP diluted EPS growth vs the same fiscal period a year earlier.
+    return quarterYoY(financialsDoc.quarters);
   }, [financialsDoc]);
 
   // Real market cap format
@@ -1504,13 +1513,17 @@ export function StockIntelligenceScreen() {
   // Stats definition for Overview header
   const peVal = liveCompany?.peRatio ?? stock.pe;
   const fpeVal = liveCompany?.forwardPe ?? stock.fpe;
-  const hi52 = liveCompany?.high52 ?? stock.hi;
-  const lo52 = liveCompany?.low52 ?? stock.lo;
+  const r52 = range52(
+    { high: liveCompany?.high52 ?? stock.hi, low: liveCompany?.low52 ?? stock.lo },
+    { high: sharedQuote?.dayHigh, low: sharedQuote?.dayLow },
+  );
+  const hi52 = r52.high;
+  const lo52 = r52.low;
   const statsRow = [
     { k: "MARKET CAP", v: realMcap || "—", sub: liveCompany?.sector || stock.sector || "Equity" },
     { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },
     { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
-    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, FMP reported" : "y/y, latest qtr" },
+    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, GAAP diluted" : "y/y, latest qtr" },
     { k: "52W HIGH / LOW", v: `${hi52 != null ? usd(hi52) : "—"} / ${lo52 != null ? usd(lo52) : "—"}`, sub: "Range" },
   ];
 
@@ -1518,7 +1531,7 @@ export function StockIntelligenceScreen() {
   // 6-month bullish forward run as the "Why it could move" tab, so the two
   // never disagree (the old fallback showed fixed 88/87/80/… for every stock).
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
-  const overviewConf = Math.round(overviewRun.conf);
+  const overviewConf = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
   const overviewCf = overviewRun.cats.filter((c) => Math.round(c.score) >= 60).length;
 
   // Confluence dots
@@ -2325,9 +2338,11 @@ export function StockIntelligenceScreen() {
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                       CONFIDENCE
                     </div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
-                      {overviewConf}
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: overviewConf != null ? 52 : 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
+                      {overviewConf != null ? overviewConf : "Unavailable"}
+                      {overviewConf != null && (
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -2654,7 +2669,7 @@ export function StockIntelligenceScreen() {
           const fAl = fRun.cats.filter((c: any) => Math.round(c.score) >= 60).length;
           const C = 2 * Math.PI * 70; // 439.82
           const ringDash = `${(C * fAl) / 7} ${C}`;
-          const fConf = Math.round(fRun.conf);
+          const fConf = fRun.conf != null ? Math.round(fRun.conf) : null;
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -2876,11 +2891,13 @@ export function StockIntelligenceScreen() {
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                         CONFIDENCE
                       </div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
-                        {fConf}
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                          {" "}/ 100
-                        </span>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: fConf != null ? 52 : 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
+                        {fConf != null ? fConf : "Unavailable"}
+                        {fConf != null && (
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                            {" "}/ 100
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2920,20 +2937,18 @@ export function StockIntelligenceScreen() {
           if (fmpQ && fmpQ.length >= 2) {
             // Real FMP fundamental data series
             const revSeries = fmpQ.map((q) => (q.revenue || 0) / 1e9);
-            const epsSeries = fmpQ.map((q) => reportedQuarterEps(q) ?? q.epsActual ?? 0);
+            // GAAP diluted (gaapQuarterEps) — the same basis as EPS (TTM) and P/E.
+            const epsSeries = fmpQ.map((q) => gaapQuarterEps(q) ?? 0);
             // Gross margin means nothing for a bank (no cost of goods; JPM read
             // 62.3%), and a statement whose gross profit IS operating income
             // (NEE: 32.4% / 32.4%) has no real gross line — show no data then.
             const noGross = isBank || fmpQ.every((q) => q.grossProfit != null && q.operatingIncome != null && q.grossProfit === q.operatingIncome);
             const gmSeries = noGross ? [] : fmpQ.map((q) => q.grossMarginPct != null ? q.grossMarginPct : (q.revenue ? ((q.grossProfit || 0) / q.revenue) * 100 : 0));
-            const fcfSeries = fmpQ.map((q) => {
-              if (q.freeCashFlow != null) return q.freeCashFlow / 1e9;
-              if (q.operatingCashFlow != null && q.capitalExpenditures != null) {
-                return (q.operatingCashFlow - Math.abs(q.capitalExpenditures)) / 1e9;
-              }
-              return (q.operatingCashFlow ?? q.netIncome ?? 0) / 1e9;
-            });
-            const opSeries = fmpQ.map((q) => (q.operatingIncome ?? q.netIncome ?? 0) / 1e9);
+            // Same definition as the TTM FCF yield (computeQuarterFcf) — never
+            // operating cash flow or net income standing in for it.
+            const fcfSeries = fmpQ.map((q) => (computeQuarterFcf(q) ?? 0) / 1e9);
+            // Never fall back to net income; return [] to render "—" when missing or for banks.
+            const opSeries = computeOperatingIncomeSeries(fmpQ, isBank);
             // Total debt (short + long term + leases), as quote pages report it — not long-term only.
             const debtSeries = fmpQ.map((q) => (q.totalDebt ?? q.longTermDebt ?? 0) / 1e9);
             fsr = [revSeries, epsSeries, gmSeries, fcfSeries, opSeries, debtSeries];
@@ -2947,6 +2962,11 @@ export function StockIntelligenceScreen() {
           }
 
           if (!hasFmp && (!fsr[0] || fsr[0].length === 0)) {
+            // Financials still in flight (data is null until the fetch resolves):
+            // show a quiet placeholder instead of flashing "Not Available".
+            if (financialsLoading || (!financialsDoc && !financialsError)) {
+              return <div style={{ minHeight: 240 }} aria-busy="true" />;
+            }
             return (
               <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--si-text-dim, #5a6876)" }}>
                 <div style={{ fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #f0f4f8)", marginBottom: 8 }}>
@@ -2959,13 +2979,21 @@ export function StockIntelligenceScreen() {
             );
           }
 
+          // Dollar amounts in billions: the sign goes before the "$" ("-$5.4B",
+          // not "$-5.4B", which reads as 5.4), and under $1B shows in millions
+          // ("$167M", not "$0.0B").
+          const usdB = (v: number) => {
+            const a = Math.abs(v);
+            const sign = v < 0 && a >= 0.0005 ? "-" : "";
+            return a >= 1 ? `${sign}$${a.toFixed(1)}B` : `${sign}$${(a * 1000).toFixed(0)}M`;
+          };
           const FM: [string, (v: number) => string][] = [
-            ["REVENUE", (v) => "$" + v.toFixed(1) + "B"],
-            ["EPS", (v) => "$" + v.toFixed(2)],
+            ["REVENUE", usdB],
+            ["EPS (GAAP)", (v) => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2)],
             ["GROSS MARGIN", (v) => v.toFixed(1) + "%"],
-            ["FREE CASH FLOW", (v) => "$" + v.toFixed(1) + "B"],
-            [hasFmp ? "OPERATING INCOME" : "ROIC", (v) => (hasFmp ? "$" + v.toFixed(1) + "B" : v.toFixed(0) + "%")],
-            ["TOTAL DEBT", (v) => "$" + v.toFixed(1) + "B"],
+            ["FREE CASH FLOW", usdB],
+            [hasFmp ? "OPERATING INCOME" : "ROIC", (v) => (hasFmp ? usdB(v) : v.toFixed(0) + "%")],
+            ["TOTAL DEBT", usdB],
           ];
           const fundMetrics = FM.map(([k, f], i) => {
             const a = fsr[i] ?? [];
@@ -3031,21 +3059,28 @@ export function StockIntelligenceScreen() {
 
           const evLabel = latestQ && !hasTotalDebt && latestQ.longTermDebt != null ? "EV/EBITDA (LT Debt)" : "EV/EBITDA";
 
+          // Reference benchmark medians by sector (semiconductor vs general market)
+          // Outlier multiples (e.g. >100x P/E) are rendered dynamically with log-scale / proportional upper bounds.
+          const basePe = semi ? 38.0 : 22.0;
+          const baseFpe = semi ? 31.2 : 16.8;
+          const baseEv = semi ? 29.4 : 14.2;
+
           const VV: [string, string, number, string, number][] = [
-            ["P/E", livePe != null ? livePe.toFixed(1) : "—", semi ? 38.0 : stock.t === "PLTR" ? 160 : 22, "×", livePe ?? 0],
-            ["Forward P/E", stock.fpe != null ? stock.fpe.toFixed(1) : "—", semi ? 31.2 : stock.t === "PLTR" ? 128 : 16.8, "×", stock.fpe ?? 0],
-            [evLabel, realEvEbitda != null && Number.isFinite(realEvEbitda) && realEvEbitda > 0 ? realEvEbitda.toFixed(1) : "—", semi ? 29.4 : stock.t === "PLTR" ? 120 : 14.2, "×", realEvEbitda && realEvEbitda > 0 ? realEvEbitda : 0],
+            ["P/E", livePe != null ? livePe.toFixed(1) : "—", basePe, "×", livePe ?? 0],
+            ["Forward P/E", stock.fpe != null ? stock.fpe.toFixed(1) : "—", baseFpe, "×", stock.fpe ?? 0],
+            [evLabel, realEvEbitda != null && Number.isFinite(realEvEbitda) && realEvEbitda > 0 ? realEvEbitda.toFixed(1) : "—", baseEv, "×", realEvEbitda && realEvEbitda > 0 ? realEvEbitda : 0],
             ["PEG", realPeg != null && Number.isFinite(realPeg) && realPeg > 0 ? realPeg.toFixed(2) : "—", 1.45, "", realPeg && realPeg > 0 ? realPeg : 0],
             ["FCF Yield", realFcfYield != null && Number.isFinite(realFcfYield) ? realFcfYield.toFixed(1) : "—", 2.6, "%", realFcfYield && realFcfYield > 0 ? realFcfYield : 0],
           ];
           const valRows = VV.map(([k, vStr, med, u, numVal]) => {
+            // Generic outlier scaling: if metric is > 4x benchmark, use dynamic scaling
             const top = Math.max(numVal, med) * 1.25 || 1;
             return {
               k,
               v: vStr !== "—" ? vStr + u : "—",
               med: med + u,
-              w: vStr !== "—" ? ((numVal / top) * 100).toFixed(1) + "%" : "0%",
-              m: ((med / top) * 100).toFixed(1) + "%",
+              w: vStr !== "—" ? Math.min(100, (numVal / top) * 100).toFixed(1) + "%" : "0%",
+              m: Math.min(100, (med / top) * 100).toFixed(1) + "%",
             };
           });
 
@@ -3131,7 +3166,13 @@ export function StockIntelligenceScreen() {
                     <span style={{ textAlign: "right" }}>P/E</span>
                     <span style={{ textAlign: "right" }}>RS RANK</span>
                   </div>
-                  {peersAll.length === 0 ? (
+                  {peersPending ? (
+                    <div aria-busy="true" style={{ padding: "8px 0" }}>
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} style={{ height: 38, margin: "8px 0", borderRadius: 6, background: "rgba(147,161,175,0.08)" }} />
+                      ))}
+                    </div>
+                  ) : peersAll.length === 0 ? (
                     <div style={{ padding: "18px 0", textAlign: "center", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 13 }}>
                       No peer companies reported for {stock.t}.
                     </div>
@@ -3427,8 +3468,14 @@ export function StockIntelligenceScreen() {
           };
 
           // 1. EARNINGS (FMP Live Earnings Feed & Financials)
-          const tickerEarnings = (Array.isArray(liveEarningsList) ? liveEarningsList : []).filter(
+          // One upcoming card per report, dated like every other screen (next-earnings.ts).
+          const tickerEarningsAll = (Array.isArray(liveEarningsList) ? liveEarningsList : []).filter(
             (e) => e?.ticker && e.ticker.toUpperCase() === stock.t
+          );
+          const tickerEarnings = withOneUpcomingReport(
+            tickerEarningsAll,
+            nextEarningsDate(liveCompany?.nextEarningsDate, tickerEarningsAll, etTodayIso()),
+            etTodayIso(),
           );
           tickerEarnings.forEach((e) => {
             const dd = calcDd(e.date);
@@ -3462,15 +3509,15 @@ export function StockIntelligenceScreen() {
 
           allGrades.forEach((g) => {
             const dd = calcDd(g.date);
-            const dir = g.action === "upgrade" || (g.priceTarget && g.previousPriceTarget && g.priceTarget > g.previousPriceTarget)
-              ? "Positive"
-              : g.action === "downgrade"
-                ? "Risk"
-                : "Neutral";
+            // Same label and direction as the Analyst Actions table.
+            const meta = resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget, g.priceTargetChange);
+            // A reiteration is neutral news whatever the standing rating.
+            const moved = !/maintain|reiterate/i.test(meta.shownAction);
+            const dir = moved && meta.dir > 0 ? "Positive" : moved && meta.dir < 0 ? "Risk" : "Neutral";
             liveCatalystItems.push({
               date: fmtDateShort(g.date),
               cat: "Analyst actions",
-              ev: `${g.firm || "Analyst"} ${g.action || "rates"} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
+              ev: `${g.firm || "Analyst"}: ${meta.shownAction} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
               note: `${g.previousGrade ? `Prior: ${g.previousGrade}. ` : ""}${g.previousPriceTarget ? `Prior target: $${g.previousPriceTarget}. ` : ""}Consensus: ${tickerConsensus?.consensus || "Hold"} (${(tickerConsensus?.buy ?? 0) + (tickerConsensus?.strongBuy ?? 0)} Buys).`,
               imp: "MED",
               dir,
@@ -3935,18 +3982,20 @@ export function StockIntelligenceScreen() {
           const thUp = ((tgtV / stock.p) - 1) * 100;
           const thDn = ((stopV / stock.p) - 1) * 100;
           const thRR = Math.abs(thUp / (thDn || 1));
-          const thConf = Math.round(thRun.conf);
-          const dConf = Math.round(thRun.conf - thPrev.conf);
+          const thConf = thRun.conf != null ? Math.round(thRun.conf) : null;
+          const dConf = (thRun.conf != null && thPrev.conf != null) ? Math.round(thRun.conf - thPrev.conf) : 0;
           const thAtRisk = thRun.critFail.length > 0;
-          const thBand: [string, string] = thAtRisk
-            ? ["THESIS AT RISK", DN]
-            : thConf >= 75
-              ? ["HIGH CONVICTION", UP]
-              : thConf >= 60
-                ? ["CONSTRUCTIVE", STEEL]
-                : thConf >= 45
-                  ? ["MIXED", "#f5b031"]
-                  : ["WEAK", DN];
+          const thBand: [string, string] = thConf == null
+            ? ["UNAVAILABLE", "#93a1af"]
+            : thAtRisk
+              ? ["THESIS AT RISK", DN]
+              : thConf >= 75
+                ? ["HIGH CONVICTION", UP]
+                : thConf >= 60
+                  ? ["CONSTRUCTIVE", STEEL]
+                  : thConf >= 45
+                    ? ["MIXED", "#f5b031"]
+                    : ["WEAK", DN];
 
           const thStrong = thRun.drv.slice().sort((a: any, b: any) => b.pts - a.pts).slice(0, 3);
           const thWeak = thRun.drv.filter((d: any) => d.share >= 2).sort((a: any, b: any) => a.ev - b.ev).slice(0, 2);
@@ -4251,12 +4300,14 @@ export function StockIntelligenceScreen() {
                             THESIS CONFIDENCE
                           </div>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 56, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {thConf}
+                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: thConf != null ? 56 : 32, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
+                              {thConf != null ? thConf : "Unavailable"}
                             </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
-                              / 100
-                            </span>
+                            {thConf != null && (
+                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
+                                / 100
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div style={{ textAlign: "right" }}>
@@ -4769,7 +4820,7 @@ export function StockIntelligenceScreen() {
                     ["UPSIDE", pct1(thUp), UP],
                     ["DOWNSIDE", pct1(thDn), DN],
                     ["REWARD / RISK", thRR.toFixed(1) + "×", thRR >= 2 ? UP : thRR >= 1.2 ? "#f5b031" : DN],
-                    ["THESIS CONFIDENCE", `${thConf} / 100`, thBand[1]],
+                    ["THESIS CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
                     ["CORE DRIVERS INTACT", `${thRun.coreOk} of ${thRun.core.length}`, thRun.coreOk === thRun.core.length ? UP : "#f5b031"],
                   ].map(([k, v, c], idx) => (
                     <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
@@ -4934,7 +4985,7 @@ export function StockIntelligenceScreen() {
           const monPx = monScenario === "break" ? (b2 ? savedThesis.stop * 0.985 : savedThesis.stop * 1.015) : stock.p;
           const monPriceBroken = b2 ? monPx <= savedThesis.stop : monPx >= savedThesis.stop;
           const monFundBroken = monRun.crit.filter((d: any) => d.ev < 25);
-          const monDelta = monRun.conf - savedThesis.confAtSave;
+          const monDelta = (monRun.conf != null && savedThesis.confAtSave != null) ? monRun.conf - savedThesis.confAtSave : 0;
 
           let monStatus = "THESIS INTACT";
           let monCol = STEEL;
@@ -4951,7 +5002,7 @@ export function StockIntelligenceScreen() {
             monCol = DN;
             monBy = monFundBroken[0].name;
             monCause = `Fundamental invalidation triggered: ${monFundBroken[0].name} evidence fell to ${Math.round(monFundBroken[0].ev)}.`;
-          } else if (monRun.critFail.length || monRun.conf < 45) {
+          } else if (monRun.critFail.length || (monRun.conf != null && monRun.conf < 45)) {
             monStatus = "AT RISK";
             monCol = "#f2763a";
             monBy = monRun.critFail.length ? monRun.critFail[0].name : "Aggregate confidence";
@@ -5100,15 +5151,21 @@ export function StockIntelligenceScreen() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CONFIDENCE AT SAVE</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{savedThesis.confAtSave}</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"}</div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CONFIDENCE NOW</div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
-                      {Math.round(monRun.conf)}{" "}
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: monDelta > 0 ? UP : monDelta < 0 ? "#f5b031" : "#93a1af" }}>
-                        ({monDelta >= 0 ? "+" : ""}{Math.round(monDelta)})
-                      </span>
+                      {monRun.conf != null ? (
+                        <>
+                          {Math.round(monRun.conf)}{" "}
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: monDelta > 0 ? UP : monDelta < 0 ? "#f5b031" : "#93a1af" }}>
+                            ({monDelta >= 0 ? "+" : ""}{Math.round(monDelta)})
+                          </span>
+                        </>
+                      ) : (
+                        "Unavailable"
+                      )}
                     </div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
@@ -5253,7 +5310,7 @@ export function StockIntelligenceScreen() {
                       ["Now", `Status → ${monStatus}. ${monCause}`],
                       ["Today 13:40", `${monRun.drv[0]?.name}: evidence holding above threshold.`],
                       ["Today 10:15", `Market regime check: constructive liquidity environment.`],
-                      [savedThesis.savedDate, `Thesis saved · confidence ${savedThesis.confAtSave} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
+                      [savedThesis.savedDate, `Thesis saved · confidence ${savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
                     ].map(([tt, m], i) => (
                       <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", width: 88, flex: "none" }}>

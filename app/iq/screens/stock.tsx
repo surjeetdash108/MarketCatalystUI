@@ -29,6 +29,7 @@ import { Stock13FFilingsView } from "../stock-13f-view";
 import { StockAnalystActionsView } from "../stock-analyst-actions-view";
 import { StockEarningsEpsSales } from "../stock-earnings-eps-sales";
 import { useSI } from "../si/si-context";
+import { resolveDividends } from "../dividend.util";
 
 const POPULAR_16_ETFS = new Set([
   "CIBR", "DIA", "GLD", "HACK", "HYG", "IBIT", "IWM", "QQEW",
@@ -39,10 +40,12 @@ import type {
   CompanyDoc, CompanySummary, AnalystConsensusDoc, InsiderTxDoc, OwnershipDoc,
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
-import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL } from "../types";
-import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, type EpsSalesPt } from "../eps-sales-data";
-import { surprisePct } from "../types";
+import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, gaapQuarterEps, quarterLabel, ADJUSTED_SURPRISE_LABEL } from "../types";
+import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type EpsSalesPt } from "../eps-sales-data";
+import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
+import { range52, fiftyTwoWeekBars } from "../range52";
+import { nextEarningsDate } from "../next-earnings";
 
 const labelOfTally = (t: Tally) => labelOf(scoreOf(t));
 
@@ -829,11 +832,20 @@ export function StockScreen({
     }
   }, [visibleTabs, activeTab]);
 
-  // Watchlists are backend-synced (multiple named lists). The star is "filled"
-  // when the ticker is in ANY list; clicking it opens the which-list picker.
+  // Watchlists are backend-synced (multiple named lists). The star beside the
+  // ticker name is "filled" when the ticker is in ANY list. See toggleWatch for
+  // what a click does.
   const { watchlists, addTicker, removeTicker, createList, tickerLimit } = useWatchlistsContext();
   const watchedSet = useMemo(() => new Set(watchlists.flatMap(w => w.tickers)), [watchlists]);
   const [wlPicker, setWlPicker] = useState<{ sym: string; x: number; y: number } | null>(null);
+  const [starBusy, setStarBusy] = useState(false);
+  const [wlToast, setWlToast] = useState<{ text: string; kind: "ok" | "error" } | null>(null);
+  useEffect(() => {
+    if (!wlToast) return;
+    // Failures carry a longer explanation, so they stay up a little longer.
+    const t = setTimeout(() => setWlToast(null), wlToast.kind === "error" ? 5000 : 2600);
+    return () => clearTimeout(t);
+  }, [wlToast]);
   const chartRef = useRef<HTMLDivElement>(null);
 
   // Cross-column height match (generic — works for any stock, any peer count):
@@ -992,16 +1004,18 @@ export function StockScreen({
   const klWeekly =
     (liveCompany?.keyLevels?.weekly ?? null)
     ?? (priorWk ? pivotsFrom(priorWk.h, priorWk.l, priorWk.c) : null);
-  const week52 = yr.length > 1
-    ? { high: Math.max(...yr.map(b => b.h)), low: Math.min(...yr.map(b => b.l)) }
-    : null;
-  // Falls back to the company doc's own avgVolume20 (technical-indicators.job,
-  // or the summary's identical computation) until the year of bars this
-  // normally derives from has loaded — same reasoning as keyStats below.
   // Twenty COMPLETED sessions: the series can end on today's still-forming
   // bar, which pulled the average down by half a day's volume (CRM read 8.36M
   // against a 20-session 8.81M).
   const yrDone = completedSessions(yr);
+  // Fallback only (keyStats.high52/low52 first): the same 52-week window as the backend.
+  const yr52w = fiftyTwoWeekBars(yrDone);
+  const week52 = yr52w.length > 0
+    ? { high: Math.max(...yr52w.map(b => b.h)), low: Math.min(...yr52w.map(b => b.l)) }
+    : null;
+  // Falls back to the company doc's own avgVolume20 (technical-indicators.job,
+  // or the summary's identical computation) until the year of bars this
+  // normally derives from has loaded — same reasoning as keyStats below.
   const avgVol20 = yrDone.length > 0
     ? yrDone.slice(-20).reduce((s, b) => s + b.v, 0) / Math.min(20, yrDone.length)
     : (keyStats?.avgVolume20 ?? null);
@@ -1131,8 +1145,8 @@ export function StockScreen({
     sector: keyStats?.sector ?? null,
     industry: keyStats?.industry ?? null,
     insiderActivity: symInsider,
-    week52High: week52?.high ?? keyStats?.high52 ?? null,
-    week52Low: week52?.low ?? keyStats?.low52 ?? null,
+    week52High: range52({ high: keyStats?.high52 ?? week52?.high, low: keyStats?.low52 ?? week52?.low }, { high: sessHigh, low: sessLow }).high,
+    week52Low: range52({ high: keyStats?.high52 ?? week52?.high, low: keyStats?.low52 ?? week52?.low }, { high: sessHigh, low: sessLow }).low,
   };
   const isUp = (data.pctChange ?? 0) >= 0;
   // `p` keeps a 0 fallback purely as the numeric baseline for the derived
@@ -1181,10 +1195,7 @@ export function StockScreen({
   // wins while it is still ahead; a stored date can be a report already made
   // (MSFT showed Jul 29 after reporting), so a past one falls through to the
   // earnings calendar. Never a past date: "—" when nothing is scheduled.
-  const storedEr = keyStats?.nextEarningsDate && keyStats.nextEarningsDate >= todayStr ? keyStats.nextEarningsDate : null;
-  const calEr = symEvents.find(e => e.date >= todayStr)?.date ?? null;
-  const erCandidates = [storedEr, calEr].filter((d): d is string => !!d && d >= todayStr).sort();
-  const erDate = erCandidates[0] || "—";
+  const erDate = nextEarningsDate(keyStats?.nextEarningsDate, symEvents, todayStr) || "—";
   // Earnings dots for both charts on this screen. Shared derivation (see
   // chart-earnings.ts) so the panel charts on watchlist / portfolio / screener /
   // movers / IPOs place the same reports at the same points. Called with the
@@ -1231,12 +1242,25 @@ export function StockScreen({
   const offHigh52 = keyStats?.pctFromHigh52 ?? null;
   const offLow52 = keyStats?.pctFromLow52 ?? null;
   const rsiSeries = liveCompany?.rsi14Series ?? null;
-  const divPerShare = keyStats?.dividendPerShare ?? null;
   // Headline quote (regular session + after hours), shared with the panel
   // charts so both print the same number. Kept separate from `p` so the many
   // derived stats below (EPS, 52w positioning) stay pinned to the snapshot.
   const hq = useHeadlineQuote(sym, live, { price: data.price, pctChange: data.pctChange });
   const { dispPrice } = hq;
+
+  const divMetrics = resolveDividends({
+    dh: dividendHistory,
+    price: dispPrice ?? data.price,
+    fallbackDivPerShare: keyStats?.dividendPerShare,
+    fallbackYield: data.dividendYield,
+  });
+  const divPerShare = divMetrics.forwardPerShare;
+
+  const isErConfirmed = Boolean(
+    (liveCompany as any)?.earningsConfirmed ??
+    (keyStats as any)?.earningsConfirmed ??
+    symEvents.find(e => e.date === erDate && (e as any).confirmed)
+  );
 
   // v is in $B. Below $1B, show millions so micro-caps (e.g. GAUZ ≈ $9M) read
   // "$9.1M" rather than rounding to a meaningless "$0.0B".
@@ -1379,6 +1403,7 @@ export function StockScreen({
       const repAct = q.epsActualReported ?? null;
       const repEst = q.epsEstimateReported ?? null;
       const pairedSurp = surprisePct(repAct, repEst);
+      const surpStr = formatEpsSurprise(repAct, repEst);
       const paired = pairedSurp != null;
       const act = repAct ?? (q.epsActual as number);
       const surp = pairedSurp ?? 0;
@@ -1387,6 +1412,9 @@ export function StockScreen({
           ? fmtDate(q.endDate, { month: "short", year: "2-digit" })
           : `${q.fiscalPeriod ?? ""} ${q.fiscalYear ?? ""}`.trim(),
         e: paired && repEst != null ? repEst : 0, a: act, surp: parseFloat(surp.toFixed(1)), mv: 0,
+        surpStr,
+        gaap: gaapQuarterEps(q),
+        label: quarterLabel(q),
       };
     });
   const beatStreak = (() => {
@@ -1617,6 +1645,36 @@ export function StockScreen({
     setWlPicker({ sym: s, x: r.right - 250, y: r.bottom });
   }
 
+  /**
+   * The star beside the ticker name. Not saved → one click adds it to the first
+   * watchlist (creating "My Watchlist" if there is none) and confirms with a
+   * toast. Saved in one list → a click removes it. Saved in several → open the
+   * picker, since "unstar" would be ambiguous.
+   */
+  async function toggleWatch(e: React.MouseEvent<HTMLButtonElement>) {
+    const S = sym.toUpperCase();
+    const saved = watchlists.filter(w => w.tickers.includes(S));
+    if (saved.length > 1) { openWatchlistPicker(S, e); return; }
+    if (saved.length === 1) {
+      void removeTicker(saved[0].id, S);
+      setWlToast({ text: `${S} removed from ${saved[0].name}`, kind: "ok" });
+      return;
+    }
+    // The server always returns at least one list, so none here means they
+    // haven't loaded (the button is disabled then) — never create one from here.
+    const list = watchlists[0];
+    if (!list) return;
+    setStarBusy(true);
+    try {
+      const res = await addTicker(list.id, S);
+      setWlToast(res.ok
+        ? { text: `${S} added to ${list.name}`, kind: "ok" }
+        : { text: res.message, kind: "error" });
+    } finally {
+      setStarBusy(false);
+    }
+  }
+
   return (
     // The container-query scope. This screen renders at four very different
     // widths — full screen, the mover drawer, the detail popover and the
@@ -1687,7 +1745,30 @@ export function StockScreen({
                 {/* StockLogo matches the height of NVDA + NASDAQ ET perfectly */}
                 <StockLogo sym={sym} size={23} style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0 }} />
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-                  <h1 style={{ lineHeight: 1.25 }}>{sym}</h1>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <h1 style={{ lineHeight: 1.25 }}>{sym}</h1>
+                    {(() => {
+                      const S = sym.toUpperCase();
+                      const lists = watchlists.filter(w => w.tickers.includes(S));
+                      const label = watchlists.length === 0 ? "Loading your watchlists…"
+                        : lists.length === 0 ? `Add ${S} to watchlist`
+                        : lists.length === 1 ? `Remove ${S} from ${lists[0].name}`
+                        : `Edit watchlists for ${S}`;
+                      return (
+                        <button
+                          type="button"
+                          className={`sd-star${watchedSet.has(S) ? " on" : ""}`}
+                          onClick={toggleWatch}
+                          disabled={starBusy || watchlists.length === 0}
+                          aria-pressed={watchedSet.has(S)}
+                          aria-label={label}
+                          title={label}
+                        >
+                          {watchedSet.has(S) ? "★" : "☆"}
+                        </button>
+                      );
+                    })()}
+                  </div>
                   <div className="ex" style={{ lineHeight: 1.25 }} title={[data.name, ex, group].filter(Boolean).join(" · ")}>
                     {[ex, group].filter(Boolean).join(" · ") || data.name}
                   </div>
@@ -1744,7 +1825,7 @@ export function StockScreen({
                 <QuoteHeadline q={hq} />
               </div>
               <div className="sd-snap-meta" style={{ marginTop: 14, display: "flex", alignItems: "center" }}>
-                <span>Vol <b>{sessionVol != null ? fmt(sessionVol) : "—"}</b></span>
+                <span>Vol <b>{sessionVol != null ? fmt(sessionVol, 0) : "—"}</b></span>
                 {mc != null && <span>Mkt cap <b>{cap(mc)}</b></span>}
                 {inSectorRank != null && inSectorTotal != null && (
                   <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".52rem", padding: "1px 5px" }}>
@@ -1857,9 +1938,9 @@ export function StockScreen({
             <div className="keystats">
               {([
                 ["Mkt Cap",        mc != null ? cap(mc) : null],
-                ["P/E",            data.peRatio != null ? data.peRatio.toFixed(1) : null],
+                ["P/E",            eps != null && eps <= 0 ? "n/a" : (data.peRatio != null ? data.peRatio.toFixed(1) : null)],
                 ["EPS (TTM)",      eps != null ? "$" + eps.toFixed(2) : null],
-                ["Next ER",        erDate],
+                ["Next ER",        erDate !== "—" ? `${fmtDate(erDate)}${!isErConfirmed ? " (Estimated)" : ""}` : null],
                 ["52W Range",      hi != null && lo != null ? "$" + nf(lo) + " – $" + nf(hi) : null],
                 // Distance from the 52-week extremes. Both are computed nightly
                 // and were sitting unused while the range they refer to was
@@ -1869,11 +1950,8 @@ export function StockScreen({
                 ["Avg Vol (20d)",  avgVol20 != null ? nf(avgVol20 / 1e6) + "M" : null],
                 ["Sector",         titleCaseLabel(data.sector)],
                 ["Industry",       titleCaseLabel(data.industry)],
-                // Forward-annualized yield (latest declared rate × frequency ÷
-                // price), per the backend methodology change — the "(fwd)" tag
-                // tells users it's forward, not trailing-twelve-month.
-                ["Div Yield",      data.dividendYield != null ? data.dividendYield.toFixed(2) + "% (fwd)" : null],
-                ["Div / Share",    divPerShare != null ? "$" + divPerShare.toFixed(2) + " (fwd)" : null],
+                ["Div Yield",      divMetrics.isPayer && divMetrics.forwardYieldPct != null ? `${divMetrics.forwardYieldPct.toFixed(2)}% (fwd)` : (divMetrics.isPayer ? null : "None")],
+                ["Div / Share",    divMetrics.isPayer && divMetrics.forwardPerShare != null ? `$${divMetrics.forwardPerShare.toFixed(2)} (fwd)` : (divMetrics.isPayer ? null : "None")],
               ] as [string, string | null][]).map(k => (
                 <div key={k[0]} className="kstat">
                   <div className="k">{k[0]}</div>
@@ -2307,17 +2385,17 @@ export function StockScreen({
         <div className="sd-rowflex">
           {(() => {
             const dh = dividendHistory;
-            const hasReal = !!dh && dh.isPayer;
-            const yieldPct = hasReal ? dh!.yieldPct : null;
-            const annualDiv = hasReal ? (dh!.ttmTotal ?? 0) : 0;
+            const hasReal = divMetrics.isPayer;
+            const yieldPct = divMetrics.forwardYieldPct ?? (hasReal ? dh?.yieldPct : null);
+            const annualDiv = divMetrics.trailingPerShare ?? (hasReal ? (dh?.ttmTotal ?? 0) : 0);
             const payoutRatio = eps != null && eps > 0 && yieldPct != null && yieldPct > 0
               ? Math.min(99, Math.round((annualDiv / eps) * 100)) : null;
-            const growthLabel = hasReal && dh!.cagr5yPct != null
-              ? `${dh!.cagr5yPct >= 0 ? "+" : ""}${dh!.cagr5yPct.toFixed(1)}% / yr`
+            const growthLabel = hasReal && dh?.cagr5yPct != null
+              ? `${dh.cagr5yPct >= 0 ? "+" : ""}${dh.cagr5yPct.toFixed(1)}% / yr`
               : null;
-            const streakLabel = hasReal && dh!.increaseStreakYears > 0 ? ` · ${dh!.increaseStreakYears}-yr streak` : "";
-            const divRows = hasReal
-              ? dh!.history.slice(0, 5).map(h => ({
+            const streakLabel = hasReal && dh && dh.increaseStreakYears > 0 ? ` · ${dh.increaseStreakYears}-yr streak` : "";
+            const divRows = hasReal && dh
+              ? dh.history.slice(0, 5).map(h => ({
                   label: h.exDividendDate ?? "—",
                   perShare: h.amount,
                   note: h.exDividendDate ? `ex ${h.exDividendDate.slice(5)}` : "",
@@ -2329,9 +2407,12 @@ export function StockScreen({
                   <h3>Dividend &amp; split history</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <VendorTag v={["fmp", "polygon"]} />
-                    {dh && (yieldPct != null
-                      ? <span className="pill up">{yieldPct.toFixed(2)}% yield</span>
-                      : <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>No dividend</span>)}
+                    {hasReal ? (<>
+                      {divMetrics.forwardYieldPct != null && <span className="pill up">{divMetrics.forwardYieldPct.toFixed(2)}% fwd</span>}
+                      {divMetrics.trailingYieldPct != null && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".65rem" }}>{divMetrics.trailingYieldPct.toFixed(2)}% trailing</span>}
+                    </>) : (
+                      <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>None</span>
+                    )}
                     {hasReal && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--up)", fontSize: ".62rem" }}>live · FMP</span>}
                     <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                   </div>
@@ -2359,8 +2440,12 @@ export function StockScreen({
                         </div>
                       ))}
                       <div className="minirow" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 6 }}>
-                        <span className="mid">Annual ({dh!.ttmPayments} payments)</span>
-                        <span className="r" style={{ color: "var(--text-hi)" }}>${annualDiv.toFixed(2)}/sh</span>
+                        <span className="mid">Forward run-rate</span>
+                        <span className="r" style={{ color: "var(--text-hi)" }}>${divMetrics.forwardPerShare != null ? divMetrics.forwardPerShare.toFixed(2) : annualDiv.toFixed(2)}/sh</span>
+                      </div>
+                      <div className="minirow" style={{ paddingTop: 4 }}>
+                        <span className="mid">Trailing ({dh.ttmPayments ?? 4} payments)</span>
+                        <span className="r" style={{ color: "var(--text-dim-solid)" }}>${annualDiv.toFixed(2)}/sh</span>
                       </div>
                     </>
                   )}
@@ -2524,14 +2609,15 @@ export function StockScreen({
                   <div style={{ fontSize: ".66rem", color: "var(--text-dim-solid)", marginBottom: 8 }}>Next report: {erDate}</div>
                   {hist10.slice(0, 5).map(q => (
                     <div key={q.q} className="minirow">
-                      <span className="tkr" style={{ width: 60 }}>{q.q}</span>
-                      <span className="mid mono">
-                        {q.e !== 0 && <span style={{ color: "var(--text-dim-solid)" }}>est ${fmt(q.e, 2)} → </span>}
-                        ${fmt(q.a, 2)} act
+                      <span className="tkr" style={{ width: 60 }} title={q.label}>{q.q}</span>
+                      <span className="mid mono" title={`EPS (GAAP diluted)${q.e !== 0 ? `; ${ADJUSTED_SURPRISE_LABEL}: adj. $${fmt(q.a, 2)} vs est. $${fmt(q.e, 2)}` : ""}`}>
+                        {q.gaap != null ? `$${fmt(q.gaap, 2)} GAAP` : "—"}
                       </span>
-                      {q.e !== 0
-                        ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "beat" : "miss"} {Math.abs(q.surp)}%</span>
-                        : <span className="r" style={{ color: "var(--text-dim-solid)" }}>—</span>}
+                      {q.surpStr && q.surpStr !== "—"
+                        ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surpStr.includes("vs est") ? q.surpStr : `${q.surp >= 0 ? "beat" : "miss"} ${q.surpStr}`}</span>
+                        : (q.e !== 0
+                          ? <span className={`r ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "beat" : "miss"} {Math.abs(q.surp)}%</span>
+                          : <span className="r" style={{ color: "var(--text-dim-solid)" }}>—</span>)}
                     </div>
                   ))}
                 </>
@@ -2622,20 +2708,26 @@ export function StockScreen({
             type Row = { k: string; v: ReactNode | null; delta?: { txt: string; up: boolean } | null };
             const left: Row[] = [
               { k: "Market cap",    v: mc != null ? cap(mc) : null },
-              { k: "P/E ratio",     v: data.peRatio != null ? data.peRatio.toFixed(2) : null },
+              { k: "P/E ratio",     v: eps != null && eps <= 0 ? "n/a" : (data.peRatio != null ? data.peRatio.toFixed(2) : null) },
               { k: "EPS (TTM)",     v: eps != null ? "$" + eps.toFixed(2) : null },
               // Forward-annualized (latest declared rate × frequency ÷ price).
-              { k: "Dividend (fwd)", v: divPerShare != null
-                  ? `$${divPerShare.toFixed(2)}${data.dividendYield != null ? ` (${data.dividendYield.toFixed(2)}%)` : ""}`
-                  : data.dividendYield != null ? data.dividendYield.toFixed(2) + "%" : null },
-              { k: "Ex-dividend date", v: exDiv ? fmtDate(exDiv) : null },
+              { k: "Dividend (fwd)", v: divMetrics.isPayer
+                  ? (divMetrics.forwardPerShare != null
+                      ? `$${divMetrics.forwardPerShare.toFixed(2)}${divMetrics.forwardYieldPct != null ? ` (${divMetrics.forwardYieldPct.toFixed(2)}%)` : ""}`
+                      : divMetrics.forwardYieldPct != null ? divMetrics.forwardYieldPct.toFixed(2) + "%" : null)
+                  : "None" },
+              { k: "Ex-dividend date", v: exDiv ? fmtDate(exDiv) : (divMetrics.isPayer ? null : "None") },
               { k: "Beta",          v: data.beta != null ? data.beta.toFixed(2) : ((keyStats as any)?.beta != null ? Number((keyStats as any).beta).toFixed(2) : ((liveCompany as any)?.beta != null ? Number((liveCompany as any).beta).toFixed(2) : null)) },
               { k: "Avg volume (20D)", v: avgVol20 != null ? Math.round(avgVol20).toLocaleString("en-US") : null },
               { k: "Sector",        v: data.sector ? titleCaseLabel(data.sector) : null },
               { k: "Industry",      v: data.industry ? titleCaseLabel(data.industry) : null },
               { k: "CEO",           v: liveCompany?.ceo ?? (keyStats as any)?.ceo ?? (data as any)?.ceo ?? null },
               { k: "Employees",     v: (liveCompany?.employees ?? (keyStats as any)?.employees ?? (data as any)?.employees) != null ? Number(liveCompany?.employees ?? (keyStats as any)?.employees ?? (data as any)?.employees).toLocaleString("en-US") : null },
-              { k: "Listing date",  v: (liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate) ? fmtDate(liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate) : null },
+              { k: "Listing date",  v: (() => {
+                  // A vendor placeholder (GE: 1900-01-01) is no listing date.
+                  const d = String(liveCompany?.listingDate ?? (keyStats as any)?.listingDate ?? (data as any)?.listingDate ?? (data as any)?.listDate ?? "").slice(0, 10);
+                  return /^\d{4}-\d{2}-\d{2}$/.test(d) && d > "1900-12-31" ? fmtDate(d) : null;
+                })() },
             ];
             const right: Row[] = [
               { k: "Volume",        v: sessionVol != null ? Math.round(sessionVol).toLocaleString("en-US") : null },
@@ -2652,7 +2744,7 @@ export function StockScreen({
                   : null },
               { k: "Price target",  v: target != null ? px(target) : null,
                 delta: targetUp != null ? { txt: pct(targetUp), up: targetUp >= 0 } : null },
-              { k: "Earnings date", v: erDate !== "—" ? fmtDate(erDate) : null },
+              { k: "Earnings date", v: erDate !== "—" ? <>{fmtDate(erDate)}{!isErConfirmed && <span className="pill" style={{ marginLeft: 6, fontSize: ".65rem", padding: "1px 5px", background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>Estimated</span>}</> : null },
             ];
             const col = (rows: Row[]) => (
               <dl className="sd-kv">
@@ -2927,19 +3019,24 @@ export function StockScreen({
 
                   {(() => {
                     const dh = dividendHistory;
-                    const hasReal = !!dh && dh.isPayer;
-                    const yieldPct = hasReal ? dh!.yieldPct : null;
-                    const annualDiv = hasReal ? (dh!.ttmTotal ?? 0) : 0;
+                    const hasReal = divMetrics.isPayer;
+                    const yieldPct = divMetrics.forwardYieldPct ?? (hasReal ? dh?.yieldPct : null);
+                    const annualDiv = divMetrics.trailingPerShare ?? (hasReal ? (dh?.ttmTotal ?? 0) : 0);
                     const payoutRatio = eps != null && eps > 0 && yieldPct != null && yieldPct > 0
                       ? Math.min(99, Math.round((annualDiv / eps) * 100)) : null;
-                    const cagr = hasReal ? dh!.cagr5yPct : null;
+                    const cagr = hasReal && dh ? dh.cagr5yPct : null;
                     return (
                       <div className="card">
                         <div className="card-h">
                           <h3>Dividend history</h3>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <VendorTag v={["fmp", "polygon"]} />
-                            {yieldPct != null && <span className="pill up">{yieldPct.toFixed(2)}% yield</span>}
+                            {hasReal ? (<>
+                              {divMetrics.forwardYieldPct != null && <span className="pill up">{divMetrics.forwardYieldPct.toFixed(2)}% fwd</span>}
+                              {divMetrics.trailingYieldPct != null && <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-hi)", fontSize: ".65rem" }}>{divMetrics.trailingYieldPct.toFixed(2)}% trailing</span>}
+                            </>) : (
+                              <span className="pill" style={{ background: "var(--surface-3)", color: "var(--text-dim-solid)" }}>None</span>
+                            )}
                             <span className="link" onClick={() => setInnerDrawer("dividend")}>View all →</span>
                           </div>
                         </div>
@@ -2954,9 +3051,9 @@ export function StockScreen({
                               ? <span style={{ color: cagr < 0 ? "var(--down)" : "var(--up)" }}>{cagr >= 0 ? "+" : "−"}{Math.abs(cagr).toFixed(1)}%/yr</span>
                               : "—"}
                             {payoutRatio != null && <> · payout {payoutRatio}%</>}
-                            {dh!.increaseStreakYears > 0 && <> · {dh!.increaseStreakYears}-yr streak</>}
+                            {dh.increaseStreakYears > 0 && <> · {dh.increaseStreakYears}-yr streak</>}
                           </div>
-                          {dh!.history.slice(0, 5).map((h, i) => (
+                          {dh.history.slice(0, 5).map((h, i) => (
                             <div key={(h.exDividendDate ?? "") + i} className="sd-row">
                               <span className="grow num">{h.exDividendDate ?? "—"}</span>
                               <span className="num">{h.amount != null ? `$${h.amount.toFixed(4)}/sh` : "—"}</span>
@@ -2964,7 +3061,11 @@ export function StockScreen({
                             </div>
                           ))}
                           <div className="sd-row">
-                            <span className="grow">Annual ({dh!.ttmPayments} payments)</span>
+                            <span className="grow">Forward run-rate</span>
+                            <span className="num">${divMetrics.forwardPerShare != null ? divMetrics.forwardPerShare.toFixed(2) : annualDiv.toFixed(2)}/sh</span>
+                          </div>
+                          <div className="sd-row">
+                            <span className="grow">Trailing ({dh.ttmPayments ?? 4} payments)</span>
                             <span className="num">${annualDiv.toFixed(2)}/sh</span>
                           </div>
                         </>)}
@@ -3326,7 +3427,7 @@ export function StockScreen({
                                   {peer.marketCap != null ? cap(peer.marketCap) : "N/A"}
                                 </td>
                                 <td className="mono" style={{ textAlign: "right", padding: "10px 14px", color: "var(--text-dim-solid)" }}>
-                                  {peer.peRatio != null ? peer.peRatio.toFixed(1) : "N/A"}
+                                  {peer.peRatio != null ? (peer.peRatio > 0 ? peer.peRatio.toFixed(1) : "n/a") : "N/A"}
                                 </td>
                                 <td style={{ textAlign: "center", padding: "10px 14px" }}>
                                   {peer.rsRating != null ? (
@@ -3785,18 +3886,20 @@ export function StockScreen({
                         <thead>
                           <tr>
                             <th>Quarter</th>
-                            <th className="num">EPS est</th>
-                            <th className="num">EPS act</th>
-                            <th className="num">Surprise</th>
+                            <th className="num" title="GAAP diluted EPS">EPS (GAAP)</th>
+                            <th className="num" title="FMP adjusted EPS — the basis of the estimate">Adj. EPS</th>
+                            <th className="num">Est. (adj.)</th>
+                            <th className="num" title={ADJUSTED_SURPRISE_LABEL}>{ADJUSTED_SURPRISE_LABEL}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {hist10.map(q => (
                             <tr key={q.q}>
-                              <td><b style={{ color: "var(--text-hi)" }}>{q.q}</b></td>
-                              <td className="num">${q.e.toFixed(2)}</td>
+                              <td><b style={{ color: "var(--text-hi)" }}>{q.label || q.q}</b></td>
+                              <td className="num">{q.gaap != null ? `$${q.gaap.toFixed(2)}` : "—"}</td>
                               <td className="num">${q.a.toFixed(2)}</td>
-                              <td className={`num ${q.surp >= 0 ? "up" : "down"}`}>{q.surp >= 0 ? "+" : ""}{q.surp}%</td>
+                              <td className="num">{q.e !== 0 ? `$${q.e.toFixed(2)}` : "—"}</td>
+                              <td className={`num ${q.surp >= 0 ? "up" : "down"}`}>{q.surpStr && q.surpStr !== "—" ? q.surpStr : `${q.surp >= 0 ? "+" : ""}${q.surp}%`}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -3818,9 +3921,7 @@ export function StockScreen({
             const beats10 = hist10.filter(h => h.surp >= 0).length;
             const reportedAnnualRows = annualEpsSalesRows(financialsDoc?.annual ?? [], financialsDoc?.epsHistory ?? []);
             const reportedYears = new Set(reportedAnnualRows.map(r => r.year));
-            const fwd = [...(financialsDoc?.annualEstimates ?? [])]
-              .filter(e => !reportedYears.has(e.fiscalYear))
-              .sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
+            const fwd = forwardAnnualEstimates(financialsDoc).filter(e => !reportedYears.has(e.fiscalYear));
             const startEps = reportedAnnualRows.length ? reportedAnnualRows[reportedAnnualRows.length - 1].eps : null;
             const startSales = reportedAnnualRows.length ? reportedAnnualRows[reportedAnnualRows.length - 1].sales : null;
             const salesM = (v: number | null | undefined) => (v != null ? v / 1e6 : null);
@@ -4163,7 +4264,8 @@ export function StockScreen({
         </>
       )}
 
-      {/* Which-watchlist picker (opened from a search-result star) */}
+      {/* Which-watchlist picker (opened from the star when the ticker is in
+          several lists) */}
       {wlPicker && (
         <WatchlistPicker
           sym={wlPicker.sym}
@@ -4175,6 +4277,30 @@ export function StockScreen({
           onClose={() => setWlPicker(null)}
           anchor={{ x: wlPicker.x, y: wlPicker.y }}
         />
+      )}
+
+      {/* Watchlist confirmation toast for the star — same look as Movers'. */}
+      {wlToast && (
+        <div
+          role={wlToast.kind === "error" ? "alert" : "status"}
+          aria-live={wlToast.kind === "error" ? "assertive" : "polite"}
+          style={{
+            position: "fixed", top: 22, left: "50%", transform: "translateX(-50%)",
+            zIndex: 999, background: "var(--surface-1)",
+            border: `1px solid ${wlToast.kind === "error" ? "var(--down)" : "var(--brand)"}`,
+            color: "var(--text-hi)", borderRadius: 10, padding: "11px 20px",
+            fontSize: ".85rem", fontWeight: 600, lineHeight: 1.4,
+            whiteSpace: wlToast.kind === "error" ? "normal" : "nowrap",
+            maxWidth: "min(560px, calc(100vw - 32px))",
+            boxShadow: "0 14px 40px -10px rgba(0,0,0,.6)",
+            display: "inline-flex", alignItems: "center", gap: 9,
+          }}
+        >
+          <span style={{ color: wlToast.kind === "error" ? "var(--down)" : "var(--brand)", fontSize: "1rem", flexShrink: 0 }}>
+            {wlToast.kind === "error" ? "!" : "★"}
+          </span>
+          {wlToast.text}
+        </div>
       )}
 
       {/* ── No-data popup — the searched ticker has no market data ── */}

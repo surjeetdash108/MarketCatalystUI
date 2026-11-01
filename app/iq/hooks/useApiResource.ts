@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "../backend";
+import { retryDelayMs } from "./retry-policy";
 
 /**
  * Fetches a backend REST endpoint, replacing useCollection()'s direct
@@ -37,7 +38,8 @@ export function useApiResource<T>(path: string | null, refetchMs?: number) {
       }
     });
 
-    async function load() {
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    async function load(attempt = 0) {
       try {
         const result = await apiGet<T>(path as string);
         if (!cancelled) {
@@ -46,21 +48,28 @@ export function useApiResource<T>(path: string | null, refetchMs?: number) {
           setLoading(false);
         }
       } catch (err) {
-        if (!cancelled) {
-          if ((err as Error)?.name !== "AbortError") {
-            console.error(`Backend fetch failed for "${path}":`, err);
-          }
-          setError(err instanceof Error ? err.message : String(err));
-          setLoading(false);
+        if (cancelled) return;
+        // A transient failure (timeout, network, 429, 5xx) is retried before the
+        // screen is told — it renders a failed read the same as "no data".
+        const wait = retryDelayMs(err, attempt);
+        if (wait != null) {
+          retryTimer = setTimeout(() => void load(attempt + 1), wait);
+          return;
         }
+        if ((err as Error)?.name !== "AbortError") {
+          console.error(`Backend fetch failed for "${path}":`, err);
+        }
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
       }
     }
 
-    load();
-    const interval = refetchMs ? setInterval(load, refetchMs) : undefined;
+    void load();
+    const interval = refetchMs ? setInterval(() => void load(), refetchMs) : undefined;
     return () => {
       cancelled = true;
       if (interval) clearInterval(interval);
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [path, refetchMs]);
 

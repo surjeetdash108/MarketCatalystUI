@@ -145,23 +145,16 @@ export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
  * per theme).
  */
 function BrandLogo({ height = 28 }: { height?: number }) {
+  const width = Math.round(height * (66 / 60));
   return (
-    <span className="brand-logo" style={{ gap: Math.round(height * 0.3), lineHeight: 1 }}>
-      <svg viewBox="0 0 44 44" width={height} height={height} aria-hidden="true" style={{ flexShrink: 0 }}>
-        <defs>
-          <linearGradient id="mcBrandGrad" x1="4" y1="40" x2="40" y2="4" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#0D3B2E" />
-            <stop offset="1" style={{ stopColor: "var(--brand)" }} />
-          </linearGradient>
-        </defs>
-        <rect x="5" y="22" width="6" height="17" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="15" y="28" width="6" height="11" rx="2" fill="url(#mcBrandGrad)" />
-        <rect x="25" y="14" width="6" height="25" rx="2" fill="url(#mcBrandGrad)" />
-        {/* Peak-valley-peak "M" silhouette across the three bar tops, continuing
-            into the arrowhead — not a smooth ascending staircase. */}
-        <path d="M8 22 L18 28 L28 14 L36 6" fill="none" stroke="url(#mcBrandGrad)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M40 2 L36 11 L31 6 Z" fill="url(#mcBrandGrad)" />
-      </svg>
+    <span className="brand-logo" style={{ gap: Math.round(height * 0.3), lineHeight: 1, display: "inline-flex", alignItems: "center" }}>
+      <img
+        src="/logo-mark.webp"
+        alt="MarketCatalyst"
+        width={width}
+        height={height}
+        style={{ height, width: "auto", display: "block", flexShrink: 0 }}
+      />
       <span style={{
         fontFamily: "var(--f-display), system-ui, sans-serif",
         fontWeight: 800, fontSize: Math.round(height * 0.68), letterSpacing: "-0.02em", whiteSpace: "nowrap",
@@ -1098,7 +1091,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const tickerSearchResults = useTickerSearch(searchQ);
   const searchMatches: Array<{ sym: string; name: string | null; price: number | null; pctChange: number | null }> = searchQ
     ? (() => {
-        const q = searchQ.toLowerCase();
+        const q = searchQ.trim().toLowerCase();
+        const upper = searchQ.trim().toUpperCase();
         const bySym = new Map(tickerSearchResults.map(r => [r.ticker, r]));
         // A handful of live `companies` docs are written by side-jobs (news
         // count, fundamentals growth) that can create the doc before the
@@ -1107,10 +1101,27 @@ export function IQShell({ children }: { children: React.ReactNode }) {
         const nameMatched = shellCompanies.filter(
           c => !!c.ticker && ((c.name ?? "").toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)) && !bySym.has(c.ticker),
         );
-        return [
+        const candidates = [
           ...tickerSearchResults.map(r => ({ sym: r.ticker, name: r.name, price: r.price, pctChange: r.pctChange })),
           ...nameMatched.map(c => ({ sym: c.ticker, name: c.name, price: c.price, pctChange: c.pctChange })),
         ];
+
+        // Rank candidates: exact ticker → ticker prefix → name prefix → substring
+        const exact: typeof candidates = [];
+        const tickerPrefix: typeof candidates = [];
+        const namePrefix: typeof candidates = [];
+        const substring: typeof candidates = [];
+
+        for (const item of candidates) {
+          const symUpper = (item.sym ?? "").toUpperCase();
+          const nameLower = (item.name ?? "").toLowerCase();
+          if (symUpper === upper) exact.push(item);
+          else if (symUpper.startsWith(upper)) tickerPrefix.push(item);
+          else if (nameLower.startsWith(q)) namePrefix.push(item);
+          else substring.push(item);
+        }
+
+        return [...exact, ...tickerPrefix, ...namePrefix, ...substring];
       })()
     : quickAccessCompanies.filter(c => !!c.ticker).map(c => ({ sym: c.ticker, name: c.name, price: c.price, pctChange: c.pctChange }));
   // On-demand quote enrichment: /live/search returns only ticker+name (its
@@ -1127,11 +1138,14 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // serves the same shared server-side cache anyway, so the dropdown shows the
   // same numbers as every other surface; only its poll phase is independent.
   const searchQuotesPath = searchOpen && enrichSyms ? `/live/quotes?tickers=${encodeURIComponent(enrichSyms)}` : null;
-  const { data: liveSearchQuotes } = useApiResource<Array<{ ticker: string; price: number | null; pctChange: number | null }>>(searchQuotesPath, 30000);
-  const quoteMap = new Map((liveSearchQuotes ?? []).map(q => [q.ticker.toUpperCase(), { price: q.price, pctChange: q.pctChange }]));
-  const displayMatches = searchMatches.map(m => {
+  // Outside regular hours `price` is the official 4:00 PM close and the
+  // extended trade comes separately (backend quoteRow) — shown on its own line.
+  type SearchExt = { session: "pre-market" | "after-hours"; price: number; pctChange: number; at: number | null };
+  const { data: liveSearchQuotes } = useApiResource<Array<{ ticker: string; price: number | null; pctChange: number | null; extended?: SearchExt | null }>>(searchQuotesPath, 30000);
+  const quoteMap = new Map((liveSearchQuotes ?? []).map(q => [q.ticker.toUpperCase(), { price: q.price, pctChange: q.pctChange, extended: q.extended ?? null }]));
+  const displayMatches: Array<(typeof searchMatches)[number] & { extended?: SearchExt | null }> = searchMatches.map(m => {
     const q = quoteMap.get(m.sym);
-    return q ? { ...m, price: q.price ?? m.price, pctChange: q.pctChange ?? m.pctChange } : m;
+    return q ? { ...m, price: q.price ?? m.price, pctChange: q.pctChange ?? m.pctChange, extended: q.extended } : m;
   });
   const cmdRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLElement>(null);
@@ -1510,6 +1524,14 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                               </div>
                             )}
                           </div>
+                          {m.extended && (
+                            <div className="mono" style={{ fontSize: ".68rem", color: "var(--text-dim-solid)" }}
+                              title="The official 4:00 PM close is shown above; this is the latest extended-hours trade.">
+                              {m.extended.session === "pre-market" ? "Pre-market" : "After hours"} {fmt(m.extended.price)}{" "}
+                              <span className={cls(m.extended.pctChange)}>{sign(m.extended.pctChange)}</span>
+                              {m.extended.at != null && <> · {new Date(m.extended.at).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })} ET</>}
+                            </div>
+                          )}
                           <div className="palette-item-sub">{m.name ?? "Stock"} · click to open</div>
                         </div>
                         <button
@@ -1621,7 +1643,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     that open in a new tab rather than router navigations, and a
                     signed-in reader keeps their session here. */}
                 <nav className="disclaimer-links">
-                  <a href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">Research</a>
+                  <a href="https://marketcatalyst.ai/posts" target="_blank" rel="noopener noreferrer">Resources</a>
                   <a href="https://marketcatalyst.ai/faqs" target="_blank" rel="noopener noreferrer">FAQs</a>
                 </nav>
               </footer>

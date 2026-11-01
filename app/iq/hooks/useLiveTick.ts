@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, streamUrl } from "../backend";
 import { subscribeStream } from "./shared-event-source";
+import { tickFromQuoteRow, type QuoteRow } from "../quote-row";
 
 /** How stale the last SSE tick must be before the JSON poll steps in (ms). */
 const SSE_STALE_MS = 8000;
@@ -34,13 +35,6 @@ interface StreamSnapshot {
   note: string;
 }
 
-/** One row of GET /live/quotes — the always-works poll fallback. */
-interface QuoteRow {
-  ticker: string;
-  name: string | null;
-  price: number | null;
-  pctChange: number | null;
-}
 
 export interface LiveTick {
   price: number;
@@ -116,8 +110,9 @@ export function useLiveTick(sym: string): UseLiveTickResult {
         const q = rows?.find((r) => r.ticker?.toUpperCase() === upper) ?? rows?.[0];
         if (!q || q.price == null) return;
         if (!cancelled && Date.now() - lastSse > SSE_STALE_MS) {
-          setTick({ price: q.price, open: null, high: null, low: null, windowVolume: null, at: null });
-          setPctFromQuote(q.pctChange ?? null);
+          const t = tickFromQuoteRow({ ...q, price: q.price });
+          setTick({ price: t.price, open: null, high: null, low: null, windowVolume: null, at: t.at });
+          setPctFromQuote(t.pct);
         }
       } catch {
         /* transient — the next poll or the SSE may succeed */

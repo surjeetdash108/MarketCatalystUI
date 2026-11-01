@@ -8,6 +8,61 @@ export function reportedQuarterEps(q: QuarterFinancials): number | null {
 }
 
 /**
+ * THE reported-EPS basis for display: GAAP diluted EPS from the income
+ * statement (`epsActual`). Quarterly EPS, the latest EPS actual and EPS growth
+ * all use it. FMP's adjusted figure (`epsActualReported`) is kept ONLY for the
+ * beat/miss surprise, where it must match the basis of the estimate — see
+ * ADJUSTED_SURPRISE_LABEL. Null when the statement has no EPS (never the
+ * adjusted figure in its place: the two bases must not mix on one line).
+ */
+export function gaapQuarterEps(q: { epsActual?: number | null }): number | null {
+  return typeof q.epsActual === "number" && Number.isFinite(q.epsActual) ? q.epsActual : null;
+}
+
+/** Label for every surprise derived from the adjusted (FMP matched) pair. */
+export const ADJUSTED_SURPRISE_LABEL = "Adjusted EPS vs estimate";
+
+/**
+ * Revenue and GAAP EPS growth, latest quarter vs the same fiscal period one
+ * year earlier (not "four slots down" — a missing quarter shifted that).
+ * EPS growth is null when the year-ago EPS is within ±$0.05 (a % of a
+ * near-zero base is meaningless).
+ */
+export function quarterYoY(
+  quarters: Array<{ endDate?: string | null; fiscalPeriod?: string | null; fiscalYear?: string | number | null; revenue?: number | null; epsActual?: number | null }> | null | undefined,
+): { revYoy: number | null; epsYoy: number | null } | null {
+  const qs = [...(quarters ?? [])].filter((q) => q.endDate).sort((a, b) => String(b.endDate).localeCompare(String(a.endDate)));
+  const latest = qs[0];
+  const yearAgo = latest
+    ? qs.find((q) => q.fiscalPeriod === latest.fiscalPeriod && Number(q.fiscalYear) === Number(latest.fiscalYear) - 1)
+    : undefined;
+  if (!latest || !yearAgo) return null;
+  const revYoy = latest.revenue != null && yearAgo.revenue != null && yearAgo.revenue > 0
+    ? ((latest.revenue - yearAgo.revenue) / yearAgo.revenue) * 100
+    : null;
+  const le = gaapQuarterEps(latest), ye = gaapQuarterEps(yearAgo);
+  const epsYoy = le != null && ye != null && Math.abs(ye) > 0.05 ? ((le - ye) / Math.abs(ye)) * 100 : null;
+  return { revYoy, epsYoy };
+}
+
+/**
+ * A quarter named by its fiscal period and when it ended — "Q3 FY26 (ended
+ * Sep 5)" — so the newest quarter is never just a month that can be read as
+ * the calendar quarter (PEP's Q3 ends Sep 5; a "Sep '26" label hid that).
+ */
+export function quarterLabel(q: { fiscalPeriod?: string | null; fiscalYear?: string | number | null; endDate?: string | null }): string {
+  const fy = q.fiscalYear != null && String(q.fiscalYear).length >= 2 ? `FY${String(q.fiscalYear).slice(-2)}` : "";
+  const fp = q.fiscalPeriod ?? "";
+  let end = "";
+  if (q.endDate && /^\d{4}-\d{2}-\d{2}/.test(q.endDate)) {
+    const d = new Date(`${q.endDate.slice(0, 10)}T00:00:00Z`);
+    end = `ended ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`;
+  }
+  const head = [fp, fy].filter(Boolean).join(" ");
+  return head && end ? `${head} (${end})` : head || end;
+}
+
+/**
  * THE surprise-% derivation — `(actual − estimate) / |estimate| × 100`.
  *
  * This was hand-written at half a dozen call sites with three different
@@ -38,10 +93,37 @@ export function surprisePct(
   return Math.abs(pct) > MAX_SURPRISE ? null : pct;
 }
 
+/**
+ * Format EPS surprise for display everywhere surprise is shown.
+ * When |estimate| < $0.05, shows the dollar difference (e.g. "+$0.01 vs est").
+ * Otherwise shows "+X%" / "-X%" up to MAX_SURPRISE (500%), or "—" when missing/exceeded.
+ */
+export function formatEpsSurprise(
+  actual: number | null | undefined,
+  estimate: number | null | undefined,
+  options?: { pctDigits?: number },
+): string {
+  if (actual == null || estimate == null) return "—";
+  const diff = actual - estimate;
+  if (Math.abs(estimate) < MIN_ESTIMATE) {
+    const sign = diff >= 0 ? "+" : "-";
+    return `${sign}$${Math.abs(diff).toFixed(2)} vs est`;
+  }
+  const pct = (diff / Math.abs(estimate)) * 100;
+  if (Math.abs(pct) > MAX_SURPRISE) return "—";
+  const digits = options?.pctDigits ?? 0;
+  return `${pct >= 0 ? "+" : ""}${digits > 0 ? pct.toFixed(digits) : Math.round(pct)}%`;
+}
+
 /** Matched-pair EPS surprise % (FMP reported actual vs the estimate from the same
  * surprise row, split-normalized). null when there's no matched pair. */
 export function quarterEpsSurprisePct(q: QuarterFinancials): number | null {
   return surprisePct(q.epsActualReported, q.epsEstimateReported);
+}
+
+/** Matched-pair formatted EPS surprise string. */
+export function quarterEpsSurpriseStr(q: QuarterFinancials): string {
+  return formatEpsSurprise(q.epsActualReported, q.epsEstimateReported);
 }
 
 /** One quarter of the deep FMP reported-EPS history (non-GAAP, split-normalized,
@@ -106,13 +188,10 @@ export function computeQuarterFcf(q: {
   operatingCashFlow?: number | null;
   capitalExpenditures?: number | null;
 }): number | null {
-  if (
-    q.freeCashFlow != null &&
-    typeof q.freeCashFlow === "number" &&
-    Number.isFinite(q.freeCashFlow)
-  ) {
-    return q.freeCashFlow;
-  }
+  // Operating cash flow minus capex, computed here whenever both are known.
+  // FMP's own freeCashFlow is OCF + capex, so a period where FMP stored capex
+  // with the wrong sign comes out inflated (AEP Q2 2026: capex +$2.79B → FCF
+  // +$4.6B instead of −$1.0B; SO likewise). Capex is spending either way.
   if (
     q.operatingCashFlow != null &&
     typeof q.operatingCashFlow === "number" &&
@@ -123,8 +202,36 @@ export function computeQuarterFcf(q: {
   ) {
     return q.operatingCashFlow - Math.abs(q.capitalExpenditures);
   }
+  if (
+    q.freeCashFlow != null &&
+    typeof q.freeCashFlow === "number" &&
+    Number.isFinite(q.freeCashFlow)
+  ) {
+    return q.freeCashFlow;
+  }
   return null;
 }
+
+/**
+ * Operating income fundamental series for stock intelligence tiles.
+ * Never falls back to net income.
+ * Returns empty array (leading to "—" display) if operating income is missing
+ * or if the entity is a bank/financial where operating income is not reported.
+ */
+export function computeOperatingIncomeSeries(
+  fmpQ: Array<{ operatingIncome?: number | null; netIncome?: number | null }>,
+  isBank?: boolean
+): number[] {
+  if (isBank) return [];
+  if (!fmpQ || fmpQ.length === 0) return [];
+  // If every quarter is missing operating income, or the latest quarter is missing, show "—"
+  const latest = fmpQ[fmpQ.length - 1];
+  if (latest?.operatingIncome == null || fmpQ.every((q) => q.operatingIncome == null)) {
+    return [];
+  }
+  return fmpQ.map((q) => (q.operatingIncome ?? 0) / 1e9);
+}
+
 
 /**
  * Calculates TTM Free Cash Flow over the most recent 4 quarters.

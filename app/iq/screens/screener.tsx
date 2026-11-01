@@ -9,6 +9,7 @@ import { etTodayIso } from "../calendar-range";
 import { StockPanelLayout, StockListCard, StockRow } from "../stock-panel";
 import { VendorTag, titleCaseLabel, fmtPrice } from "../utils";
 import { sectorFilterOptions, matchesSector } from "../sector-filter";
+import { isCommonEquity } from "../universe.util";
 
 // Maps the numeric 1-99 tech rating onto the filter's string categories
 // (Strong Buy / Buy / Neutral / Sell / Strong Sell).
@@ -41,7 +42,7 @@ type ScreenerRow = Omit<ScreenerStock, "peRatio" | "relativeStrength" | "salesGr
 };
 
 function companiesToScreenerStocks(companies: CompanyDoc[]): ScreenerRow[] {
-  return companies.map(c => ({
+  return companies.filter(c => isCommonEquity(c)).map(c => ({
     ticker: c.ticker,
     name: c.name ?? c.ticker,
     sector: c.sector ?? "—",
@@ -305,7 +306,9 @@ export function ScreenerScreen() {
       <div style={{ padding: "0 18px 18px" }}>
 
         {/* ── Filter card ── */}
-        <div className="card" style={{ marginBottom: 14, overflow: "visible" }}>
+        {/* .card is its own stacking context (entrance-animation transform), so the open
+            dropdown's z-index must be lifted on the card itself to clear the Results card. */}
+        <div className="card" style={{ marginBottom: 14, overflow: "visible", position: "relative", zIndex: ddOpen ? 50 : undefined }}>
 
           <div className="filt-hdr" style={{ cursor: "pointer" }} onClick={() => setFiltersOpen(o => !o)}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>

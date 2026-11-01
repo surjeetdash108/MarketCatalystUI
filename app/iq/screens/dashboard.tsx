@@ -15,7 +15,9 @@ import { WmnCarousel, type WmnSlide } from "../wmn-carousel";
 import { CommunityPulse } from "../community-pulse";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { useLiveQuotes, pairedQuote, extendedSession } from "../live-quotes-context";
+import { INDEX_MEMBERS } from "../index-constituents";
 import { pulseFromLive, buildSectorList, tapeItemsToIndexDocs } from "../live-market-indices";
+import { isCommonEquity } from "../universe.util";
 import type {
   LiveMoverDoc, LiveEarningsDoc, CompanyDoc, SectorApiDoc,
   InsiderTxDoc, AnalystConsensusDoc, MarketSentimentDoc, MarketSentimentHistoryDoc, EarningsAnnouncementDoc,
@@ -23,13 +25,14 @@ import type {
 } from "../types";
 
 // Insider mini-list, market internals and F&G history all had hardcoded mock
-// arrays here. None have a reachable live source today: insider transactions
-// use the real `insider_transactions` feed exclusively now (no mock
-// fallback); market internals (advance/decline, TICK, TRIN, McClellan,
-// put/call) and F&G composite history have no `/market-data/*` route at all
-// yet (the backend jobs that could feed them write to Firestore directly,
-// with no REST endpoint), so those two render DataState instead of inventing
-// numbers.
+// arrays here; nothing is invented any more. Insider transactions use the real
+// `insider_transactions` feed exclusively (no mock fallback). F&G composite
+// history is read from `/market-data/market-sentiment-history`. Market
+// internals reach this screen two ways: the Recaps card prints the latest
+// recap's `internals` (universe-wide advancers/decliners, TRIN, breadth %), and
+// the Market Breadth card counts advancers/decliners per index client-side from
+// the synced `companies` quotes. TICK, McClellan and put/call still have no
+// `/market-data/*` route, so no widget here shows them.
 
 // "View all" widgets now navigate to /menu/{screen} (see the <Link> controls);
 // the only remaining in-page drawer is Fear & Greed history. The removed drawer
@@ -47,6 +50,47 @@ const METAL_ETFS: { sym: string; label: string; name: string }[] = [
   { sym: "PALL", label: "Pall.",  name: "Palladium (abrdn Physical Palladium)" },
 ];
 const METAL_TICKERS = METAL_ETFS.map(m => m.sym);
+
+// Market Breadth card: advancers vs decliners for each index, counted from the
+// synced `companies` day change. Membership is the static INDEX_MEMBERS list
+// (no index feed is licensed), so a member we do not sync simply has no quote —
+// the card reports that as coverage ("n of m constituents with quotes") instead
+// of treating a missing quote as unchanged.
+const BREADTH_INDEXES: { key: keyof typeof INDEX_MEMBERS; label: string }[] = [
+  { key: "SP500", label: "S&P 500" },
+  { key: "NDX",   label: "Nasdaq-100" },
+  { key: "DOW",   label: "Dow 30" },
+];
+/** Below this share of an index's members with a quote, the row is flagged partial. */
+const BREADTH_PARTIAL_BELOW = 0.5;
+
+interface IndexBreadth {
+  key: string;
+  label: string;
+  advancers: number;
+  decliners: number;
+  unchanged: number;
+  /** Members with a usable day change — advancers + decliners + unchanged. */
+  covered: number;
+  /** Members on the static list. */
+  total: number;
+}
+
+function computeIndexBreadth(companies: CompanyDoc[]): IndexBreadth[] {
+  return BREADTH_INDEXES.map(({ key, label }) => {
+    const members = INDEX_MEMBERS[key];
+    let advancers = 0, decliners = 0, unchanged = 0;
+    for (const c of companies) {
+      if (!members.has(c.ticker)) continue;
+      const p = c.pctChange;
+      if (p == null || !Number.isFinite(p)) continue;
+      if (p > 0) advancers++;
+      else if (p < 0) decliners++;
+      else unchanged++;
+    }
+    return { key, label, advancers, decliners, unchanged, covered: advancers + decliners + unchanged, total: members.size };
+  });
+}
 
 // ---- Dash hover popup ----
 type PopBlock = "earnings" | "movers" | "analyst" | "watchlist" | "portfolio" | "insider" | "screener" | "searched";
@@ -381,15 +425,39 @@ export function DashboardScreen() {
   const { data: recaps, loading: recapsLoading } = useApiList<RecapDoc>("/market-data/recaps");
   const latestRecap = [...recaps].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0] ?? null;
   const { data: mostSearched, loading: mostSearchedLoading } = useApiResource<{ results: Array<{ ticker: string; count: number }> }>("/live/most-searched-tickers?limit=18");
-  // Dedupe: merge any repeated ticker and collapse Google's dual class
-  // (GOOG → GOOGL) so the same company never appears twice.
+  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
+  // Dedupe: merge repeated tickers and collapse dual-class share listings
+  // (e.g. GOOG & GOOGL for Alphabet, FOX & FOXA for Fox) by matching company
+  // name or shared ticker root so the same issuer never appears twice.
   const searchedDeduped = (() => {
+    // Map ticker -> company name / root issuer identifier
+    const companyNameMap = new Map<string, string>();
+    for (const c of companies) {
+      if (c.ticker && c.name) {
+        // Normalize name: strip Class A/B/C, Inc, Corp, etc.
+        const norm = c.name.toLowerCase()
+          .replace(/\bclass\s+[abc]\b/gi, "")
+          .replace(/\b(inc|corp|corporation|co|ltd|plc)\b\.?/gi, "")
+          .trim();
+        companyNameMap.set(c.ticker, norm);
+      }
+    }
+
     const map = new Map<string, { ticker: string; count: number }>();
+    const issuerToPrimary = new Map<string, string>();
+
     for (const r of mostSearched?.results ?? []) {
-      const key = r.ticker === "GOOG" ? "GOOGL" : r.ticker;
-      const cur = map.get(key);
+      const c = companyByTicker.get(r.ticker);
+      if (c && !isCommonEquity(c)) continue;
+      const issuer = companyNameMap.get(r.ticker) || r.ticker.replace(/\.[AB]$/, "");
+      let primaryTicker = issuerToPrimary.get(issuer);
+      if (!primaryTicker) {
+        primaryTicker = r.ticker;
+        issuerToPrimary.set(issuer, primaryTicker);
+      }
+      const cur = map.get(primaryTicker);
       if (cur) cur.count += r.count;
-      else map.set(key, { ticker: key, count: r.count });
+      else map.set(primaryTicker, { ticker: primaryTicker, count: r.count });
     }
     return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 18);
   })();
@@ -400,12 +468,63 @@ export function DashboardScreen() {
 
   const pulse = pulseFromLive(liveIndices).filter(x => x.label !== "Dollar (DXY)");
   const movers = mergeMoversData(liveMovers, companies);
+
+  // What Matters Now slides: the AI digest first, then its key developments,
+  // then a few live reads (volatility, sentiment, top gainer). Every slide is
+  // built from data we already hold; a slide with no data behind it is skipped.
+  const wmnWhen = wmn?.generatedAt
+    ? new Date(wmn.generatedAt).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(/, (\d{1,2}:\d{2})/, " · $1") + " ET"
+    : undefined;
+  const wmnSlides: WmnSlide[] = [];
+  if (wmn?.summary) {
+    wmnSlides.push({
+      tag: "AI DIGEST", tone: "brand", name: "MarketCatalyst AI", when: wmnWhen,
+      lead: wmn.summary, body: wmn.overallAssessment, point: wmn.keyDevelopments?.[0],
+    });
+    (wmn.keyDevelopments ?? []).slice(1, 5).forEach((k, idx) => {
+      wmnSlides.push({ tag: "KEY DEVELOPMENT", tone: "info", name: `#${idx + 2}`, when: wmnWhen, lead: k });
+    });
+  }
+  const vixP = pulse.find(x => x.label === "VIX");
+  if (vixP) {
+    wmnSlides.push({
+      tag: "VOLATILITY", tone: "warn", name: "VIX",
+      lead: `The VIX is at ${fmt(vixP.value, 2)}, ${vixP.change >= 0 ? "up" : "down"} ${Math.abs(vixP.change).toFixed(2)}%.`,
+      point: `VIX ${fmt(vixP.value, 2)} · ${sign(vixP.change)}`,
+    });
+  }
+  if (fgVal != null) {
+    wmnSlides.push({
+      tag: "SENTIMENT", tone: fgVal < 45 ? "down" : fgVal > 55 ? "up" : "warn", name: "Fear & Greed",
+      lead: `The Fear & Greed index sits at ${Math.round(fgVal)}${fgLabel ? ` — ${fgLabel}` : ""}.`,
+      point: fgAsOf ? `As of ${fgAsOf}` : undefined,
+    });
+  }
+  // "Heating up": green on the day with volume running well above normal.
+  const heatingUp = movers
+    .filter(m => m.pctChange >= 1 && m.rvolRatio >= 1.5)
+    .sort((a, b) => b.pctChange - a.pctChange)
+    .slice(0, 4);
+  const topGainer = [...movers].sort((a, b) => b.pctChange - a.pctChange)[0];
+  if (topGainer) {
+    wmnSlides.push({
+      tag: "MOVER", tone: "up", name: topGainer.ticker,
+      lead: `${topGainer.name && topGainer.name !== topGainer.ticker ? `${topGainer.name} (${topGainer.ticker})` : topGainer.ticker} is the day’s top gainer, up ${topGainer.pctChange.toFixed(2)}%.`,
+      point: `${topGainer.ticker} ${sign(topGainer.pctChange)} · top gainer`,
+    });
+  }
   const earnings = mergeEarningsData(liveEarnings);
   // "Earnings Today" is exactly today's reported companies — no fallback to the
   // most recent prior day, so when nothing has reported today the widget is
   // empty rather than showing stale rows. (`earnings` above stays the full list
   // for popover name/EPS lookups.)
-  const earningsToday = mergeEarningsData(liveEarnings.filter(e => e.date === etTodayIso()));
+  const earningsToday = mergeEarningsData(
+    liveEarnings.filter(
+      (e) =>
+        e.date === etTodayIso() &&
+        (!companyByTicker.get(e.ticker) || isCommonEquity(companyByTicker.get(e.ticker))),
+    ),
+  );
   const earningsLive = useLiveQuotes(earningsToday.map(e => e.ticker));
   const mergedSectorList = buildSectorList(companies, sectorsLive);
   const metalsLive = useLiveQuotes(METAL_TICKERS);
@@ -415,7 +534,7 @@ export function DashboardScreen() {
     return chg == null ? [] : [{ ...m, chg }];
   });
   const metalsAvg = metals.length ? metals.reduce((s, m) => s + m.chg, 0) / metals.length : null;
-  const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
+  const indexBreadth = useMemo(() => computeIndexBreadth(companies), [companies]);
 
   // key = the Firestore doc id, not ticker+dir: a single ticker can have
   // dozens of insider filings in the same direction (CRWD has 42 disposals),
@@ -526,8 +645,9 @@ export function DashboardScreen() {
 
   // Leaders/Laggards: real rsRating from `companies`, not the mock screener
   // catalog. Only tickers the rs-rating job has actually scored are ranked.
+  // Common equities only (no ETFs, preferreds, warrants, or sector-less symbols).
   // Top / bottom 20 by relative strength — the widget scrolls through them.
-  const rankedCompanies = companies.filter(c => c.rsRating != null);
+  const rankedCompanies = companies.filter(c => c.rsRating != null && isCommonEquity(c));
   const leaders  = [...rankedCompanies].sort((a, b) => (b.rsRating ?? 0) - (a.rsRating ?? 0)).slice(0, 20);
   const laggards = [...rankedCompanies].sort((a, b) => (a.rsRating ?? 0) - (b.rsRating ?? 0)).slice(0, 20);
   // Each ranked stock's OWN day move (QA rows 204/233). It used to be looked up
@@ -662,11 +782,19 @@ export function DashboardScreen() {
                 </div>
                 <h2>What Matters Now <span className="wmnc-sub">(MarketCatalyst Curated)</span></h2>
               </div>
+              {wmnSlides.length > 0 && (
+                <span className="wmn-live"><span className="dot" />Live</span>
+              )}
+            </div>
+            <div className="wmnc-wrap">
+              {wmnSlides.length > 0
+                ? <WmnCarousel slides={wmnSlides} />
+                : <DataState loading={!wmn} label="No market-moving activity to summarise yet." />}
             </div>
           </div>
 
           {heatingUp.length > 0 && (
-            <Link className="alpha-bar" href="/menu/movers" title="Open Movers">
+            <Link className="alpha-bar" href="/menu/screener" title="Open Alpha Signals">
               <div className="alpha-ic">
                 <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M19.07 4.93A10 10 0 1 0 22 12" /><path d="M16.24 7.76A6 6 0 1 0 18 12" /><circle cx="12" cy="12" r="1.6" /><path d="M12 12l6-6" /></svg>
               </div>
@@ -757,8 +885,12 @@ export function DashboardScreen() {
                   })}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
+        </div>
+        </div>
+        <div className="col-4 cpulse-col" style={{ minWidth: 0, display: "flex" }}>
+          <CommunityPulse />
         </div>
 
         {/* ── 3. Earnings Today ── */}
@@ -1278,6 +1410,69 @@ export function DashboardScreen() {
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 12b. Market Breadth (advancers vs decliners by index) ──
+            Sits beside Recaps, which prints the universe-wide counts. Counted
+            here from the same `companies` day change the Market Heatmap card
+            colours its tiles with, so the two cards cannot disagree. */}
+        <div className="col-4">
+          <div className="card" style={{ height: "100%" }}>
+            <div className="card-h">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Market Breadth</h3><VendorTag v={["fmp", "polygon"]} /></div>
+              <Link className="link" href="/menu/heatmap">Heatmap →</Link>
+            </div>
+            <div className="card-b">
+              {indexBreadth.every(b => b.covered === 0) ? (
+                <DataState loading={companiesLoading} label="No index constituent quotes synced yet." height={80} />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+                  {indexBreadth.map(b => {
+                    const partial = b.covered < b.total * BREADTH_PARTIAL_BELOW;
+                    const summary = `${b.label}: ${b.advancers} advancing, ${b.decliners} declining${b.unchanged > 0 ? `, ${b.unchanged} unchanged` : ""}`;
+                    return (
+                      <div key={b.key}>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+                          <span style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-hi)" }}>{b.label}</span>
+                          {b.covered > 0 ? (
+                            <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", whiteSpace: "nowrap" }}>
+                              <b className="up">{b.advancers}</b> adv · <b className="down">{b.decliners}</b> dec
+                              {b.unchanged > 0 && <> · {b.unchanged} unch</>}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>No quotes yet</span>
+                          )}
+                        </div>
+                        {/* One proportion bar per index: green advancers, grey
+                            unchanged, red decliners, as shares of the members
+                            that HAVE a quote. */}
+                        <div
+                          role="img"
+                          aria-label={summary}
+                          title={summary}
+                          style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", background: "var(--surface-3)" }}
+                        >
+                          {b.covered > 0 && (
+                            <>
+                              <div style={{ flex: `${b.advancers} 1 0%`, background: "var(--up)" }} />
+                              <div style={{ flex: `${b.unchanged} 1 0%`, background: "var(--text-dim-solid)", opacity: 0.5 }} />
+                              <div style={{ flex: `${b.decliners} 1 0%`, background: "var(--down)" }} />
+                            </>
+                          )}
+                        </div>
+                        <div style={{ marginTop: 4, fontSize: ".66rem", color: partial ? "var(--warn)" : "var(--text-dim-solid)" }}>
+                          {b.covered} of {b.total} constituents with quotes{partial ? " · partial" : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontSize: ".64rem", color: "var(--text-dim-solid)" }}>
+                    Day change from synced company quotes. Membership is a static list, so the counts cover only the constituents we hold quotes for.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

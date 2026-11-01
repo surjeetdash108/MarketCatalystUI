@@ -64,10 +64,22 @@ export function VendorTag({ v }: { v: VendorKey | VendorKey[] }) {
 // is no live source yet" — used instead of either (a) silently rendering
 // nothing, which reads as broken, or (b) inventing a plausible-looking number.
 
-/** Inline placeholder for a single removed field (a table cell, a stat, a pill). */
-export function NotAvailable({ label = "N/A" }: { label?: string }) {
+/** Inline placeholder for a single removed or non-applicable field. */
+export function NotAvailable({
+  label = "N/A",
+  title,
+}: {
+  label?: string;
+  title?: string;
+}) {
+  const defaultTitle =
+    label === "None"
+      ? "Does not pay a dividend"
+      : label.toLowerCase() === "n/a"
+      ? "Not applicable"
+      : undefined;
   return (
-    <span className="not-avail" title="No live data source for this yet">
+    <span className="not-avail" title={title ?? defaultTitle}>
       {label}
     </span>
   );
@@ -190,65 +202,65 @@ const cs = (n: number) => Math.round(n * CHART_SCALE);
  *     the backend answers 204 (No Content) for a ticker Polygon has no branding
  *     for, which completes successfully with nothing to draw.
  */
-export function useTickerLogo(sym: string) {
-  const [sourceIdx, setSourceIdx] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [prevSym, setPrevSym] = useState(sym);
+// Session-level caches so repeated renders across screens resolve synchronously in 0ms
+const knownMissingLogos = new Set<string>();
+const knownLoadedLogos = new Set<string>();
 
-  if (prevSym !== sym) {
-    setPrevSym(sym);
-    setSourceIdx(0);
-    setLoaded(false);
-    setFailed(false);
+export function useTickerLogo(sym: string) {
+  const s = (sym || "").toUpperCase().trim();
+  const isKnownMissing = knownMissingLogos.has(s);
+  const isKnownLoaded = knownLoadedLogos.has(s);
+
+  const [loaded, setLoaded] = useState(isKnownLoaded);
+  const [failed, setFailed] = useState(isKnownMissing);
+  const [prevSym, setPrevSym] = useState(s);
+
+  if (prevSym !== s) {
+    setPrevSym(s);
+    setLoaded(knownLoadedLogos.has(s));
+    setFailed(knownMissingLogos.has(s));
   }
 
-  // Multi-tier logo resolution:
-  // 1. Backend proxy / Polygon branding (/live/logo?ticker=...)
-  // 2. Parqet symbol logo CDN (covers ETFs: SPY, IVV, VOO, etc.)
-  const sources = [
-    backendUrl(`/live/logo?ticker=${encodeURIComponent(sym)}`),
-    `https://assets.parqet.com/logos/symbol/${encodeURIComponent(sym)}?format=png`,
-  ];
-
-  const currentSrc = sources[sourceIdx] ?? "";
+  // Backend /live/logo checks Polygon -> FMP -> Parqet with server-side caching
+  // and returns 204 No Content when unavailable (preventing browser 404 network errors).
+  const src = isKnownMissing ? "" : backendUrl(`/live/logo?ticker=${encodeURIComponent(s)}`);
 
   const handleFailure = useCallback(() => {
-    setSourceIdx(idx => {
-      if (idx + 1 < sources.length) {
-        return idx + 1;
-      }
-      setFailed(true);
-      return idx;
-    });
-  }, [sources.length]);
+    knownMissingLogos.add(s);
+    setFailed(true);
+  }, [s]);
+
+  const handleSuccess = useCallback(() => {
+    knownLoadedLogos.add(s);
+    setLoaded(true);
+    setFailed(false);
+  }, [s]);
 
   const ref = useCallback(
     (el: HTMLImageElement | null) => {
       if (!el || !el.complete) return;
       if (el.naturalWidth > 0) {
-        setLoaded(true);
-        setFailed(false);
+        handleSuccess();
       } else {
         handleFailure();
       }
     },
-    [handleFailure]
+    [handleSuccess, handleFailure]
   );
 
   return {
     loaded,
     failed,
-    sym,
-    sourceIdx,
+    sym: s,
     imgProps: {
       ref,
-      src: currentSrc,
+      src,
       alt: "",
+      loading: "lazy" as const,
+      decoding: "async" as const,
       onLoad: (e: React.SyntheticEvent<HTMLImageElement>) => {
         if (e.currentTarget.naturalWidth > 0) {
-          setLoaded(true);
-          setFailed(false);
+          handleSuccess();
         } else {
           handleFailure();
         }
@@ -277,7 +289,7 @@ export function StockLogo({ sym, size = 22, style }: { sym: string; size?: numbe
   const s = (sym || "").toUpperCase().trim();
   const idx = s.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % _LP.length;
   const px = Math.round(size * TICKER_LOGO_SCALE);
-  const { loaded, failed, sym: logoSym, sourceIdx, imgProps } = useTickerLogo(s);
+  const { loaded, failed, imgProps } = useTickerLogo(s);
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -292,7 +304,7 @@ export function StockLogo({ sym, size = 22, style }: { sym: string; size?: numbe
       {!loaded && (s[0] ?? "")}
       {!failed && (
         <img
-          key={`${logoSym}_${sourceIdx}`}
+          key={s}
           {...imgProps}
           style={{
             ...LOGO_IMG_STYLE,
@@ -392,7 +404,13 @@ export function hashStr(s: string): number {
 }
 
 // ---- Shared earnings-history row shape (real data — populated per-caller from live earnings_events) ----
-export interface EarnQ { q: string; e: number; a: number; surp: number; mv: number; }
+export interface EarnQ {
+  q: string; e: number; a: number; surp: number; mv: number; surpStr?: string;
+  /** GAAP diluted EPS for the quarter (displayed as "EPS"); `a`/`e` stay the adjusted pair the surprise uses. */
+  gaap?: number | null;
+  /** "Q3 FY26 (ended Sep 5)". */
+  label?: string;
+}
 
 export function EarningsGrowthChart({ hist }: { hist: EarnQ[] }) {
   const d = [...hist].slice(0, 12).reverse();
@@ -620,16 +638,6 @@ export function headlineLeadsWithTicker(headline: string | null | undefined, tic
  * Format date string into US format: MM-DD-YYYY.
  * Handles YYYY-MM-DD, ISO timestamps, or milliseconds.
  */
-/**
- * "as of 07-06" when a firm's target was posted more than 3 days before the
- * call it is shown on (a reiteration carrying its standing target), else null.
- */
-export function ptAsOf(ptDate: string | null | undefined, callDate: string | null | undefined): string | null {
-  if (!ptDate || !callDate) return null;
-  const gap = (Date.parse(callDate.slice(0, 10)) - Date.parse(ptDate.slice(0, 10))) / 86_400_000;
-  return gap > 3 ? `as of ${formatUsDate(ptDate).slice(0, 5)}` : null;
-}
-
 export function formatUsDate(d: string | number | null | undefined): string {
   if (!d) return "—";
   if (typeof d === "string") {

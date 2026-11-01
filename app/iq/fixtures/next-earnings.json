@@ -1,0 +1,95 @@
+{
+"source": "GET /market-data/earnings and /live/company (deployed), captured 2026-10-26 20:05Z",
+"ANIP": {
+"stored": "2026-11-05",
+"events": [
+{
+"ticker": "ANIP",
+"date": "2026-05-08",
+"epsEstimate": 1.28,
+"epsActual": 2.05,
+"session": null
+},
+{
+"ticker": "ANIP",
+"date": "2026-08-07",
+"epsEstimate": 2.04,
+"epsActual": 2.21,
+"session": null
+},
+{
+"ticker": "ANIP",
+"date": "2026-11-05",
+"epsEstimate": 2.18,
+"epsActual": null,
+"session": null
+},
+{
+"ticker": "ANIP",
+"date": "2026-11-06",
+"epsEstimate": 2.18,
+"epsActual": null,
+"session": null
+}
+]
+},
+"IRMD": {
+"stored": "2026-10-30",
+"events": [
+{
+"ticker": "IRMD",
+"date": "2026-05-01",
+"epsEstimate": 0.45,
+"epsActual": 0.49,
+"session": null
+},
+{
+"ticker": "IRMD",
+"date": "2026-07-31",
+"epsEstimate": 0.44,
+"epsActual": 0.46,
+"session": null
+},
+{
+"ticker": "IRMD",
+"date": "2026-10-30",
+"epsEstimate": 0.55,
+"epsActual": null,
+"session": null
+},
+{
+"ticker": "IRMD",
+"date": "2026-11-02",
+"epsEstimate": 0.55,
+"epsActual": null,
+"session": null
+}
+]
+},
+"PEP": {
+"stored": "2027-02-02",
+"events": [
+{
+"ticker": "PEP",
+"date": "2026-07-09",
+"epsEstimate": 2.19,
+"epsActual": 2.2,
+"session": null
+},
+{
+"ticker": "PEP",
+"date": "2026-10-08",
+"epsEstimate": 2.29,
+"epsActual": 2.34,
+"session": null
+},
+{
+"ticker": "PEP",
+"date": "2027-02-02",
+"epsEstimate": 2.24,
+"epsActual": null,
+"session": null
+}
+]
+}
+}

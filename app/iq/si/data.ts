@@ -194,10 +194,15 @@ const compactUsd = (v: number) => {
   return (v < 0 ? "−" : "") + s;
 };
 
-/** Forward P/E on the current-year consensus EPS, when both are positive. */
-/** Forward P/E on the NEXT fiscal year's EPS estimate (Yahoo's basis), else the year in progress. */
+/**
+ * Forward P/E on the NEXT fiscal year's EPS estimate (Yahoo's basis). The year
+ * in progress is used only when no next-year estimate exists at all — never
+ * because the next year's EPS is negative (PLAY showed 54.9× on this year's
+ * small profit while next year's consensus is a loss). Null when the EPS used
+ * is not positive: a P/E on a loss is not meaningful.
+ */
 export function forwardPe(f: SiFacts): number | null {
-  const eps = has(f.nextFyEps) && f.nextFyEps > 0 ? f.nextFyEps : f.fwdEps;
+  const eps = has(f.nextFyEps) ? f.nextFyEps : f.fwdEps;
   return has(f.price) && has(eps) && eps > 0 ? +(f.price / eps).toFixed(1) : null;
 }
 
@@ -254,7 +259,7 @@ export function buildDrivers(f: SiFacts): Driver[] {
   }
   // VALUATION
   const fpe = forwardPe(f);
-  if (has(fpe)) d.push(["VAL", "Forward P/E", `${fpe}× current-year consensus EPS`, clamp(100 - fpe * 1.5, 15, 90), "", 0]);
+  if (has(fpe)) d.push(["VAL", "Forward P/E", `${fpe}× next-FY consensus EPS`, clamp(100 - fpe * 1.5, 15, 90), "", 0]);
   if (has(f.targetMean) && has(f.price) && f.price > 0) {
     const up = (f.targetMean / f.price - 1) * 100;
     d.push(["VAL", "Analyst target upside", `${pct1(up)} to consensus ${usd(f.targetMean)}`, clamp(50 + up * 1.5), "C", 1]);
@@ -382,7 +387,7 @@ export function getStock(
   };
   if (!skipThesis) {
     const tr = thesisRun(sym, "Bull", "6M", undefined, undefined, facts);
-    item.conf = Math.round(tr.conf);
+    item.conf = tr.conf != null ? Math.round(tr.conf) : 0;
     item.cf = tr.cats.filter((c: any) => c.ds.length > 0 && Math.round(c.score) >= 60).length;
   }
   return item;
@@ -445,8 +450,7 @@ export function thesisRun(t: string, dir: "Bull" | "Bear", hz: string, adj?: any
       dd: bull ? dd : -dd,
     };
   });
-  let conf = 0;
-  const cats = CATS_T.map(([k, label]) => {
+  const catData = CATS_T.map(([k, label]) => {
     const ds = drv.filter((d: any) => d.cat === k);
     const slots: Record<string, any[]> = {};
     ds.forEach((d: any) => {
@@ -462,19 +466,33 @@ export function thesisRun(t: string, dir: "Bull" | "Bear", hz: string, adj?: any
       sv += w * v;
       return { a, w };
     });
-    // No data for a category = neutral, not a guess either way.
-    const score = sw ? sv / sw : 50;
-    const pts = (score * W[k]) / 100;
-    conf += pts;
-    sl.forEach(({ a, w }) =>
+    const hasData = sw > 0;
+    const score = hasData ? sv / sw : 0;
+    return { k, label, ds, slots, sl, sw, sv, hasData, score, baseW: W[k] || 0 };
+  });
+
+  const totalValidWeight = catData
+    .filter((c) => c.hasData)
+    .reduce((sum, c) => sum + c.baseW, 0);
+
+  let conf: number | null = 0;
+  const cats = catData.map((c) => {
+    const effW = totalValidWeight > 0 && c.hasData ? (c.baseW / totalValidWeight) * 100 : 0;
+    const pts = (c.score * effW) / 100;
+    if (conf != null) conf += pts;
+    c.sl.forEach(({ a, w }) =>
       a.forEach((d: any) => {
-        d.share = (W[k] * (w / sw)) / a.length;
+        d.share = c.sw ? (effW * (w / c.sw)) / a.length : 0;
         d.pts = (d.share * d.ev) / 100;
         d.shared = a.length > 1;
       })
     );
-    return { k, label, w: W[k], score, pts, ds };
+    return { k: c.k, label: c.label, w: effW, score: c.score, pts, ds: c.ds };
   });
+
+  if (totalValidWeight === 0) {
+    conf = null;
+  }
   const core = drv.filter((d: any) => d.core);
   const crit = drv.filter((d: any) => d.crit);
   return {
@@ -622,7 +640,7 @@ export function detail(t: string, live?: any): DetailStock {
     ? `${sym} latest quarter: ${fundBits.join(", ")}.`
     : `Quarterly fundamentals for ${sym} are not available yet.`;
   const fundEv = [
-    fpe != null ? `Forward P/E ${fpe}× on current-year consensus EPS${has(facts.trailingPe) ? ` (trailing ${facts.trailingPe.toFixed(1)}×)` : ""}` : null,
+    fpe != null ? `Forward P/E ${fpe}× on next-FY consensus EPS${has(facts.trailingPe) ? ` (trailing ${facts.trailingPe.toFixed(1)}×)` : ""}` : null,
     has(facts.fwdEps) && has(facts.nextFyEps) && facts.fwdEps > 0 ? `Consensus EPS: $${facts.fwdEps.toFixed(2)} this FY → $${facts.nextFyEps.toFixed(2)} next FY (${pct1((facts.nextFyEps / facts.fwdEps - 1) * 100)})` : null,
     has(facts.epsBeats) && has(facts.epsReports) ? `Beat EPS consensus in ${facts.epsBeats} of the last ${facts.epsReports} reports` : null,
   ].filter((x): x is string => !!x);

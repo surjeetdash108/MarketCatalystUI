@@ -28,13 +28,20 @@ export function buildSectorList(
   const validSet = new Set(liveNames);
   const hasValidSet = validSet.size > 0;
 
-  const bySector = new Map<string, [string, number, number][]>();
+  const bySector = new Map<string, Map<string, [string, number, number]>>();
   for (const c of companies) {
     const sec = c.sector;
     if (!sec || (hasValidSet && !validSet.has(sec)) || c.marketCap == null || c.pctChange == null) continue;
-    let bucket = bySector.get(sec);
-    if (!bucket) { bucket = []; bySector.set(sec, bucket); }
-    bucket.push([c.ticker, c.marketCap / 1e9, c.pctChange]);
+    let secMap = bySector.get(sec);
+    if (!secMap) { secMap = new Map(); bySector.set(sec, secMap); }
+    // Group share classes by SEC CIK: when multiple tickers share a CIK (e.g. GOOG and GOOGL),
+    // retain the primary one with the largest market cap.
+    const groupKey = (c as any).cik ? `CIK_${String((c as any).cik).replace(/^0+/, "")}` : c.ticker;
+    const existing = secMap.get(groupKey);
+    const mcapBillions = c.marketCap / 1e9;
+    if (!existing || mcapBillions > existing[1]) {
+      secMap.set(groupKey, [c.ticker, mcapBillions, c.pctChange]);
+    }
   }
 
   // Every sector the aggregate produced, in its live order. Falls back to
@@ -42,8 +49,9 @@ export function buildSectorList(
   const orderedNames = liveNames.length > 0 ? liveNames : Array.from(bySector.keys()).sort();
   const rows: SectorRow[] = [];
   orderedNames.forEach((name, i) => {
-    const items = bySector.get(name);
-    if (!items || items.length === 0) return;
+    const secMap = bySector.get(name);
+    if (!secMap || secMap.size === 0) return;
+    const items = [...secMap.values()].sort((a, b) => b[1] - a[1]);
     const pctChange =
       livePctByName.get(name) ??
       items.reduce((s, [, , p]) => s + p, 0) / items.length;

@@ -166,7 +166,7 @@ export function ProfileFields({
 
   return (
     <div className="iq-form-grid">
-      {/* Image upload */}
+      {/* Image upload (disabled for now)
       <div className="span-2">
         <label className="iq-label" htmlFor="profile-image">Profile image</label>
         <div style={{
@@ -180,7 +180,6 @@ export function ProfileFields({
             style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "2px solid var(--border-strong)" }}
           />
           <div style={{ flex: 1 }}>
-            {/* Native file input is hidden; the label acts as the trigger button. */}
             <input
               id="profile-image"
               type="file"
@@ -204,20 +203,21 @@ export function ProfileFields({
           </div>
         </div>
       </div>
-
+      */}
+ 
       <TextField id="profile-name" label="Name" value={profile.name} onChange={v => onChange("name", v)} />
       <TextField id="profile-email" label="Email" type="email" value={profile.email} readOnly={emailReadOnly} onChange={v => onChange("email", v)} />
       <TextField id="profile-mobile" label="Mobile number" type="tel" value={profile.mobileNumber} onChange={v => onChange("mobileNumber", v)} />
       <TextField id="profile-age" label="Age" type="number" value={profile.age} onChange={v => onChange("age", v)} />
-      <SelectField id="profile-income" label="Income range" options={incomeRanges} value={profile.incomeRange} onChange={v => onChange("incomeRange", v)} />
+      {/* <SelectField id="profile-income" label="Income range" options={incomeRanges} value={profile.incomeRange} onChange={v => onChange("incomeRange", v)} />
       <SelectField id="profile-experience" label="Investment experience" options={investmentExperienceOptions} value={profile.investmentExperience} onChange={v => onChange("investmentExperience", v)} />
       <SelectField id="profile-goals" label="Investment goals" options={investmentGoalOptions} value={profile.investmentGoals} onChange={v => onChange("investmentGoals", v)} />
       <SelectField id="profile-risk" label="Risk tolerance" options={riskToleranceOptions} value={profile.riskTolerance} onChange={v => onChange("riskTolerance", v)} />
       <SelectField id="profile-horizon" label="Investment horizon" options={investmentHorizonOptions} value={profile.investmentHorizon} onChange={v => onChange("investmentHorizon", v)} />
-      <TextField id="profile-value" label="Current portfolio value ($)" type="number" value={profile.currentPortfolioValue} onChange={v => onChange("currentPortfolioValue", v)} />
-
+      <TextField id="profile-value" label="Current portfolio value ($)" type="number" value={profile.currentPortfolioValue} onChange={v => onChange("currentPortfolioValue", v)} /> */}
+ 
       {/* Asset class checkboxes */}
-      <div className="span-2">
+      {/* <div className="span-2">
         <div className="iq-label" style={{ marginBottom: 8 }}>Preferred asset classes</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {assetClassOptions.map(ac => {
@@ -244,7 +244,7 @@ export function ProfileFields({
             );
           })}
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

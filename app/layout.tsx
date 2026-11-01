@@ -134,6 +134,16 @@ export const metadata: Metadata = {
     title: "MarketCatalyst — Market Intelligence Terminal",
     description: "From ticker to thesis in under 60 seconds. Earnings, movers, analyst actions, insider flows and your portfolio — all in one terminal.",
   },
+  icons: {
+    icon: [
+      { url: "/icon.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-icon.png",
+  },
+  other: {
+    "git-commit": process.env.NEXT_PUBLIC_GIT_COMMIT || "unknown",
+  },
 };
 
 export default function RootLayout({

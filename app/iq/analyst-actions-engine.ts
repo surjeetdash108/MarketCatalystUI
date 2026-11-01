@@ -36,11 +36,10 @@ export interface ProcessedAction {
   dir: number; // 1 = bullish, -1 = bearish, 0 = neutral
   from: string;
   to: string;
-  pt1: number; // Price target for this call (the firm's own, else the Street consensus — see ptSource)
-  /** "firm": the firm's own target with this call; "consensus": the firm gave none, so the Street consensus stands in. */
+  pt1: number; // The firm's own target with this call; 0 when it gave none (see ptSource)
+  /** "firm": the firm's own target with this call; "consensus": the firm gave none, so the row shows "—". */
   ptSource: "firm" | "consensus";
-  /** Date the firm posted `pt1` (firm targets only). Earlier than `date` means
-   *  the firm reiterated without a new target and this is its standing one. */
+  /** Date the firm posted `pt1` (firm targets only) — within a day or so of `date`. */
   ptDate: string | null;
   prevPt: number | null;
   px: number; // Current price
@@ -62,43 +61,101 @@ export interface ProcessedAction {
   upPct: number | null; // % upside to this target
 }
 
+const RATING_RANK: Record<string, number> = {
+  "strong buy": 5,
+  "top pick": 5,
+  "outperform": 4,
+  "buy": 4,
+  "overweight": 4,
+  "positive": 4,
+  "accumulate": 4,
+  "sector outperform": 4,
+  "hold": 3,
+  "neutral": 3,
+  "equal-weight": 3,
+  "equal weight": 3,
+  "peer perform": 3,
+  "market perform": 3,
+  "sector perform": 3,
+  "underperform": 2,
+  "underweight": 2,
+  "reduce": 2,
+  "sector underperform": 2,
+  "sell": 1,
+  "strong sell": 1,
+  "negative": 1,
+};
+
+function getRatingRank(grade?: string | null): number | null {
+  if (!grade) return null;
+  const g = grade.toLowerCase().trim();
+  if (RATING_RANK[g] != null) return RATING_RANK[g];
+  for (const [key, rank] of Object.entries(RATING_RANK)) {
+    if (g.includes(key)) return rank;
+  }
+  return null;
+}
+
+/**
+ * The label a call is shown with.
+ *
+ * "Maintain" is only claimed when it is known: the rating is unchanged AND the
+ * firm's target with this call is known and not moved. FMP's `grades` has no
+ * targets, so a reiteration whose target the feeds lack used to read
+ * "Maintain" when the firm had raised or cut it (E2E Oct 2026: 96 rows). It
+ * now reads "Rating maintained" — the rating is the only thing known.
+ * `ptChange` is the direction the firm's own headline stated, used when the
+ * figures are missing.
+ */
 export function resolveActionMeta(
   actionRaw?: string | null,
   previousGrade?: string | null,
   newGrade?: string | null,
   pt?: number | null,
   prevPt?: number | null,
+  ptChange?: "raise" | "cut" | null,
 ) {
   const act = (actionRaw ?? "").toLowerCase().trim();
   const prev = (previousGrade ?? "").trim();
   const next = (newGrade ?? "").trim();
+  const prevRank = getRatingRank(prev);
+  const nextRank = getRatingRank(next);
 
   let shownAction = "Maintain";
   let dir = 0;
 
-  if (act.includes("init") || (prev === "" && next !== "" && !act.includes("upgrade") && !act.includes("downgrade"))) {
+  // 1. Initiation when there is no prior rating
+  if (act.includes("init") || (!prev && next && !act.includes("upgrade") && !act.includes("downgrade"))) {
     shownAction = "Initiate";
-    dir = BULLISH_GRADE.test(next) ? 1 : BEARISH_GRADE.test(next) ? -1 : 0;
-  } else if (act.includes("upgrade")) {
-    shownAction = "Upgrade";
-    dir = 1;
-  } else if (act.includes("downgrade")) {
-    shownAction = "Downgrade";
-    dir = -1;
-  } else if (pt != null && prevPt != null && pt !== prevPt) {
-    if (pt > prevPt) {
-      shownAction = "PT Raise";
+    dir = (nextRank ?? 3) > 3 ? 1 : (nextRank ?? 3) < 3 ? -1 : 0;
+  }
+  // 2. Upgrade or Downgrade by comparing rating ranks
+  else if (prevRank != null && nextRank != null && prevRank !== nextRank) {
+    if (nextRank > prevRank) {
+      shownAction = "Upgrade";
       dir = 1;
     } else {
-      shownAction = "PT Cut";
+      shownAction = "Downgrade";
       dir = -1;
     }
-  } else if (BULLISH_GRADE.test(next)) {
-    shownAction = "Reiterate";
+  } else if (act.includes("upgrade") && (!prevRank || !nextRank || nextRank >= prevRank)) {
+    shownAction = "Upgrade";
     dir = 1;
-  } else if (BEARISH_GRADE.test(next)) {
-    shownAction = "Reiterate";
+  } else if (act.includes("downgrade") && (!prevRank || !nextRank || nextRank <= prevRank)) {
+    shownAction = "Downgrade";
     dir = -1;
+  }
+  // 3. PT Raise or PT Cut: from the two figures, else the headline's word
+  else if ((pt != null && prevPt != null && pt !== prevPt) || ptChange) {
+    const up = pt != null && prevPt != null && pt !== prevPt ? pt > prevPt : ptChange === "raise";
+    shownAction = up ? "PT Raise" : "PT Cut";
+    dir = up ? 1 : -1;
+  }
+  // 4. Rating unchanged: "Maintain"/"Reiterate" only with a known, unmoved
+  //    target; without one the target change is unknown.
+  else {
+    shownAction = pt == null ? "Rating maintained" : act.includes("reiterat") ? "Reiterate" : "Maintain";
+    dir = (nextRank ?? 3) > 3 ? 1 : (nextRank ?? 3) < 3 ? -1 : 0;
   }
 
   return {
@@ -147,7 +204,8 @@ export function buildAnalystActions({
       const grades = (c.recentGrades ?? []).filter((g) => g.firm && g.date);
       if (!sym || grades.length === 0) return;
       const comp = companyMap.get(sym);
-      const px = comp?.price && comp.price > 0 ? comp.price : (livePrice(sym) ?? 0);
+      const live = livePrice(sym);
+      const px = live != null && live > 0 ? live : (comp?.price && comp.price > 0 ? comp.price : 0);
       const coName = comp?.name || sym;
       const sec = comp?.sector || "—";
       const cap = capCategory(comp?.marketCap);
@@ -159,15 +217,14 @@ export function buildAnalystActions({
       if (c.priceTargetLow) allPtValues.push(c.priceTargetLow);
       const streetTargets = [...new Set(allPtValues)].sort((a, b) => a - b);
 
-      const metas = grades.map((g) => resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget));
+      const metas = grades.map((g) => resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget, g.priceTargetChange));
 
       grades.forEach((g, gIdx) => {
         const firmName = (g.firm as string).trim();
         const meta = metas[gIdx];
-        const targetPt = g.priceTarget != null && g.priceTarget > 0 ? g.priceTarget : (c.priceTargetConsensus ?? null);
-        if (targetPt == null) return; // nothing to place on the target map
+        const targetPt = g.priceTarget != null && g.priceTarget > 0 ? g.priceTarget : null;
         const prevPt = g.previousPriceTarget ?? null;
-        const upPct = px > 0 ? ((targetPt - px) / px) * 100 : null;
+        const upPct = targetPt != null && px > 0 ? ((targetPt - px) / px) * 100 : null;
 
         // Cluster: distinct firms making a same-direction call on this stock
         // within 72 hours of this one.
@@ -188,7 +245,7 @@ export function buildAnalystActions({
         const clusterScore = clusterCount >= 4 ? 25 : clusterCount === 3 ? 21 : clusterCount === 2 ? 15 : 7;
         const strengthScore = meta.shownAction === "Upgrade" || meta.shownAction === "Downgrade" ? 20 :
           meta.shownAction.includes("PT") ? 15 : meta.shownAction === "Initiate" ? 14 : 9;
-        const movePctVal = prevPt && prevPt > 0 ? Math.abs((targetPt - prevPt) / prevPt) * 100 : upPct != null ? Math.abs(upPct) : 0;
+        const movePctVal = prevPt && prevPt > 0 && targetPt != null ? Math.abs((targetPt - prevPt) / prevPt) * 100 : upPct != null ? Math.abs(upPct) : 0;
         const moveScore = movePctVal >= 20 ? 10 : movePctVal >= 12 ? 8 : movePctVal >= 5 ? 6 : 4;
         const isHeld = holdings.has(sym);
         const isWatched = watchedTickers.has(sym);
@@ -198,20 +255,24 @@ export function buildAnalystActions({
 
         const headline = clusterCount >= 2
           ? `${clusterCount} ${meta.dir >= 0 ? "bullish" : "bearish"} calls within 72h: ${clusterFirmsList.slice(0, 3).join(", ")}${clusterFirmsList.length > 3 ? " and others" : ""}`
-          : `${firmName} ${meta.shownAction.toLowerCase()}s ${sym}${meta.to !== "—" ? ` to ${meta.to}` : ""} with $${targetPt.toFixed(2)} target`;
+          : targetPt != null
+          ? `${firmName} ${meta.shownAction.toLowerCase()}s ${sym}${meta.to !== "—" ? ` to ${meta.to}` : ""} with $${targetPt.toFixed(2)} target`
+          : `${firmName} ${meta.shownAction.toLowerCase()}s ${sym}${meta.to !== "—" ? ` to ${meta.to}` : ""}`;
 
         const whyBullets: string[] = [];
         if (isHeld) whyBullets.push(`You hold this stock in your portfolio`);
         if (isWatched) whyBullets.push(`In your watchlist`);
         if (clusterCount >= 2) whyBullets.push(`${clusterCount} Firms made same-direction calls within 72 hours`);
-        if (streetTargets.length >= 2 && targetPt >= streetTargets[streetTargets.length - 1]) {
-          whyBullets.push(`New $${targetPt.toFixed(2)} PT is the highest on the Street`);
-        } else if (streetTargets.length >= 2 && targetPt <= streetTargets[0]) {
-          whyBullets.push(`New PT is the lowest on the Street`);
-        } else if (upPct != null) {
-          whyBullets.push(`Target is ${upPct >= 0 ? "+" : ""}${upPct.toFixed(1)}% vs current market price`);
-        } else {
-          whyBullets.push(`New price target: $${targetPt.toFixed(2)}`);
+        if (targetPt != null) {
+          if (streetTargets.length >= 2 && targetPt >= streetTargets[streetTargets.length - 1]) {
+            whyBullets.push(`New $${targetPt.toFixed(2)} PT is the highest on the Street`);
+          } else if (streetTargets.length >= 2 && targetPt <= streetTargets[0]) {
+            whyBullets.push(`New PT is the lowest on the Street`);
+          } else if (upPct != null) {
+            whyBullets.push(`Target is ${upPct >= 0 ? "+" : ""}${upPct.toFixed(1)}% vs current market price`);
+          } else {
+            whyBullets.push(`New price target: $${targetPt.toFixed(2)}`);
+          }
         }
         if (hitRate != null && stat) {
           whyBullets.push(`${firmName}'s price targets were hit within 12 months ${hitRate}% of the time (${stat.targetsResolved} resolved)`);
@@ -231,9 +292,9 @@ export function buildAnalystActions({
           dir: meta.dir,
           from: meta.from,
           to: meta.to,
-          pt1: targetPt,
-          ptSource: g.priceTarget != null && g.priceTarget > 0 ? "firm" : "consensus",
-          ptDate: g.priceTarget != null && g.priceTarget > 0 ? (g.priceTargetDate ?? null) : null,
+          pt1: targetPt ?? 0,
+          ptSource: targetPt != null ? "firm" : "consensus",
+          ptDate: targetPt != null ? (g.priceTargetDate ?? null) : null,
           prevPt,
           px,
           date: g.date as string,
@@ -241,7 +302,7 @@ export function buildAnalystActions({
           comp: factorsComp,
           cluster: clusterCount,
           clusterFirms: clusterFirmsList,
-          street: streetTargets.length ? streetTargets : [targetPt],
+          street: streetTargets.length ? streetTargets : (targetPt != null ? [targetPt] : []),
           hit: hitRate != null ? `${hitRate}%` : "—",
           move: pctTxt(movePct),
           headline,
@@ -257,4 +318,13 @@ export function buildAnalystActions({
     });
 
     return rows.sort((a, b) => b.score - a.score);
+}
+
+/**
+ * The price a row shows: null (rendered "—") when the stock has no quote yet.
+ * `px` is 0 internally for "unknown" so the >0 guards above skip it, and that
+ * 0 was rendered as "$0.00" beside a signal-76 call (FLG, E2E Oct 26).
+ */
+export function shownPrice(px: number | null | undefined): number | null {
+  return px != null && Number.isFinite(px) && px > 0 ? px : null;
 }

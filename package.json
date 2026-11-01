@@ -6,7 +6,7 @@
     "dev": "next dev",
     "lint:hooks": "eslint -c eslint.hooks.config.mjs app",
     "prebuild": "npm run lint:hooks",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
