@@ -1443,7 +1443,7 @@ export function EarningsScreen() {
   const { data: analystActions } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const liveEarningsData = liveEarnings;
 
-  const [mode, setMode]     = useState<"week" | "month">("month");
+  const [mode, setMode]     = useState<"day" | "week" | "month">("month");
   const [anchor, setAnchor] = useState<string>(() => etTodayIso());
   // At-a-glance snapshot: a Nasdaq-style results table (actual vs consensus,
   // surprise, revenue, year-ago) for the selected day/week/month, toggled from
@@ -1533,11 +1533,17 @@ export function EarningsScreen() {
   // Rows dated after today cannot be classified by their move — see
   // inferredSession. Computed once so every consumer agrees on "today".
   const todayIso = etTodayIso();
+  // The calendar has no Sat/Sun, so on a weekend "Today" lands on the next Monday.
+  const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
+  const todayIsWeekend = todayDow === 0 || todayDow === 6;
+  const todayTradingIso = todayIsWeekend ? isoDay(addDays(new Date(`${todayIso}T00:00:00Z`), todayDow === 6 ? 2 : 1)) : todayIso;
   const dayRows = rowsForDate(anchor, liveEarningsData).map(toCalRow);
   const glanceRaw: EarnCalItem[] =
     mode === "month"
       ? liveEarningsData.filter(d => d.date.slice(0, 7) === anchor.slice(0, 7)).map(toEarnCalItem)
-      : weekDays5.flatMap(iso => rowsForDate(iso, liveEarningsData));
+      : mode === "day"
+        ? rowsForDate(anchor, liveEarningsData)
+        : weekDays5.flatMap(iso => rowsForDate(iso, liveEarningsData));
 
   // Quotes for every reporter ON SCREEN, so a row can be placed by where its
   // move landed.
@@ -1628,6 +1634,11 @@ export function EarningsScreen() {
   const step = (dir: 1 | -1) => {
     if (mode === "month") {
       goToDate(isoDay(new Date(Date.UTC(anchorDate.getUTCFullYear(), anchorDate.getUTCMonth() + dir, 1))));
+    } else if (mode === "day") {
+      // Step weekday to weekday — the calendar has no Sat/Sun.
+      let d = addDays(anchorDate, dir);
+      while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d = addDays(d, dir);
+      goToDate(isoDay(d));
     } else {
       goToDate(isoDay(addDays(anchorDate, dir * 7)));
     }
@@ -1638,7 +1649,40 @@ export function EarningsScreen() {
 
   let calNode: React.ReactNode;
 
-  if (mode === "week") {
+  if (mode === "day") {
+    const items = filterSortRows(rowsForDate(anchor, liveEarningsData).map(toCalRow), { sort, session, mcap: mcapByTicker, quotes: sessionQuotes, today: todayIso, rowDate: anchor, usual: annUsualSession });
+    const isToday = anchor === todayIso;
+    calNode = (
+      <>
+      {todayIsWeekend && anchor === todayTradingIso && (
+        <div
+          role="note"
+          style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 10px", padding: "9px 12px", fontSize: ".82rem", color: "var(--text-hi)", background: "var(--surface-1)", border: "1px solid var(--border)", borderLeft: "3px solid var(--brand)", borderRadius: 10 }}
+        >
+          <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden style={{ flexShrink: 0, color: "var(--brand)" }}><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+          <span>
+            <strong>Markets are closed today</strong> ({new Date(`${todayIso}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}), so there are no earnings to show.
+            {" "}Showing {new Date(`${todayTradingIso}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })}, the next trading day.
+          </span>
+        </div>
+      )}
+      <div className={`ec-day${isToday ? " is-today" : ""}`}>
+        <div className="ec-dh">{dateLabel}{isToday ? " · Today" : ""} · {items.length} reporting</div>
+        {items.length === 0 ? (
+          <div className="emc-none">No earnings</div>
+        ) : (
+          <div className="emc-logos">
+            {items.map(r => (
+              <button key={r.s} className={`emc-logo${sel === r.s ? " on" : ""}`} title={r.s} onClick={() => openStockDetail(r.s, anchor)}>
+                <StockLogo sym={r.s} size={30} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      </>
+    );
+  } else if (mode === "week") {
     calNode = (
       <div className="ec-grid">
         {weekDays5.map((iso, di) => {
@@ -1835,6 +1879,7 @@ export function EarningsScreen() {
           <div className="ecal-seg">
             <button className={`ecal-segbtn${mode === "month" ? " on" : ""}`} onClick={() => setMode("month")}>Month</button>
             <button className={`ecal-segbtn${mode === "week" ? " on" : ""}`} onClick={() => setMode("week")}>Week</button>
+            <button className={`ecal-segbtn${mode === "day" ? " on" : ""}`} onClick={() => { goToDate(todayTradingIso); setMode("day"); }} title={todayIsWeekend ? "Weekend — jump to the next trading day's reporters" : "Jump to today's reporters"}>Today</button>
           </div>
           {/* Session filter — splits the day's reporters by WHERE THEIR MOVE
               LANDED, not by an announced schedule.
