@@ -780,6 +780,32 @@ button.ops-chip.on{border-color:var(--brand);color:var(--hi);background:#4ADE800
 .jb-run{display:grid;grid-template-columns:minmax(120px,1.1fr) minmax(130px,1fr) 108px minmax(0,2fr);gap:12px;align-items:baseline;padding:10px 16px;border-bottom:1px solid #14181B;font-size:12.5px}
 .jb-run:last-child{border-bottom:0}
 .jb-lock{font-size:11.5px;color:var(--warn);margin-top:5px}
+.jb-caret{display:inline-block;width:14px;color:var(--dim2);font-size:10px;transition:transform .15s}
+tr.ops-row[aria-expanded="true"] .jb-caret{transform:rotate(90deg);color:var(--brand)}
+.jb-live{display:inline-flex;align-items:center;gap:6px;font:600 10.5px var(--f-mono);color:var(--info);background:#2FB6A81c;border-radius:20px;padding:2px 10px}
+.jb-live i{width:7px;height:7px;border-radius:50%;background:currentColor;animation:jbPulse 1.4s ease-in-out infinite}
+@keyframes jbPulse{0%,100%{opacity:1}50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.jb-live i{animation:none}}
+tr.ops-row.jb-isrunning td{background:#2FB6A80a}
+.jb-sec{margin:0 0 18px}
+.jb-sec:last-child{margin-bottom:0}
+.jb-sec h4{font:600 10px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim2);margin:0 0 8px}
+.jb-now{border:1px solid #2FB6A855;background:#2FB6A80d;border-radius:10px;padding:12px 14px;font-size:12.5px}
+.jb-now.idle{border-color:var(--border);background:var(--surface)}
+.jb-steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;margin-top:8px}
+.jb-grp{grid-column:1/-1;font:600 9.5px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim2);margin-top:6px}
+.jb-step{display:flex;align-items:center;gap:7px;font:11.5px var(--f-mono);color:var(--dim);padding:5px 8px;border-radius:7px;background:#ffffff05;min-width:0}
+.jb-step span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.jb-step b{flex:none;width:14px;text-align:center}
+.jb-step em{font-style:normal;color:var(--warn);margin-left:auto;cursor:help}
+.jb-step.done{color:var(--text)} .jb-step.done b{color:var(--up)}
+.jb-step.failed{color:var(--down)}
+.jb-step.running{color:var(--hi);background:#2FB6A81f;outline:1px solid #2FB6A866} .jb-step.running b{color:var(--info)}
+.jb-feed{display:flex;gap:4px 10px;align-items:baseline;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid #14181B;font-size:12.5px}
+.jb-feed:last-child{border-bottom:0}
+.jb-scr{font:600 11px var(--f-body);color:var(--text);background:var(--surface2);border:1px solid var(--border2);border-radius:20px;padding:2px 10px;cursor:pointer;margin-top:4px}
+.jb-scr:hover{border-color:var(--brand);color:var(--hi)}
+.jb-col{display:inline-block;font:11px var(--f-mono);color:var(--text);background:#ffffff0a;border-radius:6px;padding:2px 8px;margin:0 6px 6px 0}
 .jb-modal-box{border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin:0 0 12px;font-size:12.5px;line-height:1.55;background:var(--surface2)}
 .jb-modal-box.warn{border-color:#F5B54466;background:#F5B54410;color:#e8c88a}
 .jb-modal-box.bad{border-color:#F8717166;background:#F8717112;color:#f3a6a6}
@@ -4115,7 +4141,7 @@ function jbInflightRun(name){
   return a && (a.status === 'queued' || a.status === 'running') ? a : null;
 }
 function jbLeaseLive(j){ return !!(j.lock && !j.lock.probablyStale); }
-function jbRunning(j){ return !!jbInflightRun(j.name) || jbLeaseLive(j); }
+function jbRunning(j){ return !!j.activity || !!jbInflightRun(j.name) || jbLeaseLive(j); }
 function jbRank(j){ return j.health === 'failing' ? 0 : j.health === 'late' ? 1 : jbRunning(j) ? 2 : 3; }
 function jbHasInflight(){
   var l = (JB.runs || []);
@@ -4166,47 +4192,166 @@ function jbActionCell(j){
   return '<button class="ops-btn sm" type="button" data-act="run" data-job="' + ahEsc(j.name) + '"'
     + (off ? ' disabled title="' + ahEsc((r && r.reason) || 'Run now is not available here.') + '"' : '') + '>Run now</button>';
 }
-function jbNameCell(j){
-  var t = JB_TRIG[j.trigger] || JB_TRIG.none;
-  var out = '<div><span class="jb-name">' + ahEsc(j.name) + '</span> <span class="ops-pl ' + t.cls + '" title="' + ahEsc(t.hint) + '">' + t.label + '</span>';
-  if (j.health === 'failing') out += ' <span class="ops-pl ops-bad">failing</span>';
-  else if (j.health === 'late') out += ' <span class="ops-pl ops-warn">late</span>';
-  if (j.risk) out += ' <span class="ops-pl ' + (j.risk.level === 'destructive' ? 'ops-bad' : 'ops-warn') + '" title="' + ahEsc(j.risk.note) + '">' + (j.risk.level === 'destructive' ? 'deletes data' : 'caution') + '</span>';
+/* ── what a job is, and what it is doing ── */
+function jbDur(ms){
+  if (!isFinite(ms) || ms < 0) return '';
+  var s = Math.floor(ms / 1000);
+  if (s < 60) return s + 's';
+  var m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ' + jbPad(s % 60) + 's';
+  return Math.floor(m / 60) + 'h ' + jbPad(m % 60) + 'm';
+}
+/* A ticking "3m 04s": jbTick() rewrites every .jb-el once a second without repainting the table. */
+function jbElapsed(iso){
+  return '<span class="jb-el" data-since="' + ahEsc(iso) + '">' + ahEsc(jbDur(Date.now() - Date.parse(iso))) + '</span>';
+}
+function jbTick(){
+  var els = document.querySelectorAll('#jobs .jb-el');
+  for (var i = 0; i < els.length; i++) els[i].textContent = jbDur(Date.now() - Date.parse(els[i].getAttribute('data-since')));
+}
+function jbStepCounts(a){
+  var steps = (a && a.steps) || [], done = 0;
+  steps.forEach(function(s){ if (s.state === 'done' || s.state === 'failed') done++; });
+  return { done: done, total: steps.length };
+}
+function jbStepName(n){ return n === 'warm' ? 'warming hot tickers' : n; }
+function jbMono(s){ return '<span class="ops-mono">' + ahEsc(s) + '</span>'; }
+function jbStartedBy(j, run){
+  var a = j.activity, by = a && a.startedBy;
+  if (by && by.kind === 'admin') return 'started from this tab by ' + ahEsc(by.by);
+  if (run) return 'manual run ' + ahEsc(run.status) + ' — started by ' + ahEsc(run.requestedBy) + ' ' + ahEsc(jbRel(run.requestedAt));
+  if (by && by.kind === 'lease') return 'not started from this tab — its schedule or another caller (lease held by ' + jbMono(by.owner) + ')';
+  return '';
+}
+/* The live line under a running job's name: how long, which step, who started it. */
+function jbLiveLine(j){
+  var a = j.activity, run = jbInflightRun(j.name);
+  if (!a && !run) return '';
+  var h = '<div><span class="jb-live"><i></i>' + (a && a.state === 'running' ? 'running' : 'starting');
+  if (a && a.startedAt) h += ' · ' + jbElapsed(a.startedAt);
+  h += '</span>';
+  if (a && a.steps && a.current){
+    var c = jbStepCounts(a);
+    h += ' <span class="jb-sub">step ' + Math.min(c.done + 1, c.total) + ' of ' + c.total + ': ' + jbMono(jbStepName(a.current)) + '</span>';
+  }
+  h += '</div>';
+  var who = jbStartedBy(j, run);
+  if (who) h += '<div class="jb-sub">' + who + '</div>';
+  return h;
+}
+function jbStepsGrid(steps, live){
+  var last = null, h = '<div class="jb-steps">';
+  steps.forEach(function(s){
+    if (s.group !== last){ last = s.group; h += '<div class="jb-grp">' + ahEsc(s.group) + '</div>'; }
+    var st = live ? s.state : 'idle';
+    var g = st === 'done' ? '✓' : st === 'failed' ? '✕' : st === 'running' ? '▸' : '·';
+    var tip = live ? (s.state === 'done' ? 'finished ' + (s.finishedAt ? jbRel(s.finishedAt) : '') : s.state === 'failed' ? 'failed ' + (s.finishedAt ? jbRel(s.finishedAt) : '') : s.state === 'running' ? 'in progress, or next to start' : 'not started') : '';
+    h += '<div class="jb-step ' + st + '"' + (tip ? ' title="' + ahEsc(tip) + '"' : '') + '><b>' + g + '</b><span>' + ahEsc(s.name === 'warm' ? 'Warm hot tickers' : s.name) + '</span>'
+      + (live && s.ownSchedule && (s.state === 'done' || s.state === 'failed') ? '<em title="This step also runs on its own schedule, so this record may come from that run, not from this one.">~</em>' : '') + '</div>';
+  });
+  return h + '</div>';
+}
+function jbNowBox(j, a, run){
+  var kv = [];
+  if (a || run){
+    kv.push(['State', '<span class="jb-live"><i></i>' + (a && a.state === 'running' ? 'running' : 'starting') + (a && a.startedAt ? ' · ' + jbElapsed(a.startedAt) : '') + '</span>']);
+    if (a && a.startedAt) kv.push(['Started', ahEsc(jbAbs(a.startedAt, j.timeZone)) + ' <span class="ops-dimtx">(' + ahEsc(jbRel(a.startedAt)) + ')</span>']);
+    var who = jbStartedBy(j, run);
+    if (who) kv.push(['Started by', who]);
+    if (a && a.leaseUntil) kv.push(['Deadline', 'its lease runs out ' + ahEsc(jbAbs(a.leaseUntil, j.timeZone)) + '; a run still going after that is presumed dead']);
+    if (a && a.steps){
+      var c = jbStepCounts(a);
+      kv.push(['Progress', c.done + ' of ' + c.total + ' steps finished' + (a.current ? ' — now ' + jbMono(jbStepName(a.current)) : '') + jbStepsGrid(a.steps, true)]);
+    }
+    if (run && !(a && a.startedBy && a.startedBy.kind === 'admin')) kv.push(['Manual run', jbRunLine(run, true)]);
+    return '<div class="jb-now"><div class="ops-kv">' + kv.map(function(p){ return '<div class="k">' + p[0] + '</div><div class="v">' + p[1] + '</div>'; }).join('') + '</div>'
+      + (a && a.note ? '<div class="jb-sub" style="margin-top:10px">' + ahEsc(a.note) + '</div>' : '') + '</div>';
+  }
+  var out = '<div class="jb-now idle"><div><b>Not running.</b> ';
+  if (j.lastSyncedAt) out += 'Last ran ' + ahEsc(jbRel(j.lastSyncedAt)) + ' — ' + (j.lastStatus === 'error' ? '<span class="ops-bad ops-pl"><i></i>error</span>' : '<span class="ops-ok ops-pl"><i></i>ok' + (j.lastCount != null ? ' · ' + j.lastCount : '') + '</span>') + '. ';
+  else out += 'It has never run. ';
+  if (j.nextRunAt) out += 'Next scheduled run ' + ahEsc(jbRel(j.nextRunAt)) + ' (' + ahEsc(jbAbs(j.nextRunAt, j.timeZone)) + ').';
+  else out += j.trigger === 'none' ? 'It has no schedule — it only runs when started by hand.' : '';
   out += '</div>';
-  if (j.note) out += '<div class="jb-sub ops-trunc">' + ahEsc(j.note) + '</div>';
-  if (jbLeaseLive(j)) out += '<div class="jb-lock">running now — lease until ' + ahEsc(jbAbs(j.lock.heldUntil, j.timeZone)) + '</div>';
-  else if (j.lock) out += '<div class="jb-lock">a finished run left its lease in place until ' + ahEsc(jbAbs(j.lock.heldUntil, j.timeZone)) + '</div>';
-  var run = jbInflightRun(j.name);
-  if (run) out += '<div class="jb-lock">manual run ' + ahEsc(run.status) + ' — started by ' + ahEsc(run.requestedBy) + ' ' + ahEsc(jbRel(run.requestedAt)) + '</div>';
-  return out;
+  if (j.lock && j.lock.probablyStale) out += '<div class="jb-lock">A finished run left its lease in place until ' + ahEsc(jbAbs(j.lock.heldUntil, j.timeZone)) + '; it does not mean anything is running.</div>';
+  if (j.lastAdminRun) out += '<div class="jb-sub" style="margin-top:8px">Latest manual run: ' + jbRunLine(j.lastAdminRun, true) + '</div>';
+  return out + '</div>';
+}
+function jbRoleText(j){
+  var r = j.role || {};
+  if (r.partOf && r.step){
+    var s = r.step, t = 'Step ' + s.position + ' of ' + s.of + ' (' + ahEsc(s.group) + ') in the ' + jbMono(r.partOf) + ' bundle — ';
+    t += s.after ? 'runs after ' + jbMono(s.after) : 'the first step after the warm-up';
+    t += s.before ? ', before ' + jbMono(s.before) + '.' : ', the last step.';
+    if (j.trigger === 'scheduler') t += ' It also has a scheduler entry of its own.';
+    return t;
+  }
+  if (r.steps) return 'Runs its ' + (r.steps.length - 1) + ' steps one after another after a warm-up step. A step that fails does not stop the ones after it.';
+  return '';
 }
 function jbDetail(j){
-  var t = JB_TRIG[j.trigger] || JB_TRIG.none;
-  var kv = [['Trigger', ahEsc(t.hint)]];
-  kv.push(['Declared schedule', j.schedules.length
-    ? j.schedules.map(function(c){ return '<span class="jb-cron">' + ahEsc(c) + '</span>'; }).join('<br>') + ' <span class="ops-dimtx">(' + ahEsc(j.timeZone) + ')</span>'
+  var t = JB_TRIG[j.trigger] || JB_TRIG.none, a = j.activity, run = jbInflightRun(j.name);
+  var kv = function(rows){ return '<div class="ops-kv">' + rows.map(function(p){ return '<div class="k">' + p[0] + '</div><div class="v">' + p[1] + '</div>'; }).join('') + '</div>'; };
+  var h = '<div class="jb-sec"><h4>Right now</h4>' + jbNowBox(j, a, run) + '</div>';
+
+  /* What it is */
+  var what = [['What it does', j.note ? ahEsc(j.note) : '<span class="ops-dimtx">No description is recorded for this job.</span>']];
+  var role = jbRoleText(j); if (role) what.push(['Where it fits', role]);
+  what.push(['Triggered by', ahEsc(t.hint)]);
+  what.push(['Declared schedule', j.schedules.length
+    ? j.schedules.map(function(c){ var w = jbCron(c); return (w ? ahEsc(w) + ' ' : '') + '<span class="jb-cron">' + ahEsc(c) + '</span>'; }).join('<br>') + ' <span class="ops-dimtx">(' + ahEsc(j.timeZone) + ')</span>'
     : '<span class="ops-dimtx">none</span>']);
-  if (j.note) kv.push(['Notes', ahEsc(j.note)]);
-  if (j.risk) kv.push(['Run risk', '<span class="' + (j.risk.level === 'destructive' ? 'ops-err' : 'jb-lock') + '" style="margin:0">' + ahEsc(j.risk.note) + '</span>']);
-  kv.push(['Runs recorded', (j.runCount == null ? '—' : j.runCount) + (j.errorCount ? ' · <span class="ops-err" style="display:inline;margin:0">' + j.errorCount + ' errors</span>' : '')]);
-  if (j.lastSuccessAt) kv.push(['Last success', ahEsc(jbAbsFull(j.lastSuccessAt)) + ' <span class="ops-dimtx">(' + ahEsc(jbRel(j.lastSuccessAt)) + ')</span>']);
-  if (j.lastFailedAt) kv.push(['Last failure', ahEsc(jbAbsFull(j.lastFailedAt)) + ' <span class="ops-dimtx">(' + ahEsc(jbRel(j.lastFailedAt)) + ')</span>']);
+  if (j.risk) what.push(['Run risk', '<span class="' + (j.risk.level === 'destructive' ? 'ops-err' : 'jb-lock') + '" style="margin:0">' + ahEsc(j.risk.note) + '</span>']);
+  if (j.role && j.role.steps && !(a && a.steps)) what.push(['Steps, in order', jbStepsGrid(j.role.steps, false)]);
+  h += '<div class="jb-sec"><h4>What it is</h4>' + kv(what) + '</div>';
+
+  /* What it feeds */
+  var feeds = j.feeds || [], more = feeds.length > 12 ? feeds.length - 12 : 0;
+  h += '<div class="jb-sec"><h4>What it feeds</h4>';
+  if (!feeds.length) h += '<div class="ops-dimtx" style="font-size:12.5px">Nothing in the API catalogue lists this job as a producer, so no screen is known to depend on it directly. It may still feed other jobs.</div>';
+  else h += feeds.slice(0, 12).map(function(f){
+    return '<div class="jb-feed"><span class="ops-mono">' + ahEsc(f.api) + '</span><span class="ops-dimtx">' + ahEsc(f.summary) + '</span>'
+      + (f.relation === 'also' ? ' <span class="ops-pl ops-dim">also writes here</span>' : '')
+      + '<div style="flex-basis:100%">' + (f.screens.length ? f.screens.map(function(s){ return '<button type="button" class="jb-scr" data-act="screen" data-id="' + ahEsc(s.id) + '" title="Open this screen in API Docs">' + ahEsc(s.label) + '</button> '; }).join('') : '<span class="ops-dimtx" style="font-size:11.5px">no screen calls it</span>') + '</div></div>';
+  }).join('') + (more ? '<div class="ops-dimtx" style="font-size:12px;margin-top:6px">…and ' + more + ' more (see API Docs).</div>' : '');
+  h += '</div>';
+
+  /* What it writes */
+  var writes = j.writes || [];
+  h += '<div class="jb-sec"><h4>Writes to</h4>' + (writes.length ? writes.map(function(c){ return '<span class="jb-col">' + ahEsc(c) + '</span>'; }).join('') : '<span class="ops-dimtx" style="font-size:12.5px">Not recorded — the job has not registered or reported any collections.</span>') + '</div>';
+
+  /* History */
+  var hist = [['Runs recorded', (j.runCount == null ? '—' : j.runCount) + (j.errorCount ? ' · <span class="ops-err" style="display:inline;margin:0">' + j.errorCount + ' errors</span>' : '')]];
+  if (j.lastSuccessAt) hist.push(['Last success', ahEsc(jbAbsFull(j.lastSuccessAt)) + ' <span class="ops-dimtx">(' + ahEsc(jbRel(j.lastSuccessAt)) + ')</span>']);
+  if (j.lastFailedAt) hist.push(['Last failure', ahEsc(jbAbsFull(j.lastFailedAt)) + ' <span class="ops-dimtx">(' + ahEsc(jbRel(j.lastFailedAt)) + ')</span>']);
   if (j.lastError){
     /* lastError is the last error EVER recorded, not the current state: a job
        that failed once and has succeeded since still carries it. Red only when
        the job is failing now. */
     var now = j.lastStatus === 'error';
-    kv.push([now ? 'Last error' : 'Last error (recovered)', '<div class="ops-err' + (now ? '' : ' old') + '" style="margin:0">' + ahEsc(j.lastError) + '</div>']);
+    hist.push([now ? 'Last error' : 'Last error (recovered)', '<div class="ops-err' + (now ? '' : ' old') + '" style="margin:0">' + ahEsc(j.lastError) + '</div>']);
   }
-  if (j.lock) kv.push(['Lease', 'held by <span class="ops-mono">' + ahEsc(j.lock.owner) + '</span> since ' + ahEsc(jbAbsFull(j.lock.acquiredAt)) + ', until ' + ahEsc(jbAbsFull(j.lock.heldUntil))
+  if (j.lock) hist.push(['Lease', 'held by ' + jbMono(j.lock.owner) + ' since ' + ahEsc(jbAbsFull(j.lock.acquiredAt)) + ', until ' + ahEsc(jbAbsFull(j.lock.heldUntil))
     + (j.lock.probablyStale ? ' — <b>stale</b>: the job has recorded a run since, so nothing is running' : '')]);
-  if (j.lastAdminRun) kv.push(['Latest manual run', jbRunLine(j.lastAdminRun, true)]);
-  return '<tr class="ops-detail"><td colspan="5"><div class="ops-kv">'
-    + kv.map(function(p){ return '<div class="k">' + p[0] + '</div><div class="v">' + p[1] + '</div>'; }).join('') + '</div></td></tr>';
+  h += '<div class="jb-sec"><h4>History</h4>' + kv(hist) + '</div>';
+
+  return '<tr class="ops-detail"><td colspan="5">' + h + '</td></tr>';
+}
+function jbNameCell(j){
+  var t = JB_TRIG[j.trigger] || JB_TRIG.none, open = !!JB.open[j.name];
+  var out = '<div><span class="jb-caret" aria-hidden="true">▸</span><span class="jb-name">' + ahEsc(j.name) + '</span> <span class="ops-pl ' + t.cls + '" title="' + ahEsc(t.hint) + '">' + t.label + '</span>';
+  if (j.health === 'failing') out += ' <span class="ops-pl ops-bad">failing</span>';
+  else if (j.health === 'late') out += ' <span class="ops-pl ops-warn">late</span>';
+  if (j.risk) out += ' <span class="ops-pl ' + (j.risk.level === 'destructive' ? 'ops-bad' : 'ops-warn') + '" title="' + ahEsc(j.risk.note) + '">' + (j.risk.level === 'destructive' ? 'deletes data' : 'caution') + '</span>';
+  out += '</div>';
+  if (j.note) out += '<div class="jb-sub ops-trunc">' + ahEsc(j.note) + '</div>';
+  out += jbLiveLine(j);
+  if (!jbRunning(j) && j.lock) out += '<div class="jb-lock">a finished run left its lease in place until ' + ahEsc(jbAbs(j.lock.heldUntil, j.timeZone)) + '</div>';
+  return out;
 }
 function jbRow(j){
   var open = !!JB.open[j.name];
-  return '<tr class="ops-row" data-name="' + ahEsc(j.name) + '" tabindex="0" aria-expanded="' + open + '">'
+  return '<tr class="ops-row' + (jbRunning(j) ? ' jb-isrunning' : '') + '" data-name="' + ahEsc(j.name) + '" tabindex="0" aria-expanded="' + open + '">'
     + '<td>' + jbNameCell(j) + '</td><td>' + jbSchedCell(j) + '</td><td>' + jbNextCell(j) + '</td><td>' + jbLastCell(j) + '</td>'
     + '<td style="text-align:right">' + jbActionCell(j) + '</td></tr>' + (open ? jbDetail(j) : '');
 }
@@ -4244,7 +4389,7 @@ function jbPaintHead(){
   if (d.lockError) warn.push('Lease state is unavailable (' + d.lockError + ') — a running job will not show as running.');
   if (d.runsError) warn.push('Manual-run history is unavailable (' + d.runsError + ').');
   if (warn.length) h += '<div class="ops-note warn">' + warn.map(ahEsc).join('<br>') + '</div>';
-  h += '<div class="ops-note">Schedules are the <b>declared</b> ones, transcribed from Cloud Scheduler into <span class="ops-mono">job-manifest.ts</span> — documentation of the deploy, not a live read of it. <span class="ops-mono">gcloud scheduler jobs list</span> shows what is really deployed.</div>';
+  h += '<div class="ops-note">Schedules are the <b>declared</b> ones, transcribed from Cloud Scheduler into <span class="ops-mono">job-manifest.ts</span> — documentation of the deploy, not a live read of it. <b>Click any job</b> for what it is, what it feeds and what it is doing right now. <span class="ops-mono">gcloud scheduler jobs list</span> shows what is really deployed.</div>';
   el.innerHTML = h;
 }
 function jbPaintFilters(){
@@ -4422,6 +4567,7 @@ function jbRunResult(d){
       e.stopPropagation();
       if (btn.dataset.act === 'run') jbOpenRun(btn.dataset.job);
       else if (btn.dataset.act === 'refresh') { JB.err = null; jbFetch(); jbFetchRuns(); }
+      else if (btn.dataset.act === 'screen') saFocusScreen(btn.dataset.id);
       return;
     }
     var row = e.target.closest('tr.ops-row');
@@ -4447,9 +4593,15 @@ function jbRunResult(d){
   });
   /* Keep "in 8m" honest between fetches. */
   setInterval(function(){ if (jbActive() && JB.data && !JB.pending) jbPaint(); }, 30000);
+  setInterval(function(){ if (jbActive()) jbTick(); }, 1000);
 })();
 
 /* Jump here from the API Docs tab, showing one job. */
+/* Open one screen in API Docs (from a job's "what it feeds"). */
+function saFocusScreen(id){
+  SA.mode = 'screen'; SA.sel = id; SA.st = 'all';
+  switchView('apidocs');
+}
 function jbFocus(name){
   JB.filter = 'all'; JB.q = name; JB.open[name] = true;
   var s = document.getElementById('jbSearch'); if (s) s.value = name;
