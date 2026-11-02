@@ -15,6 +15,7 @@ import {
   popoverPlacement,
   popoverScale,
   popoverStats,
+  popoverWidth,
   POPOVER,
   sectorNotOnBoardText,
   sectorView,
@@ -195,6 +196,22 @@ describe("Money Flow hover box", () => {
     const half = popoverPlacement({ left: 750, right: 810, top: 450 }, 960, 480, 0.5, 390);
     assert.strictEqual(half.left, 750 - POPOVER.w * 0.5 - 12);
     assert.strictEqual(half.top, 480 - 390 - 8);
+  });
+
+  it("box is as wide as the chart, so the chart never scrolls, and still fits the window", () => {
+    for (const tf of [1, 3, 5, 15]) {
+      const w = popoverWidth(tf);
+      // inner width (box − 2×14 padding − 2×1 border − chart frame 2×1) = chart width
+      assert.strictEqual(w - 32, popoverChartWidth(tf));
+      for (const [vw, vh] of [[1920, 960], [1440, 900], [1280, 720]]) {
+        const sc = popoverScale(vw, vh, w);
+        assert.ok(w * sc <= vw - 16 + 1e-9, `tf ${tf} fits ${vw}`);
+        const pos = popoverPlacement({ left: vw / 2, right: vw / 2 + 80, top: 300 }, vw, vh, sc, 500, w);
+        assert.ok(pos.left >= 8 && pos.left + w * sc <= vw - 8 + 1e-9, `tf ${tf} on screen at ${vw}`);
+      }
+    }
+    assert.strictEqual(popoverWidth(15), POPOVER.w + 82); // never narrower than the design box
+    assert.strictEqual(popoverScale(POPOVER.baseW, POPOVER.baseH, popoverWidth(5)), 1); // 5m keeps full size
   });
 
   it("chart width gives each timeframe readable candles and opens on the live one", () => {

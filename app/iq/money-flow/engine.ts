@@ -540,9 +540,10 @@ export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers
 }
 
 /** Scale for the window; phones fit the box to their width instead. */
-export function popoverScale(vw: number, vh: number): number {
-  if (vw < 768) return Math.min(1, (vw - 24) / POPOVER.w);
-  return Math.min(vw / POPOVER.baseW, vh / POPOVER.baseH);
+export function popoverScale(vw: number, vh: number, w: number = POPOVER.w): number {
+  if (vw < 768) return Math.min(1, (vw - 24) / w);
+  // A box wider than the design size (a wide chart) shrinks just enough to fit.
+  return Math.min(vw / POPOVER.baseW, vh / POPOVER.baseH, (vw - 16) / w);
 }
 
 /**
@@ -556,14 +557,17 @@ export function popoverPlacement(
   vh: number,
   scale: number,
   h: number,
+  boxW: number = POPOVER.w,
 ): { left: number; top: number } {
-  const w = POPOVER.w * scale;
+  const w = boxW * scale;
   const left =
     vw < 768
       ? Math.max(8, (vw - w) / 2)
       : tile.right + w + 16 < vw
         ? tile.right + 12
-        : Math.max(8, tile.left - w - 12);
+        : tile.left - w - 12 >= 8
+          ? tile.left - w - 12
+          : Math.max(8, Math.min(vw - w - 8, tile.right + 12));
   const top = Math.max(8, Math.min(vh - h - 8, tile.top - 120 * scale));
   return { left, top };
 }
@@ -577,6 +581,14 @@ const POP_CHART_PAD = 78;
 export function popoverChartWidth(tf: number): number {
   const nb = Math.round(390 / tf) + 1;
   return Math.max(430, nb * (POP_CANDLE_PX[tf] ?? 8) + POP_CHART_PAD);
+}
+
+/** Box padding (2×14) + box border (2×1) + chart frame border (2×1). */
+const POP_BOX_CHROME = 32;
+
+/** Box width that holds the whole chart with no horizontal scroll. */
+export function popoverWidth(tf: number): number {
+  return Math.max(POPOVER.w, popoverChartWidth(tf) + POP_BOX_CHROME);
 }
 
 /** scrollLeft that puts the live candle three quarters across the view. */

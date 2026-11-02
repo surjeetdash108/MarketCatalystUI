@@ -10,10 +10,10 @@ import {
   formatPct,
   indexCard,
   popoverChartWidth,
-  popoverLiveScroll,
   popoverPlacement,
   popoverScale,
   popoverStats,
+  popoverWidth,
   POPOVER,
   type PopTone,
   sectorNotOnBoardText,
@@ -108,7 +108,6 @@ export function MoneyFlowScreen() {
   } | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Which stock + timeframe the popover chart was last scrolled to the live candle for
-  const popScrollKey = useRef("");
 
   // Chart options in popover
   const [popTf, setPopTf] = useState<number>(5);
@@ -2463,7 +2462,10 @@ export function MoneyFlowScreen() {
         const s = hoveredStock.stock;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const scale = popoverScale(vw, vh);
+        const boxW = popoverWidth(popTf);
+        const scale = popoverScale(vw, vh, boxW);
+        // A wider box has room for more stat columns, which keeps it short.
+        const statCols = Math.max(2, Math.min(4, Math.floor(boxW / 240)));
         const bull = !board?.losers.some((l) => l.t === s.t) && (board?.gainers.some((g) => g.t === s.t) || s.pctChange >= 0);
         const G = "#3ddc84";
         const R = "#f0565a";
@@ -2474,8 +2476,6 @@ export function MoneyFlowScreen() {
         const dChg = s.price - s.prevClose;
         const chartW = popoverChartWidth(popTf);
         const rect = hoveredStock.rect;
-        const scrollToLive = (el: HTMLDivElement) =>
-          el.scrollTo({ left: popoverLiveScroll(chartW, popTf, popCandles.length, el.clientWidth), behavior: "smooth" });
         return (
           <div
             onMouseEnter={() => {
@@ -2485,13 +2485,13 @@ export function MoneyFlowScreen() {
             ref={(el) => {
               // Vertical position needs the rendered height.
               if (!el) return;
-              el.style.top = `${popoverPlacement(rect, vw, vh, scale, el.offsetHeight * scale).top}px`;
+              el.style.top = `${popoverPlacement(rect, vw, vh, scale, el.offsetHeight * scale, boxW).top}px`;
             }}
             style={{
               position: "fixed",
               zIndex: 9999,
-              left: popoverPlacement(rect, vw, vh, scale, 0).left,
-              width: POPOVER.w,
+              left: popoverPlacement(rect, vw, vh, scale, 0, boxW).left,
+              width: boxW,
               maxHeight: (vh - 16) / scale,
               overflowY: vw < 768 ? "auto" : "hidden",
               transform: `scale(${scale})`,
@@ -2575,8 +2575,8 @@ export function MoneyFlowScreen() {
 
             <div style={{ height: 1, background: "#1a2328" }} />
 
-            {/* Stats: two columns, divider before the right one */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "7px 0" }}>
+            {/* Stats: 2–4 columns by box width, divider between columns */}
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${statCols}, minmax(0, 1fr))`, gap: "7px 0" }}>
               {stats.map((st, i) => (
                 <div
                   key={st.k}
@@ -2587,7 +2587,7 @@ export function MoneyFlowScreen() {
                     gap: 8,
                     minWidth: 0,
                     padding: "0 12px",
-                    borderLeft: i % 2 === 1 ? "1px solid #1a2328" : "none",
+                    borderLeft: i % statCols !== 0 ? "1px solid #1a2328" : "none",
                   }}
                 >
                   <span
@@ -2710,26 +2710,14 @@ export function MoneyFlowScreen() {
               })}
             </div>
 
-            {/* Chart: a full session at readable candle width, opened on the live candle */}
+            {/* Chart: a full session at readable candle width; the box is sized to hold all of it */}
             <div
-              ref={(el) => {
-                if (!el || popCandles.length === 0) return;
-                const key = `${s.t}|${popTf}`;
-                if (popScrollKey.current === key) return;
-                popScrollKey.current = key;
-                el.scrollLeft = popoverLiveScroll(chartW, popTf, popCandles.length, el.clientWidth);
-              }}
-              onDoubleClick={(e) => scrollToLive(e.currentTarget)}
-              title="Double-click to jump back to the live candle"
               style={{
                 flex: "none",
-                cursor: "grab",
                 borderRadius: 8,
                 border: "1px solid #171c1e",
                 background: "#08090a",
-                overflowX: "auto",
-                overflowY: "hidden",
-                scrollbarWidth: "thin",
+                overflow: "hidden",
               }}
             >
               {popBarsLoading && popCandles.length === 0 ? (
