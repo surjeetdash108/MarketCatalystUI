@@ -1,7 +1,7 @@
 // Originally generated from the Strategy AI Lab prototype markup (scripts/strategy-lab/build.sh, now retired).
 // Maintained by hand; the results panel, report, facts and edit modal live in lab-panels.jsx.
 import { Fragment } from "react";
-import { EditModal, FactsBlock, Report, ResultsPanel } from "./lab-panels";
+import { AiFacts, ChartModal, DetailFacts, EditModal, Report, ResultsPanel } from "./lab-panels";
 
 /** A logo that fails to load is hidden (the prototype's data-logo-src behaviour). */
 
@@ -74,13 +74,13 @@ export default function LabView({ vm, refs }) {
                           </div>
                         </Fragment>
                       ))}
-                      <FactsBlock f={vm.aiF} />
+                      <AiFacts f={vm.aiF} />
                       {(vm.aiHasActs) ? (
                         <>
                           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                             {(vm.aiActs || []).map((a, a__i) => (
                               <Fragment key={a__i}>
-                                <button onClick={a?.onClick} style={{ borderRadius: "8px", border: `1px solid ${a?.bd ?? ''}`, background: a?.bg, color: a?.c, padding: "9px 16px", fontWeight: "800", fontSize: "12.5px", cursor: "pointer" }} className="slx6">
+                                <button onClick={a?.onClick} disabled={a?.disabled} title={a?.title} style={{ borderRadius: "8px", border: `1px solid ${a?.bd ?? ''}`, background: a?.disabled ? "#1a1d1f" : a?.bg, color: a?.disabled ? "#5f6966" : a?.c, padding: "9px 16px", fontWeight: "800", fontSize: "12.5px", cursor: a?.disabled ? "not-allowed" : "pointer" }} className="slx6">
                                   {a?.l}
                                 </button>
                               </Fragment>
@@ -89,7 +89,7 @@ export default function LabView({ vm, refs }) {
                         </>
                       ) : null}
                     </div>
-                    <ResultsPanel r={vm.hv} />
+                    <ResultsPanel r={vm.hv} title="VALIDATION" boxed />
                   </div>
                 </>
               ) : null}
@@ -272,6 +272,7 @@ export default function LabView({ vm, refs }) {
           </>
         ) : null}
         <EditModal e={vm.edit} />
+        <ChartModal c={vm.chart} />
         {(vm.labS1) ? (
           <>
             <div ref={libRef} style={{ display: "flex", alignItems: "flex-end", gap: "0", flexWrap: "wrap", borderBottom: "1px solid #233038", marginBottom: "-4px" }}>
@@ -438,6 +439,11 @@ export default function LabView({ vm, refs }) {
                                 </button>
                               </>
                             ) : null}
+                            {vm.pk?.run ? (
+                              <button onClick={vm.pk.run.onClick} disabled={vm.pk.run.disabled} title={vm.pk.run.title} style={{ borderRadius: "8px", border: `1px solid ${vm.pk.run.bd}`, background: vm.pk.run.disabled ? "#1a1d1f" : vm.pk.run.bg, color: vm.pk.run.disabled ? "#5f6966" : vm.pk.run.c, padding: "9px 16px", fontWeight: "800", fontSize: "12.5px", cursor: vm.pk.run.disabled ? "not-allowed" : "pointer" }} className={vm.pk.run.bg === "transparent" ? "slx46" : "slx47"}>
+                                {vm.pk.run.l}
+                              </button>
+                            ) : null}
                             {(vm.pk?.canDel) ? (
                               <>
                                 <span style={{ marginLeft: "auto", paddingLeft: "14px", display: "flex", gap: "8px", alignItems: "center" }}>
@@ -466,9 +472,7 @@ export default function LabView({ vm, refs }) {
                             ) : null}
                           </div>
                         </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "14px", alignItems: "flex-start" }}>
-                          <div style={{ flex: "1 1 100%", minWidth: "0" }}><FactsBlock f={vm.pkF} /></div>
-                        </div>
+                        <DetailFacts f={vm.pkF} />
                         <ResultsPanel r={vm.dv} />
                       </div>
                     </>

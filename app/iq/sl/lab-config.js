@@ -14,7 +14,15 @@ import { TF } from "./engine.js";
 
 /** Intraday backtest periods offered per candle, in calendar days. */
 export const IPER = { "1m": [1, 2, 5, 7], "5m": [7, 14, 21, 30], "15m": [14, 30, 60, 90], "30m": [30, 60, 90, 180], "1h": [30, 90, 180, 365], "4h": [90, 180, 365, 730] };
+/** "More" intraday periods, minus any longer than the server serves (730 days, strategy-lab.controller.ts). */
+export const IPERX = Object.fromEntries(
+  Object.entries({ "1m": [14, 30, 60], "5m": [60, 90, 120], "15m": [120, 180, 365], "30m": [270, 365, 730], "1h": [730, 1095, 1825], "4h": [1095, 1825, 3650] })
+    .map(([tf, a]) => [tf, a.filter((d) => d <= 730)]),
+);
 export const YEAR_OPTS = ["1", "3", "5", "10"];
+/** Exit-plan choices: stop below entry and target above entry, in percent. */
+export const STOP_PCTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+export const TP_PCTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30];
 export const COST_OPTS = ["0", "5", "10"];
 
 const num = (v) => (v === "" || v == null ? NaN : +v);
@@ -88,8 +96,15 @@ export function periodOf(cfg = {}, tf = "d") {
     const y = num(cfg.yrs);
     return { years: YEAR_OPTS.includes(String(cfg.yrs)) || (y >= 1 && y <= 10) ? y : 5 };
   }
-  const opts = IPER[tf] || [T.days], v = num(cfg["idays_" + tf]);
+  const opts = [...(IPER[tf] || [T.days]), ...(IPERX[tf] || [])], v = num(cfg["idays_" + tf]);
   return { days: opts.includes(v) ? v : T.days };
+}
+
+/** Period chips for a candle: years for daily / weekly, calendar days intraday (More adds the longer ones). */
+export function periodChoices(tf, more) {
+  if (!(TF[tf] || TF.d).fmp) { const y = YEAR_OPTS.map(Number); return { base: y, more: [], list: y }; }
+  const base = IPER[tf] || [], x = IPERX[tf] || [];
+  return { base, more: x, list: more ? [...base, ...x] : base };
 }
 
 export const periodLabel = (p) => (p.years != null ? p.years + "Y" : p.days >= 365 ? Math.round(p.days / 365) + "Y" : p.days >= 30 ? Math.round(p.days / 30) + "M" : p.days + "D");

@@ -10,14 +10,14 @@
 //    report then uses, so a report's numbers equal its table row;
 //  - saved strategies live in the user's account (/live/strategy-lab/saved),
 //    localStorage is only an offline cache;
-//  - broker automation is behind STRATEGY_LAB_AUTOMATION (off).
+//  - broker automation: the modal builds the payload and can send a test
+//    signal to a webhook; live signals need a server runner (not built).
 import React, { Component } from "react";
 import * as Engine from "./engine";
 import LabView, { LAB_HOVER_CSS } from "./lab-view";
 import { apiDelete, apiGet, apiPost, backendUrl } from "../backend";
-import { COST_OPTS, IPER, YEAR_OPTS, exitPlanKeys, exitPlanSummary, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
-import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, computeRow, engineCfg, fetchSpan, periodOfCfg, prepBars, sortRows, summarize } from "./lab-run";
-import { STRATEGY_LAB_AUTOMATION } from "./flags";
+import { COST_OPTS, STOP_PCTS, TP_PCTS, exitPlanKeys, exitPlanSummary, periodChoices, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
+import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, computeRow, engineCfg, fetchSpan, periodOfCfg, prepBars, windowLabel, windowOpts, windowStats, windowSummary } from "./lab-run";
 
 const _o=(ind,n,mult)=>{const o={ind};if(n!=null)o.n=n;if(mult!=null)o.mult=mult;return o},_v=v=>({ind:'num',v}),_c=(a,op,b)=>({a,op,b}),CL=_o('close');
 const HOLDS=['Intraday','Days','Days–weeks','Weeks','Weeks–months','Months'];
@@ -97,9 +97,14 @@ const INTRA_TF = ["1m", "5m", "15m", "30m", "1h", "4h"];
 const LOGO = (t) => backendUrl("/live/logo?ticker=" + encodeURIComponent(t));
 const SAVED_CACHE = "mc_lab_saved_v2", OLD_SAVED = "mc_lab_saved_v1", MIGRATED = "mc_lab_saved_migrated_v1", AUTO_KEY = "mc_lab_auto_v1";
 const tfL = (tf) => (Engine.TF[tf] || Engine.TF.d).l;
-const p1 = (v) => (v == null || !Number.isFinite(v) ? "n/a" : (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(1) + "%");
+// Signed to one decimal; anything that rounds to zero is shown unsigned ("0.0%", never "−0.0%").
+const sgn1 = (x, unit) => { const r = Math.abs(x * 100).toFixed(1); return (+r === 0 ? "" : x > 0 ? "+" : "−") + r + unit; };
+const p1 = (v) => (v == null || !Number.isFinite(v) ? "n/a" : sgn1(v, "%"));
 const fx = (v) => (v == null ? "—" : Number.isFinite(v) ? v.toFixed(2).replace("-", "−") : "∞");
 const sc = (v) => (v > 0 ? "#3ddc84" : v < 0 ? "#f0565a" : "#8b9592");
+/** Difference of two returns, in percentage points. */
+const pp = (v) => (v == null || !Number.isFinite(v) ? "n/a" : sgn1(v, " pp"));
+const C_MUTE = "#7a8481";
 const fmtDt = (d) => { const s = String(d), [y, m, dd] = s.slice(0, 10).split("-"); return `${MON[+m - 1]} ${+dd}, ${y}` + (s.length > 10 ? " " + s.slice(11, 16) : ""); };
 const money = (v) => "$" + Math.round(v).toLocaleString("en-US");
 const newId = () => (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).slice(0, 20);
@@ -143,7 +148,7 @@ function migrateRisk(risk) {
 export default class StrategyLab extends Component {
   libRef = React.createRef(); aiRef = React.createRef(); detRef = React.createRef(); resRef = React.createRef();
   refsObj = { aiRef: this.aiRef, libRef: this.libRef, detRef: this.detRef };
-  state = { labSaved: [], labConds: {}, cfgs: {}, candles: {}, vals: {}, quotes: {}, sorts: {}, xpMore: {}, cmp: {}, vari: {}, libTab: "library", savedNote: "" };
+  state = { labSaved: [], labConds: {}, cfgs: {}, candles: {}, vals: {}, quotes: {}, sorts: {}, xpMore: {}, cmp: {}, vari: {}, libTab: "library", savedNote: "", wins: {}, winMore: {}, pMore: {} };
   _bars = new Map(); _rows = new Map(); _rep = new Map(); _runTok = {}; _wk = undefined; _wq = new Map(); _wid = 0;
 
   // ── lifecycle ────────────────────────────────────────────────────────────
@@ -260,7 +265,7 @@ export default class StrategyLab extends Component {
     try {
       const r = await apiGet("/live/snapshot?tickers=" + encodeURIComponent(tickers.slice(0, 250).join(",")));
       const q = {};
-      for (const x of (r && r.quotes) || []) if (x && x.ticker && Number.isFinite(x.price) && x.price > 0) q[x.ticker] = x.price;
+      for (const x of (r && r.quotes) || []) if (x && x.ticker && Number.isFinite(x.price) && x.price > 0) q[x.ticker] = { p: x.price, c: Number.isFinite(x.changePct) ? x.changePct : null };
       this.setState((s) => ({ quotes: { ...s.quotes, ...q } }));
     } catch { /* no live quote → the column shows "—" */ }
   }
@@ -393,13 +398,13 @@ export default class StrategyLab extends Component {
     const sK = K.stopM === "none" ? "none" : K.stopM === "atr" ? "a" + K.stopA : "p" + K.stop;
     const tK = K.tpM === "none" ? "none" : K.tpM === "r" ? "r" + K.tpR : "p" + K.tp;
     const R = [
-      { t: "Stop", segs: [seg(sK, withCur([["p5", "5%", { stopM: "pct", stop: "5" }], ["p8", "8%", { stopM: "pct", stop: "8" }], ["p12", "12%", { stopM: "pct", stop: "12" }], ["a2", "2× ATR", { stopM: "atr", stopA: "2" }], ["none", "None", { stopM: "none" }]], sK, K.stopM === "atr" ? K.stopA + "× ATR" : K.stop + "%"))] },
-      { t: "Target", segs: [seg(tK, withCur([["p10", "+10%", { tpM: "pct", tp: "10" }], ["p20", "+20%", { tpM: "pct", tp: "20" }], ["r2", "2R", { tpM: "r", tpR: "2" }], ["none", "None", { tpM: "none" }]], tK, K.tpM === "r" ? K.tpR + "R" : "+" + K.tp + "%"), (x) => x[0] === "r" && !hasStop)] },
-      { t: "Trail", segs: [seg(K.trA, withCur([["never", "Off", { trA: "never" }], ["entry", "From entry", { trA: "entry" }], ["10", "Once up +10%", { trA: "10" }], ["1r", "Once up 1R", { trA: "1r" }]], K.trA, "Once up +" + K.trA + "%"), (x) => x === "1r" && !hasStop)].concat(K.trA !== "never" ? [seg(K.trD, withCur([["5", "5%", { trD: "5" }], ["8", "8%", { trD: "8" }], ["atr2", "2× ATR", { trD: "atr2" }]], K.trD, K.trD + "%"))] : []) },
+      { t: "STOP", segs: [seg(sK, withCur([...STOP_PCTS.map((v) => ["p" + v, v + "%", { stopM: "pct", stop: String(v) }]), ["a2", "2× ATR", { stopM: "atr", stopA: "2" }], ["none", "None", { stopM: "none" }]], sK, K.stopM === "atr" ? K.stopA + "× ATR" : K.stop + "%"))] },
+      { t: "TARGET", segs: [seg(tK, withCur([...TP_PCTS.map((v) => ["p" + v, "+" + v + "%", { tpM: "pct", tp: String(v) }]), ["r2", "2R", { tpM: "r", tpR: "2" }], ["none", "None", { tpM: "none" }]], tK, K.tpM === "r" ? K.tpR + "R" : "+" + K.tp + "%"), (x) => x[0] === "r" && !hasStop)] },
+      { t: "TRAIL", segs: [seg(K.trA, withCur([["never", "Off", { trA: "never" }], ["entry", "From entry", { trA: "entry" }], ["10", "Once up +10%", { trA: "10" }], ["1r", "Once up 1R", { trA: "1r" }]], K.trA, "Once up +" + K.trA + "%"), (x) => x === "1r" && !hasStop)].concat(K.trA !== "never" ? [seg(K.trD, withCur([["5", "5%", { trD: "5" }], ["8", "8%", { trD: "8" }], ["atr2", "2× ATR", { trD: "atr2" }]], K.trD, K.trD + "%"))] : []) },
     ];
     if (more || K.be === "on" || K.maxB !== "none") R.push(
-      { t: "Breakeven", segs: [seg(K.be, [["off", "Off", { be: "off" }], ["on", "At +1R", { be: "on" }]], (x) => x === "on" && !hasStop)], note: hasStop ? "" : "Needs a stop" },
-      { t: "Max hold", segs: [seg(K.maxB, withCur([["none", "None", { maxB: "none" }], ["10", "10 bars", { maxB: "10" }], ["20", "20 bars", { maxB: "20" }], ["40", "40 bars", { maxB: "40" }]], K.maxB, K.maxB + " bars"))] },
+      { t: "BREAKEVEN", segs: [seg(K.be, [["off", "Off", { be: "off" }], ["on", "At +1R", { be: "on" }]], (x) => x === "on" && !hasStop)], note: hasStop ? "" : "Needs a stop" },
+      { t: "MAX HOLD", segs: [seg(K.maxB, withCur([["none", "None", { maxB: "none" }], ["10", "10 bars", { maxB: "10" }], ["20", "20 bars", { maxB: "20" }], ["40", "40 bars", { maxB: "40" }]], K.maxB, K.maxB + " bars"))] },
     );
     return { riskRows: R, riskSum: exitPlanSummary(this.cfgOf(k)), more: { l: more || K.be === "on" || K.maxB !== "none" ? "Fewer options" : "More options", onClick: () => this.setState((s) => ({ xpMore: { ...s.xpMore, [k]: !more } })) } };
   }
@@ -407,55 +412,158 @@ export default class StrategyLab extends Component {
     const x = this.strategyOf(k);
     if (!x) return null;
     const spec = this.specOf(k), tf = this.tfOf(k), cfg = this.cfgOf(k), opts = this.candleOpts(spec), BT = Engine;
-    const ni = opts === INTRA_TF, p = periodOf(cfg, tf), needs = this.needsOf(k);
+    const ni = opts === INTRA_TF, p = periodOf(cfg, tf), needs = this.needsOf(k), edited = !!this.state.labConds[k];
+    const pmKey = k + "|" + tf, pmOpen = !!this.state.pMore[pmKey] || (p.days != null && periodChoices(tf, false).base.indexOf(p.days) < 0), PC = periodChoices(tf, pmOpen);
     const custom = k === "custom" && this.state.custom, un = custom && (custom.unparsed || []).length && !this.state.unparsedAck ? "Not translated: " + custom.unparsed.join(" · ") : "";
     return {
       entry: spec.entry.map(BT.label).join("  AND  ") || "—",
       exit: spec.exit.map(BT.label).join("  OR  ") || "Exit plan only (stop / target / trail / max hold)",
+      // The library's plain-English wording until the rules are edited; then the engine's own labels.
+      entryText: (!edited && x.entry) || spec.entry.map(BT.label).join(" AND ") || "—",
+      exitText: (!edited && x.exit) || spec.exit.map(BT.label).join(" OR ") || "Exit plan only",
+      riskLine: exitPlanSummary(cfg) + " · costs " + (cfg.cost ?? "5") + " bps",
       ...this.riskRows(k),
       costOpts: COST_OPTS.map((c) => ({ l: c + " bps", on: String(cfg.cost ?? "5") === c, onClick: () => this.setCfg(k, { cost: c }) })),
       candleOpts: ALL_TF.map((t) => ({ l: tfL(t), on: t === tf, off: !opts.includes(t), offT: "These rules use session levels — intraday candles only", onClick: () => this.setState((s) => ({ candles: { ...s.candles, [k]: t } })) })),
       candleNote: ni ? "Uses session levels (VWAP, opening range, prior day) — intraday candles only" : "",
-      periodOpts: p.years != null ? YEAR_OPTS.map((y) => ({ l: y + "Y", on: String(p.years) === y, onClick: () => this.setCfg(k, { yrs: y }) })) : (IPER[tf] || []).map((d) => ({ l: periodLabel({ days: d }), on: p.days === d, onClick: () => this.setCfg(k, { ["idays_" + tf]: String(d) }) })),
+      periodOpts: p.years != null ? PC.list.map((y) => ({ l: y + "Y", on: p.years === y, onClick: () => this.setCfg(k, { yrs: String(y) }) })) : PC.list.map((d) => ({ l: periodLabel({ days: d }), on: p.days === d, onClick: () => this.setCfg(k, { ["idays_" + tf]: String(d) }) })),
+      periodMore: PC.more.length ? { l: pmOpen ? "‹ Less" : "More ›", onClick: () => this.setState((s) => ({ pMore: { ...s.pMore, [pmKey]: !pmOpen } })) } : null,
       src: x.custom ? "" : x.src,
       needs: needs.length ? "Needs " + needs.join(", ") + " — not available in Strategy Lab, so Run is disabled." : "",
       unparsed: un, onDismiss: un ? () => this.setState({ unparsedAck: true }) : null, onEdit: un ? () => this.openEdit(k) : null,
     };
   }
+  /** The "Return over" window picked for a strategy on its candle (trading minutes intraday, calendar days otherwise). */
+  winOf(k, tf) {
+    const o = windowOpts(tf), key = k + "|" + tf, want = +this.state.wins[key], more = !!this.state.winMore[key] || o.more.includes(want);
+    const list = [...o.base, ...(more ? o.more : [])];
+    return { ...o, key, more, list, n: list.includes(want) ? want : o.def };
+  }
   resultsVm(k, show) {
     if (!show) return { show: false };
     const st = this.state, v = st.vals[k] || {}, sig = this.sigOf(k), blocked = this.blockedOf(k), fresh = !!(v.at && v.sig === sig);
-    const rows = v.rows || [], S = summarize(rows), annual = S.annual, sort = st.sorts[k] || { key: "sig", desc: true };
-    const isI = Engine.isIntradayTf(v.tf || this.tfOf(k));
-    const sorted = sortRows(rows.map((r) => ({ ...r, px: st.quotes[r.t] })), sort.key, sort.desc, annual);
-    const setSort = (key) => this.setState((s) => { const cur = s.sorts[k] || { key: "sig", desc: true }; return { sorts: { ...s.sorts, [k]: { key, desc: cur.key === key ? !cur.desc : key !== "t" } } }; });
-    const col = (l, key, al, title) => ({ l, key, al, title, on: sort.key === key, desc: sort.desc, onClick: () => setSort(key) });
-    const pctRow = (a) => (a == null ? "n/a" : p1(a));
+    const tf = v.tf || this.tfOf(k), W = this.winOf(k, tf), wl = windowLabel(W.n, W.intra), rows = v.rows || [];
+    const stat = new Map(rows.map((r) => [r.t, windowStats(r, W.n, W.intra)])), statOf = (r) => stat.get(r.t);
+    const now = rows.filter((r) => r.ago === 0 && statOf(r)).sort((a, b) => (b.sh ?? -Infinity) - (a.sh ?? -Infinity));
+    const S = windowSummary(rows, statOf, now.length > 0), basis = now.length ? "the " + now.length + (now.length === 1 ? " stock that meets" : " stocks that meet") + " the rules now" : "all " + S.n + " tested stocks";
+    const pct = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
+    const tiles = [
+      ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "#3ddc84" : null, "Stocks where the strategy made money over the last " + wl + " (equity now ÷ equity at the start of the window)"],
+      ["BEAT BUY & HOLD", S.beat + " / " + S.n, null, "Stocks where the strategy's return over the last " + wl + " beat buying and holding the stock over the same window"],
+      ["WIN RATE", pct(S.win), null, "Winning trades ÷ all closed trades that exited in the last " + wl + ", pooled across the stocks"],
+      ["MEDIAN SHARPE", fx(S.medSharpe), sc(S.medSharpe), "Median of each stock's Sharpe ratio over the full backtest period (" + periodLabel(periodOfCfg(v.cfg || this.engCfg(k))) + "), not just the window — upper median for an even count"],
+      ["TRADES", String(S.trades), null, "Closed trades that exited in the last " + wl + ", summed across the stocks"],
+    ];
+    const setWin = (n) => this.setState((s) => ({ wins: { ...s.wins, [W.key]: String(n) } }));
     return {
       show: true,
-      head: v.busy ? "Backtesting " + (v.total || "…") + " stocks…" : v.at ? S.tested + " stocks tested · " + rows.filter((r) => r.ago === 0).length + " triggered on the last bar" : "",
+      head: v.busy ? "Testing " + (v.done || 0) + " of " + (v.total || "…") + " stocks…" : v.at ? now.length + (now.length === 1 ? " stock meets" : " stocks meet") + " the rules now" : "",
       run: { l: v.busy ? "Running…" : v.at ? "Re-run backtest" : "Run backtest →", primary: !fresh, disabled: !!v.busy || !!blocked, title: blocked, onClick: () => this.runValidate(k) },
       busy: !!v.busy, progressT: "Tested " + (v.done || 0) + " / " + (v.total || "…") + " stocks", progressPct: v.total ? Math.round((100 * (v.done || 0)) / v.total) + "%" : "0%",
       err: v.err || (!v.at && !v.busy ? blocked : "") || "",
       stale: !!(v.at && !v.busy && v.sig !== sig), onRerun: () => this.runValidate(k),
-      idle: !v.at && !v.busy && !v.err && !blocked, idleT: "Run the backtest to test these rules on the 50 largest S&P 500 stocks, with the settings above.",
-      meta: v.at ? `${tfL(v.tf)} · ${periodLabel(periodOfCfg(v.cfg))} · as of ${v.asOf ? fmtDt(v.asOf) : "—"} · ${v.fail || 0} unavailable · ${v.insuf || 0} insufficient history` : "",
-      sum: v.at ? [
-        ["TESTED", S.tested + " / " + (v.total || S.tested)], ["PROFITABLE", S.profitable + " / " + S.tested, S.profitable > S.tested / 2 ? "#3ddc84" : null], ["BEAT B&H", S.beat + " / " + S.tested],
-        [annual ? "MEDIAN CAGR" : "MEDIAN RETURN", pctRow(S.medRet), sc(S.medRet)], ["MEDIAN SHARPE", fx(S.medSharpe), sc(S.medSharpe)], ["MEDIAN MAX DD", pctRow(S.medDd), "#f0565a"],
-        ["WIN RATE", S.win == null ? "—" : Math.round(S.win * 100) + "%"], ["TRADES", String(S.trades)],
-      ].map(([kk, vv, c]) => ({ k: kk, v: vv, c })) : [],
-      cols: [col("Signal", "sig", "left", "Triggered on the last bar, N bars ago, setting up (one condition away or within 3%), or none"), col("Stock", "t", "left"), col("Price", "px", "right", "Live quote"), col(annual ? "CAGR" : "Return", "ret"), col(annual ? "B&H CAGR" : "B&H return", "bret"), col("Excess", "ex"), col("Sharpe", "sh"), col("Max DD", "dd"), col("Win %", "win"), col("Trades", "tr")],
-      rows: v.at ? sorted.map((r) => {
-        const ret = annual ? r.cagr : r.tot, bret = annual ? r.bcagr : r.btot, ex = ret - bret;
-        const sigT = r.ago === 0 ? (isI ? "This bar" : "Today") : r.ago != null ? r.ago + (r.ago === 1 ? " bar ago" : " bars ago") : r.sig === "setup" ? "Setting up" : "—";
-        return { t: r.t, n: r.n, logo: LOGO(r.t), sig: sigT, sigC: r.ago != null ? "#3ddc84" : r.sig === "setup" ? "#f08a4b" : "#5f6966", sigBd: r.ago != null ? "#1f4a33" : r.sig === "setup" ? "#6b3a1c" : "#233038",
-          px: r.px ? r.px.toFixed(2) : "—", ret: p1(ret), retC: sc(ret), bret: p1(bret), ex: p1(ex), exC: sc(ex), sh: fx(r.sh), dd: p1(r.dd), win: r.closed ? Math.round(r.win * 100) + "%" : "—", tr: String(r.trades),
-          onClick: () => this.openReport(k, r.t, r.n) };
+      idle: !v.at && !v.busy && !v.err && !blocked, idleT: "Run backtest to see the result.", idleTitle: "Tests these rules on the 50 largest S&P 500 stocks with the candle, period and exit plan shown",
+      meta: v.at ? `${periodLabel(periodOfCfg(v.cfg))} ${tfL(v.tf).toLowerCase()} · FMP · as of ${v.asOf ? fmtDt(v.asOf) : "—"} · ${rows.length} tested` + (v.fail ? ` · ${v.fail} unavailable` : "") + (v.insuf ? ` · ${v.insuf} insufficient history` : "") : "",
+      sumNote: v.at ? "Over " + basis + " · last " + wl : "",
+      sum: v.at ? tiles.map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })) : [],
+      hasWin: !!v.at && rows.length > 0,
+      winOpts: W.list.map((n) => ({ l: windowLabel(n, W.intra), on: n === W.n, onClick: () => setWin(n) })),
+      winMore: { l: W.more ? "‹ Less" : "More ›", onClick: () => this.setState((s) => ({ winMore: { ...s.winMore, [W.key]: !W.more }, wins: W.more && !W.base.includes(W.n) ? { ...s.wins, [W.key]: String(W.def) } : s.wins })) },
+      winNote: "Strategy vs buy & hold over the last window of the backtest",
+      none: !!v.at && !v.busy && rows.length > 0 && !now.length ? "No stock meets the rules right now. The summary above shows how the strategy has performed over the window on every tested stock." : "",
+      cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", "Strategy return over the last " + wl + ": equity now ÷ equity at the start of the window − 1"], ["VS B&H", "right", "Strategy return minus buy & hold return over the same window, in percentage points"], ["WIN %", "right", "Winning ÷ closed trades that exited in the window"], ["TRADES", "right", "Closed trades that exited in the window"]].map(([l, al, title]) => ({ l, al, title })),
+      rows: v.at ? now.map((r) => {
+        const w = statOf(r), q = st.quotes[r.t];
+        return { t: r.t, n: r.n, logo: LOGO(r.t), px: q ? "$" + q.p.toFixed(2) : "—", chg: q && q.c != null ? (q.c >= 0 ? "+" : "−") + Math.abs(q.c).toFixed(2) + "%" : "", chgC: q && q.c != null ? sc(q.c) : C_MUTE,
+          ret: p1(w.ret), retC: sc(w.ret), ex: pp(w.ex), exC: sc(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n),
+          onClick: () => this.openChart(k, r.t, r.n) };
       }) : [],
     };
   }
-  openReport(k, t, n) { this.setState({ rep: { k, t, n } }); this.scrollTop(); }
+  openReport(k, t, n) { this.setState({ rep: { k, t, n }, chart: null }); this.scrollTop(); }
+  openChart(k, t, n) { this.setState({ chart: { k, t, n } }); }
+
+  /** One stock's bars and backtest, from the bars cache the run filled (fetched on demand otherwise). */
+  stockRun(k, t, onLoaded) {
+    const BT = Engine, spec = this.specOf(k), tf = this.tfOf(k), cfg = this.engCfg(k), sig = runSig(spec, tf, cfg), span = fetchSpan(spec, tf, cfg);
+    const raw = this.cachedBars(t, span);
+    if (raw === undefined) {
+      const lk = t + "|" + span.tf + "|" + span.days;
+      if (this._repLoading !== lk) { this._repLoading = lk; this._repErr = null; this.fetchBars([t], span).then(() => onLoaded(), (e) => { this._repErr = errMsg(e); onLoaded(); }).finally(() => { this._repLoading = null; }); }
+      return { tf, cfg, spec, sig, busy: this._repErr ? "" : "Loading " + t + " " + tfL(tf).toLowerCase() + " bars…", err: this._repErr || "" };
+    }
+    this._repErr = null;
+    if (raw === null) return { tf, cfg, spec, sig, err: "No " + tfL(tf).toLowerCase() + " bars for " + t + " from the data provider." };
+    const needs = BT.checkRules(spec, tf);
+    if (needs.length) return { tf, cfg, spec, sig, err: "These rules need " + needs.join(", ") + "." };
+    const bars = prepBars(raw, tf), L = bars[bars.length - 1], key = `${t}|${sig}|${L.date}|${L.close}`;
+    let R = this._rep.get(key);
+    if (!R) { const ec = engineCfg(cfg, bars); R = { r: BT.runRules(bars, spec, ec), bars, ec }; this._rep.set(key, R); }
+    if (!R.r) { const hc = BT.historyCheck(bars, spec, R.ec); return { tf, cfg, spec, sig, err: `Not enough ${tfL(tf).toLowerCase()} history for ${t}: the rules need ${hc.warm} bars before the window and at least ${BT.MIN_TEST_BARS} in it (have ${hc.start} before, ${hc.testBars} in).` }; }
+    return { tf, cfg, spec, sig, bars, r: R.r, ec: R.ec, key, L };
+  }
+
+  /** Row pop-up: the stock's price over the picked window with its trades and the levels if entered at the last price. */
+  chartVm() {
+    const st = this.state, o = st.chart;
+    if (!o) return { open: false };
+    const close = () => this.setState({ chart: null });
+    const base = { open: true, t: o.t, n: o.n || "", close, stop: (e) => e.stopPropagation(), onReport: () => this.openReport(o.k, o.t, o.n) };
+    const R = this.stockRun(o.k, o.t, () => this.forceUpdate());
+    if (!R.r) return { ...base, sub: tfL(R.tf) + " candles", busy: R.busy || "", err: R.err || "" };
+    const BT = Engine, { bars, r, cfg, spec, tf } = R, W = this.winOf(o.k, tf), wl = windowLabel(W.n, W.intra), N0 = bars.length;
+    // Same window and numbers as the table row.
+    const row = { wd: (r.eqBar || r.eq).map((x) => String(x.date)), we: (r.eqBar || r.eq).map((x) => x.v), wb: (r.bhBar || r.bh).map((x) => x.v), ct: r.trades.filter((x) => x.why !== "Still open").map((x) => [String(x.outDate), x.ret]) };
+    const w = windowStats(row, W.n, W.intra);
+    const key = (d) => (W.intra ? String(d) : String(d).slice(0, 10)), cut = key(w.from);
+    const shown = r.trades.filter((x) => key(x.outDate) >= cut);
+    // Chart from the window start, or the first shown trade's entry if earlier; at least 20 bars.
+    let i0 = bars.findIndex((b) => key(b.date) >= cut);
+    for (const x of shown) { const j = bars.findIndex((b) => String(b.date) === String(x.inDate)); if (j >= 0 && j < i0) i0 = j; }
+    i0 = Math.max(0, Math.min(i0, N0 - 20));
+    const pts = bars.slice(i0), N = pts.length, cs = pts.map((b) => b.close), lo = Math.min(...cs), hi = Math.max(...cs), pad = (hi - lo) * 0.08 || 1, LL = lo - pad, HH = hi + pad;
+    const X = (i) => (i / Math.max(N - 1, 1)) * 1000, Y = (c) => (1 - (c - LL) / (HH - LL)) * 300, idx = new Map(pts.map((b, i) => [String(b.date), i]));
+    const line = "M" + pts.map((b, i) => X(i).toFixed(1) + "," + Y(b.close).toFixed(1)).join("L"), wi = pts.findIndex((b) => key(b.date) >= cut);
+    const fd = (d) => fmtDt(d).replace(/, \d{4}/, "");
+    const trades = shown.map((x, n) => {
+      const a = idx.get(String(x.inDate)) ?? 0, b = idx.get(String(x.outDate)) ?? N - 1, win = x.ret > 0, open = x.why === "Still open";
+      return { n: n + 1, x: X(a).toFixed(1), w: Math.max(2, X(b) - X(a)).toFixed(1), fill: win ? "rgba(61,220,132,.16)" : "rgba(240,86,90,.16)", stroke: win ? "rgba(61,220,132,.55)" : "rgba(240,86,90,.55)",
+        inL: ((a / Math.max(N - 1, 1)) * 100).toFixed(2) + "%", inT: (Y(x.inPx) / 3).toFixed(2) + "%", outL: ((b / Math.max(N - 1, 1)) * 100).toFixed(2) + "%", outT: (Y(x.outPx) / 3).toFixed(2) + "%", lblL: (((a + b) / 2 / Math.max(N - 1, 1)) * 100).toFixed(2) + "%",
+        c: win ? "#3ddc84" : "#f0565a", ret: p1(x.ret), inD: fd(x.inDate), outD: open ? "Open" : fd(x.outDate), inPx: x.inPx.toFixed(2), outPx: x.outPx.toFixed(2), days: String(x.days), why: x.why, open };
+    });
+    // Levels if a position were opened at the last close, with the strategy's exit plan.
+    const last = bars[N0 - 1].close, at = (op) => { const s = BT.series(bars, op); const v2 = s && s[N0 - 1]; return v2 != null && Number.isFinite(v2) ? v2 : null; };
+    const A = cfg.stopAtr || cfg.trailAtr ? at({ ind: "atr", n: 14 }) : null;
+    const stp = cfg.stopAtr && A ? last - cfg.stopAtr * A : cfg.stop ? last * (1 - cfg.stop) : null, risk = stp ? last - stp : null;
+    const tgt = cfg.tpR && risk ? last + cfg.tpR * risk : cfg.tp ? last * (1 + cfg.tp) : null;
+    const trS = !(cfg.trail || cfg.trailAtr) || cfg.trailAct == null ? null : cfg.trailActR ? (risk ? last + cfg.trailActR * risk : null) : last * (1 + cfg.trailAct);
+    const usd = (x) => (x == null ? null : "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    const flat = (c) => (c && c.any ? c.any.flatMap(flat) : c ? [c] : []), isPx = (x) => x && ["close", "open", "high", "low"].includes(x.ind);
+    const ruleLv = [];
+    for (const [side, arr] of [["ENTRY", spec.entry], ["EXIT", spec.exit]]) for (const c of arr.flatMap(flat)) {
+      const other = isPx(c.a) && !isPx(c.b) ? c.b : isPx(c.b) && !isPx(c.a) ? c.a : null, val = other && other.ind !== "num" ? at(other) : null;
+      if (val != null) ruleLv.push([side + " · " + BT.label(c), usd(val * (other.mult || 1)), side === "EXIT" ? "#f0a0a2" : "#f0d68c", "Value on the last bar: " + BT.opLabel(other)]);
+    }
+    const dma = (n) => (N0 >= n ? at({ ind: "sma", n }) : null);
+    const lv = [
+      ["LAST", usd(last), "#eef2f4", "Last close"], ...ruleLv,
+      ...[20, 50, 200].map((n) => [tf === "d" ? n + "-DMA" : n + "-BAR SMA", usd(dma(n)), "#e6ebe8", "Simple average of the last " + n + " " + tfL(tf).toLowerCase() + " closes"]),
+      ["PERIOD HIGH", usd(hi), "#e6ebe8", "Highest close on the chart"], ["PERIOD LOW", usd(lo), "#e6ebe8", "Lowest close on the chart"],
+      ["STOP" + (cfg.stopAtr ? " · " + cfg.stopAtr + "× ATR" : cfg.stop ? " · −" + +(cfg.stop * 100).toFixed(2) + "%" : ""), usd(stp), "#f0565a", cfg.stopAtr ? "Last close − " + cfg.stopAtr + " × ATR(14), as the backtest sets it" : "Last close less the stop %"],
+      ["TARGET" + (cfg.tpR ? " · " + cfg.tpR + "R" : cfg.tp ? " · +" + +(cfg.tp * 100).toFixed(2) + "%" : ""), usd(tgt), "#3ddc84", cfg.tpR ? "Last close + " + cfg.tpR + " × the stop distance" : "Last close plus the target %"],
+      ["TRAIL STARTS", usd(trS), "#f0d68c", "Price at which the trailing stop switches on"],
+    ].filter(([kk, vv]) => vv != null || kk.startsWith("STOP") || kk.startsWith("TARGET")).map(([kk, vv, c, title]) => ({ k: kk, v: vv ?? "Not set", c: vv == null ? "#5f6966" : c, title }));
+    return {
+      ...base, has: true,
+      sub: tfL(tf) + " candles · return over " + wl + " · " + fmtDt(pts[0].date) + " – " + fmtDt(pts[N - 1].date),
+      stats: [
+        ["STRATEGY", p1(w.ret), sc(w.ret), "Strategy return over the last " + wl + " (same as the table)"], ["BUY & HOLD", p1(w.bret), sc(w.bret), "Buy & hold return over the same window"],
+        ["TRADES", String(w.n), "#e6ebe8", "Closed trades that exited in the window" + (shown.some((x) => x.why === "Still open") ? " · the open position is drawn but not counted" : "")], ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Winning ÷ closed trades in the window"],
+      ].map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
+      levels: lv, line, area: line + "L1000,300L0,300Z", trades, winX: wi > 0 ? X(wi).toFixed(1) : null, winL: wi > 0 ? ((wi / Math.max(N - 1, 1)) * 100).toFixed(2) + "%" : null, winT: "Window start · " + fmtDt(w.from) + " — returns are measured from here", hi: hi.toFixed(2), lo: lo.toFixed(2), d0: fmtDt(pts[0].date), d1: fmtDt(pts[N - 1].date),
+      tradeNote: trades.length ? "" : "No trade exited in this window.",
+    };
+  }
 
   ruleRows(k, side) {
     const st = this.state, spec = this.specOf(k), arr = spec[side], IND = Engine.IND, tf = this.tfOf(k), cfg = valCfg(this.cfgOf(k), tf);
@@ -517,7 +625,7 @@ export default class StrategyLab extends Component {
     return {
       open: true, title: x.name, nameEditable: !!(x.custom || x.sv), name: e.name, onName: (ev) => this.setState({ edit: { ...e, name: ev.target.value } }),
       entry: this.ruleRows(k, "entry"), exit: this.ruleRows(k, "exit"), addEntry: add("entry"), addExit: add("exit"),
-      riskRows: f.riskRows, riskSum: f.riskSum, more: f.more, costOpts: f.costOpts, candleOpts: f.candleOpts, periodOpts: f.periodOpts,
+      riskRows: f.riskRows, riskSum: f.riskSum, more: f.more, costOpts: f.costOpts, candleOpts: f.candleOpts, periodOpts: f.periodOpts, periodMore: f.periodMore,
       needs: needs.length ? "Needs " + needs.join(", ") + " — can't be backtested." : "",
       reset: x.lib && st.labConds[k] ? () => this.setState((s) => { const n = { ...s.labConds }; delete n[k]; return { labConds: n }; }) : null,
       cancel: () => this.closeEdit("cancel"), close: () => this.closeEdit("done"), done: () => this.closeEdit("done"), run: () => this.closeEdit("run"),
@@ -652,12 +760,17 @@ export default class StrategyLab extends Component {
       aiPh: "e.g. buy when price breaks the 52-week high on heavy volume, exit below the 20-day average", aiBtn: ai && ai.loading ? "Working…" : "Build & test", aiChips: chips.map((l) => ({ l, onClick: () => go(l) })),
       aiHas: !!ai, aiLoading: !!(ai && ai.loading), aiLoadingT: "Building rules…", aiErr: (ai && ai.err) || "", aiKind: "STRATEGY", aiTitle: ai ? (st.custom && has ? st.custom.name : ai.loading ? "Building…" : "") : "", aiSrc: (ai && ai.src) || "",
       aiParas: has && st.custom.why ? [st.custom.why] : [], aiF: has ? this.facts("custom") : null, hv: this.resultsVm("custom", has),
-      aiHasActs: has, aiActs: has ? [{ l: "Edit rules", bg: "transparent", c: "#fbefc9", bd: "#5a4a22", onClick: () => this.openEdit("custom") }, { l: st.customSvId ? "Update saved strategy" : "Save strategy", bg: "transparent", c: "#fbefc9", bd: "#5a4a22", onClick: () => this.saveStrategy() }] : [],
+      aiHasActs: has, aiActs: has ? [this.runAct("custom"), { l: "Edit rules", bg: "transparent", c: "#fbefc9", bd: "#5a4a22", onClick: () => this.openEdit("custom") }, { l: st.customSvId ? "Update saved strategy" : "Save strategy", bg: "transparent", c: "#fbefc9", bd: "#5a4a22", onClick: () => this.saveStrategy() }] : [],
     };
+  }
+  /** Run / Re-run button: gold until this exact setup has results, then outlined. */
+  runAct(k) {
+    const v = this.state.vals[k] || {}, fresh = !!(v.at && v.sig === this.sigOf(k)), blocked = this.blockedOf(k);
+    return { l: v.busy ? "Running…" : fresh ? "Re-run backtest" : v.at ? "Re-run backtest →" : "Run backtest →", bg: fresh ? "transparent" : "#c9a24a", c: fresh ? "#fbefc9" : "#08090a", bd: fresh ? "#5a4a22" : "#c9a24a", disabled: !!v.busy || !!blocked, title: blocked, onClick: () => { if (!v.busy && !blocked) this.runValidate(k); } };
   }
   pickVals() {
     const st = this.state, BT = Engine, tab = st.libTab || "library", S = this.strategies(), nSaved = st.labSaved.length;
-    const tabs = { libTabs: [["library", "Library", ""], ["saved", "Saved", String(nSaved)]].map(([k, l, n]) => ({ l, n, bd: tab === k ? "#c9a24a" : "transparent", c: tab === k ? "#eef2f4" : "#7a8481", onClick: () => this.setState({ libTab: k, labPick: null }) })), libEmpty: tab === "saved" && !nSaved, libHas: !(tab === "saved" && !nSaved) };
+    const tabs = { libTabs: [["library", "Custom", ""], ["saved", "Saved", String(nSaved)]].map(([k, l, n]) => ({ l, n, bd: tab === k ? "#c9a24a" : "transparent", c: tab === k ? "#eef2f4" : "#7a8481", onClick: () => this.setState({ libTab: k, labPick: null }) })), libEmpty: tab === "saved" && !nSaved, libHas: !(tab === "saved" && !nSaved) };
     if (st.savedNote && tab === "saved") tabs.libNote = st.savedNote;
     const P0 = S.filter((x) => (tab === "saved" ? x.k.startsWith("sv_") : x.lib));
     const lq = (st.libQ || "").trim().toLowerCase(), P = lq ? P0.filter((x) => [x.name, x.fam, x.what, x.src].join(" ").toLowerCase().includes(lq)) : P0;
@@ -673,20 +786,50 @@ export default class StrategyLab extends Component {
       pk: {
         whatOpen: st.whatOpen === k, whatBg: st.whatOpen === k ? "#2e2614" : "transparent", toggleWhat: () => this.setState({ whatOpen: st.whatOpen === k ? null : k }), whatIn: () => { if (this.state.whatOpen !== k) this.setState({ whatOpen: k }); }, whatOut: () => { if (this.state.whatOpen) this.setState({ whatOpen: null }); },
         tfL: tfL(this.tfOf(k)).toUpperCase() + " CANDLES", name: pk.name, fam: pk.fam, hold: pk.hold, src: pk.src, what: pk.what || WHAT[k] || pk.src,
-        canSave: false, showFam: !isSv, canDel: isSv, canEdit: true, onEdit: () => this.openEdit(k),
-        canAuto: STRATEGY_LAB_AUTOMATION && !needs.length, onAuto: () => this.setState({ auOpen: k }), autoL: "Automate with broker", autoBd: "#5a4a22", autoC: "#fbefc9",
+        canSave: false, showFam: !isSv, canDel: isSv, canEdit: true, onEdit: () => this.openEdit(k), run: this.runAct(k),
+        canAuto: !needs.length, onAuto: () => this.setState({ auOpen: k, auMsg: "", auDraft: { broker: null, url: "", mode: "paper", type: "market", size: "1000", send: "both" } }), autoL: "Automate with broker", autoBd: "#5a4a22", autoC: "#fbefc9",
         canHold: isSv, noHold: !isSv, onHold: (e) => this.setHold(k, e.target.value),
         onDel: () => this.setState({ delAsk: k }), delAsk: st.delAsk === k, delIdle: st.delAsk !== k, delNo: () => this.setState({ delAsk: null }), delYes: () => { this.setState({ delAsk: null }); this.delStrategy(k); },
       },
     };
   }
   autoVals() {
-    // Broker automation is behind STRATEGY_LAB_AUTOMATION (off). Nothing is sent
-    // anywhere; see docs/strategy-lab-automation-todo.md for what's missing.
-    const st = this.state;
-    if (!STRATEGY_LAB_AUTOMATION || !st.auOpen) return { auOpen: false };
-    const x = this.strategyOf(st.auOpen) || {}, close = () => this.setState({ auOpen: null });
-    return { auOpen: true, auName: x.name, auClose: close, stop: (e) => e.stopPropagation(), auBrokers: [], auHasBroker: false, auModes: [], auTypes: [], auSends: [], auSize: "", onAuSize: () => {}, auPayload: "", auMsg: "Broker automation isn't available yet: it needs a server-side OAuth callback, a bar-close signal runner and an order audit log.", auMsgC: "#f08a4b", auIsOn: false, auTest: close, auSave: close, auSaveL: "Close" };
+    // The prototype's "Automate with broker" modal. What works today: choosing the
+    // broker route and order settings, the exact payload built from the rules,
+    // and a real test POST to a webhook URL. What doesn't exist yet: broker
+    // sign-in (needs MarketCatalyst's registered broker apps) and the server job
+    // that runs the strategy after every bar — so Connect is not offered.
+    // See docs/strategy-lab-automation-todo.md.
+    const st = this.state, k = st.auOpen, x = k && this.strategyOf(k);
+    if (!x) return { auOpen: false };
+    const d = st.auDraft || {}, put = (p) => this.setState((s) => ({ auDraft: { ...(s.auDraft || {}), ...p }, auMsg: "" })), msg = (m, c) => this.setState({ auMsg: m, auMsgC: c });
+    const BR = [["alpaca", "Alpaca", "Sign in · OAuth"], ["tradier", "Tradier", "Sign in · OAuth"], ["tradestation", "TradeStation", "Sign in · OAuth"], ["traderspost", "TradersPost", "Webhook → many brokers"], ["ibkr", "Interactive Brokers", "Webhook bridge"], ["custom", "Custom webhook", "Any HTTPS endpoint"]];
+    const OAUTH = new Set(["alpaca", "tradier", "tradestation"]), HOOK = { traderspost: ["https://app.traderspost.io", "Open TradersPost →", "Create a strategy in TradersPost, link your broker there, then paste its webhook URL here."], ibkr: [null, "", "Interactive Brokers has no public webhook — paste the URL of your TWS / IB Gateway relay."], custom: [null, "", "Any HTTPS endpoint that accepts a JSON POST."] };
+    const bName = (BR.find((b) => b[0] === d.broker) || [])[1] || "", isO = OAUTH.has(d.broker), okUrl = /^https:\/\/\S+$/.test(d.url || "");
+    const seg = (key, opts) => opts.map(([v, l]) => ({ l, bg: d[key] === v ? "#2e2614" : "transparent", c: d[key] === v ? "#fbefc9" : "#8b9592", onClick: () => put({ [key]: v }) }));
+    const spec = this.specOf(k), payload = JSON.stringify({ strategy: x.name, strategy_id: k, signal: "entry", action: "buy", symbol: "{TICKER}", order_type: d.type, notional_usd: +d.size || 0, send: d.send === "both" ? "entries & exits" : "entries only", timeframe: tfL(this.tfOf(k)), mode: d.mode, price: "{LAST_PRICE}", triggered_at: "{ISO_TIME}", rules: { entry: spec.entry.map(Engine.label), exit: spec.exit.map(Engine.label), after_entry: exitPlanSummary(this.cfgOf(k)) } }, null, 2);
+    const close = () => this.setState({ auOpen: null, auMsg: "" });
+    return {
+      auOpen: true, auName: x.name, auClose: close, stop: (e) => e.stopPropagation(),
+      auBrokers: BR.map(([b, l, sub]) => ({ l, sub, bd: d.broker === b ? "#c9a24a" : "#1a1f21", bg: d.broker === b ? "#15130c" : "#0b0d0e", onClick: () => { put({ broker: b }); if (OAUTH.has(b)) msg(l + " sign-in isn't available yet — it needs MarketCatalyst's registered " + l + " app. Use TradersPost or a webhook to reach " + l + " meanwhile.", "#f08a4b"); } })),
+      auHasBroker: !!d.broker && !isO, auIsOauth: false, auIsHook: !!d.broker && !isO, auBrokerName: bName,
+      auHookT: (HOOK[d.broker] || HOOK.custom)[2], auHasDash: !!(HOOK[d.broker] && HOOK[d.broker][0]), auDashL: (HOOK[d.broker] || [])[1] || "", auOpenDash: () => window.open(HOOK[d.broker][0], "_blank", "noopener"),
+      auUrl: d.url || "", onAuUrl: (e) => put({ url: e.target.value.trim() }),
+      auModes: seg("mode", [["paper", "Paper"], ["live", "Live"]]), auTypes: seg("type", [["market", "Market"], ["limit", "Limit at signal"]]), auSends: seg("send", [["entries", "Entries only"], ["both", "Entries & exits"]]),
+      auSize: d.size ?? "1000", onAuSize: (e) => put({ size: e.target.value }), auPayload: payload,
+      auMsg: st.auMsg || "", auMsgC: st.auMsgC || "#8b9592", auIsOn: false, auDisconnect: close,
+      auTest: async () => {
+        if (!d.broker || isO) { msg("Choose TradersPost, an IBKR bridge or a custom webhook to send a test signal.", "#f08a4b"); return; }
+        if (!okUrl) { msg("Enter a valid https:// webhook URL first.", "#f08a4b"); return; }
+        msg("Sending test signal…", "#8b9592");
+        try {
+          const r = await fetch(d.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...JSON.parse(payload), test: true, symbol: "TEST", price: 0, triggered_at: new Date().toISOString() }) });
+          msg(r.ok ? "Test delivered — the webhook responded " + r.status + "." : "The webhook responded " + r.status + ".", r.ok ? "#3ddc84" : "#f08a4b");
+        } catch { msg("Couldn't reach the webhook from the browser (often CORS). The test didn't arrive.", "#f08a4b"); }
+      },
+      auSave: () => msg("Automatic signals aren't live yet: MarketCatalyst doesn't run strategies on its servers after each bar, so nothing would be sent. Use “Send test signal” to check your webhook.", "#f08a4b"),
+      auSaveL: "Connect · coming soon",
+    };
   }
   buildVm() {
     const st = this.state;
@@ -694,7 +837,7 @@ export default class StrategyLab extends Component {
       ...this.aiVals(), ...this.pickVals(), ...this.autoVals(),
       libRef: this.libRef, aiRef: this.aiRef,
       labS1: !st.rep, labNotS1: !!st.rep, labS3: !!st.rep, labHome: () => { this.setState({ rep: null }); this.scrollTop(); },
-      rep: this.reportVm(), edit: this.editVm(),
+      rep: this.reportVm(), edit: this.editVm(), chart: this.chartVm(),
     };
   }
   render() {

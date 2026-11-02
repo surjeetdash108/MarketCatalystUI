@@ -1,6 +1,6 @@
 // Strategy Lab panels maintained by hand (the rest of lab-view.jsx is the
 // prototype's generated markup): strategy facts + risk editor, results panel,
-// single-stock report, edit-rules modal.
+// row chart pop-up, single-stock report, edit-rules modal.
 import { Fragment } from "react";
 
 const C = {
@@ -16,15 +16,16 @@ const btn = (primary, disabled) => ({
 const hideImg = (e) => { e.currentTarget.style.display = "none"; };
 
 /** Segmented options: [{l, on, off, onClick, title}]. */
-export function Seg({ opts }) {
+export function Seg({ opts, more, small }) {
   return (
-    <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4 }}>
+    <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 3, background: "#08090a", border: "1px solid #1a1f21", borderRadius: 9, padding: 3 }}>
       {(opts || []).map((o, i) => (
-        <button key={i} type="button" title={o.title || (o.off ? o.offT : undefined)} disabled={!!o.off} onClick={o.off ? undefined : o.onClick}
-          style={{ borderRadius: 6, border: `1px solid ${o.on ? "#5a4a22" : C.line2}`, background: o.on ? C.chipBg : "transparent", color: o.off ? "#3c4446" : o.on ? C.chipFg : C.dim, padding: "4px 9px", fontSize: 11.5, fontWeight: 700, cursor: o.off ? "not-allowed" : "pointer" }}>
+        <button key={i} type="button" title={o.title || (o.off ? o.offT : undefined)} disabled={!!o.off} onClick={o.off ? undefined : o.onClick} className={o.off || o.on ? undefined : "slx3"}
+          style={{ borderRadius: 7, border: 0, background: o.on ? C.chipBg : "transparent", color: o.off ? "#3c4446" : o.on ? C.chipFg : C.dim, padding: small ? "4px 10px" : "5px 11px", fontSize: small ? 11.5 : 12, fontWeight: 700, cursor: o.off ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
           {o.l}
         </button>
       ))}
+      {more ? <button type="button" onClick={more.onClick} className="slx3" style={{ borderRadius: 7, border: 0, background: "transparent", color: C.goldHi, padding: "4px 10px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>{more.l}</button> : null}
     </span>
   );
 }
@@ -32,42 +33,29 @@ export function Seg({ opts }) {
 /** Exit-plan rows ({t, segs:[{opts}], note}) with the summary and the "more options" toggle. */
 export function RiskEditor({ rows, sum, more }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 12.5, color: C.text }}>{sum}</div>
-      {(rows || []).map((r, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ ...label, width: 86 }}>{r.t}</span>
-          {(r.segs || []).map((s, j) => <Seg key={j} opts={s.opts} />)}
-          {r.note ? <span style={{ fontSize: 11, color: C.mute }}>{r.note}</span> : null}
-        </div>
-      ))}
-      {more ? (
-        <button type="button" onClick={more.onClick} style={{ alignSelf: "flex-start", background: "none", border: 0, color: C.goldHi, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>
-          {more.l}
-        </button>
-      ) : null}
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid #1a2328", paddingTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", color: C.goldHi }}>AFTER ENTRY</span>
+        <span style={{ fontSize: 11.5, color: C.mute }}>{sum}</span>
+        {more ? <button type="button" onClick={more.onClick} className="slx3" style={{ marginLeft: "auto", background: "none", border: 0, padding: 0, color: C.goldHi, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>{more.l}</button> : null}
+      </div>
+      <div style={{ display: "flex", gap: "12px 18px", flexWrap: "wrap", alignItems: "center" }}>
+        {(rows || []).map((r, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexBasis: r.t === "STOP" || r.t === "TARGET" ? "100%" : "auto" }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: C.mute, minWidth: 64 }}>{r.t}</span>
+            {(r.segs || []).map((sg, j) => <Seg key={j} opts={sg.opts} />)}
+            {r.note ? <span style={{ fontSize: 11, color: "#5f6966" }}>{r.note}</span> : null}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-/** Entry · Exit · Risk (editable) · Candle · Period, plus "Not translated". */
-export function FactsBlock({ f }) {
-  if (!f) return null;
-  const row = (k, v) => (
-    <div style={{ display: "grid", gridTemplateColumns: "92px minmax(0,1fr)", gap: 10, alignItems: "start" }}>
-      <span style={{ ...label, paddingTop: 3 }}>{k}</span>
-      <div style={{ minWidth: 0 }}>{v}</div>
-    </div>
-  );
+/** "Not translated" / "Needs …" notes under the rules. */
+function RuleNotes({ f }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px", background: C.bg2 }}>
-      {row("Entry", <span style={{ fontFamily: mono, fontSize: 12.5, color: C.hi }}>{f.entry}</span>)}
-      {row("Exit", <span style={{ fontFamily: mono, fontSize: 12.5, color: C.hi }}>{f.exit}</span>)}
-      {row("Risk", <RiskEditor rows={f.riskRows} sum={f.riskSum} more={f.more} />)}
-      {row("Costs", <Seg opts={f.costOpts} />)}
-      {row("Candle", <span style={{ display: "flex", flexDirection: "column", gap: 4 }}><Seg opts={f.candleOpts} />{f.candleNote ? <span style={{ fontSize: 11, color: C.mute }}>{f.candleNote}</span> : null}</span>)}
-      {row("Period", <Seg opts={f.periodOpts} />)}
-      {f.src ? row("Source", <span style={{ fontSize: 12, color: C.dim }}>{f.src}</span>) : null}
+    <Fragment>
       {f.needs ? <div style={{ fontSize: 12.5, color: C.warn }}>{f.needs}</div> : null}
       {f.unparsed ? (
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", border: "1px solid #6b3a1c", borderRadius: 8, padding: "8px 10px", background: "#1d130b" }}>
@@ -76,84 +64,219 @@ export function FactsBlock({ f }) {
           {f.onEdit ? <button type="button" onClick={f.onEdit} style={btn(false)}>Edit rules</button> : null}
         </div>
       ) : null}
+    </Fragment>
+  );
+}
+
+const rowLabel = { fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: C.mute, minWidth: 118 };
+const boxLabel = { color: "#5f6966", fontWeight: 700, fontSize: 10.5, letterSpacing: ".08em", paddingTop: 2 };
+
+/** Library detail: candle and period on the left, the rules in plain English on the right. */
+export function DetailFacts({ f }) {
+  if (!f) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "0 1 auto", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={rowLabel}>CANDLE</span><Seg opts={f.candleOpts} />
+            {f.candleNote ? <span style={{ fontSize: 11, color: "#5f6966" }}>{f.candleNote}</span> : null}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={rowLabel}>BACKTEST PERIOD</span><Seg opts={f.periodOpts} more={f.periodMore} />
+          </div>
+        </div>
+        <div style={{ flex: "1 1 260px", minWidth: 0, display: "grid", gridTemplateColumns: "62px minmax(0,1fr)", gap: "8px 12px", fontSize: 13, border: "1px solid #1a1f21", background: "#0b0d0e", borderRadius: 10, padding: "12px 14px", alignContent: "start" }}>
+          <span style={boxLabel}>ENTRY</span><span style={{ color: C.text }} title={f.entry}>{f.entryText}</span>
+          <span style={boxLabel}>EXIT</span><span style={{ color: C.text }} title={f.exit}>{f.exitText}</span>
+          <span style={boxLabel} title="Exit plan and trading costs used by the backtest — change them with Edit">RISK</span><span style={{ color: C.dim }}>{f.riskLine}</span>
+          {f.src ? <Fragment><span style={boxLabel}>SOURCE</span><span style={{ color: C.dim }}>{f.src}</span></Fragment> : null}
+        </div>
+      </div>
+      <RuleNotes f={f} />
     </div>
   );
 }
 
-/** Multi-stock results: summary over every tested stock + sortable table. */
-export function ResultsPanel({ r }) {
-  if (!r || !r.show) return null;
+/** AI result: Entry · Exit · Risk · Candle · Period, as in the prototype. */
+export function AiFacts({ f }) {
+  if (!f) return null;
+  const k = (t, pt = 2) => <span style={{ ...boxLabel, paddingTop: pt }}>{t}</span>;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 16px", background: C.bg }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <span style={{ ...label, color: C.goldHi }}>Backtest results</span>
-        <span style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{r.head}</span>
-        <span style={{ flex: 1 }} />
-        <button type="button" onClick={r.run.disabled ? undefined : r.run.onClick} disabled={r.run.disabled} title={r.run.title} style={btn(r.run.primary, r.run.disabled)}>{r.run.l}</button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "96px minmax(0,1fr)", gap: "8px 12px", fontSize: 13, border: "1px solid #1a1f21", borderRadius: 10, padding: "12px 14px" }}>
+        {k("ENTRY")}<span style={{ fontFamily: mono, color: C.text }}>{f.entry}</span>
+        {k("EXIT")}<span style={{ fontFamily: mono, color: C.text }}>{f.exit}</span>
+        {k("RISK")}<span style={{ fontFamily: mono, color: C.text }}>{f.riskLine}</span>
+        {k("CANDLE", 7)}<span style={{ justifySelf: "start", display: "flex", flexDirection: "column", gap: 4 }}><Seg opts={f.candleOpts} small />{f.candleNote ? <span style={{ fontSize: 11, color: "#5f6966" }}>{f.candleNote}</span> : null}</span>
+        {k("PERIOD", 7)}<span style={{ justifySelf: "start" }}><Seg opts={f.periodOpts} more={f.periodMore} small /></span>
       </div>
-      {r.meta ? <div style={{ fontFamily: mono, fontSize: 11.5, color: C.mute }}>{r.meta}</div> : null}
-      {r.busy ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 12.5, color: C.text }}>{r.progressT}</div>
-          <div style={{ height: 4, background: "#1a2328", borderRadius: 3, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: r.progressPct, background: C.gold, transition: "width .2s" }} />
-          </div>
-        </div>
-      ) : null}
-      {r.err ? <div style={{ fontSize: 13, color: C.down, border: "1px solid #5a2224", borderRadius: 8, padding: "8px 10px", background: "#1a0e0f" }}>{r.err}</div> : null}
+      <RuleNotes f={f} />
+    </div>
+  );
+}
+
+/** Multi-stock results: "meet the rules now" summary, return window, table. */
+export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
+  if (!r || !r.show) return null;
+  const grid = "minmax(0,1.5fr) minmax(0,1.1fr) repeat(4,minmax(0,1fr))";
+  const hdr = { fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966", cursor: "help", whiteSpace: "nowrap" };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0, ...(boxed ? { border: "1px solid #2a2618", background: "#0b0c0d", borderRadius: 12, padding: "16px 18px" } : {}) }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", color: C.mute }}>{title}</span>
+        <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 20, color: C.hi }}>{r.head}</span>
+        {r.meta ? <span style={{ fontSize: 11.5, color: "#5f6966", marginLeft: "auto" }}>{r.meta}</span> : null}
+      </div>
+      {r.busy ? <div style={{ height: 3, background: "#15191b", borderRadius: 2, overflow: "hidden" }}><div style={{ height: 3, width: r.progressPct, background: C.gold, transition: "width .2s" }} /></div> : null}
+      {r.err ? <div style={{ fontSize: 13, color: C.warn }}>{r.err}</div> : null}
       {r.stale ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid #6b5a2a", borderRadius: 8, padding: "8px 10px", background: "#1a160c", color: C.chipFg, fontSize: 12.5 }}>
-          Rules changed since this run · <button type="button" onClick={r.onRerun} style={btn(true)}>Re-run</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: C.warn }}>
+          Rules changed since this run.
+          <button type="button" onClick={r.onRerun} style={{ borderRadius: 8, border: "1px solid #6b3a1c", background: "transparent", color: "#f7c9a8", padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Re-run</button>
         </div>
       ) : null}
-      {r.idle ? <div style={{ fontSize: 12.5, color: C.mute }}>{r.idleT}</div> : null}
+      {r.idle ? <div title={r.idleTitle} style={{ fontSize: 13, color: C.dim, lineHeight: 1.55, border: "1px dashed #263033", borderRadius: 10, padding: 16 }}>{r.idleT}</div> : null}
       {r.sum && r.sum.length ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: 8 }}>
-          {r.sum.map((s, i) => (
-            <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", background: C.bg2 }}>
-              <div style={label}>{s.k}</div>
-              <div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: s.c || C.text, marginTop: 3 }}>{s.v}</div>
-            </div>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(96px,1fr))", gap: 1, background: "#1a1f21", border: "1px solid #1a1f21", borderRadius: 10, overflow: "hidden" }}>
+            {r.sum.map((s) => (
+              <div key={s.k} title={s.title} style={{ background: C.bg, padding: "9px 11px", cursor: "help" }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966" }}>{s.k}</div>
+                <div style={{ fontFamily: mono, fontSize: 15, color: s.c || C.text, marginTop: 2 }}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "#5f6966" }}>{r.sumNote}</div>
+        </div>
+      ) : null}
+      {r.none ? <div style={{ fontSize: 13, color: C.dim, border: "1px dashed #263033", borderRadius: 10, padding: 16 }}>{r.none}</div> : null}
+      {r.hasWin && r.rows && r.rows.length ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: C.mute }}>RETURN OVER</span>
+          <Seg opts={r.winOpts} more={r.winMore} small />
+          <span style={{ fontSize: 11, color: "#5f6966" }}>{r.winNote}</span>
         </div>
       ) : null}
       {r.rows && r.rows.length ? (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 820 }}>
-            <thead>
-              <tr>
-                {r.cols.map((c) => (
-                  <th key={c.key} onClick={c.onClick} title={c.title} style={{ ...label, textAlign: c.al || "right", padding: "6px 8px", cursor: "pointer", color: c.on ? C.goldHi : C.mute, borderBottom: `1px solid ${C.line}`, whiteSpace: "nowrap" }}>
-                    {c.l}{c.on ? (c.desc ? " ↓" : " ↑") : ""}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {r.rows.map((x) => (
-                <tr key={x.t} onClick={x.onClick} title={`Open the ${x.t} report`} style={{ cursor: "pointer", borderBottom: "1px solid #151b1e" }} className="slx7">
-                  <td style={{ padding: "7px 8px", textAlign: "left", whiteSpace: "nowrap" }}>
-                    <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: x.sigC, border: `1px solid ${x.sigBd}`, borderRadius: 999, padding: "2px 8px" }}>{x.sig}</span>
-                  </td>
-                  <td style={{ padding: "7px 8px", textAlign: "left", whiteSpace: "nowrap" }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ position: "relative", width: 22, height: 22, borderRadius: 5, background: "#12171a", display: "inline-grid", placeItems: "center", fontSize: 8, color: C.mute, overflow: "hidden" }}>
-                        {x.t.slice(0, 4)}
-                        <img src={x.logo} onError={hideImg} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
-                      </span>
-                      <span style={{ fontWeight: 800, color: C.hi }}>{x.t}</span>
-                      <span style={{ color: C.mute, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>{x.n}</span>
-                    </span>
-                  </td>
-                  {[x.px, x.ret, x.bret, x.ex, x.sh, x.dd, x.win, x.tr].map((v, i) => (
-                    <td key={i} style={{ padding: "7px 8px", textAlign: "right", fontFamily: mono, color: i === 3 ? x.exC : i === 1 ? x.retC : C.text }}>{v}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: "flex", flexDirection: "column", maxHeight: 300, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
+          <div style={{ display: "grid", gridTemplateColumns: grid, gap: 6, padding: "0 8px 6px", position: "sticky", top: 0, background: boxed ? "#0b0c0d" : C.bg, zIndex: 1 }}>
+            {r.cols.map((c, i) => <span key={c.l} title={c.title} style={{ ...hdr, textAlign: i === 0 ? "left" : i === 2 || i === 5 ? "center" : "right" }}>{c.l}</span>)}
+          </div>
+          {r.rows.map((x) => (
+            <button key={x.t} type="button" onClick={x.onClick} title={`Open the ${x.t} chart`} className="slx7"
+              style={{ display: "grid", gridTemplateColumns: grid, gap: 6, alignItems: "center", background: "transparent", border: 0, borderTop: "1px solid #15191b", borderRadius: 8, padding: 8, color: C.text, cursor: "pointer", textAlign: "left" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={{ position: "relative", width: 24, height: 24, flex: "none", borderRadius: 6, background: "#1a1f21", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 800, color: C.goldHi, overflow: "hidden" }}>
+                  {x.t.slice(0, 4)}
+                  <img src={x.logo} onError={hideImg} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#fff", padding: 2 }} />
+                </span>
+                <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <span style={{ fontWeight: 800, fontSize: 12.5 }}>{x.t}</span>
+                  <span style={{ fontSize: 10.5, color: C.mute, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.n}</span>
+                </span>
+              </span>
+              <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                <span style={{ fontFamily: mono, fontSize: 12, color: C.hi }}>{x.px}</span>
+                <span style={{ fontFamily: mono, fontSize: 10.5, color: x.chgC }}>{x.chg}</span>
+              </span>
+              <span style={{ fontFamily: mono, fontSize: 12, textAlign: "center", color: x.retC }}>{x.ret}</span>
+              <span style={{ fontFamily: mono, fontSize: 12, textAlign: "right", color: x.exC }}>{x.ex}</span>
+              <span style={{ fontFamily: mono, fontSize: 12, textAlign: "right" }}>{x.win}</span>
+              <span style={{ fontFamily: mono, fontSize: 12, textAlign: "center", color: "#aab3b0" }}>{x.tr}</span>
+            </button>
+          ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Row pop-up: price over the return window, trades, and levels if entered at the last price. */
+export function ChartModal({ c }) {
+  if (!c || !c.open) return null;
+  const cols = "36px minmax(0,1fr) minmax(0,1.3fr) repeat(3,minmax(0,.8fr))";
+  return (
+    <div onClick={c.close} style={{ position: "fixed", inset: 0, background: "rgba(4,5,6,.74)", backdropFilter: "blur(3px)", zIndex: 85, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px", overflowY: "auto" }}>
+      <div onClick={c.stop} style={{ width: "100%", maxWidth: 1000, background: C.bg, border: "1px solid #2a2618", borderRadius: 14, boxShadow: "0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(201,162,74,.12)", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 28, color: C.hi }}>{c.t}</span>
+          <span style={{ fontSize: 13, color: C.dim }}>{c.n}</span>
+          <span style={{ fontSize: 11.5, color: "#5f6966" }}>{c.sub}</span>
+          <span style={{ marginLeft: "auto" }} />
+          <button type="button" onClick={c.onReport} style={btn(false)}>Full report →</button>
+          <button type="button" onClick={c.close} title="Close" style={{ borderRadius: 8, background: "none", border: `1px solid ${C.line2}`, color: "#aab3b0", width: 30, height: 30, cursor: "pointer", fontSize: 16 }}>×</button>
+        </div>
+        {c.busy ? <div style={{ fontSize: 13, color: C.dim }}>{c.busy}</div> : null}
+        {c.err ? <div style={{ fontSize: 13, color: C.down }}>{c.err}</div> : null}
+        {c.has ? (
+          <Fragment>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 1, background: "#1a1f21", border: "1px solid #1a1f21", borderRadius: 10, overflow: "hidden" }}>
+              {c.stats.map((f) => (
+                <div key={f.k} title={f.title} style={{ background: C.bg, padding: "9px 12px", cursor: "help" }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966" }}>{f.k}</div>
+                  <div style={{ fontFamily: mono, fontSize: 16, color: f.c, marginTop: 2 }}>{f.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", color: C.goldHi }}>PRICE LEVELS · IF ENTERED AT LAST PRICE</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {c.levels.map((f) => (
+                  <div key={f.k} title={f.title} style={{ border: "1px solid #1a1f21", borderRadius: 8, padding: "6px 10px", display: "flex", flexDirection: "column", gap: 1 }}>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", color: "#5f6966", whiteSpace: "nowrap" }}>{f.k}</span>
+                    <span style={{ fontFamily: mono, fontSize: 13, color: f.c }}>{f.v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 16, alignItems: "center", fontSize: 11.5, color: C.dim, flexWrap: "wrap" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(61,220,132,.25)", border: "1px solid rgba(61,220,132,.6)" }} />Winning trade</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(240,86,90,.25)", border: "1px solid rgba(240,86,90,.6)" }} />Losing trade</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: `8px solid ${C.goldHi}` }} />Entry</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", border: `2px solid ${C.hi}` }} />Exit</span>
+              {c.winX ? <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, borderTop: "1px dashed #8b9592" }} />Window start — returns above are measured from here</span> : null}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 56px", gap: 8 }}>
+              <div style={{ position: "relative", height: 320, border: "1px solid #1a1f21", borderRadius: 10, background: "#0b0d0e", overflow: "hidden" }}>
+                <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+                  {c.trades.map((t) => <rect key={t.n} x={t.x} y="0" width={t.w} height="300" fill={t.fill} stroke={t.stroke} strokeWidth="1" vectorEffect="non-scaling-stroke" />)}
+                  <path d={c.area} fill="rgba(201,162,74,.06)" />
+                  <path d={c.line} fill="none" stroke={C.goldHi} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+                  {c.winX ? <line x1={c.winX} x2={c.winX} y1="0" y2="300" stroke="#8b9592" strokeDasharray="4 4" strokeWidth="1" vectorEffect="non-scaling-stroke" /> : null}
+                </svg>
+                {c.winL ? <span title={c.winT} style={{ position: "absolute", left: c.winL, bottom: 6, transform: "translateX(4px)", fontFamily: mono, fontSize: 10, color: C.dim, background: "rgba(11,13,14,.85)", padding: "1px 5px", borderRadius: 4, whiteSpace: "nowrap", cursor: "help" }}>window start</span> : null}
+                {c.trades.map((t) => (
+                  <Fragment key={t.n}>
+                    <span title={`Entry ${t.inD} @ ${t.inPx}`} style={{ position: "absolute", left: t.inL, top: t.inT, transform: "translate(-50%,2px)", width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: `10px solid ${C.goldHi}`, filter: "drop-shadow(0 0 4px rgba(240,214,140,.6))" }} />
+                    {t.open ? null : <span title={`Exit ${t.outD} @ ${t.outPx}`} style={{ position: "absolute", left: t.outL, top: t.outT, transform: "translate(-50%,-50%)", width: 9, height: 9, borderRadius: "50%", background: "#0b0d0e", border: `2px solid ${C.hi}` }} />}
+                    <span style={{ position: "absolute", left: t.lblL, top: 8, transform: "translateX(-50%)", fontFamily: mono, fontSize: 10.5, fontWeight: 700, color: t.c, background: "rgba(11,13,14,.85)", padding: "1px 5px", borderRadius: 4, whiteSpace: "nowrap" }}>{t.ret}</span>
+                  </Fragment>
+                ))}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", fontFamily: mono, fontSize: 10.5, color: C.mute, padding: "4px 0" }}><span>{c.hi}</span><span>{c.lo}</span></div>
+              <div style={{ gridColumn: 1, display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10.5, color: C.mute, marginTop: -2 }}><span>{c.d0}</span><span>{c.d1}</span></div>
+            </div>
+            {c.tradeNote ? <div style={{ fontSize: 12.5, color: C.mute }}>{c.tradeNote}</div> : (
+              <div style={{ display: "flex", flexDirection: "column", maxHeight: 220, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
+                <div style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "0 8px 6px", fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966", position: "sticky", top: 0, background: C.bg }}>
+                  <span>#</span><span>ENTRY</span><span>EXIT</span><span style={{ textAlign: "right" }}>IN</span><span style={{ textAlign: "right" }}>OUT</span><span style={{ textAlign: "right" }}>RETURN</span>
+                </div>
+                {c.trades.map((t) => (
+                  <div key={t.n} style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: 8, borderTop: "1px solid #15191b", fontSize: 12.5, color: C.text, alignItems: "center" }}>
+                    <span style={{ fontFamily: mono, color: C.mute }}>{t.n}</span>
+                    <span>{t.inD}</span>
+                    <span title={t.why}>{t.outD} <span style={{ color: "#5f6966" }}>· {t.days} bars</span></span>
+                    <span style={{ fontFamily: mono, textAlign: "right" }}>{t.inPx}</span>
+                    <span style={{ fontFamily: mono, textAlign: "right" }}>{t.outPx}</span>
+                    <span style={{ fontFamily: mono, textAlign: "right", color: t.c, fontWeight: 700 }}>{t.ret}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Fragment>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -358,8 +481,8 @@ export function EditModal({ e }) {
     <div onClick={e.close} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(4,5,6,.72)", display: "flex", justifyContent: "center", alignItems: "flex-start", overflowY: "auto", padding: "40px 16px" }}>
       <div onClick={(x) => x.stopPropagation()} style={{ width: "min(980px,100%)", background: C.bg, border: `1px solid #2a2618`, borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ ...label, color: C.goldHi }}>Edit rules &amp; settings</span>
-          <span style={{ fontWeight: 800, color: C.hi }}>{e.title}</span>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", color: C.goldHi }}>EDIT RULES</span>
+          <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 24, color: C.hi }}>{e.title}</span>
           <span style={{ flex: 1 }} />
           <button type="button" onClick={e.cancel} title="Close without saving" style={{ background: "none", border: 0, color: C.mute, fontSize: 18, cursor: "pointer" }}>×</button>
         </div>
@@ -370,12 +493,11 @@ export function EditModal({ e }) {
         <RuleList rows={e.entry} onAdd={e.addEntry} />
         <span style={label}>Exit — any one triggers</span>
         <RuleList rows={e.exit} onAdd={e.addExit} />
-        <span style={label}>After entry</span>
         <RiskEditor rows={e.riskRows} sum={e.riskSum} more={e.more} />
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           <span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={label}>Costs</span><Seg opts={e.costOpts} /></span>
           <span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={label}>Candle</span><Seg opts={e.candleOpts} /></span>
-          <span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={label}>Period</span><Seg opts={e.periodOpts} /></span>
+          <span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={label}>Period</span><Seg opts={e.periodOpts} more={e.periodMore} /></span>
         </div>
         {e.needs ? <div style={{ fontSize: 12.5, color: C.warn }}>{e.needs}</div> : null}
         <div style={{ fontSize: 11.5, color: C.mute }}>Signals use the close of bar t; fills at the open of bar t+1. Long-only, fully invested per signal. The engine runs exactly the conditions shown.</div>
