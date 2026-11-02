@@ -120,7 +120,7 @@ export function AiFacts({ f }) {
 export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
   if (!r || !r.show) return null;
   const grid = "minmax(0,1.5fr) minmax(0,1.1fr) repeat(4,minmax(0,1fr))";
-  const hdr = { fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966", cursor: "help", whiteSpace: "nowrap" };
+  const hdr = { fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966", cursor: "default", whiteSpace: "nowrap" };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0, ...(boxed ? { border: "1px solid #2a2618", background: "#0b0c0d", borderRadius: 12, padding: "16px 18px" } : {}) }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
@@ -508,7 +508,6 @@ export function EditModal({ e }) {
         <RuleList rows={e.exit} onAdd={e.addExit} />
         <RiskEditor rows={e.riskRows} sum={e.riskSum} more={e.more} />
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={label}>Costs</span><Seg opts={e.costOpts} /></span>
           <span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={label}>Candle</span><Seg opts={e.candleOpts} /></span>
           <span style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={label}>Period</span><Seg opts={e.periodOpts} more={e.periodMore} /></span>
         </div>

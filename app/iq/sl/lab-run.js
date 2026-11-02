@@ -245,18 +245,32 @@ const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 export function progressiveView(state, statOf, expanded) {
   const ok = (state.rows || []).filter((r) => r.status === "ok");
   const matches = ok.filter((r) => r.ago === 0 && statOf(r));
-  const N = matches.length, busy = !!state.busy, prog = (state.done || 0) + "/" + (state.total || "…");
+  const N = matches.length, busy = !!state.busy;
   const kind = N ? "rows" : busy ? "scanning-empty" : ok.length ? "empty" : "none";
-  const head = kind === "scanning-empty" ? "Scanning… no matches so far (" + prog + ")"
-    : kind === "rows" || kind === "empty" ? plural(N, "stock meets", "stocks meet") + " the rules now" + (busy ? " · scanning " + prog : "")
+  const head = kind === "scanning-empty" ? "Scanning… no matches so far"
+    : kind === "rows" || kind === "empty" ? plural(N, "stock meets", "stocks meet") + " the rules now" + (busy ? " · scanning…" : "")
     : "";
-  const more = !expanded && N > 3
-    ? { label: busy ? "+" + plural(N - 3, "more stock matches", "more stocks match") + " · scanning " + prog + " → View all" : "View all " + N + " matches" }
-    : null;
+
+  const isAll = expanded === true;
+  const limit = isAll ? N : typeof expanded === "number" ? expanded : 3;
+  const hasMore = N > limit;
+
+  let more = null;
+  if (!isAll && hasMore) {
+    if (busy) {
+      more = { label: "+3 more matches", next: limit + 3 };
+    } else {
+      more = { label: "View all " + N + " matches", next: true };
+    }
+  }
+
+  const isExpanded = isAll || limit > 3;
+  const visibleRows = isAll ? sortRows(matches, "sig") : matches.slice(0, limit);
+
   return {
     state: kind, head, matches: N, soFar: busy && N > 0,
-    visible: expanded ? sortRows(matches, "sig") : matches.slice(0, 3),
-    more, less: !!expanded && N > 3,
+    visible: visibleRows,
+    more, less: isExpanded && N > 3,
     // Every match so far; with none at the end, every tested stock (the existing empty state).
     summary: N ? windowSummary(ok, statOf, true) : !busy && ok.length ? windowSummary(ok, statOf, false) : null,
   };

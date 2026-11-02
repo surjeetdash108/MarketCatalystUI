@@ -79,8 +79,8 @@ const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','De
 const CORE=[
       {k:'hi52',cond:{"entry":[{"a":{"ind":"close"},"op":"crosses above","b":{"ind":"hh","n":252}},{"a":{"ind":"volume"},"op":"≥","b":{"ind":"avgvol","n":50,"mult":1.5}}],"exit":[{"a":{"ind":"close"},"op":"<","b":{"ind":"sma","n":20}}]},fam:'Momentum',name:'52-Week High Breakout',hold:'2–8 wks',entry:'Close at a new 52-week high on volume ≥ 1.5× its 50-day average',exit:'Close below the 20-day average',data:'Daily OHLCV bars, adjusted',src:'George & Hwang (2004), Journal of Finance'},
       {k:'rsi2',cond:{"entry":[{"a":{"ind":"rsi","n":2},"op":"<","b":{"ind":"num","v":10}},{"a":{"ind":"close"},"op":">","b":{"ind":"sma","n":200}}],"exit":[{"a":{"ind":"close"},"op":">","b":{"ind":"sma","n":5}}]},fam:'Mean reversion',name:'RSI(2) Pullback',hold:'2–7 days',entry:'RSI(2) below 10 while the close is above the 200-day average',exit:'Close above the 5-day average',data:'Daily OHLCV bars, adjusted',src:'Connors & Alvarez, Short Term Trading Strategies That Work (2008)'},
-      {k:'mom',cond:{"entry":[{"a":{"ind":"mom_rank"},"op":"≤","b":{"ind":"num","v":10}}],"exit":[{"a":{"ind":"mom_rank"},"op":">","b":{"ind":"num","v":10}}]},fam:'Momentum',name:'12-1 Momentum Rotation',hold:'1–3 months',entry:'Monthly: buy the top decile by 12-month return, skipping the latest month',exit:'Rebalance monthly; sell names that leave the top decile',data:'Monthly total returns',src:'Jegadeesh & Titman (1993), Journal of Finance'},
-      {k:'pead',cond:{"entry":[{"a":{"ind":"eps_surprise"},"op":"≥","b":{"ind":"num","v":5}},{"a":{"ind":"gap"},"op":"≥","b":{"ind":"num","v":2}},{"a":{"ind":"days_er"},"op":"≤","b":{"ind":"num","v":1}}],"exit":[{"a":{"ind":"bars"},"op":"≥","b":{"ind":"num","v":40}}]},fam:'Event',name:'Post-Earnings Drift',hold:'~8 wks',entry:'Day after earnings: EPS surprise ≥ +5% and an opening gap ≥ +2%',exit:'After 40 trading days',data:'Daily bars + earnings surprises',src:'Bernard & Thomas (1989), Journal of Accounting Research'},
+      // {k:'mom',cond:{"entry":[{"a":{"ind":"mom_rank"},"op":"≤","b":{"ind":"num","v":10}}],"exit":[{"a":{"ind":"mom_rank"},"op":">","b":{"ind":"num","v":10}}]},fam:'Momentum',name:'12-1 Momentum Rotation',hold:'1–3 months',entry:'Monthly: buy the top decile by 12-month return, skipping the latest month',exit:'Rebalance monthly; sell names that leave the top decile',data:'Monthly total returns',src:'Jegadeesh & Titman (1993), Journal of Finance'},
+      // {k:'pead',cond:{"entry":[{"a":{"ind":"eps_surprise"},"op":"≥","b":{"ind":"num","v":5}},{"a":{"ind":"gap"},"op":"≥","b":{"ind":"num","v":2}},{"a":{"ind":"days_er"},"op":"≤","b":{"ind":"num","v":1}}],"exit":[{"a":{"ind":"bars"},"op":"≥","b":{"ind":"num","v":40}}]},fam:'Event',name:'Post-Earnings Drift',hold:'~8 wks',entry:'Day after earnings: EPS surprise ≥ +5% and an opening gap ≥ +2%',exit:'After 40 trading days',data:'Daily bars + earnings surprises',src:'Bernard & Thomas (1989), Journal of Accounting Research'},
       {k:'sqz',cond:{"entry":[{"a":{"ind":"sqz","n":126},"op":">","b":{"ind":"num","v":0}},{"a":{"ind":"close"},"op":"crosses above","b":{"ind":"bbu","n":20}}],"exit":[{"a":{"ind":"close"},"op":"<","b":{"ind":"sma","n":20}}]},fam:'Volatility',name:'Volatility Squeeze Breakout',hold:'1–4 wks',entry:'Bollinger Band width at a 6-month low, then a close above the upper band',exit:'Close below the 20-day average',data:'Daily OHLCV bars, adjusted',src:'Bollinger, Bollinger on Bollinger Bands (2001)'},
       {k:'gc',cond:{"entry":[{"a":{"ind":"sma","n":50},"op":"crosses above","b":{"ind":"sma","n":200}}],"exit":[{"a":{"ind":"sma","n":50},"op":"crosses below","b":{"ind":"sma","n":200}}]},fam:'Trend',name:'Golden Cross',hold:'Months',entry:'50-day average crosses above the 200-day average',exit:'50-day average crosses back below the 200-day',data:'Daily OHLCV bars, adjusted',src:'Brock, Lakonishok & LeBaron (1992), Journal of Finance'}
 ];
@@ -103,8 +103,8 @@ const sgn1 = (x, unit) => { const r = Math.abs(x * 100).toFixed(1); return (+r =
 const p1 = (v) => (v == null || !Number.isFinite(v) ? "n/a" : sgn1(v, "%"));
 const fx = (v) => (v == null ? "—" : Number.isFinite(v) ? v.toFixed(2).replace("-", "−") : "∞");
 const sc = (v) => (v > 0 ? "#3ddc84" : v < 0 ? "#f0565a" : "#8b9592");
-/** Difference of two returns, in percentage points. */
-const pp = (v) => (v == null || !Number.isFinite(v) ? "n/a" : sgn1(v, " pp"));
+/** Difference of two returns, formatted as percentage difference. */
+const pp = (v) => (v == null || !Number.isFinite(v) ? "n/a" : sgn1(v, "%"));
 const C_MUTE = "#7a8481";
 /** Colour of a value shown to one decimal: what rounds to zero is neutral. */
 const sc1 = (v) => sc(v == null ? v : +(v * 100).toFixed(1));
@@ -503,7 +503,7 @@ export default class StrategyLab extends Component {
     const st = this.state, v = st.vals[k] || {}, sig = this.sigOf(k), blocked = this.blockedOf(k), fresh = !!(v.at && v.sig === sig);
     const tf = v.tf || this.tfOf(k), W = this.winOf(k, tf), wl = windowLabel(W.n, W.intra), rows = v.rows || [], busy = !!v.busy, ran = busy || !!v.at;
     const stat = new Map(rows.map((r) => [r.t, windowStats(r, W.n, W.intra)])), statOf = (r) => stat.get(r.t);
-    const view = ran ? progressiveView(v, statOf, !!v.expanded) : null, S = view && view.summary;
+    const view = ran ? progressiveView(v, statOf, v.expanded) : null, S = view && view.summary;
     const pct = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
     const tiles = S ? [
       ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "#3ddc84" : null, "Stocks where the strategy made money over the last " + wl + " (equity now ÷ equity at the start of the window)"],
@@ -518,13 +518,13 @@ export default class StrategyLab extends Component {
     const period = v.cfg ? periodLabel(periodOfCfg(v.cfg)) + " " + tfL(v.tf).toLowerCase() : "";
     return {
       show: true,
-      head: view ? view.head || (busy ? "Testing " + (v.done || 0) + " of " + (v.total || "…") + " stocks…" : "") : "",
+      head: view ? view.head || (busy ? "Testing stocks…" : "") : "",
       run: { l: busy ? "Running…" : v.at ? "Re-run backtest" : "Run backtest →", primary: !fresh, disabled: busy || !!blocked, title: blocked, onClick: () => this.runValidate(k) },
       busy, progressT: "Tested " + (v.done || 0) + " / " + (v.total || "…") + " stocks", progressPct: v.total ? Math.round((100 * (v.done || 0)) / v.total) + "%" : "0%",
       err: v.err || (!v.at && !busy ? blocked : "") || "",
       stale: !!(v.at && !busy && v.sig !== sig), onRerun: () => this.runValidate(k),
       idle: !ran && !v.err && !blocked, idleT: "Run backtest to see the result.", idleTitle: "Tests these rules on every S&P 500 stock with the candle, period and exit plan shown",
-      meta: busy ? `${period} · FMP · testing ${v.done || 0}/${v.total || "…"}` + (v.fail ? ` · ${v.fail} unavailable` : "")
+      meta: busy ? `${period} · FMP · scanning…` + (v.fail ? ` · ${v.fail} unavailable` : "")
         : v.at ? `${period} · FMP · as of ${v.asOf ? fmtDt(v.asOf) : "—"} · ${rows.length} tested` + (v.fail ? ` · ${v.fail} unavailable` : "") + (v.insuf ? ` · ${v.insuf} insufficient history` : "") : "",
       soFar: !!(view && view.soFar),
       sumNote: S ? (view.soFar ? "So far: over " : "Over ") + basis + " · last " + wl : "",
@@ -534,14 +534,14 @@ export default class StrategyLab extends Component {
       winMore: { l: W.more ? "‹ Less" : "More ›", onClick: () => this.setState((s) => ({ winMore: { ...s.winMore, [W.key]: !W.more }, wins: W.more && !W.base.includes(W.n) ? { ...s.wins, [W.key]: String(W.def) } : s.wins })) },
       winNote: "Strategy vs buy & hold over the last window of the backtest",
       none: view && view.state === "empty" ? "No stock meets the rules right now. The summary above shows how the strategy has performed over the window on every tested stock." : "",
-      cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", "Strategy return over the last " + wl + ": equity now ÷ equity at the start of the window − 1"], ["VS B&H", "right", "Strategy return minus buy & hold return over the same window, in percentage points"], ["WIN %", "right", "Winning ÷ closed trades that exited in the window"], ["TRADES", "right", "Closed trades that exited in the window"]].map(([l, al, title]) => ({ l, al, title })),
+      cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", "Strategy return over the last " + wl + ": equity now ÷ equity at the start of the window − 1"], ["VS B&H", "right", "Strategy return minus buy & hold return over the same window (% difference)"], ["WIN %", "right", "Winning ÷ closed trades that exited in the window"], ["TRADES", "right", "Closed trades that exited in the window"]].map(([l, al, title]) => ({ l, al, title })),
       rows: view ? view.visible.map((r) => {
         const w = statOf(r), q = st.quotes[r.t];
         return { t: r.t, n: r.n, logo: LOGO(r.t), px: q ? "$" + q.p.toFixed(2) : "—", chg: q && q.c != null ? (q.c >= 0 ? "+" : "−") + Math.abs(q.c).toFixed(2) + "%" : "", chgC: q && q.c != null ? sc(q.c) : C_MUTE,
           ret: p1(w.ret), retC: sc1(w.ret), ex: pp(w.ex), exC: sc1(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n),
           onClick: () => this.openChart(k, r.t, r.n) };
       }) : [],
-      more: view && view.more ? { l: view.more.label, onClick: () => setExpanded(true) } : null,
+      more: view && view.more ? { l: view.more.label, onClick: () => setExpanded(view.more.next) } : null,
       less: view && view.less ? { l: "Show less", onClick: () => setExpanded(false) } : null,
     };
   }

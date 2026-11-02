@@ -44,7 +44,7 @@ describe("progressive view", () => {
   it("scanning with no match yet", () => {
     const v = progressiveView({ ...newRunState(1, 50), done: 12, busy: true }, statOf, false);
     assert.equal(v.state, "scanning-empty");
-    assert.equal(v.head, "Scanning… no matches so far (12/50)");
+    assert.equal(v.head, "Scanning… no matches so far");
     assert.equal(v.visible.length, 0);
     assert.equal(v.more, null);
   });
@@ -58,16 +58,20 @@ describe("progressive view", () => {
     const first3 = v1.visible.map((r) => r.t);
     assert.equal(first3.length, 3);
     assert.equal(v1.matches, 4); // 5 results, one without a match
-    assert.equal(v1.more.label, "+1 more stock matches · scanning 5/40 → View all");
+    assert.equal(v1.more.label, "+3 more matches");
     for (const r of all.slice(5)) s = acceptRow(s, 1, r);
     const v2 = progressiveView(s, statOf, false);
     assert.deepEqual(v2.visible.map((r) => r.t), first3, "the first three never reshuffle");
     assert.equal(v2.matches, 8);
-    assert.equal(v2.more.label, "+5 more stocks match · scanning 12/40 → View all");
+    assert.equal(v2.more.label, "+3 more matches");
     assert.equal(v2.soFar, true);
     const done = progressiveView({ ...s, busy: false }, statOf, false);
     assert.equal(done.more.label, "View all 8 matches");
     assert.equal(done.soFar, false);
+    const p6 = progressiveView(s, statOf, 6);
+    assert.equal(p6.visible.length, 6);
+    assert.equal(p6.more.label, "+3 more matches");
+    assert.equal(p6.less, true);
   });
 
   it("expanded: every match in the existing order (Signal, then Sharpe), with Show less", () => {
@@ -147,8 +151,8 @@ describe("scan chunks", () => {
     assert.equal(scanChunk("d", 1), 10);
     assert.equal(scanChunk("5m", 1), 4);
   });
-  it("before the universe loads the count reads … not 0", () => {
-    assert.equal(progressiveView({ ...newRunState(1, 0), busy: true }, () => null, false).head, "Scanning… no matches so far (0/…)");
+  it("shows clean scanning message without raw count numbers", () => {
+    assert.equal(progressiveView({ ...newRunState(1, 0), busy: true }, () => null, false).head, "Scanning… no matches so far");
   });
 });
 
