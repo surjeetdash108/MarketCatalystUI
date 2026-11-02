@@ -17,6 +17,8 @@ import {
   popoverStats,
   popoverWidth,
   POPOVER,
+  chartRightGutter,
+  formatCurrency,
   sectorNotOnBoardText,
   sectorView,
   sessionCandles,
@@ -222,5 +224,23 @@ describe("Money Flow hover box", () => {
     const x = popoverLiveScroll(W, 5, 50, 430);
     assert.strictEqual(x, Math.max(0, 6 + 49.5 * ((W - 78) / 79) - 430 * 0.75));
     assert.strictEqual(popoverLiveScroll(W, 5, 0, 430), 0);
+  });
+});
+
+describe("Money Flow hover chart right edge", () => {
+  // Real levels from the fixture board (GOOGL, 2026-10-29).
+  const g = [...board.gainers, ...board.losers].find((x) => x.t === "GOOGL")!;
+  const FZ = 13.5;
+  const boxRight = (txt: string, gutter: number) => -gutter + 2 + txt.length * FZ * 0.62 + 8; // relative to the chart's right edge
+  it("leaves room for every R1/R2/S1/S2 box and the last-price tag, with a margin", () => {
+    const pv = g.pivots!;
+    const labels = [["R2", pv.r2], ["R1", pv.r1], ["S1", pv.s1], ["S2", pv.s2]].map(([n, v]) => `${n} ${formatCurrency(v as number)}`);
+    const pr = chartRightGutter(labels, formatCurrency(g.price));
+    for (const t of labels) assert.ok(boxRight(t, pr) <= -4, `${t} box ends ${boxRight(t, pr).toFixed(1)}px from the edge`);
+    assert.ok(-pr + 4 + formatCurrency(g.price).length * 12 * 0.62 <= -4, "last-price tag fits");
+  });
+  it("never goes below the old 72px, and grows for four-digit prices", () => {
+    assert.equal(chartRightGutter([], "9.75"), 72); // no pivot in view, short price
+    assert.ok(chartRightGutter(["R2 1,417.54"], "1,410.00") > chartRightGutter(["R2 328.40"], "283.79"));
   });
 });

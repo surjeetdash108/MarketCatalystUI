@@ -88,6 +88,19 @@ export interface MoneyFlowBoard {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
+/**
+ * Width of the hover chart's right gutter: wide enough for the widest pivot
+ * label box (13.5px mono, drawn 2px inside the gutter with 4px padding each
+ * side) and the last-price tag (12px mono, 4px inside), plus a margin; never
+ * narrower than the original 72px.
+ */
+export function chartRightGutter(pivotLabels: string[], priceLabel: string): number {
+  const MONO = 0.62, MARGIN = 8;
+  const box = Math.max(0, ...pivotLabels.map((t) => 2 + t.length * 13.5 * MONO + 8));
+  const tag = 4 + priceLabel.length * 12 * MONO;
+  return Math.max(72, Math.ceil(Math.max(box, tag) + MARGIN));
+}
+
 export function formatCurrency(n: number): string {
   return n.toLocaleString("en-US", {
     minimumFractionDigits: 2,

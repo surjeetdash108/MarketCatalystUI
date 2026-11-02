@@ -6,7 +6,7 @@
 
 import React from "react";
 import type { BoardStock, OHLCVBar, SwingPoint } from "./engine";
-import { candleIndexAt, computeOrderBlocks, computeSwings, formatCurrency } from "./engine";
+import { candleIndexAt, chartRightGutter, computeOrderBlocks, computeSwings, formatCurrency } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
 function levelsInView(levels: Array<number | null | undefined>, lo: number, hi: number): number[] {
@@ -214,15 +214,6 @@ export function FullChartSvg({
   const zone = stock.zone;
   const ZI = zone ? candleIndexAt(candles, zone.startT) : -1;
   const KI = candles.length - 1;
-  const W = width;
-  const H = height;
-  const PL = 6;
-  const PR = 72;
-  const PT = 10;
-  const PB = 22;
-  const cw = (W - PL - PR) / (NB || 1);
-  const fz = 13.5;
-
   const lastPx = candles.length ? candles[candles.length - 1].c : stock.price;
   const safeStockPx = Number.isFinite(lastPx) && lastPx > 0 ? lastPx : stock.price;
   const pv = stock.pivots;
@@ -241,6 +232,19 @@ export function FullChartSvg({
       x[1] > 0 &&
       Math.abs(x[1] - safeStockPx) / safeStockPx < 0.25
   );
+
+  const W = width;
+  const H = height;
+  const PL = 6;
+  // Right gutter sized to the R1/R2/S1/S2 boxes and the last-price tag so they are never clipped.
+  const PR = chartRightGutter(
+    lv.map(([n, v]) => `${n} ${formatCurrency(v)}`),
+    formatCurrency(safeStockPx),
+  );
+  const PT = 10;
+  const PB = 22;
+  const cw = (W - PL - PR) / (NB || 1);
+  const fz = 13.5;
 
   if (!candles || candles.length === 0) {
     return (
