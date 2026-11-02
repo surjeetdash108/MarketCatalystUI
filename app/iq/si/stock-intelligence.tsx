@@ -185,7 +185,7 @@ function SixMonthAreaChart({
           6-MONTH TRAJECTORY & 5 MAJOR CATALYSTS
         </span>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-          Last 6 Months · Area Chart · 0 Volume
+          Last 6 Months · Area Chart
         </span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
@@ -985,6 +985,46 @@ export function StockIntelligenceScreen() {
     router.push(`/si?sym=${clean}`);
   };
 
+  // Format assistant replies: render bold markdown cleanly and strip stray **
+  const formatAiChatReply = (text: string) => {
+    if (!text) return null;
+    const lines = text.split("\n");
+    return lines.map((line, lIdx) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        return <div key={lIdx} style={{ height: 8 }} />;
+      }
+      const isBullet = trimmed.startsWith("•") || trimmed.startsWith("- ") || trimmed.startsWith("* ");
+      const cleanLine = isBullet ? trimmed.replace(/^[•\-\*]\s*/, "") : line;
+      const parts = cleanLine.split(/(\*\*[^*]+\*\*)/g);
+      const content = parts.map((part, pIdx) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <strong key={pIdx} style={{ color: "var(--si-text-hi, #ffffff)", fontWeight: 700 }}>
+              {part.slice(2, -2)}
+            </strong>
+          );
+        }
+        return part.replace(/\*\*/g, "");
+      });
+
+      if (isBullet) {
+        return (
+          <div key={lIdx} style={{ display: "flex", gap: 8, marginTop: 4, marginBottom: 4, alignItems: "flex-start" }}>
+            <span style={{ color: "var(--si-accent, #5980a6)", flex: "none" }}>•</span>
+            <div style={{ flex: 1 }}>{content}</div>
+          </div>
+        );
+      }
+
+      return (
+        <div key={lIdx} style={{ marginTop: 2, marginBottom: 4 }}>
+          {content}
+        </div>
+      );
+    });
+  };
+
   // Ask AI copilot function
   const handleAskAI = (promptText?: string) => {
     const q = (promptText || aiQuery).trim();
@@ -996,6 +1036,7 @@ export function StockIntelligenceScreen() {
 
     apiPost<{ reply: string; citations?: string[]; timestamp?: string }>("/live/copilot", {
       ticker: stock.t,
+      question: q,
       query: q,
       context: {
         price: stock.p,
@@ -3885,10 +3926,10 @@ export function StockIntelligenceScreen() {
                       fontSize: 14.5,
                       color: "var(--si-text-hi, #e8eef4)",
                       lineHeight: 1.55,
-                      whiteSpace: "pre-wrap",
+                      whiteSpace: m.role === "user" ? "pre-wrap" : "normal",
                     }}
                   >
-                    {m.text}
+                    {m.role === "user" ? m.text : formatAiChatReply(m.text)}
                   </div>
                 ))}
                 {aiBusy && (
