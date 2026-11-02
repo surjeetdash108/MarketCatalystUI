@@ -38,7 +38,7 @@ http.createServer(async (req, res) => {
     const m = p.match(/^\/live\/strategy-lab\/saved\/([a-z0-9]{4,24})$/);
     if (m && req.method === "POST") { const doc = validateSaved(body), now = new Date().toISOString(); const prev = saved.get(m[1]); const d = { ...doc, savedAt: (prev?.savedAt as string) ?? now, updatedAt: now }; saved.set(m[1], d); return send(res, 200, { id: m[1], ...d }); }
     if (m && req.method === "DELETE") { saved.delete(m[1]); return send(res, 200, { id: m[1], deleted: true }); }
-    if (p === "/live/snapshot") { const t = (u.searchParams.get("tickers") ?? "").split(",").filter(Boolean); const q = await fmp.getQuotes(t.map((x) => x.replace(/\.([A-Z])$/, "-$1"))); return send(res, 200, { quotes: q.map((x) => ({ ticker: x.symbol.replace(/-([A-Z])$/, ".$1"), price: x.price })) }); }
+    if (p === "/live/snapshot") { const t = (u.searchParams.get("tickers") ?? "").split(",").filter(Boolean); const q = await fmp.getQuotes(t.map((x) => x.replace(/\.([A-Z])$/, "-$1"))); return send(res, 200, { quotes: q.map((x) => ({ ticker: x.symbol.replace(/-([A-Z])$/, ".$1"), price: x.price, changePct: (x as { changePercentage?: number }).changePercentage ?? null })) }); }
     if (p === "/live/market-status") return send(res, 200, { phase: "open", label: "Market open" });
     return send(res, 404, { statusCode: 404, message: "not in harness: " + p });
   } catch (e) { return send(res, (e as { status?: number }).status ?? 500, { message: (e as Error).message }); }

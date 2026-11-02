@@ -1,7 +1,7 @@
 // Originally generated from the Strategy AI Lab prototype markup (scripts/strategy-lab/build.sh, now retired).
 // Maintained by hand; the results panel, report, facts and edit modal live in lab-panels.jsx.
 import { Fragment } from "react";
-import { EditModal, FactsBlock, Report, ResultsPanel } from "./lab-panels";
+import { ChartModal, EditModal, FactsBlock, Report, ResultsPanel } from "./lab-panels";
 
 /** A logo that fails to load is hidden (the prototype's data-logo-src behaviour). */
 
@@ -272,6 +272,7 @@ export default function LabView({ vm, refs }) {
           </>
         ) : null}
         <EditModal e={vm.edit} />
+        <ChartModal c={vm.chart} />
         {(vm.labS1) ? (
           <>
             <div ref={libRef} style={{ display: "flex", alignItems: "flex-end", gap: "0", flexWrap: "wrap", borderBottom: "1px solid #233038", marginBottom: "-4px" }}>

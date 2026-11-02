@@ -46,10 +46,110 @@ export function computeRow(t, n, bars, spec, cfg, tf) {
   const ev = BT.evalLast(bars, spec, lookbackFor(tf));
   const closed = r.trades.filter((x) => x.why !== "Still open");
   return {
+    ...windowSeries(r, closed, tf),
     t, n, status: "ok", asOf, last: L.close,
     sig: ev ? ev.status : null, ago: ev ? ev.ago : null, met: ev ? ev.met : 0, total: ev ? ev.total : 0,
     cagr: r.m.cagr, bcagr: r.mb.cagr, tot: r.m.tot, btot: r.mb.tot, sh: r.m.sharpe, dd: r.m.dd, win: r.m.win,
     trades: r.m.trades, closed: closed.length, wins: closed.filter((x) => x.ret > 0).length,
+  };
+}
+
+// ── "Return over" windows (results panel) ──────────────────────────────────
+// Daily and weekly windows are calendar days; intraday windows are trading
+// minutes (390 = one session). The third chip is the default.
+const DAY_WIN = { d: [2, 3, 4, 5, 10, 20, 30], "1w": [7, 14, 21, 28, 35, 42, 56] };
+const DAY_MORE = { d: [90, 180, 365], "1w": [91, 182, 364] };
+const MIN_WIN = {
+  "1m": [5, 15, 30, 60, 120, 240, 390], "5m": [15, 30, 60, 120, 180, 240, 390], "15m": [30, 60, 90, 120, 180, 240, 390],
+  "30m": [60, 90, 120, 180, 240, 300, 390], "1h": [120, 240, 390, 780, 1170, 1950, 3900], "4h": [390, 585, 780, 1170, 1950, 3900, 7800],
+};
+const MIN_MORE = { "1m": [780, 1950, 3900], "5m": [780, 1950, 3900], "15m": [780, 1950, 3900], "30m": [780, 1950, 3900], "1h": [7800, 15600, 23400], "4h": [15600, 23400, 46800] };
+
+/** Window chips for a candle: base chips, the "More" chips and the default. */
+export function windowOpts(tf) {
+  const intra = BT.isIntradayTf(tf);
+  const base = intra ? MIN_WIN[tf] : DAY_WIN[tf] || DAY_WIN.d, more = intra ? MIN_MORE[tf] : DAY_MORE[tf] || DAY_MORE.d;
+  return { base, more, def: base[2], intra };
+}
+
+/** Chip label: 2D, 3W, 3M, 1Y for calendar days; 30m, 2H, 1.5D for trading minutes. */
+export function windowLabel(n, intraday) {
+  if (intraday) return n >= 390 ? +(n / 390).toFixed(1) + "D" : n >= 60 ? +(n / 60).toFixed(2) + "H" : n + "m";
+  return n % 365 === 0 ? n / 365 + "Y" : n % 30 === 0 ? n / 30 + "M" : n % 7 === 0 ? n / 7 + "W" : n + "D";
+}
+
+const SESSION_OPEN = 570, SESSION_CLOSE = 960; // 09:30 and 16:00 ET, in minutes
+const hm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0") + ":00";
+
+/**
+ * First timestamp inside a window of `n` ending at `last`. Daily: `n` calendar
+ * days back. Intraday: whole sessions when `n` is a multiple of 390, otherwise
+ * `n` trading minutes back, carried into earlier sessions of `days` (oldest first).
+ */
+export function cutoffOf(last, n, intraday, days = []) {
+  const L = String(last);
+  if (!intraday) {
+    const c = new Date(L.slice(0, 10) + "T00:00:00Z");
+    c.setUTCDate(c.getUTCDate() - n);
+    return c.toISOString().slice(0, 10);
+  }
+  let d = L.slice(0, 10), i = days.indexOf(d);
+  if (i < 0) i = days.length;
+  if (n % 390 === 0) return days[Math.max(0, i - n / 390 + 1)] ?? d;
+  let t = +L.slice(11, 13) * 60 + +L.slice(14, 16), rem = n;
+  while (t - rem < SESSION_OPEN) {
+    if (i <= 0) return d + " " + hm(SESSION_OPEN);
+    rem -= t - SESSION_OPEN;
+    d = days[--i];
+    t = SESSION_CLOSE;
+  }
+  return d + " " + hm(t - rem);
+}
+
+/** Largest window a candle offers, so the row keeps only the tail it can show. */
+const maxWindow = (tf) => { const o = windowOpts(tf); return Math.max(...o.base, ...o.more); };
+
+/** The tail of the per-bar curves and the closed trades that any window can need. */
+function windowSeries(r, closed, tf) {
+  const intra = BT.isIntradayTf(tf), eq = r.eqBar || r.eq, bh = r.bhBar || r.bh;
+  const ds = eq.map((x) => String(x.date)), days = intra ? [...new Set(ds.map((x) => x.slice(0, 10)))] : [];
+  const cut = cutoffOf(ds[ds.length - 1], maxWindow(tf), intra, days);
+  const k = Math.max(0, ds.findIndex((x) => (intra ? x : x.slice(0, 10)) >= cut));
+  return {
+    wd: ds.slice(k), we: eq.slice(k).map((x) => x.v), wb: bh.slice(k).map((x) => x.v),
+    ct: closed.map((x) => [String(x.outDate), x.ret]).filter(([o]) => (intra ? o : o.slice(0, 10)) >= cut),
+  };
+}
+
+/**
+ * One stock over the last `n`: ret = strategy equity now ÷ equity at the first
+ * point inside the window − 1; bret the same for buy & hold; ex = ret − bret;
+ * n / w = closed trades (and winners) that exited inside the window.
+ */
+export function windowStats(row, n, intraday) {
+  if (!row || !row.wd || !row.wd.length) return null;
+  const key = (x) => (intraday ? x : x.slice(0, 10));
+  const days = intraday ? [...new Set(row.wd.map((x) => x.slice(0, 10)))] : [];
+  const cut = cutoffOf(row.wd[row.wd.length - 1], n, intraday, days);
+  const k = Math.max(0, row.wd.findIndex((x) => key(x) >= cut)), j = row.we.length - 1;
+  const ret = row.we[j] / row.we[k] - 1, bret = row.wb[j] / row.wb[k] - 1;
+  const cl = row.ct.filter(([o]) => key(o) >= cut);
+  return { ret, bret, ex: ret - bret, n: cl.length, w: cl.filter(([, r]) => r > 0).length, from: row.wd[k] };
+}
+
+/**
+ * Summary tiles over the stocks whose entry fired on the last bar (or every
+ * tested stock with `onlyNow` false): how many made money and beat buy & hold
+ * over the window, the pooled win rate and trade count of the window, and the
+ * median full-period Sharpe (upper median).
+ */
+export function windowSummary(rows, statOf, onlyNow = true) {
+  const R = rows.filter((r) => r.status === "ok" && (!onlyNow || r.ago === 0)), W = R.map(statOf).filter(Boolean);
+  const trades = W.reduce((a, q) => a + q.n, 0), wins = W.reduce((a, q) => a + q.w, 0);
+  const sh = R.map((r) => r.sh).filter((x) => x != null && Number.isFinite(x)).sort((a, b) => a - b);
+  return {
+    n: R.length, profitable: W.filter((q) => q.ret > 0).length, beat: W.filter((q) => q.ret > q.bret).length,
+    win: trades ? wins / trades : null, trades, medSharpe: sh.length ? sh[Math.floor(sh.length / 2)] : null,
   };
 }
 
