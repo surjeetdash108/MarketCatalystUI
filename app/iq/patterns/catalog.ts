@@ -1,0 +1,216 @@
+import type { PatternGroup, PatternSignal } from "./types";
+
+/**
+ * Every pattern the detectors can report, with the exact rule used — shown as
+ * the marker's tooltip and in the glossary. Pattern set from the reference
+ * sheet (Bulkowski, Edwards & Magee, Murphy, O'Neil, Minervini, Nison).
+ * Terms: "long" candle = body ≥ the 10-bar average body and ≥ half its range;
+ * "small" = body ≤ half the average body; doji = body ≤ 10% of range;
+ * downtrend / uptrend = prior close below / above its 10-bar average and the
+ * close five bars earlier; tol = max(0.5 × ATR(14), 0.1% of price) for "same
+ * level" in chart patterns; swings = zig-zag pivots of at least 1.5 × ATR(14).
+ */
+export interface PatternDef {
+  name: string;
+  group: PatternGroup;
+  signal: PatternSignal;
+  rule: string;
+}
+
+const C = (name: string, signal: PatternSignal, rule: string): PatternDef => ({ name, group: "candle", signal, rule });
+const B = (name: string, signal: PatternSignal, rule: string): PatternDef => ({ name, group: "bar", signal, rule });
+const G = (name: string, signal: PatternSignal, rule: string): PatternDef => ({ name, group: "gap", signal, rule });
+const P = (name: string, signal: PatternSignal, rule: string): PatternDef => ({ name, group: "chart", signal, rule });
+const S = (name: string, signal: PatternSignal, rule: string): PatternDef => ({ name, group: "setup", signal, rule });
+const H = (name: string, signal: PatternSignal, rule: string): PatternDef => ({ name, group: "harmonic", signal, rule });
+
+export const CATALOG: Record<string, PatternDef> = {
+  // ── Candlesticks: single ──
+  "doji": C("Doji", "either", "Body ≤ 10% of the range; neither long-legged, dragonfly nor gravestone."),
+  "long-legged-doji": C("Long-Legged Doji", "either", "Doji with both wicks ≥ 30% of the range."),
+  "dragonfly-doji": C("Dragonfly Doji", "bull", "Doji with upper wick ≤ 10% and lower wick ≥ 60% of the range."),
+  "gravestone-doji": C("Gravestone Doji", "bear", "Doji with lower wick ≤ 10% and upper wick ≥ 60% of the range."),
+  "hammer": C("Hammer", "bull", "In a downtrend: lower wick ≥ 2 × body, upper wick ≤ 10% of the range, not a doji."),
+  "hanging-man": C("Hanging Man", "bear", "Hammer shape in an uptrend."),
+  "inverted-hammer": C("Inverted Hammer", "bull", "In a downtrend: upper wick ≥ 2 × body, lower wick ≤ 10% of the range, not a doji."),
+  "shooting-star": C("Shooting Star", "bear", "Inverted-hammer shape in an uptrend."),
+  "marubozu-bull": C("Bullish Marubozu", "bull", "Up candle with body ≥ 95% of the range and ≥ the average body."),
+  "marubozu-bear": C("Bearish Marubozu", "bear", "Down candle with body ≥ 95% of the range and ≥ the average body."),
+  "spinning-top": C("Spinning Top", "either", "Body 10–30% of the range with each wick at least as long as the body."),
+  "belt-hold-bull": C("Bullish Belt Hold", "bull", "In a downtrend: long up candle opening at its low (lower wick ≤ 2% of range)."),
+  "belt-hold-bear": C("Bearish Belt Hold", "bear", "In an uptrend: long down candle opening at its high (upper wick ≤ 2% of range)."),
+  "high-wave": C("High Wave Candle", "either", "Body 10–15% of the range, both wicks ≥ 35% of it, range ≥ 1.5 × the average range."),
+  // ── Candlesticks: two ──
+  "engulfing-bull": C("Bullish Engulfing", "bull", "Downtrend; down candle then an up candle whose body covers the prior body."),
+  "engulfing-bear": C("Bearish Engulfing", "bear", "Uptrend; up candle then a down candle whose body covers the prior body."),
+  "harami-bull": C("Bullish Harami", "bull", "Downtrend; long down candle then a body ≤ half its size inside its body."),
+  "harami-bear": C("Bearish Harami", "bear", "Uptrend; long up candle then a body ≤ half its size inside its body."),
+  "harami-cross-bull": C("Bullish Harami Cross", "bull", "Bullish harami whose second candle is a doji."),
+  "harami-cross-bear": C("Bearish Harami Cross", "bear", "Bearish harami whose second candle is a doji."),
+  "piercing-line": C("Piercing Line", "bull", "Downtrend; long down candle, then an up candle opening below its close and closing above its midpoint but below its open."),
+  "dark-cloud-cover": C("Dark Cloud Cover", "bear", "Uptrend; long up candle, then a down candle opening above its close and closing below its midpoint but above its open."),
+  "tweezer-bottom": C("Tweezer Bottom", "bull", "Downtrend; down then up candle with the same low (within tolerance)."),
+  "tweezer-top": C("Tweezer Top", "bear", "Uptrend; up then down candle with the same high (within tolerance)."),
+  "kicker-bull": C("Bullish Kicker", "bull", "Long down candle, then a long up candle opening above the prior open."),
+  "kicker-bear": C("Bearish Kicker", "bear", "Long up candle, then a long down candle opening below the prior open."),
+  "counterattack-bull": C("Bullish Counterattack / Meeting Lines", "bull", "Downtrend; long down then long up candle closing at the same price."),
+  "counterattack-bear": C("Bearish Counterattack / Meeting Lines", "bear", "Uptrend; long up then long down candle closing at the same price."),
+  "separating-lines-bull": C("Bullish Separating Lines", "bull", "Uptrend; down candle then a long up candle opening at the same price."),
+  "separating-lines-bear": C("Bearish Separating Lines", "bear", "Downtrend; up candle then a long down candle opening at the same price."),
+  "on-neck": C("On-Neck", "bear", "Downtrend; long down candle, then an up candle opening below its low and closing at its low."),
+  "in-neck": C("In-Neck", "bear", "Downtrend; long down candle, then an up candle opening below its low and closing just above its close (≤ 10% into the body)."),
+  "thrusting": C("Thrusting", "bear", "Downtrend; long down candle, then an up candle opening below its low and closing inside its body but below the midpoint."),
+  "homing-pigeon": C("Homing Pigeon", "bull", "Downtrend; two down candles, the second body inside the first."),
+  "matching-low": C("Matching Low", "bull", "Downtrend; two down candles closing at the same price."),
+  "matching-high": C("Matching High", "bear", "Uptrend; two up candles closing at the same price."),
+  // ── Candlesticks: three or more ──
+  "morning-star": C("Morning Star", "bull", "Downtrend; long down candle, a small body gapping below its close, then an up candle closing above the first's midpoint."),
+  "evening-star": C("Evening Star", "bear", "Uptrend; long up candle, a small body gapping above its close, then a down candle closing below the first's midpoint."),
+  "morning-doji-star": C("Morning Doji Star", "bull", "Morning star whose middle candle is a doji."),
+  "evening-doji-star": C("Evening Doji Star", "bear", "Evening star whose middle candle is a doji."),
+  "abandoned-baby-bull": C("Bullish Abandoned Baby", "bull", "Downtrend; doji whose high is below both neighbours' lows (gaps on both sides)."),
+  "abandoned-baby-bear": C("Bearish Abandoned Baby", "bear", "Uptrend; doji whose low is above both neighbours' highs."),
+  "three-white-soldiers": C("Three White Soldiers", "bull", "Three long up candles, each opening inside the prior body and closing higher, upper wicks ≤ 30% of the body."),
+  "three-black-crows": C("Three Black Crows", "bear", "Three long down candles, each opening inside the prior body and closing lower, lower wicks ≤ 30% of the body."),
+  "three-inside-up": C("Three Inside Up", "bull", "Bullish harami, then an up candle closing above the first candle's open."),
+  "three-inside-down": C("Three Inside Down", "bear", "Bearish harami, then a down candle closing below the first candle's open."),
+  "three-outside-up": C("Three Outside Up", "bull", "Bullish engulfing, then an up candle closing higher."),
+  "three-outside-down": C("Three Outside Down", "bear", "Bearish engulfing, then a down candle closing lower."),
+  "rising-three-methods": C("Rising Three Methods", "bull", "Long up candle, three small candles inside its range, then a long up candle closing above its close."),
+  "falling-three-methods": C("Falling Three Methods", "bear", "Long down candle, three small candles inside its range, then a long down candle closing below its close."),
+  "mat-hold": C("Mat Hold", "bull", "Long up candle, a small candle gapping up, two more small candles holding above the first's midpoint, then an up candle closing at a new high."),
+  "tasuki-up": C("Upside Tasuki Gap", "bull", "Up candle, a gap-up up candle, then a down candle opening in its body and closing inside the gap without filling it."),
+  "tasuki-down": C("Downside Tasuki Gap", "bear", "Down candle, a gap-down down candle, then an up candle opening in its body and closing inside the gap without filling it."),
+  "upside-gap-two-crows": C("Upside Gap Two Crows", "bear", "Uptrend; long up candle, a down candle gapping up, then a larger down candle engulfing it but closing above the first's close."),
+  "three-line-strike-bull": C("Bullish Three-Line Strike", "bull", "Three up candles with higher closes, then a down candle opening above the third close and closing below the first open."),
+  "three-line-strike-bear": C("Bearish Three-Line Strike", "bear", "Three down candles with lower closes, then an up candle opening below the third close and closing above the first open."),
+  "advance-block": C("Advance Block", "bear", "Uptrend; three up candles with higher closes, shrinking bodies and growing upper wicks."),
+  "deliberation": C("Deliberation", "bear", "Uptrend; two long up candles, then a small up candle opening near the second's close."),
+  "stick-sandwich": C("Stick Sandwich", "bull", "Downtrend; down, up, down candles with the two down candles closing at the same price."),
+  "unique-three-river": C("Unique Three River Bottom", "bull", "Downtrend; long down candle, a down candle with a lower low and lower wick ≥ 2 × body closing inside the first body, then a small up candle closing below the second's close."),
+  "ladder-bottom": C("Ladder Bottom", "bull", "Three down candles with lower closes, a fourth down candle with an upper wick ≥ its body, then an up candle opening above the fourth's open."),
+  "tower-bottom": C("Tower Bottom", "bull", "Long down candle, two to five small candles, then a long up candle closing above the first's open."),
+  "tower-top": C("Tower Top", "bear", "Long up candle, two to five small candles, then a long down candle closing below the first's open."),
+  "tri-star-bull": C("Bullish Tri-Star", "bull", "Downtrend; three doji, the middle one gapping below both others."),
+  "tri-star-bear": C("Bearish Tri-Star", "bear", "Uptrend; three doji, the middle one gapping above both others."),
+  // ── Bar / short-term ──
+  "inside-bar": B("Inside Bar", "either", "High below and low above the previous bar's (volatility contraction)."),
+  "outside-bar": B("Outside Bar", "either", "High above and low below the previous bar's."),
+  "key-reversal-up": B("Key Reversal Up", "bull", "New 5-bar low, then a close above the previous close."),
+  "key-reversal-down": B("Key Reversal Down", "bear", "New 5-bar high, then a close below the previous close."),
+  "nr4": B("NR4", "either", "Narrowest range of the last 4 bars."),
+  "nr7": B("NR7", "either", "Narrowest range of the last 7 bars."),
+  "two-bar-reversal-bull": B("Two-Bar Reversal (bullish)", "bull", "A down bar with range ≥ 1.5 × the average, then an up bar closing above its open."),
+  "two-bar-reversal-bear": B("Two-Bar Reversal (bearish)", "bear", "An up bar with range ≥ 1.5 × the average, then a down bar closing below its open."),
+  "shark-32": B("Shark-32", "either", "Two inside bars in a row (each inside the one before), a narrowing three-bar shape."),
+  "weekly-reversal-up": B("Weekly Reversal Up", "bull", "Weekly bars: a new low below the previous week's, closing above the previous week's close."),
+  "weekly-reversal-down": B("Weekly Reversal Down", "bear", "Weekly bars: a new high above the previous week's, closing below the previous week's close."),
+  // ── Gaps ──
+  "gap-breakaway": G("Breakaway Gap", "either", "A gap (no overlap, ≥ 0.25 × average range) out of a 20-bar range that clears its high / low on ≥ 1.5 × average volume."),
+  "gap-runaway": G("Runaway (Measuring) Gap", "either", "A gap in the direction of an established move (close vs. its 10-bar average and five bars earlier) that is not a breakaway."),
+  "gap-exhaustion": G("Exhaustion Gap", "either", "A gap after a move of ≥ 6 × ATR over 20 bars that is filled within the next 3 bars."),
+  "gap-common": G("Common Gap", "either", "Any other gap of at least 0.25 × the average range."),
+  "island-top": G("Island Top Reversal", "bear", "A gap up, then 1–30 bars all above it, then a gap down below the same bars."),
+  "island-bottom": G("Island Bottom Reversal", "bull", "A gap down, then 1–30 bars all below it, then a gap up above the same bars."),
+  "island-long-top": G("Long Island Top", "bear", "Island top lasting 5 bars or more."),
+  "island-long-bottom": G("Long Island Bottom", "bull", "Island bottom lasting 5 bars or more."),
+  // ── Chart patterns (swings) ──
+  "head-shoulders-top": P("Head and Shoulders", "bear", "Three swing highs, the middle ≥ the others + tol, shoulders within half the pattern height; confirmed on a close below the neckline through the two troughs. Target = head-to-neckline height below the neckline."),
+  "head-shoulders-bottom": P("Inverse Head and Shoulders", "bull", "Mirror of head and shoulders; confirmed on a close above the neckline."),
+  "double-top": P("Double Top", "bear", "Two swing highs within tol with a trough between (height ≥ 3 × tol); confirmed on a close below the trough. Target = height below it."),
+  "double-bottom": P("Double Bottom", "bull", "Two swing lows within tol with a peak between; confirmed on a close above the peak."),
+  "big-m": P("Big M", "bear", "Double top at least 4 × ATR tall that follows a rise of at least twice its height."),
+  "big-w": P("Big W", "bull", "Double bottom at least 4 × ATR tall that follows a drop of at least twice its height."),
+  "ugly-double-bottom": P("Ugly Double Bottom", "bull", "Double bottom whose second low is higher than the first by more than tol but no more than half the height; confirmed above the peak."),
+  "triple-top": P("Triple Top", "bear", "Three swing highs within tol of their average; confirmed on a close below the lower trough."),
+  "triple-bottom": P("Triple Bottom", "bull", "Three swing lows within tol of their average; confirmed on a close above the higher peak."),
+  "triangle-ascending": P("Ascending Triangle", "bull", "Flat upper line (within tol over the pattern) and rising lower line through the swings, converging."),
+  "triangle-descending": P("Descending Triangle", "bear", "Falling upper line and flat lower line, converging."),
+  "triangle-symmetrical": P("Symmetrical Triangle", "either", "Falling upper line and rising lower line."),
+  "wedge-rising": P("Rising Wedge", "bear", "Both lines rising and converging."),
+  "wedge-falling": P("Falling Wedge", "bull", "Both lines falling and converging."),
+  "broadening": P("Broadening Formation (Megaphone)", "either", "Rising upper line and falling lower line (higher highs, lower lows)."),
+  "broadening-top": P("Broadening Top", "either", "Broadening formation that follows a rise."),
+  "broadening-bottom": P("Broadening Bottom", "either", "Broadening formation that follows a decline."),
+  "broadening-ra-ascending": P("Right-Angled Broadening, Ascending", "bear", "Flat lower line and rising upper line, diverging."),
+  "broadening-ra-descending": P("Right-Angled Broadening, Descending", "either", "Flat upper line and falling lower line, diverging."),
+  "broadening-wedge-ascending": P("Ascending Broadening Wedge", "bear", "Both lines rising and diverging."),
+  "broadening-wedge-descending": P("Descending Broadening Wedge", "bull", "Both lines falling and diverging."),
+  "channel-ascending": P("Ascending Channel", "bull", "Parallel rising lines through the swing highs and lows."),
+  "channel-descending": P("Descending Channel", "bear", "Parallel falling lines through the swing highs and lows."),
+  "rectangle": P("Rectangle", "either", "Flat, parallel support and resistance through the swings, under 60 bars."),
+  "channel-horizontal": P("Horizontal Channel", "either", "Flat, parallel support and resistance through the swings, 60 bars or more."),
+  "line-formation": P("Line Formation", "either", "Flat range no taller than 3 × ATR lasting 40 bars or more."),
+  "diamond-top": P("Diamond Top", "bear", "Swings that widen then narrow (first half diverging, second half converging) after a rise."),
+  "diamond-bottom": P("Diamond Bottom", "bull", "Swings that widen then narrow after a decline."),
+  "flag-bull": P("Bull Flag", "bull", "A rise of ≥ 4 × ATR within 12 bars, then 4–20 bars holding the upper half of it in a flat or falling parallel channel."),
+  "flag-bear": P("Bear Flag", "bear", "A drop of ≥ 4 × ATR within 12 bars, then 4–20 bars holding the lower half of it in a flat or rising parallel channel."),
+  "pennant-bull": P("Bull Pennant", "bull", "A rise of ≥ 4 × ATR within 12 bars, then 4–20 bars converging in its upper half."),
+  "pennant-bear": P("Bear Pennant", "bear", "A drop of ≥ 4 × ATR within 12 bars, then 4–20 bars converging in its lower half."),
+  "high-tight-flag": P("High and Tight Flag", "bull", "Daily bars: price up ≥ 90% within 40 bars, then 3–15 bars giving back ≤ 25%."),
+  "cup-handle": P("Cup and Handle", "bull", "Two swing highs (rims) within 2 × tol around a rounded low ≥ 4 × ATR deep (≥ 25% of the cup's bars in its bottom third), then a handle pulling back ≤ half the depth; confirmed on a close above the rim."),
+  "cup-handle-inverted": P("Inverted Cup and Handle", "bear", "Mirror of cup and handle; confirmed on a close below the base."),
+  "rounding-bottom": P("Rounding Bottom (Saucer)", "bull", "30–60 closes fitting an upward parabola (R² ≥ 0.85) with the low in the middle 40% and ends within 25% of the depth."),
+  "rounding-top": P("Rounding Top", "bear", "30–60 closes fitting a downward parabola (R² ≥ 0.85) with the high in the middle 40% and ends within 25% of the height."),
+  "scallop-ascending": P("Ascending Scallop", "bull", "A rounded dip whose right end is at least 30% of the depth above its left end."),
+  "scallop-descending": P("Descending Scallop", "bear", "A rounded dip whose right end is at least 30% of the depth below its left end."),
+  "v-bottom": P("V-Bottom (Spike Reversal)", "bull", "A drop of ≥ 5 × ATR within 15 bars into a swing low, then a rally recovering ≥ 70% of it in no more than 1.5 × the time, with ≤ 3 bars near the low."),
+  "measured-move-up": P("Measured Move Up", "bull", "Rise, a pullback of 30–70% of it, then a second rise within ±30% of the first."),
+  "measured-move-down": P("Measured Move Down", "bear", "Drop, a bounce of 30–70% of it, then a second drop within ±30% of the first."),
+  "three-rising-valleys": P("Three Rising Valleys", "bull", "Three swing lows each higher by more than tol; confirmed on a close above the highest peak between them."),
+  "three-falling-peaks": P("Three Falling Peaks", "bear", "Three swing highs each lower by more than tol; confirmed on a close below the lowest trough between them."),
+  "dead-cat-bounce": P("Dead-Cat Bounce", "bear", "Daily bars: a one-day drop of ≥ 15%, a bounce, then a close below the crash day's low within 20 bars."),
+  "dead-cat-bounce-inverted": P("Inverted Dead-Cat Bounce", "bear", "Daily bars: a one-day rise of ≥ 10%, then a close below that day's open within 10 bars."),
+  "horn-top": P("Horn Top", "bear", "Weekly bars: two up-spikes at the same high (within tol, both 10-bar highs) one bar apart, the bar between lower."),
+  "horn-bottom": P("Horn Bottom", "bull", "Weekly bars: two down-spikes at the same low one bar apart, the bar between higher."),
+  "pipe-top": P("Pipe Top", "bear", "Weekly bars: two adjacent tall bars (range ≥ 1.5 × average) with the same high, a 10-bar high."),
+  "pipe-bottom": P("Pipe Bottom", "bull", "Weekly bars: two adjacent tall bars with the same low, a 10-bar low."),
+  // ── Setups (growth / price action) ──
+  "darvas-box": S("Darvas Box", "bull", "Daily bars: a new 52-week high holds as the box top for 3 bars, the low after it holds 3 bars as the bottom; confirmed on a close above the top."),
+  "flat-base": S("Flat Base", "bull", "Daily bars: 25+ bars in a range ≤ 15% deep after a rise of ≥ 20% in the 60 bars before; confirmed on a close above the range."),
+  "vcp": S("Volatility Contraction (VCP)", "bull", "Three or more pullbacks between swings, each ≤ 80% as deep as the one before, highs within 5% of each other (and falling volume when available); confirmed on a close above the last high."),
+  "ascending-base": S("Ascending Base", "bull", "Daily bars: three pullbacks of 10–20% with higher highs and higher lows."),
+  "spring": S("Spring / Shakeout", "bull", "A dip below the low of the prior 20-bar range (≤ 4 × ATR tall) that closes back inside it within two bars."),
+  "upthrust": S("Upthrust", "bear", "A push above the high of the prior 20-bar range that closes back inside it within two bars."),
+  "swing-failure-bull": S("Failure Swing (bullish)", "bull", "A bar trading below the last swing low and closing back above it, as an up bar."),
+  "swing-failure-bear": S("Failure Swing (bearish)", "bear", "A bar trading above the last swing high and closing back below it, as a down bar."),
+  "sr-flip-support": S("Resistance → Support Flip", "bull", "A close above a swing high, then within 3–20 bars a pullback to that level (within tol) that closes above it. Also the pullback / throwback after a breakout."),
+  "sr-flip-resistance": S("Support → Resistance Flip", "bear", "A close below a swing low, then within 3–20 bars a rally to that level that closes below it."),
+  "climax-top": S("Buying Climax", "bear", "An up bar at a 20-bar high with range ≥ 2.5 × average and volume ≥ 2.5 × average after an uptrend."),
+  "climax-bottom": S("Selling Climax", "bull", "A down bar at a 20-bar low with range ≥ 2.5 × average and volume ≥ 2.5 × average after a downtrend."),
+  // ── Harmonics (swing ratios, ±5%) ──
+  "abcd-bull": H("Bullish AB=CD", "bull", "Swings A-B-C-D down: BC retraces 38.2–88.6% of AB and CD is 90–110% of AB."),
+  "abcd-bear": H("Bearish AB=CD", "bear", "Swings A-B-C-D up with the same ratios."),
+  "gartley-bull": H("Bullish Gartley", "bull", "XABCD: B at 61.8% of XA, C at 38.2–88.6% of AB, D at 78.6% of XA."),
+  "gartley-bear": H("Bearish Gartley", "bear", "Bearish XABCD with Gartley ratios."),
+  "bat-bull": H("Bullish Bat", "bull", "XABCD: B at 38.2–50% of XA, C at 38.2–88.6% of AB, D at 88.6% of XA."),
+  "bat-bear": H("Bearish Bat", "bear", "Bearish XABCD with Bat ratios."),
+  "butterfly-bull": H("Bullish Butterfly", "bull", "XABCD: B at 78.6% of XA, C at 38.2–88.6% of AB, D at 127–161.8% of XA."),
+  "butterfly-bear": H("Bearish Butterfly", "bear", "Bearish XABCD with Butterfly ratios."),
+  "crab-bull": H("Bullish Crab", "bull", "XABCD: B at 38.2–61.8% of XA, C at 38.2–88.6% of AB, D at 161.8% of XA."),
+  "crab-bear": H("Bearish Crab", "bear", "Bearish XABCD with Crab ratios."),
+  "shark-bull": H("Bullish Shark", "bull", "XABCD: C at 113–161.8% of AB, D at 88.6–113% of XC."),
+  "shark-bear": H("Bearish Shark", "bear", "Bearish XABCD with Shark ratios."),
+  "cypher-bull": H("Bullish Cypher", "bull", "XABCD: B at 38.2–61.8% of XA, C beyond A at 127.2–141.4% of XA, D at 78.6% of XC."),
+  "cypher-bear": H("Bearish Cypher", "bear", "Bearish XABCD with Cypher ratios."),
+  "three-drives-bull": H("Bullish Three Drives", "bull", "Three lower lows with drives within ±25% of each other and pullbacks of 50–78.6%."),
+  "three-drives-bear": H("Bearish Three Drives", "bear", "Three higher highs with drives within ±25% of each other and pullbacks of 50–78.6%."),
+  "wolfe-bull": H("Bullish Wolfe Wave", "bull", "Swings 1–5: 3 below 1, 4 between 1 and 2, 5 below 3 and the 1–3 line; target on the 1–4 line."),
+  "wolfe-bear": H("Bearish Wolfe Wave", "bear", "Mirror of the bullish Wolfe wave."),
+  "quasimodo-bull": H("Bullish Quasimodo", "bull", "Swing low, high, lower low, then a higher high."),
+  "quasimodo-bear": H("Bearish Quasimodo", "bear", "Swing high, low, higher high, then a lower low."),
+};
+
+/** On the reference sheet but not detected, and why (shown in the glossary). */
+export const NOT_DETECTED: Array<[string, string]> = [
+  ["Elliott Wave (5-3)", "Wave counts are subjective; no fixed rule gives one answer."],
+  ["Wyckoff Accumulation / Distribution", "Multi-phase schematics read by judgement; Spring and Upthrust, their rule-based events, are detected."],
+  ["Bump-and-Run Reversal", "Depends on a hand-drawn lead-in trendline."],
+  ["Complex Head-and-Shoulders", "Multiple heads/shoulders are ambiguous; the simple form is detected."],
+  ["Adam & Eve double top / bottom variants", "Peak shape classification is subjective; the double top / bottom is detected."],
+  ["Base-on-Base, Saucer with Platform, W with Handle", "Composite bases; their parts (flat base, rounding bottom, double bottom, cup and handle) are detected."],
+  ["Frypan Bottom / Dumpling Top, Rounded Top with Breakdown Gap", "Rounding top/bottom and gaps are detected separately."],
+  ["Inverted Scallops", "Rarely defined consistently; rounding tops are detected."],
+];
+
+export const patternRule = (id: string): string => CATALOG[id]?.rule ?? "";
