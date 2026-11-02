@@ -2032,16 +2032,28 @@ export function AnalystScreen() {
           {/* Table */}
           <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflowX: "auto" }}>
             <div style={{ display: "grid", gridTemplateColumns: "minmax(95px, .7fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(100px, .8fr) minmax(140px, 1.2fr) minmax(120px, .9fr) minmax(90px, .7fr) minmax(100px, 1fr)", gap: 12, padding: "12px 18px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
-              <span onClick={() => { setSortKey("date"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                Date {sortKey === "date" ? (sortDir === -1 ? "▼" : "▲") : "↕"}
-              </span>
-              <span onClick={() => { setSortKey("t"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>Ticker / Company</span>
-              <span onClick={() => { setSortKey("firm"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>Firm</span>
-              <span onClick={() => { setSortKey("act"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>Action</span>
-              <span onClick={() => { setSortKey("to"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ cursor: "pointer" }}>Previous → New</span>
-              <span onClick={() => { setSortKey("pt"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>Price Target</span>
-              <span onClick={() => { setSortKey("up"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>To Target</span>
-              <span onClick={() => { setSortKey("score"); setSortDir(d => d === -1 ? 1 : -1); }} style={{ textAlign: "right", cursor: "pointer" }}>Signal</span>
+              {([
+                { key: "date", label: "Date" },
+                { key: "t", label: "Ticker / Company" },
+                { key: "firm", label: "Firm" },
+                { key: "act", label: "Action" },
+                { key: "to", label: "Previous → New" },
+                { key: "pt", label: "Price Target", right: true },
+                { key: "up", label: "To Target", right: true },
+                { key: "score", label: "Signal", right: true },
+              ] as { key: SortKey; label: string; right?: boolean }[]).map(col => (
+                <span
+                  key={col.key}
+                  role="button"
+                  onClick={() => { setSortKey(col.key); setSortDir(d => d === -1 ? 1 : -1); }}
+                  style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", justifyContent: col.right ? "flex-end" : "flex-start", gap: 4, whiteSpace: "nowrap" }}
+                >
+                  {col.label}
+                  <span style={{ fontSize: 9, color: sortKey === col.key ? G : TEXT_MUTED, opacity: sortKey === col.key ? 1 : 0.5 }}>
+                    {sortKey === col.key ? (sortDir === -1 ? "▼" : "▲") : "↕"}
+                  </span>
+                </span>
+              ))}
             </div>
 
             <div style={{ maxHeight: "calc(100vh - 270px)", overflowY: "auto" }}>
