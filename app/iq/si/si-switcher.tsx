@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { useSI, useActiveSwitch, SWITCH_MS, type ActiveSwitch } from "./si-context";
+import { LABEL_TOP, switchLabel } from "./switch-label";
 
 export function SISwitcher({
   style,
@@ -251,50 +252,39 @@ function SweepLayer({ sw }: { sw: ActiveSwitch }) {
         }}
       />
 
-      {/* Centered Target Label */}
-      <div
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          top: "44%",
-          transform: "translateY(-50%)",
-          textAlign: "center",
-          fontFamily:
-            activeSweep.to !== "MC"
-              ? "'Barlow Condensed', sans-serif"
-              : "'Manrope', sans-serif",
-          fontSize: activeSweep.to !== "MC" ? 34 : 38,
-          fontWeight: activeSweep.to !== "MC" ? 700 : 800,
-          letterSpacing: activeSweep.to !== "MC" ? "0.22em" : "-0.02em",
-          color:
-            activeSweep.to === "SI"
-              ? "rgba(169,198,227,0.96)"
-              : activeSweep.to === "SL" || activeSweep.to === "MF"
-                ? "rgba(240,214,140,0.96)"
-                : "rgba(255,255,255,0.96)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 12,
-          animation: anim("mcLbl"),
-          opacity: 0,
-          willChange: "transform, opacity",
-        }}
-      >
-        {activeSweep.to === "SI" ? (
-          "STOCK INTELLIGENCE"
-        ) : activeSweep.to === "SL" ? (
-          "STRATEGY LAB"
-        ) : activeSweep.to === "MF" ? (
-          "MONEY FLOW"
-        ) : (
-          <span>
-            Market&nbsp;
-            <span style={{ color: "#4ade80" }}>Catalyst</span>
-          </span>
-        )}
-      </div>
+      {/* Centered Target Label — every module in Market Catalyst's style, in the exact middle of the screen */}
+      {(() => {
+        const L = switchLabel(activeSweep.to);
+        return (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: LABEL_TOP,
+              transform: "translateY(-50%)",
+              textAlign: "center",
+              fontFamily: L.font,
+              fontSize: L.size,
+              fontWeight: L.weight,
+              letterSpacing: L.letterSpacing,
+              lineHeight: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              animation: anim("mcLbl"),
+              opacity: 0,
+              willChange: "transform, opacity",
+            }}
+          >
+            <span>
+              <span style={{ color: L.colors[0] }}>{L.words[0]}</span>
+              &nbsp;
+              <span style={{ color: L.colors[1] }}>{L.words[1]}</span>
+            </span>
+          </div>
+        );
+      })()}
     </div>,
     document.body
   );
