@@ -7,6 +7,7 @@
 
 import { useEffect } from "react";
 import * as Sentry from "@sentry/browser";
+import { isChunkLoadError, reloadForChunkError } from "./chunk-error-recovery";
 
 export default function GlobalError({
   error,
@@ -15,10 +16,16 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const isChunk = isChunkLoadError(error);
+
   useEffect(() => {
     Sentry.captureException(error); // no-op until NEXT_PUBLIC_SENTRY_DSN is set
     console.error("[global-error]", error);
-  }, [error]);
+
+    if (isChunk) {
+      reloadForChunkError();
+    }
+  }, [error, isChunk]);
 
   return (
     <html lang="en">
@@ -46,16 +53,24 @@ export default function GlobalError({
               marginBottom: 10,
             }}
           >
-            Application error
+            {isChunk ? "Update Available" : "Application error"}
           </div>
           <h2 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: 8 }}>
-            The app hit an unexpected error
+            {isChunk ? "Refreshing application" : "The app hit an unexpected error"}
           </h2>
           <p style={{ fontSize: ".9rem", color: "#6C747C", marginBottom: 20, lineHeight: 1.5 }}>
-            Reloading usually fixes it.{error?.digest ? ` (ref: ${error.digest})` : ""}
+            {isChunk
+              ? "A newer version of the application was deployed. Refreshing to load latest updates."
+              : `Reloading usually fixes it.${error?.digest ? ` (ref: ${error.digest})` : ""}`}
           </p>
           <button
-            onClick={reset}
+            onClick={() => {
+              if (isChunk) {
+                window.location.reload();
+              } else {
+                reset();
+              }
+            }}
             style={{
               height: 40,
               padding: "0 22px",
@@ -68,7 +83,7 @@ export default function GlobalError({
               cursor: "pointer",
             }}
           >
-            Reload
+            {isChunk ? "Refresh screen" : "Reload"}
           </button>
         </div>
       </body>

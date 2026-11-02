@@ -7,6 +7,7 @@ import {
 } from "next/font/google";
 import { FirebaseAnalytics } from "./firebase-analytics";
 import { SentryInit } from "./sentry-init";
+import { ChunkErrorRecovery } from "./chunk-error-recovery";
 import { ReduxProvider } from "./store/redux-provider";
 import "./globals.css";
 import "./iq.css";
@@ -168,6 +169,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <FirebaseAnalytics />
         <SentryInit />
+        <ChunkErrorRecovery />
         <ReduxProvider>{children}</ReduxProvider>
       </body>
     </html>

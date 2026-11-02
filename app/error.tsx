@@ -7,6 +7,7 @@
 
 import { useEffect } from "react";
 import * as Sentry from "@sentry/browser";
+import { isChunkLoadError, reloadForChunkError } from "./chunk-error-recovery";
 
 export default function Error({
   error,
@@ -15,10 +16,16 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const isChunk = isChunkLoadError(error);
+
   useEffect(() => {
     Sentry.captureException(error); // no-op until NEXT_PUBLIC_SENTRY_DSN is set
     console.error("[route-error]", error);
-  }, [error]);
+
+    if (isChunk) {
+      reloadForChunkError();
+    }
+  }, [error, isChunk]);
 
   return (
     <div
@@ -44,10 +51,10 @@ export default function Error({
             marginBottom: 10,
           }}
         >
-          Something went wrong
+          {isChunk ? "Update Available" : "Something went wrong"}
         </div>
         <h2 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: 8 }}>
-          This section hit an unexpected error
+          {isChunk ? "Refreshing to load the latest version" : "This section hit an unexpected error"}
         </h2>
         <p
           style={{
@@ -57,10 +64,13 @@ export default function Error({
             lineHeight: 1.5,
           }}
         >
-          The rest of the app is unaffected. Try again, or head back to the dashboard.
-          {error?.digest ? ` (ref: ${error.digest})` : ""}
+          {isChunk
+            ? "A new version of the app was deployed. Refreshing your screen will load the latest version."
+            : `The rest of the app is unaffected. Try again, or head back to the dashboard.${
+                error?.digest ? ` (ref: ${error.digest})` : ""
+              }`}
         </p>
-        {error?.message && (
+        {error?.message && !isChunk && (
           <div
             style={{
               fontFamily: "monospace",
@@ -81,7 +91,13 @@ export default function Error({
         )}
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button
-            onClick={reset}
+            onClick={() => {
+              if (isChunk) {
+                window.location.reload();
+              } else {
+                reset();
+              }
+            }}
             style={{
               height: 40,
               padding: "0 20px",
@@ -94,7 +110,7 @@ export default function Error({
               cursor: "pointer",
             }}
           >
-            Try again
+            {isChunk ? "Refresh screen" : "Try again"}
           </button>
           <a
             href="/dashboard"
