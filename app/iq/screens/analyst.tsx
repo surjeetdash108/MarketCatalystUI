@@ -102,7 +102,7 @@ const CAPS_LIST = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
 
 /** Fixed column widths shared by each table's header and rows. The header and every
  *  row are separate grids, so content-sized columns would not line up. */
-const STOCK_CALL_COLS = "82px minmax(110px, 1.1fr) minmax(145px, 1.2fr) minmax(110px, 1fr) 85px";
+const STOCK_CALL_COLS = "85px minmax(110px, 1.1fr) minmax(105px, 1fr) minmax(120px, 1.1fr) 85px";
 const HIST_COLS = "82px 65px minmax(130px, 1.1fr) 80px 100px 90px";
 const FIRM_CALL_COLS = "82px minmax(105px, 1.1fr) minmax(130px, 1.2fr) 95px 85px";
 
@@ -1488,7 +1488,7 @@ export function AnalystScreen() {
                 {/* Every analyst action on this stock, newest first by default; Date sorts. */}
                 <div>
                   <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: isLight ? "var(--surface-2, #F4F6F5)" : "#0d100f", overflowX: "auto" }}>
-                    <div style={{ minWidth: 540 }}>
+                    <div style={{ minWidth: 560 }}>
                       <div style={{ display: "grid", gridTemplateColumns: STOCK_CALL_COLS, gap: 12, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
                         <span
                           role="button"
@@ -1520,19 +1520,19 @@ export function AnalystScreen() {
                             <span
                               onClick={() => handleGoToFirm(r.firm)}
                               title={r.firm}
-                              style={{ fontWeight: 700, color: TEXT_HI, cursor: "pointer", textDecoration: "underline", textDecorationColor: isLight ? "rgba(31,122,70,.4)" : "rgba(74,222,128,.4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                              style={{ display: "block", minWidth: 0, fontWeight: 700, color: TEXT_HI, cursor: "pointer", textDecoration: "underline", textDecorationColor: isLight ? "rgba(31,122,70,.4)" : "rgba(74,222,128,.4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                             >
                               {r.firm}
                             </span>
                             <span
                               title={r.act}
-                              style={{ fontWeight: 700, color: r.dir > 0 ? G : r.dir < 0 ? R : TEXT_HI, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                              style={{ display: "block", minWidth: 0, fontWeight: 700, color: r.dir > 0 ? G : r.dir < 0 ? R : TEXT_HI, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                             >
                               {r.dir > 0 ? "▲ " : r.dir < 0 ? "▼ " : ""}{r.act}
                             </span>
                             <span
                               title={r.from && r.from !== "—" && r.from !== r.to ? `${r.from} → ${r.to}` : r.to}
-                              style={{ color: TEXT_HI, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                              style={{ display: "block", minWidth: 0, color: TEXT_HI, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                             >
                               {r.from && r.from !== "—" && r.from !== r.to ? (
                                 <span>{r.from} → <b>{r.to}</b></span>

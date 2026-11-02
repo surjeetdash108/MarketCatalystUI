@@ -151,10 +151,9 @@ export function resolveActionMeta(
     shownAction = up ? "PT Raise" : "PT Cut";
     dir = up ? 1 : -1;
   }
-  // 4. Rating unchanged: "Maintain"/"Reiterate" only with a known, unmoved
-  //    target; without one the target change is unknown.
+  // 4. Rating unchanged: "Maintain" or "Reiterate"
   else {
-    shownAction = pt == null ? "Rating maintained" : act.includes("reiterat") ? "Reiterate" : "Maintain";
+    shownAction = act.includes("reiterat") ? "Reiterate" : "Maintain";
     dir = (nextRank ?? 3) > 3 ? 1 : (nextRank ?? 3) < 3 ? -1 : 0;
   }
 
