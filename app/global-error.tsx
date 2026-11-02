@@ -65,11 +65,7 @@ export default function GlobalError({
           </p>
           <button
             onClick={() => {
-              if (isChunk) {
-                window.location.reload();
-              } else {
-                reset();
-              }
+              window.location.reload();
             }}
             style={{
               height: 40,
@@ -83,7 +79,7 @@ export default function GlobalError({
               cursor: "pointer",
             }}
           >
-            {isChunk ? "Refresh screen" : "Reload"}
+            Refresh screen
           </button>
         </div>
       </body>

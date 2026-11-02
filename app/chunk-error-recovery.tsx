@@ -9,8 +9,14 @@ import { useEffect } from "react";
  */
 export function isChunkLoadError(err: unknown): boolean {
   if (!err) return false;
+  if (typeof err === "object" && err !== null) {
+    if ("cause" in err && (err as any).cause && isChunkLoadError((err as any).cause)) {
+      return true;
+    }
+  }
   const msg = typeof err === "string" ? err : (err as any)?.message || String(err);
   const name = (err as any)?.name || "";
+  const stack = (err as any)?.stack || "";
   return (
     name === "ChunkLoadError" ||
     /Loading chunk .* failed/i.test(msg) ||
@@ -18,28 +24,32 @@ export function isChunkLoadError(err: unknown): boolean {
     /Failed to fetch dynamically imported module/i.test(msg) ||
     /Importing a module script failed/i.test(msg) ||
     /error loading dynamically imported module/i.test(msg) ||
-    (/_next\/static\/chunks/i.test(msg) && /(failed|missing|404)/i.test(msg))
+    ((/_next\/static\/chunks/i.test(msg) || /_next\/static\/chunks/i.test(stack)) &&
+      /(failed|missing|404|net::ERR)/i.test(msg + " " + stack))
   );
 }
 
 /**
  * Safely refreshes the browser window with an anti-infinite-loop guard.
  */
-export function reloadForChunkError(): boolean {
-  if (typeof window === "undefined") return false;
+export function reloadForChunkError(reloadFn?: () => void): boolean {
+  if (typeof window === "undefined" && !reloadFn) return false;
+  const doReload = reloadFn || (() => window.location.reload());
   try {
     const RELOAD_KEY = "mc_chunk_reload_ts";
-    const last = sessionStorage.getItem(RELOAD_KEY);
+    const last = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(RELOAD_KEY) : null;
     const now = Date.now();
     // Guard against rapid infinite reload loops (e.g. offline state or persistent outage):
     // Max once per 15 seconds.
     if (!last || now - parseInt(last, 10) > 15000) {
-      sessionStorage.setItem(RELOAD_KEY, String(now));
-      window.location.reload();
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem(RELOAD_KEY, String(now));
+      }
+      doReload();
       return true;
     }
   } catch {
-    window.location.reload();
+    doReload();
     return true;
   }
   return false;

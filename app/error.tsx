@@ -66,7 +66,7 @@ export default function Error({
         >
           {isChunk
             ? "A new version of the app was deployed. Refreshing your screen will load the latest version."
-            : `The rest of the app is unaffected. Try again, or head back to the dashboard.${
+            : `The rest of the app is unaffected. Refresh your screen, try again, or head back to the dashboard.${
                 error?.digest ? ` (ref: ${error.digest})` : ""
               }`}
         </p>
@@ -89,14 +89,10 @@ export default function Error({
             {error.message}
           </div>
         )}
-        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
           <button
             onClick={() => {
-              if (isChunk) {
-                window.location.reload();
-              } else {
-                reset();
-              }
+              window.location.reload();
             }}
             style={{
               height: 40,
@@ -110,8 +106,26 @@ export default function Error({
               cursor: "pointer",
             }}
           >
-            {isChunk ? "Refresh screen" : "Try again"}
+            Refresh screen
           </button>
+          {!isChunk && (
+            <button
+              onClick={() => reset()}
+              style={{
+                height: 40,
+                padding: "0 16px",
+                borderRadius: "var(--r, 10px)",
+                border: "1px solid var(--border, #1C2127)",
+                background: "transparent",
+                color: "var(--text, #C6CDC9)",
+                fontSize: ".88rem",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Try again
+            </button>
+          )}
           <a
             href="/dashboard"
             style={{
