@@ -187,6 +187,12 @@ describe("Money Flow hover box", () => {
     assert.strictEqual(val(st, "VWAP"), "—");
   });
 
+  it("shows R:R target price when target is present", () => {
+    const s = { ...board.gainers[0], rr: 2.5, target: 72.5 };
+    const st = popoverStats(s, board);
+    assert.strictEqual(val(st, "R:R"), "1 : 2.5 (tgt 72.50)");
+  });
+
   it("scales with the window, keeping the box's proportions", () => {
     assert.strictEqual(popoverScale(POPOVER.baseW, POPOVER.baseH), 1);
     assert.strictEqual(popoverScale(1440, 900), 0.75);

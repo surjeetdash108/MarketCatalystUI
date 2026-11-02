@@ -62,6 +62,9 @@ function open(url: string, types: string[]): Entry | null {
   // only a real event clears the watchdog — "error" is passed through as-is.
   for (const t of types) entry.listen(t);
   es.addEventListener("error", (ev) => {
+    if (es.readyState === EventSource.CLOSED) {
+      console.warn(`[live-stream] Connection closed on ${url}, reconnecting with backoff.`);
+    }
     for (const h of entry.handlers.get("error") ?? []) h(ev as MessageEvent<string>);
   });
   entry.watchdog = setTimeout(() => {

@@ -61,22 +61,16 @@ export const isMfPath = (p: string | null | undefined) => !!p && (p === "/money-
 
 /**
  * Runs one switch: overlay → navigate behind it → overlay fades out. Ignores
- * clicks while a switch is already running. If the client-side navigation has
- * not landed by the end of the transition, falls back to a full page load so a
- * click always ends up on the other side.
+ * clicks while a switch is already running.
  */
 function runSwitch(to: AppModule, target: string, push: (url: string) => void) {
   if (activeSwitch) return;
   const key = Date.now();
   setActiveSwitch({ to, key, startedAt: key });
-  const targetPath = target.split("?")[0];
 
   setTimeout(() => push(target), NAV_AT_MS);
   setTimeout(() => {
     if (activeSwitch?.key === key) setActiveSwitch(null);
-    if (typeof window !== "undefined" && window.location.pathname !== targetPath) {
-      window.location.assign(target);
-    }
   }, SWITCH_MS);
 }
 

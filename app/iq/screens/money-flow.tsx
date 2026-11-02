@@ -44,8 +44,8 @@ import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
 import { useLiveQuotes } from "../live-quotes-context";
 
-/** Board refresh: the backend rebuilds every 30s from 15-minute-delayed bars. */
-const BOARD_POLL_MS = 30_000;
+/** Board refresh: rebuilds and polls every 15s to keep rankings fresh. */
+const BOARD_POLL_MS = 15_000;
 
 interface BarsResponse {
   bars: Array<{ t: number; o: number; h: number; l: number; c: number; v: number; vw: number | null }>;
@@ -962,6 +962,7 @@ export function MoneyFlowScreen() {
                         }}
                       >
                         <span
+                          title={sc.name}
                           style={{
                             fontFamily: "Manrope, sans-serif",
                             fontSize: 11,
@@ -1147,6 +1148,7 @@ export function MoneyFlowScreen() {
                           </span>
                         </div>
                         <span
+                          title={sc.name}
                           style={{
                             fontSize: 12.5,
                             fontWeight: 700,
@@ -1251,6 +1253,7 @@ export function MoneyFlowScreen() {
                           </span>
                         </div>
                         <span
+                          title={sc.name}
                           style={{
                             fontSize: 12.5,
                             fontWeight: 700,
@@ -1443,6 +1446,7 @@ export function MoneyFlowScreen() {
                   const isSecMatch = Boolean(activeSector && fc.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
                   const cardQuote = getDisplayQuote(fc);
+                  const hasNoSetup = fc.chop || fc.entry == null;
                   return (
                     <button
                       key={fc.t}
@@ -1555,15 +1559,15 @@ export function MoneyFlowScreen() {
                             fontSize: 10,
                             fontWeight: 800,
                             letterSpacing: ".1em",
-                            color: "#08090a",
-                            background: "#3ddc84",
+                            color: hasNoSetup ? "#94a3b8" : "#08090a",
+                            background: hasNoSetup ? "#1e293b" : "#3ddc84",
                             borderRadius: 4,
                             padding: "2px 6px",
                             whiteSpace: "nowrap",
                             marginLeft: "auto",
                           }}
                         >
-                          BULLISH
+                          {hasNoSetup ? "NO SETUP" : "BULLISH"}
                         </span>
                         <span
                           style={{
@@ -1616,14 +1620,14 @@ export function MoneyFlowScreen() {
                             fontSize: 9,
                             fontWeight: 800,
                             letterSpacing: ".08em",
-                            color: "#3ddc84",
+                            color: hasNoSetup ? "#94a3b8" : "#3ddc84",
                             background: "rgba(8,9,10,.75)",
-                            border: "1px solid rgba(61,220,132,.4)",
+                            border: `1px solid ${hasNoSetup ? "rgba(148,163,184,.4)" : "rgba(61,220,132,.4)"}`,
                             borderRadius: 3,
                             padding: "0 4px",
                           }}
                         >
-                          {(fc.rvol ?? 0) >= 1.4 ? "ACCUMULATION" : "MOMENTUM UP"}
+                          {fc.chop ? "CHOPPY" : (fc.rvol ?? 0) >= 1.4 ? "ACCUMULATION" : "MOMENTUM UP"}
                         </span>
                       </div>
 
@@ -1776,6 +1780,7 @@ export function MoneyFlowScreen() {
                   const isSecMatch = Boolean(activeSector && fc.sector === activeSector);
                   const isDimmed = Boolean(activeSector && !isSecMatch);
                   const cardQuote = getDisplayQuote(fc);
+                  const hasNoSetup = fc.chop || fc.entry == null;
                   return (
                     <button
                       key={fc.t}
@@ -1888,15 +1893,15 @@ export function MoneyFlowScreen() {
                             fontSize: 10,
                             fontWeight: 800,
                             letterSpacing: ".1em",
-                            color: "#08090a",
-                            background: "#f0565a",
+                            color: hasNoSetup ? "#94a3b8" : "#08090a",
+                            background: hasNoSetup ? "#1e293b" : "#f0565a",
                             borderRadius: 4,
                             padding: "2px 6px",
                             whiteSpace: "nowrap",
                             marginLeft: "auto",
                           }}
                         >
-                          BEARISH
+                          {hasNoSetup ? "NO SETUP" : "BEARISH"}
                         </span>
                         <span
                           style={{
@@ -1949,14 +1954,14 @@ export function MoneyFlowScreen() {
                             fontSize: 9,
                             fontWeight: 800,
                             letterSpacing: ".08em",
-                            color: "#f0565a",
+                            color: hasNoSetup ? "#94a3b8" : "#f0565a",
                             background: "rgba(8,9,10,.75)",
-                            border: "1px solid rgba(240,86,90,.4)",
+                            border: `1px solid ${hasNoSetup ? "rgba(148,163,184,.4)" : "rgba(240,86,90,.4)"}`,
                             borderRadius: 3,
                             padding: "0 4px",
                           }}
                         >
-                          {(fc.rvol ?? 0) >= 1.4 ? "DISTRIBUTION" : "MOMENTUM DOWN"}
+                          {fc.chop ? "CHOPPY" : (fc.rvol ?? 0) >= 1.4 ? "DISTRIBUTION" : "MOMENTUM DOWN"}
                         </span>
                       </div>
 

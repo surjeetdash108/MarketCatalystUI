@@ -9,67 +9,93 @@ import type { TapeFrame } from "../types/tape";
 const SSE_STALE_MS = 8000;
 const POLL_MS = 20000;
 
-/**
- * Subscribes to the backend's ticker-tape SSE broadcast for live push, with a
- * JSON fallback so the tape ALWAYS populates.
- *
- * Why the fallback: `/live/tape/stream` (SSE) works against the Cloud Run
- * service directly, but Firebase Hosting does not proxy the long-lived stream —
- * through the hosting origin the browser's EventSource never receives a frame,
- * which left the VIX/index cards (Macro, Dashboard, Recap, marquee) spinning
- * forever. The EventSource is now built via `streamUrl()`, which targets the
- * Cloud Run `live` origin directly when NEXT_PUBLIC_LIVE_STREAM_ORIGIN is set,
- * so SSE drives live updates in production too. The poll stays as a safety net:
- * we still fetch the plain JSON `/live/tape` immediately and poll it whenever
- * SSE hasn't delivered recently, so the tape ALWAYS populates even if the
- * direct origin is unset or unreachable.
- */
-export function useTapeStream() {
-  const [frame, setFrame] = useState<TapeFrame | null>(null);
-  const [connected, setConnected] = useState(false);
+let sharedFrame: TapeFrame | null = null;
+let sharedConnected = false;
+let subscribersCount = 0;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let streamUnsub: (() => void) | null = null;
+let lastSse = 0;
+const listeners = new Set<() => void>();
 
-  useEffect(() => {
-    let cancelled = false;
-    let lastSse = 0;
+function notify() {
+  listeners.forEach((l) => l());
+}
 
-    // Plain-JSON snapshot — the always-works path. Suppressed while a fresh SSE
-    // frame is arriving, so live push wins when it's actually available.
-    const fetchOnce = async () => {
-      try {
-        const f = await apiGet<TapeFrame>("/live/tape");
-        if (!cancelled && Date.now() - lastSse > SSE_STALE_MS) setFrame(f);
-      } catch {
-        /* transient — the next poll or the SSE may succeed */
-      }
-    };
-    void fetchOnce();
+async function fetchSharedTape() {
+  try {
+    const f = await apiGet<TapeFrame>("/live/tape");
+    if (Date.now() - lastSse > SSE_STALE_MS) {
+      sharedFrame = f;
+      notify();
+    }
+  } catch {
+    /* transient */
+  }
+}
 
+function startSharedTape() {
+  if (subscribersCount === 0) {
+    void fetchSharedTape();
     const onTape = (ev: MessageEvent<string>) => {
       try {
         lastSse = Date.now();
-        if (!cancelled) {
-          setFrame(JSON.parse(ev.data) as TapeFrame);
-          setConnected(true);
-        }
+        sharedFrame = JSON.parse(ev.data) as TapeFrame;
+        sharedConnected = true;
+        notify();
       } catch (err) {
         console.error("tape stream: malformed frame", err);
       }
     };
-    const onError = () => setConnected(false);
-
-    // One connection per page, shared with every other tape subscriber.
-    const unsubscribe = subscribeStream(streamUrl("/live/tape/stream"), {
+    const onError = () => {
+      sharedConnected = false;
+      notify();
+    };
+    streamUnsub = subscribeStream(streamUrl("/live/tape/stream"), {
       tape: onTape,
       heartbeat: () => {},
       error: onError,
     });
+    pollTimer = setInterval(() => void fetchSharedTape(), POLL_MS);
+  }
+  subscribersCount++;
+}
 
-    const poll = setInterval(() => void fetchOnce(), POLL_MS);
+function stopSharedTape() {
+  subscribersCount--;
+  if (subscribersCount <= 0) {
+    subscribersCount = 0;
+    if (pollTimer) clearInterval(pollTimer);
+    if (streamUnsub) streamUnsub();
+    pollTimer = null;
+    streamUnsub = null;
+  }
+}
 
+/**
+ * Subscribes to the backend's ticker-tape SSE broadcast for live push, with a
+ * JSON fallback so the tape ALWAYS populates.
+ *
+ * State is shared across all consumers on the page so the marquee ticker and the
+ * dashboard index tiles read from the exact same source and never drift.
+ */
+export function useTapeStream() {
+  const [frame, setFrame] = useState<TapeFrame | null>(sharedFrame);
+  const [connected, setConnected] = useState(sharedConnected);
+
+  useEffect(() => {
+    startSharedTape();
+    const listener = () => {
+      setFrame(sharedFrame);
+      setConnected(sharedConnected);
+    };
+    listeners.add(listener);
+    // Sync immediate state if already available
+    if (sharedFrame !== frame) {
+      setFrame(sharedFrame);
+    }
     return () => {
-      cancelled = true;
-      clearInterval(poll);
-      unsubscribe();
+      listeners.delete(listener);
+      stopSharedTape();
     };
   }, []);
 

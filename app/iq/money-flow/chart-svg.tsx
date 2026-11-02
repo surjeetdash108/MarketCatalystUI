@@ -752,7 +752,7 @@ export function FullChartSvg({
               fontWeight={700}
               textAnchor="end"
             >
-              ORH
+              {`ORH $${formatCurrency(orh)}`}
             </text>
             <text
               x={W - PR - 4}
@@ -763,7 +763,7 @@ export function FullChartSvg({
               fontWeight={700}
               textAnchor="end"
             >
-              ORL
+              {`ORL $${formatCurrency(orl)}`}
             </text>
 
             {ih >= 0 && (
@@ -781,7 +781,7 @@ export function FullChartSvg({
                   fontWeight={700}
                   textAnchor="middle"
                 >
-                  HOD
+                  {`HOD $${formatCurrency(hiAll)}`}
                 </text>
               </>
             )}
@@ -800,7 +800,7 @@ export function FullChartSvg({
                   fontWeight={700}
                   textAnchor="middle"
                 >
-                  LOD
+                  {`LOD $${formatCurrency(loAll)}`}
                 </text>
               </>
             )}
