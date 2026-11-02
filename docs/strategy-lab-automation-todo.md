@@ -1,10 +1,13 @@
-# Strategy Lab broker automation — before `STRATEGY_LAB_AUTOMATION` can be turned on
+# Strategy Lab broker automation — what's built and what's missing
 
-The "Automate with broker" button, its badges and its modal are behind the
-build-time flag `NEXT_PUBLIC_STRATEGY_LAB_AUTOMATION` (`app/iq/sl/flags.js`,
-default **off**). With the flag off, nothing is shown and nothing is sent. With
-it on today, the modal only says the feature isn't available. No order, test
-order or webhook call exists anywhere in the code.
+The "Automate with broker" button and modal are shown (as in the prototype).
+What works today: choosing the route (TradersPost, an IBKR bridge or a custom
+webhook), mode, order type, size and what to send; the exact JSON payload built
+from the strategy's rules and exit plan; and **Send test signal**, a real POST
+(`test: true`) from the browser to the user's https:// webhook. Alpaca, Tradier
+and TradeStation sign-in say they aren't available yet, and **Connect** says
+automatic signals aren't live — no strategy is run on the server, so no order,
+live or paper, is ever sent.
 
 What has to exist first:
 
