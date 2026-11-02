@@ -6,7 +6,8 @@
 //    multi-stock run, the single-stock report, chart levels, the stale
 //    signature and Save / Edit;
 //  - the multi-stock run backtests the 50 largest S&P 500 stocks
-//    (GET /live/strategy-lab/universe) in a Web Worker, on the same bars the
+//    (GET /live/strategy-lab/universe — every S&P 500 stock, largest first) in a
+//    Web Worker, showing matches as they arrive, on the same bars the
 //    report then uses, so a report's numbers equal its table row;
 //  - saved strategies live in the user's account (/live/strategy-lab/saved),
 //    localStorage is only an offline cache;
@@ -17,7 +18,7 @@ import * as Engine from "./engine";
 import LabView, { LAB_HOVER_CSS } from "./lab-view";
 import { apiDelete, apiGet, apiPost, backendUrl } from "../backend";
 import { COST_OPTS, STOP_PCTS, TP_PCTS, exitPlanKeys, exitPlanSummary, periodChoices, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
-import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, computeRow, engineCfg, fetchSpan, periodOfCfg, prepBars, windowLabel, windowOpts, windowStats, windowSummary } from "./lab-run";
+import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, prepBars, progressiveView, scanChunk, universeUrl, windowLabel, windowOpts, windowStats } from "./lab-run";
 
 const _o=(ind,n,mult)=>{const o={ind};if(n!=null)o.n=n;if(mult!=null)o.mult=mult;return o},_v=v=>({ind:'num',v}),_c=(a,op,b)=>({a,op,b}),CL=_o('close');
 const HOLDS=['Intraday','Days','Days–weeks','Weeks','Weeks–months','Months'];
@@ -105,6 +106,8 @@ const sc = (v) => (v > 0 ? "#3ddc84" : v < 0 ? "#f0565a" : "#8b9592");
 /** Difference of two returns, in percentage points. */
 const pp = (v) => (v == null || !Number.isFinite(v) ? "n/a" : sgn1(v, " pp"));
 const C_MUTE = "#7a8481";
+/** Colour of a value shown to one decimal: what rounds to zero is neutral. */
+const sc1 = (v) => sc(v == null ? v : +(v * 100).toFixed(1));
 const fmtDt = (d) => { const s = String(d), [y, m, dd] = s.slice(0, 10).split("-"); return `${MON[+m - 1]} ${+dd}, ${y}` + (s.length > 10 ? " " + s.slice(11, 16) : ""); };
 const money = (v) => "$" + Math.round(v).toLocaleString("en-US");
 const newId = () => (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).slice(0, 20);
@@ -149,11 +152,11 @@ export default class StrategyLab extends Component {
   libRef = React.createRef(); aiRef = React.createRef(); detRef = React.createRef(); resRef = React.createRef();
   refsObj = { aiRef: this.aiRef, libRef: this.libRef, detRef: this.detRef };
   state = { labSaved: [], labConds: {}, cfgs: {}, candles: {}, vals: {}, quotes: {}, sorts: {}, xpMore: {}, cmp: {}, vari: {}, libTab: "library", savedNote: "", wins: {}, winMore: {}, pMore: {} };
-  _bars = new Map(); _rows = new Map(); _rep = new Map(); _runTok = {}; _wk = undefined; _wq = new Map(); _wid = 0;
+  _bars = new Map(); _rows = new Map(); _rep = new Map(); _runTok = {}; _runSeq = 0; _ac = {}; _flushT = {}; _univ = {}; _wk = undefined; _wq = new Map(); _wid = 0;
 
   // ── lifecycle ────────────────────────────────────────────────────────────
   componentDidMount() { this.loadSaved(); }
-  componentWillUnmount() { clearTimeout(this.tt); if (this._wk) this._wk.terminate(); }
+  componentWillUnmount() { clearTimeout(this.tt); for (const k of Object.keys(this._ac)) this.cancelRun(k, false); if (this._wk) this._wk.terminate(); }
   scrollEl() { return typeof document !== "undefined" ? document.querySelector(".sl-main-scroll") : null; }
   scrollTo(el) { const c = this.scrollEl(); if (!c || !el) return; c.scrollTo({ top: el.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop - 90, behavior: "smooth" }); }
   scrollTop() { const c = this.scrollEl(); if (c) c.scrollTo(0, 0); }
@@ -184,11 +187,12 @@ export default class StrategyLab extends Component {
   }
 
   // ── data ─────────────────────────────────────────────────────────────────
-  async loadUniverse() {
-    if (this._univ && Date.now() - this._univ.at < 6 * 3600e3) return this._univ.stocks;
-    const r = await apiGet("/live/strategy-lab/universe");
+  async loadUniverse(tf) {
+    const c = this._univ[tf];
+    if (c && Date.now() - c.at < 6 * 3600e3) return c.stocks;
+    const r = await apiGet(universeUrl(tf));
     if (!r || !Array.isArray(r.stocks) || !r.stocks.length) throw new Error("The stock universe is unavailable.");
-    this._univ = { at: Date.now(), stocks: r.stocks, source: r.source };
+    this._univ[tf] = { at: Date.now(), stocks: r.stocks, source: r.source };
     return r.stocks;
   }
   barsKey(t, span) { return `${t}|${span.tf}|${span.days}|${span.tf === "d" ? etDayNow() : Math.floor(Date.now() / 300e3)}`; }
@@ -214,51 +218,106 @@ export default class StrategyLab extends Component {
     } catch { this._wk = null; }
     return this._wk;
   }
-  computeAsync(u, bars, spec, cfg, tf) {
+  computeAsync(u, bars, spec, cfg, tf, runId) {
     const args = [u.t, u.n, bars, spec, cfg, tf], w = this.worker();
     if (!w) return Promise.resolve(computeRow(...args));
-    return new Promise((res) => { const id = ++this._wid; this._wq.set(id, { res, args }); w.postMessage({ id, t: u.t, n: u.n, bars, spec, cfg, tf }); });
+    return new Promise((res) => { const id = ++this._wid; this._wq.set(id, { res, args }); w.postMessage({ id, runId, t: u.t, n: u.n, bars, spec, cfg, tf }); });
+  }
+  /** Bars for a scan chunk straight from the server (no shared in-flight request, cancellable). */
+  async rawBars(symbols, span, signal) {
+    const r = await apiGet(`/live/strategy-lab/bars?symbols=${encodeURIComponent(symbols.join(","))}&tf=${span.tf}&days=${span.days}`, { signal });
+    return Object.fromEntries(symbols.map((t) => { const rows = r && r.bars && r.bars[t]; return [t, rows && rows.length ? rows.map(([date, open, high, low, close, volume]) => ({ date, open, high, low, close, volume })) : null]; }));
+  }
+  /** A scan chunk: cached bars first, the rest fetched with retries (chunk twice, then each missing symbol once). */
+  async scanBars(symbols, span, signal) {
+    const out = {}, need = [];
+    for (const t of symbols) { const c = this.cachedBars(t, span); if (c) out[t] = c; else need.push(t); }
+    if (!need.length) return { bars: out, err: "" };
+    const r = await fetchWithRetry(need, (s) => this.rawBars(s, span, signal), signal);
+    if (r.aborted) return { aborted: true };
+    for (const t of need) { out[t] = r.bars[t]; if (r.bars[t]) this._bars.set(this.barsKey(t, span), r.bars[t]); }
+    return { bars: out, err: r.err };
   }
 
-  /** Multi-stock run: every universe stock, same rules and engine config; progress as each finishes. */
+  /** Stop a strategy's scan: no new fetches, in-flight requests aborted, queued worker jobs skipped, late results ignored. */
+  cancelRun(k, clear = true) {
+    const old = this._runTok[k];
+    this._runTok[k] = ++this._runSeq;
+    if (this._ac[k]) { this._ac[k].abort(); this._ac[k] = null; }
+    clearTimeout(this._flushT[k]); this._flushT[k] = null;
+    if (old != null && this._wk) this._wk.postMessage({ cancel: old });
+    const v = this.state.vals[k];
+    if (clear && v && v.busy) this.setState((s) => ({ vals: { ...s.vals, [k]: { sig: v.sig, tf: v.tf, cfg: v.cfg, busy: false, rows: [], at: null, cancelled: true } } }));
+  }
+  /** A scan whose rules / candle / period changed, or whose strategy is no longer shown, is cancelled. */
+  componentDidUpdate() {
+    const st = this.state;
+    for (const [k, v] of Object.entries(st.vals)) {
+      if (!v || !v.busy) continue;
+      const shown = k === st.labPick || (k === "custom" && !!st.custom);
+      if (!shown || this.sigOf(k) !== v.sig) this.cancelRun(k);
+    }
+  }
+
+  /**
+   * Multi-stock scan over the Strategy Lab universe (largest market cap first).
+   * Each stock's result is added as soon as it finishes (batched into state
+   * every ~120 ms), tagged with this run's id so nothing from an older run can
+   * land in it.
+   */
   async runValidate(k) {
-    const spec = copy(this.specOf(k)), tf = this.tfOf(k), cfg = this.engCfg(k), sig = runSig(spec, tf, cfg), tok = (this._runTok[k] = (this._runTok[k] || 0) + 1);
-    const put = (p) => this.setState((s) => ({ vals: { ...s.vals, [k]: { ...(s.vals[k] || {}), ...p } } }));
+    const spec = copy(this.specOf(k)), tf = this.tfOf(k), cfg = this.engCfg(k), sig = runSig(spec, tf, cfg);
+    this.cancelRun(k, false);
+    const runId = this._runTok[k], ac = new AbortController(), live = () => this._runTok[k] === runId;
+    this._ac[k] = ac;
+    const put = (p) => this.setState((s) => (s.vals[k] && s.vals[k].runId !== runId && !p.runId ? null : { vals: { ...s.vals, [k]: { ...(s.vals[k] || {}), ...p } } }));
     const blocked = this.blockedOf(k);
-    if (blocked) { put({ err: blocked, busy: false, sig, tf, cfg }); return; }
-    put({ busy: true, done: 0, total: 0, err: "", rows: [], fail: 0, insuf: 0, asOf: "", sig, tf, cfg, at: null });
+    if (blocked) { put({ runId, err: blocked, busy: false, sig, tf, cfg, rows: [], at: null }); return; }
+    put({ ...newRunState(runId, 0), err: "", sig, tf, cfg, at: null, expanded: false, cancelled: false });
     let univ;
-    try { univ = await this.loadUniverse(); } catch (e) { put({ busy: false, err: "Can't load the stock universe: " + errMsg(e) }); return; }
-    if (this._runTok[k] !== tok) return;
+    try { univ = await this.loadUniverse(tf); } catch (e) { if (live()) put({ busy: false, err: "Can't load the stock universe: " + errMsg(e) }); return; }
+    if (!live()) return;
     put({ total: univ.length });
-    const span = fetchSpan(spec, tf, cfg), B = Engine.isIntradayTf(tf) ? 4 : 10, q = [...univ], rows = [];
-    let fail = 0, insuf = 0, asOf = "", lastErr = "";
+    const span = fetchSpan(spec, tf, cfg), q = [...univ];
+    let pending = [], lastErr = "";
+    const flush = () => {
+      clearTimeout(this._flushT[k]); this._flushT[k] = null;
+      if (!pending.length) return;
+      const batch = pending; pending = [];
+      this.setState((s) => { let v = s.vals[k]; if (!v || v.runId !== runId) return null; for (const row of batch) v = acceptRow(v, runId, row); return { vals: { ...s.vals, [k]: v } }; });
+      const fired = batch.filter((r) => r.status === "ok" && r.ago === 0 && !this.state.quotes[r.t]).map((r) => r.t);
+      if (fired.length) this.loadQuotes(fired);
+    };
+    const push = (row) => { pending.push(row); if (!this._flushT[k]) this._flushT[k] = setTimeout(flush, 120); };
     const work = async () => {
-      while (q.length) {
-        const chunk = q.splice(0, B);
-        let data = {};
-        try { data = await this.fetchBars(chunk.map((u) => u.t), span); } catch (e) { lastErr = errMsg(e); }
+      for (let round = 0; q.length && live(); round++) {
+        const chunk = q.splice(0, scanChunk(tf, round));
+        const res = await this.scanBars(chunk.map((u) => u.t), span, ac.signal);
+        if (res.aborted || !live()) return;
+        if (res.err) lastErr = res.err;
         await Promise.all(chunk.map(async (u) => {
-          const raw = data[u.t], bars = raw ? prepBars(raw, tf) : null;
+          const raw = res.bars[u.t], bars = raw ? prepBars(raw, tf) : null;
           let row;
           if (!bars || !bars.length) row = { t: u.t, n: u.n, status: "unavailable" };
           else {
             const L = bars[bars.length - 1], ck = `${u.t}|${sig}|${L.date}|${L.close}`;
-            row = this._rows.get(ck) || (await this.computeAsync(u, bars, spec, cfg, tf));
-            this._rows.set(ck, row);
+            row = this._rows.get(ck) || (await this.computeAsync(u, bars, spec, cfg, tf, runId));
+            if (row && !row.cancelled) this._rows.set(ck, row);
           }
-          if (this._runTok[k] !== tok) return;
-          if (row.status === "unavailable") fail++; else if (row.status === "insufficient") insuf++; else rows.push(row);
-          if (row.asOf && row.asOf > asOf) asOf = row.asOf;
-          this.setState((s) => ({ vals: { ...s.vals, [k]: { ...(s.vals[k] || {}), done: ((s.vals[k] || {}).done || 0) + 1 } } }));
+          if (live() && row && !row.cancelled) push(row);
         }));
       }
     };
     await Promise.all([work(), work(), work(), work()]);
-    if (this._runTok[k] !== tok) return;
-    if (!rows.length && fail === univ.length) { put({ busy: false, err: "Price data unavailable" + (lastErr ? ": " + lastErr : "") + ". No results were computed.", rows: [], fail, insuf }); return; }
-    put({ busy: false, rows, fail, insuf, asOf, at: Date.now(), total: univ.length, err: lastErr && fail ? "Some stocks couldn't be loaded: " + lastErr : "" });
-    this.loadQuotes(rows.map((r) => r.t));
+    if (!live()) return;
+    flush();
+    this._ac[k] = null;
+    this.setState((s) => {
+      const v = s.vals[k];
+      if (!v || v.runId !== runId) return null;
+      const allFail = v.total > 0 && v.fail === v.total;
+      return { vals: { ...s.vals, [k]: { ...v, busy: false, at: Date.now(), rows: allFail ? [] : v.rows, err: allFail ? "Price data unavailable" + (lastErr ? ": " + lastErr : "") + ". No results were computed." : lastErr && v.fail ? "Some stocks couldn't be loaded: " + lastErr : "" } } };
+    });
   }
   async loadQuotes(tickers) {
     if (!tickers.length) return;
@@ -442,42 +501,48 @@ export default class StrategyLab extends Component {
   resultsVm(k, show) {
     if (!show) return { show: false };
     const st = this.state, v = st.vals[k] || {}, sig = this.sigOf(k), blocked = this.blockedOf(k), fresh = !!(v.at && v.sig === sig);
-    const tf = v.tf || this.tfOf(k), W = this.winOf(k, tf), wl = windowLabel(W.n, W.intra), rows = v.rows || [];
+    const tf = v.tf || this.tfOf(k), W = this.winOf(k, tf), wl = windowLabel(W.n, W.intra), rows = v.rows || [], busy = !!v.busy, ran = busy || !!v.at;
     const stat = new Map(rows.map((r) => [r.t, windowStats(r, W.n, W.intra)])), statOf = (r) => stat.get(r.t);
-    const now = rows.filter((r) => r.ago === 0 && statOf(r)).sort((a, b) => (b.sh ?? -Infinity) - (a.sh ?? -Infinity));
-    const S = windowSummary(rows, statOf, now.length > 0), basis = now.length ? "the " + now.length + (now.length === 1 ? " stock that meets" : " stocks that meet") + " the rules now" : "all " + S.n + " tested stocks";
+    const view = ran ? progressiveView(v, statOf, !!v.expanded) : null, S = view && view.summary;
     const pct = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
-    const tiles = [
+    const tiles = S ? [
       ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "#3ddc84" : null, "Stocks where the strategy made money over the last " + wl + " (equity now ÷ equity at the start of the window)"],
       ["BEAT BUY & HOLD", S.beat + " / " + S.n, null, "Stocks where the strategy's return over the last " + wl + " beat buying and holding the stock over the same window"],
       ["WIN RATE", pct(S.win), null, "Winning trades ÷ all closed trades that exited in the last " + wl + ", pooled across the stocks"],
       ["MEDIAN SHARPE", fx(S.medSharpe), sc(S.medSharpe), "Median of each stock's Sharpe ratio over the full backtest period (" + periodLabel(periodOfCfg(v.cfg || this.engCfg(k))) + "), not just the window — upper median for an even count"],
       ["TRADES", String(S.trades), null, "Closed trades that exited in the last " + wl + ", summed across the stocks"],
-    ];
+    ] : [];
+    const basis = !view ? "" : view.matches ? "the " + view.matches + (view.matches === 1 ? " stock that meets" : " stocks that meet") + " the rules" + (view.soFar ? " so far" : " now") : "all " + (S ? S.n : 0) + " tested stocks";
     const setWin = (n) => this.setState((s) => ({ wins: { ...s.wins, [W.key]: String(n) } }));
+    const setExpanded = (on) => this.setState((s) => (s.vals[k] ? { vals: { ...s.vals, [k]: { ...s.vals[k], expanded: on } } } : null));
+    const period = v.cfg ? periodLabel(periodOfCfg(v.cfg)) + " " + tfL(v.tf).toLowerCase() : "";
     return {
       show: true,
-      head: v.busy ? "Testing " + (v.done || 0) + " of " + (v.total || "…") + " stocks…" : v.at ? now.length + (now.length === 1 ? " stock meets" : " stocks meet") + " the rules now" : "",
-      run: { l: v.busy ? "Running…" : v.at ? "Re-run backtest" : "Run backtest →", primary: !fresh, disabled: !!v.busy || !!blocked, title: blocked, onClick: () => this.runValidate(k) },
-      busy: !!v.busy, progressT: "Tested " + (v.done || 0) + " / " + (v.total || "…") + " stocks", progressPct: v.total ? Math.round((100 * (v.done || 0)) / v.total) + "%" : "0%",
-      err: v.err || (!v.at && !v.busy ? blocked : "") || "",
-      stale: !!(v.at && !v.busy && v.sig !== sig), onRerun: () => this.runValidate(k),
-      idle: !v.at && !v.busy && !v.err && !blocked, idleT: "Run backtest to see the result.", idleTitle: "Tests these rules on the 50 largest S&P 500 stocks with the candle, period and exit plan shown",
-      meta: v.at ? `${periodLabel(periodOfCfg(v.cfg))} ${tfL(v.tf).toLowerCase()} · FMP · as of ${v.asOf ? fmtDt(v.asOf) : "—"} · ${rows.length} tested` + (v.fail ? ` · ${v.fail} unavailable` : "") + (v.insuf ? ` · ${v.insuf} insufficient history` : "") : "",
-      sumNote: v.at ? "Over " + basis + " · last " + wl : "",
-      sum: v.at ? tiles.map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })) : [],
-      hasWin: !!v.at && rows.length > 0,
+      head: view ? view.head || (busy ? "Testing " + (v.done || 0) + " of " + (v.total || "…") + " stocks…" : "") : "",
+      run: { l: busy ? "Running…" : v.at ? "Re-run backtest" : "Run backtest →", primary: !fresh, disabled: busy || !!blocked, title: blocked, onClick: () => this.runValidate(k) },
+      busy, progressT: "Tested " + (v.done || 0) + " / " + (v.total || "…") + " stocks", progressPct: v.total ? Math.round((100 * (v.done || 0)) / v.total) + "%" : "0%",
+      err: v.err || (!v.at && !busy ? blocked : "") || "",
+      stale: !!(v.at && !busy && v.sig !== sig), onRerun: () => this.runValidate(k),
+      idle: !ran && !v.err && !blocked, idleT: "Run backtest to see the result.", idleTitle: "Tests these rules on every S&P 500 stock with the candle, period and exit plan shown",
+      meta: busy ? `${period} · FMP · testing ${v.done || 0}/${v.total || "…"}` + (v.fail ? ` · ${v.fail} unavailable` : "")
+        : v.at ? `${period} · FMP · as of ${v.asOf ? fmtDt(v.asOf) : "—"} · ${rows.length} tested` + (v.fail ? ` · ${v.fail} unavailable` : "") + (v.insuf ? ` · ${v.insuf} insufficient history` : "") : "",
+      soFar: !!(view && view.soFar),
+      sumNote: S ? (view.soFar ? "So far: over " : "Over ") + basis + " · last " + wl : "",
+      sum: tiles.map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
+      hasWin: !!view && view.visible.length > 0,
       winOpts: W.list.map((n) => ({ l: windowLabel(n, W.intra), on: n === W.n, onClick: () => setWin(n) })),
       winMore: { l: W.more ? "‹ Less" : "More ›", onClick: () => this.setState((s) => ({ winMore: { ...s.winMore, [W.key]: !W.more }, wins: W.more && !W.base.includes(W.n) ? { ...s.wins, [W.key]: String(W.def) } : s.wins })) },
       winNote: "Strategy vs buy & hold over the last window of the backtest",
-      none: !!v.at && !v.busy && rows.length > 0 && !now.length ? "No stock meets the rules right now. The summary above shows how the strategy has performed over the window on every tested stock." : "",
+      none: view && view.state === "empty" ? "No stock meets the rules right now. The summary above shows how the strategy has performed over the window on every tested stock." : "",
       cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", "Strategy return over the last " + wl + ": equity now ÷ equity at the start of the window − 1"], ["VS B&H", "right", "Strategy return minus buy & hold return over the same window, in percentage points"], ["WIN %", "right", "Winning ÷ closed trades that exited in the window"], ["TRADES", "right", "Closed trades that exited in the window"]].map(([l, al, title]) => ({ l, al, title })),
-      rows: v.at ? now.map((r) => {
+      rows: view ? view.visible.map((r) => {
         const w = statOf(r), q = st.quotes[r.t];
         return { t: r.t, n: r.n, logo: LOGO(r.t), px: q ? "$" + q.p.toFixed(2) : "—", chg: q && q.c != null ? (q.c >= 0 ? "+" : "−") + Math.abs(q.c).toFixed(2) + "%" : "", chgC: q && q.c != null ? sc(q.c) : C_MUTE,
-          ret: p1(w.ret), retC: sc(w.ret), ex: pp(w.ex), exC: sc(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n),
+          ret: p1(w.ret), retC: sc1(w.ret), ex: pp(w.ex), exC: sc1(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n),
           onClick: () => this.openChart(k, r.t, r.n) };
       }) : [],
+      more: view && view.more ? { l: view.more.label, onClick: () => setExpanded(true) } : null,
+      less: view && view.less ? { l: "Show less", onClick: () => setExpanded(false) } : null,
     };
   }
   openReport(k, t, n) { this.setState({ rep: { k, t, n }, chart: null }); this.scrollTop(); }

@@ -6,11 +6,13 @@ import * as http from "http";
 import { ConfigService } from "@nestjs/config";
 import { FmpService } from "../src/vendors/fmp/fmp.service";
 import { StrategyLabService } from "../src/live/strategy-lab.service";
+import { LabUniverseService } from "../src/live/strategy-lab/lab-universe";
 import { validateSaved } from "../src/live/strategy-lab.controller";
 
 const config = new ConfigService(process.env);
 const fmp = new FmpService(config);
-const lab = new StrategyLabService(fmp, { enabled: false } as never);
+// No Firestore here: the stored-pack path is off (LAB_BARS_FROM_STORE unset), so /bars is FMP + the in-memory LRU, as in production today.
+const lab = new StrategyLabService(fmp, { enabled: false } as never, new LabUniverseService(fmp), { readDailyMany: async () => new Map() } as never, config);
 const saved = new Map<string, Record<string, unknown>>();
 let failBars = false;
 const send = (res: http.ServerResponse, code: number, body: unknown) => {
@@ -27,7 +29,7 @@ http.createServer(async (req, res) => {
   try {
     if (p === "/__fail") { failBars = u.searchParams.get("on") === "1"; return send(res, 200, { failBars }); }
     if (p === "/__log") return send(res, 200, log.splice(0));
-    if (p === "/live/strategy-lab/universe") return send(res, 200, await lab.universe());
+    if (p === "/live/strategy-lab/universe") return send(res, 200, await lab.universe(u.searchParams.get("tf") ?? "d", Number(u.searchParams.get("size") ?? 0) || 0));
     if (p === "/live/strategy-lab/bars") {
       if (failBars) return send(res, 500, { statusCode: 500, message: "Data provider unavailable (harness)" });
       const syms = (u.searchParams.get("symbols") ?? "").split(",").filter(Boolean), tf = u.searchParams.get("tf") ?? "d", days = Number(u.searchParams.get("days"));

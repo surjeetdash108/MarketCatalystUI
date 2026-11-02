@@ -147,7 +147,10 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 11, color: "#5f6966" }}>{r.sumNote}</div>
+          <div style={{ fontSize: 11, color: "#5f6966", display: "flex", alignItems: "center", gap: 6 }}>
+            {r.soFar ? <span title="The scan is still running; the tiles update as stocks finish" style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".08em", color: C.goldHi, border: "1px solid #5a4a22", borderRadius: 999, padding: "1px 7px" }}>SO FAR</span> : null}
+            {r.sumNote}
+          </div>
         </div>
       ) : null}
       {r.none ? <div style={{ fontSize: 13, color: C.dim, border: "1px dashed #263033", borderRadius: 10, padding: 16 }}>{r.none}</div> : null}
@@ -186,6 +189,16 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
               <span style={{ fontFamily: mono, fontSize: 12, textAlign: "center", color: "#aab3b0" }}>{x.tr}</span>
             </button>
           ))}
+          {r.more ? (
+            <button type="button" onClick={r.more.onClick} className="slx7" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: 0, borderTop: "1px solid #15191b", borderRadius: 8, padding: 10, color: C.goldHi, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+              {r.more.l}
+            </button>
+          ) : null}
+          {r.less ? (
+            <button type="button" onClick={r.less.onClick} style={{ alignSelf: "center", background: "none", border: 0, borderTop: "1px solid #15191b", padding: "8px 0 2px", color: C.goldHi, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              {r.less.l}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

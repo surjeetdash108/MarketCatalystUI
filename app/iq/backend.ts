@@ -1,4 +1,5 @@
 import { signOut } from "firebase/auth";
+import { linkSignals } from "./abort";
 import { firebaseAuth } from "../firebase";
 import { normalizeSector } from "./sector-filter";
 import { clearSession, SESSION_SUPERSEDED, sessionIdFor } from "./session";
@@ -168,7 +169,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       cache: isLiveOrMarketData ? "no-store" : init.cache,
       ...init,
       headers,
-      signal: init.signal ?? controller.signal,
+      signal: linkSignals(init.signal ?? undefined, controller.signal),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -211,7 +212,9 @@ function sectorReviver(key: string, value: unknown): unknown {
  */
 const inflightGets = new Map<string, Promise<unknown>>();
 
-export function apiGet<T>(path: string): Promise<T> {
+/** GET. With `opts.signal` the request can be cancelled by the caller and is not shared with other callers. */
+export function apiGet<T>(path: string, opts?: { signal?: AbortSignal }): Promise<T> {
+  if (opts?.signal) return request<T>(path, { signal: opts.signal });
   const running = inflightGets.get(path);
   if (running) return running as Promise<T>;
   const p = request<T>(path).finally(() => inflightGets.delete(path));

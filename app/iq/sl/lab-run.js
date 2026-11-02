@@ -206,3 +206,86 @@ export function sortRows(rows, key = "sig", desc = true, annual = true) {
     return (desc ? -c : c) || b.sh - a.sh;
   });
 }
+
+// ── Progressive scan ─────────────────────────────────────────────────────
+// Results arrive per stock; the panel shows the first three matches at once
+// (fixed), a row 4 that counts the rest, and tiles over every match so far.
+
+/** Symbols per /bars request: small for each worker's first pull so the first matches show sooner, then the normal size. */
+export const scanChunk = (tf, round) => (round === 0 ? 3 : BT.isIntradayTf(tf) ? 4 : 10);
+
+/** The universe request for a candle (the server applies any per-candle cap). */
+export const universeUrl = (tf) => "/live/strategy-lab/universe?tf=" + encodeURIComponent(tf);
+
+/** A fresh run: id, stocks to test, counters, results in arrival order. */
+export const newRunState = (runId, total) => ({ runId, total, done: 0, fail: 0, insuf: 0, rows: [], asOf: "", busy: true });
+
+/**
+ * One stock's result into the run. A result tagged with another run id is
+ * ignored (the same state object comes back), so a cancelled or superseded run
+ * can never add rows to the current one.
+ */
+export function acceptRow(state, runId, row) {
+  if (!state || runId !== state.runId || !row) return state;
+  const next = { ...state, done: state.done + 1 };
+  if (row.status === "ok") next.rows = [...state.rows, row];
+  else if (row.status === "insufficient") next.insuf = state.insuf + 1;
+  else next.fail = state.fail + 1;
+  if (row.asOf && row.asOf > (state.asOf || "")) next.asOf = row.asOf;
+  return next;
+}
+
+const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
+
+/**
+ * What the panel shows for a run: matches (entry fired on the last bar), the
+ * visible rows (first three in arrival order, or every match in Signal-then-
+ * Sharpe order when expanded), the row-4 label, the tiles and the state.
+ */
+export function progressiveView(state, statOf, expanded) {
+  const ok = (state.rows || []).filter((r) => r.status === "ok");
+  const matches = ok.filter((r) => r.ago === 0 && statOf(r));
+  const N = matches.length, busy = !!state.busy, prog = (state.done || 0) + "/" + (state.total || "…");
+  const kind = N ? "rows" : busy ? "scanning-empty" : ok.length ? "empty" : "none";
+  const head = kind === "scanning-empty" ? "Scanning… no matches so far (" + prog + ")"
+    : kind === "rows" || kind === "empty" ? plural(N, "stock meets", "stocks meet") + " the rules now" + (busy ? " · scanning " + prog : "")
+    : "";
+  const more = !expanded && N > 3
+    ? { label: busy ? "+" + plural(N - 3, "more stock matches", "more stocks match") + " · scanning " + prog + " → View all" : "View all " + N + " matches" }
+    : null;
+  return {
+    state: kind, head, matches: N, soFar: busy && N > 0,
+    visible: expanded ? sortRows(matches, "sig") : matches.slice(0, 3),
+    more, less: !!expanded && N > 3,
+    // Every match so far; with none at the end, every tested stock (the existing empty state).
+    summary: N ? windowSummary(ok, statOf, true) : !busy && ok.length ? windowSummary(ok, statOf, false) : null,
+  };
+}
+
+const isAbortErr = (e, signal) => !!(signal && signal.aborted) || !!(e && (e.name === "AbortError" || /aborted/i.test(String(e && e.message))));
+
+/**
+ * Bars for a chunk of symbols: the chunk is tried twice, then any symbol still
+ * missing is tried once on its own; what is still missing is unavailable.
+ * Stops at once when the run is cancelled.
+ */
+export async function fetchWithRetry(symbols, fetchChunk, signal) {
+  const ABORTED = { bars: {}, unavailable: [], err: "", aborted: true };
+  let bars = {}, err = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { bars = (await fetchChunk(symbols)) || {}; err = ""; break; }
+    catch (e) { if (isAbortErr(e, signal)) return ABORTED; err = String((e && e.message) || e); bars = {}; }
+  }
+  const out = {}, unavailable = [];
+  for (const t of symbols) {
+    let r = bars[t];
+    if (!r || !r.length) {
+      if (signal && signal.aborted) return ABORTED;
+      try { r = ((await fetchChunk([t])) || {})[t]; }
+      catch (e) { if (isAbortErr(e, signal)) return ABORTED; err = String((e && e.message) || e); r = null; }
+    }
+    out[t] = r && r.length ? r : null;
+    if (!out[t]) unavailable.push(t);
+  }
+  return { bars: out, unavailable, err, aborted: false };
+}
