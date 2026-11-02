@@ -63,3 +63,39 @@ export function patternsToShow(hits: PatternHit[], from: number, to: number, opt
 export const signalColor = (sig: PatternHit["signal"]) => (sig === "bull" ? "#3ddc84" : sig === "bear" ? "#f0565a" : "#7fa8d0");
 export const patternTitle = (h: PatternHit) => `${h.name}${h.confirmed === false ? " (forming)" : ""} — ${patternRule(h.id)}`;
 export const catalogSize = () => Object.keys(CATALOG).length;
+
+export interface PatternGlyphs {
+  color: string;
+  title: string;
+  lines: Array<{ i0: number; p0: number; i1: number; p1: number; dash: number[] }>;
+  points: Array<{ i: number; p: number; label: string }>;
+  /** The name tag: at bar `i`, price `p`; above the bar for bearish / neutral, below for bullish. */
+  label: { i: number; p: number; text: string; above: boolean };
+}
+
+/** How a hit is drawn on any chart: colour by signal, dashed pattern lines, swing labels and a name tag. */
+export function patternGlyphs(h: PatternHit): PatternGlyphs {
+  const dash = (role: string) => (role === "level" ? [2, 3] : role === "leg" ? [] : [5, 4]);
+  return {
+    color: signalColor(h.signal),
+    title: patternTitle(h),
+    lines: (h.lines ?? []).map((l) => ({ i0: l.i0, p0: l.p0, i1: l.i1, p1: l.p1, dash: dash(l.role) })),
+    points: h.points ?? [],
+    label: { i: h.at, p: h.price, text: h.name + (h.confirmed === false ? " (forming)" : ""), above: h.signal !== "bull" },
+  };
+}
+
+/**
+ * Name-tag placement: tags that would overlap an earlier one are moved away
+ * from their bar (up for tags above the bar, down for tags below) until free.
+ */
+export function layoutLabels<T extends { x: number; y: number; w: number; h: number; above: boolean }>(boxes: T[]): T[] {
+  const placed: T[] = [];
+  const hits = (a: T, b: T) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  for (const b0 of boxes) {
+    const b = { ...b0 };
+    for (let k = 0; k < 40 && placed.some((p) => hits(p, b)); k++) b.y += b.above ? -(b.h + 2) : b.h + 2;
+    placed.push(b);
+  }
+  return placed;
+}

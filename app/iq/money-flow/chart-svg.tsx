@@ -6,6 +6,7 @@
 
 import React from "react";
 import type { BoardStock, OHLCVBar, SwingPoint } from "./engine";
+import { detectPatterns, layoutLabels, patternGlyphs, patternsToShow } from "../patterns";
 import { candleIndexAt, chartRightGutter, computeOrderBlocks, computeSwings, formatCurrency, liveLevels, popText, timeTicks } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
@@ -208,7 +209,7 @@ export function FullChartSvg({
 }: {
   stock: BoardStock;
   candles: OHLCVBar[];
-  layers: { ob: boolean; vwap: boolean; fvg: boolean; liq: boolean; str: boolean };
+  layers: { ob: boolean; vwap: boolean; fvg: boolean; liq: boolean; str: boolean; pat?: boolean };
   tf?: number;
   width?: number;
   height?: number;
@@ -926,6 +927,36 @@ export function FullChartSvg({
           </g>
         );
       })}
+
+      {/* Patterns (app/iq/patterns): latest candle marks + chart patterns, each with its rule as the tooltip */}
+      {layers.pat && (() => {
+        const hits = patternsToShow(detectPatterns(safeCandles), 0, safeCandles.length - 1);
+        const xi = (i: number) => PL + i * cw + cw / 2;
+        const lf = T(11.5);
+        const glyphs = hits.map((h) => patternGlyphs(h));
+        // Name tags laid out so none overlap (layoutLabels), kept inside the plot.
+        const tags = layoutLabels(glyphs.map((g) => {
+          const w = g.label.text.length * lf * 0.56 + 8, h = lf + 4;
+          return { x: Math.max(PL, Math.min(W - PR - w, xi(g.label.i) - w / 2)), y: g.label.above ? y(g.label.p) - h - 6 : y(g.label.p) + 6, w, h, above: g.label.above };
+        })).map((b) => ({ ...b, y: Math.max(PT, Math.min(H - PB - b.h, b.y)) }));
+        return glyphs.map((g, hi) => {
+          const tg = tags[hi];
+          return (
+            <g key={`pat_${hi}`}>
+              <title>{g.title}</title>
+              {g.lines.map((l, li) => (
+                <line key={li} x1={xi(l.i0)} y1={y(l.p0)} x2={xi(Math.min(l.i1, safeCandles.length - 1))} y2={y(l.p1)} stroke={g.color} strokeWidth={1.3} strokeOpacity={0.85} strokeDasharray={l.dash.join(" ") || undefined} />
+              ))}
+              {g.points.map((p, pi) => (
+                <text key={`pp${pi}`} x={xi(p.i)} y={y(p.p) + (g.label.above ? -5 : lf + 3)} textAnchor="middle" fontSize={T(10.5)} fill={g.color} fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{p.label}</text>
+              ))}
+              <line x1={xi(g.label.i)} y1={y(g.label.p)} x2={Math.max(tg.x, Math.min(tg.x + tg.w, xi(g.label.i)))} y2={g.label.above ? tg.y + tg.h : tg.y} stroke={g.color} strokeOpacity={0.45} strokeWidth={1} />
+              <rect x={tg.x} y={tg.y} width={tg.w} height={tg.h} rx={3} fill="rgba(8,9,10,.88)" stroke={g.color} strokeOpacity={0.6} />
+              <text x={tg.x + 4} y={tg.y + lf} fontSize={lf} fill={g.color} fontFamily="Manrope, sans-serif" fontWeight={700}>{g.label.text}</text>
+            </g>
+          );
+        });
+      })()}
 
       {/* Time axis (ET) */}
       {timeTicks(tf).filter((k) => k.i < NB).map((k) => {

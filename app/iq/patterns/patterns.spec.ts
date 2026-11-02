@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
-import { CATALOG, detectPatterns, patternsToShow, type PBar, type PatternHit } from "./index";
+import { CATALOG, detectPatterns, layoutLabels, patternGlyphs, patternsToShow, type PBar, type PatternHit } from "./index";
 
 /* ── builders: textbook shapes ─────────────────────────────────────────── */
 
@@ -164,5 +164,44 @@ describe("real FMP bars (AAPL / NVDA / MSFT daily, AAPL 5-minute)", () => {
     const small = shown.filter((h) => h.group === "candle" || h.group === "bar");
     assert.ok(small.length <= 6 && shown.length - small.length <= 6);
     assert.equal(new Set(small.map((h) => h.at)).size, small.length);
+  });
+});
+
+describe("how a pattern is drawn (shared by both charts)", () => {
+  it("bullish marks sit below the bar in green, bearish above in red; forming patterns say so; lines dash by role", () => {
+    const b = path2([[0, 100], [20, 120], [30, 110], [40, 120.2], [55, 100]]);
+    const dt = detectPatterns(b).find((q) => q.id === "double-top" || q.id === "big-m")!;
+    const g = patternGlyphs(dt);
+    assert.equal(g.color, "#f0565a");
+    assert.equal(g.label.above, true);
+    assert.equal(g.label.text, dt.name);
+    assert.deepEqual(g.lines[0].dash, [5, 4]);
+    const forming = patternGlyphs({ ...dt, confirmed: false, signal: "bull" });
+    assert.equal(forming.label.text, dt.name + " (forming)");
+    assert.equal(forming.label.above, false);
+    assert.equal(forming.color, "#3ddc84");
+    assert.ok(g.title.includes(CATALOG[dt.id].rule));
+  });
+});
+
+describe("name tags never overlap", () => {
+  it("stacks overlapping tags away from the bar (up for bearish, down for bullish)", () => {
+    const boxes = [
+      { x: 100, y: 50, w: 80, h: 16, above: true },
+      { x: 120, y: 50, w: 80, h: 16, above: true },
+      { x: 110, y: 90, w: 80, h: 16, above: false },
+      { x: 130, y: 90, w: 80, h: 16, above: false },
+      { x: 400, y: 50, w: 80, h: 16, above: true },
+    ];
+    const out = layoutLabels(boxes);
+    for (let i = 0; i < out.length; i++)
+      for (let j = i + 1; j < out.length; j++) {
+        const a = out[i], b = out[j];
+        const hit = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        assert.ok(!hit, `${i} overlaps ${j}`);
+      }
+    assert.ok(out[1].y < boxes[1].y, "bearish tag moved up");
+    assert.ok(out[3].y > boxes[3].y, "bullish tag moved down");
+    assert.equal(out[4].y, 50, "a free tag stays put");
   });
 });

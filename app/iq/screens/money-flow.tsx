@@ -34,6 +34,7 @@ import {
   MiniProfileSvg,
   FullChartSvg,
 } from "../money-flow/chart-svg";
+import { NOT_DETECTED } from "../patterns";
 import { useIQActions } from "../shell";
 import { ModuleSwitcher } from "../module-switcher";
 import { useSI } from "../si/si-context";
@@ -124,6 +125,7 @@ export function MoneyFlowScreen() {
     fvg: false,
     liq: false,
     str: false,
+    pat: false,
   });
 
   // Popover chart: the hovered stock's real 1-minute bars, grouped to the
@@ -2714,6 +2716,7 @@ export function MoneyFlowScreen() {
                 { k: "fvg", l: "FVG", c: "#5aa9e6" },
                 { k: "liq", l: "Liquidity", c: "#f0a24a" },
                 { k: "str", l: "Structure", c: "#3ddc84" },
+                { k: "pat", l: "Patterns", c: "#c39bff" },
               ].map((ly) => {
                 const active = popLayers[ly.k as keyof typeof popLayers];
                 return (
@@ -3106,6 +3109,19 @@ export function MoneyFlowScreen() {
                   {
                     term: "Liquidity",
                     desc: "BSL (above swing highs) and SSL (below swing lows) — where stop orders cluster. “✕ swept” once price has taken them.",
+                  },
+                  {
+                    term: "Patterns",
+                    desc: (
+                      <>
+                        Rule-based detection of the classic patterns: <b style={{ color: "#eef2f4" }}>candlesticks</b> (doji, hammer, engulfing, stars, soldiers / crows, …),{" "}
+                        <b style={{ color: "#eef2f4" }}>bar patterns</b> (inside / outside, key reversal, NR4 / NR7), <b style={{ color: "#eef2f4" }}>gaps and islands</b>,{" "}
+                        <b style={{ color: "#eef2f4" }}>chart patterns</b> (head and shoulders, double / triple tops and bottoms, triangles, wedges, channels, flags, pennants, cups, rounding tops / bottoms, …),{" "}
+                        <b style={{ color: "#eef2f4" }}>setups</b> (VCP, flat base, Darvas box, spring / upthrust, S/R flips) and <b style={{ color: "#eef2f4" }}>harmonics</b> (AB=CD, Gartley, Bat, Butterfly, Crab, Shark, Cypher).
+                        Green = bullish, red = bearish, blue = either way; “(forming)” = not yet confirmed. Hover a pattern for its exact rule. The chart shows the latest six candle marks and up to six larger patterns.
+                        Not detected (no fixed rule gives one answer): {NOT_DETECTED.map(([n]) => n).join(", ")}.
+                      </>
+                    ),
                   },
                   {
                     term: "Structure",
