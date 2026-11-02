@@ -383,10 +383,7 @@ export function FullChartSvg({
             : "#6ea8ff";
         const txt = `${n} ${formatCurrency(v)}`;
         const tw = txt.length * fz * 0.62 + 8;
-        const lx = Math.max(
-          PL + 2,
-          Math.min(PL + (KI + 1) * cw + 10, W - PR - tw - 2)
-        );
+        const lx = W - PR + 2;
         const ly = y(v);
         return (
           <g key={n}>

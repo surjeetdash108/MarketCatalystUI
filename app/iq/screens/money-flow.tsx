@@ -2462,7 +2462,7 @@ export function MoneyFlowScreen() {
         const s = hoveredStock.stock;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const boxW = popoverWidth(popTf);
+        const boxW = popoverWidth(5);
         const scale = popoverScale(vw, vh, boxW);
         // A wider box has room for more stat columns, which keeps it short.
         const statCols = Math.max(2, Math.min(4, Math.floor(boxW / 240)));
@@ -2474,7 +2474,7 @@ export function MoneyFlowScreen() {
         const stats = popoverStats(s, board ?? { gainers: [], losers: [] });
         const q = getDisplayQuote(s);
         const dChg = s.price - s.prevClose;
-        const chartW = popoverChartWidth(popTf);
+        const chartW = popoverChartWidth(5);
         const rect = hoveredStock.rect;
         return (
           <div
@@ -2492,6 +2492,7 @@ export function MoneyFlowScreen() {
               zIndex: 9999,
               left: popoverPlacement(rect, vw, vh, scale, 0, boxW).left,
               width: boxW,
+              maxWidth: "calc(100vw - 16px)",
               maxHeight: (vh - 16) / scale,
               overflowY: vw < 768 ? "auto" : "hidden",
               transform: `scale(${scale})`,
