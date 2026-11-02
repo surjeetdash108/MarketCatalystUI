@@ -25,6 +25,8 @@ import type { KeyMoment } from "./key-moments";
 import { useBackendBars } from "./hooks/useBackendBars";
 import { DataState, useShowVendorTags, vendorText } from "./utils";
 import { atr, boll, ema, etSessionDate, macd, rsi, sma, stoch, vwap, type Num } from "./indicators";
+import { chartPatterns, drawPatternOps, patternDrawOps } from "./chart-patterns";
+import type { PatternHit } from "./patterns";
 
 /* ══════════════════════════════════════════════════════════════════════
    Types + candle intervals
@@ -291,7 +293,7 @@ function computeStudy(s: Study, src: OHLCBar[], intraday: boolean): StudyData {
    Study store — shared by every chart, persisted per browser
    ══════════════════════════════════════════════════════════════════════ */
 
-interface ChartPrefs { studies: Study[]; favs: StudyKind[]; log: boolean }
+interface ChartPrefs { studies: Study[]; favs: StudyKind[]; log: boolean; /** Pattern overlay (app/iq/patterns) on the price chart. */ pattern: boolean }
 
 const PREFS_KEY = "mc.chart.prefs.v1";
 const DEFAULT_PREFS: ChartPrefs = {
@@ -302,6 +304,7 @@ const DEFAULT_PREFS: ChartPrefs = {
   ],
   favs: ["sma", "rsi"],
   log: false,
+  pattern: false,
 };
 
 const KINDS = new Set<StudyKind>(["atr", "bb", "ema", "macd", "rsi", "sma", "stoch", "vol", "vwap"]);
@@ -316,7 +319,7 @@ function parsePrefs(raw: string | null): ChartPrefs | null {
       !!s && typeof s.id === "string" && KINDS.has(s.k) && typeof s.col === "string" && typeof s.on === "boolean"
       && (s.len === null || (typeof s.len === "number" && s.len >= 1 && s.len <= 500)));
     const favs = Array.isArray(p.favs) ? p.favs.filter((k): k is StudyKind => KINDS.has(k)) : DEFAULT_PREFS.favs;
-    return { studies, favs, log: p.log === true };
+    return { studies, favs, log: p.log === true, pattern: p.pattern === true };
   } catch {
     return null;
   }
@@ -428,6 +431,8 @@ interface DrawModel {
   kmMarks: Array<{ i: number; km: KeyMoment }>;
   /** Index into kmMarks of the hovered / opened key moment. */
   kmActive: number | null;
+  /** Pattern hits to overlay on the price area, or null when the overlay is off. */
+  patterns: PatternHit[] | null;
   pal: Palette;
 }
 
@@ -674,6 +679,9 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
     ctx.closePath(); ctx.fill();
     kmHits.push({ k, x, y });
   });
+  // ── patterns (the "Pattern" button): same detector and look as Money Flow ──
+  if (m.patterns && m.patterns.length)
+    drawPatternOps(ctx, patternDrawOps(m.patterns, view.from, view.to, xOf, yOf, { l: g.l, r: g.r, top: g.top, bottom: g.priceB }), pal.font, pal.bg);
   ctx.restore();
 
   // ── study panes ──
@@ -903,7 +911,7 @@ function togglePreset(k: StudyKind, len: number | null) {
   });
 }
 
-function QuickStudyButtons({ studies }: { studies: readonly Study[] }) {
+function QuickStudyButtons({ studies, pattern }: { studies: readonly Study[]; pattern: boolean }) {
   const isOn = (k: StudyKind, len: number | null) => !!findPreset(studies, k, len)?.on;
   const ma = (k: "sma" | "ema", name: string) => {
     const any = MA_PERIODS.some(len => isOn(k, len));
@@ -932,6 +940,9 @@ function QuickStudyButtons({ studies }: { studies: readonly Study[] }) {
       {ma("ema", "EMA")}
       {flag("vol", null, "Volume")}
       {flag("rsi", 14, "RSI")}
+      <button type="button" className={`rng indbtn${pattern ? " on" : ""}`} aria-pressed={pattern}
+        title="Chart patterns, candlestick patterns, gaps, setups and harmonics — hover the glossary in Money Flow for each rule"
+        onClick={() => writePrefs(p => ({ ...p, pattern: !p.pattern }))}>Pattern</button>
     </>
   );
 }
@@ -1163,6 +1174,8 @@ function CandleChartInner({
   }, [data, n]);
   const intraday = interval ? isIntradayInterval(interval) : barMs < 20 * 3_600_000;
   const monthly = interval ? interval === "1M" : barMs > 20 * 86_400_000;
+  // Pattern overlay: detected once per data set while the "Pattern" button is on.
+  const patterns = useMemo(() => (prefs.pattern && data.length ? chartPatterns(data, intraday) : null), [prefs.pattern, data, intraday]);
 
   // Range mode only: older same-granularity bars, fetched purely to seed the
   // studies (never drawn) while anything besides volume is on.
@@ -1293,7 +1306,7 @@ function CandleChartInner({
     const hits = drawChart(ctx, {
       W: size.w, H: size.h, data, seed: series.seed, studies, computed, view, hover,
       chartType: chartType.toLowerCase(), log: prefs.log, intraday, monthly, erMarks,
-      erActive: erOpen?.k ?? erHover, kmMarks, kmActive: kmOpen?.k ?? kmHover, pal: readPalette(cv),
+      erActive: erOpen?.k ?? erHover, kmMarks, kmActive: kmOpen?.k ?? kmHover, patterns, pal: readPalette(cv),
     });
     erHitsRef.current = hits.er;
     kmHitsRef.current = hits.km;
@@ -1703,7 +1716,7 @@ function CandleChartInner({
           </svg>
           Indicators
         </button>
-        <QuickStudyButtons studies={studies} />
+        <QuickStudyButtons studies={studies} pattern={prefs.pattern} />
         <span className="cc-hint" title="Scroll to zoom · drag to pan · double-click to reset">Scroll: zoom · Drag: pan · Double-click: reset</span>
         <span className="cc-spacer" />
         {toolbarEnd}
