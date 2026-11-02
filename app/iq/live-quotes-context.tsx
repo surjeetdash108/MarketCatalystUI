@@ -27,6 +27,8 @@ import { apiGet } from "./backend";
 export interface LiveQuote {
   price: number | null;
   pctChange: number | null;
+  name?: string | null;
+  marketCap?: number | null;
   /**
    * Today's PRE-MARKET move (04:00–09:30 ET), from the vendor's
    * `early_trading_change_percent`. Verified: it persists through the regular
@@ -278,6 +280,8 @@ export function LiveQuotesProvider({ children }: { children: ReactNode }) {
             merged.set(q.ticker, {
               price: q.price,
               pctChange: q.changePct,
+              name: (q as any).name ?? null,
+              marketCap: (q as any).marketCap ?? null,
               earlyPct: q.earlyTradingChangePct ?? null,
               latePct: q.lateTradingChangePct ?? null,
               regularPct: q.regularTradingChangePct ?? null,

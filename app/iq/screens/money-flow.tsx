@@ -52,7 +52,7 @@ interface BarsResponse {
 }
 
 export function MoneyFlowScreen() {
-  const { openIndex } = useIQActions();
+  const { openStock, openIndex } = useIQActions();
   const { exitToMC, enterSI } = useSI();
 
   // The whole board — flows, movers, levels, scores — from GET /live/money-flow.
@@ -241,18 +241,31 @@ export function MoneyFlowScreen() {
 
   const handleTileEnter = (stock: BoardStock, e: React.MouseEvent) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    // Dismiss any stale unpinned popover immediately on entering another tile
+    setHoveredStock((cur) => (cur && cur.stock.t !== stock.t && !cur.pinned ? null : cur));
     const rect = e.currentTarget.getBoundingClientRect();
-    hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "enter", key: stock.t }, stock, rect), 150);
+    hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "enter", key: stock.t }, stock, rect), 120);
   };
 
   const handleTileLeave = () => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "leave" }), 250);
+    hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "leave" }), 200);
   };
 
   const handleTileClick = (stock: BoardStock, e: React.MouseEvent) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    applyPop({ type: "click", key: stock.t }, stock, e.currentTarget.getBoundingClientRect());
+    setHoveredStock(null);
+    const live = liveQuotes.get(stock.t);
+    const sec = stock.sector ? board?.sectors.find((s) => s.name === stock.sector) : null;
+    openStock(stock.t, {
+      price: live?.price ?? stock.price,
+      pctChange: live?.pctChange ?? stock.pctChange,
+      rvol: stock.rvol,
+      marketCap: live?.marketCap ?? stock.marketCap,
+      name: live?.name ?? stock.name,
+      sector: stock.sector,
+      sectorPctChange: sec?.avgPct ?? null,
+    });
   };
 
   // A pinned pop-up closes on a click outside it (or another tile's click re-pins) or on Esc.

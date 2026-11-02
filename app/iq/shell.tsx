@@ -86,9 +86,15 @@ export type FontKey =
   | "figtree" | "public-sans" | "sora" | "lexend" | "urbanist"
   | "work-sans" | "archivo" | "rubik" | "nunito-sans";
 
+import {
+  resolveStockDrawerData,
+  type StockDrawerContext,
+} from "./stock-drawer-data";
+import { useLiveQuotes } from "./live-quotes-context";
+
 // ---- IQ Actions context ----
 interface IQActions {
-  openStock: (sym: string) => void;
+  openStock: (sym: string, context?: StockDrawerContext) => void;
   openStockFull: (sym: string) => void;
   openStockDetail: (sym: string, list?: string[]) => void;
   openMoverModal: (sym: string) => void;
@@ -197,22 +203,23 @@ function NavIcon({ slug }: { slug: string }) {
 }
 
 // ---- Drawers ----
-function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
-  sym: string; companies: CompanyDoc[]; sectorsLive: SectorApiDoc[]; loading: boolean; onClose: () => void;
+function StockDrawer({ sym, context, companies, sectorsLive, loading, onClose }: {
+  sym: string; context?: StockDrawerContext; companies: CompanyDoc[]; sectorsLive: SectorApiDoc[]; loading: boolean; onClose: () => void;
 }) {
   const { openSector } = useIQActions();
-  const { exitToMC, enterSI } = useSI();
+  const quotes = useLiveQuotes([sym]);
   const c = companies.find(x => x.ticker === sym);
+  const live = quotes.get(sym);
+  const res = resolveStockDrawerData(sym, context, live, c, sectorsLive);
 
-  const name   = c?.name ?? sym;
-  const sector = c?.sector ?? null;
-  const p      = c?.price ?? null;
-  const chg    = c?.pctChange ?? null;
-  const rvol   = c?.rvol ?? null;
-  const rs     = c?.rsRating ?? null;
-  const mc     = c?.marketCap ?? null;
-  const mcTxt  = mc != null ? (mc >= 1e12 ? `$${(mc / 1e12).toFixed(2)}T` : `$${(mc / 1e9).toFixed(1)}B`) : null;
-  const sec    = sector ? sectorsLive.find(s => s.sector === sector) ?? null : null;
+  const name   = res.name;
+  const sector = res.sector;
+  const p      = res.price;
+  const chg    = res.pctChange;
+  const rvol   = res.rvol;
+  const rs     = res.rsRating;
+  const mcTxt  = res.marketCapText;
+  const secSentence = res.sectorSentence;
 
   return (
     <>
@@ -233,7 +240,7 @@ function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
         </div>
 
         <div className="drawer-b">
-          {!c ? (
+          {!res.hasData ? (
             <DataState loading={loading} label={`No live data synced for ${sym} yet.`} />
           ) : (
             <>
@@ -243,16 +250,16 @@ function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
                 {rvol != null && rvol >= 2 && <span className="pill amc">{rvol.toFixed(1)}× volume</span>}
               </div>
 
-              {sec && chg != null && (
+              {secSentence && (
                 <div className="ai-block" style={{ marginBottom: 14 }}>
                   <div className="card-h">
                     <h3 className="ai-c">◆ Sector context</h3>
                   </div>
                   <div className="card-b">
                     <p style={{ fontSize: ".85rem", lineHeight: 1.6, color: "var(--text)", margin: 0 }}>
-                      Its group, <b>{titleCaseLabel(sector)}</b>, is {sec.pctChange >= 0 ? "up" : "down"}{" "}
-                      <b className={cls(sec.pctChange)}>{sign(sec.pctChange)}</b> today —{" "}
-                      {(sec.pctChange >= 0) === (chg >= 0) ? "in line with sector strength." : "bucking its sector today."}
+                      Its group, <b>{titleCaseLabel(secSentence.sectorName)}</b>, is {secSentence.direction}{" "}
+                      <b className={cls(res.sectorPctChange ?? 0)}>{secSentence.pctText}</b> today —{" "}
+                      {secSentence.relation}
                     </p>
                   </div>
                 </div>
@@ -281,39 +288,54 @@ function StockDrawer({ sym, companies, sectorsLive, loading, onClose }: {
                 View {titleCaseLabel(sector)} in heatmap →
               </button>
             )}
-            <button
+            <a
+              href={`/menu/stock?sym=${encodeURIComponent(sym)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn cta"
               style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 width: "100%",
                 background: "#4ade80",
                 color: "#05210f",
                 fontWeight: 700,
                 fontSize: ".88rem",
+                textDecoration: "none",
+                boxSizing: "border-box",
               }}
               onClick={() => {
+                localStorage.setItem("iq-stock", sym);
+                localStorage.setItem("iq-nav-collapsed", "0");
+                window.dispatchEvent(new CustomEvent("iq-stock-change", { detail: sym }));
                 onClose();
-                exitToMC(sym);
               }}
             >
-              Open {sym} in Market Catalyst →
-            </button>
-            <button
+              Open {sym} in Market Catalyst ↗
+            </a>
+            <a
+              href={`/si?sym=${encodeURIComponent(sym)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn cta"
               style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 width: "100%",
                 background: "#16202c",
                 border: "1px solid #2a3a4a",
                 color: "#7fa8d0",
                 fontWeight: 700,
                 fontSize: ".88rem",
+                textDecoration: "none",
+                boxSizing: "border-box",
               }}
-              onClick={() => {
-                onClose();
-                enterSI(sym);
-              }}
+              onClick={() => onClose()}
             >
-              Open {sym} in Stock Intelligence →
-            </button>
+              Open {sym} in Stock Intelligence ↗
+            </a>
           </div>
         </div>
       </div>
@@ -1212,7 +1234,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const cmdRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLElement>(null);
   const [drawer, setDrawer] = useState<
-    | { type: "stock"; sym: string }
+    | { type: "stock"; sym: string; context?: StockDrawerContext }
     // | { type: "mover-modal"; sym: string }
     | { type: "stock-detail"; sym: string; list?: string[] }
     | { type: "earnings"; sym: string }
@@ -1329,7 +1351,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   // Action context
   const actions: IQActions = {
-    openStock: useCallback((sym) => setDrawer({ type: "stock", sym }), []),
+    openStock: useCallback((sym, context) => setDrawer({ type: "stock", sym, context }), []),
     openMoverModal: useCallback((sym) => setDrawer({ type: "stock-detail", sym }),[]),
     openStockDetail: useCallback((sym, list) => setDrawer({ type: "stock-detail", sym, list }), []),
     openStockFull: useCallback((sym) => {
@@ -1745,7 +1767,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
           {/* Drawers */}
           {drawer?.type === "stock" && (
-            <StockDrawer sym={drawer.sym} companies={shellCompanies} sectorsLive={shellSectors} loading={shellCompaniesLoading} onClose={() => setDrawer(null)} />
+            <StockDrawer sym={drawer.sym} context={drawer.context} companies={shellCompanies} sectorsLive={shellSectors} loading={shellCompaniesLoading} onClose={() => setDrawer(null)} />
           )}
           {/* {drawer?.type === "mover-modal" && (
             <MoverModal key={drawer.sym} sym={drawer.sym} onClose={() => setDrawer(null)} />
