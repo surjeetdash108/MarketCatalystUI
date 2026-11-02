@@ -8,6 +8,7 @@ import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { useIQActions } from "../shell";
 import { WatchlistPicker } from "../watchlist-picker";
 import { exchangeLabel } from "../exchange";
+import { useSI } from "../si/si-context";
 import type { AnalystConsensusDoc, CompanyDoc, IpoEventDoc } from "../types";
 import { StockLogo, DataState, VendorTag, cls, sign, fmtPrice } from "../utils";
 import {
@@ -134,7 +135,8 @@ function PriceChart({ sym }: { sym: string }) {
 }
 
 export function AlphaSignals() {
-  const { openStockDetail, openStockFull } = useIQActions();
+  const { openStockDetail } = useIQActions();
+  const { enterSI } = useSI();
   const { watchlists, addTicker, removeTicker, createList, tickerLimit } = useWatchlistsContext();
   const { data: companies, loading } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: analystDocs } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
@@ -366,7 +368,7 @@ export function AlphaSignals() {
               )}
               <div className="alp-detail-f">
                 <button type="button" className="alp-btn ghost" onClick={() => openStockDetail(curRow.ticker, rows.map(r => r.ticker))}>Open Stock</button>
-                <button type="button" className="alp-btn" onClick={() => openStockFull(curRow.ticker)}>Stock Intelligence →</button>
+                <button type="button" className="alp-btn" onClick={() => enterSI(curRow.ticker)}>Stock Intelligence →</button>
               </div>
             </>
           ) : (
@@ -387,7 +389,7 @@ export function AlphaSignals() {
               starred={watchlists.some(w => w.tickers.includes(pick.c.ticker.toUpperCase()))}
               onStar={e => void toggleWatch(pick.c.ticker, e)}
               onInfo={openInfo} onPrev={() => nextPick(-1)} onNext={() => nextPick(1)} onClose={() => setPickSym(null)}
-              onExplore={() => { setPickSym(null); openStockFull(pick.c.ticker); }}
+              onExplore={() => { setPickSym(null); enterSI(pick.c.ticker); }}
             />
           </div>
         </div>, modalHost)}
