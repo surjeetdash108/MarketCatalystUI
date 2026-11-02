@@ -21,6 +21,9 @@ import {
   popoverButtons,
   extendedPivots,
   liveLevels,
+  popText,
+  POP_MIN_TEXT_PX,
+  timeTicks,
   popoverNext,
   formatCurrency,
   sectorNotOnBoardText,
@@ -239,13 +242,14 @@ describe("Money Flow hover chart right edge", () => {
   it("leaves room for every R1/R2/S1/S2 box and the last-price tag, with a margin", () => {
     const pv = g.pivots!;
     const labels = [["R2", pv.r2], ["R1", pv.r1], ["S1", pv.s1], ["S2", pv.s2]].map(([n, v]) => `${n} ${formatCurrency(v as number)}`);
-    const pr = chartRightGutter(labels, formatCurrency(g.price));
+    const pr = chartRightGutter(labels, formatCurrency(g.price), FZ, 12);
     for (const t of labels) assert.ok(boxRight(t, pr) <= -4, `${t} box ends ${boxRight(t, pr).toFixed(1)}px from the edge`);
     assert.ok(-pr + 4 + formatCurrency(g.price).length * 12 * 0.62 <= -4, "last-price tag fits");
   });
   it("never goes below the old 72px, and grows for four-digit prices", () => {
-    assert.equal(chartRightGutter([], "9.75"), 72); // no pivot in view, short price
-    assert.ok(chartRightGutter(["R2 1,417.54"], "1,410.00") > chartRightGutter(["R2 328.40"], "283.79"));
+    assert.equal(chartRightGutter([], "9.75", 13.5, 12), 72); // no pivot in view, short price
+    assert.ok(chartRightGutter(["R2 1,417.54"], "1,410.00", 13.5, 12) > chartRightGutter(["R2 328.40"], "283.79", 13.5, 12));
+    assert.ok(chartRightGutter(["R2 328.40"], "283.79", 20, 18) > chartRightGutter(["R2 328.40"], "283.79", 13.5, 12)); // grows with the text size
   });
 });
 
@@ -300,5 +304,32 @@ describe("pivot levels renumber from the current price", () => {
     const l = liveLevels(pv, 321.5); // below S1
     assert.deepEqual(l.filter((r) => r.name[0] === "S").map((r) => [r.name, r.from]), [["S1", "S2"], ["S2", "S3"]]);
     near(l.find((r) => r.name === "S1")!.v, pv.s2!);
+  });
+});
+
+describe("Money Flow pop-up text stays readable", () => {
+  it("no text draws smaller than 12px on screen, whatever the box scale", () => {
+    assert.equal(POP_MIN_TEXT_PX, 12);
+    for (const [vw, vh] of [[1920, 960], [1440, 900], [1280, 720]] as const)
+      for (const tf of [1, 3, 5, 15]) {
+        const sc = popoverScale(vw, vh, popoverWidth(tf));
+        for (const base of [10, 11, 12, 14]) assert.ok(popText(base, sc) * sc >= 12 - 1e-9, `${vw}x${vh} ${tf}m base ${base}: ${popText(base, sc) * sc}`);
+      }
+  });
+  it("keeps the design size when the box is not shrunk", () => {
+    assert.equal(popText(13, 1), 13);
+    assert.equal(popText(13, 4 / 3), 13);
+  });
+});
+
+describe("Money Flow hover chart time axis", () => {
+  it("labels the session in ET: every hour on 5- and 15-minute candles, every 30 minutes on 1 and 3", () => {
+    assert.deepEqual(timeTicks(5).map((t) => t.label), ["9:30", "10:30", "11:30", "12:30", "13:30", "14:30", "15:30"]);
+    assert.deepEqual(timeTicks(15).map((t) => t.label), ["9:30", "10:30", "11:30", "12:30", "13:30", "14:30", "15:30"]);
+    assert.equal(timeTicks(1)[1].label, "10:00");
+    assert.equal(timeTicks(3).length, 13);
+    // slot index = minutes since 9:30 ÷ candle size (the chart draws slot i at x = PL + i·cw)
+    assert.equal(timeTicks(5)[1].i, 12);
+    assert.equal(timeTicks(1)[1].i, 30);
   });
 });

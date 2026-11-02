@@ -129,6 +129,31 @@ export function liveLevels(p: PivotLevels | null | undefined, price: number): Li
   return [...pick("R").reverse(), ...pick("S")];
 }
 
+/** Smallest on-screen text size in the stock pop-up (CSS px, after the box's scale). */
+export const POP_MIN_TEXT_PX = 12;
+
+/**
+ * Font size to draw at inside the pop-up so the text is never smaller than
+ * POP_MIN_TEXT_PX on screen: the design size when the box is at full size or
+ * larger, bigger when the box is scaled down to fit a smaller window or a
+ * wide chart.
+ */
+export const popText = (base: number, scale: number): number => Math.max(base, POP_MIN_TEXT_PX / (scale > 0 ? scale : 1));
+
+/**
+ * Time-axis ticks for the hover chart, in ET: every hour on 5- and 15-minute
+ * candles, every 30 minutes on 1- and 3-minute ones. `i` is the candle slot
+ * (minutes since 09:30 ÷ candle size), matching the chart's x positions.
+ */
+export function timeTicks(tf: number): Array<{ i: number; label: string }> {
+  const step = tf <= 3 ? 30 : 60, out: Array<{ i: number; label: string }> = [];
+  for (let m = 0; m < 390; m += step) {
+    const t = 570 + m;
+    out.push({ i: m / tf, label: `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}` });
+  }
+  return out;
+}
+
 /** What is open in the stock pop-up: which tile, and whether a click pinned it. */
 export interface PopoverState { key: string; pinned: boolean }
 export type PopoverEvent = { type: "enter" | "click"; key: string } | { type: "leave" } | { type: "dismiss" };
@@ -157,14 +182,14 @@ export const popoverButtons = (): [string, string] => ["Open in Market Catalyst 
 
 /**
  * Width of the hover chart's right gutter: wide enough for the widest pivot
- * label box (13.5px mono, drawn 2px inside the gutter with 4px padding each
- * side) and the last-price tag (12px mono, 4px inside), plus a margin; never
- * narrower than the original 72px.
+ * label box (mono at `levelFz`, drawn 2px inside the gutter with 4px padding
+ * each side) and the last-price tag (mono at `tagFz`, 4px inside), plus a
+ * margin; never narrower than the original 72px.
  */
-export function chartRightGutter(pivotLabels: string[], priceLabel: string): number {
+export function chartRightGutter(pivotLabels: string[], priceLabel: string, levelFz = 13.5, tagFz = 12): number {
   const MONO = 0.62, MARGIN = 8;
-  const box = Math.max(0, ...pivotLabels.map((t) => 2 + t.length * 13.5 * MONO + 8));
-  const tag = 4 + priceLabel.length * 12 * MONO;
+  const box = Math.max(0, ...pivotLabels.map((t) => 2 + t.length * levelFz * MONO + 8));
+  const tag = 4 + priceLabel.length * tagFz * MONO;
   return Math.max(72, Math.ceil(Math.max(box, tag) + MARGIN));
 }
 

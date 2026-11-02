@@ -24,6 +24,7 @@ import {
   type MoneyFlowBoard,
   type TileLayout,
   liveLevels,
+  popText,
   popoverButtons,
   popoverNext,
   type PopoverEvent,
@@ -2584,7 +2585,7 @@ export function MoneyFlowScreen() {
                 </span>
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: popText(12, scale),
                     color: "#7a8481",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -2606,7 +2607,7 @@ export function MoneyFlowScreen() {
                 }}
               >
                 <span style={{ fontSize: 18, fontWeight: 700, color: "#eef2f4", lineHeight: 1.1 }}>{q.priceStr}</span>
-                <span style={{ fontSize: 12, color: q.isUp ? G : R }}>
+                <span style={{ fontSize: popText(13, scale), color: q.isUp ? G : R }}>
                   {q.pctStr}
                   {!q.isAH && ` · ${dChg >= 0 ? "+" : "−"}${Math.abs(dChg).toFixed(2)}`}
                 </span>
@@ -2632,7 +2633,7 @@ export function MoneyFlowScreen() {
                 >
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: popText(11, scale),
                       fontWeight: 700,
                       letterSpacing: ".12em",
                       textTransform: "uppercase",
@@ -2645,7 +2646,7 @@ export function MoneyFlowScreen() {
                   <span
                     style={{
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 11.5,
+                      fontSize: popText(12.5, scale),
                       color: toneColor[st.tone],
                       fontWeight: st.bold ? 800 : 400,
                       whiteSpace: "nowrap",
@@ -2663,7 +2664,7 @@ export function MoneyFlowScreen() {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: popText(11, scale),
                   fontWeight: 700,
                   letterSpacing: ".12em",
                   textTransform: "uppercase",
@@ -2692,7 +2693,7 @@ export function MoneyFlowScreen() {
                       borderRadius: 5,
                       padding: "3px 10px",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 11,
+                      fontSize: popText(12, scale),
                       fontWeight: 700,
                       cursor: "pointer",
                       background: popTf === tf ? "#c9a24a" : "transparent",
@@ -2737,7 +2738,7 @@ export function MoneyFlowScreen() {
                       color: active ? ly.c : "#7a8481",
                       borderRadius: 5,
                       padding: "4px 6px",
-                      fontSize: 10.5,
+                      fontSize: popText(11.5, scale),
                       fontWeight: 700,
                       cursor: "pointer",
                       whiteSpace: "nowrap",
@@ -2767,14 +2768,14 @@ export function MoneyFlowScreen() {
                     display: "grid",
                     placeItems: "center",
                     color: "#7a8481",
-                    fontSize: 12,
+                    fontSize: popText(13, scale),
                     fontFamily: "'JetBrains Mono', monospace",
                   }}
                 >
                   Loading {s.t} 1-minute bars…
                 </div>
               ) : (
-                <FullChartSvg stock={s} candles={popCandles} layers={popLayers} tf={popTf} width={chartW} height={POPOVER.chartH} />
+                <FullChartSvg stock={s} candles={popCandles} layers={popLayers} tf={popTf} width={chartW} height={POPOVER.chartH} scale={scale} />
               )}
             </div>
 
@@ -2800,7 +2801,7 @@ export function MoneyFlowScreen() {
                     border: `1px solid ${b.bd}`,
                     color: b.fg,
                     fontFamily: "Manrope, sans-serif",
-                    fontSize: 11,
+                    fontSize: popText(12, scale),
                     fontWeight: 700,
                     cursor: "pointer",
                     whiteSpace: "nowrap",
