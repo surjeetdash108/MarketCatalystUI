@@ -88,6 +88,32 @@ export interface MoneyFlowBoard {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
+/** What is open in the stock pop-up: which tile, and whether a click pinned it. */
+export interface PopoverState { key: string; pinned: boolean }
+export type PopoverEvent = { type: "enter" | "click"; key: string } | { type: "leave" } | { type: "dismiss" };
+
+/**
+ * One pop-up for hover and click. Hover opens it; leaving closes it unless a
+ * click pinned it. A pinned pop-up stays while the pointer moves elsewhere,
+ * moves to another tile on that tile's click, and closes on dismiss (a click
+ * outside or Esc).
+ */
+export function popoverNext(cur: PopoverState | null, ev: PopoverEvent): PopoverState | null {
+  switch (ev.type) {
+    case "enter":
+      return cur?.pinned ? cur : { key: ev.key, pinned: false };
+    case "click":
+      return { key: ev.key, pinned: true };
+    case "leave":
+      return cur?.pinned ? cur : null;
+    case "dismiss":
+      return null;
+  }
+}
+
+/** The pop-up's open buttons; the ticker is already in the pop-up's title. */
+export const popoverButtons = (): [string, string] => ["Open in Market Catalyst →", "Open in Stock Intelligence →"];
+
 /**
  * Width of the hover chart's right gutter: wide enough for the widest pivot
  * label box (13.5px mono, drawn 2px inside the gutter with 4px padding each

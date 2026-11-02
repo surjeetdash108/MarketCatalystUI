@@ -18,6 +18,8 @@ import {
   popoverWidth,
   POPOVER,
   chartRightGutter,
+  popoverButtons,
+  popoverNext,
   formatCurrency,
   sectorNotOnBoardText,
   sectorView,
@@ -242,5 +244,25 @@ describe("Money Flow hover chart right edge", () => {
   it("never goes below the old 72px, and grows for four-digit prices", () => {
     assert.equal(chartRightGutter([], "9.75"), 72); // no pivot in view, short price
     assert.ok(chartRightGutter(["R2 1,417.54"], "1,410.00") > chartRightGutter(["R2 328.40"], "283.79"));
+  });
+});
+
+describe("Money Flow pop-up: click is the same pop-up as hover, pinned", () => {
+  const T = board.gainers[0].t, U = board.gainers[1].t;
+  it("hover shows it, leaving hides it", () => {
+    const a = popoverNext(null, { type: "enter", key: T });
+    assert.deepEqual(a, { key: T, pinned: false });
+    assert.equal(popoverNext(a, { type: "leave" }), null);
+  });
+  it("a click pins the same pop-up; leaving or hovering another tile keeps it", () => {
+    const p = popoverNext(popoverNext(null, { type: "enter", key: T }), { type: "click", key: T });
+    assert.deepEqual(p, { key: T, pinned: true });
+    assert.deepEqual(popoverNext(p, { type: "leave" }), p);
+    assert.deepEqual(popoverNext(p, { type: "enter", key: U }), p);
+    assert.deepEqual(popoverNext(p, { type: "click", key: U }), { key: U, pinned: true });
+    assert.equal(popoverNext(p, { type: "dismiss" }), null);
+  });
+  it("buttons open the stock without repeating its ticker", () => {
+    assert.deepEqual(popoverButtons(), ["Open in Market Catalyst →", "Open in Stock Intelligence →"]);
   });
 });

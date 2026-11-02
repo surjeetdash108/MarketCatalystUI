@@ -23,6 +23,9 @@ import {
   type BoardStock,
   type MoneyFlowBoard,
   type TileLayout,
+  popoverButtons,
+  popoverNext,
+  type PopoverEvent,
 } from "../money-flow/engine";
 import {
   SparklineSvg,
@@ -46,7 +49,7 @@ interface BarsResponse {
 }
 
 export function MoneyFlowScreen() {
-  const { openStock, openIndex } = useIQActions();
+  const { openIndex } = useIQActions();
   const { exitToMC, enterSI } = useSI();
 
   // The whole board — flows, movers, levels, scores — from GET /live/money-flow.
@@ -105,6 +108,8 @@ export function MoneyFlowScreen() {
   const [hoveredStock, setHoveredStock] = useState<{
     stock: BoardStock;
     rect: DOMRect;
+    /** Pinned by a click: stays open until a click outside or Esc. */
+    pinned?: boolean;
   } | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Which stock + timeframe the popover chart was last scrolled to the live candle for
@@ -219,21 +224,47 @@ export function MoneyFlowScreen() {
     };
   };
 
+  // One pop-up for hover and click (popoverNext): hover opens it, a click pins it.
+  const applyPop = (ev: PopoverEvent, stock?: BoardStock, rect?: DOMRect) =>
+    setHoveredStock((cur) => {
+      const nx = popoverNext(cur ? { key: cur.stock.t, pinned: !!cur.pinned } : null, ev);
+      if (!nx) return null;
+      if (cur && nx.key === cur.stock.t) return nx.pinned === !!cur.pinned ? cur : { ...cur, pinned: nx.pinned };
+      if (!stock || !rect) return cur;
+      setPopTf(5);
+      return { stock, rect, pinned: nx.pinned };
+    });
+
   const handleTileEnter = (stock: BoardStock, e: React.MouseEvent) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     const rect = e.currentTarget.getBoundingClientRect();
-    hoverTimeoutRef.current = setTimeout(() => {
-      setPopTf(5);
-      setHoveredStock({ stock, rect });
-    }, 150);
+    hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "enter", key: stock.t }, stock, rect), 150);
   };
 
   const handleTileLeave = () => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    hoverTimeoutRef.current = setTimeout(() => {
-      setHoveredStock(null);
-    }, 250);
+    hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "leave" }), 250);
   };
+
+  const handleTileClick = (stock: BoardStock, e: React.MouseEvent) => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    applyPop({ type: "click", key: stock.t }, stock, e.currentTarget.getBoundingClientRect());
+  };
+
+  // A pinned pop-up closes on a click outside it (or another tile's click re-pins) or on Esc.
+  const pinned = !!hoveredStock?.pinned;
+  useEffect(() => {
+    if (!pinned) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("[data-mf-pop]") || t?.closest("[data-mf-tile]")) return;
+      applyPop({ type: "dismiss" });
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") applyPop({ type: "dismiss" }); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [pinned]);
 
   return (
     <div className="mf-page-wrap">
@@ -1400,7 +1431,8 @@ export function MoneyFlowScreen() {
                       key={fc.t}
                       type="button"
                       className="mf-mid-card"
-                      onClick={() => openStock(fc.t)}
+                      data-mf-tile=""
+                      onClick={(e) => handleTileClick(fc, e)}
                       onMouseEnter={(e) => handleTileEnter(fc, e)}
                       onMouseLeave={handleTileLeave}
                       style={{
@@ -1731,7 +1763,8 @@ export function MoneyFlowScreen() {
                       key={fc.t}
                       type="button"
                       className="mf-mid-card"
-                      onClick={() => openStock(fc.t)}
+                      data-mf-tile=""
+                      onClick={(e) => handleTileClick(fc, e)}
                       onMouseEnter={(e) => handleTileEnter(fc, e)}
                       onMouseLeave={handleTileLeave}
                       style={{
@@ -2029,7 +2062,8 @@ export function MoneyFlowScreen() {
                     <button
                       key={x.t}
                       type="button"
-                      onClick={() => openStock(x.t)}
+                      data-mf-tile=""
+                      onClick={(e) => handleTileClick(fullStock, e)}
                       onMouseEnter={(e) => handleTileEnter(fullStock, e)}
                       onMouseLeave={handleTileLeave}
                       style={{
@@ -2265,7 +2299,8 @@ export function MoneyFlowScreen() {
                     <button
                       key={x.t}
                       type="button"
-                      onClick={() => openStock(x.t)}
+                      data-mf-tile=""
+                      onClick={(e) => handleTileClick(fullStock, e)}
                       onMouseEnter={(e) => handleTileEnter(fullStock, e)}
                       onMouseLeave={handleTileLeave}
                       style={{
@@ -2478,6 +2513,7 @@ export function MoneyFlowScreen() {
         const rect = hoveredStock.rect;
         return (
           <div
+            data-mf-pop=""
             onMouseEnter={() => {
               if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
             }}
@@ -2742,8 +2778,8 @@ export function MoneyFlowScreen() {
             {/* Open the stock elsewhere */}
             <div style={{ display: "flex", gap: 6, flex: "none" }}>
               {[
-                { l: `Open ${s.t} in Market Catalyst →`, go: () => exitToMC(s.t), bg: "#4ade80", bd: "#22c55e", fg: "#05210f" },
-                { l: `Open ${s.t} in Stock Intelligence →`, go: () => enterSI(s.t), bg: "#161b1d", bd: "#233038", fg: "#7fa8d0" },
+                { l: popoverButtons()[0], go: () => exitToMC(s.t), bg: "#4ade80", bd: "#22c55e", fg: "#05210f" },
+                { l: popoverButtons()[1], go: () => enterSI(s.t), bg: "#161b1d", bd: "#233038", fg: "#7fa8d0" },
               ].map((b) => (
                 <button
                   key={b.l}
