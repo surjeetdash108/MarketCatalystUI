@@ -23,6 +23,7 @@ import {
   type BoardStock,
   type MoneyFlowBoard,
   type TileLayout,
+  liveLevels,
   popoverButtons,
   popoverNext,
   type PopoverEvent,
@@ -1629,10 +1630,11 @@ export function MoneyFlowScreen() {
                             v: fc.zone ? `${fc.zone.lo.toFixed(1)}–${fc.zone.hi.toFixed(1)}` : "—",
                             c: "#e0bb5e",
                           },
-                          { k: "R2", v: formatLevel(fc.pivots?.r2, 1), c: "#e0bb5e" },
-                          { k: "R1", v: formatLevel(fc.pivots?.r1, 1), c: "#e0bb5e" },
-                          { k: "S1", v: formatLevel(fc.pivots?.s1, 1), c: "#e6ebe8" },
-                          { k: "S2", v: formatLevel(fc.pivots?.s2, 1), c: "#f0565a" },
+                          ...(["R2", "R1", "S1", "S2"] as const).map((k) => ({
+                            k,
+                            v: formatLevel(liveLevels(fc.pivots, fc.price).find((l) => l.name === k)?.v, 1),
+                            c: k[0] === "R" ? "#e0bb5e" : k === "S1" ? "#e6ebe8" : "#f0565a",
+                          })),
                           { k: "R:R", v: fc.rr == null ? "—" : `1:${fc.rr.toFixed(1)}`, c: "#e6ebe8" },
                         ].map((l) => (
                           <span
@@ -1961,10 +1963,11 @@ export function MoneyFlowScreen() {
                             v: fc.zone ? `${fc.zone.lo.toFixed(1)}–${fc.zone.hi.toFixed(1)}` : "—",
                             c: "#e0bb5e",
                           },
-                          { k: "R2", v: formatLevel(fc.pivots?.r2, 1), c: "#e0bb5e" },
-                          { k: "R1", v: formatLevel(fc.pivots?.r1, 1), c: "#e0bb5e" },
-                          { k: "S1", v: formatLevel(fc.pivots?.s1, 1), c: "#e6ebe8" },
-                          { k: "S2", v: formatLevel(fc.pivots?.s2, 1), c: "#f0565a" },
+                          ...(["R2", "R1", "S1", "S2"] as const).map((k) => ({
+                            k,
+                            v: formatLevel(liveLevels(fc.pivots, fc.price).find((l) => l.name === k)?.v, 1),
+                            c: k[0] === "R" ? "#e0bb5e" : k === "S1" ? "#e6ebe8" : "#f0565a",
+                          })),
                           { k: "R:R", v: fc.rr == null ? "—" : `1:${fc.rr.toFixed(1)}`, c: "#e6ebe8" },
                         ].map((l) => (
                           <span
@@ -3064,7 +3067,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "R1 · R2 · S1 · S2",
-                    desc: "Classic pivot levels from the previous session’s high and low and its official close.",
+                    desc: "Classic pivot levels from the last completed session’s high, low and official close (TradingView Pivot Points Standard, Traditional), counted from the current price: the two levels above are R1 and R2, the two below S1 and S2. Once price touches or passes R1, the old R2 is shown as R1 and R3 as R2 (out to R5); the same for S levels on the way down.",
                   },
                   {
                     term: "Zone",

@@ -88,6 +88,47 @@ export interface MoneyFlowBoard {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
+type LevelName = "R1" | "R2" | "R3" | "R4" | "R5" | "S1" | "S2" | "S3" | "S4" | "S5";
+
+/**
+ * Classic pivots out to R5/S5 — TradingView "Pivot Points Standard",
+ * Traditional type. The board sends P, R1–R3, S1–S3; the session high and low
+ * are recovered from them (R1 = 2P − L, S1 = 2P − H) for R4/R5 and S4/S5.
+ */
+export function extendedPivots(p: PivotLevels): Record<LevelName, number | null> {
+  const P = p.pivot, ok = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);
+  const out: Record<LevelName, number | null> = { R1: p.r1, R2: p.r2, R3: p.r3, R4: null, R5: null, S1: p.s1, S2: p.s2, S3: p.s3, S4: null, S5: null };
+  if (ok(P) && ok(p.r1) && ok(p.s1)) {
+    const H = 2 * P - p.s1, L = 2 * P - p.r1;
+    out.R4 = P * 3 + (H - 3 * L);
+    out.R5 = P * 4 + (H - 4 * L);
+    out.S4 = P * 3 - (3 * H - L);
+    out.S5 = P * 4 - (4 * H - L);
+  }
+  return out;
+}
+
+/** A level as shown: its name counted from the current price, and the classic level it is. */
+export interface LiveLevel { name: "R1" | "R2" | "S1" | "S2"; v: number; from: LevelName }
+
+/**
+ * The two resistances above price and the two supports below it, renumbered
+ * from price: once price touches or passes R1, R2 is shown as R1 and R3 as R2
+ * (and so on out to R5); the same for S levels on the way down. Ordered top
+ * to bottom: R2, R1, S1, S2.
+ */
+export function liveLevels(p: PivotLevels | null | undefined, price: number): LiveLevel[] {
+  if (!p || !Number.isFinite(price)) return [];
+  const x = extendedPivots(p);
+  const pick = (side: "R" | "S") =>
+    ([1, 2, 3, 4, 5] as const)
+      .map((n) => ({ from: `${side}${n}` as LevelName, v: x[`${side}${n}` as LevelName] }))
+      .filter((l): l is { from: LevelName; v: number } => l.v != null && Number.isFinite(l.v) && (side === "R" ? l.v > price : l.v < price))
+      .slice(0, 2)
+      .map((l, i) => ({ name: `${side}${i + 1}` as LiveLevel["name"], v: l.v, from: l.from }));
+  return [...pick("R").reverse(), ...pick("S")];
+}
+
 /** What is open in the stock pop-up: which tile, and whether a click pinned it. */
 export interface PopoverState { key: string; pinned: boolean }
 export type PopoverEvent = { type: "enter" | "click"; key: string } | { type: "leave" } | { type: "dismiss" };

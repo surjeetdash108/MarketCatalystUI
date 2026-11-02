@@ -6,7 +6,7 @@
 
 import React from "react";
 import type { BoardStock, OHLCVBar, SwingPoint } from "./engine";
-import { candleIndexAt, chartRightGutter, computeOrderBlocks, computeSwings, formatCurrency } from "./engine";
+import { candleIndexAt, chartRightGutter, computeOrderBlocks, computeSwings, formatCurrency, liveLevels } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
 function levelsInView(levels: Array<number | null | undefined>, lo: number, hi: number): number[] {
@@ -25,7 +25,9 @@ export function SparklineSvg({ stock, candles }: { stock: BoardStock; candles: O
   const cMax = Math.max(...candles.map((x) => x.h));
   const zone = stock.zone;
   const pv = stock.pivots;
-  const lv = levelsInView([zone?.lo, zone?.hi, pv?.s1, pv?.r1, pv?.r2], cMin, cMax);
+  const live = liveLevels(pv, cl[cl.length - 1]);
+  const lvl = (n: string) => live.find((l) => l.name === n)?.v ?? null;
+  const lv = levelsInView([zone?.lo, zone?.hi, lvl("S1"), lvl("R1"), lvl("R2")], cMin, cMax);
   const mx = Math.max(cMax, ...lv);
   const mn = Math.min(cMin, ...lv);
   const y = (v: number) => 4 + ((mx - v) / (mx - mn || 1)) * (H - 8);
@@ -51,9 +53,9 @@ export function SparklineSvg({ stock, candles }: { stock: BoardStock; candles: O
       )}
       {(
         [
-          ["s", pv?.s1, "rgba(230,235,232,.45)"],
-          ["r1", pv?.r1, "rgba(224,187,94,.6)"],
-          ["r2", pv?.r2, "rgba(224,187,94,.6)"],
+          ["s", lvl("S1"), "rgba(230,235,232,.45)"],
+          ["r1", lvl("R1"), "rgba(224,187,94,.6)"],
+          ["r2", lvl("R2"), "rgba(224,187,94,.6)"],
         ] as Array<[string, number | null | undefined, string]>
       )
         .filter(([, v]) => inView(v))
@@ -218,12 +220,8 @@ export function FullChartSvg({
   const safeStockPx = Number.isFinite(lastPx) && lastPx > 0 ? lastPx : stock.price;
   const pv = stock.pivots;
 
-  const rawLevels: Array<[string, number | null]> = [
-    ["R2", pv?.r2 ?? null],
-    ["R1", pv?.r1 ?? null],
-    ["S1", pv?.s1 ?? null],
-    ["S2", pv?.s2 ?? null],
-  ];
+  // Two levels each side of price, renumbered from price (liveLevels): past R1, R2 shows as R1, R3 as R2.
+  const rawLevels: Array<[string, number | null]> = liveLevels(pv, safeStockPx).map((l) => [l.name, l.v]);
 
   const lv: Array<[string, number]> = rawLevels.filter(
     (x): x is [string, number] =>

@@ -19,6 +19,8 @@ import {
   POPOVER,
   chartRightGutter,
   popoverButtons,
+  extendedPivots,
+  liveLevels,
   popoverNext,
   formatCurrency,
   sectorNotOnBoardText,
@@ -264,5 +266,39 @@ describe("Money Flow pop-up: click is the same pop-up as hover, pinned", () => {
   });
   it("buttons open the stock without repeating its ticker", () => {
     assert.deepEqual(popoverButtons(), ["Open in Market Catalyst →", "Open in Stock Intelligence →"]);
+  });
+});
+
+describe("pivot levels renumber from the current price", () => {
+  // Real levels from the fixture board (GOOGL, 2026-10-29): P 324.65, R1 326.65, R2 328.40, R3 330.40, S1 322.90, S2 320.90, S3 319.15.
+  const pv = [...board.gainers, ...board.losers].find((x) => x.t === "GOOGL")!.pivots!;
+  const near = (a: number | null, b: number) => assert.ok(a != null && Math.abs(a - b) < 0.02, `${a} vs ${b}`);
+  it("extends to R4/R5 and S4/S5 with TradingView's Traditional formulas (H, L recovered from P, R1, S1)", () => {
+    const x = extendedPivots(pv);
+    const H = 2 * pv.pivot! - pv.s1!, L = 2 * pv.pivot! - pv.r1!, P = pv.pivot!;
+    near(x.R3, pv.r3!);
+    near(x.S3, pv.s3!);
+    near(x.R4, P * 3 + (H - 3 * L));
+    near(x.S4, P * 3 - (3 * H - L));
+    near(x.R5, P * 4 + (H - 4 * L));
+    near(x.S5, P * 4 - (4 * H - L));
+  });
+  it("between S1 and R1 the names are the classic ones", () => {
+    const l = liveLevels(pv, 324.0);
+    assert.deepEqual(l.map((r) => [r.name, r.from]), [["R2", "R2"], ["R1", "R1"], ["S1", "S1"], ["S2", "S2"]]);
+  });
+  it("once price touches or passes R1, R2 is called R1 and R3 is called R2", () => {
+    for (const px of [pv.r1!, 327.5]) {
+      const l = liveLevels(pv, px);
+      assert.deepEqual(l.filter((r) => r.name[0] === "R").map((r) => [r.name, r.from]), [["R2", "R3"], ["R1", "R2"]], String(px));
+      near(l.find((r) => r.name === "R1")!.v, pv.r2!);
+    }
+    const far = liveLevels(pv, 331); // above R3: R4 → R1, R5 → R2
+    assert.deepEqual(far.filter((r) => r.name[0] === "R").map((r) => r.from), ["R5", "R4"]);
+  });
+  it("supports do the same on the way down", () => {
+    const l = liveLevels(pv, 321.5); // below S1
+    assert.deepEqual(l.filter((r) => r.name[0] === "S").map((r) => [r.name, r.from]), [["S1", "S2"], ["S2", "S3"]]);
+    near(l.find((r) => r.name === "S1")!.v, pv.s2!);
   });
 });
