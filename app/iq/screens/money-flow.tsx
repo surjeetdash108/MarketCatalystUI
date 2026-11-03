@@ -40,6 +40,7 @@ import { ModuleSwitcher } from "../module-switcher";
 import { useSI } from "../si/si-context";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
 import { useApiResource } from "../hooks/useApiResource";
+import { PopFullChart } from "../money-flow/full-chart";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
 import { useLiveQuotes } from "../live-quotes-context";
@@ -119,6 +120,8 @@ export function MoneyFlowScreen() {
 
   // Chart options in popover
   const [popTf, setPopTf] = useState<number>(5);
+  // "Full Chart": the stock screen's zoomable chart in place of the one-day chart.
+  const [popFull, setPopFull] = useState(false);
   const [popLayers, setPopLayers] = useState({
     ob: true,
     vwap: true,
@@ -236,6 +239,7 @@ export function MoneyFlowScreen() {
       if (cur && nx.key === cur.stock.t) return nx.pinned === !!cur.pinned ? cur : { ...cur, pinned: nx.pinned };
       if (!stock || !rect) return cur;
       setPopTf(5);
+      setPopFull(false);
       return { stock, rect, pinned: nx.pinned };
     });
 
@@ -2714,6 +2718,26 @@ export function MoneyFlowScreen() {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                aria-pressed={popFull}
+                title={popFull ? "Back to the one-day chart" : "Zoomable chart with history: scroll to zoom, drag to pan"}
+                onClick={() => setPopFull((v) => !v)}
+                style={{
+                  marginLeft: "auto",
+                  border: `1px solid ${popFull ? "#c9a24a" : "#233038"}`,
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: popText(12, scale),
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  background: popFull ? "#c9a24a" : "transparent",
+                  color: popFull ? "#08090a" : "#aab3b0",
+                }}
+              >
+                Full Chart
+              </button>
             </div>
 
             {/* Layer toggles: one row */}
@@ -2770,7 +2794,9 @@ export function MoneyFlowScreen() {
                 overflow: "hidden",
               }}
             >
-              {popBarsLoading && popCandles.length === 0 ? (
+              {popFull ? (
+                <PopFullChart sym={s.t} tf={popTf} layers={popLayers} height={POPOVER.chartH - 44} />
+              ) : popBarsLoading && popCandles.length === 0 ? (
                 <div
                   style={{
                     height: POPOVER.chartH,

@@ -27,6 +27,8 @@ import { DataState, useShowVendorTags, vendorText } from "./utils";
 import { atr, boll, ema, etSessionDate, macd, rsi, sma, stoch, vwap, type Num } from "./indicators";
 import { chartPatterns, drawPatternOps, patternDrawOps } from "./chart-patterns";
 import type { PatternHit } from "./patterns";
+import { smcOverlays, type SmcLayers, type SmcOp } from "./money-flow/smc";
+import { elementScale } from "./chart-pointer";
 
 /* ══════════════════════════════════════════════════════════════════════
    Types + candle intervals
@@ -433,6 +435,8 @@ interface DrawModel {
   kmActive: number | null;
   /** Pattern hits to overlay on the price area, or null when the overlay is off. */
   patterns: PatternHit[] | null;
+  /** Money Flow layers (Order blocks, FVG, Liquidity, Structure) in Money Flow mode, else null. */
+  smc: SmcOp[] | null;
   pal: Palette;
 }
 
@@ -544,6 +548,9 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
     for (let i = i1; i >= i0; i--) { const l = at(d.lo, i); if (l != null) ctx.lineTo(xOf(i), yOf(l)); }
     ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
   }
+
+  // ── Money Flow zones (order blocks, FVGs, premium / discount) under the candles ──
+  if (m.smc) drawSmc(ctx, m.smc, "under", g, xOf, yOf, g.w / span, pal.font);
 
   // ── price series ──
   const bw = Math.max(1, Math.min(18, (g.w / span) * 0.7));
@@ -682,6 +689,8 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
   // ── patterns (the "Pattern" button): same detector and look as Money Flow ──
   if (m.patterns && m.patterns.length)
     drawPatternOps(ctx, patternDrawOps(m.patterns, view.from, view.to, xOf, yOf, { l: g.l, r: g.r, top: g.top, bottom: g.priceB }), pal.font, pal.bg);
+  // ── Money Flow lines and labels (liquidity, structure, zone labels) over the candles ──
+  if (m.smc) { drawSmc(ctx, m.smc, "over", g, xOf, yOf, g.w / span, pal.font); ctx.font = font; }
   ctx.restore();
 
   // ── study panes ──
@@ -726,6 +735,77 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
     ctx.fillStyle = pal.tagInk; ctx.textAlign = "center"; ctx.fillText(lbl, tx, g.bottom + 13);
   }
   return { er: hits, km: kmHits };
+}
+
+/**
+ * Paints smcOverlays shapes: the zone boxes on the "under" pass, everything
+ * with text on the "over" pass. `slot` is one bar's width; a box runs from the
+ * left edge of bar i0 to the left edge of bar i1, a line between bar centres,
+ * and a null end is the plot's edge.
+ */
+function drawSmc(
+  ctx: CanvasRenderingContext2D, ops: SmcOp[], pass: "under" | "over", g: Geo,
+  xOf: (i: number) => number, yOf: (p: number) => number, slot: number, fontFamily: string,
+) {
+  const edgeL = (i: number | null) => (i == null ? g.l : xOf(i) - slot / 2);
+  const edgeR = (i: number | null) => (i == null ? g.r : xOf(i) - slot / 2);
+  ctx.font = `bold 11px ${fontFamily}`;
+  ctx.textBaseline = "middle";
+  for (const o of ops) {
+    if (o.k === "box") {
+      const x1 = Math.max(g.l, edgeL(o.i0)), x2 = Math.min(g.r, edgeR(o.i1));
+      if (x2 <= x1) continue;
+      const yt = yOf(o.hi), yb = yOf(o.lo);
+      if (pass === "under") {
+        ctx.fillStyle = `rgba(${o.rgb},${o.fill})`;
+        ctx.fillRect(x1, yt, x2 - x1, Math.max(1.5, yb - yt));
+        if (o.stroke > 0) {
+          ctx.strokeStyle = `rgba(${o.rgb},${o.stroke})`;
+          if (o.dash) ctx.setLineDash([3, 3]);
+          ctx.strokeRect(x1 + 0.5, yt + 0.5, Math.max(1, x2 - x1 - 1), Math.max(1, yb - yt - 1));
+          ctx.setLineDash([]);
+        }
+      } else if (o.label) {
+        ctx.fillStyle = `rgb(${o.rgb})`;
+        if (o.stroke === 0) {
+          // A shaded band (premium / discount): label inside it, at the right.
+          ctx.textAlign = "right";
+          ctx.fillText(o.label, g.r - 4, o.labelBelow ? yb - 7 : yt + 9);
+        } else {
+          ctx.textAlign = "left";
+          ctx.fillText(o.label, x1 + 3, o.labelBelow ? yb + 9 : yt - 7);
+        }
+      }
+      continue;
+    }
+    if (pass === "under") continue;
+    if (o.k === "line") {
+      const x1 = Math.max(g.l, o.i0 == null ? g.l : xOf(o.i0)), x2 = Math.min(g.r, o.i1 == null ? g.r : xOf(o.i1));
+      if (x2 <= x1) continue;
+      const y = yOf(o.p);
+      ctx.globalAlpha = o.alpha; ctx.strokeStyle = o.color; ctx.lineWidth = o.width;
+      ctx.setLineDash(o.dash);
+      ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+      ctx.setLineDash([]); ctx.lineWidth = 1; ctx.globalAlpha = 1;
+      if (o.label) {
+        ctx.fillStyle = o.color;
+        const ly = y + (o.below ? 10 : -7);
+        if (o.at === "start") { ctx.textAlign = "left"; ctx.fillText(o.label, x1 + 4, ly); }
+        else if (o.at === "mid") { ctx.textAlign = "center"; ctx.fillText(o.label, o.label === "BOS" ? (x1 + x2) / 2 : x2, ly); }
+        else { ctx.textAlign = "right"; ctx.fillText(o.label, g.r - 4, ly); }
+      }
+    } else if (o.k === "text") {
+      const x = xOf(o.i);
+      if (x < g.l || x > g.r) continue;
+      ctx.fillStyle = o.color; ctx.textAlign = "center";
+      ctx.fillText(o.text, x, yOf(o.p) + (o.below ? 13 : -10));
+    } else {
+      const w = ctx.measureText(o.text).width + 14;
+      ctx.fillStyle = "rgba(8,9,10,.88)"; ctx.fillRect(g.l + 6, g.top + 4, w, 18);
+      ctx.strokeStyle = o.color; ctx.strokeRect(g.l + 6.5, g.top + 4.5, w - 1, 17);
+      ctx.fillStyle = o.color; ctx.textAlign = "left"; ctx.fillText(o.text, g.l + 13, g.top + 13);
+    }
+  }
 }
 
 function tag(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, bg: string, fg: string) {
@@ -1117,7 +1197,18 @@ type CandleChartProps = {
   toolbarStart?: ReactNode;
   /** Rendered before the toolbar's log / full-screen buttons — vendor chips, freshness stamps. */
   toolbarEnd?: ReactNode;
+  /**
+   * Money Flow mode (the pop-up's "Full Chart"): the chart shows only these
+   * layers — Order blocks, VWAP, FVG, Liquidity, Structure, Patterns — instead
+   * of the page's saved indicators (no volume, no moving averages, no
+   * indicator buttons), and never changes those saved indicators. `tf` is the
+   * candle size in minutes, used to size swings and the opening range.
+   */
+  smc?: { layers: SmcLayers; tf: number };
 };
+
+/** The VWAP line in Money Flow mode, in the pop-up's colour. */
+const SMC_VWAP: Study = { id: "smc-vwap", k: "vwap", len: null, col: "#8b7cf6", on: true };
 
 /**
  * BUG-DATA-002: never fabricate a chart. With fewer than two real bars there is
@@ -1139,11 +1230,14 @@ export function CandleChart(props: CandleChartProps) {
 
 function CandleChartInner({
   sym, tf, interval, chartType = "candles", realBars, live, earnings = [], moments = NO_MOMENTS, hideHudOhlc, onBarHover,
-  height, toolbarStart, toolbarEnd,
+  height, toolbarStart, toolbarEnd, smc,
 }: CandleChartProps) {
   const prefs = useChartPrefs();
   const showVendor = useShowVendorTags();
-  const { studies } = prefs;
+  // Money Flow mode draws its own layers; the saved indicators stay untouched for the other charts.
+  const inSmc = smc != null, smcVwap = smc?.layers.vwap ?? false;
+  const studies = useMemo(() => (inSmc ? (smcVwap ? [SMC_VWAP] : []) : prefs.studies), [inSmc, smcVwap, prefs.studies]);
+  const patternOn = smc ? smc.layers.pat : prefs.pattern;
 
   /* ── data ─────────────────────────────────────────────────────────── */
   const isDailyTf = !interval && DAILY_TF.has(tf);
@@ -1191,7 +1285,9 @@ function CandleChartInner({
   const intraday = interval ? isIntradayInterval(interval) : barMs < 20 * 3_600_000;
   const monthly = interval ? interval === "1M" : barMs > 20 * 86_400_000;
   // Pattern overlay: detected once per data set while the "Pattern" button is on.
-  const patterns = useMemo(() => (prefs.pattern && data.length ? chartPatterns(data, intraday) : null), [prefs.pattern, data, intraday]);
+  const patterns = useMemo(() => (patternOn && data.length ? chartPatterns(data, intraday) : null), [patternOn, data, intraday]);
+  const smcLayers = smc?.layers, smcTf = smc?.tf ?? 5;
+  const smcOps = useMemo(() => (smcLayers ? smcOverlays(data, smcLayers, smcTf) : null), [smcLayers, smcTf, data]);
 
   // Range mode only: older same-granularity bars, fetched purely to seed the
   // studies (never drawn) while anything besides volume is on.
@@ -1322,7 +1418,7 @@ function CandleChartInner({
     const hits = drawChart(ctx, {
       W: size.w, H: size.h, data, seed: series.seed, studies, computed, view, hover,
       chartType: chartType.toLowerCase(), log: prefs.log, intraday, monthly, erMarks,
-      erActive: erOpen?.k ?? erHover, kmMarks, kmActive: kmOpen?.k ?? kmHover, patterns, pal: readPalette(cv),
+      erActive: erOpen?.k ?? erHover, kmMarks, kmActive: kmOpen?.k ?? kmHover, patterns, smc: smcOps, pal: readPalette(cv),
     });
     erHitsRef.current = hits.er;
     kmHitsRef.current = hits.km;
@@ -1358,7 +1454,7 @@ function CandleChartInner({
     if (!cv) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const x = e.clientX - cv.getBoundingClientRect().left;
+      const x = (e.clientX - cv.getBoundingClientRect().left) / elementScale(cv);
       if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         setView(v => clampView({ from: v.from + (e.deltaX || e.deltaY) * 0.01 * (v.to - v.from), to: v.to + (e.deltaX || e.deltaY) * 0.01 * (v.to - v.from) }));
       } else zoomAt(e.deltaY > 0 ? 1.05 : 1 / 1.05, x); // gentle step: trackpads fire often
@@ -1368,13 +1464,14 @@ function CandleChartInner({
   }, [zoomAt, clampView]);
 
   // Drag-to-pan follows the pointer even outside the canvas until release.
-  const dragRef = useRef<{ x: number; view: View } | null>(null);
+  // `k`: the chart's on-screen scale (a scaled pop-up), so screen px map back to chart px.
+  const dragRef = useRef<{ x: number; view: View; k: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e: MouseEvent) => {
       const d = dragRef.current; if (!d) return;
-      const db = ((e.clientX - d.x) / plotW) * (d.view.to - d.view.from);
+      const db = ((e.clientX - d.x) / d.k / plotW) * (d.view.to - d.view.from);
       setView(clampView({ from: d.view.from - db, to: d.view.to - db }));
     };
     const onUp = () => { dragRef.current = null; setDragging(false); };
@@ -1385,8 +1482,8 @@ function CandleChartInner({
 
   const onCanvasMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const r = e.currentTarget.getBoundingClientRect(), k = elementScale(e.currentTarget);
+    const mx = (e.clientX - r.left) / k, my = (e.clientY - r.top) / k;
     const i = Math.min(n - 1, Math.max(0, idxAt(mx)));
     setHover(h => (h && h.i === i && h.y === my ? h : { i, y: my }));
     const km = kmHitAt(mx, my);
@@ -1437,8 +1534,8 @@ function CandleChartInner({
     const d = downRef.current;
     downRef.current = null;
     if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const r = e.currentTarget.getBoundingClientRect(), k = elementScale(e.currentTarget);
+    const mx = (e.clientX - r.left) / k, my = (e.clientY - r.top) / k;
     const km = kmHitAt(mx, my);
     const hit = km ? undefined : erHitAt(mx, my);
     cancelPreviewClose();
@@ -1471,15 +1568,15 @@ function CandleChartInner({
   }, [kmOpen]);
 
   // Touch: one finger pans, two pinch-zoom.
-  const touchRef = useRef<{ x: number; view: View; pinch: number | null } | null>(null);
+  const touchRef = useRef<{ x: number; view: View; pinch: number | null; k: number } | null>(null);
   useEffect(() => {
     const cv = cvRef.current;
     if (!cv) return;
     const onStart = (e: TouchEvent) => {
-      const t = e.touches;
+      const t = e.touches, k = elementScale(cv);
       touchRef.current = t.length === 2
-        ? { x: (t[0].clientX + t[1].clientX) / 2, view, pinch: Math.abs(t[0].clientX - t[1].clientX) }
-        : { x: t[0].clientX, view, pinch: null };
+        ? { x: (t[0].clientX + t[1].clientX) / 2, view, pinch: Math.abs(t[0].clientX - t[1].clientX), k }
+        : { x: t[0].clientX, view, pinch: null, k };
     };
     const onMove = (e: TouchEvent) => {
       const s = touchRef.current; if (!s) return;
@@ -1491,7 +1588,7 @@ function CandleChartInner({
         const mid = (s.view.from + s.view.to) / 2;
         setView(clampView({ from: mid - ns / 2, to: mid + ns / 2 }));
       } else if (s.pinch == null && t.length === 1) {
-        const db = ((t[0].clientX - s.x) / plotW) * span;
+        const db = ((t[0].clientX - s.x) / s.k / plotW) * span;
         setView(clampView({ from: s.view.from - db, to: s.view.to - db }));
       }
     };
@@ -1725,14 +1822,16 @@ function CandleChartInner({
     <div ref={rootRef} className={`cc${full ? " is-full" : ""}`}>
       <div className="cc-tools">
         {toolbarStart}
-        {toolbarStart && <span className="cc-tool-sep" />}
-        <button ref={indBtnRef} type="button" className="cc-tvbtn" onClick={openBrowser}>
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-            <path d="M1.5 11.5 5 7l3 2.5L14.5 3" /><path d="M1.5 14.5h13" />
-          </svg>
-          Indicators
-        </button>
-        <QuickStudyButtons studies={studies} pattern={prefs.pattern} />
+        {toolbarStart && !inSmc && <span className="cc-tool-sep" />}
+        {!inSmc && (<>
+          <button ref={indBtnRef} type="button" className="cc-tvbtn" onClick={openBrowser}>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+              <path d="M1.5 11.5 5 7l3 2.5L14.5 3" /><path d="M1.5 14.5h13" />
+            </svg>
+            Indicators
+          </button>
+          <QuickStudyButtons studies={studies} pattern={prefs.pattern} />
+        </>)}
         <span className="cc-hint" title="Scroll to zoom · drag to pan · double-click to reset">Scroll: zoom · Drag: pan · Double-click: reset</span>
         <span className="cc-spacer" />
         {toolbarEnd}
@@ -1777,7 +1876,7 @@ function CandleChartInner({
           onMouseDown={e => {
             if (e.button !== 0) return;
             downRef.current = { x: e.clientX, y: e.clientY };
-            dragRef.current = { x: e.clientX, view }; setDragging(true);
+            dragRef.current = { x: e.clientX, view, k: elementScale(e.currentTarget) }; setDragging(true);
           }}
           onMouseMove={onCanvasMove}
           onClick={onCanvasClick}
@@ -1789,7 +1888,7 @@ function CandleChartInner({
         {kmCard}
       </div>
 
-      {studies.length > 0 && (
+      {studies.length > 0 && !inSmc && (
         <div className="cc-legend" role="list" aria-label="Indicators on chart">
           {studies.map(s => {
             const v = s.on ? studyVal(s) : null;
