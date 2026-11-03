@@ -333,6 +333,10 @@ export function AlphaSignals() {
                 </div>
                 {curSig && <div className="alp-detail-sc"><InfoDot onOpen={openInfo} /><Ring score={curSig.score} size={56} /></div>}
               </div>
+              <div className="alp-detail-chart">
+                <div className="alp-k-row"><span className="alp-k">Price · 1M</span></div>
+                <PriceChart sym={curRow.ticker} />
+              </div>
               {curSig ? (
                 <div className="alp-detail-b">
                   <div className="alp-meta">
