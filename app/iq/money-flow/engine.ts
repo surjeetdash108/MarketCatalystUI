@@ -751,7 +751,7 @@ export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers
     { k: "Rank", v: `${rank} / ${side.length} ${bull ? "gainers" : "losers"}`, tone: "plain" },
     {
       k: "Vol",
-      v: `${s.rvol == null ? "—" : `${s.rvol.toFixed(1)}×`} · ${s.buyPct == null ? "—" : `${Math.round(s.buyPct)}%`} buy`,
+      v: `${s.rvol == null ? "—" : `${s.rvol.toFixed(1)}×`} · ${s.buyPct == null ? "—" : `${Math.round(s.buyPct)}%`} inflow`,
       tone: "plain",
     },
     { k: "Δ", v: flow, tone: s.netFlow >= 0 ? "up" : "down" },

@@ -3097,7 +3097,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Vol",
-                    desc: "Relative volume (see RVOL above) · the share of today’s flow that was buying (see Money flow above).",
+                    desc: "Relative volume (see RVOL above) · inflow share: of all the money traded today, the part that traded in bars where the typical price rose (see Money flow above). It is not counted buy orders.",
                   },
                   {
                     term: "Δ",

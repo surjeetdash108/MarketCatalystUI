@@ -170,7 +170,7 @@ describe("Money Flow hover box", () => {
     assert.strictEqual(val(st, "Confidence"), "84");
     assert.strictEqual(val(st, "Direction"), "Bullish");
     assert.strictEqual(val(st, "Rank"), `#1 / ${board.gainers.length} gainers`);
-    assert.strictEqual(val(st, "Vol"), "2.6× · 62% buy");
+    assert.strictEqual(val(st, "Vol"), "2.6× · 62% inflow");
     assert.strictEqual(val(st, "Δ"), "+3.1M · ▲ above VWAP");
     assert.strictEqual(val(st, "VWAP"), "67.85");
     assert.strictEqual(val(st, "OB"), "67.81–68.07");
@@ -199,7 +199,7 @@ describe("Money Flow hover box", () => {
     const st = popoverStats(bare, board);
     assert.strictEqual(val(st, "Rule"), "NO SETUP");
     assert.strictEqual(val(st, "OB"), "—");
-    assert.strictEqual(val(st, "Vol"), "— · — buy");
+    assert.strictEqual(val(st, "Vol"), "— · — inflow");
     assert.strictEqual(val(st, "VWAP"), "—");
   });
 
