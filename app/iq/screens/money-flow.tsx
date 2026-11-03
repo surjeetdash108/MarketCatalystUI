@@ -6,7 +6,6 @@ import {
   computeSquarifiedTiles,
   etTimeLabel,
   formatCurrency,
-  formatLevel,
   formatPct,
   indexCard,
   popoverChartWidth,
@@ -23,11 +22,11 @@ import {
   type BoardStock,
   type MoneyFlowBoard,
   type TileLayout,
-  liveLevels,
   popText,
   popoverButtons,
   popChartModes,
   popTimeframes,
+  cardLevels,
   BOARD_HEADINGS,
   POP_STAT_VALUE_STYLE,
   fullSessionView,
@@ -1651,19 +1650,10 @@ export function MoneyFlowScreen() {
                           marginTop: 1,
                         }}
                       >
-                        {[
-                          {
-                            k: "ZONE",
-                            v: fc.zone ? `${fc.zone.lo.toFixed(1)}–${fc.zone.hi.toFixed(1)}` : "—",
-                            c: "#e0bb5e",
-                          },
-                          ...(["R2", "R1", "S1", "S2"] as const).map((k) => ({
-                            k,
-                            v: formatLevel(liveLevels(fc.pivots, fc.price).find((l) => l.name === k)?.v, 1),
-                            c: k[0] === "R" ? "#e0bb5e" : k === "S1" ? "#e6ebe8" : "#f0565a",
-                          })),
-                          { k: "R:R", v: fc.rr == null ? "—" : `1:${fc.rr.toFixed(1)}`, c: "#e6ebe8" },
-                        ].map((l) => (
+                        {cardLevels(fc).map((x) => ({
+                          ...x,
+                          c: x.k === "ZONE" || x.k === "R2" || x.k === "R1" ? "#e0bb5e" : x.k === "S2" ? "#f0565a" : "#e6ebe8",
+                        })).map((l) => (
                           <span
                             key={l.k}
                             style={{
@@ -1985,19 +1975,10 @@ export function MoneyFlowScreen() {
                           marginTop: 1,
                         }}
                       >
-                        {[
-                          {
-                            k: "ZONE",
-                            v: fc.zone ? `${fc.zone.lo.toFixed(1)}–${fc.zone.hi.toFixed(1)}` : "—",
-                            c: "#e0bb5e",
-                          },
-                          ...(["R2", "R1", "S1", "S2"] as const).map((k) => ({
-                            k,
-                            v: formatLevel(liveLevels(fc.pivots, fc.price).find((l) => l.name === k)?.v, 1),
-                            c: k[0] === "R" ? "#e0bb5e" : k === "S1" ? "#e6ebe8" : "#f0565a",
-                          })),
-                          { k: "R:R", v: fc.rr == null ? "—" : `1:${fc.rr.toFixed(1)}`, c: "#e6ebe8" },
-                        ].map((l) => (
+                        {cardLevels(fc).map((x) => ({
+                          ...x,
+                          c: x.k === "ZONE" || x.k === "R2" || x.k === "R1" ? "#e0bb5e" : x.k === "S2" ? "#f0565a" : "#e6ebe8",
+                        })).map((l) => (
                           <span
                             key={l.k}
                             style={{

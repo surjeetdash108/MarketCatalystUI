@@ -23,6 +23,7 @@ import {
   popChartModes,
   POP_TIMEFRAMES,
   popTimeframes,
+  cardLevels,
   BOARD_HEADINGS,
   zoomIntradayView,
   panIntradayView,
@@ -41,6 +42,7 @@ import {
   timeTicks,
   popoverNext,
   formatCurrency,
+  formatLevel,
   sectorNotOnBoardText,
   sectorView,
   sessionCandles,
@@ -507,5 +509,19 @@ describe("pivot levels: a level price has passed changes sides", () => {
   });
   it("after a gap past R5 there is no resistance left; R5 and R4 are the supports, not a far-off S1", () => {
     assert.deepEqual(liveLevels(pv, 400).map((r) => [r.name, r.from]), [["S1", "R5"], ["S2", "R4"]]);
+  });
+});
+
+describe("Money Flow card levels", () => {
+  it("have two decimals, like the pop-up (one decimal could read 9.8–9.8)", () => {
+    const s = { ...board.gainers[0], zone: { lo: 9.751, hi: 9.784, startT: 0 }, rr: 2.345 };
+    const c = Object.fromEntries(cardLevels(s).map((x) => [x.k, x.v]));
+    assert.deepEqual(Object.keys(c), ["ZONE", "R2", "R1", "S1", "S2", "R:R"]);
+    assert.equal(c.ZONE, "9.75–9.78");
+    assert.equal(c["R:R"], "1:2.3");
+    for (const k of ["R2", "R1", "S1", "S2"]) {
+      assert.equal(c[k], formatLevel(liveLevels(s.pivots, s.price).find((l) => l.name === k)?.v));
+      assert.match(c[k], /^(\d+\.\d{2}|—)$/);
+    }
   });
 });

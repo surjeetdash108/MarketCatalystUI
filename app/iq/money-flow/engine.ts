@@ -342,6 +342,16 @@ export function formatLevel(v: number | null | undefined, dp = 2): string {
   return v == null || !Number.isFinite(v) ? "—" : v.toFixed(dp);
 }
 
+/** The #1–#3 card's level row: zone, the live R/S levels and R:R, at the pop-up's two decimals. */
+export function cardLevels(s: BoardStock): Array<{ k: "ZONE" | LiveLevel["name"] | "R:R"; v: string }> {
+  const ll = liveLevels(s.pivots, s.price);
+  return [
+    { k: "ZONE", v: s.zone ? `${formatLevel(s.zone.lo)}–${formatLevel(s.zone.hi)}` : "—" },
+    ...(["R2", "R1", "S1", "S2"] as const).map((k) => ({ k, v: formatLevel(ll.find((l) => l.name === k)?.v) })),
+    { k: "R:R", v: s.rr == null ? "—" : `1:${s.rr.toFixed(1)}` },
+  ];
+}
+
 // ── Candles ─────────────────────────────────────────────────────────────────
 
 export interface OHLCVBar {
