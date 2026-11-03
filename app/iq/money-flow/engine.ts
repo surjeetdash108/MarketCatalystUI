@@ -221,6 +221,16 @@ export const popChartModes = (): Array<{ full: boolean; label: string }> => [
   { full: true, label: "Full Chart" },
 ];
 
+/**
+ * A stat's value in the pop-up: never clipped. It sits right-aligned on its
+ * label's line, and wraps to the next line (whole) when both do not fit.
+ */
+export const POP_STAT_VALUE_STYLE: { whiteSpace: "nowrap"; marginLeft: "auto"; textAlign: "right"; overflow?: string; textOverflow?: string } = {
+  whiteSpace: "nowrap",
+  marginLeft: "auto",
+  textAlign: "right",
+};
+
 /** Candle sizes (minutes) on the pop-up's timeframe buttons; each works on both charts. */
 export const POP_TIMEFRAMES = [1, 3, 5, 15] as const;
 

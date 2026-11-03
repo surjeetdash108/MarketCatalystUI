@@ -28,6 +28,7 @@ import {
   popoverButtons,
   popChartModes,
   popTimeframes,
+  POP_STAT_VALUE_STYLE,
   popTfLabel,
   popTfForMode,
   type PopTf,
@@ -2644,9 +2645,10 @@ export function MoneyFlowScreen() {
                   key={st.k}
                   style={{
                     display: "flex",
+                    flexWrap: "wrap",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    gap: 8,
+                    gap: "2px 8px",
                     minWidth: 0,
                     padding: "0 12px",
                     borderLeft: i % statCols !== 0 ? "1px solid #1a2328" : "none",
@@ -2670,9 +2672,7 @@ export function MoneyFlowScreen() {
                       fontSize: popText(12.5, scale),
                       color: toneColor[st.tone],
                       fontWeight: st.bold ? 800 : 400,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      ...POP_STAT_VALUE_STYLE,
                     }}
                   >
                     {st.v}

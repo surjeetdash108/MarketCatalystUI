@@ -23,6 +23,7 @@ import {
   popChartModes,
   POP_TIMEFRAMES,
   popTimeframes,
+  POP_STAT_VALUE_STYLE,
   popTfLabel,
   popTfForMode,
   chartFrame,
@@ -448,5 +449,14 @@ describe("Money Flow pop-up: 1D / 1W / 1M on the full chart only", () => {
     for (const tf of ["1D", "1W", "1M"] as const) assert.equal(popTfForMode(tf, false), 5);
     assert.equal(popTfForMode(15, false), 15);
     assert.equal(popTfForMode("1W", true), "1W");
+  });
+});
+
+describe("Money Flow pop-up: stat values are never cut short", () => {
+  it("a value that does not fit beside its label wraps below it instead of ending in an ellipsis", () => {
+    assert.equal(POP_STAT_VALUE_STYLE.textOverflow, undefined);
+    assert.equal(POP_STAT_VALUE_STYLE.overflow, undefined);
+    assert.equal(POP_STAT_VALUE_STYLE.whiteSpace, "nowrap"); // "169.39 · 168.12" stays on one line
+    assert.equal(POP_STAT_VALUE_STYLE.marginLeft, "auto"); // right-aligned, on the label's line or the next
   });
 });
