@@ -2766,9 +2766,7 @@ export function MoneyFlowScreen() {
             <div
               style={{
                 flex: "none",
-                borderRadius: 8,
-                border: "1px solid #171c1e",
-                background: "#08090a",
+                // The chart draws its own box around the price area; R1/R2/S1/S2 sit outside it.
                 overflow: "hidden",
               }}
             >
@@ -2776,6 +2774,9 @@ export function MoneyFlowScreen() {
                 <div
                   style={{
                     height: POPOVER.chartH,
+                    border: "1px solid #171c1e",
+                    borderRadius: 8,
+                    background: "#08090a",
                     display: "grid",
                     placeItems: "center",
                     color: "#7a8481",

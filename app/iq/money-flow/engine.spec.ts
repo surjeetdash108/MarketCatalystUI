@@ -19,6 +19,7 @@ import {
   POPOVER,
   chartRightGutter,
   popoverButtons,
+  chartFrame,
   extendedPivots,
   liveLevels,
   popText,
@@ -350,3 +351,11 @@ describe("Money Flow: a tile click opens the hover pop-up (pinned), not the deta
   });
 });
 
+describe("Money Flow hover chart: R1/R2/S1/S2 sit outside the chart box", () => {
+  it("the chart frame ends where the level column starts", () => {
+    const f = chartFrame(980, 340, 110);
+    assert.deepEqual(f, { x: 0, y: 0, w: 870, h: 340 });
+    const levelLabelX = 980 - 110 + 2; // where the R/S boxes are drawn
+    assert.ok(levelLabelX > f.x + f.w);
+  });
+});

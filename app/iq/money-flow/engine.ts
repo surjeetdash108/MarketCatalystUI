@@ -129,6 +129,12 @@ export function liveLevels(p: PivotLevels | null | undefined, price: number): Li
   return [...pick("R").reverse(), ...pick("S")];
 }
 
+/**
+ * The hover chart's frame: the price area only. The right column (R1/R2/S1/S2
+ * boxes and the last-price tag, `gutter` wide) sits outside it, inside the pop-up.
+ */
+export const chartFrame = (w: number, h: number, gutter: number) => ({ x: 0, y: 0, w: w - gutter, h });
+
 /** Smallest on-screen text size in the stock pop-up (CSS px, after the box's scale). */
 export const POP_MIN_TEXT_PX = 12;
 

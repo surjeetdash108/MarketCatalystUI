@@ -7,7 +7,7 @@
 import React from "react";
 import type { BoardStock, OHLCVBar, SwingPoint } from "./engine";
 import { detectPatterns, layoutLabels, patternGlyphs, patternsToShow } from "../patterns";
-import { candleIndexAt, chartRightGutter, computeOrderBlocks, computeSwings, formatCurrency, liveLevels, popText, timeTicks } from "./engine";
+import { candleIndexAt, chartFrame, chartRightGutter, computeOrderBlocks, computeSwings, formatCurrency, liveLevels, popText, timeTicks } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
 function levelsInView(levels: Array<number | null | undefined>, lo: number, hi: number): number[] {
@@ -304,6 +304,9 @@ export function FullChartSvg({
       preserveAspectRatio="none"
       style={{ display: "block", width: "100%", height: "100%", minWidth: W }}
     >
+      {/* Chart box: the price area only — the level column to its right sits outside it */}
+      {(() => { const f = chartFrame(W, H, PR); return <rect x={f.x + 0.5} y={f.y + 0.5} width={f.w - 1} height={f.h - 1} rx={8} fill="#08090a" stroke="#171c1e" />; })()}
+
       {/* Grid lines */}
       {[1, 2, 3, 4, 5].map((g) => {
         const gy = PT + (g * (H - PT - PB)) / 6;
