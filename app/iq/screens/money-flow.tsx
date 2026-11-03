@@ -126,7 +126,7 @@ export function MoneyFlowScreen() {
 
   // Chart options in popover
   const [popTf, setPopTf] = useState<PopTf>(5);
-  // The Money Flow chart is minutes only; 1D / 1W / 1M exist on the full chart (popTfForMode).
+  // The Intra-Day chart is minutes only; 1D / 1W / 1M exist on the full chart (popTfForMode).
   const popMin = typeof popTf === "number" ? popTf : 5;
   // "Full Chart": the stock screen's zoomable chart in place of the one-day chart.
   const [popFull, setPopFull] = useState(false);
@@ -2681,7 +2681,7 @@ export function MoneyFlowScreen() {
               ))}
             </div>
 
-            {/* Chart toggle (Money Flow Chart | Full Chart), then the timeframe — it drives both charts */}
+            {/* Chart toggle (Intra-Day Chart | Full Chart), then the timeframe — it drives both charts */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               {(() => {
                 const seg = { display: "flex", background: "#0f1213", border: "1px solid #1e2427", borderRadius: 7, padding: 2, gap: 2 } as const;

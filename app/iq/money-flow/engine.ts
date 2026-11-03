@@ -217,7 +217,7 @@ export const popoverButtons = (): [string, string] => ["Open in Market Catalyst 
 
 /** The pop-up's chart toggle: the one-day Money Flow chart, or the zoomable full chart. */
 export const popChartModes = (): Array<{ full: boolean; label: string }> => [
-  { full: false, label: "Money Flow Chart" },
+  { full: false, label: "Intra-Day Chart" },
   { full: true, label: "Full Chart" },
 ];
 

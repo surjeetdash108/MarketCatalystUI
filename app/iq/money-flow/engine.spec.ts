@@ -426,8 +426,8 @@ describe("Money Flow FVG detection (shared by the pop-up and the full chart)", (
 });
 
 describe("Money Flow pop-up: chart mode toggle, then timeframe", () => {
-  it("the toggle reads Money Flow Chart | Full Chart, in that order", () => {
-    assert.deepEqual(popChartModes().map((m) => m.label), ["Money Flow Chart", "Full Chart"]);
+  it("the toggle reads Intra-Day Chart | Full Chart, in that order", () => {
+    assert.deepEqual(popChartModes().map((m) => m.label), ["Intra-Day Chart", "Full Chart"]);
     assert.deepEqual(popChartModes().map((m) => m.full), [false, true]);
   });
   it("every timeframe button works in both modes: the full chart has bars for each", () => {
