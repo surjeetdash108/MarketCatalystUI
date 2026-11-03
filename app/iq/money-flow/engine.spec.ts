@@ -22,6 +22,9 @@ import {
   chartFrame,
   extendedPivots,
   liveLevels,
+  popLevelRows,
+  levelTag,
+  computeFvgs,
   popText,
   POP_MIN_TEXT_PX,
   timeTicks,
@@ -357,5 +360,60 @@ describe("Money Flow hover chart: R1/R2/S1/S2 sit outside the chart box", () => 
     assert.deepEqual(f, { x: 0, y: 0, w: 870, h: 340 });
     const levelLabelX = 980 - 110 + 2; // where the R/S boxes are drawn
     assert.ok(levelLabelX > f.x + f.w);
+  });
+});
+
+describe("Money Flow pop-up: R/S lines on fixed rows", () => {
+  const pv = [...board.gainers, ...board.losers].find((x) => x.t === "GOOGL")!.pivots!;
+  it("R2, R1 sit at the top and S1, S2 at the bottom, at the same place whatever the levels or price", () => {
+    const a = popLevelRows(10, 418, 26);
+    assert.ok(a.y.R2 < a.y.R1 && a.y.R1 < a.band.top, "R rows above the candles");
+    assert.ok(a.band.bottom < a.y.S1 && a.y.S1 < a.y.S2, "S rows below the candles");
+    assert.ok(a.y.R2 >= 10 && a.y.S2 <= 418);
+    // The rows depend only on the box, never on prices: the same rows for any stock.
+    assert.deepEqual(popLevelRows(10, 418, 26), a);
+  });
+  it("pattern lanes sit between the level rows and the candles", () => {
+    const r = popLevelRows(10, 418, 26, 39);
+    assert.ok(r.lanes.top[0] > r.y.R1 && r.lanes.top[1] <= r.band.top);
+    assert.ok(r.lanes.bottom[0] >= r.band.bottom && r.lanes.bottom[1] < r.y.S1);
+    assert.equal(r.lanes.top[1] - r.lanes.top[0], 39);
+  });
+  it("crossing R1 renames the rows, not their place: R2 moves into the R1 row", () => {
+    const below = liveLevels(pv, pv.r1! - 0.01).map((l) => l.name);
+    const above = liveLevels(pv, pv.r1! + 0.01);
+    assert.deepEqual(below, ["R2", "R1", "S1", "S2"]);
+    assert.deepEqual(above.map((l) => l.name), ["R2", "R1", "S1", "S2"]);
+    assert.equal(above.find((l) => l.name === "R1")!.from, "R2");
+  });
+  it("the box holds only the name; the value is printed beside it, outside the box", () => {
+    const t = levelTag("R1", 241.32, 14, 500);
+    assert.equal(t.name, "R1");
+    assert.equal(t.value.text, "241.32");
+    assert.ok(t.value.x >= t.box.x + t.box.w, "value starts after the box ends");
+    assert.ok(t.box.w < 2 * 14 * 0.62 + 10, "box is sized to the name only");
+  });
+  it("the name box and the value beside it fit in the right column", () => {
+    const fz = 14, labels = [["R2", 1417.54], ["S2", 9.75]] as const;
+    const pr = chartRightGutter(labels.map(([n, v]) => `${n} ${formatCurrency(v)}`), "1,410.00", fz, 13);
+    for (const [n, v] of labels) {
+      const t = levelTag(n, v, fz, -pr + 2);
+      assert.ok(t.value.x + t.value.text.length * fz * 0.62 <= -4, `${n} ends inside the column`);
+    }
+  });
+});
+
+describe("Money Flow FVG detection (shared by the pop-up and the full chart)", () => {
+  const bar = (o: number, h: number, l: number, c: number) => ({ o, h, l, c });
+  it("finds a bullish gap and marks where it was filled", () => {
+    const c = [bar(100, 101, 99, 100.5), bar(100.5, 103, 100.4, 102.8), bar(102.8, 104, 102, 103.5), bar(103.5, 103.6, 100.8, 101)];
+    const f = computeFvgs(c);
+    assert.deepEqual(f.map((g) => ({ i: g.i, lo: g.lo, hi: g.hi, bull: g.bull, end: g.end })), [{ i: 1, lo: 101, hi: 102, bull: true, end: 3 }]);
+  });
+  it("keeps only the latest seven", () => {
+    const c: Array<ReturnType<typeof bar>> = [];
+    for (let k = 0; k < 40; k++) c.push(bar(100 + k * 3, 101 + k * 3, 99 + k * 3, 100.5 + k * 3));
+    assert.equal(computeFvgs(c).length, 7);
+    assert.equal(computeFvgs(c, 0).length > 7, true);
   });
 });

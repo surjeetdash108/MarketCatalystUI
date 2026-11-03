@@ -7,7 +7,7 @@
 import React from "react";
 import type { BoardStock, OHLCVBar, SwingPoint } from "./engine";
 import { detectPatterns, layoutCallouts, patternGlyphs, patternsToShow } from "../patterns";
-import { candleIndexAt, chartFrame, chartRightGutter, computeOrderBlocks, computeSwings, formatCurrency, liveLevels, popText, timeTicks } from "./engine";
+import { candleIndexAt, chartFrame, chartRightGutter, computeFvgs, computeOrderBlocks, computeSwings, formatCurrency, levelTag, liveLevels, popLevelRows, popText, timeTicks } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
 function levelsInView(levels: Array<number | null | undefined>, lo: number, hi: number): number[] {
@@ -228,12 +228,9 @@ export function FullChartSvg({
   // Two levels each side of price, renumbered from price (liveLevels): past R1, R2 shows as R1, R3 as R2.
   const rawLevels: Array<[string, number | null]> = liveLevels(pv, safeStockPx).map((l) => [l.name, l.v]);
 
+  // Every level is shown, however far from price: each has its own fixed row (popLevelRows).
   const lv: Array<[string, number]> = rawLevels.filter(
-    (x): x is [string, number] =>
-      typeof x[1] === "number" &&
-      Number.isFinite(x[1]) &&
-      x[1] > 0 &&
-      Math.abs(x[1] - safeStockPx) / safeStockPx < 0.25
+    (x): x is [string, number] => typeof x[1] === "number" && Number.isFinite(x[1]) && x[1] > 0
   );
 
   const W = width;
@@ -266,21 +263,10 @@ export function FullChartSvg({
     .flatMap((x) => [x.h, x.l, x.o, x.c])
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
 
-  const candleMin = candleVals.length ? Math.min(...candleVals) : safeStockPx * 0.985;
-  const candleMax = candleVals.length ? Math.max(...candleVals) : safeStockPx * 1.015;
-  const candleRange = Math.max(candleMax - candleMin, safeStockPx * 0.008);
-
-  const levelVals = lv.map((x) => x[1]);
-  // Filter out extreme pivot levels so they don't crush the intraday candles into a flat line
-  const relevantLevels = levelVals.filter(
-    (lvl) => lvl >= candleMin - candleRange * 1.6 && lvl <= candleMax + candleRange * 1.6
-  );
-
-  const displayVals = candleVals.concat(relevantLevels.length ? relevantLevels : [safeStockPx]);
-
-  let mx = Math.max(...displayVals, safeStockPx);
-  let mn = Math.min(...displayVals, safeStockPx);
-  const pad = Math.max((mx - mn) * 0.08, safeStockPx * 0.003);
+  // The candles are scaled to their own range only: the levels sit on fixed rows, not on this scale.
+  let mx = candleVals.length ? Math.max(...candleVals, safeStockPx) : safeStockPx * 1.015;
+  let mn = candleVals.length ? Math.min(...candleVals, safeStockPx) : safeStockPx * 0.985;
+  const pad = Math.max((mx - mn) * 0.04, safeStockPx * 0.002);
   mx += pad;
   mn -= pad;
 
@@ -289,10 +275,12 @@ export function FullChartSvg({
     mn = safeStockPx * 0.985;
   }
 
-  // With Patterns on, a band above and below the price area holds the pattern callouts (two rows each).
+  // R2/R1 on fixed rows at the top, S1/S2 at the bottom; with Patterns on, a lane
+  // between them and the candles holds the pattern callouts (two rows each).
   const calloutFz = T(11.5);
   const laneH = layers.pat ? 2 * (calloutFz + 8) : 0;
-  const pTop = PT + (laneH ? laneH + 8 : 0), pBot = H - PB - (laneH ? laneH + 8 : 0);
+  const rows = popLevelRows(PT, H - PB, fz + 12, laneH);
+  const pTop = rows.band.top, pBot = rows.band.bottom;
   const y = (v: number) => {
     const val = Number.isFinite(v) ? v : safeStockPx;
     return pTop + ((mx - val) / (mx - mn || 1)) * (pBot - pTop);
@@ -387,7 +375,7 @@ export function FullChartSvg({
         </>
       )}
 
-      {/* Pivots R1, R2, S1, S2 */}
+      {/* Pivots R1, R2, S1, S2: fixed rows; the name in the box, the value beside it */}
       {lv.map(([n, v]) => {
         const col =
           n === "R2"
@@ -397,10 +385,8 @@ export function FullChartSvg({
             : n === "S1"
             ? "#4fd1e8"
             : "#6ea8ff";
-        const txt = `${n} ${formatCurrency(v)}`;
-        const tw = txt.length * fz * 0.62 + 8;
-        const lx = W - PR + 2;
-        const ly = y(v);
+        const tg = levelTag(n, v, fz, W - PR + 2);
+        const ly = rows.y[n as keyof typeof rows.y];
         return (
           <g key={n}>
             <line
@@ -413,9 +399,9 @@ export function FullChartSvg({
               strokeDasharray="5 4"
             />
             <rect
-              x={lx}
+              x={tg.box.x}
               y={ly - fz * 0.75 - 2}
-              width={tw}
+              width={tg.box.w}
               height={fz + 4}
               rx={3}
               fill="rgba(8,9,10,.88)"
@@ -423,14 +409,24 @@ export function FullChartSvg({
               strokeOpacity={0.55}
             />
             <text
-              x={lx + 4}
+              x={tg.box.x + 4}
               y={ly + fz * 0.36}
               fontSize={fz}
               fill={col}
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
             >
-              {txt}
+              {tg.name}
+            </text>
+            <text
+              x={tg.value.x}
+              y={ly + fz * 0.36}
+              fontSize={fz}
+              fill={col}
+              fontFamily="'JetBrains Mono', monospace"
+              fontWeight={700}
+            >
+              {tg.value.text}
             </text>
           </g>
         );
@@ -451,21 +447,8 @@ export function FullChartSvg({
 
       {/* Fair Value Gaps (FVG) */}
       {layers.fvg && (() => {
-        const F: Array<{ i: number; lo: number; hi: number; bull: boolean }> = [];
-        for (let i = 1; i < safeCandles.length - 1; i++) {
-          const a = safeCandles[i - 1];
-          const b = safeCandles[i + 1];
-          if (b.l > a.h && (b.l - a.h) / (a.h || 1) > 0.0006) F.push({ i, lo: a.h, hi: b.l, bull: true });
-          if (b.h < a.l && (a.l - b.h) / (a.l || 1) > 0.0006) F.push({ i, lo: b.h, hi: a.l, bull: false });
-        }
-        return F.slice(-7).map((g, gi) => {
-          let end: number | null = null;
-          for (let j = g.i + 2; j < safeCandles.length; j++) {
-            if (g.bull ? safeCandles[j].l <= g.lo : safeCandles[j].h >= g.hi) {
-              end = j;
-              break;
-            }
-          }
+        return computeFvgs(safeCandles).map((g, gi) => {
+          const end = g.end;
           const x1 = PL + g.i * cw;
           const x2 = end != null ? PL + (end + 1) * cw : W - PR;
           const col = g.bull ? "90,169,230" : "230,120,190";
@@ -950,7 +933,7 @@ export function FullChartSvg({
             h: lf + 6,
             above: g.label.above,
           })),
-          { top: [PT + 2, PT + 2 + laneH], bottom: [H - PB - 2 - laneH, H - PB - 2] },
+          rows.lanes,
           PL + 2,
           W - PR - 4,
         );

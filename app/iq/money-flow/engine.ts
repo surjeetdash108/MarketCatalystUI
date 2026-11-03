@@ -135,6 +135,35 @@ export function liveLevels(p: PivotLevels | null | undefined, price: number): Li
  */
 export const chartFrame = (w: number, h: number, gutter: number) => ({ x: 0, y: 0, w: w - gutter, h });
 
+/**
+ * Fixed rows for the pop-up chart's levels: R2 then R1 at the top, S1 then S2
+ * at the bottom, whatever their values. They never move; only the names and
+ * values in them change as price crosses a level (liveLevels). The candles are
+ * scaled into `band`, between R1 and S1. With pattern callouts on (`laneH` > 0)
+ * a lane of that height sits between each pair of rows and the candles.
+ */
+export function popLevelRows(top: number, bottom: number, rowH: number, laneH = 0) {
+  const r2 = top + rowH * 0.6, r1 = r2 + rowH, s2 = bottom - rowH * 0.6, s1 = s2 - rowH;
+  const edge = rowH * 0.6, lane = laneH ? laneH + 8 : 0;
+  return {
+    y: { R2: r2, R1: r1, S1: s1, S2: s2 } as Record<LiveLevel["name"], number>,
+    band: { top: r1 + edge + lane, bottom: s1 - edge - lane },
+    lanes: {
+      top: [r1 + edge, r1 + edge + laneH] as [number, number],
+      bottom: [s1 - edge - laneH, s1 - edge] as [number, number],
+    },
+  };
+}
+
+/**
+ * A level's tag in the right column at `x`: the name alone in a box (mono at
+ * `fz`, 4px padding each side), and the value printed beside it, outside the box.
+ */
+export function levelTag(name: string, value: number, fz: number, x: number) {
+  const w = name.length * fz * 0.62 + 8;
+  return { name, box: { x, w }, value: { x: x + w + 5, text: formatCurrency(value) } };
+}
+
 /** Smallest on-screen text size in the stock pop-up (CSS px, after the box's scale). */
 export const POP_MIN_TEXT_PX = 12;
 
@@ -365,6 +394,28 @@ export function computeSwings(c: Array<Pick<OHLCVBar, "h" | "l">>, n: number = 3
 }
 
 /** Same definition as the backend: last opposite candle before a >0.18% displacement. */
+export interface FairValueGap { i: number; lo: number; hi: number; bull: boolean; /** Bar that filled it, or null while open. */ end: number | null }
+
+/**
+ * Three-bar fair value gaps (a gap of more than 0.06% between bar i−1 and bar
+ * i+1), each with the bar that later filled it. The latest `keep` only (0 = all).
+ */
+export function computeFvgs(c: Array<Pick<OHLCVBar, "h" | "l">>, keep = 7): FairValueGap[] {
+  const F: FairValueGap[] = [];
+  for (let i = 1; i < c.length - 1; i++) {
+    const a = c[i - 1], b = c[i + 1];
+    if (b.l > a.h && (b.l - a.h) / (a.h || 1) > 0.0006) F.push({ i, lo: a.h, hi: b.l, bull: true, end: null });
+    if (b.h < a.l && (a.l - b.h) / (a.l || 1) > 0.0006) F.push({ i, lo: b.h, hi: a.l, bull: false, end: null });
+  }
+  const out = keep > 0 ? F.slice(-keep) : F;
+  for (const g of out) {
+    for (let j = g.i + 2; j < c.length; j++) {
+      if (g.bull ? c[j].l <= g.lo : c[j].h >= g.hi) { g.end = j; break; }
+    }
+  }
+  return out;
+}
+
 export function computeOrderBlocks(c: Array<Pick<OHLCVBar, "o" | "h" | "l" | "c">>): OrderBlock[] {
   const OB: OrderBlock[] = [];
   for (let i = 2; i < c.length - 2; i++) {
