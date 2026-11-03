@@ -9,6 +9,7 @@ import { tapeItemsToIndexDocs, TAPE_SOURCE_NAME } from "../live-market-indices";
 import type { MacroEventDoc, DividendHistoryDoc, CompanyDoc } from "../types";
 import type { MarketStatusPayload } from "../types/market-status";
 import { fmtMonthDay, isoDay, addDays, mondayOf, fmtDate, etTodayIso } from "../calendar-range";
+import { resolveDividends } from "../dividend.util";
 
 // ── Economic calendar ────────────────────────────────────────────────────────
 interface MacroEvent {
@@ -172,6 +173,12 @@ function DividendDrawer({ stock, onClose }: { stock: DivStock; onClose: () => vo
         <div className="drawer-b">
           {!dh ? (
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Loading…</div>
+          ) : !resolveDividends({ dh }).isPayer ? (
+            // The doc synced fine — this ticker just has no dividend records
+            // (most high-beta names: CRML, QBTS, OKLO…). Not a "not synced" case.
+            // resolveDividends, not dh.isPayer: docs written before the flag
+            // existed have none and must not read as "not a payer".
+            <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)", padding: "8px 0" }}>{stock.sym} does not currently pay a dividend.</div>
           ) : (
             <>
               <div className="metric-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 14 }}>
