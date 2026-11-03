@@ -165,10 +165,10 @@ describe("Money Flow hover box", () => {
     const s = board.gainers[0]; // CVNA 68.73, entry 68.07, VWAP 67.85
     const st = popoverStats(s, board);
     assert.deepStrictEqual(st.map((x) => x.k), [
-      "Confidence", "Setup", "Rank", "Vol", "Δ", "VWAP", "OB", "Entry/Stop", "R:R", "Rule",
+      "Confidence", "Direction", "Rank", "Vol", "Δ", "VWAP", "OB", "Entry/Stop", "R:R", "Rule",
     ]);
     assert.strictEqual(val(st, "Confidence"), "84");
-    assert.strictEqual(val(st, "Setup"), "Bullish");
+    assert.strictEqual(val(st, "Direction"), "Bullish");
     assert.strictEqual(val(st, "Rank"), `#1 / ${board.gainers.length} gainers`);
     assert.strictEqual(val(st, "Vol"), "2.6× · 62% buy");
     assert.strictEqual(val(st, "Δ"), "+3.1M · ▲ above VWAP");
@@ -193,7 +193,8 @@ describe("Money Flow hover box", () => {
   it("choppy or zone-less stocks have no setup", () => {
     const s = board.gainers[0];
     assert.strictEqual(val(popoverStats({ ...s, chop: true }, board), "Rule"), "NO SETUP");
-    assert.strictEqual(val(popoverStats({ ...s, chop: true }, board), "Setup"), "Choppy");
+    // Direction is the side of the move; choppiness is noted, not swapped in for it (the badge / Rule carry NO SETUP).
+    assert.strictEqual(val(popoverStats({ ...s, chop: true }, board), "Direction"), "Bullish · choppy");
     const bare = { ...s, zone: null, entry: null, stop: null, vwap: null, rvol: null, buyPct: null };
     const st = popoverStats(bare, board);
     assert.strictEqual(val(st, "Rule"), "NO SETUP");

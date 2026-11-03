@@ -3084,8 +3084,8 @@ export function MoneyFlowScreen() {
                 title: "Hover box & levels",
                 rows: [
                   {
-                    term: "Setup",
-                    desc: "Choppy (see Adjustment above), otherwise Bullish or Bearish by the direction of the move.",
+                    term: "Direction",
+                    desc: "Bullish for a gainer, Bearish for a loser, with “· choppy” when the stock is choppy (see Adjustment above). It is not a trade signal: that is the Rule, and the card’s badge.",
                   },
                   {
                     term: "Size",

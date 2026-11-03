@@ -746,7 +746,8 @@ export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers
     : `${dist != null && dist > WATCH_DIST_PCT ? "WATCH" : "PICK"} · ${bull ? "BULLISH" : "BEARISH"}${i >= 0 ? ` #${i + 1}` : ""}`;
   return [
     { k: "Confidence", v: s.confidence ? String(s.confidence.score) : "—", tone: dir, bold: true },
-    { k: "Setup", v: s.chop ? "Choppy" : bull ? "Bullish" : "Bearish", tone: s.chop ? "muted" : dir },
+    // The side of the move only; whether there is a trade is the Rule (and the card badge).
+    { k: "Direction", v: `${bull ? "Bullish" : "Bearish"}${s.chop ? " · choppy" : ""}`, tone: s.chop ? "muted" : dir },
     { k: "Rank", v: `${rank} / ${side.length} ${bull ? "gainers" : "losers"}`, tone: "plain" },
     {
       k: "Vol",
