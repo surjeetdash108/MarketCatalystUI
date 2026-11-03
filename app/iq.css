@@ -1112,6 +1112,13 @@
   gap: 18px;
 }
 
+/* The bar is position:fixed, so it can't follow the grid: pull it in to the
+   icon-only rail's width when collapsed. Desktop only — on mobile the rail is a
+   drawer and the bar already resets to left:0 (see the max-width:767px block). */
+@media (min-width: 768px) {
+  .app.nav-collapsed .disclaimer-bar { left: 3.875rem; }
+}
+
 .disclaimer-text {
   flex: 1 1 auto;
   min-width: 0;
@@ -13669,7 +13676,9 @@ h6.sd-sec {
 .iq-root[data-theme="light"] .alp, .iq-root[data-theme="light"] .alp-scrim, .iq-root[data-theme="light"] .alp-toast {
   --alp-v: #5b49d6; --alp-vl: #4a3bb8; --alp-up2: #1f7a46; --alp-blue: #2f6fc0;
 }
-.iq-root .alp { padding: 12px 18px 24px; display: flex; flex-direction: column; gap: 18px; max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+/* No max-width/auto-margin: a 1480px cap centred the page, so collapsing the rail
+   (main gets wider) left dead gutters either side instead of filling the space. */
+.iq-root .alp { padding: 12px 18px 24px; display: flex; flex-direction: column; gap: 18px; width: 100%; box-sizing: border-box; }
 .iq-root .alp .mono, .iq-root .alp-scrim .mono { font-family: var(--f-mono); }
 .iq-root .alp .up, .iq-root .alp-scrim .up { color: var(--up); }
 .iq-root .alp .down, .iq-root .alp-scrim .down { color: var(--down); }
