@@ -683,7 +683,6 @@ export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers
     s.price > 0
       ? `${formatShares(s.netFlow / s.price)}${above == null ? "" : above ? " · ▲ above VWAP" : " · ▼ below VWAP"}`
       : "—";
-  const pv = s.pivots;
   const noSetup = s.chop || s.entry == null;
   const dist = s.entry != null && s.price > 0 ? (Math.abs(s.price - s.entry) / s.price) * 100 : null;
   const rule = noSetup
@@ -702,23 +701,6 @@ export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers
     { k: "VWAP", v: formatLevel(s.vwap), tone: "plain" },
     { k: "OB", v: s.zone ? `${formatLevel(s.zone.lo)}–${formatLevel(s.zone.hi)}` : "—", tone: "zone" },
     { k: "Entry/Stop", v: `${formatLevel(s.entry)} · ${formatLevel(s.stop)}`, tone: "zone" },
-    (() => {
-      const ll = liveLevels(pv, s.price);
-      const rLevels = ll.filter((l) => l.name.startsWith("R"));
-      const sLevels = ll.filter((l) => l.name.startsWith("S"));
-      if (bull) {
-        const rVal = rLevels.length >= 2
-          ? `${formatLevel(rLevels[1].v)} · ${formatLevel(rLevels[0].v)}`
-          : `${formatLevel(pv?.r1)} · ${formatLevel(pv?.r2)}`;
-        const rLabel = rLevels.length >= 2 && rLevels[1].from !== "R1" ? `${rLevels[1].from}/${rLevels[0].from}` : "R1/R2";
-        return { k: rLabel, v: rVal, tone: "up" as PopTone };
-      }
-      const sVal = sLevels.length >= 2
-        ? `${formatLevel(sLevels[0].v)} · ${formatLevel(sLevels[1].v)}`
-        : `${formatLevel(pv?.s1)} · ${formatLevel(pv?.s2)}`;
-      const sLabel = sLevels.length >= 2 && sLevels[0].from !== "S1" ? `${sLevels[0].from}/${sLevels[1].from}` : "S1/S2";
-      return { k: sLabel, v: sVal, tone: "down" as PopTone };
-    })(),
     { k: "R:R", v: s.rr == null ? "—" : `1 : ${s.rr.toFixed(1)}${s.target != null ? ` (tgt ${formatLevel(s.target)})` : ""}`, tone: "plain" },
     { k: "Rule", v: rule, tone: noSetup ? "muted" : dir, bold: true },
   ];

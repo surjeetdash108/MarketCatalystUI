@@ -153,11 +153,11 @@ describe("Money Flow view helpers", () => {
 describe("Money Flow hover box", () => {
   const val = (stats: ReturnType<typeof popoverStats>, k: string) => stats.find((x) => x.k === k)?.v;
 
-  it("bullish stock: rank on its side, flow in shares vs VWAP, entry/stop and R1/R2", () => {
+  it("bullish stock: rank on its side, flow in shares vs VWAP, entry/stop; no R/S levels row", () => {
     const s = board.gainers[0]; // CVNA 68.73, entry 68.07, VWAP 67.85
     const st = popoverStats(s, board);
     assert.deepStrictEqual(st.map((x) => x.k), [
-      "Confidence", "Setup", "Rank", "Vol", "Δ", "VWAP", "OB", "Entry/Stop", "R1/R2", "R:R", "Rule",
+      "Confidence", "Setup", "Rank", "Vol", "Δ", "VWAP", "OB", "Entry/Stop", "R:R", "Rule",
     ]);
     assert.strictEqual(val(st, "Confidence"), "84");
     assert.strictEqual(val(st, "Setup"), "Bullish");
@@ -167,16 +167,16 @@ describe("Money Flow hover box", () => {
     assert.strictEqual(val(st, "VWAP"), "67.85");
     assert.strictEqual(val(st, "OB"), "67.81–68.07");
     assert.strictEqual(val(st, "Entry/Stop"), "68.07 · 67.81");
-    assert.strictEqual(val(st, "R1/R2"), "60.35 · 61.66");
     assert.strictEqual(val(st, "R:R"), "—");
     assert.strictEqual(val(st, "Rule"), "PICK · BULLISH #1"); // 0.96% from entry
   });
 
-  it("bearish stock uses S1/S2, net selling and WATCH when price is over 1.2% from entry", () => {
+  it("bearish stock: net selling, no R/S levels row, and WATCH when price is over 1.2% from entry", () => {
     const now = popoverStats(board.losers[0], board); // NOW −$1.74B at 110.65
     assert.strictEqual(val(now, "Rank"), `#1 / ${board.losers.length} losers`);
     assert.strictEqual(val(now, "Δ"), "−16M · ▼ below VWAP");
-    assert.strictEqual(val(now, "S1/S2"), "147.18 · 144.24");
+    // The levels are on the chart; the box no longer repeats them (R1/R2, R3/R4, S1/S2 …).
+    for (const x of [...now, ...popoverStats(board.gainers[0], board)]) assert.doesNotMatch(x.k, /^[RS]\d\/[RS]\d$/);
     assert.strictEqual(val(now, "Rule"), "PICK · BEARISH #1");
     const alny = popoverStats(board.losers[1], board); // 172.84 vs entry 175.56 = 1.57%
     assert.strictEqual(val(alny, "Rule"), "WATCH · BEARISH #2");
