@@ -12027,13 +12027,20 @@ button.pill.lf-chip {
   font-weight: 400;
 }
 
-.iq-root .cc-ma>button:first-of-type {
+.iq-root .cc-ma>button.cc-ma-all+button {
   margin-left: .45em;
 }
 
 .iq-root .cc-ma>button[aria-pressed="true"] {
   opacity: 1;
   font-weight: 700;
+}
+
+/* The SMA / EMA label toggles every period at once; it keeps the label's own look, not the dim/bold period states.
+   Must follow the aria-pressed rule above (equal specificity). */
+.iq-root .cc-ma>button.cc-ma-all {
+  opacity: 1;
+  font-weight: inherit;
 }
 
 .iq-root .cc-ma>button:hover {
@@ -13787,6 +13794,7 @@ h6.sd-sec {
 .iq-root .alp-detail-h .l2 b { color: var(--text-hi); font-weight: 400; }
 .iq-root .alp-detail-h .l2 i { font-style: normal; }
 .iq-root .alp-detail-sc { display: flex; align-items: center; gap: 8px; }
+.iq-root .alp-detail-chart { padding: 14px 18px 12px; border-bottom: 1px solid var(--border-soft); }
 .iq-root .alp-detail-b { padding: 16px 18px; display: flex; flex-direction: column; gap: 18px; overflow: auto; }
 .iq-root .alp-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .iq-root .alp-meta .k { font-size: .66rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim-solid); }

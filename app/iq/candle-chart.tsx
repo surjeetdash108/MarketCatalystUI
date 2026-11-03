@@ -911,13 +911,29 @@ function togglePreset(k: StudyKind, len: number | null) {
   });
 }
 
+/** Show or hide every period of one kind in a single store update (the SMA / EMA label). */
+function setPresets(k: StudyKind, lens: readonly number[], on: boolean) {
+  const inSet = (s: Study) => s.k === k && s.len != null && lens.includes(s.len);
+  writePrefs(p => {
+    if (!on) return { ...p, studies: p.studies.filter(s => !(inSet(s) && s.on)) };
+    let studies = p.studies.map(s => (inSet(s) ? { ...s, on: true } : s));
+    for (const len of lens) {
+      if (!findPreset(studies, k, len)) studies = [...studies, { id: newStudyId(k), k, len, col: nextStudyColor(k, studies), on: true }];
+    }
+    return { ...p, studies };
+  });
+}
+
 function QuickStudyButtons({ studies, pattern }: { studies: readonly Study[]; pattern: boolean }) {
   const isOn = (k: StudyKind, len: number | null) => !!findPreset(studies, k, len)?.on;
   const ma = (k: "sma" | "ema", name: string) => {
     const any = MA_PERIODS.some(len => isOn(k, len));
+    const all = MA_PERIODS.every(len => isOn(k, len));
     return (
       <span className={`rng indbtn cc-ma${any ? " on" : ""}`} role="group" aria-label={`${name} periods`}>
-        {name}
+        <button type="button" className="cc-ma-all" aria-pressed={all ? true : any ? "mixed" : false}
+          title={`${all ? "Hide" : "Show"} all ${name} periods`}
+          onClick={() => setPresets(k, MA_PERIODS, !all)}>{name}</button>
         {MA_PERIODS.map((len, i) => {
           const on = isOn(k, len);
           return (
