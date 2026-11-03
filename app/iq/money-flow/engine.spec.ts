@@ -22,6 +22,9 @@ import {
   popoverButtons,
   popChartModes,
   POP_TIMEFRAMES,
+  popTimeframes,
+  popTfLabel,
+  popTfForMode,
   chartFrame,
   extendedPivots,
   liveLevels,
@@ -432,5 +435,18 @@ describe("Money Flow pop-up: chart mode toggle, then timeframe", () => {
       const { interval, group } = fullChartInterval(tf);
       assert.equal(Number(interval.replace("m", "")) * group, tf, `${tf}m full chart candles are ${tf} minutes`);
     }
+  });
+});
+
+describe("Money Flow pop-up: 1D / 1W / 1M on the full chart only", () => {
+  it("the Money Flow chart offers minutes only; the full chart adds 1D, 1W, 1M", () => {
+    assert.deepEqual(popTimeframes(false), [1, 3, 5, 15]);
+    assert.deepEqual(popTimeframes(true), [1, 3, 5, 15, "1D", "1W", "1M"]);
+    assert.deepEqual(popTimeframes(true).map(popTfLabel), ["1m", "3m", "5m", "15m", "1D", "1W", "1M"]);
+  });
+  it("going back to the Money Flow chart from 1D / 1W / 1M falls back to 5m; minutes are kept", () => {
+    for (const tf of ["1D", "1W", "1M"] as const) assert.equal(popTfForMode(tf, false), 5);
+    assert.equal(popTfForMode(15, false), 15);
+    assert.equal(popTfForMode("1W", true), "1W");
   });
 });

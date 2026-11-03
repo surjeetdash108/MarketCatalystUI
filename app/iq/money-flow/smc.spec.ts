@@ -20,6 +20,9 @@ describe("Full chart: bars for the pop-up's timeframe", () => {
     assert.deepEqual(fullChartInterval(3), { interval: "1m", group: 3 });
     assert.deepEqual(fullChartInterval(5), { interval: "5m", group: 1 });
     assert.deepEqual(fullChartInterval(15), { interval: "15m", group: 1 });
+    assert.deepEqual(fullChartInterval("1D"), { interval: "1D", group: 1 });
+    assert.deepEqual(fullChartInterval("1W"), { interval: "1W", group: 1 });
+    assert.deepEqual(fullChartInterval("1M"), { interval: "1M", group: 1 });
   });
   it("groups 1-minute bars into 3-minute candles aligned to the 9:30 open", () => {
     assert.ok(m1.length > 30, "fixture has 1-minute bars");
@@ -81,5 +84,27 @@ describe("Full chart overlays (Order blocks, FVG, Liquidity, Structure)", () => 
     assert.ok(eq && eq.k === "line" && Math.abs(eq.p - (hod + lod) / 2) < 1e-9);
     const pdh = ops.find((o) => o.k === "line" && (o.label ?? "").startsWith("PDH"));
     assert.ok(pdh && pdh.k === "line" && Math.abs(pdh.p - Math.max(...two.slice(0, two.length - bars.length).map((b) => b.h))) < 1e-9, "PDH from the previous session");
+  });
+});
+
+describe("Full chart overlays on daily / weekly / monthly candles", () => {
+  // 80 daily candles with a zig-zag so there are swings to tag.
+  const DAY = 86_400_000, t0 = Date.UTC(2026, 5, 1, 4);
+  const daily = Array.from({ length: 80 }, (_, i) => {
+    const c = 100 + 10 * Math.sin(i / 4) + i * 0.1;
+    return { t: t0 + i * DAY, o: c - 0.5, h: c + 1, l: c - 1, c, v: 1e6 };
+  });
+  it("structure keeps swing tags and BOS but drops the session-only items (HOD/LOD, EQ, opening range, PDH/PDL)", () => {
+    const ops = smcOverlays(daily, only("str"), "1D");
+    const labels = ops.map((o) => (o.k === "text" ? o.text : o.k === "line" ? o.label ?? "" : o.k === "box" ? o.label ?? "" : o.text));
+    assert.ok(labels.some((l) => /^(HH|HL|LH|LL|H|L)$/.test(l)), "swing tags");
+    assert.ok(!labels.some((l) => /HOD|LOD|EQ 50%|ORH|ORL|PDH|PDL|PREMIUM|DISCOUNT/.test(l)), labels.join(","));
+  });
+  it("order blocks, FVGs and liquidity work the same on daily candles", () => {
+    assert.deepEqual(
+      smcOverlays(daily, only("fvg"), "1D").map((o) => (o.k === "box" ? o.i0 : -1)),
+      computeFvgs(daily).map((g) => g.i),
+    );
+    assert.ok(smcOverlays(daily, only("liq"), "1W").every((o) => o.k === "line"));
   });
 });

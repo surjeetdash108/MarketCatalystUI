@@ -8,8 +8,9 @@ import { useMemo } from "react";
 import { CandleChart } from "../candle-chart";
 import { useIntervalBars } from "../hooks/useBackendBars";
 import { fullChartInterval, groupBars, type SmcLayers } from "./smc";
+import type { PopTf } from "./engine";
 
-export function PopFullChart({ sym, tf, layers, height }: { sym: string; tf: number; layers: SmcLayers; height: number }) {
+export function PopFullChart({ sym, tf, layers, height }: { sym: string; tf: PopTf; layers: SmcLayers; height: number }) {
   const { interval, group } = fullChartInterval(tf);
   const { bars, loading } = useIntervalBars(sym, interval);
   const candles = useMemo(() => (bars ? groupBars(bars, group) : undefined), [bars, group]);

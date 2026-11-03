@@ -28,6 +28,7 @@ import { atr, boll, ema, etSessionDate, macd, rsi, sma, stoch, vwap, type Num } 
 import { chartPatterns, drawPatternOps, patternDrawOps } from "./chart-patterns";
 import type { PatternHit } from "./patterns";
 import { smcOverlays, type SmcLayers, type SmcOp } from "./money-flow/smc";
+import type { PopTf } from "./money-flow/engine";
 import { elementScale } from "./chart-pointer";
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -1202,9 +1203,9 @@ type CandleChartProps = {
    * layers — Order blocks, VWAP, FVG, Liquidity, Structure, Patterns — instead
    * of the page's saved indicators (no volume, no moving averages, no
    * indicator buttons), and never changes those saved indicators. `tf` is the
-   * candle size in minutes, used to size swings and the opening range.
+   * pop-up timeframe (minutes, or 1D / 1W / 1M), used to size swings and the opening range.
    */
-  smc?: { layers: SmcLayers; tf: number };
+  smc?: { layers: SmcLayers; tf: PopTf };
 };
 
 /** The VWAP line in Money Flow mode, in the pop-up's colour. */
@@ -1286,7 +1287,7 @@ function CandleChartInner({
   const monthly = interval ? interval === "1M" : barMs > 20 * 86_400_000;
   // Pattern overlay: detected once per data set while the "Pattern" button is on.
   const patterns = useMemo(() => (patternOn && data.length ? chartPatterns(data, intraday) : null), [patternOn, data, intraday]);
-  const smcLayers = smc?.layers, smcTf = smc?.tf ?? 5;
+  const smcLayers = smc?.layers, smcTf: PopTf = smc?.tf ?? 5;
   const smcOps = useMemo(() => (smcLayers ? smcOverlays(data, smcLayers, smcTf) : null), [smcLayers, smcTf, data]);
 
   // Range mode only: older same-granularity bars, fetched purely to seed the

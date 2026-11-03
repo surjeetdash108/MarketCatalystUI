@@ -8,10 +8,12 @@
  * The detection is the pop-up's (engine.ts), so both charts mark the same
  * blocks, gaps and swings. Over a multi-day series the session-anchored parts
  * of Structure (day range, EQ, opening range, HOD/LOD, PDH/PDL) use the latest
- * session; swings, BOS and the other layers use the whole series.
+ * session; swings, BOS and the other layers use the whole series. On 1D / 1W /
+ * 1M candles there is no session to anchor to, so Structure keeps only the
+ * swing tags, BOS and the price pattern.
  */
 import { etSessionDate } from "../indicators";
-import { computeFvgs, computeOrderBlocks, computeSwings, formatCurrency, type SwingPoint } from "./engine";
+import { computeFvgs, computeOrderBlocks, computeSwings, formatCurrency, type PopTf, type SwingPoint } from "./engine";
 
 type Bar = { t: number; o: number; h: number; l: number; c: number; v: number };
 
@@ -29,8 +31,9 @@ export type SmcOp =
   | { k: "text"; i: number; p: number; text: string; color: string; below: boolean }
   | { k: "badge"; text: string; color: string };
 
-/** Backend candle size for a pop-up timeframe (minutes); 3m has none, so it is grouped from 1m. */
-export function fullChartInterval(tf: number): { interval: "1m" | "5m" | "15m"; group: number } {
+/** Backend candle size for a pop-up timeframe; 3m has none, so it is grouped from 1m. */
+export function fullChartInterval(tf: PopTf): { interval: "1m" | "5m" | "15m" | "1D" | "1W" | "1M"; group: number } {
+  if (typeof tf === "string") return { interval: tf, group: 1 };
   if (tf === 5) return { interval: "5m", group: 1 };
   if (tf === 15) return { interval: "15m", group: 1 };
   return { interval: "1m", group: tf === 3 ? 3 : 1 };
@@ -63,11 +66,11 @@ export function groupBars<B extends Bar>(bars: B[], minutes: number): Bar[] {
 
 const MAX_OB = 12, MAX_LIQ = 10, MAX_SWING_TAGS = 30, MAX_BOS = 4;
 
-export function smcOverlays(bars: Bar[], layers: SmcLayers, tf: number): SmcOp[] {
+export function smcOverlays(bars: Bar[], layers: SmcLayers, tf: PopTf): SmcOp[] {
   const ops: SmcOp[] = [];
   const n = bars.length;
   if (n < 3) return ops;
-  const swingN = tf <= 3 ? 4 : tf >= 15 ? 2 : 3;
+  const swingN = typeof tf === "string" ? 3 : tf <= 3 ? 4 : tf >= 15 ? 2 : 3;
   const swings = layers.liq || layers.str ? computeSwings(bars, swingN) : [];
 
   if (layers.ob) {
@@ -109,8 +112,14 @@ export function smcOverlays(bars: Bar[], layers: SmcLayers, tf: number): SmcOp[]
   return ops;
 }
 
-/** Structure layer: latest-session range, EQ, opening range, HOD/LOD, PDH/PDL; swing tags, BOS, the price pattern. */
-function structure(bars: Bar[], swings: SwingPoint[], tf: number, ops: SmcOp[]) {
+/** Structure layer: latest-session range, EQ, opening range, HOD/LOD, PDH/PDL (intraday only); swing tags, BOS, the price pattern. */
+function structure(bars: Bar[], swings: SwingPoint[], tf: PopTf, ops: SmcOp[]) {
+  if (typeof tf === "number") sessionStructure(bars, tf, ops);
+  swingStructure(bars, swings, ops);
+}
+
+/** The session-anchored part of Structure, on intraday candles of `tf` minutes. */
+function sessionStructure(bars: Bar[], tf: number, ops: SmcOp[]) {
   const n = bars.length;
   const dates = bars.map((b) => etSessionDate(b.t));
   const today = dates[n - 1];
@@ -145,8 +154,11 @@ function structure(bars: Bar[], swings: SwingPoint[], tf: number, ops: SmcOp[]) 
   const ih = s0 + day.findIndex((b) => b.h === hiAll), il = s0 + day.findIndex((b) => b.l === loAll);
   ops.push({ k: "text", i: ih, p: hiAll, text: `▼ HOD $${formatCurrency(hiAll)}`, color: "#f0565a", below: false });
   ops.push({ k: "text", i: il, p: loAll, text: `▲ LOD $${formatCurrency(loAll)}`, color: "#3ddc84", below: true });
+}
 
-  // Swing tags (HH / HL / LH / LL) and breaks of structure.
+/** Swing tags (HH / HL / LH / LL), breaks of structure and the price pattern, over the whole series. */
+function swingStructure(bars: Bar[], swings: SwingPoint[], ops: SmcOp[]) {
+  const n = bars.length;
   const sorted = swings.slice().sort((a, b) => a.i - b.i);
   let lH: SwingPoint | null = null, lL: SwingPoint | null = null;
   const tags: SmcOp[] = [];

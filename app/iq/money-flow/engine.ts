@@ -224,6 +224,17 @@ export const popChartModes = (): Array<{ full: boolean; label: string }> => [
 /** Candle sizes (minutes) on the pop-up's timeframe buttons; each works on both charts. */
 export const POP_TIMEFRAMES = [1, 3, 5, 15] as const;
 
+/** A pop-up timeframe: minutes (both charts), or a daily-and-up size (full chart only). */
+export type PopTf = (typeof POP_TIMEFRAMES)[number] | "1D" | "1W" | "1M";
+
+/** The timeframe buttons for a chart: the full chart adds 1D, 1W and 1M. */
+export const popTimeframes = (full: boolean): PopTf[] => (full ? [...POP_TIMEFRAMES, "1D", "1W", "1M"] : [...POP_TIMEFRAMES]);
+
+export const popTfLabel = (tf: PopTf): string => (typeof tf === "number" ? `${tf}m` : tf);
+
+/** The timeframe to keep when switching charts: the Money Flow chart has no 1D / 1W / 1M, so those fall back to 5m. */
+export const popTfForMode = (tf: PopTf, full: boolean): PopTf => (full || typeof tf === "number" ? tf : 5);
+
 /**
  * Width of the hover chart's right gutter: wide enough for the widest pivot
  * label box (mono at `levelFz`, drawn 2px inside the gutter with 4px padding

@@ -27,7 +27,10 @@ import {
   popText,
   popoverButtons,
   popChartModes,
-  POP_TIMEFRAMES,
+  popTimeframes,
+  popTfLabel,
+  popTfForMode,
+  type PopTf,
   popoverNext,
   type PopoverEvent,
 } from "../money-flow/engine";
@@ -121,7 +124,9 @@ export function MoneyFlowScreen() {
   // Which stock + timeframe the popover chart was last scrolled to the live candle for
 
   // Chart options in popover
-  const [popTf, setPopTf] = useState<number>(5);
+  const [popTf, setPopTf] = useState<PopTf>(5);
+  // The Money Flow chart is minutes only; 1D / 1W / 1M exist on the full chart (popTfForMode).
+  const popMin = typeof popTf === "number" ? popTf : 5;
   // "Full Chart": the stock screen's zoomable chart in place of the one-day chart.
   const [popFull, setPopFull] = useState(false);
   const [popLayers, setPopLayers] = useState({
@@ -140,8 +145,8 @@ export function MoneyFlowScreen() {
     popSym ? `/live/bars?ticker=${encodeURIComponent(popSym)}&interval=1m` : null,
   );
   const popCandles = useMemo(
-    () => (popBars?.bars && board ? sessionCandles(popBars.bars, board.sessionDate, popTf) : []),
-    [popBars, board, popTf],
+    () => (popBars?.bars && board ? sessionCandles(popBars.bars, board.sessionDate, popMin) : []),
+    [popBars, board, popMin],
   );
 
   const gainers = useMemo(() => board?.gainers ?? [], [board]);
@@ -2701,7 +2706,10 @@ export function MoneyFlowScreen() {
                           type="button"
                           aria-pressed={popFull === m.full}
                           title={m.full ? "Zoomable chart with history: scroll to zoom, drag to pan" : "Today's session with R/S levels"}
-                          onClick={() => setPopFull(m.full)}
+                          onClick={() => {
+                            setPopFull(m.full);
+                            setPopTf((tf) => popTfForMode(tf, m.full));
+                          }}
                           style={btn(popFull === m.full)}
                         >
                           {m.label}
@@ -2721,9 +2729,9 @@ export function MoneyFlowScreen() {
                       Timeframe
                     </span>
                     <div style={seg} role="group" aria-label="Timeframe">
-                      {POP_TIMEFRAMES.map((tf) => (
+                      {popTimeframes(popFull).map((tf) => (
                         <button key={tf} type="button" aria-pressed={popTf === tf} onClick={() => setPopTf(tf)} style={btn(popTf === tf)}>
-                          {tf}m
+                          {popTfLabel(tf)}
                         </button>
                       ))}
                     </div>
@@ -2805,7 +2813,7 @@ export function MoneyFlowScreen() {
                   Loading {s.t} 1-minute bars…
                 </div>
               ) : (
-                <FullChartSvg stock={s} candles={popCandles} layers={popLayers} tf={popTf} width={chartW} height={POPOVER.chartH} scale={scale} />
+                <FullChartSvg stock={s} candles={popCandles} layers={popLayers} tf={popMin} width={chartW} height={POPOVER.chartH} scale={scale} />
               )}
             </div>
 
