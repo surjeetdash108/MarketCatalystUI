@@ -26,6 +26,8 @@ import {
   liveLevels,
   popText,
   popoverButtons,
+  popChartModes,
+  POP_TIMEFRAMES,
   popoverNext,
   type PopoverEvent,
 } from "../money-flow/engine";
@@ -2674,70 +2676,60 @@ export function MoneyFlowScreen() {
               ))}
             </div>
 
-            {/* Timeframe */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  fontSize: popText(11, scale),
-                  fontWeight: 700,
-                  letterSpacing: ".12em",
-                  textTransform: "uppercase",
-                  color: "#7a8481",
-                }}
-              >
-                Timeframe
-              </span>
-              <div
-                style={{
-                  display: "flex",
-                  background: "#0f1213",
-                  border: "1px solid #1e2427",
-                  borderRadius: 7,
-                  padding: 2,
-                  gap: 2,
-                }}
-              >
-                {[1, 3, 5, 15].map((tf) => (
-                  <button
-                    key={tf}
-                    type="button"
-                    onClick={() => setPopTf(tf)}
-                    style={{
-                      border: 0,
-                      borderRadius: 5,
-                      padding: "3px 10px",
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: popText(12, scale),
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      background: popTf === tf ? "#c9a24a" : "transparent",
-                      color: popTf === tf ? "#08090a" : "#aab3b0",
-                    }}
-                  >
-                    {tf}m
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                aria-pressed={popFull}
-                title={popFull ? "Back to the one-day chart" : "Zoomable chart with history: scroll to zoom, drag to pan"}
-                onClick={() => setPopFull((v) => !v)}
-                style={{
-                  marginLeft: "auto",
-                  border: `1px solid ${popFull ? "#c9a24a" : "#233038"}`,
-                  borderRadius: 6,
-                  padding: "4px 10px",
+            {/* Chart toggle (Money Flow Chart | Full Chart), then the timeframe — it drives both charts */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {(() => {
+                const seg = { display: "flex", background: "#0f1213", border: "1px solid #1e2427", borderRadius: 7, padding: 2, gap: 2 } as const;
+                const btn = (on: boolean) => ({
+                  border: 0,
+                  borderRadius: 5,
+                  padding: "3px 10px",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: popText(12, scale),
                   fontWeight: 700,
                   cursor: "pointer",
-                  background: popFull ? "#c9a24a" : "transparent",
-                  color: popFull ? "#08090a" : "#aab3b0",
-                }}
-              >
-                Full Chart
-              </button>
+                  whiteSpace: "nowrap" as const,
+                  background: on ? "#c9a24a" : "transparent",
+                  color: on ? "#08090a" : "#aab3b0",
+                });
+                return (
+                  <>
+                    <div style={seg} role="group" aria-label="Chart">
+                      {popChartModes().map((m) => (
+                        <button
+                          key={m.label}
+                          type="button"
+                          aria-pressed={popFull === m.full}
+                          title={m.full ? "Zoomable chart with history: scroll to zoom, drag to pan" : "Today's session with R/S levels"}
+                          onClick={() => setPopFull(m.full)}
+                          style={btn(popFull === m.full)}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                    <span
+                      style={{
+                        marginLeft: 4,
+                        fontSize: popText(11, scale),
+                        fontWeight: 700,
+                        letterSpacing: ".12em",
+                        textTransform: "uppercase",
+                        color: "#7a8481",
+                      }}
+                    >
+                      Timeframe
+                    </span>
+                    <div style={seg} role="group" aria-label="Timeframe">
+                      {POP_TIMEFRAMES.map((tf) => (
+                        <button key={tf} type="button" aria-pressed={popTf === tf} onClick={() => setPopTf(tf)} style={btn(popTf === tf)}>
+                          {tf}m
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Layer toggles: one row */}

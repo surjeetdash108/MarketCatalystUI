@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
+import { fullChartInterval } from "./smc";
 import {
   boardCandles,
   computeSquarifiedTiles,
@@ -19,6 +20,8 @@ import {
   POPOVER,
   chartRightGutter,
   popoverButtons,
+  popChartModes,
+  POP_TIMEFRAMES,
   chartFrame,
   extendedPivots,
   liveLevels,
@@ -415,5 +418,19 @@ describe("Money Flow FVG detection (shared by the pop-up and the full chart)", (
     for (let k = 0; k < 40; k++) c.push(bar(100 + k * 3, 101 + k * 3, 99 + k * 3, 100.5 + k * 3));
     assert.equal(computeFvgs(c).length, 7);
     assert.equal(computeFvgs(c, 0).length > 7, true);
+  });
+});
+
+describe("Money Flow pop-up: chart mode toggle, then timeframe", () => {
+  it("the toggle reads Money Flow Chart | Full Chart, in that order", () => {
+    assert.deepEqual(popChartModes().map((m) => m.label), ["Money Flow Chart", "Full Chart"]);
+    assert.deepEqual(popChartModes().map((m) => m.full), [false, true]);
+  });
+  it("every timeframe button works in both modes: the full chart has bars for each", () => {
+    assert.deepEqual([...POP_TIMEFRAMES], [1, 3, 5, 15]);
+    for (const tf of POP_TIMEFRAMES) {
+      const { interval, group } = fullChartInterval(tf);
+      assert.equal(Number(interval.replace("m", "")) * group, tf, `${tf}m full chart candles are ${tf} minutes`);
+    }
   });
 });

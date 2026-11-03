@@ -215,6 +215,15 @@ export function popoverNext(cur: PopoverState | null, ev: PopoverEvent): Popover
 /** The pop-up's open buttons; the ticker is already in the pop-up's title. */
 export const popoverButtons = (): [string, string] => ["Open in Market Catalyst →", "Open in Stock Intelligence →"];
 
+/** The pop-up's chart toggle: the one-day Money Flow chart, or the zoomable full chart. */
+export const popChartModes = (): Array<{ full: boolean; label: string }> => [
+  { full: false, label: "Money Flow Chart" },
+  { full: true, label: "Full Chart" },
+];
+
+/** Candle sizes (minutes) on the pop-up's timeframe buttons; each works on both charts. */
+export const POP_TIMEFRAMES = [1, 3, 5, 15] as const;
+
 /**
  * Width of the hover chart's right gutter: wide enough for the widest pivot
  * label box (mono at `levelFz`, drawn 2px inside the gutter with 4px padding
