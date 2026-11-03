@@ -4,7 +4,6 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   boardCandles,
   computeSquarifiedTiles,
-  etTimeLabel,
   formatCurrency,
   formatPct,
   indexCard,
@@ -26,6 +25,7 @@ import {
   popoverButtons,
   popChartModes,
   popTimeframes,
+  flowsLagLabel,
   cardLevels,
   BOARD_HEADINGS,
   POP_STAT_VALUE_STYLE,
@@ -203,9 +203,7 @@ export function MoneyFlowScreen() {
   // What the board covers and how fresh its bars are
   const sessionLine = board
     ? `${sessionDateLabel(board.sessionDate)} session · ${
-        board.barsThrough != null
-          ? `flows through ${etTimeLabel(board.barsThrough)} ET (${board.delayMinutes}-min delayed)`
-          : `flows start at 9:${30 + board.delayMinutes} AM ET (${board.delayMinutes}-min delayed)`
+        flowsLagLabel(board)
       } · ${board.universe.priced} of ${board.universe.total} S&P 500 / Nasdaq-100 stocks`
     : boardError
       ? "Money Flow is unavailable right now."
@@ -2921,7 +2919,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Candles",
-                    desc: "Polygon 5-minute bars, regular session 9:30–4:00 ET, 15 minutes delayed. Before the open the board shows the last completed session.",
+                    desc: "5-minute bars, regular session 9:30–4:00 ET, from FMP (Polygon as fallback). They can trail the live price; the line above says how far. Before the open the board shows the last completed session.",
                   },
                 ],
               },
@@ -3053,7 +3051,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Order block · +5",
-                    desc: "Bonus for an unmitigated order block on its side: 5 with price at the block, easing to 1.5 at 1.5% away or more; 0 with none.",
+                    desc: "Bonus for an unmitigated order block on its side: 5 with price at the block, easing to 1.5 at about 1% away (1.05%) and staying there further out; 0 with none.",
                   },
                   {
                     term: "Adjustment",
@@ -3102,7 +3100,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "R:R",
-                    desc: "Entry at the zone edge nearest price, stop at its far edge, target at the first pivot level beyond both: |target − entry| ÷ |entry − stop|. A dash means no zone, or price is already past every pivot level.",
+                    desc: "Entry at the zone edge nearest price, stop at its far edge, target at the first pivot level (S5 … R5) beyond both: |target − entry| ÷ |entry − stop|. A dash means no zone, or price is already past R5 (S5 for a short).",
                   },
                   {
                     term: "Rule",
@@ -3110,7 +3108,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Timeframe",
-                    desc: "1m · 3m · 5m · 15m candles for the chart, grouped from Polygon 1-minute bars.",
+                    desc: "1m · 3m · 5m · 15m candles for the chart, grouped from today’s 1-minute bars (FMP first, Polygon as fallback). The Full Chart adds 1D · 1W · 1M.",
                   },
                 ],
               },

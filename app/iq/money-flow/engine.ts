@@ -2,7 +2,8 @@
  * Money Flow — view helpers over the backend board (GET /live/money-flow).
  *
  * Every number comes from the board: the backend computes flows, levels and
- * scores from Polygon bars and FMP quotes (money-flow.calc.ts, where each basis
+ * scores from intraday bars (FMP first, Polygon as fallback) and FMP quotes
+ * (money-flow.calc.ts, where each basis
  * is documented and returned as `board.basis`). This file only formats, maps
  * and lays out; the popover chart's 1/3/5/15-minute candles are grouped here
  * from real 1-minute bars.
@@ -388,6 +389,18 @@ export function etClock(ms: number): { date: string; minutes: number } {
 /** "1:25 PM" in ET. */
 export function etTimeLabel(ms: number): string {
   return new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+}
+
+/**
+ * How fresh the board's flows are: the end of the latest bar, and how far it
+ * trails the board's build (measured, since the bar feed's lag varies).
+ */
+export function flowsLagLabel(b: Pick<MoneyFlowBoard, "asOf" | "barsThrough" | "sessionComplete">): string {
+  if (b.barsThrough == null) return "flows start after 9:30 AM ET";
+  const at = etTimeLabel(b.barsThrough);
+  if (b.sessionComplete) return `flows through ${at} ET (session closed)`;
+  const behind = Math.max(0, Math.round((Date.parse(b.asOf) - b.barsThrough) / 60_000));
+  return `flows through ${at} ET (${behind} min behind)`;
 }
 
 /** "Oct 29" for a YYYY-MM-DD session date. */

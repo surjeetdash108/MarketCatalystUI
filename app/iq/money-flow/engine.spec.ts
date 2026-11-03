@@ -23,6 +23,7 @@ import {
   popChartModes,
   POP_TIMEFRAMES,
   popTimeframes,
+  flowsLagLabel,
   cardLevels,
   BOARD_HEADINGS,
   zoomIntradayView,
@@ -523,5 +524,22 @@ describe("Money Flow card levels", () => {
       assert.equal(c[k], formatLevel(liveLevels(s.pivots, s.price).find((l) => l.name === k)?.v));
       assert.match(c[k], /^(\d+\.\d{2}|—)$/);
     }
+  });
+});
+
+describe("Money Flow freshness line and glossary", () => {
+  it("shows how far the bars actually trail the board, not a fixed 15 minutes", () => {
+    const b = { ...board, asOf: "2026-10-29T17:36:44.170Z", barsThrough: Date.parse("2026-10-29T17:10:00Z"), sessionComplete: false };
+    assert.equal(flowsLagLabel(b), "flows through 1:10 PM ET (27 min behind)");
+    assert.equal(flowsLagLabel({ ...b, barsThrough: null }), "flows start after 9:30 AM ET");
+    assert.equal(flowsLagLabel({ ...b, sessionComplete: true, barsThrough: Date.parse("2026-10-29T20:00:00Z") }), "flows through 4:00 PM ET (session closed)");
+  });
+  it("the glossary names the feed the code uses and the code's numbers", () => {
+    const src = fs.readFileSync(path.join(import.meta.dirname, "../screens/money-flow.tsx"), "utf-8");
+    assert.doesNotMatch(src, /Polygon 5-minute bars/);
+    assert.doesNotMatch(src, /grouped from Polygon 1-minute bars/);
+    assert.doesNotMatch(src, /-min delayed/);
+    assert.match(src, /easing to 1\.5 at about 1% away/); // 5 × clamp(1 − d/1.5, 0.3, 1) bottoms out at d = 1.05%
+    assert.match(src, /first pivot level \(S5 … R5\)/);
   });
 });
