@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
-import { CATALOG, detectPatterns, layoutLabels, patternGlyphs, patternsToShow, type PBar, type PatternHit } from "./index";
+import { CATALOG, detectPatterns, layoutCallouts, layoutLabels, patternGlyphs, patternsToShow, type PBar, type PatternHit } from "./index";
 
 /* ── builders: textbook shapes ─────────────────────────────────────────── */
 
@@ -203,5 +203,39 @@ describe("name tags never overlap", () => {
     assert.ok(out[1].y < boxes[1].y, "bearish tag moved up");
     assert.ok(out[3].y > boxes[3].y, "bullish tag moved down");
     assert.equal(out[4].y, 50, "a free tag stays put");
+  });
+});
+
+describe("pattern callouts: tags in bands above / below the price with an arrow to the pattern", () => {
+  it("places every tag inside its band, none overlapping, each with an arrow ending at its anchor", () => {
+    const items = [
+      { ax: 300, ay: 150, w: 120, h: 16, above: true },
+      { ax: 310, ay: 160, w: 110, h: 16, above: true },
+      { ax: 320, ay: 155, w: 90, h: 16, above: true },
+      { ax: 330, ay: 170, w: 130, h: 16, above: false },
+      { ax: 340, ay: 175, w: 100, h: 16, above: false },
+      { ax: 900, ay: 150, w: 120, h: 16, above: true },
+    ];
+    const lanes = { top: [10, 50] as [number, number], bottom: [250, 290] as [number, number] };
+    const out = layoutCallouts(items, lanes, 0, 1000);
+    out.forEach((b, i) => {
+      const [lo, hi] = items[i].above ? lanes.top : lanes.bottom;
+      assert.ok(b.y >= lo && b.y + b.h <= hi + 0.01, `tag ${i} in its band`);
+      assert.ok(b.x >= 0 && b.x + b.w <= 1000);
+      assert.deepEqual([b.arrow.x2, b.arrow.y2], [items[i].ax, items[i].ay]);
+      assert.equal(b.arrow.y1, items[i].above ? b.y + b.h : b.y);
+    });
+    for (let i = 0; i < out.length; i++)
+      for (let j = i + 1; j < out.length; j++) {
+        const a = out[i], c = out[j];
+        assert.ok(!(a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h), `${i} overlaps ${j}`);
+      }
+  });
+  it("shows at most the asked number of marks and one of each larger pattern", () => {
+    const bars = rows(fx.daily.NVDA), hits = detectPatterns(bars, { daily: true });
+    const shown = patternsToShow(hits, bars.length - 120, bars.length - 1, { candles: 3, others: 4 });
+    const big = shown.filter((h) => h.group !== "candle" && h.group !== "bar");
+    assert.ok(shown.length - big.length <= 3 && big.length <= 4);
+    assert.equal(new Set(big.map((h) => h.id)).size, big.length);
   });
 });

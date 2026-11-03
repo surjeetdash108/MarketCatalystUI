@@ -57,7 +57,10 @@ export function patternsToShow(hits: PatternHit[], from: number, to: number, opt
   // One mark per bar for candles: the longest pattern ending there.
   const perBar = new Map<number, PatternHit>();
   for (const h of small) { const cur = perBar.get(h.at); if (!cur || h.i1 - h.i0 > cur.i1 - cur.i0) perBar.set(h.at, h); }
-  return [...[...perBar.values()].sort((a, b) => a.at - b.at).slice(-nC), ...big.slice(0, nO)];
+  // One of each larger pattern (the newest), so the same name never appears twice.
+  const seen = new Set<string>();
+  const uniq = big.filter((h) => (seen.has(h.id) ? false : (seen.add(h.id), true)));
+  return [...[...perBar.values()].sort((a, b) => a.at - b.at).slice(-nC), ...uniq.slice(0, nO)];
 }
 
 export const signalColor = (sig: PatternHit["signal"]) => (sig === "bull" ? "#3ddc84" : sig === "bear" ? "#f0565a" : "#7fa8d0");
@@ -98,4 +101,50 @@ export function layoutLabels<T extends { x: number; y: number; w: number; h: num
     placed.push(b);
   }
   return placed;
+}
+
+export interface Callout { ax: number; ay: number; w: number; h: number; above: boolean }
+
+/**
+ * Callout placement: each tag goes in the band above the price (bearish /
+ * neutral) or below it (bullish), as near its anchor's x as the band allows,
+ * sliding along a row or down to the next row so none overlap, with an arrow
+ * from the tag to its anchor.
+ */
+export function layoutCallouts<T extends Callout>(
+  items: T[], lanes: { top: [number, number]; bottom: [number, number] }, xMin: number, xMax: number, gap = 6,
+): Array<T & { x: number; y: number; arrow: { x1: number; y1: number; x2: number; y2: number } }> {
+  const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const clash = (b: { x: number; y: number; w: number; h: number }) =>
+    placed.some((p) => b.x < p.x + p.w + gap && p.x < b.x + b.w + gap && b.y < p.y + p.h && p.y < b.y + b.h);
+  const out = new Array<T & { x: number; y: number; arrow: { x1: number; y1: number; x2: number; y2: number } }>(items.length);
+  const order = items.map((_, i) => i).sort((a, b) => items[a].ax - items[b].ax);
+  for (const i of order) {
+    const it = items[i], [lo, hi] = it.above ? lanes.top : lanes.bottom, rowH = it.h + 4;
+    const rows = Math.max(1, Math.floor((hi - lo + 4) / rowH));
+    const clampX = (x: number) => Math.max(xMin, Math.min(xMax - it.w, x));
+    let spot: { x: number; y: number } | null = null;
+    for (let r = 0; r < rows && !spot; r++) {
+      const y = it.above ? lo + r * rowH : hi - it.h - r * rowH;
+      // nearest free x to the anchor in this row: try the anchor, then slide right, then left
+      const want = clampX(it.ax - it.w / 2);
+      const tries = [want];
+      for (const p of placed) if (p.y === y) tries.push(clampX(p.x + p.w + gap), clampX(p.x - it.w - gap));
+      tries.sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
+      const x = tries.find((tx) => !clash({ x: tx, y, w: it.w, h: it.h }));
+      if (x != null) spot = { x, y };
+    }
+    if (!spot) {
+      // band full: stack beyond it rather than overlap
+      let y = it.above ? lo : hi - it.h;
+      while (clash({ x: clampX(it.ax - it.w / 2), y, w: it.w, h: it.h })) y += it.above ? rowH : -rowH;
+      spot = { x: clampX(it.ax - it.w / 2), y };
+    }
+    placed.push({ ...spot, w: it.w, h: it.h });
+    out[i] = {
+      ...it, ...spot,
+      arrow: { x1: Math.max(spot.x + 4, Math.min(spot.x + it.w - 4, it.ax)), y1: it.above ? spot.y + it.h : spot.y, x2: it.ax, y2: it.ay },
+    };
+  }
+  return out;
 }

@@ -6,7 +6,7 @@
 
 import React from "react";
 import type { BoardStock, OHLCVBar, SwingPoint } from "./engine";
-import { detectPatterns, layoutLabels, patternGlyphs, patternsToShow } from "../patterns";
+import { detectPatterns, layoutCallouts, patternGlyphs, patternsToShow } from "../patterns";
 import { candleIndexAt, chartFrame, chartRightGutter, computeOrderBlocks, computeSwings, formatCurrency, liveLevels, popText, timeTicks } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
@@ -289,9 +289,13 @@ export function FullChartSvg({
     mn = safeStockPx * 0.985;
   }
 
+  // With Patterns on, a band above and below the price area holds the pattern callouts (two rows each).
+  const calloutFz = T(11.5);
+  const laneH = layers.pat ? 2 * (calloutFz + 8) : 0;
+  const pTop = PT + (laneH ? laneH + 8 : 0), pBot = H - PB - (laneH ? laneH + 8 : 0);
   const y = (v: number) => {
     const val = Number.isFinite(v) ? v : safeStockPx;
-    return PT + ((mx - val) / (mx - mn || 1)) * (H - PT - PB);
+    return pTop + ((mx - val) / (mx - mn || 1)) * (pBot - pTop);
   };
 
   const zx = PL + Math.max(0, ZI) * cw;
@@ -933,32 +937,52 @@ export function FullChartSvg({
 
       {/* Patterns (app/iq/patterns): latest candle marks + chart patterns, each with its rule as the tooltip */}
       {layers.pat && (() => {
-        const hits = patternsToShow(detectPatterns(safeCandles), 0, safeCandles.length - 1);
+        const hits = patternsToShow(detectPatterns(safeCandles), 0, safeCandles.length - 1, { candles: 3, others: 4 });
         const xi = (i: number) => PL + i * cw + cw / 2;
-        const lf = T(11.5);
+        const lf = calloutFz;
         const glyphs = hits.map((h) => patternGlyphs(h));
-        // Name tags laid out so none overlap (layoutLabels), kept inside the plot.
-        const tags = layoutLabels(glyphs.map((g) => {
-          const w = g.label.text.length * lf * 0.56 + 8, h = lf + 4;
-          return { x: Math.max(PL, Math.min(W - PR - w, xi(g.label.i) - w / 2)), y: g.label.above ? y(g.label.p) - h - 6 : y(g.label.p) + 6, w, h, above: g.label.above };
-        })).map((b) => ({ ...b, y: Math.max(PT, Math.min(H - PB - b.h, b.y)) }));
-        return glyphs.map((g, hi) => {
-          const tg = tags[hi];
-          return (
-            <g key={`pat_${hi}`}>
-              <title>{g.title}</title>
-              {g.lines.map((l, li) => (
-                <line key={li} x1={xi(l.i0)} y1={y(l.p0)} x2={xi(Math.min(l.i1, safeCandles.length - 1))} y2={y(l.p1)} stroke={g.color} strokeWidth={1.3} strokeOpacity={0.85} strokeDasharray={l.dash.join(" ") || undefined} />
+        // Callouts in the bands above / below the price with an arrow to each pattern (layoutCallouts).
+        const tags = layoutCallouts(
+          glyphs.map((g) => ({
+            ax: xi(Math.min(g.label.i, safeCandles.length - 1)),
+            ay: y(g.label.p) + (g.label.above ? -4 : 4),
+            w: g.label.text.length * lf * 0.56 + 10,
+            h: lf + 6,
+            above: g.label.above,
+          })),
+          { top: [PT + 2, PT + 2 + laneH], bottom: [H - PB - 2 - laneH, H - PB - 2] },
+          PL + 2,
+          W - PR - 4,
+        );
+        const colors = [...new Set(glyphs.map((g) => g.color))];
+        return (
+          <g>
+            <defs>
+              {colors.map((c) => (
+                <marker key={c} id={`mfArrow${c.slice(1)}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L8,4 L0,8 z" fill={c} />
+                </marker>
               ))}
-              {g.points.map((p, pi) => (
-                <text key={`pp${pi}`} x={xi(p.i)} y={y(p.p) + (g.label.above ? -5 : lf + 3)} textAnchor="middle" fontSize={T(10.5)} fill={g.color} fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{p.label}</text>
-              ))}
-              <line x1={xi(g.label.i)} y1={y(g.label.p)} x2={Math.max(tg.x, Math.min(tg.x + tg.w, xi(g.label.i)))} y2={g.label.above ? tg.y + tg.h : tg.y} stroke={g.color} strokeOpacity={0.45} strokeWidth={1} />
-              <rect x={tg.x} y={tg.y} width={tg.w} height={tg.h} rx={3} fill="rgba(8,9,10,.88)" stroke={g.color} strokeOpacity={0.6} />
-              <text x={tg.x + 4} y={tg.y + lf} fontSize={lf} fill={g.color} fontFamily="Manrope, sans-serif" fontWeight={700}>{g.label.text}</text>
-            </g>
-          );
-        });
+            </defs>
+            {glyphs.map((g, hi) => {
+              const tg = tags[hi];
+              return (
+                <g key={`pat_${hi}`}>
+                  <title>{g.title}</title>
+                  {g.lines.map((l, li) => (
+                    <line key={li} x1={xi(l.i0)} y1={y(l.p0)} x2={xi(Math.min(l.i1, safeCandles.length - 1))} y2={y(l.p1)} stroke={g.color} strokeWidth={1.3} strokeOpacity={0.8} strokeDasharray={l.dash.join(" ") || undefined} />
+                  ))}
+                  {g.points.map((p, pi) => (
+                    <text key={`pp${pi}`} x={xi(p.i)} y={y(p.p) + (g.label.above ? -5 : lf + 3)} textAnchor="middle" fontSize={T(10.5)} fill={g.color} fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{p.label}</text>
+                  ))}
+                  <line x1={tg.arrow.x1} y1={tg.arrow.y1} x2={tg.arrow.x2} y2={tg.arrow.y2} stroke={g.color} strokeWidth={1.2} strokeOpacity={0.9} markerEnd={`url(#mfArrow${g.color.slice(1)})`} />
+                  <rect x={tg.x} y={tg.y} width={tg.w} height={tg.h} rx={4} fill="rgba(8,9,10,.92)" stroke={g.color} strokeOpacity={0.75} />
+                  <text x={tg.x + 5} y={tg.y + tg.h / 2 + lf * 0.36} fontSize={lf} fill={g.color} fontFamily="Manrope, sans-serif" fontWeight={700}>{g.label.text}</text>
+                </g>
+              );
+            })}
+          </g>
+        );
       })()}
 
       {/* Time axis (ET) */}
