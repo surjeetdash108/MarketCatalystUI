@@ -52,7 +52,7 @@ interface BarsResponse {
 }
 
 export function MoneyFlowScreen() {
-  const { openStock, openIndex } = useIQActions();
+  const { openIndex } = useIQActions();
   const { exitToMC, enterSI } = useSI();
 
   // The whole board — flows, movers, levels, scores — from GET /live/money-flow.
@@ -252,20 +252,10 @@ export function MoneyFlowScreen() {
     hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "leave" }), 200);
   };
 
+  // A click shows the SAME pop-up as hover, pinned (popoverNext) — not the app-wide detail window.
   const handleTileClick = (stock: BoardStock, e: React.MouseEvent) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    setHoveredStock(null);
-    const live = liveQuotes.get(stock.t);
-    const sec = stock.sector ? board?.sectors.find((s) => s.name === stock.sector) : null;
-    openStock(stock.t, {
-      price: live?.price ?? stock.price,
-      pctChange: live?.pctChange ?? stock.pctChange,
-      rvol: stock.rvol,
-      marketCap: live?.marketCap ?? stock.marketCap,
-      name: live?.name ?? stock.name,
-      sector: stock.sector,
-      sectorPctChange: sec?.avgPct ?? null,
-    });
+    applyPop({ type: "click", key: stock.t }, stock, e.currentTarget.getBoundingClientRect());
   };
 
   // A pinned pop-up closes on a click outside it (or another tile's click re-pins) or on Esc.

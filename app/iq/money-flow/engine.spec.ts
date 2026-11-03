@@ -339,3 +339,14 @@ describe("Money Flow hover chart time axis", () => {
     assert.equal(timeTicks(1)[1].i, 30);
   });
 });
+
+describe("Money Flow: a tile click opens the hover pop-up (pinned), not the detail window", () => {
+  it("handleTileClick pins the same pop-up and never opens the stock drawer", () => {
+    const src = fs.readFileSync(path.join(import.meta.dirname, "../screens/money-flow.tsx"), "utf-8");
+    const body = src.slice(src.indexOf("const handleTileClick"), src.indexOf("};", src.indexOf("const handleTileClick")));
+    assert.ok(body.length > 0);
+    assert.ok(!/openStock\(/.test(body), "tile click must not open the detail window");
+    assert.ok(/applyPop\(\{ type: "click"/.test(body), "tile click pins the hover pop-up");
+  });
+});
+
