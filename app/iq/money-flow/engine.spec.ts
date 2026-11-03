@@ -23,6 +23,7 @@ import {
   popChartModes,
   POP_TIMEFRAMES,
   popTimeframes,
+  BOARD_HEADINGS,
   zoomIntradayView,
   panIntradayView,
   fullSessionView,
@@ -485,5 +486,12 @@ describe("Intra-Day chart zoom and scroll, today's session only", () => {
     assert.deepEqual(panIntradayView({ from: 10, to: 30 }, -100, NB), { from: 0, to: 20 });
     assert.deepEqual(panIntradayView({ from: 10, to: 30 }, 100, NB), { from: NB - 20, to: NB });
     assert.deepEqual(panIntradayView({ from: 10, to: 30 }, 5, NB), { from: 15, to: 35 });
+  });
+});
+
+describe("Money Flow card headings", () => {
+  it("say what the cards are: the three biggest movers each side, setup or not", () => {
+    assert.deepEqual(BOARD_HEADINGS.bull, ["Top 3 Bullish Stocks", "Biggest Gainers"]);
+    assert.deepEqual(BOARD_HEADINGS.bear, ["Top 3 Bearish Stocks", "Biggest Losers"]);
   });
 });

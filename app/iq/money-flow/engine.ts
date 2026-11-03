@@ -215,6 +215,15 @@ export function popoverNext(cur: PopoverState | null, ev: PopoverEvent): Popover
 /** The pop-up's open buttons; the ticker is already in the pop-up's title. */
 export const popoverButtons = (): [string, string] => ["Open in Market Catalyst →", "Open in Stock Intelligence →"];
 
+/**
+ * Headings over the #1–#3 cards. The cards are the three biggest % movers on
+ * each side, whatever their setup, so the sub-heading says that, not "setups".
+ */
+export const BOARD_HEADINGS = {
+  bull: ["Top 3 Bullish Stocks", "Biggest Gainers"],
+  bear: ["Top 3 Bearish Stocks", "Biggest Losers"],
+} as const;
+
 /** The pop-up's chart toggle: the one-day Money Flow chart, or the zoomable full chart. */
 export const popChartModes = (): Array<{ full: boolean; label: string }> => [
   { full: false, label: "Intra-Day Chart" },

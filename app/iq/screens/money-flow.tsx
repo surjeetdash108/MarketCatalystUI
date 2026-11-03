@@ -28,6 +28,7 @@ import {
   popoverButtons,
   popChartModes,
   popTimeframes,
+  BOARD_HEADINGS,
   POP_STAT_VALUE_STYLE,
   fullSessionView,
   type IntradayView,
@@ -1400,7 +1401,7 @@ export function MoneyFlowScreen() {
                   color: "#3ddc84",
                 }}
               >
-                Top 3 Bullish Stocks
+                {BOARD_HEADINGS.bull[0]}
               </span>
               <span
                 style={{
@@ -1411,7 +1412,7 @@ export function MoneyFlowScreen() {
                   color: "#7a8481",
                 }}
               >
-                Strongest Setups
+                {BOARD_HEADINGS.bull[1]}
               </span>
             </div>
 
@@ -1734,7 +1735,7 @@ export function MoneyFlowScreen() {
                   color: "#f0565a",
                 }}
               >
-                Top 3 Bearish Stocks
+                {BOARD_HEADINGS.bear[0]}
               </span>
               <span
                 style={{
@@ -1745,7 +1746,7 @@ export function MoneyFlowScreen() {
                   color: "#7a8481",
                 }}
               >
-                Heavy Selling
+                {BOARD_HEADINGS.bear[1]}
               </span>
             </div>
 
