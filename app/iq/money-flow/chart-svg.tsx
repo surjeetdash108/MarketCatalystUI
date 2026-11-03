@@ -253,8 +253,10 @@ export function FullChartSvg({
   const zone = stock.zone;
   const ZI = zone ? candleIndexAt(candles, zone.startT) : -1;
   const KI = candles.length - 1;
-  const lastPx = candles.length ? candles[candles.length - 1].c : stock.price;
-  const safeStockPx = Number.isFinite(lastPx) && lastPx > 0 ? lastPx : stock.price;
+  // The live price, as the header and the cards show it (the levels are named from
+  // it too); the last bar's close can lag it. The bar close is the fallback.
+  const lastPx = candles.length ? candles[candles.length - 1].c : NaN;
+  const safeStockPx = Number.isFinite(stock.price) && stock.price > 0 ? stock.price : lastPx;
   const pv = stock.pivots;
 
   // Two levels each side of price, renumbered from price (liveLevels): past R1, R2 shows as R1, R3 as R2.
