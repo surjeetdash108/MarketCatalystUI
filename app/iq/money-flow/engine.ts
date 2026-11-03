@@ -231,6 +231,32 @@ export const POP_STAT_VALUE_STYLE: { whiteSpace: "nowrap"; marginLeft: "auto"; t
   textAlign: "right",
 };
 
+/** The Intra-Day chart's visible window, in candle slots (0 = 9:30, nb = the close). */
+export interface IntradayView { from: number; to: number }
+
+/** Fewest candle slots the Intra-Day chart zooms in to. */
+const MIN_INTRADAY_SPAN = 8;
+
+export const fullSessionView = (nb: number): IntradayView => ({ from: 0, to: nb });
+
+/** Keeps a window inside today's session (slots 0..nb), never narrower than a few candles. */
+function clampIntradayView(from: number, span: number, nb: number): IntradayView {
+  const s = Math.min(nb, Math.max(Math.min(MIN_INTRADAY_SPAN, nb), span));
+  const f = Math.min(Math.max(0, from), nb - s);
+  return { from: f, to: f + s };
+}
+
+/** Zoom by `factor` (< 1 zooms in) around `anchor`, the pointer's fraction across the plot. */
+export function zoomIntradayView(v: IntradayView, factor: number, anchor: number, nb: number): IntradayView {
+  const span = v.to - v.from, a = Math.min(1, Math.max(0, anchor));
+  const at = v.from + a * span, s = span * factor;
+  return clampIntradayView(at - a * Math.min(nb, Math.max(Math.min(MIN_INTRADAY_SPAN, nb), s)), s, nb);
+}
+
+/** Scroll by `slots` candles (negative = earlier), stopping at 9:30 and at the close. */
+export const panIntradayView = (v: IntradayView, slots: number, nb: number): IntradayView =>
+  clampIntradayView(v.from + slots, v.to - v.from, nb);
+
 /** Candle sizes (minutes) on the pop-up's timeframe buttons; each works on both charts. */
 export const POP_TIMEFRAMES = [1, 3, 5, 15] as const;
 

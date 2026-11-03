@@ -29,6 +29,8 @@ import {
   popChartModes,
   popTimeframes,
   POP_STAT_VALUE_STYLE,
+  fullSessionView,
+  type IntradayView,
   popTfLabel,
   popTfForMode,
   type PopTf,
@@ -128,6 +130,8 @@ export function MoneyFlowScreen() {
   const [popTf, setPopTf] = useState<PopTf>(5);
   // The Intra-Day chart is minutes only; 1D / 1W / 1M exist on the full chart (popTfForMode).
   const popMin = typeof popTf === "number" ? popTf : 5;
+  // Intra-Day chart zoom / scroll window (null = the whole session); reset per stock and timeframe.
+  const [popView, setPopView] = useState<{ key: string; v: IntradayView } | null>(null);
   // "Full Chart": the stock screen's zoomable chart in place of the one-day chart.
   const [popFull, setPopFull] = useState(false);
   const [popLayers, setPopLayers] = useState({
@@ -2813,7 +2817,9 @@ export function MoneyFlowScreen() {
                   Loading {s.t} 1-minute bars…
                 </div>
               ) : (
-                <FullChartSvg stock={s} candles={popCandles} layers={popLayers} tf={popMin} width={chartW} height={POPOVER.chartH} scale={scale} />
+                <FullChartSvg stock={s} candles={popCandles} layers={popLayers} tf={popMin} width={chartW}
+                  view={popView?.key === `${s.t}|${popMin}` ? popView.v : fullSessionView(Math.round(390 / popMin) + 1)}
+                  onView={(v) => setPopView({ key: `${s.t}|${popMin}`, v })} height={POPOVER.chartH} scale={scale} />
               )}
             </div>
 

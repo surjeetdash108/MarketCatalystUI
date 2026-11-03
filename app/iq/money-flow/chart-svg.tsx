@@ -4,10 +4,10 @@
  * day high/low). A level that does not exist is not drawn.
  */
 
-import React from "react";
-import type { BoardStock, OHLCVBar, SwingPoint } from "./engine";
+import React, { useEffect, useId, useRef } from "react";
+import type { BoardStock, IntradayView, OHLCVBar, SwingPoint } from "./engine";
 import { detectPatterns, layoutCallouts, patternGlyphs, patternsToShow } from "../patterns";
-import { candleIndexAt, chartFrame, chartRightGutter, computeFvgs, computeOrderBlocks, computeSwings, formatCurrency, levelTag, liveLevels, popLevelRows, popText, timeTicks } from "./engine";
+import { candleIndexAt, chartFrame, chartRightGutter, computeFvgs, computeOrderBlocks, computeSwings, formatCurrency, fullSessionView, levelTag, liveLevels, panIntradayView, popLevelRows, popText, timeTicks, zoomIntradayView } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
 function levelsInView(levels: Array<number | null | undefined>, lo: number, hi: number): number[] {
@@ -206,6 +206,8 @@ export function FullChartSvg({
   width = 900,
   height = 340,
   scale = 1,
+  view,
+  onView,
 }: {
   stock: BoardStock;
   candles: OHLCVBar[];
@@ -215,9 +217,39 @@ export function FullChartSvg({
   height?: number;
   /** The pop-up's on-screen scale: text is drawn large enough to stay ≥ 12px on screen (popText). */
   scale?: number;
+  /** Visible window in candle slots (zoom / scroll); the whole session when omitted. */
+  view?: IntradayView | null;
+  /** Wheel zooms around the pointer, drag scrolls, double-click resets — all within today's session. */
+  onView?: (v: IntradayView) => void;
 }) {
   const T = (n: number) => popText(n, scale);
   const NB = Math.round(390 / tf) + 1;
+  const vw = view ?? fullSessionView(NB);
+  const clipId = useId().replace(/:/g, "");
+  const svgRef = useRef<SVGSVGElement>(null);
+  // Latest geometry for the native wheel listener and the drag (set below, read in handlers).
+  const geo = useRef({ vw, NB, PL: 6, plotW: 1, W: width, onView });
+  const drag = useRef<{ x: number; v: IntradayView } | null>(null);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    // Non-passive, so the wheel zooms the chart instead of scrolling the page.
+    const onWheel = (e: WheelEvent) => {
+      const g = geo.current;
+      if (!g.onView) return;
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const sx = ((e.clientX - r.left) / (r.width || 1)) * g.W; // pointer in chart units (works in the scaled pop-up)
+      const span = g.vw.to - g.vw.from;
+      if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        g.onView(panIntradayView(g.vw, ((e.deltaX || e.deltaY) / 100) * span * 0.1, g.NB));
+      } else {
+        g.onView(zoomIntradayView(g.vw, e.deltaY > 0 ? 1.1 : 1 / 1.1, (sx - g.PL) / g.plotW, g.NB));
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
   const zone = stock.zone;
   const ZI = zone ? candleIndexAt(candles, zone.startT) : -1;
   const KI = candles.length - 1;
@@ -245,7 +277,13 @@ export function FullChartSvg({
   );
   const PT = 10;
   const PB = Math.max(22, Math.ceil(T(12) + 12));
-  const cw = (W - PL - PR) / (NB || 1);
+  const cw = (W - PL - PR) / (vw.to - vw.from || 1);
+  /** Left edge of candle slot i, in the zoomed / scrolled window. */
+  const sx = (i: number) => PL + (i - vw.from) * cw;
+  const plotW = W - PL - PR;
+  useEffect(() => {
+    geo.current = { vw, NB, PL, plotW, W, onView };
+  });
   const fz = T(14);
 
   if (!candles || candles.length === 0) {
@@ -259,7 +297,10 @@ export function FullChartSvg({
   }
   const safeCandles = candles;
 
-  const candleVals = safeCandles
+  // Price scale fits the candles in view.
+  const i0 = Math.max(0, Math.floor(vw.from)), i1 = Math.ceil(vw.to);
+  const inView = safeCandles.slice(i0, i1 + 1);
+  const candleVals = (inView.length ? inView : safeCandles)
     .flatMap((x) => [x.h, x.l, x.o, x.c])
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
 
@@ -286,16 +327,37 @@ export function FullChartSvg({
     return pTop + ((mx - val) / (mx - mn || 1)) * (pBot - pTop);
   };
 
-  const zx = PL + Math.max(0, ZI) * cw;
+  const zx = sx(Math.max(0, ZI));
   const obs = layers.ob ? computeOrderBlocks(safeCandles) : [];
   const swings = layers.liq || layers.str ? computeSwings(safeCandles, tf <= 3 ? 4 : tf >= 15 ? 2 : 3) : [];
 
   return (
     <svg
+      ref={svgRef}
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
-      style={{ display: "block", width: "100%", height: "100%", minWidth: W }}
+      style={{ display: "block", width: "100%", height: "100%", minWidth: W, cursor: onView ? "grab" : undefined, touchAction: "none" }}
+      onPointerDown={(e) => {
+        if (!onView || e.button !== 0) return;
+        drag.current = { x: e.clientX, v: vw };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d || !onView) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const dx = ((e.clientX - d.x) / (r.width || 1)) * W; // chart units
+        onView(panIntradayView(d.v, -dx / cw, NB));
+      }}
+      onPointerUp={() => { drag.current = null; }}
+      onPointerCancel={() => { drag.current = null; }}
+      onDoubleClick={() => onView?.(fullSessionView(NB))}
     >
+      <defs>
+        {/* Candles and layers stay inside the price area when zoomed or scrolled */}
+        <clipPath id={`${clipId}p`}><rect x={0} y={rows.y.R1} width={W - PR} height={rows.y.S1 - rows.y.R1} /></clipPath>
+        <clipPath id={`${clipId}x`}><rect x={0} y={0} width={W - PR + 1} height={H} /></clipPath>
+      </defs>
       {/* Chart box: the price area only — the level column to its right sits outside it */}
       {(() => { const f = chartFrame(W, H, PR); return <rect x={f.x + 0.5} y={f.y + 0.5} width={f.w - 1} height={f.h - 1} rx={8} fill="#08090a" stroke="#171c1e" />; })()}
 
@@ -314,6 +376,7 @@ export function FullChartSvg({
         );
       })}
 
+      <g clipPath={`url(#${clipId}p)`}>
       {/* Order Block Base Zone */}
       {layers.ob && (
         <>
@@ -342,8 +405,8 @@ export function FullChartSvg({
           )}
 
           {obs.map((b, bi) => {
-            const x1 = PL + b.i * cw;
-            const x2 = b.mit ? PL + (b.end + 1) * cw : W - PR;
+            const x1 = sx(b.i);
+            const x2 = b.mit ? sx(b.end + 1) : W - PR;
             const col = b.bull ? "61,220,132" : "240,86,90";
             return (
               <g key={`ob_rect_${bi}`}>
@@ -374,6 +437,8 @@ export function FullChartSvg({
           })}
         </>
       )}
+
+      </g>
 
       {/* Pivots R1, R2, S1, S2: fixed rows; the name in the box, the value beside it */}
       {lv.map(([n, v]) => {
@@ -432,11 +497,12 @@ export function FullChartSvg({
         );
       })}
 
+      <g clipPath={`url(#${clipId}p)`}>
       {/* VWAP */}
       {layers.vwap && (
         <polyline
           points={safeCandles
-            .map((b, i) => `${PL + i * cw + cw / 2},${y(b.vw)}`)
+            .map((b, i) => `${sx(i) + cw / 2},${y(b.vw)}`)
             .join(" ")}
           fill="none"
           stroke="#8b7cf6"
@@ -449,8 +515,8 @@ export function FullChartSvg({
       {layers.fvg && (() => {
         return computeFvgs(safeCandles).map((g, gi) => {
           const end = g.end;
-          const x1 = PL + g.i * cw;
-          const x2 = end != null ? PL + (end + 1) * cw : W - PR;
+          const x1 = sx(g.i);
+          const x2 = end != null ? sx(end + 1) : W - PR;
           const col = g.bull ? "90,169,230" : "230,120,190";
           return (
             <g key={`fvg_${gi}`}>
@@ -490,8 +556,8 @@ export function FullChartSvg({
             break;
           }
         }
-        const x1 = PL + p.i * cw + cw / 2;
-        const x2 = sw != null ? PL + sw * cw + cw / 2 : W - PR;
+        const x1 = sx(p.i) + cw / 2;
+        const x2 = sw != null ? sx(sw) + cw / 2 : W - PR;
         const col = p.hi ? "#f0a24a" : "#4ad0c9";
         return (
           <g key={`liq_${pi}`}>
@@ -537,7 +603,7 @@ export function FullChartSvg({
       {/* Structure Layer */}
       {layers.str && (() => {
         const N = safeCandles.length;
-        const xi = (i: number) => PL + i * cw + cw / 2;
+        const xi = (i: number) => sx(i) + cw / 2;
         const hiAll = Math.max(...safeCandles.map((q) => q.h));
         const loAll = Math.min(...safeCandles.map((q) => q.l));
         const eq = (hiAll + loAll) / 2;
@@ -709,9 +775,9 @@ export function FullChartSvg({
             )}
 
             <rect
-              x={PL}
+              x={sx(0)}
               y={y(orh)}
-              width={Math.max(2, xi(orb.length - 1) - PL + cw / 2)}
+              width={Math.max(2, xi(orb.length - 1) - sx(0) + cw / 2)}
               height={Math.max(1, y(orl) - y(orh))}
               fill="rgba(154,167,255,.07)"
               stroke="rgba(154,167,255,.35)"
@@ -886,7 +952,7 @@ export function FullChartSvg({
 
       {/* Candles */}
       {safeCandles.map((b, i) => {
-        const cx = PL + i * cw + cw / 2;
+        const cx = sx(i) + cw / 2;
         const cyO = y(b.o);
         const cyC = y(b.c);
         const cyH = y(b.h);
@@ -920,10 +986,12 @@ export function FullChartSvg({
 
       {/* Patterns (app/iq/patterns): latest candle marks + chart patterns, each with its rule as the tooltip */}
       {layers.pat && (() => {
-        const hits = patternsToShow(detectPatterns(safeCandles), 0, safeCandles.length - 1, { candles: 3, others: 4 });
-        const xi = (i: number) => PL + i * cw + cw / 2;
+        // Only patterns whose callout points at a candle in view (slot i is visible while i < view end).
+        const last = Math.min(Math.ceil(vw.to) - 1, safeCandles.length - 1);
+        const hits = patternsToShow(detectPatterns(safeCandles), i0, last, { candles: 3, others: 4 });
+        const xi = (i: number) => sx(i) + cw / 2;
         const lf = calloutFz;
-        const glyphs = hits.map((h) => patternGlyphs(h));
+        const glyphs = hits.map((h) => patternGlyphs(h)).filter((g) => g.label.i >= vw.from - 0.5 && g.label.i <= last);
         // Callouts in the bands above / below the price with an arrow to each pattern (layoutCallouts).
         const tags = layoutCallouts(
           glyphs.map((g) => ({
@@ -968,9 +1036,12 @@ export function FullChartSvg({
         );
       })()}
 
+      </g>
+
+      <g clipPath={`url(#${clipId}x)`}>
       {/* Time axis (ET) */}
       {timeTicks(tf).filter((k) => k.i < NB).map((k) => {
-        const tx = PL + k.i * cw;
+        const tx = sx(k.i);
         return (
           <g key={`tt_${k.i}`}>
             <line x1={tx} x2={tx} y1={PT} y2={H - PB} stroke="rgba(255,255,255,.05)" strokeWidth={1} />
@@ -980,6 +1051,8 @@ export function FullChartSvg({
           </g>
         );
       })}
+
+      </g>
 
       {/* Current Price Marker */}
       <line

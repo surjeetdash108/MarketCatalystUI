@@ -23,6 +23,9 @@ import {
   popChartModes,
   POP_TIMEFRAMES,
   popTimeframes,
+  zoomIntradayView,
+  panIntradayView,
+  fullSessionView,
   POP_STAT_VALUE_STYLE,
   popTfLabel,
   popTfForMode,
@@ -458,5 +461,29 @@ describe("Money Flow pop-up: stat values are never cut short", () => {
     assert.equal(POP_STAT_VALUE_STYLE.overflow, undefined);
     assert.equal(POP_STAT_VALUE_STYLE.whiteSpace, "nowrap"); // "169.39 · 168.12" stays on one line
     assert.equal(POP_STAT_VALUE_STYLE.marginLeft, "auto"); // right-aligned, on the label's line or the next
+  });
+});
+
+describe("Intra-Day chart zoom and scroll, today's session only", () => {
+  const NB = 79; // 5-minute slots 9:30-16:00
+  it("starts on the whole session", () => {
+    assert.deepEqual(fullSessionView(NB), { from: 0, to: NB });
+  });
+  it("zooming in narrows the window around the pointer", () => {
+    const v = zoomIntradayView(fullSessionView(NB), 0.5, 0.5, NB);
+    assert.ok(Math.abs(v.to - v.from - NB / 2) < 1e-9);
+    assert.ok(Math.abs((v.from + v.to) / 2 - NB / 2) < 1e-9, "centred on the pointer");
+    const left = zoomIntradayView(fullSessionView(NB), 0.5, 0, NB);
+    assert.equal(left.from, 0, "anchored at the left edge");
+  });
+  it("never zooms out past the session or in past a few candles", () => {
+    assert.deepEqual(zoomIntradayView({ from: 10, to: 30 }, 10, 0.5, NB), { from: 0, to: NB });
+    const tight = zoomIntradayView({ from: 10, to: 30 }, 0.01, 0.5, NB);
+    assert.ok(tight.to - tight.from >= 8 - 1e-9);
+  });
+  it("scrolling stops at 9:30 and at the close: nothing before or after today's session", () => {
+    assert.deepEqual(panIntradayView({ from: 10, to: 30 }, -100, NB), { from: 0, to: 20 });
+    assert.deepEqual(panIntradayView({ from: 10, to: 30 }, 100, NB), { from: NB - 20, to: NB });
+    assert.deepEqual(panIntradayView({ from: 10, to: 30 }, 5, NB), { from: 15, to: 35 });
   });
 });
