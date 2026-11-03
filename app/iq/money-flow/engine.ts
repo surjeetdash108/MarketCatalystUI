@@ -112,21 +112,26 @@ export function extendedPivots(p: PivotLevels): Record<LevelName, number | null>
 export interface LiveLevel { name: "R1" | "R2" | "S1" | "S2"; v: number; from: LevelName }
 
 /**
- * The two resistances above price and the two supports below it, renumbered
- * from price: once price touches or passes R1, R2 is shown as R1 and R3 as R2
- * (and so on out to R5); the same for S levels on the way down. Ordered top
+ * The two levels just above price (R1, R2) and the two just below (S1, S2),
+ * from the whole ladder S5…S1, R1…R5, named by where they sit relative to
+ * price. Once price passes R1, R2 is shown as R1 and R3 as R2, and the old R1
+ * becomes S1, the nearest support; the same on the way down. After a gap past
+ * R5 there is no resistance left and R5 / R4 are the supports. (The pivot P is
+ * left out, so between S1 and R1 the names are the classic ones.) Ordered top
  * to bottom: R2, R1, S1, S2.
  */
 export function liveLevels(p: PivotLevels | null | undefined, price: number): LiveLevel[] {
   if (!p || !Number.isFinite(price)) return [];
   const x = extendedPivots(p);
-  const pick = (side: "R" | "S") =>
-    ([1, 2, 3, 4, 5] as const)
-      .map((n) => ({ from: `${side}${n}` as LevelName, v: x[`${side}${n}` as LevelName] }))
-      .filter((l): l is { from: LevelName; v: number } => l.v != null && Number.isFinite(l.v) && (side === "R" ? l.v > price : l.v < price))
-      .slice(0, 2)
-      .map((l, i) => ({ name: `${side}${i + 1}` as LiveLevel["name"], v: l.v, from: l.from }));
-  return [...pick("R").reverse(), ...pick("S")];
+  const all = (Object.keys(x) as LevelName[])
+    .map((from) => ({ from, v: x[from] }))
+    .filter((l): l is { from: LevelName; v: number } => l.v != null && Number.isFinite(l.v));
+  const above = all.filter((l) => l.v > price).sort((a, b) => a.v - b.v).slice(0, 2);
+  const below = all.filter((l) => l.v < price).sort((a, b) => b.v - a.v).slice(0, 2);
+  return [
+    ...above.map((l, i) => ({ name: `R${i + 1}` as LiveLevel["name"], v: l.v, from: l.from })).reverse(),
+    ...below.map((l, i) => ({ name: `S${i + 1}` as LiveLevel["name"], v: l.v, from: l.from })),
+  ];
 }
 
 /**

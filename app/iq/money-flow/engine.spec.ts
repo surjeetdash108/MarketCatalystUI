@@ -496,3 +496,16 @@ describe("Money Flow card headings", () => {
     assert.deepEqual(BOARD_HEADINGS.bear, ["Top 3 Bearish Stocks", "Biggest Losers"]);
   });
 });
+
+describe("pivot levels: a level price has passed changes sides", () => {
+  const pv = [...board.gainers, ...board.losers].find((x) => x.t === "GOOGL")!.pivots!;
+  it("a passed resistance is the nearest support, and a passed support the nearest resistance", () => {
+    const l = liveLevels(pv, 327.5); // above R1 (326.65)
+    assert.deepEqual(l.map((r) => [r.name, r.from]), [["R2", "R3"], ["R1", "R2"], ["S1", "R1"], ["S2", "S1"]]);
+    const down = liveLevels(pv, 321.5); // below S1 (322.90)
+    assert.deepEqual(down.map((r) => [r.name, r.from]), [["R2", "R1"], ["R1", "S1"], ["S1", "S2"], ["S2", "S3"]]);
+  });
+  it("after a gap past R5 there is no resistance left; R5 and R4 are the supports, not a far-off S1", () => {
+    assert.deepEqual(liveLevels(pv, 400).map((r) => [r.name, r.from]), [["S1", "R5"], ["S2", "R4"]]);
+  });
+});

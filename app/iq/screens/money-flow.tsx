@@ -3113,7 +3113,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "R1 · R2 · S1 · S2",
-                    desc: "Classic pivot levels from the last completed session’s high, low and official close (TradingView Pivot Points Standard, Traditional), counted from the current price: the two levels above are R1 and R2, the two below S1 and S2. Once price touches or passes R1, the old R2 is shown as R1 and R3 as R2 (out to R5); the same for S levels on the way down.",
+                    desc: "Classic pivot levels from the last completed session’s high, low and official close (TradingView Pivot Points Standard, Traditional), counted from the current price: the two levels above are R1 and R2, the two below S1 and S2. Once price touches or passes R1, the old R2 is shown as R1 and R3 as R2 (out to R5), and the old R1 becomes S1, the nearest support; the same on the way down. After a gap past R5 there is no resistance left (a dash) and R5 / R4 are the supports.",
                   },
                   {
                     term: "Zone",
