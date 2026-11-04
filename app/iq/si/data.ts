@@ -774,7 +774,7 @@ const DAY_MS = 86_400_000;
 const NOTABLE_KINDS: Array<{ kind: string; re: RegExp }> = [
   {
     kind: "Leadership",
-    re: /\b(ceo|cfo|coo|cto|chief (executive|financial|operating|technology)|chair(man|woman)?|founder)\b.{0,80}\b(steps? down|stepping down|resign\w*|retir\w*|ousted|fired|departure|departs|exits?|succe\w+|replac\w+|appoint\w*|hires?|hired)\b|\b(steps? down|stepping down|resign\w*|ousted|fired|appoint\w*|succession|new (ceo|cfo))\b.{0,80}\b(ceo|cfo|chief|chair(man|woman)?|founder)\b/i,
+    re: /\b(ceo|cfo|coo|cto|chief (executive|financial|operating|technology)|chair(man|woman)?|founder)\b.{0,80}\b(steps? down|stepping down|resign\w*|retir\w*|ousted|fired|departure|departs|exits?|successor|succession|appoint\w*|hires?|hired)\b|\b(steps? down|stepping down|resign\w*|ousted|fired|appoint\w*|succession|new (ceo|cfo))\b.{0,80}\b(ceo|cfo|chief|chair(man|woman)?|founder)\b/i,
   },
   { kind: "M&A", re: /\b(acqui\w+|merger|merges?|merged|buyout|takeover|take-private|spin-?off|divest\w*)\b/i },
   { kind: "Legal / Regulatory", re: /\b(lawsuit|sues?|sued|probe|investigation|antitrust|subpoena|settle\w*|fined?|recall|fda|doj|ftc)\b/i },
@@ -825,14 +825,28 @@ function notableContext(news: any[] | null | undefined, moveDay: number, skipTit
   return hits.sort((a, b) => a.rank - b.rank).slice(0, 3).map((h) => h.item);
 }
 
-/** What the press said about a report: the best earnings-related article from the day before through three days after. */
-function earningsCommentary(news: any[] | null | undefined, reportDay: number): string | undefined {
-  const from = reportDay - DAY_MS;
-  const to = reportDay + 4 * DAY_MS;
+/** A headline that looks ahead to a report ("what to expect", "ahead of earnings") rather than reacting to it. */
+const PREVIEW_RE = /\b(preview|what to expect|ahead of|before (the )?(earnings|report)|expected to report|will report|set to report|whatever happens)\b/i;
+
+/**
+ * What the press said about a report: the best earnings-related article from the
+ * report day through three days after the move. Reactions beat previews, then
+ * articles with a summary, then the closest to the middle of the move's session
+ * (an after-close report is reacted to the next day, so the report day is too early).
+ */
+function earningsCommentary(news: any[] | null | undefined, reportDay: number, moveDay: number): string | undefined {
+  const to = Math.max(reportDay, moveDay) + 4 * DAY_MS;
+  const anchor = Math.max(reportDay, moveDay) + DAY_MS / 2;
+  const title = (x: any) => `${x.headline ?? x.title ?? ""}`;
   const cands = (news ?? [])
     .map((x) => ({ x, ms: articleMs(x) }))
-    .filter(({ x, ms }) => Number.isFinite(ms) && ms >= from && ms < to && (x.tag === "earnings" || /earnings|quarter|results|revenue|guidance|outlook/i.test(`${x.headline ?? x.title ?? ""}`)))
-    .sort((a, b) => Number(!!b.x.summary) - Number(!!a.x.summary) || Math.abs(a.ms - reportDay) - Math.abs(b.ms - reportDay));
+    .filter(({ x, ms }) => Number.isFinite(ms) && ms >= reportDay && ms < to && (x.tag === "earnings" || /earnings|quarter|results|revenue|guidance|outlook/i.test(title(x))))
+    .sort(
+      (a, b) =>
+        Number(PREVIEW_RE.test(title(a.x))) - Number(PREVIEW_RE.test(title(b.x))) ||
+        Number(!!b.x.summary) - Number(!!a.x.summary) ||
+        Math.abs(a.ms - anchor) - Math.abs(b.ms - anchor),
+    );
   const x = cands[0]?.x;
   if (!x) return undefined;
   const headline = String(x.headline ?? x.title ?? "").trim();
@@ -956,7 +970,7 @@ export function getSixMonthMajorEvents(
       const verdict = eps != null && est != null ? (eps >= est ? "EPS beat" : "EPS miss") : null;
       const facts = [
         q.revenue != null ? `revenue $${(q.revenue / 1e9).toFixed(2)}B` : null,
-        eps != null ? `EPS $${Number(eps).toFixed(2)}${est != null ? ` vs $${Number(est).toFixed(2)} est.` : ""}` : null,
+        eps != null ? `EPS $${Number(eps).toFixed(2)}${est != null ? ` vs $${Number(est).toFixed(2)} est` : ""}` : null,
       ].filter(Boolean);
       const reportDay = rep ? Date.parse(`${rep.date}T00:00:00Z`) : moveDay;
       return {
@@ -968,7 +982,7 @@ export function getSixMonthMajorEvents(
         details: `${facts.length ? `Reported ${facts.join(", ")}. ` : ""}Stock moved ${retFmt} that session.`,
         fr,
         metrics: earningsMetrics(q, eps, est, quarters, reports),
-        commentary: earningsCommentary(news, reportDay),
+        commentary: earningsCommentary(news, reportDay, moveDay),
         context: notableContext(news, moveDay),
       };
     }

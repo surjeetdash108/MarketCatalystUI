@@ -78,7 +78,7 @@ const toneColor = (tone?: "up" | "dn") =>
  * print, and notable headlines such as a CEO leaving, a deal or a probe.
  * `compact` is the hover tooltip's tighter spacing.
  */
-function EventContextBlocks({ ev, compact }: { ev: MajorSixMonthEvent; compact?: boolean }) {
+function EventContextBlocks({ ev, compact, metricsOnly }: { ev: MajorSixMonthEvent; compact?: boolean; metricsOnly?: boolean }) {
   const label: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em", color: "var(--si-accent-light, #93a1af)", marginBottom: 3 };
   const body: React.CSSProperties = { fontFamily: "'Manrope', sans-serif", fontSize: compact ? 11 : 11.5, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.4 };
   const block: React.CSSProperties = { marginTop: compact ? 6 : 8, paddingTop: compact ? 6 : 8, borderTop: "1px solid var(--si-border, #1c2733)" };
@@ -94,13 +94,13 @@ function EventContextBlocks({ ev, compact }: { ev: MajorSixMonthEvent; compact?:
           ))}
         </div>
       )}
-      {ev.commentary && (
+      {!metricsOnly && ev.commentary && (
         <div style={block}>
           <div style={label}>EARNINGS COMMENTARY</div>
           <div style={body}>{ev.commentary}</div>
         </div>
       )}
-      {ev.context && ev.context.length > 0 && (
+      {!metricsOnly && ev.context && ev.context.length > 0 && (
         <div style={block}>
           <div style={label}>NOTABLE EVENTS</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -342,8 +342,10 @@ function SixMonthAreaChart({
             style={{
               position: "absolute",
               left: `${Math.min(84, Math.max(16, (activeHover.x / 1000) * 100))}%`,
-              top: `${Math.max(12, (activeHover.y / 340) * 100 - 24)}%`,
-              transform: "translate(-50%, -100%)",
+              // A pin high on the chart opens the tooltip downward: this one is tall
+              // (title, metrics, article text) and used to run off the top of the page.
+              top: activeHover.y < 170 ? `${(activeHover.y / 340) * 100 + 5}%` : `${Math.max(12, (activeHover.y / 340) * 100 - 24)}%`,
+              transform: activeHover.y < 170 ? "translate(-50%, 0)" : "translate(-50%, -100%)",
               background: "var(--si-card-solid, #0c1118)",
               border: "1px solid var(--si-border-sec, #7fa8d0)",
               boxShadow: "var(--si-shadow, 0 8px 24px rgba(0,0,0,0.4))",
@@ -353,6 +355,8 @@ function SixMonthAreaChart({
               zIndex: 30,
               minWidth: 220,
               maxWidth: 380,
+              maxHeight: 330,
+              overflow: "hidden",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -366,10 +370,15 @@ function SixMonthAreaChart({
             <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginBottom: 4 }}>
               {activeHover.label}
             </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.35 }}>
+            <EventContextBlocks ev={activeHover} compact metricsOnly />
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.35, marginTop: 6 }}>
               {activeHover.details}
             </div>
-            <EventContextBlocks ev={activeHover} compact />
+            {(activeHover.commentary || (activeHover.context && activeHover.context.length > 0)) && (
+              <div style={{ marginTop: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-sub, #5d6b79)" }}>
+                {[activeHover.commentary ? "Commentary" : null, activeHover.context?.length ? "notable events" : null].filter(Boolean).join(" and ").replace(/^n/, "N")} in card #{activeHover.num} below
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1071,7 +1080,13 @@ export function StockIntelligenceScreen() {
             </strong>
           );
         }
-        return part.replace(/\*\*/g, "");
+        // A lone *word* is italics (models add one to the closing disclaimer).
+        return part
+          .replace(/\*\*/g, "")
+          .split(/(\*[^*\s][^*]*\*)/g)
+          .map((seg, sIdx) =>
+            seg.length > 2 && seg.startsWith("*") && seg.endsWith("*") ? <em key={`${pIdx}-${sIdx}`}>{seg.slice(1, -1)}</em> : seg,
+          );
       });
 
       if (isBullet) {
