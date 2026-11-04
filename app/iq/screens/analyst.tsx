@@ -105,6 +105,8 @@ const CAPS_LIST = ["All", "Mega", "Large", "Mid", "Small", "Micro"];
 const STOCK_CALL_COLS = "85px minmax(110px, 1.1fr) minmax(105px, 1fr) minmax(120px, 1.1fr) 85px";
 const HIST_COLS = "82px 65px minmax(130px, 1.1fr) 80px 100px 90px";
 const FIRM_CALL_COLS = "82px minmax(105px, 1.1fr) minmax(130px, 1.2fr) 95px 85px";
+// Top Firms: both panels share this height so the list and the firm card line up and each scrolls inside its box.
+const FIRM_PANEL_H = "clamp(480px, calc(100vh - 320px), 900px)";
 
 type MainTab = "Rating" | "Top Firms" | "All Actions";
 type FilterChip = "All" | "My stocks" | "High signal" | "Upgrades" | "Downgrades" | "Clusters";
@@ -1651,7 +1653,7 @@ export function AnalystScreen() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 520px), 1fr))", gap: 24, alignItems: "stretch" }}>
             {/* Left: Firms Table */}
-            <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflowX: "auto", display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" }}>
+            <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, overflowX: "auto", display: "flex", flexDirection: "column", height: FIRM_PANEL_H, boxSizing: "border-box" }}>
               <div style={{ display: "grid", gridTemplateColumns: "36px minmax(130px, 1.5fr) minmax(100px, 1fr) 90px 60px 80px 50px", gap: 10, padding: "10px 16px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
                 <span>#</span>
                 <span>Firm</span>
@@ -1737,7 +1739,7 @@ export function AnalystScreen() {
 
             {/* Right: Selected Firm Profile */}
             {selectedFirm && (
-              <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, padding: 22, display: "flex", flexDirection: "column", gap: 18, height: "100%", boxSizing: "border-box" }}>
+              <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 14, background: BG_SURFACE, padding: 22, display: "flex", flexDirection: "column", gap: 18, height: FIRM_PANEL_H, boxSizing: "border-box" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <div>
                     <h3 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: TEXT_HI }}>{selectedFirm.name}</h3>
@@ -1791,8 +1793,8 @@ export function AnalystScreen() {
                     </button>
                   </div>
 
-                  <div style={{ border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: isLight ? "var(--surface-2)" : "#0d100f", overflowX: "auto" }}>
-                    <div style={{ minWidth: 500 }}>
+                  <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", border: `1px solid ${BORDER_DARK}`, borderRadius: 10, background: isLight ? "var(--surface-2)" : "#0d100f", overflowX: "auto" }}>
+                    <div style={{ minWidth: 500, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
                       <div style={{ display: "grid", gridTemplateColumns: FIRM_CALL_COLS, gap: 12, padding: "10px 14px", borderBottom: `1px solid ${BORDER_DARK}`, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>
                         <span>Date</span>
                         <span>Ticker</span>
@@ -1800,7 +1802,7 @@ export function AnalystScreen() {
                         <span>Price Target</span>
                         <span>Result</span>
                       </div>
-                      <div style={{ maxHeight: 520, overflowY: "auto" }}>
+                      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                         {firmCalls.length === 0 && (
                           <div style={{ padding: 14, fontSize: 12.5, color: TEXT_MUTED }}>
                             {firmCallsLoading ? "Loading calls…" : "No calls on record for this firm."}
