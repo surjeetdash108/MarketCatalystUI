@@ -26,6 +26,22 @@ export interface UpcomingEvent {
   txt: string;
   imp: string;
   col: string;
+  /** Short kind tag shown above the name, e.g. "Political" or "Earnings". */
+  cat?: string;
+}
+
+/** One labelled figure on a major-move card, e.g. EPS surprise +4.2%; `tone` tints it green/red. */
+export interface EventMetric {
+  k: string;
+  v: string;
+  tone?: "up" | "dn";
+}
+
+/** A notable headline near a major move: leadership change, M&A, legal, guidance, etc. */
+export interface EventContext {
+  kind: string;
+  text: string;
+  tone?: "up" | "dn";
 }
 
 export interface MajorSixMonthEvent {
@@ -36,12 +52,25 @@ export interface MajorSixMonthEvent {
   mv: number;
   details: string;
   fr: number;
+  /** Earnings only: EPS/sales growth, surprise and margins for the reported quarter. */
+  metrics?: EventMetric[];
+  /** Earnings only: what the press said about the print (guidance, drivers, tone). */
+  commentary?: string;
+  /** Notable non-earnings headlines in the window (CEO exits, deals, probes, ...). */
+  context?: EventContext[];
+}
+
+/** A run of the assessment sentence; `tone` tints it green ("up") or red ("dn"). */
+export interface AssessSeg {
+  t: string;
+  tone?: "up" | "dn";
 }
 
 export interface DetailStock {
   sv: number[];
   ev?: Record<string, string[]>;
   assess: string;
+  assessSegs?: AssessSeg[];
   assessEv?: string[];
   att: number[];
   movedTxt: string;

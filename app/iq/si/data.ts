@@ -1,5 +1,6 @@
 import { fmtMarketDate } from "../calendar-range";
-import { StockItem, DetailStock, SITab, UpcomingEvent, MajorSixMonthEvent } from "./types";
+import { surprisePct } from "../types";
+import { StockItem, DetailStock, SITab, UpcomingEvent, MajorSixMonthEvent, AssessSeg, EventMetric, EventContext } from "./types";
 export type { MajorSixMonthEvent };
 
 export const UP = "#4ade80";
@@ -14,8 +15,8 @@ export const TABS: [SITab, string][] = [
   ["tech", "TECHNICALS"],
   ["cat", "CATALYSTS"],
   ["ai", "AI RESEARCH"],
-  ["lab", "STRATEGY LAB"],
-  ["mon", "STRATEGY MONITOR"],
+  ["lab", "TRADE BUILDER"],
+  ["mon", "TRADE TRACKER"],
 ];
 
 export const LG_COL: Record<string, [string, string]> = {
@@ -149,6 +150,8 @@ export interface SiFacts {
   upgrades90: number | null;
   downgrades90: number | null;
   // Technicals
+  sma9: number | null; // simple averages of the last 9 / 21 daily closes
+  sma21: number | null;
   sma50: number | null;
   sma200: number | null;
   rsi14: number | null;
@@ -180,7 +183,7 @@ export const EMPTY_FACTS: SiFacts = {
   revGrowthYoY: null, grossMargin: null, opMargin: null, opMarginYearAgo: null, epsBeats: null, epsReports: null,
   fwdEps: null, nextFyEps: null, trailingPe: null,
   consensus: null, buyCount: null, holdCount: null, sellCount: null, targetMean: null, upgrades90: null, downgrades90: null,
-  sma50: null, sma200: null, rsi14: null, rvol: null, rsRating: null, pctFromHigh52: null, beta: null, realizedVol30: null,
+  sma9: null, sma21: null, sma50: null, sma200: null, rsi14: null, rvol: null, rsRating: null, pctFromHigh52: null, beta: null, realizedVol30: null,
   pivotR1: null, pivotR2: null, pivotS1: null, pivotS2: null, sectorRank: null, sectorRankTotal: null,
   instOwnershipPct: null, instHoldersChange: null, instSharesChange: null, instPutCallRatio: null, insiderNet90: null,
   daysToEarnings: null, newsPos: null, newsNeg: null,
@@ -188,6 +191,15 @@ export const EMPTY_FACTS: SiFacts = {
 
 const clamp = (v: number, lo = 5, hi = 95) => Math.max(lo, Math.min(hi, v));
 const has = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);
+
+/** Simple average of the last `n` closes (oldest → newest); null until there are `n` of them. */
+export function smaOf(closes: ReadonlyArray<number>, n: number): number | null {
+  if (closes.length < n) return null;
+  let sum = 0;
+  for (let i = closes.length - n; i < closes.length; i++) sum += closes[i];
+  const avg = sum / n;
+  return Number.isFinite(avg) ? Math.round(avg * 100) / 100 : null;
+}
 const compactUsd = (v: number) => {
   const a = Math.abs(v);
   const s = a >= 1e9 ? `$${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `$${(a / 1e6).toFixed(1)}M` : `$${Math.round(a / 1e3)}K`;
@@ -238,7 +250,7 @@ export function buildDrivers(f: SiFacts): Driver[] {
   if (has(f.price) && has(f.sma50) && has(f.sma200)) {
     const a50 = f.price > f.sma50, a200 = f.price > f.sma200;
     const score = a50 && a200 ? 80 : a200 ? 60 : a50 ? 45 : 25;
-    d.push(["TECH", "Trend vs 50/200-day", `${a50 ? "above" : "below"} 50-day ${usd(f.sma50)} · ${a200 ? "above" : "below"} 200-day ${usd(f.sma200)}`, score, "C", 1]);
+    d.push(["TECH", "Trend vs 50/200 DMA", `${a50 ? "above" : "below"} 50 DMA ${usd(f.sma50)} · ${a200 ? "above" : "below"} 200 DMA ${usd(f.sma200)}`, score, "C", 1]);
   }
   if (has(f.rsRating)) d.push(["TECH", "Relative strength", `RS rating ${f.rsRating}/99`, clamp(f.rsRating), "C", 2]);
   if (has(f.rvol) && has(f.changePct)) {
@@ -333,12 +345,12 @@ export function getTP(t: string, facts: SiFacts = EMPTY_FACTS) {
     sup2: f.pivotS2 ?? f.sma200,
     // Invalidation rules — conditions to watch, stated against real levels.
     fi: [
-      has(f.sma50) ? `Daily close below the 50-day average (${usd(f.sma50)})` : "Daily close below the 50-day average",
+      has(f.sma50) ? `Daily close below the 50 DMA (${usd(f.sma50)})` : "Daily close below the 50 DMA",
       "Next-FY consensus EPS cut by more than 10%",
       has(f.revGrowthYoY) ? `Revenue growth slips below 0% y/y (now ${pct1(f.revGrowthYoY)})` : "Revenue growth turns negative y/y",
     ],
     fiB: [
-      has(f.sma50) ? `Daily close back above the 50-day average (${usd(f.sma50)})` : "Daily close back above the 50-day average",
+      has(f.sma50) ? `Daily close back above the 50 DMA (${usd(f.sma50)})` : "Daily close back above the 50 DMA",
       "Next-FY consensus EPS raised by more than 10%",
     ],
   };
@@ -426,6 +438,7 @@ export const CAT_KINDS = [
   "Product launches",
   "Industry events",
   "Regulatory",
+  "Political",
   "Macro",
   "News",
   "Insider activity",
@@ -575,13 +588,31 @@ export function detail(t: string, live?: any): DetailStock {
   const minIdx = scored.length ? scored.reduce((a: number, b: number) => (sv[b] < sv[a] ? b : a)) : -1;
   const fpe = forwardPe(facts);
 
-  const assessParts = [
-    `${sym} reads as ${s.setup.toLowerCase()} with a thesis score of ${s.conf}/100 from ${tr.drv.length} measured drivers`,
-    facts.consensus ? `analysts rate it ${facts.consensus}${has(facts.targetMean) && has(facts.price) ? ` with a ${usd(facts.targetMean)} consensus target (${pct1((facts.targetMean / facts.price - 1) * 100)})` : ""}` : null,
-    has(facts.revGrowthYoY) ? `revenue grew ${pct1(facts.revGrowthYoY)} y/y last quarter` : null,
-  ].filter(Boolean);
+  // Each clause is a list of segments so the rating, the target upside and the
+  // revenue growth can be tinted green/red by their data (see AssessSeg).
+  const signTone = (v: number): AssessSeg["tone"] => (v > 0 ? "up" : v < 0 ? "dn" : undefined);
+  const ratingTone = (r: string): AssessSeg["tone"] =>
+    /buy|outperform|overweight/i.test(r) ? "up" : /sell|underperform|underweight/i.test(r) ? "dn" : undefined;
+  const targetMean = has(facts.targetMean) && has(facts.price) ? facts.targetMean : null;
+  const targetUp = targetMean != null && has(facts.price) ? (targetMean / facts.price - 1) * 100 : null;
+  const assessClauses: AssessSeg[][] = [
+    [{ t: `${sym} reads as ${s.setup.toLowerCase()} with a thesis score of ${s.conf}/100 from ${tr.drv.length} measured drivers` }],
+    facts.consensus
+      ? [
+          { t: "analysts rate it " },
+          { t: facts.consensus, tone: ratingTone(facts.consensus) },
+          ...(targetMean != null && targetUp != null
+            ? [{ t: ` with a ${usd(targetMean)} consensus target (` }, { t: pct1(targetUp), tone: signTone(targetUp) }, { t: ")" }]
+            : []),
+        ]
+      : [],
+    has(facts.revGrowthYoY)
+      ? [{ t: "revenue grew " }, { t: pct1(facts.revGrowthYoY), tone: signTone(facts.revGrowthYoY) }, { t: " y/y last quarter" }]
+      : [],
+  ].filter((c) => c.length > 0);
+  const assessSegs: AssessSeg[] = assessClauses.flatMap((c, i) => (i ? [{ t: "; " }, ...c] : c)).concat({ t: "." });
   const assess = tr.drv.length
-    ? assessParts.join("; ") + "."
+    ? assessSegs.map((x) => x.t).join("")
     : `Not enough live data has loaded for ${sym} to assess a setup yet.`;
 
   const assessEv = [
@@ -627,7 +658,7 @@ export function detail(t: string, live?: any): DetailStock {
   };
 
   const invalid: [string, string][] = [];
-  if (has(facts.sma50)) invalid.push(["Price loses the 50-day moving average", `Daily close below ${usd(facts.sma50)}`]);
+  if (has(facts.sma50)) invalid.push(["Price loses the 50 DMA", `Daily close below ${usd(facts.sma50)}`]);
   if (has(facts.pivotS1)) invalid.push(["Breaks first support", `Daily close below S1 ${usd(facts.pivotS1)}`]);
   invalid.push(["Forward EPS cuts", "Next-FY consensus EPS revised down more than 10%"]);
 
@@ -669,8 +700,10 @@ export function detail(t: string, live?: any): DetailStock {
   if (has(facts.price)) levels.push({ k: "Last Price", v: usd(facts.price), col: "#e8eef4" });
   if (has(facts.pivotS1)) levels.push({ k: "Support 1 (S1)", v: usd(facts.pivotS1), col: UP });
   if (has(facts.pivotS2)) levels.push({ k: "Support 2 (S2)", v: usd(facts.pivotS2), col: UP });
-  if (has(facts.sma50)) levels.push({ k: "50-day average", v: usd(facts.sma50), col: STEEL });
-  if (has(facts.sma200)) levels.push({ k: "200-day average", v: usd(facts.sma200), col: STEEL });
+  if (has(facts.sma9)) levels.push({ k: "9 DMA", v: usd(facts.sma9), col: STEEL });
+  if (has(facts.sma21)) levels.push({ k: "21 DMA", v: usd(facts.sma21), col: STEEL });
+  if (has(facts.sma50)) levels.push({ k: "50 DMA", v: usd(facts.sma50), col: STEEL });
+  if (has(facts.sma200)) levels.push({ k: "200 DMA", v: usd(facts.sma200), col: STEEL });
 
   // Evidence per signal key — each line a real number; categories also list
   // their scored drivers.
@@ -681,8 +714,10 @@ export function detail(t: string, live?: any): DetailStock {
   };
   put("Momentum", [
     has(facts.rsi14) ? `RSI(14) ${facts.rsi14.toFixed(0)}` : null,
-    has(facts.price) && has(facts.sma50) ? `Price ${facts.price > facts.sma50 ? "above" : "below"} the 50-day average (${usd(facts.sma50)})` : null,
-    has(facts.price) && has(facts.sma200) ? `Price ${facts.price > facts.sma200 ? "above" : "below"} the 200-day average (${usd(facts.sma200)})` : null,
+    has(facts.price) && has(facts.sma9) ? `Price ${facts.price > facts.sma9 ? "above" : "below"} the 9 DMA (${usd(facts.sma9)})` : null,
+    has(facts.price) && has(facts.sma21) ? `Price ${facts.price > facts.sma21 ? "above" : "below"} the 21 DMA (${usd(facts.sma21)})` : null,
+    has(facts.price) && has(facts.sma50) ? `Price ${facts.price > facts.sma50 ? "above" : "below"} the 50 DMA (${usd(facts.sma50)})` : null,
+    has(facts.price) && has(facts.sma200) ? `Price ${facts.price > facts.sma200 ? "above" : "below"} the 200 DMA (${usd(facts.sma200)})` : null,
     has(facts.pctFromHigh52) ? `${pct1(facts.pctFromHigh52)} from the 52-week high` : null,
   ]);
   put("Volume", [has(facts.rvol) ? `Today's volume ${facts.rvol.toFixed(1)}× the 20-day average` : null]);
@@ -714,6 +749,7 @@ export function detail(t: string, live?: any): DetailStock {
     events: [],
     sixMonthEvents: [],
     assess,
+    assessSegs: tr.drv.length ? assessSegs : undefined,
     assessEv,
     att,
     movedTxt,
@@ -730,6 +766,128 @@ export function detail(t: string, live?: any): DetailStock {
     signals: [],
     fwdScn: [],
   };
+}
+
+const DAY_MS = 86_400_000;
+
+/** Headline kinds worth surfacing next to a big move, most important first. */
+const NOTABLE_KINDS: Array<{ kind: string; re: RegExp }> = [
+  {
+    kind: "Leadership",
+    re: /\b(ceo|cfo|coo|cto|chief (executive|financial|operating|technology)|chair(man|woman)?|founder)\b.{0,80}\b(steps? down|stepping down|resign\w*|retir\w*|ousted|fired|departure|departs|exits?|succe\w+|replac\w+|appoint\w*|hires?|hired)\b|\b(steps? down|stepping down|resign\w*|ousted|fired|appoint\w*|succession|new (ceo|cfo))\b.{0,80}\b(ceo|cfo|chief|chair(man|woman)?|founder)\b/i,
+  },
+  { kind: "M&A", re: /\b(acqui\w+|merger|merges?|merged|buyout|takeover|take-private|spin-?off|divest\w*)\b/i },
+  { kind: "Legal / Regulatory", re: /\b(lawsuit|sues?|sued|probe|investigation|antitrust|subpoena|settle\w*|fined?|recall|fda|doj|ftc)\b/i },
+  { kind: "Guidance", re: /\b(guidance|outlook|forecast)\b/i },
+  { kind: "Capital", re: /\b(buyback|repurchase|dividend|stock split|share offering|secondary offering|debt offering)\b/i },
+  { kind: "Product", re: /\b(launch\w*|unveil\w*|debut\w*)\b/i },
+];
+
+const articleMs = (x: any): number => {
+  const pub = x?.publishedAt || x?.date;
+  return !pub ? NaN : typeof pub === "number" ? pub : new Date(pub).getTime();
+};
+
+const toneOf = (x: any): "up" | "dn" | undefined =>
+  x?.sentiment === "positive" ? "up" : x?.sentiment === "negative" ? "dn" : undefined;
+
+/** First full sentence of a summary, so the line gives the point without being cut mid-word. */
+const firstSentence = (s: unknown): string => {
+  const t = String(s ?? "").trim();
+  if (!t) return "";
+  const m = t.match(/^.*?[.!?](?=\s|$)/);
+  return (m ? m[0] : t).trim();
+};
+
+/**
+ * Notable headlines around a move — a CEO leaving, a deal, a probe, guidance,
+ * a buyback or a launch — from two days before the move through its session.
+ * Up to three, most important kind first; `skipTitle` is the headline already
+ * shown as the event's own label.
+ */
+function notableContext(news: any[] | null | undefined, moveDay: number, skipTitle?: string): EventContext[] {
+  const from = moveDay - 2 * DAY_MS;
+  const to = moveDay + DAY_MS + 4 * 3_600_000;
+  const seen = new Set<string>(skipTitle ? [skipTitle] : []);
+  const hits: Array<{ rank: number; item: EventContext }> = [];
+  for (const x of news ?? []) {
+    const ms = articleMs(x);
+    if (!Number.isFinite(ms) || ms < from || ms >= to) continue;
+    const headline = String(x.headline ?? x.title ?? "").trim();
+    if (!headline || seen.has(headline)) continue;
+    const text = `${headline} ${x.summary ?? ""}`;
+    const rank = NOTABLE_KINDS.findIndex((k) => k.re.test(text));
+    if (rank < 0) continue;
+    seen.add(headline);
+    const lead = firstSentence(x.summary);
+    hits.push({ rank, item: { kind: NOTABLE_KINDS[rank].kind, text: lead && lead !== headline ? `${headline} — ${lead}` : headline, tone: toneOf(x) } });
+  }
+  return hits.sort((a, b) => a.rank - b.rank).slice(0, 3).map((h) => h.item);
+}
+
+/** What the press said about a report: the best earnings-related article from the day before through three days after. */
+function earningsCommentary(news: any[] | null | undefined, reportDay: number): string | undefined {
+  const from = reportDay - DAY_MS;
+  const to = reportDay + 4 * DAY_MS;
+  const cands = (news ?? [])
+    .map((x) => ({ x, ms: articleMs(x) }))
+    .filter(({ x, ms }) => Number.isFinite(ms) && ms >= from && ms < to && (x.tag === "earnings" || /earnings|quarter|results|revenue|guidance|outlook/i.test(`${x.headline ?? x.title ?? ""}`)))
+    .sort((a, b) => Number(!!b.x.summary) - Number(!!a.x.summary) || Math.abs(a.ms - reportDay) - Math.abs(b.ms - reportDay));
+  const x = cands[0]?.x;
+  if (!x) return undefined;
+  const headline = String(x.headline ?? x.title ?? "").trim();
+  const summary = String(x.summary ?? x.text ?? "").trim();
+  return summary ? `${headline} — ${summary}` : headline || undefined;
+}
+
+/** Year-over-year % change on a positive base; null when there is no meaningful base. */
+const yoyPct = (cur: number | null | undefined, prev: number | null | undefined): number | null => {
+  if (cur == null || prev == null || !(prev > 0)) return null;
+  const p = (cur / prev - 1) * 100;
+  return Math.abs(p) > 1000 ? null : p;
+};
+
+const signedPct = (v: number, digits = 1): string => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(digits)}%`;
+const toneOfNum = (v: number): "up" | "dn" | undefined => (v > 0 ? "up" : v < 0 ? "dn" : undefined);
+
+/**
+ * The figures behind an earnings move: EPS surprise and growth, revenue and
+ * sales growth and surprise, and margins. A figure with no data is left out.
+ */
+function earningsMetrics(
+  q: any,
+  eps: number | null,
+  est: number | null,
+  quarters: any[] | null | undefined,
+  reports: Array<{ fiscalYear: number; fiscalPeriod: string; epsActual: number | null }> | null | undefined,
+): EventMetric[] {
+  const out: EventMetric[] = [];
+  const add = (k: string, v: string | null, tone?: "up" | "dn") => v && out.push({ k, v, tone });
+
+  const surp = surprisePct(eps, est);
+  if (surp != null) add("EPS surprise", signedPct(surp), toneOfNum(surp));
+
+  const fy = q.fiscalYear != null ? Number(q.fiscalYear) : NaN;
+  const per = q.fiscalPeriod;
+  const priorQ = Number.isFinite(fy) && per ? quarters?.find((x) => Number(x.fiscalYear) === fy - 1 && x.fiscalPeriod === per) : undefined;
+  const priorEps = Number.isFinite(fy) && per
+    ? (reports ?? []).find((r) => r.fiscalYear === fy - 1 && r.fiscalPeriod === per)?.epsActual ?? priorQ?.epsActualReported ?? priorQ?.epsActual ?? null
+    : null;
+  const epsGrowth = yoyPct(eps, priorEps);
+  if (epsGrowth != null) add("EPS growth y/y", signedPct(epsGrowth), toneOfNum(epsGrowth));
+  else if (eps != null && priorEps != null && priorEps <= 0) add("EPS vs year ago", eps > priorEps ? "from a loss / flat base" : "loss widened", eps > priorEps ? "up" : "dn");
+
+  if (q.revenue != null) add("Revenue", `$${(q.revenue / 1e9).toFixed(2)}B`);
+  const salesGrowth = yoyPct(q.revenue, priorQ?.revenue);
+  if (salesGrowth != null) add("Sales growth y/y", signedPct(salesGrowth), toneOfNum(salesGrowth));
+  const salesSurp = surprisePct(q.revenue, q.revenueEstimateReported);
+  if (salesSurp != null) add("Sales surprise", signedPct(salesSurp), toneOfNum(salesSurp));
+
+  const gm = q.grossMarginPct ?? (q.revenue && q.grossProfit != null ? (q.grossProfit / q.revenue) * 100 : null);
+  if (gm != null) add("Gross margin", `${gm.toFixed(1)}%`);
+  const om = q.operatingMarginPct ?? (q.revenue && q.operatingIncome != null ? (q.operatingIncome / q.revenue) * 100 : null);
+  if (om != null) add("Operating margin", `${om.toFixed(1)}%`);
+  return out;
 }
 
 /**
@@ -800,6 +958,7 @@ export function getSixMonthMajorEvents(
         q.revenue != null ? `revenue $${(q.revenue / 1e9).toFixed(2)}B` : null,
         eps != null ? `EPS $${Number(eps).toFixed(2)}${est != null ? ` vs $${Number(est).toFixed(2)} est.` : ""}` : null,
       ].filter(Boolean);
+      const reportDay = rep ? Date.parse(`${rep.date}T00:00:00Z`) : moveDay;
       return {
         num: i + 1,
         date: dateStr,
@@ -808,6 +967,9 @@ export function getSixMonthMajorEvents(
         mv: +m.ret.toFixed(2),
         details: `${facts.length ? `Reported ${facts.join(", ")}. ` : ""}Stock moved ${retFmt} that session.`,
         fr,
+        metrics: earningsMetrics(q, eps, est, quarters, reports),
+        commentary: earningsCommentary(news, reportDay),
+        context: notableContext(news, moveDay),
       };
     }
 
@@ -837,11 +999,12 @@ export function getSixMonthMajorEvents(
       return {
         num: i + 1,
         date: dateStr,
-        label: title.length > 60 ? title.slice(0, 58) + "…" : title,
+        label: title,
         category: cat,
         mv: +m.ret.toFixed(2),
         details: String(n.summary || n.text || `Stock moved ${retFmt} that session.`),
         fr,
+        context: notableContext(news, moveDay, title),
       };
     }
 
@@ -853,6 +1016,7 @@ export function getSixMonthMajorEvents(
       mv: +m.ret.toFixed(2),
       details: "Largest move in this stretch; no earnings report or same-day headline found for it.",
       fr,
+      context: notableContext(news, moveDay),
     };
   });
 }

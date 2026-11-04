@@ -155,6 +155,69 @@ export function nextFomcDecision(fromIso: string = etTodayIso()): string | null 
   return FOMC_DECISION_DAYS.find((d) => d >= fromIso) ?? null;
 }
 
+export interface PoliticalEvent {
+  date: string;
+  name: string;
+  desc: string;
+  imp: "HIGH" | "MED" | "LOW";
+}
+
+/** U.S. general Election Day: the Tuesday after the first Monday in November. */
+function electionDay(year: number): string {
+  const novFirst = new Date(Date.UTC(year, 10, 1)).getUTCDay();
+  const firstMonday = 1 + ((1 - novFirst + 7) % 7);
+  return isoDay(new Date(Date.UTC(year, 10, firstMonday + 1)));
+}
+
+/**
+ * Rule-based U.S. political and fiscal-calendar events from `lookbackDays`
+ * before `fromIso` through `horizonDays` after it, soonest first: Election Day
+ * (midterm or presidential), Inauguration Day, and the Sep 30 federal funding
+ * deadline. The recent past is kept so the days right after an election still
+ * show it — the result is what moves the market then. Dates that depend on
+ * Congress or the courts (tariff deadlines, debt-ceiling X-dates, primaries)
+ * are not on a fixed rule, so they are not listed here.
+ */
+export function upcomingPoliticalEvents(
+  fromIso: string = etTodayIso(),
+  lookbackDays = 3,
+  horizonDays = 420,
+): PoliticalEvent[] {
+  const from = new Date(`${fromIso}T00:00:00Z`).getTime();
+  const lo = isoDay(new Date(from - lookbackDays * 86_400_000));
+  const hi = isoDay(new Date(from + horizonDays * 86_400_000));
+  const y0 = Number(fromIso.slice(0, 4));
+  const out: PoliticalEvent[] = [];
+  for (let y = y0 - 1; y <= y0 + 2; y++) {
+    if (y % 2 === 0) {
+      const presidential = y % 4 === 0;
+      out.push({
+        date: electionDay(y),
+        name: presidential ? "U.S. Presidential Election" : "U.S. Midterm Elections",
+        desc: presidential
+          ? "Voters choose the president and Congress; the outcome shapes tax, tariff, regulatory and spending expectations across sectors"
+          : "Voters decide control of the House and Senate; the result shapes tax, tariff, regulatory and spending expectations across sectors",
+        imp: "HIGH",
+      });
+    }
+    if (y % 4 === 1) {
+      out.push({
+        date: `${y}-01-20`,
+        name: "Presidential Inauguration",
+        desc: "New administration takes office; early executive orders on trade, taxes and regulation can reprice affected sectors",
+        imp: "HIGH",
+      });
+    }
+    out.push({
+      date: `${y}-09-30`,
+      name: "Federal Funding Deadline",
+      desc: "Fiscal year ends; Congress must pass spending bills or a stopgap to avoid a government shutdown",
+      imp: "MED",
+    });
+  }
+  return out.filter((e) => e.date >= lo && e.date <= hi).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /** 13F filings are due 45 days after quarter end (next business day if that is a weekend). */
 export function next13fDeadline(fromIso: string = etTodayIso()): string {
   const [y] = fromIso.split("-").map(Number);
