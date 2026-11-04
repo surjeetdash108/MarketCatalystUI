@@ -39,6 +39,8 @@ import {
   popTfForMode,
   type PopTf,
   popoverNext,
+  popoverKey,
+  popoverInteractive,
   type PopoverEvent,
 } from "../money-flow/engine";
 import {
@@ -276,7 +278,7 @@ export function MoneyFlowScreen() {
     applyPop({ type: "click", key: stock.t }, stock, e.currentTarget.getBoundingClientRect());
   };
 
-  // A pinned pop-up closes on a click outside it (or another tile's click re-pins) or on Esc.
+  // A pinned pop-up closes on a click outside it (or another tile's click re-pins).
   const pinned = !!hoveredStock?.pinned;
   useEffect(() => {
     if (!pinned) return;
@@ -285,11 +287,22 @@ export function MoneyFlowScreen() {
       if (t?.closest("[data-mf-pop]") || t?.closest("[data-mf-tile]")) return;
       applyPop({ type: "dismiss" });
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") applyPop({ type: "dismiss" }); };
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+    return () => document.removeEventListener("mousedown", onDown);
   }, [pinned]);
+  // Esc closes any open pop-up, pinned or not (popoverKey). Captured first, and any
+  // pending hover timer is dropped so it cannot open the pop-up again.
+  const popOpen = hoveredStock != null;
+  useEffect(() => {
+    if (!popOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (popoverKey({ key: "open", pinned: false }, e.key) !== null) return;
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+      setHoveredStock(null);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [popOpen]);
 
   return (
     <div className="mf-page-wrap">
@@ -2531,7 +2544,8 @@ export function MoneyFlowScreen() {
               overflowY: vw < 768 ? "auto" : "hidden",
               transform: `scale(${scale})`,
               transformOrigin: "top left",
-              pointerEvents: "auto",
+              // A hover preview lets the pointer through to the tiles it covers; a pinned one is interactive.
+              pointerEvents: popoverInteractive({ key: s.t, pinned: !!hoveredStock.pinned }) ? "auto" : "none",
               background: `linear-gradient(180deg, ${bull ? "rgba(61,220,132,.10)" : "rgba(240,86,90,.10)"}, transparent 110px), #0b0d0e`,
               border: `1px solid ${bull ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)"}`,
               borderBottom: `2px solid ${c}`,

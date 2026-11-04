@@ -45,6 +45,8 @@ import {
   POP_MIN_TEXT_PX,
   timeTicks,
   popoverNext,
+  popoverKey,
+  popoverInteractive,
   formatCurrency,
   formatLevel,
   sectorNotOnBoardText,
@@ -615,5 +617,22 @@ describe("Money Flow relative volume: one value for popover, tiles and card tags
     assert.equal(phaseTag({ chop: false, rvol: 1.34 }, false), "MOMENTUM DOWN");
     assert.equal(phaseTag({ chop: false, rvol: null }, true), "MOMENTUM UP");
     assert.equal(phaseTag({ chop: true, rvol: 3 }, true), "CHOPPY");
+  });
+});
+
+describe("Money Flow pop-up: no stale preview, Esc always closes", () => {
+  const T = board.gainers[0].t;
+  it("a hover preview lets the pointer through to the tiles underneath; only a pinned pop-up takes clicks", () => {
+    // The pop-up is wider than a tile and sits beside it; an interactive preview held the pointer,
+    // so the next tile got no hover until it was left (the 2–5 s stale pop-up).
+    assert.equal(popoverInteractive({ key: T, pinned: false }), false);
+    assert.equal(popoverInteractive({ key: T, pinned: true }), true);
+    assert.equal(popoverInteractive(null), false);
+  });
+  it("Esc closes the pop-up, pinned or not; other keys leave it alone", () => {
+    assert.equal(popoverKey({ key: T, pinned: true }, "Escape"), null);
+    assert.equal(popoverKey({ key: T, pinned: false }, "Escape"), null);
+    assert.deepEqual(popoverKey({ key: T, pinned: true }, "ArrowLeft"), { key: T, pinned: true });
+    assert.equal(popoverKey(null, "Escape"), null);
   });
 });

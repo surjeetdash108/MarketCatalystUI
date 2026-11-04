@@ -217,6 +217,18 @@ export type PopoverEvent = { type: "enter" | "click"; key: string } | { type: "l
  * moves to another tile on that tile's click, and closes on dismiss (a click
  * outside or Esc).
  */
+/**
+ * Whether the pop-up takes the pointer. A hover preview does not: it is wider
+ * than a tile and sits beside it, so an interactive preview held the pointer and
+ * the tile underneath got no hover until it was left (the previous stock stayed
+ * up for seconds). A pinned pop-up (after a click) is interactive.
+ */
+export const popoverInteractive = (cur: PopoverState | null): boolean => !!cur?.pinned;
+
+/** A key press on the open pop-up: Esc closes it, pinned or not. */
+export const popoverKey = (cur: PopoverState | null, key: string): PopoverState | null =>
+  key === "Escape" ? null : cur;
+
 export function popoverNext(cur: PopoverState | null, ev: PopoverEvent): PopoverState | null {
   switch (ev.type) {
     case "enter":
