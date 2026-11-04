@@ -7,7 +7,7 @@
 import React, { useEffect, useId, useRef } from "react";
 import type { BoardStock, IntradayView, OHLCVBar, SwingPoint } from "./engine";
 import { detectPatterns, layoutCallouts, patternGlyphs, patternsToShow } from "../patterns";
-import { candleIndexAt, chartFrame, chartRightGutter, computeFvgs, computeOrderBlocks, computeSwings, formatCurrency, fullSessionView, levelTag, liveLevels, panIntradayView, popLevelRows, popText, timeTicks, zoomIntradayView } from "./engine";
+import { candleIndexAt, chartFrame, chartRightGutter, computeFvgs, computeOrderBlocks, computeSwings, calloutLaneRows, formatCurrency, fullSessionView, layoutEdgeLabels, levelTag, liveLevels, panIntradayView, popLevelRows, popText, timeTicks, zoomIntradayView, type EdgeLabelIn } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
 function levelsInView(levels: Array<number | null | undefined>, lo: number, hi: number): number[] {
@@ -319,10 +319,19 @@ export function FullChartSvg({
   }
 
   // R2/R1 on fixed rows at the top, S1/S2 at the bottom; with Patterns on, a lane
-  // between them and the candles holds the pattern callouts (two rows each).
+  // between them and the candles holds the pattern callouts — only as many rows,
+  // on each side, as the callouts in view need (calloutLaneRows).
   const calloutFz = T(11.5);
-  const laneH = layers.pat ? 2 * (calloutFz + 8) : 0;
-  const rows = popLevelRows(PT, H - PB, fz + 12, laneH);
+  // Only patterns whose callout points at a candle in view (slot i is visible while i < view end).
+  const last = Math.min(Math.ceil(vw.to) - 1, safeCandles.length - 1);
+  const patGlyphs = layers.pat
+    ? patternsToShow(detectPatterns(safeCandles), i0, last, { candles: 3, others: 4 })
+        .map((h) => patternGlyphs(h))
+        .filter((g) => g.label.i >= vw.from - 0.5 && g.label.i <= last)
+    : [];
+  const laneRows = calloutLaneRows(patGlyphs.map((g) => g.label));
+  const laneRowH = calloutFz + 8;
+  const rows = popLevelRows(PT, H - PB, fz + 8, laneRows.above * laneRowH, laneRows.below * laneRowH);
   const pTop = rows.band.top, pBot = rows.band.bottom;
   const y = (v: number) => {
     const val = Number.isFinite(v) ? v : safeStockPx;
@@ -332,6 +341,50 @@ export function FullChartSvg({
   const zx = sx(Math.max(0, ZI));
   const obs = layers.ob ? computeOrderBlocks(safeCandles) : [];
   const swings = layers.liq || layers.str ? computeSwings(safeCandles, tf <= 3 ? 4 : tf >= 15 ? 2 : 3) : [];
+
+  // Liquidity: of the swings not yet swept, the three nearest the price on each side;
+  // of the swept ones, the two most recent per side (1m had ~14 "✕ swept" tags).
+  const liq = swings.map((p) => {
+    let sw: number | null = null;
+    for (let j = p.i + 1; j < safeCandles.length; j++) {
+      if (p.hi ? safeCandles[j].h > p.p : safeCandles[j].l < p.p) { sw = j; break; }
+    }
+    return { p, sw };
+  });
+  const keepSwept = new Set(
+    [true, false].flatMap((hi) => liq.filter((l) => l.p.hi === hi && l.sw != null).sort((a, b) => b.sw! - a.sw!).slice(0, 2)),
+  );
+  const keepOpen = new Set(
+    [true, false].flatMap((hi) => liq.filter((l) => l.p.hi === hi && l.sw == null).sort((a, b) => Math.abs(a.p.p - safeStockPx) - Math.abs(b.p.p - safeStockPx)).slice(0, 3)),
+  );
+  const liqShown = liq.filter((l) => keepOpen.has(l) || keepSwept.has(l));
+
+  // Structure levels (also used by the edge labels below).
+  const hiAll = Math.max(...safeCandles.map((q) => q.h));
+  const loAll = Math.min(...safeCandles.map((q) => q.l));
+  const eq = (hiAll + loAll) / 2;
+  const orb = safeCandles.slice(0, Math.min(safeCandles.length, Math.max(1, Math.round(30 / tf))));
+  const orh = Math.max(...orb.map((q) => q.h));
+  const orl = Math.min(...orb.map((q) => q.l));
+  const pdh = stock.prevHigh ?? NaN;
+  const pdl = stock.prevLow ?? NaN;
+
+  // Right-edge labels, merged by price and spaced apart; off-scale ones pinned to the edge (layoutEdgeLabels).
+  const edgeIn: EdgeLabelIn[] = [];
+  if (layers.liq) for (const l of liqShown) if (l.sw == null) edgeIn.push({ price: l.p.p, name: l.p.hi ? "BSL" : "SSL", color: l.p.hi ? "#f0a24a" : "#4ad0c9" });
+  if (layers.str) {
+    edgeIn.push(
+      { price: eq, name: "EQ 50%", color: "#aab3b0" },
+      { price: orh, name: "ORH", color: "#9aa7ff" },
+      { price: orl, name: "ORL", color: "#9aa7ff" },
+      { price: hiAll, name: "HOD", color: "#e0bb5e" },
+      { price: loAll, name: "LOD", color: "#e0bb5e" },
+    );
+    if (Number.isFinite(pdh)) edgeIn.push({ price: pdh, name: "PDH", color: "#9aa7ff" });
+    if (Number.isFinite(pdl)) edgeIn.push({ price: pdl, name: "PDL", color: "#9aa7ff" });
+  }
+  const edgeFz = T(12);
+  const edgeLabels = layoutEdgeLabels(edgeIn, y, pTop + edgeFz * 0.5, pBot - edgeFz * 0.3, edgeFz + 4);
 
   return (
     <svg
@@ -549,15 +602,8 @@ export function FullChartSvg({
         });
       })()}
 
-      {/* Liquidity (BSL / SSL) */}
-      {layers.liq && swings.map((p, pi) => {
-        let sw: number | null = null;
-        for (let j = p.i + 1; j < safeCandles.length; j++) {
-          if (p.hi ? safeCandles[j].h > p.p : safeCandles[j].l < p.p) {
-            sw = j;
-            break;
-          }
-        }
+      {/* Liquidity (BSL / SSL): unswept lines (their prices are edge labels) + the two latest swept per side */}
+      {layers.liq && liqShown.map(({ p, sw }, pi) => {
         const x1 = sx(p.i) + cw / 2;
         const x2 = sw != null ? sx(sw) + cw / 2 : W - PR;
         const col = p.hi ? "#f0a24a" : "#4ad0c9";
@@ -573,19 +619,7 @@ export function FullChartSvg({
               strokeOpacity={sw != null ? 0.45 : 0.9}
               strokeDasharray="1 3"
             />
-            {sw == null ? (
-              <text
-                x={W - PR - 4}
-                y={y(p.p) + (p.hi ? -4 : 12)}
-                fontSize={T(12)}
-                fill={col}
-                fontFamily="'JetBrains Mono', monospace"
-                fontWeight={700}
-                textAnchor="end"
-              >
-                {`${p.hi ? "BSL " : "SSL "}${formatCurrency(p.p)}`}
-              </text>
-            ) : (
+            {sw != null && (
               <text
                 x={x2}
                 y={y(p.p) + (p.hi ? -4 : 12)}
@@ -595,7 +629,7 @@ export function FullChartSvg({
                 fontWeight={700}
                 textAnchor="middle"
               >
-                ✕ swept
+                ✕
               </text>
             )}
           </g>
@@ -604,18 +638,7 @@ export function FullChartSvg({
 
       {/* Structure Layer */}
       {layers.str && (() => {
-        const N = safeCandles.length;
         const xi = (i: number) => sx(i) + cw / 2;
-        const hiAll = Math.max(...safeCandles.map((q) => q.h));
-        const loAll = Math.min(...safeCandles.map((q) => q.l));
-        const eq = (hiAll + loAll) / 2;
-        const pdh = stock.prevHigh ?? NaN;
-        const pdl = stock.prevLow ?? NaN;
-
-        const orn = Math.max(1, Math.round(30 / tf));
-        const orb = safeCandles.slice(0, Math.min(N, orn));
-        const orh = Math.max(...orb.map((q) => q.h));
-        const orl = Math.min(...orb.map((q) => q.l));
 
         const ih = safeCandles.findIndex((q) => q.h === hiAll);
         const il = safeCandles.findIndex((q) => q.l === loAll);
@@ -694,37 +717,24 @@ export function FullChartSvg({
               strokeDasharray="1 4"
             />
             <text
-              x={W - PR - 4}
-              y={y(eq) - 4}
-              fontSize={T(12)}
-              fill="#aab3b0"
-              fontFamily="'JetBrains Mono', monospace"
-              fontWeight={700}
-              textAnchor="end"
-            >
-              EQ 50%
-            </text>
-            <text
-              x={W - PR - 4}
+              x={PL + 4}
               y={y(hiAll) + 12}
-              fontSize={T(12)}
+              fontSize={T(11)}
               fill="rgba(240,86,90,.7)"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
-              textAnchor="end"
             >
-              PREMIUM
+              {`PREMIUM ${formatCurrency(eq)}–${formatCurrency(hiAll)}`}
             </text>
             <text
-              x={W - PR - 4}
+              x={PL + 4}
               y={y(loAll) - 5}
-              fontSize={T(12)}
+              fontSize={T(11)}
               fill="rgba(61,220,132,.7)"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
-              textAnchor="end"
             >
-              DISCOUNT
+              {`DISCOUNT ${formatCurrency(loAll)}–${formatCurrency(eq)}`}
             </text>
 
             {pdh <= mx && pdh >= mn && (
@@ -739,16 +749,6 @@ export function FullChartSvg({
                   strokeOpacity={0.6}
                   strokeDasharray="2 5"
                 />
-                <text
-                  x={PL + 4}
-                  y={y(pdh) - 4}
-                  fontSize={T(12)}
-                  fill="#9aa7ff"
-                  fontFamily="'JetBrains Mono', monospace"
-                  fontWeight={700}
-                >
-                  {`PDH ${formatCurrency(pdh)}`}
-                </text>
               </>
             )}
             {pdl <= mx && pdl >= mn && (
@@ -763,16 +763,6 @@ export function FullChartSvg({
                   strokeOpacity={0.6}
                   strokeDasharray="2 5"
                 />
-                <text
-                  x={PL + 4}
-                  y={y(pdl) + 12}
-                  fontSize={T(12)}
-                  fill="#9aa7ff"
-                  fontFamily="'JetBrains Mono', monospace"
-                  fontWeight={700}
-                >
-                  {`PDL ${formatCurrency(pdl)}`}
-                </text>
               </>
             )}
 
@@ -801,28 +791,6 @@ export function FullChartSvg({
               stroke="rgba(154,167,255,.5)"
               strokeDasharray="6 4"
             />
-            <text
-              x={W - PR - 4}
-              y={y(orh) - 4}
-              fontSize={T(12)}
-              fill="#9aa7ff"
-              fontFamily="'JetBrains Mono', monospace"
-              fontWeight={700}
-              textAnchor="end"
-            >
-              {`ORH $${formatCurrency(orh)}`}
-            </text>
-            <text
-              x={W - PR - 4}
-              y={y(orl) + 12}
-              fontSize={T(12)}
-              fill="#9aa7ff"
-              fontFamily="'JetBrains Mono', monospace"
-              fontWeight={700}
-              textAnchor="end"
-            >
-              {`ORL $${formatCurrency(orl)}`}
-            </text>
 
             {ih >= 0 && (
               <>
@@ -830,17 +798,6 @@ export function FullChartSvg({
                   d={`M${xi(ih) - 4},${y(hiAll) - 9} L${xi(ih) + 4},${y(hiAll) - 9} L${xi(ih)},${y(hiAll) - 3}Z`}
                   fill="#e0bb5e"
                 />
-                <text
-                  x={xi(ih)}
-                  y={y(hiAll) - 13}
-                  fontSize={T(12)}
-                  fill="#e0bb5e"
-                  fontFamily="'JetBrains Mono', monospace"
-                  fontWeight={700}
-                  textAnchor="middle"
-                >
-                  {`HOD $${formatCurrency(hiAll)}`}
-                </text>
               </>
             )}
             {il >= 0 && (
@@ -849,22 +806,10 @@ export function FullChartSvg({
                   d={`M${xi(il) - 4},${y(loAll) + 9} L${xi(il) + 4},${y(loAll) + 9} L${xi(il)},${y(loAll) + 3}Z`}
                   fill="#e0bb5e"
                 />
-                <text
-                  x={xi(il)}
-                  y={y(loAll) + 22}
-                  fontSize={T(12)}
-                  fill="#e0bb5e"
-                  fontFamily="'JetBrains Mono', monospace"
-                  fontWeight={700}
-                  textAnchor="middle"
-                >
-                  {`LOD $${formatCurrency(loAll)}`}
-                </text>
               </>
             )}
 
-            {swingSorted.map((p, pi) => {
-              const cx = xi(p.i);
+            {swingSorted.map((p) => {
               let tag = "";
               if (p.hi) {
                 tag = lH == null ? "H" : p.p > lH.p ? "HH" : "LH";
@@ -873,6 +818,10 @@ export function FullChartSvg({
                 tag = lL == null ? "L" : p.p > lL.p ? "HL" : "LL";
                 lL = p;
               }
+              return { p, tag };
+            }).slice(-6).map(({ p, tag }, pi) => {
+              // Only the six most recent swing tags (1m drew a wall of HH / HL along the candles).
+              const cx = xi(p.i);
               const col =
                 tag === "HH" || tag === "HL"
                   ? "#3ddc84"
@@ -895,7 +844,7 @@ export function FullChartSvg({
               );
             })}
 
-            {ev.slice(-4).map((e, ei) => {
+            {ev.slice(-3).map((e, ei) => {
               const up = e.p.hi;
               const x1 = xi(e.p.i);
               const x2 = xi(e.j);
@@ -988,12 +937,9 @@ export function FullChartSvg({
 
       {/* Patterns (app/iq/patterns): latest candle marks + chart patterns, each with its rule as the tooltip */}
       {layers.pat && (() => {
-        // Only patterns whose callout points at a candle in view (slot i is visible while i < view end).
-        const last = Math.min(Math.ceil(vw.to) - 1, safeCandles.length - 1);
-        const hits = patternsToShow(detectPatterns(safeCandles), i0, last, { candles: 3, others: 4 });
         const xi = (i: number) => sx(i) + cw / 2;
         const lf = calloutFz;
-        const glyphs = hits.map((h) => patternGlyphs(h)).filter((g) => g.label.i >= vw.from - 0.5 && g.label.i <= last);
+        const glyphs = patGlyphs;
         // Callouts in the bands above / below the price with an arrow to each pattern (layoutCallouts).
         const tags = layoutCallouts(
           glyphs.map((g) => ({
@@ -1038,6 +984,21 @@ export function FullChartSvg({
         );
       })()}
 
+      </g>
+
+      {/* Right-edge labels: one per price, spaced apart, off-scale ones pinned with ▲ / ▼ */}
+      <g clipPath={`url(#${clipId}x)`}>
+        {edgeLabels.map((l, li) => {
+          const w = l.text.length * edgeFz * 0.6 + 8;
+          return (
+            <g key={`edge_${li}`}>
+              <rect x={W - PR - 4 - w} y={l.y - edgeFz * 0.75} width={w} height={edgeFz + 3} rx={3} fill="rgba(8,9,10,.82)" />
+              <text x={W - PR - 8} y={l.y + edgeFz * 0.35} fontSize={edgeFz} fill={l.color} fontFamily="'JetBrains Mono', monospace" fontWeight={700} textAnchor="end">
+                {l.text}
+              </text>
+            </g>
+          );
+        })}
       </g>
 
       <g clipPath={`url(#${clipId}x)`}>

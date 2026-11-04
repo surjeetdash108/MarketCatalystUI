@@ -39,6 +39,8 @@ import {
   extendedPivots,
   liveLevels,
   popLevelRows,
+  layoutEdgeLabels,
+  calloutLaneRows,
   levelTag,
   computeFvgs,
   popText,
@@ -662,5 +664,48 @@ describe("Money Flow sector names agree between the pop-up and the board", () =>
   it("a sector row's tooltip carries the full name, flow and move", () => {
     const row = sectorView(withSectorLabels(revived).sectors).sectors[0];
     assert.equal(sectorRowTitle(row), `${row.name} · ${row.flowFormatted} net flow · ${row.avgPctFormatted} avg move`);
+  });
+});
+
+describe("Money Flow chart labels stay readable", () => {
+  const y = (p: number) => 400 - (p - 140) * 20; // price 140 → 400 px, 155 → 100 px
+  it("labels at the same price merge into one (ORL · LOD · SSL $143.65)", () => {
+    const out = layoutEdgeLabels([
+      { price: 143.65, name: "ORL", color: "#9aa7ff" },
+      { price: 143.65, name: "LOD", color: "#e0bb5e" },
+      { price: 143.652, name: "SSL", color: "#4ad0c9" },
+      { price: 152.8, name: "SSL", color: "#4ad0c9" },
+    ], y, 60, 420, 16);
+    assert.equal(out.length, 2);
+    assert.ok(out.some((l) => l.text === "ORL · LOD · SSL $143.65"));
+    assert.ok(out.some((l) => l.text === "SSL $152.80"));
+  });
+  it("labels close together are pushed apart, none overlapping, all inside the price area", () => {
+    const out = layoutEdgeLabels([150, 150.2, 150.3, 150.4, 150.5].map((p, i) => ({ price: p, name: `L${i}`, color: "#fff" })), y, 60, 420, 16);
+    const ys = out.map((l) => l.y).sort((a, b) => a - b);
+    for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 16 - 1e-9, `gap ${ys[i] - ys[i - 1]}`);
+    assert.ok(ys[0] >= 60 && ys[ys.length - 1] <= 420);
+  });
+  it("a level beyond the candles' scale is pinned to the edge with an arrow instead of hidden or stretching the scale", () => {
+    const out = layoutEdgeLabels([{ price: 170, name: "PDH", color: "#9aa7ff" }, { price: 120, name: "PDL", color: "#9aa7ff" }], y, 60, 420, 16);
+    const up = out.find((l) => l.text.includes("PDH"))!, down = out.find((l) => l.text.includes("PDL"))!;
+    assert.equal(up.text, "▲ PDH $170.00");
+    assert.equal(up.offScale, "above");
+    assert.ok(up.y <= 60 + 16);
+    assert.equal(down.text, "▼ PDL $120.00");
+    assert.ok(down.y >= 420 - 16);
+  });
+  it("callout lanes take only the rows the callouts in view need, per side", () => {
+    assert.deepEqual(calloutLaneRows([]), { above: 0, below: 0 });
+    assert.deepEqual(calloutLaneRows([{ above: true }]), { above: 1, below: 0 });
+    assert.deepEqual(calloutLaneRows([{ above: true }, { above: true }, { above: true }, { above: false }]), { above: 2, below: 1 });
+  });
+  it("level rows leave the candles most of the chart; lanes can differ above and below", () => {
+    const none = popLevelRows(10, 416, 22);
+    assert.ok(none.band.bottom - none.band.top > 0.75 * 406, `${none.band.bottom - none.band.top}`);
+    const r = popLevelRows(10, 416, 22, 20, 0);
+    assert.equal(r.band.bottom - r.band.top, none.band.bottom - none.band.top - (20 + 8)); // only the top lane is taken
+    assert.equal(r.lanes.top[1] - r.lanes.top[0], 20);
+    assert.equal(r.lanes.bottom[1] - r.lanes.bottom[0], 0);
   });
 });

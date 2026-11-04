@@ -162,17 +162,59 @@ export const chartFrame = (w: number, h: number, gutter: number) => ({ x: 0, y: 
  * scaled into `band`, between R1 and S1. With pattern callouts on (`laneH` > 0)
  * a lane of that height sits between each pair of rows and the candles.
  */
-export function popLevelRows(top: number, bottom: number, rowH: number, laneH = 0) {
-  const r2 = top + rowH * 0.6, r1 = r2 + rowH, s2 = bottom - rowH * 0.6, s1 = s2 - rowH;
-  const edge = rowH * 0.6, lane = laneH ? laneH + 8 : 0;
+export function popLevelRows(top: number, bottom: number, rowH: number, laneH = 0, laneBottomH = laneH) {
+  const edge = rowH * 0.5;
+  const r2 = top + edge, r1 = r2 + rowH, s2 = bottom - edge, s1 = s2 - rowH;
+  const laneT = laneH ? laneH + 8 : 0, laneB = laneBottomH ? laneBottomH + 8 : 0;
   return {
     y: { R2: r2, R1: r1, S1: s1, S2: s2 } as Record<LiveLevel["name"], number>,
-    band: { top: r1 + edge + lane, bottom: s1 - edge - lane },
+    band: { top: r1 + edge + laneT, bottom: s1 - edge - laneB },
     lanes: {
       top: [r1 + edge, r1 + edge + laneH] as [number, number],
-      bottom: [s1 - edge - laneH, s1 - edge] as [number, number],
+      bottom: [s1 - edge - laneBottomH, s1 - edge] as [number, number],
     },
   };
+}
+
+/** Rows a callout lane needs per side: as many callouts as are in view on it, at most two. */
+export function calloutLaneRows(labels: Array<{ above: boolean }>): { above: number; below: number } {
+  const up = labels.filter((l) => l.above).length, down = labels.length - up;
+  const rows = (n: number) => (n > 2 ? 2 : n > 0 ? 1 : 0);
+  return { above: rows(up), below: rows(down) };
+}
+
+export interface EdgeLabelIn { price: number; name: string; color: string }
+export interface EdgeLabelOut { y: number; text: string; color: string; offScale: "above" | "below" | null }
+
+/**
+ * The chart's right-edge labels (BSL / SSL, ORH / ORL, PDH / PDL, HOD / LOD,
+ * EQ): labels at the same price become one ("ORL · LOD · SSL $143.65"); a
+ * level beyond the candles' scale is pinned to the edge of the price area with
+ * ▲ / ▼ instead of being hidden (the scale stays fitted to the candles); then
+ * they are pushed apart by `gap` so none overlap, inside [top, bottom].
+ */
+export function layoutEdgeLabels(labels: EdgeLabelIn[], y: (p: number) => number, top: number, bottom: number, gap: number): EdgeLabelOut[] {
+  const groups = new Map<string, { price: number; names: string[]; color: string }>();
+  for (const l of labels) {
+    if (!Number.isFinite(l.price)) continue;
+    const key = l.price.toFixed(2);
+    const g = groups.get(key);
+    if (!g) groups.set(key, { price: l.price, names: [l.name], color: l.color });
+    else if (!g.names.includes(l.name)) g.names.push(l.name);
+  }
+  const out: EdgeLabelOut[] = [...groups.values()].map((g) => {
+    const raw = y(g.price);
+    const offScale = raw < top ? "above" : raw > bottom ? "below" : null;
+    const text = `${offScale === "above" ? "▲ " : offScale === "below" ? "▼ " : ""}${g.names.join(" · ")} $${formatCurrency(g.price)}`;
+    return { y: offScale === "above" ? top + gap / 2 : offScale === "below" ? bottom - gap / 2 : raw, text, color: g.color, offScale };
+  });
+  out.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < out.length; i++) out[i].y = Math.max(out[i].y, out[i - 1].y + gap);
+  if (out.length && out[out.length - 1].y > bottom) {
+    out[out.length - 1].y = bottom;
+    for (let i = out.length - 2; i >= 0; i--) out[i].y = Math.min(out[i].y, out[i + 1].y - gap);
+  }
+  return out;
 }
 
 /**
