@@ -23,6 +23,9 @@ import {
   popChartModes,
   POP_TIMEFRAMES,
   popTimeframes,
+  formatRvol,
+  phaseTag,
+  RVOL_HEAVY,
   flowsLagLabel,
   cardLevels,
   BOARD_HEADINGS,
@@ -591,5 +594,26 @@ describe("Money Flow sector boxes keep their text on a small window", () => {
     assert.equal(SECTOR_NAME_STYLE.overflow, "hidden"); // long names still end in an ellipsis sideways
     assert.equal(SECTOR_NAME_STYLE.whiteSpace, "nowrap");
     assert.ok(SECTOR_NAME_STYLE.lineHeight >= 1.2);
+  });
+});
+
+describe("Money Flow relative volume: one value for popover, tiles and card tags", () => {
+  const s = board.gainers[0];
+  it("the popover, the tile and the tag all read the same relative volume", () => {
+    const st = popoverStats({ ...s, rvol: 1.46 }, board);
+    assert.ok(st.find((x) => x.k === "Vol")!.v.startsWith(formatRvol(1.46) + " "));
+    assert.equal(formatRvol(1.46), "1.5×");
+    assert.equal(formatRvol(null), "—");
+  });
+  it("ACCUMULATION / DISTRIBUTION start at the 1.4× the popover shows (TRI / APO at 1.4–1.5× are DISTRIBUTION)", () => {
+    assert.equal(RVOL_HEAVY, 1.4);
+    assert.equal(phaseTag({ chop: false, rvol: 1.46 }, false), "DISTRIBUTION");
+    assert.equal(phaseTag({ chop: false, rvol: 1.46 }, true), "ACCUMULATION");
+    // Shown as "1.4×" → tagged as 1.4× (the tag never disagrees with the number on screen).
+    assert.equal(formatRvol(1.36), "1.4×");
+    assert.equal(phaseTag({ chop: false, rvol: 1.36 }, false), "DISTRIBUTION");
+    assert.equal(phaseTag({ chop: false, rvol: 1.34 }, false), "MOMENTUM DOWN");
+    assert.equal(phaseTag({ chop: false, rvol: null }, true), "MOMENTUM UP");
+    assert.equal(phaseTag({ chop: true, rvol: 3 }, true), "CHOPPY");
   });
 });

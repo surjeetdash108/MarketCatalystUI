@@ -351,6 +351,29 @@ export function indexCard(
 }
 
 /** A price, or an em dash when the level does not exist. */
+/**
+ * Relative volume as the page shows it — the popover's Vol row, the tiles and
+ * the cards all use this, from the board's one `rvol` (backend buildBoard).
+ */
+export const formatRvol = (rvol: number | null | undefined): string =>
+  rvol == null || !Number.isFinite(rvol) ? "—" : `${rvol.toFixed(1)}×`;
+
+/** Relative volume from which a card is tagged ACCUMULATION / DISTRIBUTION. */
+export const RVOL_HEAVY = 1.4;
+
+/**
+ * A card's tag: CHOPPY, else ACCUMULATION / DISTRIBUTION from RVOL_HEAVY up,
+ * else MOMENTUM UP / DOWN. Tested on the relative volume as shown (one
+ * decimal), so the tag never disagrees with the number on screen.
+ */
+export function phaseTag(s: { chop: boolean; rvol: number | null }, bull: boolean):
+  "CHOPPY" | "ACCUMULATION" | "DISTRIBUTION" | "MOMENTUM UP" | "MOMENTUM DOWN" {
+  if (s.chop) return "CHOPPY";
+  const shown = s.rvol == null || !Number.isFinite(s.rvol) ? null : Math.round(s.rvol * 10) / 10;
+  if (shown != null && shown >= RVOL_HEAVY) return bull ? "ACCUMULATION" : "DISTRIBUTION";
+  return bull ? "MOMENTUM UP" : "MOMENTUM DOWN";
+}
+
 export function formatLevel(v: number | null | undefined, dp = 2): string {
   return v == null || !Number.isFinite(v) ? "—" : v.toFixed(dp);
 }
@@ -756,7 +779,7 @@ export function computeSquarifiedTiles(items: BoardStock[], bull: boolean): Tile
       rsC: (x.vsSector ?? 0) >= 0 ? "#3ddc84" : "#f0565a",
       m30: x.m30 == null ? "—" : `${x.m30 >= 0 ? "▲" : "▼"}${Math.abs(x.m30).toFixed(2)}%`,
       m30C: (x.m30 ?? 0) >= 0 ? "#3ddc84" : "#f0565a",
-      volx: x.rvol == null ? "—" : `${x.rvol.toFixed(1)}×`,
+      volx: formatRvol(x.rvol),
       bg: `linear-gradient(160deg,rgba(${c},${Math.max(0.06, 0.2 - i * 0.012)}),rgba(${c},0.03))`,
       bd: `rgba(${c},0.32)`,
     };
@@ -816,7 +839,7 @@ export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers
     { k: "Rank", v: `${rank} / ${side.length} ${bull ? "gainers" : "losers"}`, tone: "plain" },
     {
       k: "Vol",
-      v: `${s.rvol == null ? "—" : `${s.rvol.toFixed(1)}×`} · ${s.buyPct == null ? "—" : `${Math.round(s.buyPct)}%`} inflow`,
+      v: `${formatRvol(s.rvol)} · ${s.buyPct == null ? "—" : `${Math.round(s.buyPct)}%`} inflow`,
       tone: "plain",
     },
     { k: "Δ", v: flow, tone: s.netFlow >= 0 ? "up" : "down" },

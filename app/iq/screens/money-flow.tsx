@@ -28,6 +28,7 @@ import {
   popoverButtons,
   popChartModes,
   popTimeframes,
+  phaseTag,
   flowsLagLabel,
   cardLevels,
   BOARD_HEADINGS,
@@ -1618,7 +1619,7 @@ export function MoneyFlowScreen() {
                             padding: "0 4px",
                           }}
                         >
-                          {fc.chop ? "CHOPPY" : (fc.rvol ?? 0) >= 1.4 ? "ACCUMULATION" : "MOMENTUM UP"}
+                          {phaseTag(fc, true)}
                         </span>
                       </div>
 
@@ -1943,7 +1944,7 @@ export function MoneyFlowScreen() {
                             padding: "0 4px",
                           }}
                         >
-                          {fc.chop ? "CHOPPY" : (fc.rvol ?? 0) >= 1.4 ? "DISTRIBUTION" : "MOMENTUM DOWN"}
+                          {phaseTag(fc, false)}
                         </span>
                       </div>
 
