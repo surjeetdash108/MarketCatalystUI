@@ -47,6 +47,8 @@ import {
   sectorNotOnBoardText,
   sectorView,
   TOP_SECTORS,
+  SECTOR_BOX_SIZE,
+  SECTOR_NAME_STYLE,
   sessionCandles,
   type MoneyFlowBoard,
 } from "./engine";
@@ -577,5 +579,17 @@ describe("Money Flow freshness line and glossary", () => {
     assert.doesNotMatch(src, /-min delayed/);
     assert.match(src, /easing to 1\.5 at about 1% away/); // 5 × clamp(1 − d/1.5, 0.3, 1) bottoms out at d = 1.05%
     assert.match(src, /first pivot level \(S5 … R5\)/);
+  });
+});
+
+describe("Money Flow sector boxes keep their text on a small window", () => {
+  it("a box never shrinks below its content, and neither does the sector name line", () => {
+    // In a short column, flex items shrink; an overflow-hidden line can shrink to nothing,
+    // which hid the sector name under the flow figure. Both are pinned at their content size.
+    assert.equal(SECTOR_BOX_SIZE.flexShrink, 0);
+    assert.equal(SECTOR_NAME_STYLE.flexShrink, 0);
+    assert.equal(SECTOR_NAME_STYLE.overflow, "hidden"); // long names still end in an ellipsis sideways
+    assert.equal(SECTOR_NAME_STYLE.whiteSpace, "nowrap");
+    assert.ok(SECTOR_NAME_STYLE.lineHeight >= 1.2);
   });
 });

@@ -569,6 +569,28 @@ export interface SectorFlowItem {
 /** Sectors pulled into the inflow / outflow boxes, each side. */
 export const TOP_SECTORS = 3;
 
+/**
+ * An inflow / outflow box's size. flexShrink 0: in a short column (a small
+ * window) the boxes keep their content height and the column grows, instead of
+ * squeezing the text out of view.
+ */
+export const SECTOR_BOX_SIZE = { flexShrink: 0, minHeight: 58, padding: "5px 10px" } as const;
+
+/**
+ * The sector name inside a box. overflow hidden (for the sideways ellipsis)
+ * lets a flex item shrink to no height at all, so it is pinned at its line.
+ */
+export const SECTOR_NAME_STYLE = {
+  fontSize: 12.5,
+  fontWeight: 700,
+  color: "#eef2f4",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  lineHeight: 1.3,
+  flexShrink: 0,
+} as const;
+
 export function sectorView(sectors: BoardSector[]): {
   sectors: SectorFlowItem[];
   topInflow: SectorFlowItem[];

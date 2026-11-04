@@ -17,6 +17,8 @@ import {
   sectorNotOnBoardText,
   sectorView,
   TOP_SECTORS,
+  SECTOR_BOX_SIZE,
+  SECTOR_NAME_STYLE,
   sessionCandles,
   sessionDateLabel,
   type BoardStock,
@@ -1106,8 +1108,7 @@ export function MoneyFlowScreen() {
                           display: "flex",
                           flexDirection: "column",
                           gap: 4,
-                          padding: "5px 10px",
-                          minHeight: 58,
+                          ...SECTOR_BOX_SIZE,
                           justifyContent: "space-between",
                           borderRadius: 8,
                           border: `1px solid ${isMatch
@@ -1154,14 +1155,7 @@ export function MoneyFlowScreen() {
                         </div>
                         <span
                           title={sc.name}
-                          style={{
-                            fontSize: 12.5,
-                            fontWeight: 700,
-                            color: "#eef2f4",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
+                          style={SECTOR_NAME_STYLE}
                         >
                           {sc.name}
                         </span>
@@ -1211,8 +1205,7 @@ export function MoneyFlowScreen() {
                           display: "flex",
                           flexDirection: "column",
                           gap: 4,
-                          padding: "5px 10px",
-                          minHeight: 58,
+                          ...SECTOR_BOX_SIZE,
                           justifyContent: "space-between",
                           borderRadius: 8,
                           border: `1px solid ${isMatch
@@ -1259,14 +1252,7 @@ export function MoneyFlowScreen() {
                         </div>
                         <span
                           title={sc.name}
-                          style={{
-                            fontSize: 12.5,
-                            fontWeight: 700,
-                            color: "#eef2f4",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
+                          style={SECTOR_NAME_STYLE}
                         >
                           {sc.name}
                         </span>
