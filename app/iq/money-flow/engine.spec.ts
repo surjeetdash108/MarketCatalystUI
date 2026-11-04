@@ -587,7 +587,7 @@ describe("Money Flow freshness line and glossary", () => {
     assert.doesNotMatch(src, /grouped from Polygon 1-minute bars/);
     assert.doesNotMatch(src, /-min delayed/);
     assert.match(src, /easing to 1\.5 at about 1% away/); // 5 × clamp(1 − d/1.5, 0.3, 1) bottoms out at d = 1.05%
-    assert.match(src, /first pivot level \(S5 … R5\)/);
+    assert.match(src, /first level on the trade’s side/); // the R:R target rule (see the R:R glossary test)
   });
 });
 
@@ -720,5 +720,16 @@ describe("Money Flow glossary: click pins the pop-up (no detail window here)", (
   });
   it("does not describe a detail window or heatmap click-through that no longer opens", () => {
     assert.doesNotMatch(glossary, /opens? (the |a )?detail (window|view)|View \S+ in heatmap/i);
+  });
+});
+
+describe("Money Flow glossary: the R:R target rule", () => {
+  const src = fs.readFileSync(path.join(import.meta.dirname, "../screens/money-flow.tsx"), "utf-8");
+  const rr = src.slice(src.indexOf('term: "R:R"'), src.indexOf('term: "Rule"'));
+  it("says the target is the first shown level on the trade's side beyond entry and price, skipping passed levels", () => {
+    assert.match(rr, /first level on the trade’s side/);
+    assert.match(rr, /already passed are skipped/);
+    assert.match(rr, /past R5 \/ S5/i);
+    assert.doesNotMatch(rr, /S5 … R5/); // the old mixed ladder
   });
 });

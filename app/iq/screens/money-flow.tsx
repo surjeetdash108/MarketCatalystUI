@@ -3113,7 +3113,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "R:R",
-                    desc: "Entry at the zone edge nearest price, stop at its far edge, target at the first pivot level (S5 … R5) beyond both: |target − entry| ÷ |entry − stop|. A dash means no zone, or price is already past R5 (S5 for a short).",
+                    desc: "Entry at the zone edge nearest price, stop at its far edge, target at the first level on the trade’s side (R1, R2, … for a long; S1, S2, … for a short) beyond both the entry and the current price — the first R / S the chart shows past the entry. Levels price has already passed are skipped. Past R5 / S5 the levels continue at the same step, so there is always a target. R:R = |target − entry| ÷ |entry − stop|. A dash means no zone.",
                   },
                   {
                     term: "Rule",
