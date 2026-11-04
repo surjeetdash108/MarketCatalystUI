@@ -16,6 +16,8 @@ import {
   type PopTone,
   sectorNotOnBoardText,
   sectorView,
+  withSectorLabels,
+  sectorRowTitle,
   TOP_SECTORS,
   SECTOR_BOX_SIZE,
   SECTOR_NAME_STYLE,
@@ -71,8 +73,10 @@ export function MoneyFlowScreen() {
   const { exitToMC, enterSI } = useSI();
 
   // The whole board — flows, movers, levels, scores — from GET /live/money-flow.
-  const { data: board, loading: boardLoading, error: boardError } =
+  const { data: rawBoard, loading: boardLoading, error: boardError } =
     useApiResource<MoneyFlowBoard>("/live/money-flow", BOARD_POLL_MS);
+  // One sector label everywhere: the stocks' and the sector list's (withSectorLabels).
+  const board = useMemo(() => (rawBoard ? withSectorLabels(rawBoard) : null), [rawBoard]);
 
   // Real-time market status and ET clock
   const mkt = useBackendMarketStatus();
@@ -953,6 +957,7 @@ export function MoneyFlowScreen() {
                       onClick={() =>
                         setSelectedSector(isSelected ? null : sc.name)
                       }
+                      title={sectorRowTitle(sc)}
                       onMouseEnter={() => setHoveredSector(sc.name)}
                       onMouseLeave={() => setHoveredSector(null)}
                       style={{
@@ -1113,7 +1118,8 @@ export function MoneyFlowScreen() {
                         onClick={() =>
                           setSelectedSector(selectedSector === sc.name ? null : sc.name)
                         }
-                        onMouseEnter={() => setHoveredSector(sc.name)}
+                        title={sectorRowTitle(sc)}
+                      onMouseEnter={() => setHoveredSector(sc.name)}
                         onMouseLeave={() => setHoveredSector(null)}
                         style={{
                           all: "unset",
@@ -1210,7 +1216,8 @@ export function MoneyFlowScreen() {
                         onClick={() =>
                           setSelectedSector(selectedSector === sc.name ? null : sc.name)
                         }
-                        onMouseEnter={() => setHoveredSector(sc.name)}
+                        title={sectorRowTitle(sc)}
+                      onMouseEnter={() => setHoveredSector(sc.name)}
                         onMouseLeave={() => setHoveredSector(null)}
                         style={{
                           all: "unset",

@@ -9,6 +9,8 @@
  * from real 1-minute bars.
  */
 
+import { normalizeSector } from "../sector-filter";
+
 // ── Board payload (mirrors the backend's MoneyFlowBoard) ────────────────────
 
 export interface PivotLevels {
@@ -625,6 +627,27 @@ export const SECTOR_NAME_STYLE = {
   lineHeight: 1.3,
   flexShrink: 0,
 } as const;
+
+/**
+ * The board with the app's sector labels on its sector list too. backend.ts
+ * renames every JSON "sector" field as responses are parsed (normalizeSector,
+ * e.g. Consumer Non-Durables → Consumer Defensive), which reaches each stock's
+ * `sector` but not the sector list's `name`; without this the pop-up and the
+ * board named one sector two ways and clicking it matched none of its stocks.
+ */
+export function withSectorLabels<B extends Pick<MoneyFlowBoard, "sectors" | "gainers" | "losers">>(b: B): B {
+  const label = (n: string | null) => (n == null ? n : normalizeSector(n));
+  return {
+    ...b,
+    sectors: b.sectors.map((x) => ({ ...x, name: normalizeSector(x.name) })),
+    gainers: b.gainers.map((x) => ({ ...x, sector: label(x.sector) })),
+    losers: b.losers.map((x) => ({ ...x, sector: label(x.sector) })),
+  };
+}
+
+/** A sector row's tooltip: the full name (rows truncate it), its net flow and its average move. */
+export const sectorRowTitle = (s: Pick<SectorFlowItem, "name" | "flowFormatted" | "avgPctFormatted">): string =>
+  `${s.name} · ${s.flowFormatted} net flow · ${s.avgPctFormatted} avg move`;
 
 export function sectorView(sectors: BoardSector[]): {
   sectors: SectorFlowItem[];

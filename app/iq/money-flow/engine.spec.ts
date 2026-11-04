@@ -51,6 +51,8 @@ import {
   formatLevel,
   sectorNotOnBoardText,
   sectorView,
+  withSectorLabels,
+  sectorRowTitle,
   TOP_SECTORS,
   SECTOR_BOX_SIZE,
   SECTOR_NAME_STYLE,
@@ -634,5 +636,31 @@ describe("Money Flow pop-up: no stale preview, Esc always closes", () => {
     assert.equal(popoverKey({ key: T, pinned: false }, "Escape"), null);
     assert.deepEqual(popoverKey({ key: T, pinned: true }, "ArrowLeft"), { key: T, pinned: true });
     assert.equal(popoverKey(null, "Escape"), null);
+  });
+});
+
+describe("Money Flow sector names agree between the pop-up and the board", () => {
+  // The UI renames every JSON "sector" field as responses are parsed (backend.ts →
+  // normalizeSector: Consumer Non-Durables → Consumer Defensive), so a stock's sector
+  // was renamed but the board's sector list (field "name") was not.
+  const revived = {
+    ...board,
+    gainers: board.gainers.map((g) => (g.sector === "Consumer Non-Durables" ? { ...g, sector: "Consumer Defensive" } : g)),
+    losers: board.losers.map((g) => (g.sector === "Consumer Non-Durables" ? { ...g, sector: "Consumer Defensive" } : g)),
+  };
+  it("every stock's sector is a sector on the board, after the app-wide relabelling", () => {
+    const b = withSectorLabels(revived);
+    const names = b.sectors.map((x) => x.name);
+    for (const st of [...b.gainers, ...b.losers]) if (st.sector) assert.ok(names.includes(st.sector), st.sector);
+    assert.ok(names.includes("Consumer Defensive") && !names.includes("Consumer Non-Durables"));
+  });
+  it("leaves other sector names alone and keeps the flows", () => {
+    const b = withSectorLabels(revived);
+    assert.deepEqual(b.sectors.map((x) => x.netFlow), board.sectors.map((x) => x.netFlow));
+    assert.ok(b.sectors.some((x) => x.name === "Technology Services"));
+  });
+  it("a sector row's tooltip carries the full name, flow and move", () => {
+    const row = sectorView(withSectorLabels(revived).sectors).sectors[0];
+    assert.equal(sectorRowTitle(row), `${row.name} · ${row.flowFormatted} net flow · ${row.avgPctFormatted} avg move`);
   });
 });
