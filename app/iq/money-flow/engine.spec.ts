@@ -500,16 +500,38 @@ describe("Money Flow card headings", () => {
   });
 });
 
-describe("pivot levels: a level price has passed changes sides", () => {
+describe("pivot levels: R1/R2/S1/S2 always shown, renumbered within each side", () => {
   const pv = [...board.gainers, ...board.losers].find((x) => x.t === "GOOGL")!.pivots!;
-  it("a passed resistance is the nearest support, and a passed support the nearest resistance", () => {
-    const l = liveLevels(pv, 327.5); // above R1 (326.65)
-    assert.deepEqual(l.map((r) => [r.name, r.from]), [["R2", "R3"], ["R1", "R2"], ["S1", "R1"], ["S2", "S1"]]);
-    const down = liveLevels(pv, 321.5); // below S1 (322.90)
-    assert.deepEqual(down.map((r) => [r.name, r.from]), [["R2", "R1"], ["R1", "S1"], ["S1", "S2"], ["S2", "S3"]]);
+  const names = (px: number) => liveLevels(pv, px).map((r) => [r.name, r.from]);
+  it("crossing R1 renames the R side only: R2 becomes R1, R3 becomes R2; S1 / S2 stay the classic ones", () => {
+    assert.deepEqual(names(327.5), [["R2", "R3"], ["R1", "R2"], ["S1", "S1"], ["S2", "S2"]]); // above R1 (326.65)
   });
-  it("after a gap past R5 there is no resistance left; R5 and R4 are the supports, not a far-off S1", () => {
-    assert.deepEqual(liveLevels(pv, 400).map((r) => [r.name, r.from]), [["S1", "R5"], ["S2", "R4"]]);
+  it("crossing S1 renames the S side only", () => {
+    assert.deepEqual(names(321.5), [["R2", "R2"], ["R1", "R1"], ["S1", "S2"], ["S2", "S3"]]); // below S1 (322.90)
+  });
+  it("past R5 the ladder keeps going with the classic step, so R1 and R2 still exist (SWK +14.6%)", () => {
+    const x = extendedPivots(pv);
+    const H = 2 * pv.pivot! - pv.s1!, L = 2 * pv.pivot! - pv.r1!, P = pv.pivot!;
+    const l = liveLevels(pv, 400);
+    assert.deepEqual(l.map((r) => r.name), ["R2", "R1", "S1", "S2"]);
+    const r1 = l.find((r) => r.name === "R1")!, r2 = l.find((r) => r.name === "R2")!;
+    assert.ok(r1.v > 400 && r2.v > r1.v);
+    // R_n = H + (n − 1)(P − L) from R2 up: the same rule that gives R2…R5.
+    const n = Number(r1.from.slice(1));
+    assert.ok(n > 5);
+    assert.ok(Math.abs(r1.v - (H + (n - 1) * (P - L))) < 1e-9);
+    assert.ok(Math.abs(r2.v - r1.v - (P - L)) < 1e-9);
+    assert.ok(Math.abs(x.R5! - (H + 4 * (P - L))) < 1e-9, "R5 fits the same rule");
+    assert.deepEqual(l.filter((r) => r.name[0] === "S").map((r) => r.from), ["S1", "S2"]);
+  });
+  it("past S5 the same on the way down (and never below zero)", () => {
+    const l = liveLevels(pv, 250);
+    assert.deepEqual(l.map((r) => r.name), ["R2", "R1", "S1", "S2"]);
+    assert.ok(Number(l.find((r) => r.name === "S1")!.from.slice(1)) > 5);
+    assert.ok(l.every((r) => r.v > 0));
+  });
+  it("whatever the price, all four rows have a level", () => {
+    for (let px = 200; px <= 460; px += 3.7) assert.equal(liveLevels(pv, px).length, 4, String(px));
   });
 });
 

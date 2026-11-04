@@ -89,50 +89,62 @@ export interface MoneyFlowBoard {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
-type LevelName = "R1" | "R2" | "R3" | "R4" | "R5" | "S1" | "S2" | "S3" | "S4" | "S5";
+type LevelName = `R${number}` | `S${number}`;
 
 /**
  * Classic pivots out to R5/S5 — TradingView "Pivot Points Standard",
  * Traditional type. The board sends P, R1–R3, S1–S3; the session high and low
  * are recovered from them (R1 = 2P − L, S1 = 2P − H) for R4/R5 and S4/S5.
  */
-export function extendedPivots(p: PivotLevels): Record<LevelName, number | null> {
-  const P = p.pivot, ok = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);
-  const out: Record<LevelName, number | null> = { R1: p.r1, R2: p.r2, R3: p.r3, R4: null, R5: null, S1: p.s1, S2: p.s2, S3: p.s3, S4: null, S5: null };
-  if (ok(P) && ok(p.r1) && ok(p.s1)) {
-    const H = 2 * P - p.s1, L = 2 * P - p.r1;
-    out.R4 = P * 3 + (H - 3 * L);
-    out.R5 = P * 4 + (H - 4 * L);
-    out.S4 = P * 3 - (3 * H - L);
-    out.S5 = P * 4 - (4 * H - L);
-  }
-  return out;
+export function extendedPivots(p: PivotLevels): Record<"R1" | "R2" | "R3" | "R4" | "R5" | "S1" | "S2" | "S3" | "S4" | "S5", number | null> {
+  return {
+    R1: pivotLevel(p, "R", 1), R2: pivotLevel(p, "R", 2), R3: pivotLevel(p, "R", 3), R4: pivotLevel(p, "R", 4), R5: pivotLevel(p, "R", 5),
+    S1: pivotLevel(p, "S", 1), S2: pivotLevel(p, "S", 2), S3: pivotLevel(p, "S", 3), S4: pivotLevel(p, "S", 4), S5: pivotLevel(p, "S", 5),
+  };
+}
+
+/**
+ * Level n on one side. R1–R3 / S1–S3 are the board's own; beyond them the
+ * Traditional formulas follow one rule — from R2 up, R_n = H + (n − 1)(P − L),
+ * and from S2 down, S_n = L − (n − 1)(H − P) — which gives R4/R5 and S4/S5 and
+ * keeps going past them at the same step, so a stock that gaps past R5 still
+ * has levels above it. Null when the inputs are missing or degenerate.
+ */
+export function pivotLevel(p: PivotLevels, side: "R" | "S", n: number): number | null {
+  const own = side === "R" ? [p.r1, p.r2, p.r3][n - 1] : [p.s1, p.s2, p.s3][n - 1];
+  if (own != null && Number.isFinite(own)) return own;
+  const P = p.pivot;
+  if (P == null || p.r1 == null || p.s1 == null || ![P, p.r1, p.s1].every(Number.isFinite)) return null;
+  const H = 2 * P - p.s1, L = 2 * P - p.r1;
+  if (n === 1) return side === "R" ? 2 * P - L : 2 * P - H;
+  return side === "R" ? H + (n - 1) * (P - L) : L - (n - 1) * (H - P);
 }
 
 /** A level as shown: its name counted from the current price, and the classic level it is. */
 export interface LiveLevel { name: "R1" | "R2" | "S1" | "S2"; v: number; from: LevelName }
 
+/** How far up / down the ladder to look for levels beyond price. */
+const MAX_LEVEL = 400;
+
 /**
- * The two levels just above price (R1, R2) and the two just below (S1, S2),
- * from the whole ladder S5…S1, R1…R5, named by where they sit relative to
- * price. Once price passes R1, R2 is shown as R1 and R3 as R2, and the old R1
- * becomes S1, the nearest support; the same on the way down. After a gap past
- * R5 there is no resistance left and R5 / R4 are the supports. (The pivot P is
- * left out, so between S1 and R1 the names are the classic ones.) Ordered top
- * to bottom: R2, R1, S1, S2.
+ * Always two resistances above price and two supports below it, each side
+ * renumbered on its own: once price touches or passes R1, R2 is shown as R1
+ * and R3 as R2 (on past R5 with the same step, see pivotLevel); once price
+ * touches or passes S1, S2 is shown as S1 and S3 as S2. Crossing one side
+ * never renames the other. Ordered top to bottom: R2, R1, S1, S2.
  */
 export function liveLevels(p: PivotLevels | null | undefined, price: number): LiveLevel[] {
   if (!p || !Number.isFinite(price)) return [];
-  const x = extendedPivots(p);
-  const all = (Object.keys(x) as LevelName[])
-    .map((from) => ({ from, v: x[from] }))
-    .filter((l): l is { from: LevelName; v: number } => l.v != null && Number.isFinite(l.v));
-  const above = all.filter((l) => l.v > price).sort((a, b) => a.v - b.v).slice(0, 2);
-  const below = all.filter((l) => l.v < price).sort((a, b) => b.v - a.v).slice(0, 2);
-  return [
-    ...above.map((l, i) => ({ name: `R${i + 1}` as LiveLevel["name"], v: l.v, from: l.from })).reverse(),
-    ...below.map((l, i) => ({ name: `S${i + 1}` as LiveLevel["name"], v: l.v, from: l.from })),
-  ];
+  const pick = (side: "R" | "S") => {
+    const out: Array<{ v: number; from: LevelName }> = [];
+    for (let n = 1; n <= MAX_LEVEL && out.length < 2; n++) {
+      const v = pivotLevel(p, side, n);
+      if (v == null || v <= 0) break; // no data, or below zero on the way down
+      if (side === "R" ? v > price : v < price) out.push({ v, from: `${side}${n}` });
+    }
+    return out.map((l, i) => ({ name: `${side}${i + 1}` as LiveLevel["name"], v: l.v, from: l.from }));
+  };
+  return [...pick("R").reverse(), ...pick("S")];
 }
 
 /**
