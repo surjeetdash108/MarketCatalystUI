@@ -709,3 +709,16 @@ describe("Money Flow chart labels stay readable", () => {
     assert.equal(r.lanes.bottom[1] - r.lanes.bottom[0], 0);
   });
 });
+
+describe("Money Flow glossary: click pins the pop-up (no detail window here)", () => {
+  const src = fs.readFileSync(path.join(import.meta.dirname, "../screens/money-flow.tsx"), "utf-8");
+  const glossary = src.slice(src.indexOf('title: "Data"'));
+  it("documents hover → pop-up, click → pinned, Esc / outside click → closed", () => {
+    assert.match(glossary, /term: "Click a card or tile"/);
+    assert.match(glossary, /pins it/);
+    assert.match(glossary, /Esc/);
+  });
+  it("does not describe a detail window or heatmap click-through that no longer opens", () => {
+    assert.doesNotMatch(glossary, /opens? (the |a )?detail (window|view)|View \S+ in heatmap/i);
+  });
+});

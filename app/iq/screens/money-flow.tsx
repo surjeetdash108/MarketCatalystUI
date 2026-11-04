@@ -2990,6 +2990,10 @@ export function MoneyFlowScreen() {
                     desc: "Proportional to the size of the % move. Very small moves are grouped into the neighbouring column so every tile stays readable.",
                   },
                   {
+                    term: "Click a card or tile",
+                    desc: "Hovering a card or tile shows its pop-up; a click pins it, so it stays while you move the pointer and its chart, layers and buttons can be used. It closes on Esc or a click outside, and clicking another card or tile moves it there. There is no separate detail window on this page: “Open in Market Catalyst / Stock Intelligence” in the pop-up opens the full stock views.",
+                  },
+                  {
                     term: "Ring number",
                     desc: "Confidence score 1–99 (see below). A dash means no regular-session bars yet.",
                   },
