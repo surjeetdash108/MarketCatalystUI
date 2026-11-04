@@ -2928,7 +2928,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Candles",
-                    desc: "5-minute bars, regular session 9:30–4:00 ET, from FMP (Polygon as fallback). They can trail the live price; the line above says how far. Before the open the board shows the last completed session.",
+                    desc: "5-minute bars, regular session 9:30–4:00 ET, grouped from 1-minute bars: Polygon’s prices with each minute’s volume topped up from FMP (Polygon leaves the opening auction out of the 9:30 bar; FMP drops volume in some minutes), FMP alone for the latest minutes Polygon has not published yet. They can trail the live price; the line above says how far. Before the open the board shows the last completed session.",
                   },
                 ],
               },
@@ -3027,7 +3027,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Relative volume",
-                    desc: "Day volume ÷ (20-session average daily volume × share of the regular session elapsed).",
+                    desc: "Today’s regular-session volume so far — the live quote’s day volume, opening auction included — ÷ (20-session average daily volume × share of the regular session elapsed). The pop-up’s Vol, the tiles and the cards’ tags all use this one number.",
                   },
                 ],
               },
@@ -3121,7 +3121,11 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Timeframe",
-                    desc: "1m · 3m · 5m · 15m candles for the chart, grouped from today’s 1-minute bars (FMP first, Polygon as fallback). The Full Chart adds 1D · 1W · 1M.",
+                    desc: "1m · 3m · 5m · 15m candles, on both charts; the Full Chart adds 1D · 1W · 1M.",
+                  },
+                  {
+                    term: "Intra-Day Chart · Full Chart",
+                    desc: "Two tabs in the pop-up. Intra-Day Chart: today’s session only, R1 / R2 / S1 / S2 on fixed rows, mouse wheel to zoom, drag or sideways scroll to move, double-click to reset (it never leaves today’s session). Full Chart: the stock page’s chart with history, an O / H / L / C readout, zoom and pan, and only this pop-up’s six layers (no volume or indicators).",
                   },
                 ],
               },
@@ -3142,7 +3146,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Liquidity",
-                    desc: "BSL (above swing highs) and SSL (below swing lows) — where stop orders cluster. “✕ swept” once price has taken them.",
+                    desc: "BSL (above swing highs) and SSL (below swing lows) — where stop orders cluster. The three nearest price on each side are drawn, with their price at the right edge; an ✕ marks where price swept one (the two most recent per side).",
                   },
                   {
                     term: "Patterns",
@@ -3152,7 +3156,7 @@ export function MoneyFlowScreen() {
                         <b style={{ color: "#eef2f4" }}>bar patterns</b> (inside / outside, key reversal, NR4 / NR7), <b style={{ color: "#eef2f4" }}>gaps and islands</b>,{" "}
                         <b style={{ color: "#eef2f4" }}>chart patterns</b> (head and shoulders, double / triple tops and bottoms, triangles, wedges, channels, flags, pennants, cups, rounding tops / bottoms, …),{" "}
                         <b style={{ color: "#eef2f4" }}>setups</b> (VCP, flat base, Darvas box, spring / upthrust, S/R flips) and <b style={{ color: "#eef2f4" }}>harmonics</b> (AB=CD, Gartley, Bat, Butterfly, Crab, Shark, Cypher).
-                        Green = bullish, red = bearish, blue = either way; “(forming)” = not yet confirmed. Hover a pattern for its exact rule. The chart shows the latest six candle marks and up to six larger patterns.
+                        Green = bullish, red = bearish, blue = either way; “(forming)” = not yet confirmed. Hover a pattern for its exact rule. The chart shows the latest three candle marks and up to four larger patterns, for the candles in view.
                         Not detected (no fixed rule gives one answer): {NOT_DETECTED.map(([n]) => n).join(", ")}.
                       </>
                     ),
@@ -3176,7 +3180,9 @@ export function MoneyFlowScreen() {
                         session high/low ·{" "}
                         <b style={{ color: "#eef2f4" }}>Premium / Discount</b>{" "}
                         halves of today’s range split at{" "}
-                        <b style={{ color: "#eef2f4" }}>EQ 50%</b>.
+                        <b style={{ color: "#eef2f4" }}>EQ 50%</b>, each with its price range. Labels at the right edge show one label per price
+                        (“ORL · LOD $143.65”), spaced so they never overlap; a level beyond the candles’ scale is pinned to the edge with ▲ / ▼
+                        rather than squeezing the candles.
                       </>
                     ),
                   },

@@ -733,3 +733,27 @@ describe("Money Flow glossary: the R:R target rule", () => {
     assert.doesNotMatch(rr, /S5 … R5/); // the old mixed ladder
   });
 });
+
+describe("Money Flow glossary matches the page (Nov 3 test)", () => {
+  const src = fs.readFileSync(path.join(import.meta.dirname, "../screens/money-flow.tsx"), "utf-8");
+  const g = src.slice(src.indexOf('title: "Data"'));
+  it("covers the Intra-Day Chart / Full Chart tabs, zoom and 1D / 1W / 1M", () => {
+    assert.match(g, /term: "Intra-Day Chart · Full Chart"/);
+    assert.match(g, /zoom/i);
+    assert.match(g, /1D · 1W · 1M/);
+  });
+  it("relative volume and candles describe the full session (opening auction included)", () => {
+    const rv = g.slice(g.indexOf('term: "Relative volume"'), g.indexOf('title: "Confidence'));
+    assert.match(rv, /opening auction/);
+    assert.match(g.slice(g.indexOf('term: "Candles"'), g.indexOf('title: "Sector Money Flow"')), /Polygon’s prices/);
+  });
+  it("chart labels: merged by price, off-scale levels pinned with ▲ / ▼, ✕ for a swept level", () => {
+    assert.match(g, /one label per price/);
+    assert.match(g, /▲ \/ ▼/);
+    assert.doesNotMatch(g, /“✕ swept”/);
+  });
+  it("pattern limits match the chart (three candle marks, four larger patterns)", () => {
+    assert.match(g, /latest three candle marks and up to four larger patterns/);
+    assert.doesNotMatch(g, /latest six candle marks/);
+  });
+});
