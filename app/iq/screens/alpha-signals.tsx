@@ -101,16 +101,39 @@ function CompRow({ x }: { x: Comp }) {
   );
 }
 
-/** Line + area of the last month's daily closes — the real price path, not a score history. */
+/** Price-history windows. Every one is cut from DAILY closes: the backend's own "1M"
+ *  is 30-minute bars, and it has no 9M — "1Y" is the shortest daily series covering it. */
+const PRICE_RANGES = [
+  { key: "1M", tf: "3M", days: 31,  aria: "month" },
+  { key: "3M", tf: "3M", days: 92,  aria: "3 months" },
+  { key: "6M", tf: "6M", days: 184, aria: "6 months" },
+  { key: "9M", tf: "1Y", days: 275, aria: "9 months" },
+] as const;
+type PriceRangeKey = (typeof PRICE_RANGES)[number]["key"];
+
+/** Label row with the range picker, then line + area of the daily closes over the
+ *  chosen window — the real price path, not a score history. */
 function PriceChart({ sym }: { sym: string }) {
-  const { bars, loading } = useBackendBars(sym, "3M");
+  const [rangeKey, setRangeKey] = useState<PriceRangeKey>("1M");
+  const range = PRICE_RANGES.find(r => r.key === rangeKey)!;
+  const { bars, loading } = useBackendBars(sym, range.tf);
   const [now] = useState(() => Date.now());
   const pts = useMemo(() => {
     const ms = (t: number) => (t < 1e11 ? t * 1000 : t);
-    return (bars ?? []).filter(b => ms(b.t) >= now - 31 * DAY).map(b => ({ t: ms(b.t), c: b.c }));
-  }, [bars, now]);
-  if (loading && pts.length === 0) return <div className="alp-chart-empty">Loading price history…</div>;
-  if (pts.length < 3) return <div className="alp-chart-empty">No price history available.</div>;
+    return (bars ?? []).filter(b => ms(b.t) >= now - range.days * DAY).map(b => ({ t: ms(b.t), c: b.c }));
+  }, [bars, now, range.days]);
+  const head = (
+    <div className="alp-k-row">
+      <span className="alp-k">Price · {range.key}</span>
+      <div className="alp-seg" role="group" aria-label="Price history range" style={{ marginLeft: "auto" }}>
+        {PRICE_RANGES.map(r => (
+          <button key={r.key} type="button" className={r.key === rangeKey ? "on" : ""} onClick={() => setRangeKey(r.key)}>{r.key}</button>
+        ))}
+      </div>
+    </div>
+  );
+  if (loading && pts.length === 0) return <>{head}<div className="alp-chart-empty">Loading price history…</div></>;
+  if (pts.length < 3) return <>{head}<div className="alp-chart-empty">No price history available.</div></>;
   const lo = Math.min(...pts.map(p => p.c)), hi = Math.max(...pts.map(p => p.c)), span = hi - lo || 1;
   // Left gutter is wide enough for a 4-digit price with cents ("1,380.00").
   const L = 58, Rt = 552;
@@ -121,16 +144,19 @@ function PriceChart({ sym }: { sym: string }) {
   const price = (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const mid = Math.floor((pts.length - 1) / 2);
   return (
-    <svg className="alp-chart" viewBox="0 0 560 160" role="img" aria-label={`${sym} closing price, last month`}>
-      <line x1={L} x2={Rt} y1="26" y2="26" className="g" /><line x1={L} x2={Rt} y1="130" y2="130" className="g2" />
-      <text x={L - 6} y="29" textAnchor="end">{price(hi)}</text>
-      <text x={L - 6} y="133" textAnchor="end">{price(lo)}</text>
-      <path d={`${line} L${X(pts.length - 1)},130 L${L},130 Z`} className="a" />
-      <path d={line} className="l" />
-      <text x={L} y="152" textAnchor="start">{lab(0)}</text>
-      <text x={X(mid)} y="152" textAnchor="middle">{lab(mid)}</text>
-      <text x={Rt} y="152" textAnchor="end">{lab(pts.length - 1)}</text>
-    </svg>
+    <>
+      {head}
+      <svg className="alp-chart" viewBox="0 0 560 160" role="img" aria-label={`${sym} closing price, last ${range.aria}`}>
+        <line x1={L} x2={Rt} y1="26" y2="26" className="g" /><line x1={L} x2={Rt} y1="130" y2="130" className="g2" />
+        <text x={L - 6} y="29" textAnchor="end">{price(hi)}</text>
+        <text x={L - 6} y="133" textAnchor="end">{price(lo)}</text>
+        <path d={`${line} L${X(pts.length - 1)},130 L${L},130 Z`} className="a" />
+        <path d={line} className="l" />
+        <text x={L} y="152" textAnchor="start">{lab(0)}</text>
+        <text x={X(mid)} y="152" textAnchor="middle">{lab(mid)}</text>
+        <text x={Rt} y="152" textAnchor="end">{lab(pts.length - 1)}</text>
+      </svg>
+    </>
   );
 }
 
@@ -334,7 +360,6 @@ export function AlphaSignals() {
                 {curSig && <div className="alp-detail-sc"><InfoDot onOpen={openInfo} /><Ring score={curSig.score} size={56} /></div>}
               </div>
               <div className="alp-detail-chart">
-                <div className="alp-k-row"><span className="alp-k">Price · 1M</span></div>
                 <PriceChart sym={curRow.ticker} />
               </div>
               {curSig ? (
@@ -504,7 +529,6 @@ function PickBody({ p, pos, now, starred, onStar, onInfo, onPrev, onNext, onClos
             {p.comps.map(x => <CompRow key={x.key} x={x} />)}
           </div>
           <div className="alp-hist">
-            <div className="alp-k-row"><span className="alp-k">Price · 1M</span></div>
             <PriceChart sym={c.ticker} />
             {story && <div className="story">{story[0].toUpperCase() + story.slice(1)}.</div>}
             <div className="stats">

@@ -23,17 +23,20 @@ const MARKET_HOLIDAYS = new Set<string>([
   "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24",
 ]);
 
+// Built once: constructing an Intl.DateTimeFormat costs ~10x formatting with one,
+// and the Movers weekly tabs call etParts per row (thousands of times per render).
+let etFormatter: Intl.DateTimeFormat | null = null;
+
 // Extract ET wall-clock parts (DST-aware via the IANA zone) for any Date,
 // independent of the machine/browser timezone.
 export function etParts(d: Date) {
+  etFormatter ??= new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      weekday: "short", year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    })
-      .formatToParts(d)
-      .map(p => [p.type, p.value]),
+    etFormatter.formatToParts(d).map(p => [p.type, p.value]),
   );
   const hour = parseInt(parts.hour, 10) % 24; // "24:00" → 0
   const minute = parseInt(parts.minute, 10);

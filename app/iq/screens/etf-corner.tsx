@@ -60,7 +60,7 @@ export interface EtfMarketResponse {
   leveraged: EtfFundItem[];
 }
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 10;
 const ETF_CACHE_KEY = "mc_etf_market_weekly_cache";
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -134,7 +134,7 @@ export function EtfMarketFunds() {
     return etfData?.categories ?? [];
   }, [etfData]);
 
-  // Reset pagination to first 100 when switching categories or filtering
+  // Reset pagination to the first page when switching categories or filtering
   useEffect(() => {
     setPage(0);
   }, [activeSectionId, query]);
@@ -192,7 +192,7 @@ export function EtfMarketFunds() {
     );
   }, [currentSection, q]);
 
-  // 100 funds per screen pagination calculations
+  // PAGE_SIZE funds per screen pagination calculations
   const totalFunds = filteredFunds.length;
   const pageCount = Math.max(1, Math.ceil(totalFunds / PAGE_SIZE));
   const clampedPage = Math.min(Math.max(0, page), pageCount - 1);
@@ -282,7 +282,7 @@ export function EtfMarketFunds() {
   /*
    * DEFAULT ETF CORNER VIEW
    * 1. Top row of 16 hardcoded popular ETFs (8 per row on desktop, UI reactive).
-   * 2. "Other ETF Market Funds" section with 10 tabs, paginated 100 per screen.
+   * 2. "Other ETF Market Funds" section with 10 tabs, paginated PAGE_SIZE (10) per screen.
    */
   return (
     <>
@@ -470,7 +470,7 @@ export function EtfMarketFunds() {
             </nav>
 
             {!selectedFundTicker ? (
-              /* WHOLE SCREEN LIST (100 per screen) */
+              /* WHOLE SCREEN LIST (PAGE_SIZE per screen) */
               <div
                 className="card"
                 style={{
@@ -611,7 +611,7 @@ export function EtfMarketFunds() {
                         ))}
                       </div>
 
-                      {/* Pagination: 100 per screen (1-100, 101-200, etc.) */}
+                      {/* Pagination: PAGE_SIZE per screen (1-10, 11-20, etc.) */}
                       {totalFunds > PAGE_SIZE && (
                         <div
                           style={{
@@ -692,7 +692,7 @@ export function EtfMarketFunds() {
                   height: 740,
                 }}
               >
-                {/* LEFT — Fund list for active category (100 per screen) */}
+                {/* LEFT — Fund list for active category (PAGE_SIZE per screen) */}
                 <div
                   className="card"
                   style={{

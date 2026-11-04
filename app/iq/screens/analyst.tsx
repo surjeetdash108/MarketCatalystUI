@@ -106,7 +106,7 @@ const STOCK_CALL_COLS = "85px minmax(110px, 1.1fr) minmax(105px, 1fr) minmax(120
 const HIST_COLS = "82px 65px minmax(130px, 1.1fr) 80px 100px 90px";
 const FIRM_CALL_COLS = "82px minmax(105px, 1.1fr) minmax(130px, 1.2fr) 95px 85px";
 
-type MainTab = "Analyst Actions" | "Top Firms" | "All Actions";
+type MainTab = "Rating" | "Top Firms" | "All Actions";
 type FilterChip = "All" | "My stocks" | "High signal" | "Upgrades" | "Downgrades" | "Clusters";
 type SortKey = "score" | "t" | "firm" | "up" | "act" | "to" | "pt" | "date";
 type FirmSortKey = "hit" | "ret" | "calls" | "name" | "rank";
@@ -306,7 +306,7 @@ export function AnalystScreen() {
   }, [companies]);
 
   // Navigation & View State
-  const [tab, setTab] = useState<MainTab>("Analyst Actions");
+  const [tab, setTab] = useState<MainTab>("Rating");
   const [filterChip, setFilterChip] = useState<FilterChip>("All");
   const [searchQ, setSearchQ] = useState("");
   const [sectorFilter, setSectorFilter] = useState("All");
@@ -877,7 +877,7 @@ export function AnalystScreen() {
       {/* ── Top Global Sub-Nav & Indices Tape ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px 12px", borderBottom: `1px solid ${BORDER_DARK}` }}>
         <div style={{ display: "inline-flex", gap: 4, padding: 4, border: `1px solid ${BORDER_DARK}`, borderRadius: 12, background: isLight ? "var(--surface-2, #F4F6F5)" : BG_SURFACE }}>
-          {(["Analyst Actions", "Top Firms", "All Actions"] as MainTab[]).map(t => (
+          {(["Rating", "Top Firms", "All Actions"] as MainTab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -908,9 +908,9 @@ export function AnalystScreen() {
       </div>
 
       {/* ==================================================================== */}
-      {/* TAB 1: ANALYST ACTIONS MASTER / DETAIL                               */}
+      {/* TAB 1: RATING MASTER / DETAIL                                        */}
       {/* ==================================================================== */}
-      {tab === "Analyst Actions" && (
+      {tab === "Rating" && (
         <div style={{ padding: "20px 24px 40px" }}>
           {/* Header Stats Banner */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap", fontSize: 14, color: TEXT_MUTED }}>
@@ -2065,7 +2065,7 @@ export function AnalystScreen() {
                     key={r.id}
                     onClick={() => {
                       setSelectedStockId(r.id);
-                      setTab("Analyst Actions");
+                      setTab("Rating");
                     }}
                     style={{
                       cursor: "pointer",
