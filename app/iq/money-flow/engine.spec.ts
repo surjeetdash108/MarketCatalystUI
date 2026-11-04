@@ -193,7 +193,7 @@ describe("Money Flow hover box", () => {
     assert.strictEqual(val(st, "Direction"), "Bullish");
     assert.strictEqual(val(st, "Rank"), `#1 / ${board.gainers.length} gainers`);
     assert.strictEqual(val(st, "Vol"), "2.6× · 62% inflow");
-    assert.strictEqual(val(st, "Δ"), "+3.1M · ▲ above VWAP");
+    assert.strictEqual(val(st, "Δ"), "+3.1M · ▲ price above VWAP"); // "above" is the price, not Δ
     assert.strictEqual(val(st, "VWAP"), "67.85");
     assert.strictEqual(val(st, "OB"), "67.81–68.07");
     assert.strictEqual(val(st, "Entry/Stop"), "68.07 · 67.81");
@@ -204,7 +204,7 @@ describe("Money Flow hover box", () => {
   it("bearish stock: net selling, no R/S levels row, and WATCH when price is over 1.2% from entry", () => {
     const now = popoverStats(board.losers[0], board); // NOW −$1.74B at 110.65
     assert.strictEqual(val(now, "Rank"), `#1 / ${board.losers.length} losers`);
-    assert.strictEqual(val(now, "Δ"), "−16M · ▼ below VWAP");
+    assert.strictEqual(val(now, "Δ"), "−16M · ▼ price below VWAP");
     // The levels are on the chart; the box no longer repeats them (R1/R2, R3/R4, S1/S2 …).
     for (const x of [...now, ...popoverStats(board.gainers[0], board)]) assert.doesNotMatch(x.k, /^[RS]\d\/[RS]\d$/);
     assert.strictEqual(val(now, "Rule"), "PICK · BEARISH #1");

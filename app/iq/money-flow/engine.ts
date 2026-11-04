@@ -825,7 +825,7 @@ export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers
   const above = s.vwap != null ? s.price > s.vwap : null;
   const flow =
     s.price > 0
-      ? `${formatShares(s.netFlow / s.price)}${above == null ? "" : above ? " · ▲ above VWAP" : " · ▼ below VWAP"}`
+      ? `${formatShares(s.netFlow / s.price)}${above == null ? "" : above ? " · ▲ price above VWAP" : " · ▼ price below VWAP"}`
       : "—";
   const noSetup = s.chop || s.entry == null;
   const dist = s.entry != null && s.price > 0 ? (Math.abs(s.price - s.entry) / s.price) * 100 : null;

@@ -3068,7 +3068,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Δ",
-                    desc: "Net shares: the stock’s money flow today ÷ its price, and whether price is above or below VWAP.",
+                    desc: "Net shares: the stock’s money flow today ÷ its price (+ = more money traded on up-ticks). Then “price above / below VWAP”: where the current price sits against VWAP — about the price, not the flow, so a buying flow can sit below VWAP.",
                   },
                   {
                     term: "VWAP",
