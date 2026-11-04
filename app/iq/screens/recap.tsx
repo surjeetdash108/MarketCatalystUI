@@ -4,7 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useIQActions } from "../shell";
-import { cls, sign, StockLogo, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, titleCaseLabel} from "../utils";
+import { cls, sign, heatCol, StockLogo, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, titleCaseLabel} from "../utils";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { useTapeStream } from "../hooks/useTapeStream";
@@ -18,8 +18,6 @@ const StockScreenEmbed = dynamic<{ initialSym?: string }>(
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> },
 );
 
-const SEC_PAGE = 10;
-
 // Compact volume/number formatter for the internals block (e.g. 1.2B, 340M).
 function fmtVol(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -29,12 +27,6 @@ function fmtVol(n: number | null | undefined): string {
   if (abs >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
   if (abs >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
   return `${n}`;
-}
-
-function heatColor(v: number): string {
-  const a = Math.min(Math.abs(v) / 2.2, 1);
-  if (v >= 0) return `rgba(74,222,128,${(0.15 + a * 0.6).toFixed(2)})`;
-  return `rgba(248,113,113,${(0.15 + a * 0.6).toFixed(2)})`;
 }
 
 const STAR_SVG = (
@@ -99,7 +91,6 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
   // sliding drawer the IPO screen uses (StockScreenEmbed), independent of the
   // shell's openStock action.
   const [selectedSym, setSelectedSym] = useState<string | null>(null);
-  const [recapPage, setRecapPage] = useState(0);
   const [drawer, setDrawer] = useState<"earn-movers" | null>(null);
 
   const { data: sectorsLive, loading: sectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
@@ -183,9 +174,6 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
     : [];
 
   const sortedSectors = [...sectorsLive].sort((a, b) => a.sector.localeCompare(b.sector));
-  const SEC_PAGES = Math.max(1, Math.ceil(sortedSectors.length / SEC_PAGE));
-  const pageStart = recapPage * SEC_PAGE;
-  const pageSectors = sortedSectors.slice(pageStart, pageStart + SEC_PAGE);
 
   const now = new Date();
   const etHour = parseInt(
@@ -252,32 +240,26 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
         <span className="link" onClick={() => router.push("/menu/heatmap")}>View all →</span>
       </div>
       <div className="card-b">
-        {pageSectors.length === 0 ? (
+        {sortedSectors.length === 0 ? (
           <DataState loading={sectorsLoading} label="No live sector performance data yet." />
         ) : (
           <>
             <div className="heat">
-              {pageSectors.map(s => (
-                <div key={s.sector} className="s"
-                  style={{ background: heatColor(s.pctChange), cursor: "pointer" }}
-                  onClick={() => openSector(s.sector)}>
-                  <div className="nm">{titleCaseLabel(s.sector)}</div>
-                  <div className="v">{sign(s.pctChange)}</div>
-                </div>
-              ))}
+              {sortedSectors.map(s => {
+                // Same scale as the Heatmap tab, so a sector reads the same colour in both places.
+                const hc = heatCol(s.pctChange);
+                return (
+                  <div key={s.sector} className="s"
+                    style={{ background: hc.bg, cursor: "pointer" }}
+                    onClick={() => openSector(s.sector)}>
+                    <div className="nm" style={{ color: hc.fg }}>{titleCaseLabel(s.sector)}</div>
+                    <div className="v" style={{ color: hc.fg }}>{sign(s.pctChange)}</div>
+                  </div>
+                );
+              })}
             </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 9, fontSize: ".74rem" }}>
-              <span style={{ color: "var(--text-dim-solid)" }}>
-                Sectors {pageStart + 1}–{Math.min(pageStart + SEC_PAGE, sortedSectors.length)} of {sortedSectors.length} · click one to open it in the heatmap
-              </span>
-              <span style={{ display: "flex", gap: 14 }}>
-                {recapPage > 0 && (
-                  <span className="link" onClick={() => setRecapPage(p => p - 1)}>← Previous 10</span>
-                )}
-                <span className="link" onClick={() => setRecapPage(p => (p + 1) % SEC_PAGES)}>
-                  {recapPage < SEC_PAGES - 1 ? "Show next 10 →" : "Back to first 10 ↺"}
-                </span>
-              </span>
+            <div style={{ marginTop: 9, fontSize: ".74rem", color: "var(--text-dim-solid)" }}>
+              All {sortedSectors.length} sectors · click one to open it in the heatmap
             </div>
           </>
         )}
@@ -635,7 +617,7 @@ export function RecapScreen({ mode = "daily" }: { mode?: "daily" | "weekly" }) {
         <div className="sd-seg" role="group" aria-label="Recap period">
           {(["daily", "weekly"] as const).map(p => (
             <button key={p} type="button" aria-pressed={period === p}
-              onClick={() => { setPeriod(p); setRecapPage(0); }}>
+              onClick={() => setPeriod(p)}>
               {p === "daily" ? "Daily" : "Weekly"}
             </button>
           ))}
