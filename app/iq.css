@@ -4072,6 +4072,57 @@ table.tbl tr:hover td {
   box-shadow: 0 1px 6px -2px #000;
 }
 
+/* Heatmap sector row (Overall + each sector): green labels, and a solid brand
+   fill on the selected one — same treatment as .ecal-segbtn.on. The default
+   .tab.on is a grey/white surface that all but disappears next to its white
+   neighbours, so the active sector was hard to find among ~16 tabs. */
+.hm-sectors .tab {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.hm-sectors .tab:hover {
+  background: var(--brand-dim);
+  color: var(--brand);
+}
+
+.hm-sectors .tab.on {
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 700;
+  box-shadow: 0 2px 8px -4px var(--brand);
+}
+
+/* Movers header: the tab bar stays on one row on every tab. The caption beside
+   it is longest on the This Week tabs; left shrinkable it squeezed .tabs and the
+   labels wrapped to two lines, so the bar changed shape when those tabs opened.
+   The caption now gives way instead (one line, ellipsis, full text in its title),
+   and a bar wider than the row scrolls sideways rather than wrapping. */
+.mv-head .tabs {
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mv-head .tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.mv-head .tab {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.mv-head>span {
+  min-width: 0;
+  margin-left: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
 /* copilot */
 .copilot {
   position: fixed;

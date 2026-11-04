@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
 import { forwardAnnualEstimates } from "../eps-sales-data";
 import { useIQActions, ExpandBtn } from "../shell";
 import { cls, sign, EarnQ, StockLogo, NotAvailable, DataState, VendorTag, useShowVendorTags, useTickerLogo, LOGO_IMG_STYLE, formatUsDate } from "../utils";
@@ -317,6 +317,64 @@ function EcChip({ sym, selected, onSelect }: { sym: string; selected: boolean; o
       </span>
       {sym}
     </button>
+  );
+}
+
+// ── Today logo wall ───────────────────────────────────────────────────────────
+// A busy day is ~300 reporters. Showing them all pushed everything else off the
+// screen, so the wall stops after DAY_LOGO_ROWS rows with a "Show more" below it.
+// "A row" depends on how many tiles fit across, which changes with the window
+// width and zoom — so it is measured from the rendered tiles, not hard-coded.
+
+const DAY_LOGO_ROWS = 4;
+
+function DayLogoGrid({ items, selected, onOpen }: {
+  items: { s: string }[];
+  selected: string | null;
+  onOpen: (s: string) => void;
+}) {
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [perRow, setPerRow] = useState(0); // 0 = not measured yet
+
+  useLayoutEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const measure = () => {
+      const tile = el.firstElementChild as HTMLElement | null;
+      if (!tile || tile.offsetWidth === 0) return;
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+      setPerRow(Math.max(1, Math.floor((el.clientWidth + gap) / (tile.offsetWidth + gap))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Until measured only one tile is rendered (enough to measure from); the layout
+  // effect corrects that before the first paint.
+  const limit = perRow ? perRow * DAY_LOGO_ROWS : 1;
+  const shown = expanded ? items : items.slice(0, limit);
+  const hidden = items.length - limit;
+
+  return (
+    <>
+      <div ref={gridRef} className="emc-logos">
+        {shown.map(r => (
+          <button key={r.s} className={`emc-logo${selected === r.s ? " on" : ""}`} title={r.s} onClick={() => onOpen(r.s)}>
+            <StockLogo sym={r.s} size={30} />
+          </button>
+        ))}
+      </div>
+      {perRow > 0 && hidden > 0 && (
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+          <button className="btn" onClick={() => setExpanded(e => !e)}>
+            {expanded ? "Show less" : `Show more (${hidden})`}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1438,6 +1496,14 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
+/** The date itself on a weekday, the next Monday on a weekend — the calendar has
+ *  no Sat/Sun, so this is the day "Today" shows (and the screen opens on). */
+function tradingDayOnOrAfter(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const dow = d.getUTCDay();
+  return dow === 6 ? isoDay(addDays(d, 2)) : dow === 0 ? isoDay(addDays(d, 1)) : iso;
+}
+
 export function EarningsScreen() {
   const { openStockFull } = useIQActions();
   const { data: liveEarnings } = useApiList<LiveEarningsDoc>("/market-data/earnings");
@@ -1449,8 +1515,9 @@ export function EarningsScreen() {
   const { data: analystActions } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
   const liveEarningsData = liveEarnings;
 
-  const [mode, setMode]     = useState<"day" | "week" | "month">("month");
-  const [anchor, setAnchor] = useState<string>(() => etTodayIso());
+  // Opens on Today (the day view), same as clicking the Today button.
+  const [mode, setMode]     = useState<"day" | "week" | "month">("day");
+  const [anchor, setAnchor] = useState<string>(() => tradingDayOnOrAfter(etTodayIso()));
   // At-a-glance snapshot: a Nasdaq-style results table (actual vs consensus,
   // surprise, revenue, year-ago) for the selected day/week/month, toggled from
   // the calendar header. Off = the normal icon calendar.
@@ -1542,7 +1609,7 @@ export function EarningsScreen() {
   // The calendar has no Sat/Sun, so on a weekend "Today" lands on the next Monday.
   const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
   const todayIsWeekend = todayDow === 0 || todayDow === 6;
-  const todayTradingIso = todayIsWeekend ? isoDay(addDays(new Date(`${todayIso}T00:00:00Z`), todayDow === 6 ? 2 : 1)) : todayIso;
+  const todayTradingIso = tradingDayOnOrAfter(todayIso);
   const dayRows = rowsForDate(anchor, liveEarningsData).map(toCalRow);
   const glanceRaw: EarnCalItem[] =
     mode === "month"
@@ -1677,13 +1744,8 @@ export function EarningsScreen() {
         {items.length === 0 ? (
           <div className="emc-none">No earnings</div>
         ) : (
-          <div className="emc-logos">
-            {items.map(r => (
-              <button key={r.s} className={`emc-logo${sel === r.s ? " on" : ""}`} title={r.s} onClick={() => openStockDetail(r.s, anchor)}>
-                <StockLogo sym={r.s} size={30} />
-              </button>
-            ))}
-          </div>
+          // keyed by date so each day opens collapsed rather than inheriting "Show less"
+          <DayLogoGrid key={anchor} items={items} selected={sel} onOpen={s => openStockDetail(s, anchor)} />
         )}
       </div>
       </>

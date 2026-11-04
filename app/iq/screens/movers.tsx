@@ -375,6 +375,8 @@ function thisWeekBase(
 const CAP_ORDER = ["Mega", "Large", "Mid", "Small", "Micro"];
 /** Movers' default market-cap floor (USD) — lifted by the "Show all" checkbox. */
 const MIN_DEFAULT_MCAP = 1e9;
+/** Table rows shown at first, and added by each "Show more" click. */
+const MOVERS_PAGE_SIZE = 10;
 function uniqueByTicker<T extends { ticker: string }>(rows: T[]): T[] {
   const seen = new Set<string>();
 
@@ -1033,8 +1035,20 @@ export function MoversScreen() {
    * One function, used by the render and by the tab guard below, so what a row
    * displays and what decides it belongs cannot come apart.
    */
-  const shownValues = useCallback((m: Mover): { price: number | null; change: number | null } => {
-    return resolvePriceAndChange(m.ticker, m.price, m.pctChange, m.weekBase, m.weekPct, m.weekCloses);
+  const shownValues = useMemo(() => {
+    // The sort comparator asks for the same row on every comparison — O(n log n)
+    // calls on a ~500-row weekly board, each walking four maps plus the ET
+    // week-start maths. Cached per row, and dropped whenever any input to
+    // resolvePriceAndChange (quotes, tab, session) changes.
+    const cache = new WeakMap<Mover, { price: number | null; change: number | null }>();
+    return (m: Mover): { price: number | null; change: number | null } => {
+      let v = cache.get(m);
+      if (!v) {
+        v = resolvePriceAndChange(m.ticker, m.price, m.pctChange, m.weekBase, m.weekPct, m.weekCloses);
+        cache.set(m, v);
+      }
+      return v;
+    };
   }, [resolvePriceAndChange]);
 
   /**
@@ -1143,6 +1157,17 @@ export function MoversScreen() {
     })
   );
 
+  // Table rows shown: the first page, then MOVERS_PAGE_SIZE more per "Show more".
+  // An expansion belongs to the view it was made in — a different tab, filter or
+  // search starts back at the first page. Keyed to the view rather than reset in
+  // an effect, so no render applies the old count to the new list. Re-sorting a
+  // column keeps the expansion: it reorders the same list, not a different one.
+  const viewKey = [tab, sector, effCap, showAllCaps, q].join("|");
+  const [expansion, setExpansion] = useState({ key: viewKey, rows: MOVERS_PAGE_SIZE });
+  const rowLimit = expansion.key === viewKey ? expansion.rows : MOVERS_PAGE_SIZE;
+  const tableRows = visible.slice(0, rowLimit);
+  const hiddenRows = visible.length - tableRows.length;
+
   /**
    * Direction that would exactly reproduce the ACTIVE tab's own default
    * ranking for this column — Top Gainers/Weekly Gainers already sort by
@@ -1206,9 +1231,24 @@ export function MoversScreen() {
     </th>
   );
 
+  const captionText =
+    tab === "biggest"
+      ? `${biggestCount} names · top 20 gainers + top 20 losers by sector · ${QUOTE_DELAY_LABEL}`
+      : tab === "active"
+      ? `${activeCount} names · top volume + top relative volume by sector · ${QUOTE_DELAY_LABEL}`
+      : `${searched.length} ${
+          tab === "win" || tab === "weekwin" ? "gainers" : tab === "lose" || tab === "weeklose" ? "losers" : "names"
+        } · ${
+          isWeekTab(tab) ? "tracked universe · ranked by this week's move (Mon–Fri)"
+          : tab === "vol" ? "tracked universe · ranked by relative volume"
+          : tab === "win" ? "ranked by session gain"
+          : tab === "lose" ? "ranked by session decline"
+          : "ranked by session move"
+        } · ${QUOTE_DELAY_LABEL}`;
+
   return (
     <>
-      <div className="page-head">
+      <div className="page-head mv-head">
         <div className="tabs" >
           {TABS.map(([k, l]) => (
             <button key={k} className={`tab${k === tab ? " on" : ""}`} onClick={() => setTab(k as TabKey)}>{l}</button>
@@ -1219,22 +1259,14 @@ export function MoversScreen() {
             losers · ranked by session move" — and shown on every tab, including
             Unusual Volume and the two weekly ones, which draw from the tracked
             universe and rank by RVOL or by the 5-day move. It was stating the
-            wrong source AND the wrong ranking on three tabs out of five. */}
+            wrong source AND the wrong ranking on three tabs out of five.
+            The caption is the part that gives way when the row is tight (see
+            .mv-head in iq.css) — it is longest on the weekly tabs, and as a
+            plain flex sibling it used to squeeze the tab bar until the tab
+            labels wrapped onto two lines. */}
         {((tab === "biggest" ? biggestCount : tab === "active" ? activeCount : searched.length) > 0) && (
-          <span style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-            {tab === "biggest"
-              ? `${biggestCount} names · top 20 gainers + top 20 losers by sector · ${QUOTE_DELAY_LABEL}`
-              : tab === "active"
-              ? `${activeCount} names · top volume + top relative volume by sector · ${QUOTE_DELAY_LABEL}`
-              : `${searched.length} ${
-                  tab === "win" || tab === "weekwin" ? "gainers" : tab === "lose" || tab === "weeklose" ? "losers" : "names"
-                } · ${
-                  isWeekTab(tab) ? "tracked universe · ranked by this week's move (Mon–Fri)"
-                  : tab === "vol" ? "tracked universe · ranked by relative volume"
-                  : tab === "win" ? "ranked by session gain"
-                  : tab === "lose" ? "ranked by session decline"
-                  : "ranked by session move"
-                } · ${QUOTE_DELAY_LABEL}`}
+          <span title={captionText} style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+            {captionText}
           </span>
         )}
       </div>
@@ -1575,7 +1607,7 @@ export function MoversScreen() {
                   </tr>
                 );
               }
-              return visible.map((m) => {
+              return tableRows.map((m) => {
                 // Same values the tab guard used — see shownValues.
                 const { price, change: v } = shownValues(m);
                 return (
@@ -1658,6 +1690,16 @@ export function MoversScreen() {
           </tbody>
         </table>
         </div>
+        {hiddenRows > 0 && (
+          <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 14px" }}>
+            <button
+              className="btn"
+              onClick={() => setExpansion({ key: viewKey, rows: rowLimit + MOVERS_PAGE_SIZE })}
+            >
+              Show more ({hiddenRows})
+            </button>
+          </div>
+        )}
       </div>
       )}
 

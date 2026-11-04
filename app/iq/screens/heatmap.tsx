@@ -239,7 +239,7 @@ function HeatmapInner() {
 
         {/* Level 2: Sector Selection (Overall + individual sectors) */}
         {sorted.length > 0 && (
-          <div className="tabs" style={{ maxWidth: "100%", flexWrap: "wrap", gap: 6 }}>
+          <div className="tabs hm-sectors" style={{ maxWidth: "100%", flexWrap: "wrap", gap: 6 }}>
             <button
               className={`tab${isOverall ? " on" : ""}`}
               onClick={() => setSelectedSector("Overall")}

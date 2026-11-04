@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useIQActions } from "../shell";
 import { StockLogo, formatUsDate } from "../utils";
 import { apiGet } from "../backend";
@@ -18,6 +18,12 @@ const DN = "var(--down, #f2555f)";
 const AMB = "var(--warn, #f3b24a)";
 const GR = "var(--text-dim, #7d8798)";
 const N_BARS = 180;
+/** Stock-list rows are a fixed height so the list box can be sized in whole rows:
+ *  it shows LIST_VISIBLE_ROWS of them, then scrolls. */
+const LIST_ROW_H = 64;
+const LIST_VISIBLE_ROWS = 12;
+/** Smallest the Form 4 list is allowed to get when lining up with the stock list. */
+const F4_MIN_H = 240;
 
 // Display metadata per company. Price/change are null until a live quote or
 // the company doc supplies them — never a placeholder number.
@@ -854,6 +860,38 @@ export function InsiderScreen() {
     return tradesList.filter((r) => r.code === "P" && r.ago <= rangeDays).length;
   }, [tradesList, rangeDays]);
 
+  // Form 4 filings end where the stock list beside them ends, and scroll inside.
+  // Left to its natural height the list ran to every filing the ticker has (4,500px
+  // for a busy one), far past the stock list. Callback refs (state), because the
+  // right column only mounts once a ticker is focused.
+  const [listEl, setListEl] = useState<HTMLElement | null>(null);
+  const [f4El, setF4El] = useState<HTMLElement | null>(null);
+  const [f4MaxH, setF4MaxH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!listEl || !f4El) return;
+    const measure = () => {
+      const l = listEl.getBoundingClientRect();
+      const f = f4El.getBoundingClientRect();
+      // Wrapped under the stock list (narrow window): nothing beside it to line up with.
+      const sideBySide = f.left >= l.right;
+      setF4MaxH(sideBySide ? Math.max(F4_MIN_H, Math.floor(l.bottom - f.top)) : null);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(listEl);
+    ro.observe(f4El);
+    // The whole right column too: anything above the Form 4 list changing height
+    // (verdict text wrapping, chart data arriving) moves the list's top edge.
+    const row = listEl.parentElement;
+    if (row) {
+      ro.observe(row);
+      let col: HTMLElement | null = f4El;
+      while (col && col.parentElement !== row) col = col.parentElement;
+      if (col) ro.observe(col);
+    }
+    return () => ro.disconnect();
+  }, [listEl, f4El]);
+
   return (
     <div
       style={{
@@ -1024,6 +1062,7 @@ export function InsiderScreen() {
       >
         {/* LEFT COLUMN: Stock List */}
         <section
+          ref={setListEl}
           style={{
             flex: "0 1 410px",
             minWidth: 330,
@@ -1128,7 +1167,7 @@ export function InsiderScreen() {
           </div>
 
           {/* Scrollable Rows */}
-          <div style={{ maxHeight: 720, overflowY: "auto" }}>
+          <div style={{ maxHeight: LIST_ROW_H * LIST_VISIBLE_ROWS, overflowY: "auto" }}>
             {filteredStatsList.map((s, idx) => {
               const comp: CompanyMeta = companiesMap.get(s.t) || {
                 name: s.t,
@@ -1153,6 +1192,8 @@ export function InsiderScreen() {
                     gridTemplateColumns: "18px 32px minmax(0,1fr) auto 82px",
                     gap: 12,
                     alignItems: "center",
+                    height: LIST_ROW_H,
+                    boxSizing: "border-box",
                     padding: "11px 16px",
                     borderBottom: "1px solid var(--border-soft)",
                     cursor: "pointer",
@@ -1768,6 +1809,7 @@ export function InsiderScreen() {
                   </span>
                 </div>
 
+                <div ref={setF4El} style={{ maxHeight: f4MaxH ?? undefined, overflowY: "auto" }}>
                 {deepDive.trades.map((tr, idx) => (
                   <div
                     key={idx}
@@ -1848,6 +1890,7 @@ export function InsiderScreen() {
                     {deepDive.emptyMsg}
                   </div>
                 )}
+                </div>
               </div>
 
               {/* Right Sub-Panel: 13F Holders */}
