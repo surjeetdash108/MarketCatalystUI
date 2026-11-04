@@ -566,10 +566,13 @@ export interface SectorFlowItem {
  * outflow only with net flow < 0, so a one-sided day shows fewer boxes rather
  * than mislabelling a sector.
  */
+/** Sectors pulled into the inflow / outflow boxes, each side. */
+export const TOP_SECTORS = 3;
+
 export function sectorView(sectors: BoardSector[]): {
   sectors: SectorFlowItem[];
-  top2Inflow: SectorFlowItem[];
-  top2Outflow: SectorFlowItem[];
+  topInflow: SectorFlowItem[];
+  topOutflow: SectorFlowItem[];
   remaining: SectorFlowItem[];
 } {
   const maxAbs = Math.max(1, ...sectors.map((s) => Math.abs(s.netFlow)));
@@ -587,10 +590,10 @@ export function sectorView(sectors: BoardSector[]): {
       stockCount: s.count,
       isPositive: s.netFlow >= 0,
     }));
-  const top2Inflow = list.filter((s) => s.flowVal > 0).slice(0, 2);
-  const top2Outflow = list.filter((s) => s.flowVal < 0).slice(-2).reverse();
-  const pulled = new Set([...top2Inflow, ...top2Outflow].map((s) => s.name));
-  return { sectors: list, top2Inflow, top2Outflow, remaining: list.filter((s) => !pulled.has(s.name)) };
+  const topInflow = list.filter((s) => s.flowVal > 0).slice(0, TOP_SECTORS);
+  const topOutflow = list.filter((s) => s.flowVal < 0).slice(-TOP_SECTORS).reverse();
+  const pulled = new Set([...topInflow, ...topOutflow].map((s) => s.name));
+  return { sectors: list, topInflow, topOutflow, remaining: list.filter((s) => !pulled.has(s.name)) };
 }
 
 /**

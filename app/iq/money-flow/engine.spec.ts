@@ -46,6 +46,7 @@ import {
   formatLevel,
   sectorNotOnBoardText,
   sectorView,
+  TOP_SECTORS,
   sessionCandles,
   type MoneyFlowBoard,
 } from "./engine";
@@ -109,13 +110,26 @@ describe("Money Flow view helpers", () => {
 
   it("outflow boxes hold only sectors with negative net flow, inflow boxes only positive", () => {
     const v = sectorView(board.sectors);
-    assert.ok(v.top2Inflow.length > 0 && v.top2Inflow.every((s) => s.flowVal > 0));
-    assert.ok(v.top2Outflow.length > 0 && v.top2Outflow.every((s) => s.flowVal < 0));
-    assert.strictEqual(v.top2Outflow[0].flowVal, Math.min(...board.sectors.map((s) => s.netFlow)));
-    assert.strictEqual(v.remaining.length + v.top2Inflow.length + v.top2Outflow.length, board.sectors.length);
+    assert.ok(v.topInflow.length > 0 && v.topInflow.every((s) => s.flowVal > 0));
+    assert.ok(v.topOutflow.length > 0 && v.topOutflow.every((s) => s.flowVal < 0));
+    assert.strictEqual(v.topOutflow[0].flowVal, Math.min(...board.sectors.map((s) => s.netFlow)));
+    assert.strictEqual(v.remaining.length + v.topInflow.length + v.topOutflow.length, board.sectors.length);
     // One-sided day: every sector positive → no outflow box.
     const allUp = board.sectors.map((s) => ({ ...s, netFlow: Math.abs(s.netFlow) + 1 }));
-    assert.strictEqual(sectorView(allUp).top2Outflow.length, 0);
+    assert.strictEqual(sectorView(allUp).topOutflow.length, 0);
+  });
+
+  it("pulls the top 3 each side: biggest inflows first, biggest outflows first", () => {
+    assert.strictEqual(TOP_SECTORS, 3);
+    const flows = [900, 500, 300, 100, -50, -200, -700, -1000];
+    const v = sectorView(flows.map((f, i) => ({ ...board.sectors[0], name: `S${i}`, netFlow: f })));
+    assert.deepEqual(v.topInflow.map((s) => s.flowVal), [900, 500, 300]);
+    assert.deepEqual(v.topOutflow.map((s) => s.flowVal), [-1000, -700, -200]);
+    assert.deepEqual(v.remaining.map((s) => s.flowVal), [100, -50]); // the rest stay in the list, nothing lost
+    // Fewer than 3 on a side: just those.
+    const two = sectorView([10, 5, -3].map((f, i) => ({ ...board.sectors[0], name: `T${i}`, netFlow: f })));
+    assert.deepEqual(two.topInflow.map((s) => s.flowVal), [10, 5]);
+    assert.deepEqual(two.topOutflow.map((s) => s.flowVal), [-3]);
   });
 
   it("sectors are the board's (the app's), not a hardcoded list", () => {

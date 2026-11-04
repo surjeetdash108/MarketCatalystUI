@@ -16,6 +16,7 @@ import {
   type PopTone,
   sectorNotOnBoardText,
   sectorView,
+  TOP_SECTORS,
   sessionCandles,
   sessionDateLabel,
   type BoardStock,
@@ -859,7 +860,7 @@ export function MoneyFlowScreen() {
               })}
             </div>
 
-            {/* 2. Sectors Split: remaining sectors + Top 2 In/Out + Breadth */}
+            {/* 2. Sectors Split: remaining sectors + Top 3 In/Out + Breadth */}
             <div
               className="mf-sectors-split"
               style={{
@@ -869,7 +870,7 @@ export function MoneyFlowScreen() {
                 display: "flex",
               }}
             >
-              {/* Remaining sectors (excludes the Top 2 In/Out boxes) */}
+              {/* Remaining sectors (excludes the Top 3 In/Out boxes) */}
               <div
                 className="mf-sectors-list"
                 style={{
@@ -1026,7 +1027,7 @@ export function MoneyFlowScreen() {
                 })}
               </div>
 
-              {/* Top 2 In / Top 2 Out Cards + Breadth Bar */}
+              {/* Top 3 In / Top 3 Out Cards + Breadth Bar */}
               <div
                 className="mf-top2-breadth-pane"
                 style={{
@@ -1083,9 +1084,9 @@ export function MoneyFlowScreen() {
                       color: "#3ddc84",
                     }}
                   >
-                    Top 2 Sectors · Inflow
+                    Top {TOP_SECTORS} Sectors · Inflow
                   </span>
-                  {sectorData.top2Inflow.map((sc) => {
+                  {sectorData.topInflow.map((sc) => {
                     const isSelected = selectedSector === sc.name;
                     const isMatch = activeSector === sc.name;
                     const isDimmed = Boolean(activeSector && !isMatch);
@@ -1105,8 +1106,8 @@ export function MoneyFlowScreen() {
                           display: "flex",
                           flexDirection: "column",
                           gap: 4,
-                          padding: "7px 10px",
-                          minHeight: 70,
+                          padding: "5px 10px",
+                          minHeight: 58,
                           justifyContent: "space-between",
                           borderRadius: 8,
                           border: `1px solid ${isMatch
@@ -1188,9 +1189,9 @@ export function MoneyFlowScreen() {
                       marginTop: 2,
                     }}
                   >
-                    Top 2 Sectors · Outflow
+                    Top {TOP_SECTORS} Sectors · Outflow
                   </span>
-                  {sectorData.top2Outflow.map((sc) => {
+                  {sectorData.topOutflow.map((sc) => {
                     const isSelected = selectedSector === sc.name;
                     const isMatch = activeSector === sc.name;
                     const isDimmed = Boolean(activeSector && !isMatch);
@@ -1210,8 +1211,8 @@ export function MoneyFlowScreen() {
                           display: "flex",
                           flexDirection: "column",
                           gap: 4,
-                          padding: "7px 10px",
-                          minHeight: 70,
+                          padding: "5px 10px",
+                          minHeight: 58,
                           justifyContent: "space-between",
                           borderRadius: 8,
                           border: `1px solid ${isMatch
@@ -2944,11 +2945,11 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Sectors column",
-                    desc: "Every sector with at least one stock in the universe, inflows first (biggest at top), then outflows, minus the ones pulled into the Top 2 boxes.",
+                    desc: "Every sector with at least one stock in the universe, inflows first (biggest at top), then outflows, minus the ones pulled into the Top 3 boxes.",
                   },
                   {
-                    term: "Top 2 boxes",
-                    desc: "The two sectors with the largest positive net flow (green) and the two with the largest negative net flow (red). On a one-sided day there can be fewer.",
+                    term: "Top 3 boxes",
+                    desc: "The three sectors with the largest positive net flow (green) and the three with the largest negative net flow (red). On a one-sided day there can be fewer.",
                   },
                   {
                     term: "Click / hover",
