@@ -11514,6 +11514,17 @@ button.pill.lf-chip {
   min-width: 0;
 }
 
+/* The 200-day moving average is black. On the dark theme black would vanish
+   into the chart, so it takes the lightest ink there. On .iq-root, not .cc, so
+   the study dialog (portaled outside the chart) resolves it too. */
+.iq-root {
+  --cc-ma-ink: #e8edf5;
+}
+
+.iq-root[data-theme="light"] {
+  --cc-ma-ink: #000000;
+}
+
 .iq-root[data-theme="light"] .cc {
   --cc-grid: #e8ecf1;
   --cc-text: #5d6775;

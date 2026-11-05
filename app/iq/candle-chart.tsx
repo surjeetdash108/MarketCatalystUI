@@ -266,9 +266,24 @@ const studyLabel = (s: Pick<Study, "k" | "len">): string => {
   return c.fixed ? `${c.name} ${c.fixed}` : c.param ? `${c.name} ${s.len}${c.suffix ?? ""}` : c.name;
 };
 
-/** Overlay line dash: EMA dashed, VWAP dash-dot-ish, SMA and the rest solid. */
+/**
+ * The moving-average colours, the same on every chart: 10-day purple, 21-day
+ * green, 50-day red, 200-day black. An SMA and an EMA of the same length share
+ * a colour; the EMA is the dotted one. The 9-day sits with the 10-day. Other
+ * lengths (the 100) keep a palette colour.
+ */
+const MA_INK = "#000000";
+const MA_COLORS: Record<number, string> = { 9: "#b44fc8", 10: "#b44fc8", 21: "#2e9d2e", 50: "#e5282e", 200: MA_INK };
+const maColor = (k: StudyKind, len: number | null): string | null =>
+  (k === "sma" || k === "ema") && len != null ? MA_COLORS[len] ?? null : null;
+/** Pins every standard-length moving average to its colour, whatever an older saved setting held. */
+const withMaColors = (studies: Study[]): Study[] =>
+  studies.map(s => { const c = maColor(s.k, s.len); return c && c !== s.col ? { ...s, col: c } : s; });
+
+/** Overlay line dash: EMA dotted, VWAP dash-dot-ish, SMA and the rest solid. */
+const DOTS = [0.1, 5];
 const lineDash = (k: StudyKind): number[] | null =>
-  k === "ema" ? [6, 4] : k === "vwap" ? [6, 3] : null;
+  k === "ema" ? DOTS : k === "vwap" ? [6, 3] : null;
 
 type StudyData =
   | { kind: "line"; v: Num[] }
@@ -302,8 +317,8 @@ const PREFS_KEY = "mc.chart.prefs.v1";
 const DEFAULT_PREFS: ChartPrefs = {
   studies: [
     { id: "vol", k: "vol", len: null, col: "#6b7688", on: true },
-    { id: "sma50", k: "sma", len: 50, col: "#f3b24a", on: true },
-    { id: "sma200", k: "sma", len: 200, col: "#4a67d8", on: true },
+    { id: "sma50", k: "sma", len: 50, col: MA_COLORS[50], on: true },
+    { id: "sma200", k: "sma", len: 200, col: MA_COLORS[200], on: true },
   ],
   favs: ["sma", "rsi"],
   log: false,
@@ -322,7 +337,7 @@ function parsePrefs(raw: string | null): ChartPrefs | null {
       !!s && typeof s.id === "string" && KINDS.has(s.k) && typeof s.col === "string" && typeof s.on === "boolean"
       && (s.len === null || (typeof s.len === "number" && s.len >= 1 && s.len <= 500)));
     const favs = Array.isArray(p.favs) ? p.favs.filter((k): k is StudyKind => KINDS.has(k)) : DEFAULT_PREFS.favs;
-    return { studies, favs, log: p.log === true, pattern: p.pattern === true };
+    return { studies: withMaColors(studies), favs, log: p.log === true, pattern: p.pattern === true };
   } catch {
     return null;
   }
@@ -340,7 +355,8 @@ function readPrefs(): ChartPrefs {
 }
 
 function writePrefs(update: (p: ChartPrefs) => ChartPrefs) {
-  prefsCache = update(readPrefs());
+  const next = update(readPrefs());
+  prefsCache = { ...next, studies: withMaColors(next.studies) };
   try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefsCache)); } catch { /* storage blocked */ }
   prefsListeners.forEach(l => l());
 }
@@ -353,6 +369,8 @@ function useChartPrefs(): ChartPrefs {
 }
 
 function nextStudyColor(k: StudyKind, studies: readonly Study[]): string {
+  const std = maColor(k, cat(k).param?.def ?? null);
+  if (std) return std;
   const used = new Set(studies.map(s => s.col));
   const own = cat(k).col!;
   if (!used.has(own)) return own;
@@ -386,7 +404,7 @@ const PAD = { t: 14, r: 70, b: 28, l: 8 };
 /** Colours resolved from CSS (see `.cc` in iq.css) so the canvas follows the theme. */
 interface Palette {
   up: string; down: string; grid: string; text: string; cross: string; last: string; lastInk: string;
-  er: string; erInk: string; km: string; kmInk: string; tag: string; tagInk: string; paneLabel: string; band: string; avg: string; bg: string; font: string;
+  er: string; erInk: string; km: string; kmInk: string; tag: string; tagInk: string; paneLabel: string; band: string; avg: string; bg: string; maInk: string; font: string;
 }
 
 function readPalette(el: Element): Palette {
@@ -399,6 +417,7 @@ function readPalette(el: Element): Palette {
     km: v("--cc-km", "#f5a524"), kmInk: v("--cc-km-ink", "#1a1204"),
     tag: v("--cc-tag", "#2a3346"), tagInk: v("--cc-tag-ink", "#e7ecf4"), paneLabel: v("--cc-pane-label", "#4b5566"),
     band: v("--cc-band", "#2a3346"), avg: v("--cc-avg", "rgba(150,160,180,.55)"), bg: v("--cc-bg", "#0b0d10"),
+    maInk: v("--cc-ma-ink", "#e8edf5"),
     font: v("--f-mono", "ui-monospace, monospace"),
   };
 }
@@ -619,7 +638,9 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
 
   // ── overlays ──
   const line = (arr: Num[], col: string, yf: (v: number) => number, w = 1.6, dash: number[] | null = null) => {
-    ctx.strokeStyle = col; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash);
+    ctx.strokeStyle = col === MA_INK ? pal.maInk : col; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash);
+    // A near-zero dash with round caps draws dots (the EMA); otherwise the cap is the default.
+    ctx.lineCap = dash && dash[0] < 1 ? "round" : "butt";
     ctx.beginPath(); let drawing = false;
     for (let i = i0; i <= i1; i++) {
       const v = at(arr, i);
@@ -628,7 +649,7 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
       if (drawing) ctx.lineTo(x, y); else ctx.moveTo(x, y);
       drawing = true;
     }
-    ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+    ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1; ctx.lineCap = "butt";
   };
   // RSI is drawn over the price area on a fixed 0-100 scale of its own, not the price axis.
   const rsiY = (v: number) => g.top + ((100 - v) / 100) * ph;
@@ -1055,8 +1076,10 @@ function StudySettings({ k, study, studies, onCommit, onClose }: {
   const commit = () => {
     const parsed = parseInt(len, 10);
     const l = c.param ? Math.max(1, Math.min(500, Number.isFinite(parsed) ? parsed : c.param.def)) : null;
-    onCommit(l, col);
+    onCommit(l, maColor(k, l) ?? col);
   };
+  // The standard moving-average lengths have a fixed colour, so no picker for them.
+  const std = maColor(k, parseInt(len, 10) || null);
   return (
     <div className="cc-modal-back sub" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="cc-modal sm" role="dialog" aria-modal="true" aria-labelledby="cc-param-title">
@@ -1082,12 +1105,19 @@ function StudySettings({ k, study, studies, onCommit, onClose }: {
           )}
           <div className="cc-fld col">
             <span>Colour</span>
-            <div className="cc-swatches">
-              {LINE_PALETTE.map(p => (
-                <button key={p} type="button" style={{ background: p, color: p }} aria-pressed={p === col}
-                  aria-label={`Colour ${p}`} onClick={() => setCol(p)} />
-              ))}
-            </div>
+            {std ? (
+              <div className="cc-swatches">
+                <span className="cc-swatch" style={{ background: std === MA_INK ? "var(--cc-ma-ink)" : std }} />
+                <span>Standard colour for the {len}-day{k === "ema" ? " (dotted)" : ""}</span>
+              </div>
+            ) : (
+              <div className="cc-swatches">
+                {LINE_PALETTE.map(p => (
+                  <button key={p} type="button" style={{ background: p, color: p }} aria-pressed={p === col}
+                    aria-label={`Colour ${p}`} onClick={() => setCol(p)} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="cc-modal-ft">
@@ -1899,8 +1929,10 @@ function CandleChartInner({
             return (
               <div key={s.id} role="listitem" className={`cc-lg-row${s.on ? "" : " hidden"}`}>
                 <svg className="sw" width="18" height="8" viewBox="0 0 18 8" aria-hidden="true">
-                  <line x1="0" y1="4" x2="18" y2="4" stroke={s.col} strokeWidth="2"
-                    strokeDasharray={dash ? dash.map(x => x * 0.6).join(" ") : undefined} />
+                  <line x1="0" y1="4" x2="18" y2="4" strokeWidth="2"
+                    style={{ stroke: s.col === MA_INK ? "var(--cc-ma-ink)" : s.col }}
+                    strokeLinecap={dash && dash[0] < 1 ? "round" : undefined}
+                    strokeDasharray={dash ? (dash[0] < 1 ? "0.1 4" : dash.map(x => x * 0.6).join(" ")) : undefined} />
                 </svg>
                 <span className={`n${editable ? " edit" : ""}`} role={editable ? "button" : undefined} tabIndex={editable ? 0 : undefined}
                   title={editable ? "Settings" : undefined}
