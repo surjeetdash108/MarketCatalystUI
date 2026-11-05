@@ -1022,6 +1022,10 @@ export function StockIntelligenceScreen() {
     stop: number;
     confAtSave: number | null;
     savedDate: string;
+    /** Price when the trade was saved. Trades saved before this field existed have none. */
+    entryPx?: number | null;
+    /** ISO time the trade was saved. */
+    savedAt?: string;
     wO?: Record<string, number> | null;
   } | null>(null);
 
@@ -5239,6 +5243,8 @@ export function StockIntelligenceScreen() {
                       stop: stopV,
                       confAtSave: thConf,
                       savedDate: "Just now · Active",
+                      entryPx: Number.isFinite(stock.p) ? stock.p : null,
+                      savedAt: new Date().toISOString(),
                       wO: labWeightsState,
                     };
                     setSavedThesis(newT);
@@ -5383,6 +5389,9 @@ export function StockIntelligenceScreen() {
           const monPriceBroken = b2 ? monPx <= savedThesis.stop : monPx >= savedThesis.stop;
           const monFundBroken = monRun.crit.filter((d: any) => d.ev < 25);
           const monDelta = (monRun.conf != null && savedThesis.confAtSave != null) ? monRun.conf - savedThesis.confAtSave : 0;
+          const monEntry = typeof savedThesis.entryPx === "number" && savedThesis.entryPx > 0 ? savedThesis.entryPx : null;
+          // Against the live price (the PRICE NOW at the top), not a simulated one.
+          const monSinceEntry = monEntry != null && Number.isFinite(stock.p) ? ((stock.p - monEntry) / monEntry) * 100 : null;
 
           let monStatus = "ON TRACK";
           let monCol = UP;
@@ -5582,8 +5591,18 @@ export function StockIntelligenceScreen() {
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{monRun.coreOk} / {monRun.core.length}</div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>{monScenario === "break" ? "PRICE · SIMULATED" : "PRICE"}</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{usd(monPx)}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>ENTRY PRICE</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{monEntry != null ? usd(monEntry) : "Unavailable"}</div>
+                    {monEntry != null && savedThesis.savedAt && !Number.isNaN(Date.parse(savedThesis.savedAt)) && (
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-mid, #93a1af)" }}>
+                        Started {new Date(savedThesis.savedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </div>
+                    )}
+                    {monSinceEntry != null && (
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: (b2 ? monSinceEntry >= 0 : monSinceEntry <= 0) ? UP : DN }}>
+                        {pct(monSinceEntry)} since entry
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -5719,7 +5738,7 @@ export function StockIntelligenceScreen() {
                       ["Now", `Status → ${monStatus}. ${monCause}`],
                       ["Today 13:40", `${monRun.drv[0]?.name}: evidence holding above threshold.`],
                       ["Today 10:15", `Market regime check: constructive liquidity environment.`],
-                      [savedThesis.savedDate, `Thesis saved · confidence ${savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
+                      [savedThesis.savedDate, `Thesis saved${monEntry != null ? ` at ${usd(monEntry)}` : ""} · confidence ${savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
                     ].map(([tt, m], i) => (
                       <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", width: 88, flex: "none" }}>
