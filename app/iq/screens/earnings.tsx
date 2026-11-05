@@ -1970,8 +1970,8 @@ export function EarningsScreen() {
           {SESSION_FILTER_ENABLED && (
             <div className="ecal-seg">
               <button className={`ecal-segbtn${session === "both" ? " on" : ""}`} onClick={() => setSession("both")} title="Every reporter for this day">All</button>
-              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Pre-market</button>
-              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">After hours</button>
+              <button className={`ecal-segbtn${session === "BMO" ? " on" : ""}`} onClick={() => setSession("BMO")} title="Stocks whose bigger move landed in the pre-market session. Inferred from price, not from an announced reporting time.">Before Open</button>
+              <button className={`ecal-segbtn${session === "AMC" ? " on" : ""}`} onClick={() => setSession("AMC")} title="Stocks whose bigger move landed in the post-market session. Inferred from price, not from an announced reporting time — and the post-market field is vendor-reported, see LiveQuote.latePct.">After Close</button>
             </div>
           )}
           <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 10 }}>
@@ -1992,8 +1992,8 @@ export function EarningsScreen() {
         {atGlance ? (
           glanceItems.length > 0 ? (
             <div>
-              <GlanceTable title="Pre-market" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
-              <GlanceTable title="After hours" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="Before Open" items={glanceBmo} showDate onSelect={(s, d) => openStockDetail(s, d)} />
+              <GlanceTable title="After Close" items={glanceAmc} showDate onSelect={(s, d) => openStockDetail(s, d)} />
               <GlanceTable title="Time not specified" items={glanceTbd} showDate onSelect={(s, d) => openStockDetail(s, d)} />
             </div>
           ) : (
