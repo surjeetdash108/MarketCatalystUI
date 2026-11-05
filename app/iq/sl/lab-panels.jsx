@@ -90,7 +90,7 @@ export function DetailFacts({ f }) {
         <div style={{ flex: "1 1 260px", minWidth: 0, display: "grid", gridTemplateColumns: "62px minmax(0,1fr)", gap: "8px 12px", fontSize: 13, border: "1px solid #1a1f21", background: "#0b0d0e", borderRadius: 10, padding: "12px 14px", alignContent: "start" }}>
           <span style={boxLabel}>ENTRY</span><span style={{ color: C.text }} title={f.entry}>{f.entryText}</span>
           <span style={boxLabel}>EXIT</span><span style={{ color: C.text }} title={f.exit}>{f.exitText}</span>
-          <span style={boxLabel} title="Exit plan and trading costs used by the backtest — change them with Edit">RISK</span><span style={{ color: C.dim }}>{f.riskLine}</span>
+          <span style={boxLabel} title="Exit plan used by the backtest — change it with Edit">RISK</span><span style={{ color: C.dim }}>{f.riskLine}</span>
           {f.src ? <Fragment><span style={boxLabel}>SOURCE</span><span style={{ color: C.dim }}>{f.src}</span></Fragment> : null}
         </div>
       </div>

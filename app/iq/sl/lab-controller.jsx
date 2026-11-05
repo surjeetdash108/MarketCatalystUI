@@ -480,7 +480,7 @@ export default class StrategyLab extends Component {
       // The library's plain-English wording until the rules are edited; then the engine's own labels.
       entryText: (!edited && x.entry) || spec.entry.map(BT.label).join(" AND ") || "—",
       exitText: (!edited && x.exit) || spec.exit.map(BT.label).join(" OR ") || "Exit plan only",
-      riskLine: exitPlanSummary(cfg) + " · costs " + (cfg.cost ?? "5") + " bps",
+      riskLine: exitPlanSummary(cfg),
       ...this.riskRows(k),
       costOpts: COST_OPTS.map((c) => ({ l: c + " bps", on: String(cfg.cost ?? "5") === c, onClick: () => this.setCfg(k, { cost: c }) })),
       candleOpts: ALL_TF.map((t) => ({ l: tfL(t), on: t === tf, off: !opts.includes(t), offT: "These rules use session levels — intraday candles only", onClick: () => this.setState((s) => ({ candles: { ...s.candles, [k]: t } })) })),
@@ -521,7 +521,6 @@ export default class StrategyLab extends Component {
     // Picking the selected chip again clears it (back to the whole backtest period).
     const setWin = (n) => this.setState((s) => ({ wins: { ...s.wins, [W.key]: n === W.n ? "" : String(n) } }));
     const setExpanded = (on) => this.setState((s) => (s.vals[k] ? { vals: { ...s.vals, [k]: { ...s.vals[k], expanded: on } } } : null));
-    const period = v.cfg ? periodLabel(periodOfCfg(v.cfg)) + " " + tfL(v.tf).toLowerCase() : "";
     return {
       show: true,
       head: view ? view.head || (busy ? "Testing stocks…" : "") : "",
@@ -530,8 +529,6 @@ export default class StrategyLab extends Component {
       err: v.err || (!v.at && !busy ? blocked : "") || "",
       stale: !!(v.at && !busy && v.sig !== sig), onRerun: () => this.runValidate(k),
       idle: !ran && !v.err && !blocked, idleT: "Run backtest to see the result.", idleTitle: "Tests these rules on every S&P 500 stock with the candle, period and exit plan shown",
-      meta: busy ? `${period} · FMP · scanning…` + (v.fail ? ` · ${v.fail} unavailable` : "")
-        : v.at ? `${period} · FMP · as of ${v.asOf ? fmtDt(v.asOf) : "—"} · ${rows.length} tested` + (v.fail ? ` · ${v.fail} unavailable` : "") + (v.insuf ? ` · ${v.insuf} insufficient history` : "") : "",
       soFar: !!(view && view.soFar),
       sumNote: S ? (view.soFar ? "So far: over " : "Over ") + basis + " · " + (W.n == null ? "full " + wl + " backtest" : "last " + wl) : "",
       sum: tiles.map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
@@ -706,7 +703,7 @@ export default class StrategyLab extends Component {
     if (!rp) return { show: false };
     const BT = Engine, k = rp.k, t = rp.t, x = this.strategyOf(k) || { name: k }, spec = this.specOf(k), tf = this.tfOf(k), cfg = this.engCfg(k), sig = runSig(spec, tf, cfg), span = fetchSpan(spec, tf, cfg), period = periodOfCfg(cfg);
     const base = {
-      show: true, t, title: x.name + " · " + t, sub: (rp.n ? rp.n + " · " : "") + "Long-only · " + tfL(tf) + " candles · " + periodLabel(period) + " · " + exitPlanSummary(this.cfgOf(k)) + " · costs " + cfg.costBps + " bps",
+      show: true, t, title: x.name + " · " + t, sub: (rp.n ? rp.n + " · " : "") + "Long-only · " + tfL(tf) + " candles · " + periodLabel(period) + " · " + exitPlanSummary(this.cfgOf(k)),
       onEdit: () => this.openEdit(k), onMatches: () => this.showMatches(k),
       settings: [["Entry", spec.entry.map(BT.label).join(" AND ") || "—"], ["Exit", spec.exit.map(BT.label).join(" OR ") || "exit plan only"]],
     };
