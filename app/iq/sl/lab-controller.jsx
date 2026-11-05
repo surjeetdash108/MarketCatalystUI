@@ -526,7 +526,7 @@ export default class StrategyLab extends Component {
       show: true,
       head: view ? view.head || (busy ? "Testing stocks…" : "") : "",
       run: { l: busy ? "Running…" : v.at ? "Re-run backtest" : "Run backtest →", primary: !fresh, disabled: busy || !!blocked, title: blocked, onClick: () => this.runValidate(k) },
-      busy, progressT: "Tested " + (v.done || 0) + " / " + (v.total || "…") + " stocks", progressPct: v.total ? Math.round((100 * (v.done || 0)) / v.total) + "%" : "0%",
+      busy,
       err: v.err || (!v.at && !busy ? blocked : "") || "",
       stale: !!(v.at && !busy && v.sig !== sig), onRerun: () => this.runValidate(k),
       idle: !ran && !v.err && !blocked, idleT: "Run backtest to see the result.", idleTitle: "Tests these rules on every S&P 500 stock with the candle, period and exit plan shown",

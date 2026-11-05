@@ -2,6 +2,7 @@
 // prototype's generated markup): strategy facts + risk editor, results panel,
 // row chart pop-up, single-stock report, edit-rules modal.
 import { Fragment } from "react";
+import { blinkParts } from "./lab-run";
 
 const C = {
   bg: "#0d0f10", bg2: "#0b0e10", line: "#1e2427", line2: "#233038", gold: "#c9a24a", goldHi: "#f0d68c", chipBg: "#2e2614", chipFg: "#fbefc9",
@@ -125,10 +126,11 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0, ...(boxed ? { border: "1px solid #2a2618", background: "#0b0c0d", borderRadius: 12, padding: "16px 18px" } : {}) }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", color: C.mute }}>{title}</span>
-        <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 20, color: C.hi }}>{r.head}</span>
+        <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 20, color: C.hi }}>
+          {blinkParts(r.head || "", r.busy).map((p, i) => (p.dots ? <span key={i} className="sl-blink">{p.t}</span> : <Fragment key={i}>{p.t}</Fragment>))}
+        </span>
         {r.meta ? <span style={{ fontSize: 11.5, color: "#5f6966", marginLeft: "auto" }}>{r.meta}</span> : null}
       </div>
-      {r.busy ? <div style={{ height: 3, background: "#15191b", borderRadius: 2, overflow: "hidden" }}><div style={{ height: 3, width: r.progressPct, background: C.gold, transition: "width .2s" }} /></div> : null}
       {r.err ? <div style={{ fontSize: 13, color: C.warn }}>{r.err}</div> : null}
       {r.stale ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: C.warn }}>

@@ -278,6 +278,12 @@ export function acceptRow(state, runId, row) {
   return next;
 }
 
+/** Status text split so each "…" can blink while the run is busy (the panel animates the dots parts). */
+export function blinkParts(text, busy) {
+  if (!busy) return [{ t: text, dots: false }];
+  return String(text).split(/(…)/).filter(Boolean).map((t) => ({ t, dots: t === "…" }));
+}
+
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 
 /**
