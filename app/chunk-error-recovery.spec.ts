@@ -61,4 +61,9 @@ test("Chunk Error Recovery & Screen Refresh", async (t) => {
     assert.equal(second, false);
     assert.equal(reloads, 1);
   });
+
+  await t.test("recognizes missing chunk URLs in error message or stack", () => {
+    const errorWithUrl = new Error("net::ERR_ABORTED 404 at https://app.marketcatalyst.ai/_next/static/chunks/2983-e861ad53e29f3d38.js");
+    assert.equal(isChunkLoadError(errorWithUrl), true);
+  });
 });

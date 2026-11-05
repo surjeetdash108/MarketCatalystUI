@@ -22,10 +22,9 @@ export default function Error({
     Sentry.captureException(error); // no-op until NEXT_PUBLIC_SENTRY_DSN is set
     console.error("[route-error]", error);
 
-    if (isChunk) {
-      reloadForChunkError();
-    }
-  }, [error, isChunk]);
+    // Auto-refresh the user's screen once (with 15s infinite loop guard)
+    reloadForChunkError();
+  }, [error]);
 
   return (
     <div

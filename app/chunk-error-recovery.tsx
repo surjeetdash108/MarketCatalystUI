@@ -61,8 +61,19 @@ export function reloadForChunkError(reloadFn?: () => void): boolean {
  */
 export function ChunkErrorRecovery() {
   useEffect(() => {
-    function onError(event: ErrorEvent) {
-      if (isChunkLoadError(event.error || event.message)) {
+    function onError(event: ErrorEvent | Event) {
+      // In browsers, script and link 404/load errors do not bubble and are captured on the element itself
+      const target = (event as any)?.target;
+      if (target && (target.tagName === "SCRIPT" || target.tagName === "LINK")) {
+        const src = target.src || target.href || "";
+        if (typeof src === "string" && (src.includes("/_next/static/") || src.endsWith(".js") || src.endsWith(".css"))) {
+          reloadForChunkError();
+          return;
+        }
+      }
+
+      const err = (event as ErrorEvent).error || (event as ErrorEvent).message;
+      if (isChunkLoadError(err)) {
         reloadForChunkError();
       }
     }
@@ -73,10 +84,11 @@ export function ChunkErrorRecovery() {
       }
     }
 
-    window.addEventListener("error", onError);
+    // useCapture: true is required to capture script tag load errors
+    window.addEventListener("error", onError, true);
     window.addEventListener("unhandledrejection", onUnhandledRejection);
     return () => {
-      window.removeEventListener("error", onError);
+      window.removeEventListener("error", onError, true);
       window.removeEventListener("unhandledrejection", onUnhandledRejection);
     };
   }, []);
