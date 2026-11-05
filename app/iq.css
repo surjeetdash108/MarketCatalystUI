@@ -4726,7 +4726,6 @@ table.tbl tr:hover td {
 .mv-i {
   font-size: .72rem;
   color: var(--text-dim-solid);
-  cursor: help;
 }
 
 /* command palette */
@@ -9509,7 +9508,6 @@ table.tbl tr:hover td {
   color: var(--text-dim-solid);
   font-style: italic;
   font-size: .92em;
-  cursor: help;
 }
 
 .data-state {
@@ -10123,7 +10121,6 @@ button.pill.lf-chip {
   color: var(--text-dim-solid);
   background: var(--surface-3);
   border: 1px solid var(--border-soft);
-  cursor: help;
 }
 
 /* ── Add Holding form (portfolio.tsx) ───────────────────────────────────────
@@ -10818,10 +10815,6 @@ button.pill.lf-chip {
 
 .hh-table th.num {
   letter-spacing: .04em;
-}
-
-.hh-table th[title] {
-  cursor: help;
 }
 
 .hh-table tbody tr:last-child td {

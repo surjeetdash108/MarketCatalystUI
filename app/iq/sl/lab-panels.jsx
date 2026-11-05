@@ -143,7 +143,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(96px,1fr))", gap: 1, background: "#1a1f21", border: "1px solid #1a1f21", borderRadius: 10, overflow: "hidden" }}>
             {r.sum.map((s) => (
-              <div key={s.k} title={s.title} style={{ background: C.bg, padding: "9px 11px", cursor: "help" }}>
+              <div key={s.k} title={s.title} style={{ background: C.bg, padding: "9px 11px" }}>
                 <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966" }}>{s.k}</div>
                 <div style={{ fontFamily: mono, fontSize: 15, color: s.c || C.text, marginTop: 2 }}>{s.v}</div>
               </div>
@@ -228,7 +228,7 @@ export function ChartModal({ c }) {
           <Fragment>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 1, background: "#1a1f21", border: "1px solid #1a1f21", borderRadius: 10, overflow: "hidden" }}>
               {c.stats.map((f) => (
-                <div key={f.k} title={f.title} style={{ background: C.bg, padding: "9px 12px", cursor: "help" }}>
+                <div key={f.k} title={f.title} style={{ background: C.bg, padding: "9px 12px" }}>
                   <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966" }}>{f.k}</div>
                   <div style={{ fontFamily: mono, fontSize: 16, color: f.c, marginTop: 2 }}>{f.v}</div>
                 </div>
@@ -421,7 +421,7 @@ function CondRow({ c }) {
   const inp = { ...sel, width: 64 };
   const tip = (t) => (
     <span style={{ position: "relative" }}>
-      <span role="button" tabIndex={0} onMouseEnter={t.on} onMouseLeave={t.off} onFocus={t.on} onBlur={t.off} style={{ display: "inline-grid", placeItems: "center", width: 15, height: 15, borderRadius: 999, border: `1px solid ${C.line2}`, color: C.mute, fontSize: 9, cursor: "help" }}>i</span>
+      <span role="button" tabIndex={0} onMouseEnter={t.on} onMouseLeave={t.off} onFocus={t.on} onBlur={t.off} style={{ display: "inline-grid", placeItems: "center", width: 15, height: 15, borderRadius: 999, border: `1px solid ${C.line2}`, color: C.mute, fontSize: 9 }}>i</span>
       {t.open ? <span style={{ position: "absolute", zIndex: 20, top: 20, left: -10, width: 260, background: "#12171a", border: `1px solid ${C.line2}`, borderRadius: 8, padding: "8px 10px", fontSize: 11.5, color: C.text }}>{t.txt}</span> : null}
     </span>
   );
