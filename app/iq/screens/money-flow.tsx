@@ -50,7 +50,7 @@ import {
   MiniProfileSvg,
   FullChartSvg,
 } from "../money-flow/chart-svg";
-import { NOT_DETECTED } from "../patterns";
+// import { NOT_DETECTED } from "../patterns"; // the glossary now lists only the enabled patterns
 import { useIQActions } from "../shell";
 import { ModuleSwitcher } from "../module-switcher";
 import { useSI } from "../si/si-context";
@@ -3152,12 +3152,10 @@ export function MoneyFlowScreen() {
                     term: "Patterns",
                     desc: (
                       <>
-                        Rule-based detection of the classic patterns: <b style={{ color: "#eef2f4" }}>candlesticks</b> (doji, hammer, engulfing, stars, soldiers / crows, …),{" "}
-                        <b style={{ color: "#eef2f4" }}>bar patterns</b> (inside / outside, key reversal, NR4 / NR7), <b style={{ color: "#eef2f4" }}>gaps and islands</b>,{" "}
-                        <b style={{ color: "#eef2f4" }}>chart patterns</b> (head and shoulders, double / triple tops and bottoms, triangles, wedges, channels, flags, pennants, cups, rounding tops / bottoms, …),{" "}
-                        <b style={{ color: "#eef2f4" }}>setups</b> (VCP, flat base, Darvas box, spring / upthrust, S/R flips) and <b style={{ color: "#eef2f4" }}>harmonics</b> (AB=CD, Gartley, Bat, Butterfly, Crab, Shark, Cypher).
-                        Green = bullish, red = bearish, blue = either way; “(forming)” = not yet confirmed. Hover a pattern for its exact rule. The chart shows the latest three candle marks and up to four larger patterns, for the candles in view.
-                        Not detected (no fixed rule gives one answer): {NOT_DETECTED.map(([n]) => n).join(", ")}.
+                        Rule-based detection of six chart patterns: <b style={{ color: "#eef2f4" }}>cup with handle</b>, <b style={{ color: "#eef2f4" }}>cup without handle</b>,{" "}
+                        <b style={{ color: "#eef2f4" }}>double bottom</b>, <b style={{ color: "#eef2f4" }}>double top</b>, <b style={{ color: "#eef2f4" }}>head and shoulders</b> and{" "}
+                        <b style={{ color: "#eef2f4" }}>high and tight flag</b> (daily bars only).
+                        Green = bullish, red = bearish; “(forming)” = not yet confirmed. Hover a pattern for its exact rule. The chart shows up to four patterns, for the candles in view.
                       </>
                     ),
                   },

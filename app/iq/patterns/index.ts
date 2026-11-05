@@ -1,9 +1,10 @@
-import { detectBars, detectGaps } from "./bars";
-import { detectCandles } from "./candles";
+// Only the enabled chart patterns are detected (see detectPatterns); the other detectors are switched off.
+// import { detectBars, detectGaps } from "./bars";
+// import { detectCandles } from "./candles";
 import { CATALOG, NOT_DETECTED, patternRule } from "./catalog";
-import { detectEvents, detectFlags, detectLinePatterns, detectRounding, detectSwingPatterns } from "./chart";
-import { detectHarmonics } from "./harmonics";
-import { detectSetups } from "./setups";
+import { /* detectEvents, */ detectFlags, /* detectLinePatterns, detectRounding, */ detectSwingPatterns } from "./chart";
+// import { detectHarmonics } from "./harmonics";
+// import { detectSetups } from "./setups";
 import { zigzag } from "./swings";
 import type { DetectOptions, PatternHit, PBar } from "./types";
 import { context } from "./util";
@@ -11,23 +12,31 @@ import { context } from "./util";
 export type { DetectOptions, PatternHit, PBar } from "./types";
 export { CATALOG, NOT_DETECTED, patternRule };
 
-/** Every pattern in the bars, ordered by the bar it completes on. */
+/**
+ * The patterns the charts show. Everything else in the catalog is switched
+ * off: its detector call below (or its branch in chart.ts) is commented out.
+ */
+export const ENABLED_PATTERNS: ReadonlySet<string> = new Set([
+  "cup-handle", "cup-no-handle", "double-bottom", "double-top", "high-tight-flag", "head-shoulders-top",
+]);
+
+/** Every enabled pattern in the bars, ordered by the bar it completes on. */
 export function detectPatterns(bars: PBar[], opt: DetectOptions = {}): PatternHit[] {
   const clean = bars.filter((b) => [b.o, b.h, b.l, b.c].every((v) => Number.isFinite(v)) && b.h >= b.l);
   if (clean.length < 3) return [];
   const x = context(clean), s = zigzag(x, 1.5);
   return dedupe([
-    ...detectCandles(x),
-    ...detectBars(x, opt),
-    ...detectGaps(x),
+    // ...detectCandles(x),
+    // ...detectBars(x, opt),
+    // ...detectGaps(x),
     ...detectSwingPatterns(x, s),
-    ...detectLinePatterns(x, s),
+    // ...detectLinePatterns(x, s),
     ...detectFlags(x, opt),
-    ...detectRounding(x),
-    ...detectEvents(x, opt),
-    ...detectSetups(x, s, opt),
-    ...detectHarmonics(x, s),
-  ]).sort((a, b) => a.i1 - b.i1 || a.i0 - b.i0);
+    // ...detectRounding(x),
+    // ...detectEvents(x, opt),
+    // ...detectSetups(x, s, opt),
+    // ...detectHarmonics(x, s),
+  ]).filter((h) => ENABLED_PATTERNS.has(h.id)).sort((a, b) => a.i1 - b.i1 || a.i0 - b.i0);
 }
 
 /** The same multi-bar pattern found from overlapping swing windows is reported once: the longest. */

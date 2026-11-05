@@ -32,7 +32,8 @@ function path2(points: Array<[number, number]>, wick = 0.2): PBar[] {
 const ids = (hits: PatternHit[]) => new Set(hits.map((h) => h.id));
 const endingAt = (hits: PatternHit[], i: number) => new Set(hits.filter((h) => h.i1 === i).map((h) => h.id));
 
-describe("candlestick patterns (textbook shapes)", () => {
+// Switched off in detectPatterns (see ENABLED_PATTERNS); kept to re-enable with the detector.
+describe.skip("candlestick patterns (textbook shapes)", () => {
   it("hammer after a decline, hanging man after a rise", () => {
     const d = [...trend("down"), bar(108.2, 108.9, 106.2, 108.8)];
     assert.ok(endingAt(detectPatterns(d), d.length - 1).has("hammer"));
@@ -68,7 +69,7 @@ describe("candlestick patterns (textbook shapes)", () => {
   });
 });
 
-describe("bar patterns and gaps", () => {
+describe.skip("bar patterns and gaps (switched off)", () => {
   it("inside bar, outside bar, NR7", () => {
     const b = [...trend("up"), bar(131, 133, 129, 132), bar(131.5, 132.5, 130, 132)];
     assert.ok(endingAt(detectPatterns(b), b.length - 1).has("inside-bar"));
@@ -101,11 +102,11 @@ describe("chart patterns (price paths)", () => {
     assert.equal(h!.confirmed, true);
     assert.deepEqual(h!.points!.map((p) => p.label), ["LS", "H", "RS"]);
   });
-  it("ascending triangle: flat highs, rising lows", () => {
+  it.skip("ascending triangle: flat highs, rising lows (switched off)", () => {
     const b = path2([[0, 90], [10, 110], [20, 96], [30, 110], [40, 101], [50, 110], [58, 105.5]]);
     assert.ok(ids(detectPatterns(b)).has("triangle-ascending"), [...ids(detectPatterns(b))].join(","));
   });
-  it("bull flag: sharp pole, tight pullback, breakout", () => {
+  it.skip("bull flag: sharp pole, tight pullback, breakout (switched off)", () => {
     const b = path2([[0, 100], [20, 100.5], [30, 130], [38, 126], [40, 127], [44, 125], [50, 134]], 0.15);
     assert.ok([...ids(detectPatterns(b))].some((id) => id === "flag-bull" || id === "pennant-bull"));
   });
@@ -113,17 +114,66 @@ describe("chart patterns (price paths)", () => {
     const pts: Array<[number, number]> = [[0, 90], [10, 120]];
     for (let k = 1; k <= 30; k++) pts.push([10 + k, 120 - 25 * Math.sin((Math.PI * k) / 30)]);
     pts.push([47, 113], [52, 124]);
-    assert.ok(ids(detectPatterns(path2(pts))).has("cup-handle"));
+    const found = ids(detectPatterns(path2(pts)));
+    assert.ok(found.has("cup-handle"));
+    assert.ok(!found.has("cup-no-handle"), "a cup with a handle is not also a cup without one");
   });
-  it("rounding bottom from a parabola", () => {
+  it("cup without handle: rounded cup, then straight through the rim", () => {
+    const pts: Array<[number, number]> = [[0, 90], [10, 120]];
+    for (let k = 1; k <= 30; k++) pts.push([10 + k, 120 - 25 * Math.sin((Math.PI * k) / 30)]);
+    pts.push([48, 130]);
+    const h = detectPatterns(path2(pts)).find((q) => q.id === "cup-no-handle");
+    assert.ok(h, [...ids(detectPatterns(path2(pts)))].join(","));
+    assert.equal(h!.confirmed, true);
+    assert.equal(h!.name, "Cup without Handle");
+    assert.ok(!ids(detectPatterns(path2(pts))).has("cup-handle"));
+  });
+  it("a V-shaped drop and recovery is not a cup", () => {
+    const b = path2([[0, 90], [10, 120], [25, 95], [40, 122]]);
+    assert.ok(!ids(detectPatterns(b)).has("cup-no-handle"));
+  });
+  it("high and tight flag on daily bars: a near-doubling pole, then a shallow pause", () => {
+    const b = path2([[0, 100], [10, 100], [20, 195], [25, 185], [27, 190], [30, 200]], 0.3);
+    assert.ok(ids(detectPatterns(b, { daily: true })).has("high-tight-flag"), [...ids(detectPatterns(b, { daily: true }))].join(","));
+  });
+  it("a tall double bottom after a long drop is reported as a double bottom", () => {
+    const b = path2([[0, 160], [20, 100], [30, 120], [40, 100.2], [55, 125]]);
+    assert.ok(ids(detectPatterns(b)).has("double-bottom"), [...ids(detectPatterns(b))].join(","));
+  });
+  it.skip("rounding bottom from a parabola (switched off)", () => {
     const pts: Array<[number, number]> = [];
     for (let k = 0; k <= 45; k++) pts.push([k, 100 + 30 * ((k - 22.5) / 22.5) ** 2]);
     assert.ok(ids(detectPatterns(path2(pts, 0.05))).has("rounding-bottom"));
   });
-  it("Gartley from exact ratios", () => {
+  it.skip("Gartley from exact ratios (switched off)", () => {
     // X 100 → A 130 (XA 30) → B 111.46 (61.8%) → C 123 → D 106.42 (78.6% of XA)
     const b = path2([[0, 100], [15, 130], [25, 111.46], [35, 123], [50, 106.42], [56, 112]]);
     assert.ok(ids(detectPatterns(b)).has("gartley-bull"), [...ids(detectPatterns(b))].join(","));
+  });
+});
+
+describe("only the enabled patterns are reported", () => {
+  const ONLY = new Set(["cup-handle", "cup-no-handle", "double-bottom", "double-top", "high-tight-flag", "head-shoulders-top"]);
+  it("shapes of switched-off patterns report nothing outside the six", () => {
+    const rounding: Array<[number, number]> = [];
+    for (let k = 0; k <= 45; k++) rounding.push([k, 100 + 30 * ((k - 22.5) / 22.5) ** 2]);
+    const shapes: PBar[][] = [
+      [...trend("down"), bar(108.2, 108.9, 106.2, 108.8)], // hammer
+      [...trend("down"), bar(109.5, 109.6, 107.9, 108), bar(107.8, 110.2, 107.7, 110)], // engulfing
+      [...trend("up"), bar(131, 133, 129, 132), bar(131.5, 132.5, 130, 132)], // inside bar
+      path2([[0, 90], [10, 110], [20, 96], [30, 110], [40, 101], [50, 110], [58, 105.5]]), // ascending triangle
+      path2([[0, 100], [20, 100.5], [30, 130], [38, 126], [40, 127], [44, 125], [50, 134]], 0.15), // bull flag
+      path2(rounding, 0.05), // rounding bottom
+      path2([[0, 100], [15, 130], [25, 111.46], [35, 123], [50, 106.42], [56, 112]]), // Gartley
+      path2([[0, 110], [15, 90], [25, 100], [40, 80], [55, 100], [70, 90], [85, 112]]), // inverse head and shoulders
+      path2([[0, 100], [20, 120], [30, 110], [40, 120.2], [50, 110], [60, 120.1], [75, 100]]), // triple top
+    ];
+    for (const b of shapes) for (const opt of [{}, { daily: true }, { daily: true, weekly: true }])
+      for (const h of detectPatterns(b, opt)) assert.ok(ONLY.has(h.id), h.id);
+  });
+  it("real FMP bars report nothing outside the six", () => {
+    for (const t of ["AAPL", "NVDA", "MSFT"]) for (const h of detectPatterns(rows(fx.daily[t]), { daily: true })) assert.ok(ONLY.has(h.id), `${t} ${h.id}`);
+    for (const h of detectPatterns(rows(fx.m5.AAPL))) assert.ok(ONLY.has(h.id), `AAPL 5m ${h.id}`);
   });
 });
 

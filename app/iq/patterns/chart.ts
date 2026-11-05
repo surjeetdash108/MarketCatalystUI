@@ -17,11 +17,16 @@ function closeBeyond(x: Ctx, from: number, to: number, level: (k: number) => num
 const lastBar = (x: Ctx) => x.bars.length - 1;
 const seq = (s: Swing[], j: number, pat: string) => j + pat.length <= s.length && [...pat].every((c, k) => s[j + k].hi === (c === "H"));
 
-/** Double / triple tops and bottoms, head and shoulders, three rising valleys / falling peaks, measured moves, cups, V-bottoms. */
+/**
+ * Double tops and bottoms, head and shoulders, cup with and without handle.
+ * Switched off (commented out below): Big M / W, ugly double bottom, triple
+ * tops / bottoms, inverse head and shoulders, three rising valleys / falling
+ * peaks, measured moves, inverted cup and handle, V-bottoms.
+ */
 export function detectSwingPatterns(x: Ctx, s: Swing[]): PatternHit[] {
   const out: PatternHit[] = [], B = x.bars, end = lastBar(x);
   for (let j = 0; j < s.length; j++) {
-    // ── double top / bottom (+ Big M / W, ugly double bottom) ──
+    // ── double top / bottom ──
     for (const top of [true, false]) {
       if (!seq(s, j, top ? "HLH" : "LHL")) continue;
       const [p1, m, p2] = [s[j], s[j + 1], s[j + 2]], t = levelTol(x, p2.i);
@@ -32,9 +37,12 @@ export function detectSwingPatterns(x: Ctx, s: Swing[]): PatternHit[] {
       const forming = conf < 0 && win >= end;
       let id = "";
       if (Math.abs(p1.p - p2.p) <= t) {
-        const prev = s[j - 1], run = prev ? Math.abs(p1.p - prev.p) : 0;
-        id = height >= 4 * (x.atr[p2.i] || Infinity) && run >= 2 * height ? (top ? "big-m" : "big-w") : top ? "double-top" : "double-bottom";
-      } else if (!top && p2.p - p1.p > t && p2.p - p1.p <= 0.5 * (m.p - p1.p)) id = "ugly-double-bottom";
+        // Big M / W off: a tall double top / bottom after a long run is reported as the plain double top / bottom.
+        // const prev = s[j - 1], run = prev ? Math.abs(p1.p - prev.p) : 0;
+        // id = height >= 4 * (x.atr[p2.i] || Infinity) && run >= 2 * height ? (top ? "big-m" : "big-w") : top ? "double-top" : "double-bottom";
+        id = top ? "double-top" : "double-bottom";
+      }
+      // else if (!top && p2.p - p1.p > t && p2.p - p1.p <= 0.5 * (m.p - p1.p)) id = "ugly-double-bottom";
       if (!id || (conf < 0 && !forming)) continue;
       const k = conf >= 0 ? conf : end;
       out.push(hit(id, p1.i, k, k, top ? Math.max(p1.p, p2.p) : Math.min(p1.p, p2.p), {
@@ -44,23 +52,24 @@ export function detectSwingPatterns(x: Ctx, s: Swing[]): PatternHit[] {
         points: [{ i: p1.i, p: p1.p, label: top ? "T1" : "B1" }, { i: p2.i, p: p2.p, label: top ? "T2" : "B2" }],
       }));
     }
-    // ── triple top / bottom, head and shoulders ──
-    for (const top of [true, false]) {
+    // ── head and shoulders (top only; inverse off) ──
+    for (const top of [true /* , false */]) {
       if (!seq(s, j, top ? "HLHLH" : "LHLHL")) continue;
       const [a, t1, b, t2, c] = s.slice(j, j + 5), tol = levelTol(x, c.i);
       const span = c.i - a.i, win = c.i + span;
-      const peaks = [a.p, b.p, c.p], avg = (a.p + b.p + c.p) / 3;
-      if (peaks.every((p) => Math.abs(p - avg) <= tol)) {
-        const neck = top ? Math.min(t1.p, t2.p) : Math.max(t1.p, t2.p);
-        const conf = closeBeyond(x, c.i, win, () => neck, top ? -1 : 1);
-        if (conf >= 0 || win >= end) {
-          const k = conf >= 0 ? conf : end;
-          out.push(hit(top ? "triple-top" : "triple-bottom", a.i, k, k, top ? Math.max(...peaks) : Math.min(...peaks), {
-            confirmed: conf >= 0, lines: [line(a.i, neck, k, neck, "neckline")],
-            points: [a, b, c].map((q, n) => ({ i: q.i, p: q.p, label: String(n + 1) })),
-          }));
-        }
-      }
+      // ── triple top / bottom (off) ──
+      // const peaks = [a.p, b.p, c.p], avg = (a.p + b.p + c.p) / 3;
+      // if (peaks.every((p) => Math.abs(p - avg) <= tol)) {
+      //   const neck = top ? Math.min(t1.p, t2.p) : Math.max(t1.p, t2.p);
+      //   const conf = closeBeyond(x, c.i, win, () => neck, top ? -1 : 1);
+      //   if (conf >= 0 || win >= end) {
+      //     const k = conf >= 0 ? conf : end;
+      //     out.push(hit(top ? "triple-top" : "triple-bottom", a.i, k, k, top ? Math.max(...peaks) : Math.min(...peaks), {
+      //       confirmed: conf >= 0, lines: [line(a.i, neck, k, neck, "neckline")],
+      //       points: [a, b, c].map((q, n) => ({ i: q.i, p: q.p, label: String(n + 1) })),
+      //     }));
+      //   }
+      // }
       const headOk = top ? b.p >= Math.max(a.p, c.p) + tol : b.p <= Math.min(a.p, c.p) - tol;
       const hgt = Math.abs(b.p - (top ? Math.min(t1.p, t2.p) : Math.max(t1.p, t2.p)));
       if (headOk && Math.abs(a.p - c.p) <= 0.5 * hgt) {
@@ -75,28 +84,47 @@ export function detectSwingPatterns(x: Ctx, s: Swing[]): PatternHit[] {
           }));
         }
       }
-      // three rising valleys (L H L H L) / three falling peaks (H L H L H)
-      const steps = top ? [a.p - b.p, b.p - c.p] : [b.p - a.p, c.p - b.p];
-      if (steps.every((d) => d > tol)) {
-        const lvl = top ? Math.min(t1.p, t2.p) : Math.max(t1.p, t2.p);
-        const conf = closeBeyond(x, c.i, win, () => lvl, top ? -1 : 1);
-        if (conf >= 0) out.push(hit(top ? "three-falling-peaks" : "three-rising-valleys", a.i, conf, conf, c.p, {
-          confirmed: true, lines: [line(a.i, a.p, c.i, c.p, "trend"), line(t1.i, lvl, conf, lvl, "level")],
-        }));
-      }
+      // ── three rising valleys (L H L H L) / three falling peaks (H L H L H) (off) ──
+      // const steps = top ? [a.p - b.p, b.p - c.p] : [b.p - a.p, c.p - b.p];
+      // if (steps.every((d) => d > tol)) {
+      //   const lvl = top ? Math.min(t1.p, t2.p) : Math.max(t1.p, t2.p);
+      //   const conf = closeBeyond(x, c.i, win, () => lvl, top ? -1 : 1);
+      //   if (conf >= 0) out.push(hit(top ? "three-falling-peaks" : "three-rising-valleys", a.i, conf, conf, c.p, {
+      //     confirmed: true, lines: [line(a.i, a.p, c.i, c.p, "trend"), line(t1.i, lvl, conf, lvl, "level")],
+      //   }));
+      // }
     }
-    // ── measured move up / down ──
-    for (const upMove of [true, false]) {
-      if (!seq(s, j, upMove ? "LHLH" : "HLHL")) continue;
-      const [p0, p1, p2, p3] = s.slice(j, j + 4);
-      const leg1 = Math.abs(p1.p - p0.p), corr = Math.abs(p1.p - p2.p), leg2 = Math.abs(p3.p - p2.p);
-      if (leg1 > 0 && corr >= 0.3 * leg1 && corr <= 0.7 * leg1 && leg2 >= 0.7 * leg1 && leg2 <= 1.3 * leg1)
-        out.push(hit(upMove ? "measured-move-up" : "measured-move-down", p0.i, p3.i, p3.i, p3.p, {
-          lines: [line(p0.i, p0.p, p1.i, p1.p, "leg"), line(p1.i, p1.p, p2.i, p2.p, "leg"), line(p2.i, p2.p, p3.i, p3.p, "leg")],
+    // ── measured move up / down (off) ──
+    // for (const upMove of [true, false]) {
+    //   if (!seq(s, j, upMove ? "LHLH" : "HLHL")) continue;
+    //   const [p0, p1, p2, p3] = s.slice(j, j + 4);
+    //   const leg1 = Math.abs(p1.p - p0.p), corr = Math.abs(p1.p - p2.p), leg2 = Math.abs(p3.p - p2.p);
+    //   if (leg1 > 0 && corr >= 0.3 * leg1 && corr <= 0.7 * leg1 && leg2 >= 0.7 * leg1 && leg2 <= 1.3 * leg1)
+    //     out.push(hit(upMove ? "measured-move-up" : "measured-move-down", p0.i, p3.i, p3.i, p3.p, {
+    //       lines: [line(p0.i, p0.p, p1.i, p1.p, "leg"), line(p1.i, p1.p, p2.i, p2.p, "leg"), line(p2.i, p2.p, p3.i, p3.p, "leg")],
+    //     }));
+    // }
+    // ── cup without handle: rim, rounded low, then one rise closing above the rim with no swing pullback on the way ──
+    if (seq(s, j, "HL")) {
+      const [r1, bt] = [s[j], s[j + 1]], rim = r1.p, depth = rim - bt.p, atr = x.atr[r1.i] || Infinity;
+      const next = s[j + 2]; // the first swing after the low: a pullback before the breakout is a handle
+      const brk = closeBeyond(x, bt.i, Math.min(end, bt.i + 2 * (bt.i - r1.i)), () => rim, 1);
+      const handle = next !== undefined && (brk < 0 || next.i < brk);
+      const k = brk >= 0 ? brk : end;
+      // Forming: the low is the last swing and price has climbed back into the cup's top third.
+      const forming = brk < 0 && next === undefined && B[end].c >= bt.p + (2 * depth) / 3;
+      // Rounded, not a V: a straight-line V spends a third of its bars in its bottom third, a U about half.
+      let deep = 0;
+      for (let q = r1.i + 1; q < k; q++) if (B[q].c <= bt.p + depth / 3) deep++;
+      if (depth >= 4 * atr && k - r1.i >= 15 && !handle && (brk >= 0 || forming) && deep >= 0.4 * (k - r1.i))
+        out.push(hit("cup-no-handle", r1.i, k, k, bt.p, {
+          confirmed: brk >= 0, target: rim + depth,
+          lines: [line(r1.i, rim, k, rim, "neckline")],
+          points: [{ i: bt.i, p: bt.p, label: "Cup" }],
         }));
     }
-    // ── cup and handle / inverted ──
-    for (const cup of [true, false]) {
+    // ── cup and handle (inverted off) ──
+    for (const cup of [true /* , false */]) {
       if (!seq(s, j, cup ? "HLHL" : "LHLH")) continue;
       const [r1, bt, r2, hd] = s.slice(j, j + 4), t = levelTol(x, r2.i);
       const rim = cup ? Math.max(r1.p, r2.p) : Math.min(r1.p, r2.p);
@@ -115,17 +143,17 @@ export function detectSwingPatterns(x: Ctx, s: Swing[]): PatternHit[] {
         points: [{ i: bt.i, p: bt.p, label: cup ? "Cup" : "Cap" }, { i: hd.i, p: hd.p, label: "Handle" }],
       }));
     }
-    // ── V-bottom ──
-    if (seq(s, j, "HL")) {
-      const [h0, lo] = [s[j], s[j + 1]], drop = h0.p - lo.p, dur = lo.i - h0.i;
-      if (drop >= 5 * (x.atr[lo.i] || Infinity) && dur <= 15) {
-        let k = -1;
-        for (let q = lo.i + 1; q <= Math.min(end, lo.i + Math.ceil(1.5 * dur)); q++) if (B[q].h >= lo.p + 0.7 * drop) { k = q; break; }
-        let near = 0;
-        for (let q = Math.max(0, lo.i - 5); q <= Math.min(end, lo.i + 5); q++) if (B[q].l <= lo.p + 0.5 * (x.atr[lo.i] || 0)) near++;
-        if (k >= 0 && near <= 3) out.push(hit("v-bottom", h0.i, k, lo.i, lo.p, { confirmed: true, lines: [line(h0.i, h0.p, lo.i, lo.p, "leg"), line(lo.i, lo.p, k, B[k].h, "leg")] }));
-      }
-    }
+    // ── V-bottom (off) ──
+    // if (seq(s, j, "HL")) {
+    //   const [h0, lo] = [s[j], s[j + 1]], drop = h0.p - lo.p, dur = lo.i - h0.i;
+    //   if (drop >= 5 * (x.atr[lo.i] || Infinity) && dur <= 15) {
+    //     let k = -1;
+    //     for (let q = lo.i + 1; q <= Math.min(end, lo.i + Math.ceil(1.5 * dur)); q++) if (B[q].h >= lo.p + 0.7 * drop) { k = q; break; }
+    //     let near = 0;
+    //     for (let q = Math.max(0, lo.i - 5); q <= Math.min(end, lo.i + 5); q++) if (B[q].l <= lo.p + 0.5 * (x.atr[lo.i] || 0)) near++;
+    //     if (k >= 0 && near <= 3) out.push(hit("v-bottom", h0.i, k, lo.i, lo.p, { confirmed: true, lines: [line(h0.i, h0.p, lo.i, lo.p, "leg"), line(lo.i, lo.p, k, B[k].h, "leg")] }));
+    //   }
+    // }
   }
   return out;
 }
@@ -218,7 +246,7 @@ export function detectLinePatterns(x: Ctx, s: Swing[]): PatternHit[] {
   return kept;
 }
 
-/** Flags and pennants after a sharp pole; high and tight flags on daily bars. */
+/** High and tight flags on daily bars. Flags and pennants are switched off (commented out below). */
 export function detectFlags(x: Ctx, opt: DetectOptions): PatternHit[] {
   const B = x.bars, n = B.length, out: PatternHit[] = [];
   let skipTo = -1;
@@ -250,8 +278,9 @@ export function detectFlags(x: Ctx, opt: DetectOptions): PatternHit[] {
       const against = bull ? du <= t : du >= -t;
       let id = "";
       if (htf) id = "high-tight-flag";
-      else if (converging) id = bull ? "pennant-bull" : "pennant-bear";
-      else if (parallel && against) id = bull ? "flag-bull" : "flag-bear";
+      // else if (converging) id = bull ? "pennant-bull" : "pennant-bear";
+      // else if (parallel && against) id = bull ? "flag-bull" : "flag-bear";
+      void converging; void parallel; void against;
       if (!id) continue;
       const k = brk >= 0 ? brk : last;
       out.push(hit(id, startIdx, k, k, bull ? B[ib].h : B[ib].l, {

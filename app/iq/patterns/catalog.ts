@@ -149,6 +149,7 @@ export const CATALOG: Record<string, PatternDef> = {
   "pennant-bear": P("Bear Pennant", "bear", "A drop of ≥ 4 × ATR within 12 bars, then 4–20 bars converging in its lower half."),
   "high-tight-flag": P("High and Tight Flag", "bull", "Daily bars: price up ≥ 90% within 40 bars, then 3–15 bars giving back ≤ 25%."),
   "cup-handle": P("Cup and Handle", "bull", "Two swing highs (rims) within 2 × tol around a rounded low ≥ 4 × ATR deep (≥ 25% of the cup's bars in its bottom third), then a handle pulling back ≤ half the depth; confirmed on a close above the rim."),
+  "cup-no-handle": P("Cup without Handle", "bull", "A swing high (rim), a rounded low ≥ 4 × ATR below it (≥ 40% of the cup's bars in its bottom third, so not a V), then one rise closing above the rim with no swing pullback (handle) on the way, ≥ 15 bars rim to breakout. Target = depth above the rim."),
   "cup-handle-inverted": P("Inverted Cup and Handle", "bear", "Mirror of cup and handle; confirmed on a close below the base."),
   "rounding-bottom": P("Rounding Bottom (Saucer)", "bull", "30–60 closes fitting an upward parabola (R² ≥ 0.85) with the low in the middle 40% and ends within 25% of the depth."),
   "rounding-top": P("Rounding Top", "bear", "30–60 closes fitting a downward parabola (R² ≥ 0.85) with the high in the middle 40% and ends within 25% of the height."),

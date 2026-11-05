@@ -752,8 +752,9 @@ describe("Money Flow glossary matches the page (Nov 3 test)", () => {
     assert.match(g, /▲ \/ ▼/);
     assert.doesNotMatch(g, /“✕ swept”/);
   });
-  it("pattern limits match the chart (three candle marks, four larger patterns)", () => {
-    assert.match(g, /latest three candle marks and up to four larger patterns/);
-    assert.doesNotMatch(g, /latest six candle marks/);
+  it("pattern limit and list match the chart (the six enabled patterns, up to four shown)", () => {
+    assert.match(g, /shows up to four patterns/);
+    assert.match(g, /six chart patterns/);
+    assert.doesNotMatch(g, /candle marks/);
   });
 });
