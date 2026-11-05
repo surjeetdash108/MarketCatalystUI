@@ -51,6 +51,7 @@ export function computeRow(t, n, bars, spec, cfg, tf) {
     sig: ev ? ev.status : null, ago: ev ? ev.ago : null, met: ev ? ev.met : 0, total: ev ? ev.total : 0,
     cagr: r.m.cagr, bcagr: r.mb.cagr, tot: r.m.tot, btot: r.mb.tot, sh: r.m.sharpe, dd: r.m.dd, win: r.m.win,
     trades: r.m.trades, closed: closed.length, wins: closed.filter((x) => x.ret > 0).length,
+    open: r.trades.length - closed.length,
   };
 }
 
@@ -70,6 +71,15 @@ export function windowOpts(tf) {
   const intra = BT.isIntradayTf(tf);
   const base = intra ? MIN_WIN[tf] : DAY_WIN[tf] || DAY_WIN.d, more = intra ? MIN_MORE[tf] : DAY_MORE[tf] || DAY_MORE.d;
   return { base, more, def: base[2], intra };
+}
+
+/**
+ * The picked "Return over" window, or null for none: the whole backtest period
+ * (the default, matching the full report). Only a chip the candle offers counts.
+ */
+export function windowPick(tf, stored) {
+  const o = windowOpts(tf), n = +stored;
+  return stored != null && stored !== "" && [...o.base, ...o.more].includes(n) ? n : null;
 }
 
 /** Chip label: 2D, 3W, 3M, 1Y for calendar days; 30m, 2H, 1.5D for trading minutes. */
@@ -124,17 +134,22 @@ function windowSeries(r, closed, tf) {
 /**
  * One stock over the last `n`: ret = strategy equity now ÷ equity at the first
  * point inside the window − 1; bret the same for buy & hold; ex = ret − bret;
- * n / w = closed trades (and winners) that exited inside the window.
+ * n / w = closed trades (and winners) that exited inside the window; open = a
+ * position still held at the end (it is in every window, and can be all of the
+ * window's return). `n` null = the whole backtest period, as the full report.
  */
 export function windowStats(row, n, intraday) {
-  if (!row || !row.wd || !row.wd.length) return null;
+  if (!row) return null;
+  const open = row.open || 0;
+  if (n == null) return row.tot == null ? null : { ret: row.tot, bret: row.btot, ex: row.tot - row.btot, n: row.closed, w: row.wins, open, from: null };
+  if (!row.wd || !row.wd.length) return null;
   const key = (x) => (intraday ? x : x.slice(0, 10));
   const days = intraday ? [...new Set(row.wd.map((x) => x.slice(0, 10)))] : [];
   const cut = cutoffOf(row.wd[row.wd.length - 1], n, intraday, days);
   const k = Math.max(0, row.wd.findIndex((x) => key(x) >= cut)), j = row.we.length - 1;
   const ret = row.we[j] / row.we[k] - 1, bret = row.wb[j] / row.wb[k] - 1;
   const cl = row.ct.filter(([o]) => key(o) >= cut);
-  return { ret, bret, ex: ret - bret, n: cl.length, w: cl.filter(([, r]) => r > 0).length, from: row.wd[k] };
+  return { ret, bret, ex: ret - bret, n: cl.length, w: cl.filter(([, r]) => r > 0).length, open, from: row.wd[k] };
 }
 
 /**
@@ -149,7 +164,7 @@ export function windowSummary(rows, statOf, onlyNow = true) {
   const sh = R.map((r) => r.sh).filter((x) => x != null && Number.isFinite(x)).sort((a, b) => a - b);
   return {
     n: R.length, profitable: W.filter((q) => q.ret > 0).length, beat: W.filter((q) => q.ret > q.bret).length,
-    win: trades ? wins / trades : null, trades, medSharpe: sh.length ? sh[Math.floor(sh.length / 2)] : null,
+    win: trades ? wins / trades : null, trades, open: W.reduce((a, q) => a + (q.open || 0), 0), medSharpe: sh.length ? sh[Math.floor(sh.length / 2)] : null,
   };
 }
 

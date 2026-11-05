@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import * as BT from "../../app/iq/sl/engine.js";
 import { valCfg } from "../../app/iq/sl/lab-config.js";
-import { computeRow, cutoffOf, prepBars, windowOpts, windowStats, windowSummary, windowLabel } from "../../app/iq/sl/lab-run.js";
+import { computeRow, cutoffOf, prepBars, windowOpts, windowPick, windowStats, windowSummary, windowLabel } from "../../app/iq/sl/lab-run.js";
 
 const fx = JSON.parse(fs.readFileSync(new URL("./fixtures/fmp-bars-2026-10-30.json", import.meta.url), "utf8"));
 const rows = (a) => a.map(([date, open, high, low, close, volume]) => ({ date, open, high, low, close, volume }));
@@ -102,5 +102,42 @@ describe("summary tiles over stocks triggered on the last bar", () => {
     assert.equal(S.trades, 6);
     assert.equal(S.win, 4 / 6);
     assert.equal(S.medSharpe, 0.8); // sorted [-0.4, 0.1, 0.8, 1.2], element ⌊4/2⌋
+  });
+});
+
+describe("no window picked: the whole backtest period, as the full report shows it", () => {
+  it("no chip is selected by default; a picked chip is used, picking it again clears it", () => {
+    assert.equal(windowPick("d", undefined), null);
+    assert.equal(windowPick("d", ""), null);
+    assert.equal(windowPick("d", "4"), 4);
+    assert.equal(windowPick("d", "7777"), null, "a value the candle does not offer is not a window");
+  });
+  for (const t of ["AAPL", "NVDA", "MSFT"]) {
+    it(`${t}: RETURN, VS B&H, WIN %, TRADES over the full period match the report's metrics and trades`, () => {
+      const bars = prepBars(rows(fx.daily[t]), "d");
+      const row = computeRow(t, t, bars, SPEC, CFG, "d");
+      const r = BT.runRules(bars, SPEC, { ...CFG, startDate: "2025-10-30" });
+      const w = windowStats(row, null, false);
+      assert.equal(w.ret, r.m.tot);
+      assert.equal(w.bret, r.mb.tot);
+      const closed = r.trades.filter((x) => x.why !== "Still open");
+      assert.equal(w.n, closed.length);
+      assert.equal(w.w, closed.filter((x) => x.ret > 0).length);
+      assert.equal(w.open, r.trades.length - closed.length);
+    });
+  }
+});
+
+describe("a position still open counts as a trade in the window", () => {
+  it("a stock profitable on an open position shows it under TRADES (profitable with 0 closed trades was unexplained)", () => {
+    const bars = prepBars(rows(fx.daily.NVDA), "d");
+    // Enter once and never exit: the window return comes only from the open position.
+    const spec = { entry: [{ a: { ind: "close" }, op: ">", b: { ind: "num", v: 0 } }], exit: [] };
+    const row = computeRow("NVDA", "NVDA", bars, spec, CFG, "d");
+    const w = windowStats(row, 30, false);
+    assert.equal(w.n, 0);
+    assert.equal(w.open, 1);
+    const S = windowSummary([{ ...row, ago: 0 }], () => w);
+    assert.equal(S.open, 1);
   });
 });

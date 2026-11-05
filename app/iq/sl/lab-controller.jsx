@@ -18,7 +18,7 @@ import * as Engine from "./engine";
 import LabView, { LAB_HOVER_CSS } from "./lab-view";
 import { apiDelete, apiGet, apiPost, backendUrl } from "../backend";
 import { COST_OPTS, STOP_PCTS, TP_PCTS, exitPlanKeys, exitPlanSummary, periodChoices, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
-import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, prepBars, progressiveView, scanChunk, universeUrl, windowLabel, windowOpts, windowStats } from "./lab-run";
+import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, prepBars, progressiveView, scanChunk, universeUrl, windowLabel, windowOpts, windowPick, windowStats } from "./lab-run";
 
 const _o=(ind,n,mult)=>{const o={ind};if(n!=null)o.n=n;if(mult!=null)o.mult=mult;return o},_v=v=>({ind:'num',v}),_c=(a,op,b)=>({a,op,b}),CL=_o('close');
 const HOLDS=['Intraday','Days','Days–weeks','Weeks','Weeks–months','Months'];
@@ -492,28 +492,34 @@ export default class StrategyLab extends Component {
       unparsed: un, onDismiss: un ? () => this.setState({ unparsedAck: true }) : null, onEdit: un ? () => this.openEdit(k) : null,
     };
   }
-  /** The "Return over" window picked for a strategy on its candle (trading minutes intraday, calendar days otherwise). */
+  /**
+   * The "Return over" window picked for a strategy on its candle (trading minutes intraday, calendar days otherwise).
+   * n is null until a chip is picked: the whole backtest period, the same numbers as the full report.
+   */
   winOf(k, tf) {
-    const o = windowOpts(tf), key = k + "|" + tf, want = +this.state.wins[key], more = !!this.state.winMore[key] || o.more.includes(want);
+    const o = windowOpts(tf), key = k + "|" + tf, n = windowPick(tf, this.state.wins[key]), more = !!this.state.winMore[key] || o.more.includes(n);
     const list = [...o.base, ...(more ? o.more : [])];
-    return { ...o, key, more, list, n: list.includes(want) ? want : o.def };
+    const full = periodLabel(periodOfCfg(this.engCfg(k)));
+    // wl names the span in column heads; over reads in a sentence ("over the last 4D" / "over the full 3Y backtest").
+    return { ...o, key, more, list, n, wl: n == null ? full : windowLabel(n, o.intra), over: n == null ? "the full " + full + " backtest" : "the last " + windowLabel(n, o.intra) };
   }
   resultsVm(k, show) {
     if (!show) return { show: false };
     const st = this.state, v = st.vals[k] || {}, sig = this.sigOf(k), blocked = this.blockedOf(k), fresh = !!(v.at && v.sig === sig);
-    const tf = v.tf || this.tfOf(k), W = this.winOf(k, tf), wl = windowLabel(W.n, W.intra), rows = v.rows || [], busy = !!v.busy, ran = busy || !!v.at;
+    const tf = v.tf || this.tfOf(k), W = this.winOf(k, tf), wl = W.wl, over = W.over, rows = v.rows || [], busy = !!v.busy, ran = busy || !!v.at;
     const stat = new Map(rows.map((r) => [r.t, windowStats(r, W.n, W.intra)])), statOf = (r) => stat.get(r.t);
     const view = ran ? progressiveView(v, statOf, v.expanded) : null, S = view && view.summary;
     const pct = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
     const tiles = S ? [
-      ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "#3ddc84" : null, "Stocks where the strategy made money over the last " + wl + " (equity now ÷ equity at the start of the window)"],
-      ["BEAT BUY & HOLD", S.beat + " / " + S.n, null, "Stocks where the strategy's return over the last " + wl + " beat buying and holding the stock over the same window"],
-      ["WIN RATE", pct(S.win), null, "Winning trades ÷ all closed trades that exited in the last " + wl + ", pooled across the stocks"],
+      ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "#3ddc84" : null, "Stocks where the strategy made money over " + over + " (equity now ÷ equity at the start), including gains on positions still open — counted under Trades as open"],
+      ["BEAT BUY & HOLD", S.beat + " / " + S.n, null, "Stocks where the strategy's return over " + over + " beat buying and holding the stock over the same span"],
+      ["WIN RATE", pct(S.win), null, "Winning trades ÷ all closed trades that exited over " + over + ", pooled across the stocks"],
       ["MEDIAN SHARPE", fx(S.medSharpe), sc(S.medSharpe), "Median of each stock's Sharpe ratio over the full backtest period (" + periodLabel(periodOfCfg(v.cfg || this.engCfg(k))) + "), not just the window — upper median for an even count"],
-      ["TRADES", String(S.trades), null, "Closed trades that exited in the last " + wl + ", summed across the stocks"],
+      ["TRADES", String(S.trades) + (S.open ? " + " + S.open + " open" : ""), null, "Closed trades that exited over " + over + ", summed across the stocks, plus positions still open (their gain or loss is in the returns, not the win rate)"],
     ] : [];
     const basis = !view ? "" : view.matches ? "the " + view.matches + (view.matches === 1 ? " stock that meets" : " stocks that meet") + " the rules" + (view.soFar ? " so far" : " now") : "all " + (S ? S.n : 0) + " tested stocks";
-    const setWin = (n) => this.setState((s) => ({ wins: { ...s.wins, [W.key]: String(n) } }));
+    // Picking the selected chip again clears it (back to the whole backtest period).
+    const setWin = (n) => this.setState((s) => ({ wins: { ...s.wins, [W.key]: n === W.n ? "" : String(n) } }));
     const setExpanded = (on) => this.setState((s) => (s.vals[k] ? { vals: { ...s.vals, [k]: { ...s.vals[k], expanded: on } } } : null));
     const period = v.cfg ? periodLabel(periodOfCfg(v.cfg)) + " " + tfL(v.tf).toLowerCase() : "";
     return {
@@ -527,18 +533,18 @@ export default class StrategyLab extends Component {
       meta: busy ? `${period} · FMP · scanning…` + (v.fail ? ` · ${v.fail} unavailable` : "")
         : v.at ? `${period} · FMP · as of ${v.asOf ? fmtDt(v.asOf) : "—"} · ${rows.length} tested` + (v.fail ? ` · ${v.fail} unavailable` : "") + (v.insuf ? ` · ${v.insuf} insufficient history` : "") : "",
       soFar: !!(view && view.soFar),
-      sumNote: S ? (view.soFar ? "So far: over " : "Over ") + basis + " · last " + wl : "",
+      sumNote: S ? (view.soFar ? "So far: over " : "Over ") + basis + " · " + (W.n == null ? "full " + wl + " backtest" : "last " + wl) : "",
       sum: tiles.map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
       hasWin: !!view && view.visible.length > 0,
       winOpts: W.list.map((n) => ({ l: windowLabel(n, W.intra), on: n === W.n, onClick: () => setWin(n) })),
-      winMore: { l: W.more ? "‹ Less" : "More ›", onClick: () => this.setState((s) => ({ winMore: { ...s.winMore, [W.key]: !W.more }, wins: W.more && !W.base.includes(W.n) ? { ...s.wins, [W.key]: String(W.def) } : s.wins })) },
-      winNote: "Strategy vs buy & hold over the last window of the backtest",
+      winMore: { l: W.more ? "‹ Less" : "More ›", onClick: () => this.setState((s) => ({ winMore: { ...s.winMore, [W.key]: !W.more }, wins: W.more && W.n != null && !W.base.includes(W.n) ? { ...s.wins, [W.key]: "" } : s.wins })) },
+      winNote: W.n == null ? "Showing the full " + wl + " backtest — pick a span to see only its last days" : "Strategy vs buy & hold over the last " + wl + " · click again for the full backtest",
       none: view && view.state === "empty" ? "No stock meets the rules right now. The summary above shows how the strategy has performed over the window on every tested stock." : "",
-      cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", "Strategy return over the last " + wl + ": equity now ÷ equity at the start of the window − 1"], ["VS B&H", "right", "Strategy return minus buy & hold return over the same window (% difference)"], ["WIN %", "right", "Winning ÷ closed trades that exited in the window"], ["TRADES", "right", "Closed trades that exited in the window"]].map(([l, al, title]) => ({ l, al, title })),
+      cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", "Strategy return over " + over + ": equity now ÷ equity at the start − 1"], ["VS B&H", "right", "Strategy return minus buy & hold return over the same span (% difference)"], ["WIN %", "right", "Winning ÷ closed trades that exited over " + over], ["TRADES", "right", "Closed trades that exited over " + over + ", plus a position still open"]].map(([l, al, title]) => ({ l, al, title })),
       rows: view ? view.visible.map((r) => {
         const w = statOf(r), q = st.quotes[r.t];
         return { t: r.t, n: r.n, logo: LOGO(r.t), px: q ? "$" + q.p.toFixed(2) : "—", chg: q && q.c != null ? (q.c >= 0 ? "+" : "−") + Math.abs(q.c).toFixed(2) + "%" : "", chgC: q && q.c != null ? sc(q.c) : C_MUTE,
-          ret: p1(w.ret), retC: sc1(w.ret), ex: pp(w.ex), exC: sc1(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n),
+          ret: p1(w.ret), retC: sc1(w.ret), ex: pp(w.ex), exC: sc1(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n) + (w.open ? " + " + w.open + " open" : ""),
           onClick: () => this.openChart(k, r.t, r.n) };
       }) : [],
       more: view && view.more ? { l: view.more.label, onClick: () => setExpanded(view.more.next) } : null,
@@ -576,11 +582,14 @@ export default class StrategyLab extends Component {
     const base = { open: true, t: o.t, n: o.n || "", close, stop: (e) => e.stopPropagation(), onReport: () => this.openReport(o.k, o.t, o.n) };
     const R = this.stockRun(o.k, o.t, () => this.forceUpdate());
     if (!R.r) return { ...base, sub: tfL(R.tf) + " candles", busy: R.busy || "", err: R.err || "" };
-    const BT = Engine, { bars, r, cfg, spec, tf } = R, W = this.winOf(o.k, tf), wl = windowLabel(W.n, W.intra), N0 = bars.length;
+    const BT = Engine, { bars, r, cfg, spec, tf } = R, W = this.winOf(o.k, tf), wl = W.wl, N0 = bars.length;
     // Same window and numbers as the table row.
-    const row = { wd: (r.eqBar || r.eq).map((x) => String(x.date)), we: (r.eqBar || r.eq).map((x) => x.v), wb: (r.bhBar || r.bh).map((x) => x.v), ct: r.trades.filter((x) => x.why !== "Still open").map((x) => [String(x.outDate), x.ret]) };
+    const closed = r.trades.filter((x) => x.why !== "Still open");
+    const row = { wd: (r.eqBar || r.eq).map((x) => String(x.date)), we: (r.eqBar || r.eq).map((x) => x.v), wb: (r.bhBar || r.bh).map((x) => x.v), ct: closed.map((x) => [String(x.outDate), x.ret]),
+      tot: r.m.tot, btot: r.mb.tot, closed: closed.length, wins: closed.filter((x) => x.ret > 0).length, open: r.trades.length - closed.length };
     const w = windowStats(row, W.n, W.intra);
-    const key = (d) => (W.intra ? String(d) : String(d).slice(0, 10)), cut = key(w.from);
+    // No window picked: every trade of the backtest.
+    const key = (d) => (W.intra ? String(d) : String(d).slice(0, 10)), cut = w.from ? key(w.from) : "";
     const shown = r.trades.filter((x) => key(x.outDate) >= cut);
     // Chart from the window start, or the first shown trade's entry if earlier; at least 20 bars.
     let i0 = bars.findIndex((b) => key(b.date) >= cut);
@@ -622,8 +631,8 @@ export default class StrategyLab extends Component {
       ...base, has: true,
       sub: tfL(tf) + " candles · return over " + wl + " · " + fmtDt(pts[0].date) + " – " + fmtDt(pts[N - 1].date),
       stats: [
-        ["STRATEGY", p1(w.ret), sc(w.ret), "Strategy return over the last " + wl + " (same as the table)"], ["BUY & HOLD", p1(w.bret), sc(w.bret), "Buy & hold return over the same window"],
-        ["TRADES", String(w.n), "#e6ebe8", "Closed trades that exited in the window" + (shown.some((x) => x.why === "Still open") ? " · the open position is drawn but not counted" : "")], ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Winning ÷ closed trades in the window"],
+        ["STRATEGY", p1(w.ret), sc(w.ret), "Strategy return over " + W.over + " (same as the table)"], ["BUY & HOLD", p1(w.bret), sc(w.bret), "Buy & hold return over the same span"],
+        ["TRADES", String(w.n) + (w.open ? " + " + w.open + " open" : ""), "#e6ebe8", "Closed trades that exited over " + W.over + ", plus a position still open"], ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Winning ÷ closed trades over " + W.over],
       ].map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
       levels: lv, line, area: line + "L1000,300L0,300Z", trades, winX: wi > 0 ? X(wi).toFixed(1) : null, winL: wi > 0 ? ((wi / Math.max(N - 1, 1)) * 100).toFixed(2) + "%" : null, winT: "Window start · " + fmtDt(w.from) + " — returns are measured from here", hi: hi.toFixed(2), lo: lo.toFixed(2), d0: fmtDt(pts[0].date), d1: fmtDt(pts[N - 1].date),
       tradeNote: trades.length ? "" : "No trade exited in this window.",
