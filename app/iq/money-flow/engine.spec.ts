@@ -634,10 +634,9 @@ describe("Money Flow pop-up loading text", () => {
 
 describe("Money Flow pop-up: no stale preview, Esc always closes", () => {
   const T = board.gainers[0].t;
-  it("a hover preview lets the pointer through to the tiles underneath; only a pinned pop-up takes clicks", () => {
-    // The pop-up is wider than a tile and sits beside it; an interactive preview held the pointer,
-    // so the next tile got no hover until it was left (the 2–5 s stale pop-up).
-    assert.equal(popoverInteractive({ key: T, pinned: false }), false);
+  it("the pointer can move from the tile onto a hover preview and use it; pinned or not, the open pop-up takes the pointer", () => {
+    // Entering another tile still closes an unpinned preview at once (handleTileEnter), so it cannot go stale.
+    assert.equal(popoverInteractive({ key: T, pinned: false }), true);
     assert.equal(popoverInteractive({ key: T, pinned: true }), true);
     assert.equal(popoverInteractive(null), false);
   });

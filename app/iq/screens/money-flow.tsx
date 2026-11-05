@@ -274,7 +274,8 @@ export function MoneyFlowScreen() {
 
   const handleTileLeave = () => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "leave" }), 200);
+    // Long enough to cross the gap from the tile to the pop-up, whose mouseenter cancels it.
+    hoverTimeoutRef.current = setTimeout(() => applyPop({ type: "leave" }), 300);
   };
 
   // A click shows the SAME pop-up as hover, pinned (popoverNext) — not the app-wide detail window.
@@ -2552,7 +2553,7 @@ export function MoneyFlowScreen() {
               overflowY: vw < 768 ? "auto" : "hidden",
               transform: `scale(${scale})`,
               transformOrigin: "top left",
-              // A hover preview lets the pointer through to the tiles it covers; a pinned one is interactive.
+              // Open pop-ups take the pointer so it can move from the tile onto the preview.
               pointerEvents: popoverInteractive({ key: s.t, pinned: !!hoveredStock.pinned }) ? "auto" : "none",
               background: `linear-gradient(180deg, ${bull ? "rgba(61,220,132,.10)" : "rgba(240,86,90,.10)"}, transparent 110px), #0b0d0e`,
               border: `1px solid ${bull ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)"}`,

@@ -262,12 +262,12 @@ export type PopoverEvent = { type: "enter" | "click"; key: string } | { type: "l
  * outside or Esc).
  */
 /**
- * Whether the pop-up takes the pointer. A hover preview does not: it is wider
- * than a tile and sits beside it, so an interactive preview held the pointer and
- * the tile underneath got no hover until it was left (the previous stock stayed
- * up for seconds). A pinned pop-up (after a click) is interactive.
+ * Whether the pop-up takes the pointer: whenever it is open, so the pointer can
+ * move from the tile onto a hover preview (the leave grace period covers the gap)
+ * and use its controls. Entering another tile closes an unpinned preview at
+ * once, so it does not linger over the board.
  */
-export const popoverInteractive = (cur: PopoverState | null): boolean => !!cur?.pinned;
+export const popoverInteractive = (cur: PopoverState | null): boolean => !!cur;
 
 /** Pop-up chart placeholder while its bars load: the timeframe shown (5m by default), not the 1-minute bars it is grouped from. */
 export const popChartLoadingText = (sym: string, minutes: number): string => `Loading ${sym} ${minutes}m chart…`;
