@@ -15,12 +15,6 @@ const SMA = (n) => ({ ind: "sma", n });
 const SPEC = { entry: [{ a: SMA(20), op: "crosses above", b: SMA(50) }], exit: [{ a: SMA(20), op: "crosses below", b: SMA(50) }] };
 const CFG = valCfg({ stopM: "none", tpM: "none", trA: "never", be: "off", maxB: "none", cost: "5", yrs: "1" }, "d");
 
-/** Independent reference: window return straight from the engine's equity curve. */
-function refWindow(eq, cutoff) {
-  const s0 = eq.find((x) => String(x.date) >= cutoff) || eq[0];
-  return eq[eq.length - 1].v / s0.v - 1;
-}
-
 describe("window chips", () => {
   it("daily, weekly and intraday chips are the PDF's, default the third", () => {
     assert.deepEqual(windowOpts("d").base, [2, 3, 4, 5, 10, 20, 30]);
@@ -47,47 +41,6 @@ describe("window cutoff", () => {
     assert.equal(cutoffOf("2026-10-30 15:55:00", 390, true, days), "2026-10-30");
     assert.equal(cutoffOf("2026-10-30 15:55:00", 780, true, days), "2026-10-29");
     assert.equal(cutoffOf("2026-10-30 15:55:00", 60, true, days), "2026-10-30 14:55:00");
-  });
-});
-
-describe("per-stock window stats (real AAPL / NVDA / MSFT daily bars)", () => {
-  for (const t of ["AAPL", "NVDA", "MSFT"]) {
-    it(`${t}: RETURN, VS B&H, WIN %, TRADES match the engine's own curve and trades`, () => {
-      const bars = prepBars(rows(fx.daily[t]), "d");
-      const row = computeRow(t, t, bars, SPEC, CFG, "d");
-      assert.equal(row.status, "ok");
-      const r = BT.runRules(bars, SPEC, { ...CFG, startDate: "2025-10-30" });
-      for (const n of [30, 90, 365]) {
-        const cut = cutoffOf(String(bars[bars.length - 1].date), n, false);
-        const w = windowStats(row, n, false);
-        assert.ok(Math.abs(w.ret - refWindow(r.eq, cut)) < 1e-12, `ret ${n}`);
-        assert.ok(Math.abs(w.bret - refWindow(r.bh, cut)) < 1e-12, `bret ${n}`);
-        assert.ok(Math.abs(w.ex - (w.ret - w.bret)) < 1e-15);
-        const closed = r.trades.filter((x) => x.why !== "Still open" && String(x.outDate) >= cut);
-        assert.equal(w.n, closed.length, `trades ${n}`);
-        assert.equal(w.w, closed.filter((x) => x.ret > 0).length, `wins ${n}`);
-      }
-    });
-  }
-});
-
-describe("intraday window stats use per-bar equity (real AAPL 5-minute bars)", () => {
-  it("a 60-minute window measures the last hour, not the whole day", () => {
-    const bars = prepBars(rows(fx.m5.AAPL), "5m");
-    const spec = { entry: [{ a: { ind: "ema", n: 9 }, op: "crosses above", b: { ind: "ema", n: 20 } }], exit: [{ a: { ind: "ema", n: 9 }, op: "crosses below", b: { ind: "ema", n: 20 } }] };
-    const cfg = valCfg({ stopM: "none", tpM: "none", trA: "never", be: "off", maxB: "none", cost: "0", idays_5m: "7" }, "5m");
-    const row = computeRow("AAPL", "Apple", bars, spec, cfg, "5m");
-    assert.equal(row.status, "ok");
-    const r = BT.runRules(bars, spec, { ...cfg, startDate: row.start });
-    const L = String(bars[bars.length - 1].date);
-    const cut = cutoffOf(L, 60, true);
-    assert.equal(cut, "2026-10-30 14:55:00");
-    const w = windowStats(row, 60, true);
-    assert.ok(Math.abs(w.bret - refWindow(r.bhBar, cut)) < 1e-12);
-    assert.ok(Math.abs(w.ret - refWindow(r.eqBar, cut)) < 1e-12);
-    // buy & hold over the last hour = last close / close of the first bar at or after 14:55
-    const b0 = bars.find((b) => String(b.date) >= cut);
-    assert.ok(Math.abs(w.bret - (bars[bars.length - 1].close / b0.close - 1)) < 1e-12);
   });
 });
 
@@ -126,18 +79,4 @@ describe("no window picked: the whole backtest period, as the full report shows 
       assert.equal(w.open, r.trades.length - closed.length);
     });
   }
-});
-
-describe("a position still open counts as a trade in the window", () => {
-  it("a stock profitable on an open position shows it under TRADES (profitable with 0 closed trades was unexplained)", () => {
-    const bars = prepBars(rows(fx.daily.NVDA), "d");
-    // Enter once and never exit: the window return comes only from the open position.
-    const spec = { entry: [{ a: { ind: "close" }, op: ">", b: { ind: "num", v: 0 } }], exit: [] };
-    const row = computeRow("NVDA", "NVDA", bars, spec, CFG, "d");
-    const w = windowStats(row, 30, false);
-    assert.equal(w.n, 0);
-    assert.equal(w.open, 1);
-    const S = windowSummary([{ ...row, ago: 0 }], () => w);
-    assert.equal(S.open, 1);
-  });
 });

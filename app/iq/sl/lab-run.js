@@ -73,8 +73,10 @@ export function computeRow(t, n, bars, spec, cfg, tf) {
   if (!r) return { t, n, status: "insufficient", asOf };
   const ev = BT.evalLast(bars, spec, lookbackFor(tf));
   const closed = r.trades.filter((x) => x.why !== "Still open");
+  const o = windowOpts(tf), fw = {};
+  for (const w of [...o.base, ...o.more]) { const f = forwardStats(bars, r, w, tf); fw[w] = { ret: f.ret, base: f.base, n: f.n, w: f.w }; }
   return {
-    ...windowSeries(r, closed, tf),
+    fw,
     t, n, status: "ok", asOf, last: L.close,
     sig: ev ? ev.status : null, ago: ev ? ev.ago : null, met: ev ? ev.met : 0, total: ev ? ev.total : 0,
     cagr: r.m.cagr, bcagr: r.mb.cagr, tot: r.m.tot, btot: r.mb.tot, sh: r.m.sharpe, dd: r.m.dd, win: r.m.win,
@@ -144,40 +146,51 @@ export function cutoffOf(last, n, intraday, days = []) {
   return d + " " + hm(t - rem);
 }
 
-/** Largest window a candle offers, so the row keeps only the tail it can show. */
-const maxWindow = (tf) => { const o = windowOpts(tf); return Math.max(...o.base, ...o.more); };
-
-/** The tail of the per-bar curves and the closed trades that any window can need. */
-function windowSeries(r, closed, tf) {
-  const intra = BT.isIntradayTf(tf), eq = r.eqBar || r.eq, bh = r.bhBar || r.bh;
-  const ds = eq.map((x) => String(x.date)), days = intra ? [...new Set(ds.map((x) => x.slice(0, 10)))] : [];
-  const cut = cutoffOf(ds[ds.length - 1], maxWindow(tf), intra, days);
-  const k = Math.max(0, ds.findIndex((x) => (intra ? x : x.slice(0, 10)) >= cut));
-  return {
-    wd: ds.slice(k), we: eq.slice(k).map((x) => x.v), wb: bh.slice(k).map((x) => x.v),
-    ct: closed.map((x) => [String(x.outDate), x.ret]).filter(([o]) => (intra ? o : o.slice(0, 10)) >= cut),
+/**
+ * "Return over N" for one stock: every entry the strategy took in the backtest
+ * (open or closed), and the return from its entry price to the close N later —
+ * N calendar days on daily / weekly candles (the first bar on or after), N
+ * trading minutes intraday (N ÷ the candle's minutes bars on). A signal too
+ * recent to have N after it is left out (rets[i] null). base = the stock's own
+ * average N return from every bar of the test window, the bar a random entry
+ * would get. ret / base are null when nothing can be measured.
+ */
+export function forwardStats(bars, r, n, tf) {
+  const intra = BT.isIntradayTf(tf), step = intra ? Math.max(1, Math.round(n / BT.TF[tf].min)) : 0;
+  const ds = bars.map((b) => String(b.date).slice(0, 10)), ix = new Map(bars.map((b, i) => [String(b.date), i]));
+  const plus = (d) => { const c = new Date(d + "T00:00:00Z"); c.setUTCDate(c.getUTCDate() + n); return c.toISOString().slice(0, 10); };
+  // First bar at or after bar i + N; the target only moves forward with i, so one pointer serves the whole pass.
+  let j = 0;
+  const fwd = (i) => {
+    if (intra) return i + step < bars.length ? i + step : -1;
+    const cut = plus(ds[i]);
+    if (j <= i) j = i + 1;
+    while (j < bars.length && ds[j] < cut) j++;
+    return j < bars.length ? j : -1;
   };
+  const base = [];
+  for (let i = r.start; i < bars.length; i++) { const k = fwd(i); if (k < 0) break; base.push(bars[k].close / bars[i].close - 1); }
+  j = 0;
+  const rets = r.trades.map((t) => { const i = ix.get(String(t.inDate)); const k = i == null ? -1 : fwd(i); return k < 0 ? null : bars[k].close / t.inPx - 1; });
+  const got = rets.filter((x) => x != null), mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  return { rets, ret: mean(got), base: mean(base), n: got.length, w: got.filter((x) => x > 0).length };
 }
 
 /**
- * One stock over the last `n`: ret = strategy equity now ÷ equity at the first
- * point inside the window − 1; bret the same for buy & hold; ex = ret − bret;
- * n / w = closed trades (and winners) that exited inside the window; open = a
- * position still held at the end (it is in every window, and can be all of the
- * window's return). `n` null = the whole backtest period, as the full report.
+ * One stock's numbers for the results list. With a chip `n`: the strategy's
+ * signals measured N after entry (forwardStats) — ret = their average return,
+ * bret = the stock's own average N return, ex = ret − bret, n / w = signals
+ * measured (and those up). `n` null = the whole backtest, as the full report:
+ * total strategy vs buy & hold return, closed trades and wins, open = a
+ * position still held.
  */
 export function windowStats(row, n, intraday) {
+  void intraday;
   if (!row) return null;
-  const open = row.open || 0;
-  if (n == null) return row.tot == null ? null : { ret: row.tot, bret: row.btot, ex: row.tot - row.btot, n: row.closed, w: row.wins, open, from: null };
-  if (!row.wd || !row.wd.length) return null;
-  const key = (x) => (intraday ? x : x.slice(0, 10));
-  const days = intraday ? [...new Set(row.wd.map((x) => x.slice(0, 10)))] : [];
-  const cut = cutoffOf(row.wd[row.wd.length - 1], n, intraday, days);
-  const k = Math.max(0, row.wd.findIndex((x) => key(x) >= cut)), j = row.we.length - 1;
-  const ret = row.we[j] / row.we[k] - 1, bret = row.wb[j] / row.wb[k] - 1;
-  const cl = row.ct.filter(([o]) => key(o) >= cut);
-  return { ret, bret, ex: ret - bret, n: cl.length, w: cl.filter(([, r]) => r > 0).length, open, from: row.wd[k] };
+  if (n == null) return row.tot == null ? null : { ret: row.tot, bret: row.btot, ex: row.tot - row.btot, n: row.closed, w: row.wins, open: row.open || 0 };
+  const f = row.fw && row.fw[n];
+  if (!f) return null;
+  return { ret: f.ret, bret: f.base, ex: f.ret == null || f.base == null ? null : f.ret - f.base, n: f.n, w: f.w, open: 0 };
 }
 
 /**
@@ -191,7 +204,7 @@ export function windowSummary(rows, statOf, onlyNow = true) {
   const trades = W.reduce((a, q) => a + q.n, 0), wins = W.reduce((a, q) => a + q.w, 0);
   const sh = R.map((r) => r.sh).filter((x) => x != null && Number.isFinite(x)).sort((a, b) => a - b);
   return {
-    n: R.length, profitable: W.filter((q) => q.ret > 0).length, beat: W.filter((q) => q.ret > q.bret).length,
+    n: R.length, profitable: W.filter((q) => q.ret != null && q.ret > 0).length, beat: W.filter((q) => q.ret != null && q.bret != null && q.ret > q.bret).length,
     win: trades ? wins / trades : null, trades, open: W.reduce((a, q) => a + (q.open || 0), 0), medSharpe: sh.length ? sh[Math.floor(sh.length / 2)] : null,
   };
 }

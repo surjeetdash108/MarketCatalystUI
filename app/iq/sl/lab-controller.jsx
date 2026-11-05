@@ -18,7 +18,7 @@ import * as Engine from "./engine";
 import LabView, { LAB_HOVER_CSS } from "./lab-view";
 import { apiDelete, apiGet, apiPost, backendUrl } from "../backend";
 import { COST_OPTS, STOP_PCTS, TP_PCTS, exitPlanKeys, exitPlanSummary, periodChoices, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
-import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, prepBars, priceChart, progressiveView, scanChunk, universeUrl, windowLabel, windowOpts, windowPick, windowStats } from "./lab-run";
+import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, forwardStats, prepBars, priceChart, progressiveView, scanChunk, universeUrl, windowLabel, windowOpts, windowPick, windowStats } from "./lab-run";
 
 const _o=(ind,n,mult)=>{const o={ind};if(n!=null)o.n=n;if(mult!=null)o.mult=mult;return o},_v=v=>({ind:'num',v}),_c=(a,op,b)=>({a,op,b}),CL=_o('close');
 const HOLDS=['Intraday','Days','Days–weeks','Weeks','Weeks–months','Months'];
@@ -493,15 +493,16 @@ export default class StrategyLab extends Component {
     };
   }
   /**
-   * The "Return over" window picked for a strategy on its candle (trading minutes intraday, calendar days otherwise).
-   * n is null until a chip is picked: the whole backtest period, the same numbers as the full report.
+   * The "Return over" chip picked for a strategy on its candle (trading minutes intraday, calendar days otherwise).
+   * A chip measures each of the strategy's signals N after entry (forwardStats). n is null until a chip is
+   * picked: the whole backtest period, the same numbers as the full report.
    */
   winOf(k, tf) {
     const o = windowOpts(tf), key = k + "|" + tf, n = windowPick(tf, this.state.wins[key]), more = !!this.state.winMore[key] || o.more.includes(n);
     const list = [...o.base, ...(more ? o.more : [])];
     const full = periodLabel(periodOfCfg(this.engCfg(k)));
-    // wl names the span in column heads; over reads in a sentence ("over the last 4D" / "over the full 3Y backtest").
-    return { ...o, key, more, list, n, wl: n == null ? full : windowLabel(n, o.intra), over: n == null ? "the full " + full + " backtest" : "the last " + windowLabel(n, o.intra) };
+    // wl names the span in column heads; over reads in a sentence ("4D after each signal" / "the full 3Y backtest").
+    return { ...o, key, more, list, n, wl: n == null ? full : windowLabel(n, o.intra), over: n == null ? "the full " + full + " backtest" : windowLabel(n, o.intra) + " after each signal" };
   }
   resultsVm(k, show) {
     if (!show) return { show: false };
@@ -510,12 +511,30 @@ export default class StrategyLab extends Component {
     const stat = new Map(rows.map((r) => [r.t, windowStats(r, W.n, W.intra)])), statOf = (r) => stat.get(r.t);
     const view = ran ? progressiveView(v, statOf, v.expanded) : null, S = view && view.summary;
     const pct = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
+    const chip = W.n != null;
+    // Tooltips per mode: a chip measures signals N after entry; no chip is the whole backtest.
+    const T = chip ? {
+      prof: "Stocks whose signals gained on average " + wl + " after entry (entry price → close " + wl + " later, every entry in the backtest)",
+      beat: "Stocks whose average " + wl + " return after a signal beat the stock's own average " + wl + " return over the test period",
+      win: "Signals up " + wl + " after entry ÷ signals measured, pooled across the stocks",
+      tr: "Signals in the backtest that have " + wl + " of bars after them, summed across the stocks",
+      ret: "Average return " + wl + " after each signal: entry price → the close " + wl + " later",
+      ex: "That average minus the stock's own average " + wl + " return over the test period (any entry day)",
+      wpc: "Signals up " + wl + " after entry ÷ signals measured", trc: "Signals in the backtest with " + wl + " of bars after them",
+    } : {
+      prof: "Stocks where the strategy made money over " + over + " (equity now ÷ equity at the start), including positions still open",
+      beat: "Stocks where the strategy beat buying and holding the stock over " + over,
+      win: "Winning ÷ closed trades over " + over + ", pooled across the stocks",
+      tr: "Closed trades over " + over + ", summed across the stocks, plus positions still open",
+      ret: "Strategy return over " + over + ": equity now ÷ equity at the start − 1", ex: "Strategy return minus buy & hold return over " + over,
+      wpc: "Winning ÷ closed trades over " + over, trc: "Closed trades over " + over + ", plus a position still open",
+    };
     const tiles = S ? [
-      ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "#3ddc84" : null, "Stocks where the strategy made money over " + over + " (equity now ÷ equity at the start), including gains on positions still open — counted under Trades as open"],
-      ["BEAT BUY & HOLD", S.beat + " / " + S.n, null, "Stocks where the strategy's return over " + over + " beat buying and holding the stock over the same span"],
-      ["WIN RATE", pct(S.win), null, "Winning trades ÷ all closed trades that exited over " + over + ", pooled across the stocks"],
+      ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "#3ddc84" : null, T.prof],
+      [chip ? "BEAT STOCK AVG" : "BEAT BUY & HOLD", S.beat + " / " + S.n, null, T.beat],
+      ["WIN RATE", pct(S.win), null, T.win],
       ["MEDIAN SHARPE", fx(S.medSharpe), sc(S.medSharpe), "Median of each stock's Sharpe ratio over the full backtest period (" + periodLabel(periodOfCfg(v.cfg || this.engCfg(k))) + "), not just the window — upper median for an even count"],
-      ["TRADES", String(S.trades) + (S.open ? " + " + S.open + " open" : ""), null, "Closed trades that exited over " + over + ", summed across the stocks, plus positions still open (their gain or loss is in the returns, not the win rate)"],
+      [chip ? "SIGNALS" : "TRADES", String(S.trades) + (S.open ? " + " + S.open + " open" : ""), null, T.tr],
     ] : [];
     const basis = !view ? "" : view.matches ? "the " + view.matches + (view.matches === 1 ? " stock that meets" : " stocks that meet") + " the rules" + (view.soFar ? " so far" : " now") : "all " + (S ? S.n : 0) + " tested stocks";
     // Picking the selected chip again clears it (back to the whole backtest period).
@@ -530,18 +549,18 @@ export default class StrategyLab extends Component {
       stale: !!(v.at && !busy && v.sig !== sig), onRerun: () => this.runValidate(k),
       idle: !ran && !v.err && !blocked, idleT: "Run backtest to see the result.", idleTitle: "Tests these rules on every S&P 500 stock with the candle, period and exit plan shown",
       soFar: !!(view && view.soFar),
-      sumNote: S ? (view.soFar ? "So far: over " : "Over ") + basis + " · " + (W.n == null ? "full " + wl + " backtest" : "last " + wl) : "",
+      sumNote: S ? (view.soFar ? "So far: over " : "Over ") + basis + " · " + (chip ? "return " + over : "full " + wl + " backtest") : "",
       sum: tiles.map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
       hasWin: !!view && view.visible.length > 0,
       winOpts: W.list.map((n) => ({ l: windowLabel(n, W.intra), on: n === W.n, onClick: () => setWin(n) })),
       winMore: { l: W.more ? "‹ Less" : "More ›", onClick: () => this.setState((s) => ({ winMore: { ...s.winMore, [W.key]: !W.more }, wins: W.more && W.n != null && !W.base.includes(W.n) ? { ...s.wins, [W.key]: "" } : s.wins })) },
-      winNote: W.n == null ? "Showing the full " + wl + " backtest — pick a span to see only its last days" : "Strategy vs buy & hold over the last " + wl + " · click again for the full backtest",
-      none: view && view.state === "empty" ? "No stock meets the rules right now. The summary above shows how the strategy has performed over the window on every tested stock." : "",
-      cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", "Strategy return over " + over + ": equity now ÷ equity at the start − 1"], ["VS B&H", "right", "Strategy return minus buy & hold return over the same span (% difference)"], ["WIN %", "right", "Winning ÷ closed trades that exited over " + over], ["TRADES", "right", "Closed trades that exited over " + over + ", plus a position still open"]].map(([l, al, title]) => ({ l, al, title })),
+      winNote: chip ? "Average return " + wl + " after each entry the strategy took · click again for the full backtest" : "Showing the full " + wl + " backtest — pick a span to see the average return that long after each signal",
+      none: view && view.state === "empty" ? "No stock meets the rules right now. The summary above shows how the strategy has performed on every tested stock." : "",
+      cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", T.ret], [chip ? "VS STOCK AVG" : "VS B&H", "right", T.ex], ["WIN %", "right", T.wpc], [chip ? "SIGNALS" : "TRADES", "right", T.trc]].map(([l, al, title]) => ({ l, al, title })),
       rows: view ? view.visible.map((r) => {
         const w = statOf(r), q = st.quotes[r.t];
         return { t: r.t, n: r.n, logo: LOGO(r.t), px: q ? "$" + q.p.toFixed(2) : "—", chg: q && q.c != null ? (q.c >= 0 ? "+" : "−") + Math.abs(q.c).toFixed(2) + "%" : "", chgC: q && q.c != null ? sc(q.c) : C_MUTE,
-          ret: p1(w.ret), retC: sc1(w.ret), ex: pp(w.ex), exC: sc1(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n) + (w.open ? " + " + w.open + " open" : ""),
+          ret: w.ret == null ? "—" : p1(w.ret), retC: sc1(w.ret), ex: w.ex == null ? "—" : pp(w.ex), exC: sc1(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n) + (w.open ? " + " + w.open + " open" : ""),
           onClick: () => this.openChart(k, r.t, r.n) };
       }) : [],
       more: view && view.more ? { l: view.more.label, onClick: () => setExpanded(view.more.next) } : null,
@@ -580,21 +599,20 @@ export default class StrategyLab extends Component {
     const R = this.stockRun(o.k, o.t, () => this.forceUpdate());
     if (!R.r) return { ...base, sub: tfL(R.tf) + " candles", busy: R.busy || "", err: R.err || "" };
     const BT = Engine, { bars, r, cfg, spec, tf } = R, W = this.winOf(o.k, tf), wl = W.wl, N0 = bars.length;
-    // Same window and numbers as the table row.
-    const closed = r.trades.filter((x) => x.why !== "Still open");
-    const row = { wd: (r.eqBar || r.eq).map((x) => String(x.date)), we: (r.eqBar || r.eq).map((x) => x.v), wb: (r.bhBar || r.bh).map((x) => x.v), ct: closed.map((x) => [String(x.outDate), x.ret]),
-      tot: r.m.tot, btot: r.mb.tot, closed: closed.length, wins: closed.filter((x) => x.ret > 0).length, open: r.trades.length - closed.length };
+    // Same numbers as the table row (computeRow's fields, from the same bars and engine config).
+    const closed = r.trades.filter((x) => x.why !== "Still open"), chip = W.n != null;
+    const fw = chip ? forwardStats(bars, r, W.n, tf) : null;
+    const row = { tot: r.m.tot, btot: r.mb.tot, closed: closed.length, wins: closed.filter((x) => x.ret > 0).length, open: r.trades.length - closed.length,
+      fw: chip ? { [W.n]: { ret: fw.ret, base: fw.base, n: fw.n, w: fw.w } } : {} };
     const w = windowStats(row, W.n, W.intra);
-    // No window picked: every trade of the backtest.
-    const key = (d) => (W.intra ? String(d) : String(d).slice(0, 10)), cut = w.from ? key(w.from) : "";
-    const shown = r.trades.filter((x) => key(x.outDate) >= cut);
-    // The chart is the full report's: the whole test window with every trade; the list below is the picked window's trades.
+    // The full report's chart and every trade of the backtest; with a chip, each trade's return that long after entry too.
     const chart = priceChart(bars, r, R.ec, { fmt: fmtDt, tfLabel: tfL(tf) });
     const cs = bars.slice(r.start).map((b) => b.close), lo = Math.min(...cs), hi = Math.max(...cs);
-    const trades = shown.map((x, n) => {
-      const win = x.ret > 0, open = x.why === "Still open";
-      return { n: n + 1, c: win ? "#3ddc84" : "#f0565a", ret: p1(x.ret), inD: fmtDt(x.inDate), outD: open ? "Open" : fmtDt(x.outDate), inPx: x.inPx.toFixed(2), outPx: x.outPx.toFixed(2), days: String(x.days), why: x.why, open };
-    });
+    const trades = r.trades.map((x, n) => {
+      const win = x.ret > 0, open = x.why === "Still open", a = fw ? fw.rets[n] : null;
+      return { n: n + 1, c: win ? "#3ddc84" : "#f0565a", ret: p1(x.ret), inD: fmtDt(x.inDate), outD: open ? "Open" : fmtDt(x.outDate), inPx: x.inPx.toFixed(2), outPx: x.outPx.toFixed(2), days: String(x.days), why: x.why, open,
+        after: a == null ? "—" : p1(a), afterC: a == null ? "#5f6966" : sc(a) };
+    }).reverse();
     // Levels if a position were opened at the last close, with the strategy's exit plan.
     const last = bars[N0 - 1].close, at = (op) => { const s = BT.series(bars, op); const v2 = s && s[N0 - 1]; return v2 != null && Number.isFinite(v2) ? v2 : null; };
     const A = cfg.stopAtr || cfg.trailAtr ? at({ ind: "atr", n: 14 }) : null;
@@ -619,13 +637,18 @@ export default class StrategyLab extends Component {
     ].filter(([kk, vv]) => vv != null || kk.startsWith("STOP") || kk.startsWith("TARGET")).map(([kk, vv, c, title]) => ({ k: kk, v: vv ?? "Not set", c: vv == null ? "#5f6966" : c, title }));
     return {
       ...base, has: true,
-      sub: tfL(tf) + " candles · return over " + (W.n == null ? "the full " + wl + " backtest" : "the last " + wl),
-      stats: [
+      sub: tfL(tf) + " candles · " + (chip ? "return " + W.over : "the full " + wl + " backtest"),
+      stats: (chip ? [
+        ["AVG RETURN · " + wl + " AFTER SIGNAL", w.ret == null ? "—" : p1(w.ret), sc(w.ret), "Average of each signal's return " + wl + " after entry (same as the table)"],
+        ["STOCK AVG · " + wl, w.bret == null ? "—" : p1(w.bret), sc(w.bret), "The stock's own average " + wl + " return over the test period, from any day"],
+        ["SIGNALS", String(w.n), "#e6ebe8", "Entries in the backtest with " + wl + " of bars after them" + (w.n < r.trades.length ? " (" + (r.trades.length - w.n) + " too recent)" : "")],
+        ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Signals up " + wl + " after entry"],
+      ] : [
         ["STRATEGY", p1(w.ret), sc(w.ret), "Strategy return over " + W.over + " (same as the table)"], ["BUY & HOLD", p1(w.bret), sc(w.bret), "Buy & hold return over the same span"],
-        ["TRADES", String(w.n) + (w.open ? " + " + w.open + " open" : ""), "#e6ebe8", "Closed trades that exited over " + W.over + ", plus a position still open"], ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Winning ÷ closed trades over " + W.over],
-      ].map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
-      levels: lv, chart, trades,
-      tradeNote: trades.length ? "" : W.n == null ? "No trades in the backtest." : "No trade exited in this window.",
+        ["TRADES", String(w.n) + (w.open ? " + " + w.open + " open" : ""), "#e6ebe8", "Closed trades over " + W.over + ", plus a position still open"], ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Winning ÷ closed trades over " + W.over],
+      ]).map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
+      levels: lv, chart, trades, afterL: chip ? "AFTER " + wl : "",
+      tradeNote: trades.length ? "" : "No trades in the backtest.",
     };
   }
 

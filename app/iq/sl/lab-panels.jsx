@@ -210,7 +210,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
 /** Row pop-up: the full report's price chart, the window's trades, and levels if entered at the last price. */
 export function ChartModal({ c }) {
   if (!c || !c.open) return null;
-  const cols = "36px minmax(0,1fr) minmax(0,1.3fr) repeat(3,minmax(0,.8fr))";
+  const cols = "36px minmax(0,1fr) minmax(0,1.3fr) repeat(" + (c.afterL ? 4 : 3) + ",minmax(0,.8fr))";
   return (
     <div onClick={c.close} style={{ position: "fixed", inset: 0, background: "rgba(4,5,6,.74)", backdropFilter: "blur(3px)", zIndex: 85, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px", overflowY: "auto" }}>
       <div onClick={c.stop} style={{ width: "100%", maxWidth: 1000, background: C.bg, border: "1px solid #2a2618", borderRadius: 14, boxShadow: "0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(201,162,74,.12)", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -250,7 +250,7 @@ export function ChartModal({ c }) {
             {c.tradeNote ? <div style={{ fontSize: 12.5, color: C.mute }}>{c.tradeNote}</div> : (
               <div style={{ display: "flex", flexDirection: "column", maxHeight: 220, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
                 <div style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "0 8px 6px", fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966", position: "sticky", top: 0, background: C.bg }}>
-                  <span>#</span><span>ENTRY</span><span>EXIT</span><span style={{ textAlign: "right" }}>IN</span><span style={{ textAlign: "right" }}>OUT</span><span style={{ textAlign: "right" }}>RETURN</span>
+                  <span>#</span><span>ENTRY</span><span>EXIT</span><span style={{ textAlign: "right" }}>IN</span><span style={{ textAlign: "right" }}>OUT</span><span style={{ textAlign: "right" }}>RETURN</span>{c.afterL ? <span style={{ textAlign: "right" }} title="Entry price → the close that long after entry">{c.afterL}</span> : null}
                 </div>
                 {c.trades.map((t) => (
                   <div key={t.n} style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: 8, borderTop: "1px solid #15191b", fontSize: 12.5, color: C.text, alignItems: "center" }}>
@@ -260,6 +260,7 @@ export function ChartModal({ c }) {
                     <span style={{ fontFamily: mono, textAlign: "right" }}>{t.inPx}</span>
                     <span style={{ fontFamily: mono, textAlign: "right" }}>{t.outPx}</span>
                     <span style={{ fontFamily: mono, textAlign: "right", color: t.c, fontWeight: 700 }}>{t.ret}</span>
+                    {c.afterL ? <span style={{ fontFamily: mono, textAlign: "right", color: t.afterC, fontWeight: 700 }}>{t.after}</span> : null}
                   </div>
                 ))}
               </div>
