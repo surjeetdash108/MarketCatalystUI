@@ -63,10 +63,3 @@ export async function completeGoogleLogin(userCredential: UserCredential) {
 
   window.location.href = postLoginPath(userCredential.user.email);
 }
-
-export async function checkAndRedirectIfLoggedIn() {
-  await firebaseAuth.authStateReady();
-  if (firebaseAuth.currentUser) {
-    window.location.href = postLoginPath(firebaseAuth.currentUser.email);
-  }
-}

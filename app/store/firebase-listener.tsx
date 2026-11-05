@@ -2,6 +2,7 @@
 
 import { onAuthStateChanged } from "firebase/auth";
 import { useEffect } from "react";
+import { writeAuthHint } from "../auth/auth-gate";
 import { firebaseAuth } from "../firebase";
 import { apiGet } from "../iq/backend";
 import { clearSession } from "../iq/session";
@@ -23,6 +24,8 @@ export function FirebaseListener() {
 
       unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
         if (cancelled) return;
+        // Lets the login page skip its wait for a browser that last saw a sign-out (auth-gate.ts).
+        writeAuthHint(!!user);
 
         if (user) {
           dispatch(

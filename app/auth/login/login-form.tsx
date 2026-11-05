@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import {
-  getRedirectResult,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
@@ -11,7 +10,6 @@ import {
 import { firebaseAuth, googleAuthProvider } from "../../firebase";
 import { postLoginPath } from "../../admin/admin-email";
 import {
-  checkAndRedirectIfLoggedIn,
   completeGoogleLogin,
   getAuthErrorMessage,
   shouldUseGoogleRedirect,
@@ -52,34 +50,23 @@ const divLine: React.CSSProperties = {
   flex: 1, height: 1, background: "var(--border-soft)",
 };
 
-export function LoginForm() {
+/** The form itself; LoginScreen decides whether it shows and passes any Google-redirect error in. */
+export function LoginForm({ initialError = "" }: Readonly<{ initialError?: string }>) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  // The form renders only in the browser (LoginScreen shows it after the auth check), so window is there.
+  const [error, setError] = useState(() =>
+    initialError ||
+    (new URLSearchParams(window.location.search).get("reason") === "signed-in-elsewhere"
+      ? "You were signed out because this account was signed in on another device."
+      : ""),
+  );
   const [focused, setFocused] = useState("");
 
   useEffect(() => {
-    let isMounted = true;
-    if (new URLSearchParams(window.location.search).get("reason") === "signed-in-elsewhere") {
-      setError("You were signed out because this account was signed in on another device.");
-    }
-    void (async () => {
-      try {
-        const cred = await getRedirectResult(firebaseAuth);
-        if (!isMounted) return;
-        if (cred) { setIsSubmitting(true); await completeGoogleLogin(cred); return; }
-        await checkAndRedirectIfLoggedIn();
-      } catch (err) {
-        if (!isMounted) return;
-        const msg = getAuthErrorMessage(err);
-        setError(msg); showError(msg);
-      } finally {
-        if (isMounted) setIsSubmitting(false);
-      }
-    })();
-    return () => { isMounted = false; };
-  }, []);
+    if (initialError) showError(initialError);
+  }, [initialError]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

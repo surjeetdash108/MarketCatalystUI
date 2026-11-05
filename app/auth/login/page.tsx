@@ -1,10 +1,5 @@
-import { AuthLayout } from "../auth-layout";
-import { LoginForm } from "./login-form";
+import { LoginScreen } from "./login-screen";
 
 export default function LoginPage() {
-  return (
-    <AuthLayout>
-      <LoginForm />
-    </AuthLayout>
-  );
+  return <LoginScreen />;
 }
