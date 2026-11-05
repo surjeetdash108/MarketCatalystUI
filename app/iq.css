@@ -11569,6 +11569,14 @@ button.pill.lf-chip {
   margin: 0;
 }
 
+/* A selected toolbar button is a green box. The default selected fill
+   (--surface-3) is near-black on the dark theme and vanished into the chart.
+   Inside the SMA / EMA groups the dim periods stay dim, the bold ones are on. */
+.iq-root .cc-tools .rng.on {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
 .cc-tool-sep {
   width: 1px;
   height: 20px;
