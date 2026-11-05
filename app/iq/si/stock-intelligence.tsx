@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSI } from "./si-context";
+import { TrackedTradesList, type TrackedTrade } from "./tracked-trades-list";
 import { SITab, StockItem, DetailStock, UpcomingEvent } from "./types";
 import {
   POPULAR,
@@ -1040,13 +1041,35 @@ export function StockIntelligenceScreen() {
     if (!currentTicker) return;
     try {
       const stored = localStorage.getItem(`si_thesis_${currentTicker}`);
-      if (stored) {
-        setSavedThesis(JSON.parse(stored));
-      } else {
-        setSavedThesis(null);
-      }
+      const parsed = stored ? JSON.parse(stored) : null;
+      // Keep the SAME object when the saved trade has not changed. `stock` is
+      // rebuilt whenever any data input re-renders, and storing a fresh object
+      // here every time re-rendered again — a loop (React's "Maximum update
+      // depth exceeded") that starved the router, so nothing else could be clicked.
+      setSavedThesis(prev => (prev && parsed && JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
     } catch { }
   }, [currentTicker, stock]);
+
+  // Every trade saved in this browser (one `si_thesis_<TICKER>` per stock), for
+  // the Trade Tracker's list. Re-read when the tab opens, the open stock changes,
+  // or the open stock's trade is saved or removed (both go through savedThesis).
+  const [trackedTrades, setTrackedTrades] = useState<TrackedTrade[]>([]);
+  useEffect(() => {
+    try {
+      const found: TrackedTrade[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith("si_thesis_")) continue;
+        const t = JSON.parse(localStorage.getItem(key) || "null");
+        if (t && typeof t.ticker === "string" && typeof t.target === "number" && typeof t.stop === "number") {
+          found.push({ ticker: t.ticker, dir: t.dir, hz: t.hz, target: t.target, stop: t.stop });
+        }
+      }
+      found.sort((a, b) => a.ticker.localeCompare(b.ticker));
+      // Same array when nothing changed, so this can never feed a render loop.
+      setTrackedTrades(prev => (JSON.stringify(prev) === JSON.stringify(found) ? prev : found));
+    } catch { }
+  }, [activeTab, currentTicker, savedThesis]);
 
   // Handle stock selection
   const handleSelectStock = (ticker: string) => {
@@ -1058,6 +1081,16 @@ export function StockIntelligenceScreen() {
     setSearchQuery("");
     setSearchFocused(false);
     router.push(`/si?sym=${clean}`);
+  };
+
+  // Trade Tracker list: open that stock's trade. The simulation and the
+  // "Remove this trade?" prompt belong to the trade that was open, so they reset
+  // rather than carry over to the next one.
+  const selectTrackedTrade = (ticker: string) => {
+    if (ticker === currentTicker) return;
+    setMonScenario("live");
+    setConfirmDeleteThesis(false);
+    handleSelectStock(ticker);
   };
 
   // Format assistant replies: render bold markdown cleanly and strip stray **
@@ -5238,8 +5271,18 @@ export function StockIntelligenceScreen() {
             TAB 9: TRADE TRACKER (was "Strategy Monitor"; Issue 7: Full Monitored View)
             ==================================================== */}
         {activeTab === "mon" && (() => {
+          // With more than one saved trade the tab is a list on the left and the
+          // open stock's trade on the right; with one or none it stays full width.
+          const monLayout = (body: React.ReactNode) =>
+            trackedTrades.length > 1 ? (
+              <div className="si-trk">
+                <TrackedTradesList trades={trackedTrades} activeTicker={currentTicker} onSelect={selectTrackedTrade} />
+                <div className="si-trk-detail">{body}</div>
+              </div>
+            ) : body;
+
           if (!savedThesis) {
-            return (
+            return monLayout(
               <div
                 style={{
                   border: "1px dashed var(--si-border-dashed, #2a3a4a)",
@@ -5378,7 +5421,7 @@ export function StockIntelligenceScreen() {
           const hi2 = Math.max(savedThesis.stop, savedThesis.target);
           const monNowF = Math.max(0, Math.min(1, (monPx - lo2) / (hi2 - lo2 || 1)));
 
-          return (
+          return monLayout(
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Monitored Summary Box */}
               <div style={{ position: "relative", border: `1px solid ${monCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16, transition: "border-color 300ms" }}>
@@ -5445,10 +5488,22 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
 
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>STATUS</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, letterSpacing: "0.04em", color: monCol, transition: "color 300ms" }}>
-                      {monStatus}
+                  <div style={{ display: "flex", gap: 36, alignItems: "flex-start", flexWrap: "wrap", justifyContent: "flex-end", textAlign: "right" }}>
+                    {/* The stock's live price, whatever scenario is simulated below. */}
+                    <div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>PRICE NOW</div>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, letterSpacing: "0.02em", color: "var(--si-text-hi, #e8eef4)" }}>
+                        {usd(stock.p)}
+                      </div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: stock.c >= 0 ? UP : DN }}>
+                        {pct(stock.c)} today
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>STATUS</div>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, letterSpacing: "0.04em", color: monCol, transition: "color 300ms" }}>
+                        {monStatus}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -5527,7 +5582,7 @@ export function StockIntelligenceScreen() {
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{monRun.coreOk} / {monRun.core.length}</div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>PRICE</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>{monScenario === "break" ? "PRICE · SIMULATED" : "PRICE"}</div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{usd(monPx)}</div>
                   </div>
                 </div>

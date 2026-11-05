@@ -14041,3 +14041,47 @@ h6.sd-sec {
     scrollbar-width: thin;
   }
 }
+
+/* Stock Intelligence, Trade Tracker: with more than one saved trade the tab is a
+   list on the left and the open stock's trade on the right. */
+.si-trk {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.si-trk-list {
+  flex: 0 0 280px;
+  position: sticky;
+  /* Below the sticky header + tab rail. */
+  top: 120px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+.si-trk-detail {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.si-trade-row:hover {
+  background: rgba(89, 128, 166, 0.08);
+}
+
+.si-trade-row:focus-visible {
+  outline: 2px solid #7fa8d0;
+  outline-offset: -2px;
+}
+
+@media (max-width: 900px) {
+  .si-trk {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .si-trk-list {
+    flex-basis: auto;
+    position: static;
+    max-height: 340px;
+  }
+}
