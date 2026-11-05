@@ -18,7 +18,7 @@ import * as Engine from "./engine";
 import LabView, { LAB_HOVER_CSS } from "./lab-view";
 import { apiDelete, apiGet, apiPost, backendUrl } from "../backend";
 import { COST_OPTS, STOP_PCTS, TP_PCTS, exitPlanKeys, exitPlanSummary, periodChoices, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
-import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, prepBars, progressiveView, scanChunk, universeUrl, windowLabel, windowOpts, windowPick, windowStats } from "./lab-run";
+import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, prepBars, priceChart, progressiveView, scanChunk, universeUrl, windowLabel, windowOpts, windowPick, windowStats } from "./lab-run";
 
 const _o=(ind,n,mult)=>{const o={ind};if(n!=null)o.n=n;if(mult!=null)o.mult=mult;return o},_v=v=>({ind:'num',v}),_c=(a,op,b)=>({a,op,b}),CL=_o('close');
 const HOLDS=['Intraday','Days','Days–weeks','Weeks','Weeks–months','Months'];
@@ -591,19 +591,12 @@ export default class StrategyLab extends Component {
     // No window picked: every trade of the backtest.
     const key = (d) => (W.intra ? String(d) : String(d).slice(0, 10)), cut = w.from ? key(w.from) : "";
     const shown = r.trades.filter((x) => key(x.outDate) >= cut);
-    // Chart from the window start, or the first shown trade's entry if earlier; at least 20 bars.
-    let i0 = bars.findIndex((b) => key(b.date) >= cut);
-    for (const x of shown) { const j = bars.findIndex((b) => String(b.date) === String(x.inDate)); if (j >= 0 && j < i0) i0 = j; }
-    i0 = Math.max(0, Math.min(i0, N0 - 20));
-    const pts = bars.slice(i0), N = pts.length, cs = pts.map((b) => b.close), lo = Math.min(...cs), hi = Math.max(...cs), pad = (hi - lo) * 0.08 || 1, LL = lo - pad, HH = hi + pad;
-    const X = (i) => (i / Math.max(N - 1, 1)) * 1000, Y = (c) => (1 - (c - LL) / (HH - LL)) * 300, idx = new Map(pts.map((b, i) => [String(b.date), i]));
-    const line = "M" + pts.map((b, i) => X(i).toFixed(1) + "," + Y(b.close).toFixed(1)).join("L"), wi = pts.findIndex((b) => key(b.date) >= cut);
-    const fd = (d) => fmtDt(d).replace(/, \d{4}/, "");
+    // The chart is the full report's: the whole test window with every trade; the list below is the picked window's trades.
+    const chart = priceChart(bars, r, R.ec, { fmt: fmtDt, tfLabel: tfL(tf) });
+    const cs = bars.slice(r.start).map((b) => b.close), lo = Math.min(...cs), hi = Math.max(...cs);
     const trades = shown.map((x, n) => {
-      const a = idx.get(String(x.inDate)) ?? 0, b = idx.get(String(x.outDate)) ?? N - 1, win = x.ret > 0, open = x.why === "Still open";
-      return { n: n + 1, x: X(a).toFixed(1), w: Math.max(2, X(b) - X(a)).toFixed(1), fill: win ? "rgba(61,220,132,.16)" : "rgba(240,86,90,.16)", stroke: win ? "rgba(61,220,132,.55)" : "rgba(240,86,90,.55)",
-        inL: ((a / Math.max(N - 1, 1)) * 100).toFixed(2) + "%", inT: (Y(x.inPx) / 3).toFixed(2) + "%", outL: ((b / Math.max(N - 1, 1)) * 100).toFixed(2) + "%", outT: (Y(x.outPx) / 3).toFixed(2) + "%", lblL: (((a + b) / 2 / Math.max(N - 1, 1)) * 100).toFixed(2) + "%",
-        c: win ? "#3ddc84" : "#f0565a", ret: p1(x.ret), inD: fd(x.inDate), outD: open ? "Open" : fd(x.outDate), inPx: x.inPx.toFixed(2), outPx: x.outPx.toFixed(2), days: String(x.days), why: x.why, open };
+      const win = x.ret > 0, open = x.why === "Still open";
+      return { n: n + 1, c: win ? "#3ddc84" : "#f0565a", ret: p1(x.ret), inD: fmtDt(x.inDate), outD: open ? "Open" : fmtDt(x.outDate), inPx: x.inPx.toFixed(2), outPx: x.outPx.toFixed(2), days: String(x.days), why: x.why, open };
     });
     // Levels if a position were opened at the last close, with the strategy's exit plan.
     const last = bars[N0 - 1].close, at = (op) => { const s = BT.series(bars, op); const v2 = s && s[N0 - 1]; return v2 != null && Number.isFinite(v2) ? v2 : null; };
@@ -622,20 +615,20 @@ export default class StrategyLab extends Component {
     const lv = [
       ["LAST", usd(last), "#eef2f4", "Last close"], ...ruleLv,
       ...[20, 50, 200].map((n) => [tf === "d" ? n + "-DMA" : n + "-BAR SMA", usd(dma(n)), "#e6ebe8", "Simple average of the last " + n + " " + tfL(tf).toLowerCase() + " closes"]),
-      ["PERIOD HIGH", usd(hi), "#e6ebe8", "Highest close on the chart"], ["PERIOD LOW", usd(lo), "#e6ebe8", "Lowest close on the chart"],
+      ["PERIOD HIGH", usd(hi), "#e6ebe8", "Highest close in the test window"], ["PERIOD LOW", usd(lo), "#e6ebe8", "Lowest close in the test window"],
       ["STOP" + (cfg.stopAtr ? " · " + cfg.stopAtr + "× ATR" : cfg.stop ? " · −" + +(cfg.stop * 100).toFixed(2) + "%" : ""), usd(stp), "#f0565a", cfg.stopAtr ? "Last close − " + cfg.stopAtr + " × ATR(14), as the backtest sets it" : "Last close less the stop %"],
       ["TARGET" + (cfg.tpR ? " · " + cfg.tpR + "R" : cfg.tp ? " · +" + +(cfg.tp * 100).toFixed(2) + "%" : ""), usd(tgt), "#3ddc84", cfg.tpR ? "Last close + " + cfg.tpR + " × the stop distance" : "Last close plus the target %"],
       ["TRAIL STARTS", usd(trS), "#f0d68c", "Price at which the trailing stop switches on"],
     ].filter(([kk, vv]) => vv != null || kk.startsWith("STOP") || kk.startsWith("TARGET")).map(([kk, vv, c, title]) => ({ k: kk, v: vv ?? "Not set", c: vv == null ? "#5f6966" : c, title }));
     return {
       ...base, has: true,
-      sub: tfL(tf) + " candles · return over " + wl + " · " + fmtDt(pts[0].date) + " – " + fmtDt(pts[N - 1].date),
+      sub: tfL(tf) + " candles · return over " + (W.n == null ? "the full " + wl + " backtest" : "the last " + wl),
       stats: [
         ["STRATEGY", p1(w.ret), sc(w.ret), "Strategy return over " + W.over + " (same as the table)"], ["BUY & HOLD", p1(w.bret), sc(w.bret), "Buy & hold return over the same span"],
         ["TRADES", String(w.n) + (w.open ? " + " + w.open + " open" : ""), "#e6ebe8", "Closed trades that exited over " + W.over + ", plus a position still open"], ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Winning ÷ closed trades over " + W.over],
       ].map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
-      levels: lv, line, area: line + "L1000,300L0,300Z", trades, winX: wi > 0 ? X(wi).toFixed(1) : null, winL: wi > 0 ? ((wi / Math.max(N - 1, 1)) * 100).toFixed(2) + "%" : null, winT: "Window start · " + fmtDt(w.from) + " — returns are measured from here", hi: hi.toFixed(2), lo: lo.toFixed(2), d0: fmtDt(pts[0].date), d1: fmtDt(pts[N - 1].date),
-      tradeNote: trades.length ? "" : "No trade exited in this window.",
+      levels: lv, chart, trades,
+      tradeNote: trades.length ? "" : W.n == null ? "No trades in the backtest." : "No trade exited in this window.",
     };
   }
 
@@ -743,31 +736,13 @@ export default class StrategyLab extends Component {
       ["WIN RATE", m.trades ? Math.round(m.win * 100) + "%" : "—", "Of closed trades"], ["PROFIT FACTOR", Number.isFinite(m.pf) ? m.pf.toFixed(2) : "∞", "Gross win ÷ gross loss"], ["REWARD:RISK", m.rr === 0 ? "—" : fx(m.rr), "Avg win ÷ avg loss"],
       ["TRADES", String(m.trades), "Avg hold " + Math.round(m.hold) + " bars"], ["EXPOSURE", Math.round(m.exposure * 100) + "%", "Bars in a position"],
     ].map(([l, v, s, c]) => ({ l, v, s, c }));
-    // Price chart over the test window only, so its buy & hold matches the report.
-    const tb = bars.slice(r.start), step = Math.max(1, Math.ceil(tb.length / 1200)), pts = tb.filter((_, i) => i % step === 0 || i === tb.length - 1);
-    const N = pts.length, cs = pts.map((q) => q.close), lo = Math.min(...tb.map((q) => q.low)), hi = Math.max(...tb.map((q) => q.high)), pad = (hi - lo) * 0.06 || 1, LL = lo - pad, HH = hi + pad;
-    const CX = (i) => (i / Math.max(N - 1, 1)) * 1000, CY = (c) => (1 - (c - LL) / (HH - LL)) * 300, idx = new Map(tb.map((q, i) => [String(q.date), i])), atr = cfg.stopAtr ? BT.series(bars, { ind: "atr", n: 14 }) : null;
-    const xi = (d) => { const i = idx.get(String(d)); return i == null ? null : CX(i / step); };
-    const levels = [], bands = [];
-    for (const tr of r.trades) {
-      const a = xi(tr.inDate), b = xi(tr.outDate);
-      if (a == null || b == null) continue;
-      const win = tr.ret > 0, w = Math.max(2, b - a);
-      bands.push({ x: a.toFixed(1), w: w.toFixed(1), fill: win ? "rgba(61,220,132,.14)" : "rgba(240,86,90,.14)", stroke: win ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)" });
-      const ei = bars.findIndex((q) => String(q.date) === String(tr.inDate)), A = atr && ei > 0 ? atr[ei - 1] : null;
-      const sl = cfg.stopAtr && A ? tr.inPx - cfg.stopAtr * A : cfg.stop ? tr.inPx * (1 - cfg.stop) : null, risk = sl ? tr.inPx - sl : null;
-      const tp = cfg.tpR && risk ? tr.inPx + cfg.tpR * risk : cfg.tp ? tr.inPx * (1 + cfg.tp) : null;
-      if (sl) levels.push({ x1: a, x2: a + w, y: CY(sl), c: "rgba(240,86,90,.8)" });
-      if (tp) levels.push({ x1: a, x2: a + w, y: CY(tp), c: "rgba(61,220,132,.8)" });
-    }
-    const cline = "M" + cs.map((c, i) => CX(i).toFixed(1) + "," + CY(c).toFixed(1)).join("L");
     const vari = st.vari[key] ? this.varianceCells(k, bars, spec) : null;
     return {
       ...base, has: true,
       meta: tfL(tf) + " · " + periodLabel(period) + " · " + fmtDt(r.eq[0].date) + " – " + fmtDt(r.eq[r.eq.length - 1].date) + " · as of " + fmtDt(L.date) + " · warm-up " + r.warm + " bars before the window",
       metrics,
       growth: { lineS: line(es), lineB: line(eb), areaS: line(es) + " L600,200 L0,200 Z", endS: money(es[es.length - 1]), endB: money(eb[eb.length - 1]), bench: t + " buy & hold", axis: [...new Set(r.eq.map((q) => String(q.date).slice(0, 4)))] },
-      chart: { sub: tfL(tf) + " candles · " + fmtDt(tb[0].date) + " – " + fmtDt(L.date) + " · test window only", trades: bands, levels, line: cline, area: cline + "L1000,300L0,300Z", hi: hi.toFixed(2), lo: lo.toFixed(2), d0: fmtDt(tb[0].date), d1: fmtDt(L.date), legend: "bands = trades (green win, red loss) · dashed = stop / target from the exit plan" },
+      chart: priceChart(bars, r, R.ec, { fmt: fmtDt, tfLabel: tfL(tf) }),
       years: { title: "Year by year", note: "* partial year", rows: m.yr.map((o, i) => { const b = mb.yr[i] ? mb.yr[i].r : 0; return { y: o.y + (i === 0 || i === m.yr.length - 1 ? "*" : ""), s: p1(o.r), sc: sc(o.r), b: p1(b), bc: sc(b), e: p1(o.r - b), ec: sc(o.r - b) }; }) },
       trades: { cnt: (r.trades.length > 200 ? "Latest 200 of " : "") + r.trades.length + (r.trades.length === 1 ? " trade" : " trades"), rows: r.trades.slice().reverse().slice(0, 200).map((q) => ({ inD: fmtDt(q.inDate), inP: "$" + q.inPx.toFixed(2), outD: q.why === "Still open" ? "Open" : fmtDt(q.outDate), outP: "$" + q.outPx.toFixed(2), r: p1(q.ret), rc: sc(q.ret), d: String(q.days), why: q.why })) },
       vari: { run: () => this.setState((s) => ({ vari: { ...s.vari, [key]: true } })), head: vari ? vari.head : [], rows: vari ? vari.rows : null },

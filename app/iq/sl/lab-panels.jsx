@@ -205,7 +205,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
   );
 }
 
-/** Row pop-up: price over the return window, trades, and levels if entered at the last price. */
+/** Row pop-up: the full report's price chart, the window's trades, and levels if entered at the last price. */
 export function ChartModal({ c }) {
   if (!c || !c.open) return null;
   const cols = "36px minmax(0,1fr) minmax(0,1.3fr) repeat(3,minmax(0,.8fr))";
@@ -243,33 +243,8 @@ export function ChartModal({ c }) {
                 ))}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 16, alignItems: "center", fontSize: 11.5, color: C.dim, flexWrap: "wrap" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(61,220,132,.25)", border: "1px solid rgba(61,220,132,.6)" }} />Winning trade</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(240,86,90,.25)", border: "1px solid rgba(240,86,90,.6)" }} />Losing trade</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: `8px solid ${C.goldHi}` }} />Entry</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", border: `2px solid ${C.hi}` }} />Exit</span>
-              {c.winX ? <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, borderTop: "1px dashed #8b9592" }} />Window start — returns above are measured from here</span> : null}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 56px", gap: 8 }}>
-              <div style={{ position: "relative", height: 320, border: "1px solid #1a1f21", borderRadius: 10, background: "#0b0d0e", overflow: "hidden" }}>
-                <svg viewBox="0 0 1000 300" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-                  {c.trades.map((t) => <rect key={t.n} x={t.x} y="0" width={t.w} height="300" fill={t.fill} stroke={t.stroke} strokeWidth="1" vectorEffect="non-scaling-stroke" />)}
-                  <path d={c.area} fill="rgba(201,162,74,.06)" />
-                  <path d={c.line} fill="none" stroke={C.goldHi} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-                  {c.winX ? <line x1={c.winX} x2={c.winX} y1="0" y2="300" stroke="#8b9592" strokeDasharray="4 4" strokeWidth="1" vectorEffect="non-scaling-stroke" /> : null}
-                </svg>
-                {c.winL ? <span title={c.winT} style={{ position: "absolute", left: c.winL, bottom: 6, transform: "translateX(4px)", fontFamily: mono, fontSize: 10, color: C.dim, background: "rgba(11,13,14,.85)", padding: "1px 5px", borderRadius: 4, whiteSpace: "nowrap", cursor: "help" }}>window start</span> : null}
-                {c.trades.map((t) => (
-                  <Fragment key={t.n}>
-                    <span title={`Entry ${t.inD} @ ${t.inPx}`} style={{ position: "absolute", left: t.inL, top: t.inT, transform: "translate(-50%,2px)", width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: `10px solid ${C.goldHi}`, filter: "drop-shadow(0 0 4px rgba(240,214,140,.6))" }} />
-                    {t.open ? null : <span title={`Exit ${t.outD} @ ${t.outPx}`} style={{ position: "absolute", left: t.outL, top: t.outT, transform: "translate(-50%,-50%)", width: 9, height: 9, borderRadius: "50%", background: "#0b0d0e", border: `2px solid ${C.hi}` }} />}
-                    <span style={{ position: "absolute", left: t.lblL, top: 8, transform: "translateX(-50%)", fontFamily: mono, fontSize: 10.5, fontWeight: 700, color: t.c, background: "rgba(11,13,14,.85)", padding: "1px 5px", borderRadius: 4, whiteSpace: "nowrap" }}>{t.ret}</span>
-                  </Fragment>
-                ))}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", fontFamily: mono, fontSize: 10.5, color: C.mute, padding: "4px 0" }}><span>{c.hi}</span><span>{c.lo}</span></div>
-              <div style={{ gridColumn: 1, display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10.5, color: C.mute, marginTop: -2 }}><span>{c.d0}</span><span>{c.d1}</span></div>
-            </div>
+            {/* The full report's price chart: the whole test window, every trade, stop / target lines. */}
+            <ChartPanel ch={c.chart} />
             {c.tradeNote ? <div style={{ fontSize: 12.5, color: C.mute }}>{c.tradeNote}</div> : (
               <div style={{ display: "flex", flexDirection: "column", maxHeight: 220, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
                 <div style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "0 8px 6px", fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966", position: "sticky", top: 0, background: C.bg }}>

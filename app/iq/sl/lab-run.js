@@ -34,6 +34,34 @@ export function prepBars(rows, tf) {
 /** The engine config for one stock: the shared cfg plus its window start. */
 export const engineCfg = (cfg, bars) => ({ ...cfg, startDate: windowStart(bars[bars.length - 1].date, cfg) });
 
+/**
+ * "Price chart · trades" (full report and the results row pop-up): closes over
+ * the test window only, so its buy & hold matches the report; a band per trade
+ * (green win, red loss) and dashed stop / target lines from the exit plan.
+ * In a 1000 × 300 box; fmt formats a bar date, tfLabel names the candle.
+ */
+export function priceChart(bars, r, cfg, { fmt, tfLabel }) {
+  const L = bars[bars.length - 1];
+  const tb = bars.slice(r.start), step = Math.max(1, Math.ceil(tb.length / 1200)), pts = tb.filter((_, i) => i % step === 0 || i === tb.length - 1);
+  const N = pts.length, cs = pts.map((q) => q.close), lo = Math.min(...tb.map((q) => q.low)), hi = Math.max(...tb.map((q) => q.high)), pad = (hi - lo) * 0.06 || 1, LL = lo - pad, HH = hi + pad;
+  const CX = (i) => (i / Math.max(N - 1, 1)) * 1000, CY = (c) => (1 - (c - LL) / (HH - LL)) * 300, idx = new Map(tb.map((q, i) => [String(q.date), i])), atr = cfg.stopAtr ? BT.series(bars, { ind: "atr", n: 14 }) : null;
+  const xi = (d) => { const i = idx.get(String(d)); return i == null ? null : CX(i / step); };
+  const levels = [], bands = [];
+  for (const tr of r.trades) {
+    const a = xi(tr.inDate), b = xi(tr.outDate);
+    if (a == null || b == null) continue;
+    const win = tr.ret > 0, w = Math.max(2, b - a);
+    bands.push({ x: a.toFixed(1), w: w.toFixed(1), fill: win ? "rgba(61,220,132,.14)" : "rgba(240,86,90,.14)", stroke: win ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)" });
+    const ei = bars.findIndex((q) => String(q.date) === String(tr.inDate)), A = atr && ei > 0 ? atr[ei - 1] : null;
+    const sl = cfg.stopAtr && A ? tr.inPx - cfg.stopAtr * A : cfg.stop ? tr.inPx * (1 - cfg.stop) : null, risk = sl ? tr.inPx - sl : null;
+    const tp = cfg.tpR && risk ? tr.inPx + cfg.tpR * risk : cfg.tp ? tr.inPx * (1 + cfg.tp) : null;
+    if (sl) levels.push({ x1: a, x2: a + w, y: CY(sl), c: "rgba(240,86,90,.8)" });
+    if (tp) levels.push({ x1: a, x2: a + w, y: CY(tp), c: "rgba(61,220,132,.8)" });
+  }
+  const line = "M" + cs.map((c, i) => CX(i).toFixed(1) + "," + CY(c).toFixed(1)).join("L");
+  return { sub: tfLabel + " candles · " + fmt(tb[0].date) + " – " + fmt(L.date) + " · test window only", trades: bands, levels, line, area: line + "L1000,300L0,300Z", hi: hi.toFixed(2), lo: lo.toFixed(2), d0: fmt(tb[0].date), d1: fmt(L.date), legend: "bands = trades (green win, red loss) · dashed = stop / target from the exit plan" };
+}
+
 /** The period object evidence and labels use. */
 export const periodOfCfg = (cfg) => (cfg.years != null ? { years: cfg.years } : { days: cfg.idays });
 
