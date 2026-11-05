@@ -211,7 +211,7 @@ export function WatchlistScreen() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn primary" disabled={!uid || !activeId} onClick={openAddStock}>
+          <button className="btn cta" disabled={!uid || !activeId} onClick={openAddStock}>
             <svg viewBox="0 0 24 24" fill="none" style={{ width: 14, height: 14 }}>
               <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
@@ -296,7 +296,7 @@ export function WatchlistScreen() {
                     )}
                   </div>
                   {addError && <div className="wl-add-err" role="alert">{addError}</div>}
-                  <button className="btn primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => void addStock()} disabled={adding}>
+                  <button className="btn cta" style={{ width: "100%", justifyContent: "center" }} onClick={() => void addStock()} disabled={adding}>
                     {adding ? "Adding…" : `Add to ${active?.name ?? "watchlist"}`}
                   </button>
                 </>
