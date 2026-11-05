@@ -269,6 +269,9 @@ export type PopoverEvent = { type: "enter" | "click"; key: string } | { type: "l
  */
 export const popoverInteractive = (cur: PopoverState | null): boolean => !!cur?.pinned;
 
+/** Pop-up chart placeholder while its bars load: the timeframe shown (5m by default), not the 1-minute bars it is grouped from. */
+export const popChartLoadingText = (sym: string, minutes: number): string => `Loading ${sym} ${minutes}m chart…`;
+
 /** A key press on the open pop-up: Esc closes it, pinned or not. */
 export const popoverKey = (cur: PopoverState | null, key: string): PopoverState | null =>
   key === "Escape" ? null : cur;

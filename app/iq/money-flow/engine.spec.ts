@@ -49,6 +49,7 @@ import {
   popoverNext,
   popoverKey,
   popoverInteractive,
+  popChartLoadingText,
   formatCurrency,
   formatLevel,
   sectorNotOnBoardText,
@@ -621,6 +622,13 @@ describe("Money Flow relative volume: one value for popover, tiles and card tags
     assert.equal(phaseTag({ chop: false, rvol: 1.34 }, false), "MOMENTUM DOWN");
     assert.equal(phaseTag({ chop: false, rvol: null }, true), "MOMENTUM UP");
     assert.equal(phaseTag({ chop: true, rvol: 3 }, true), "CHOPPY");
+  });
+});
+
+describe("Money Flow pop-up loading text", () => {
+  it("names the chart's timeframe (5m by default), not the 1-minute bars it is built from", () => {
+    assert.equal(popChartLoadingText("AAPL", 5), "Loading AAPL 5m chart…");
+    assert.equal(popChartLoadingText("NVDA", 15), "Loading NVDA 15m chart…");
   });
 });
 

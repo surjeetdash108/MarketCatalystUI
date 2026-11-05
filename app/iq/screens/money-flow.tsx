@@ -43,6 +43,7 @@ import {
   popoverNext,
   popoverKey,
   popoverInteractive,
+  popChartLoadingText,
   type PopoverEvent,
 } from "../money-flow/engine";
 import {
@@ -2803,7 +2804,7 @@ export function MoneyFlowScreen() {
                     fontFamily: "'JetBrains Mono', monospace",
                   }}
                 >
-                  Loading {s.t} 1-minute bars…
+                  {popChartLoadingText(s.t, popMin)}
                 </div>
               ) : (
                 <FullChartSvg stock={s} candles={popCandles} layers={popLayers} tf={popMin} width={chartW}
