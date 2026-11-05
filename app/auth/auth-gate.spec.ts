@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { AUTH_HINT_KEY, gateDecision, readAuthHint, showLoginBeforeAuthReady, writeAuthHint } from "./auth-gate";
+import { AUTH_HINT_KEY, AUTH_HOME_KEY, EARLY_REDIRECT_SCRIPT, gateDecision, readAuthHint, showLoginBeforeAuthReady, writeAuthHint } from "./auth-gate";
 
 /** In-memory stand-in for localStorage. */
 function store(init: Record<string, string> = {}) {
@@ -36,5 +36,35 @@ describe("auth hint in localStorage", () => {
     assert.equal(readAuthHint(store({ [AUTH_HINT_KEY]: "maybe" })), null);
     assert.equal(readAuthHint(throwing), null);
     assert.doesNotThrow(() => writeAuthHint(true, throwing));
+  });
+});
+
+/** Runs the inline script against a fake localStorage / location; returns where it sent the page, or null. */
+function runEarly(items: Record<string, string> | "blocked"): string | null {
+  let to: string | null = null;
+  const localStorage = items === "blocked" ? throwing : store(items);
+  const location = { replace: (u: string) => { to = u; } };
+  new Function("localStorage", "location", EARLY_REDIRECT_SCRIPT)(localStorage, location);
+  return to;
+}
+
+describe("instant redirect at / (inline script, runs before any JavaScript bundle or Firebase loads)", () => {
+  it("a browser that was signed in goes straight to its home, with no wait for Firebase", () => {
+    assert.equal(runEarly({ [AUTH_HINT_KEY]: "in", [AUTH_HOME_KEY]: "/dashboard" }), "/dashboard");
+    assert.equal(runEarly({ [AUTH_HINT_KEY]: "in", [AUTH_HOME_KEY]: "/admin" }), "/admin");
+    assert.equal(runEarly({ [AUTH_HINT_KEY]: "in" }), "/dashboard");
+  });
+  it("only known homes: anything else stored goes to /dashboard, never an arbitrary URL", () => {
+    assert.equal(runEarly({ [AUTH_HINT_KEY]: "in", [AUTH_HOME_KEY]: "https://evil.example" }), "/dashboard");
+  });
+  it("signed out, unknown or blocked storage: stays on the page (the gate decides)", () => {
+    assert.equal(runEarly({ [AUTH_HINT_KEY]: "out" }), null);
+    assert.equal(runEarly({}), null);
+    assert.equal(runEarly("blocked"), null);
+  });
+  it("signing in records the home the early redirect uses", () => {
+    const s = store();
+    writeAuthHint(true, s, "/admin");
+    assert.equal(s.m.get(AUTH_HOME_KEY), "/admin");
   });
 });

@@ -10,12 +10,16 @@ import { postLoginPath } from "../admin/admin-email";
  * but the background until it knows, and a signed-in user is sent on without
  * the form ever showing.
  *
- * The hint below only shortens the wait for people who are signed out: it is
- * never trusted to redirect, so a stale value cannot bounce a user between the
- * login page and the dashboard.
+ * The hint below (the last auth state this browser saw) does two things: at /
+ * only, a browser that was signed in leaves for its home before anything loads
+ * (EARLY_REDIRECT_SCRIPT); and a browser that last saw a sign-out gets the form
+ * without waiting. /auth/login never redirects on it, which is what keeps a
+ * stale value from bouncing a user between the login page and the dashboard.
  */
 
 export const AUTH_HINT_KEY = "mc_auth_hint";
+/** The home a signed-in user is sent to (/dashboard, or /admin for the admin account). */
+export const AUTH_HOME_KEY = "mc_auth_home";
 export type AuthHint = "in" | "out" | null;
 type HintStore = Pick<Storage, "getItem" | "setItem">;
 
@@ -31,10 +35,11 @@ export function readAuthHint(store: HintStore | null = browserStore()): AuthHint
   }
 }
 
-/** Records the auth state Firebase reported; a blocked storage is ignored (the gate then just waits). */
-export function writeAuthHint(signedIn: boolean, store: HintStore | null = browserStore()): void {
+/** Records the auth state Firebase reported (and a signed-in user's home); a blocked storage is ignored (the gate then just waits). */
+export function writeAuthHint(signedIn: boolean, store: HintStore | null = browserStore(), home?: string): void {
   try {
     store?.setItem(AUTH_HINT_KEY, signedIn ? "in" : "out");
+    if (signedIn && home) store?.setItem(AUTH_HOME_KEY, home);
   } catch {
     /* private mode / blocked storage: no hint, no harm */
   }
@@ -49,3 +54,16 @@ export type GateDecision = { kind: "redirect"; to: string } | { kind: "login" };
 export function gateDecision(user: { email: string | null } | null): GateDecision {
   return user ? { kind: "redirect", to: postLoginPath(user.email) } : { kind: "login" };
 }
+
+/**
+ * Inline at the top of / (app/page.tsx), so it runs as the HTML is parsed —
+ * before any JavaScript bundle or Firebase loads, which is where the 2-3 s
+ * went. A browser that was signed in is sent to its home at once; only the two
+ * known homes are allowed. If the session has in fact expired, /dashboard's
+ * guard sends the user to /auth/login, and the Firebase listener marks the
+ * browser signed out first. /auth/login never redirects on the hint, so a
+ * stale hint cannot loop.
+ */
+export const EARLY_REDIRECT_SCRIPT =
+  'try{if(localStorage.getItem("' + AUTH_HINT_KEY + '")==="in"){' +
+  'location.replace(localStorage.getItem("' + AUTH_HOME_KEY + '")==="/admin"?"/admin":"/dashboard")}}catch(e){}';
