@@ -3038,7 +3038,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "R1 · R2 · S1 · S2",
-                    desc: "Classic pivot levels from the last completed session’s high, low and official close (TradingView Pivot Points Standard, Traditional), counted from the current price: the two levels above are R1 and R2, the two below S1 and S2. All four are always shown, on fixed rows. Once price touches or passes R1, the old R2 is shown as R1 and R3 as R2; once it passes S1, S2 is shown as S1 and S3 as S2. Each side renumbers on its own. Past R5 (or S5) the levels continue at the same step as the Traditional formulas (R_n = H + (n − 1)(P − L) from R2 up), so a stock that gaps far still has an R1 and R2.",
+                    desc: "Classic pivot levels from the last completed session’s high, low and official close (TradingView Pivot Points Standard, Traditional), counted from the current price: the two levels above are R1 and R2, the two below S1 and S2. All four are always shown, on fixed rows. To prevent levels and R:R flip-flopping when price sits on a level, levels only renumber once price is beyond the level by a small buffer (0.05% or at least 1 cent) and hasn't crossed back within the last minute. Once price clears R1 by this buffer without crossing back, the old R2 is shown as R1 and R3 as R2; similarly for S1 and S2. Each side renumbers on its own. Past R5 (or S5) the levels continue at the same step as the Traditional formulas (R_n = H + (n − 1)(P − L) from R2 up), so a stock that gaps far still has an R1 and R2.",
                   },
                   {
                     term: "Zone",

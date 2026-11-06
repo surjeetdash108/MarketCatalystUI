@@ -135,14 +135,55 @@ const MAX_LEVEL = 400;
  * touches or passes S1, S2 is shown as S1 and S3 as S2. Crossing one side
  * never renames the other. Ordered top to bottom: R2, R1, S1, S2.
  */
-export function liveLevels(p: PivotLevels | null | undefined, price: number): LiveLevel[] {
+/**
+ * A level is only cleared if price has passed it by a small buffer (0.05% or at least
+ * 1 cent) AND has not crossed back across it within the last minute (60s). This prevents
+ * level and R:R flip-flopping when price sits on a level (item 3).
+ */
+export function isLevelCleared(
+  side: "R" | "S",
+  v: number,
+  price: number,
+  bars?: Array<{ t: number; l?: number; h?: number }>
+): boolean {
+  const buf = Math.max(0.01, v * 0.0005);
+  if (side === "R") {
+    if (price <= v + buf) return false;
+    if (bars && bars.length > 0) {
+      const lastT = bars[bars.length - 1].t;
+      const oneMinAgo = lastT - 60_000;
+      for (let i = bars.length - 1; i >= 0 && bars[i].t >= oneMinAgo; i--) {
+        const low = bars[i].l;
+        if (low != null && low < v) return false;
+      }
+    }
+    return true;
+  } else {
+    if (price >= v - buf) return false;
+    if (bars && bars.length > 0) {
+      const lastT = bars[bars.length - 1].t;
+      const oneMinAgo = lastT - 60_000;
+      for (let i = bars.length - 1; i >= 0 && bars[i].t >= oneMinAgo; i--) {
+        const high = bars[i].h;
+        if (high != null && high > v) return false;
+      }
+    }
+    return true;
+  }
+}
+
+export function liveLevels(
+  p: PivotLevels | null | undefined,
+  price: number,
+  bars?: Array<{ t: number; l?: number; h?: number }>
+): LiveLevel[] {
   if (!p || !Number.isFinite(price)) return [];
   const pick = (side: "R" | "S") => {
     const out: Array<{ v: number; from: LevelName }> = [];
     for (let n = 1; n <= MAX_LEVEL && out.length < 2; n++) {
       const v = pivotLevel(p, side, n);
       if (v == null || v <= 0) break; // no data, or below zero on the way down
-      if (side === "R" ? v > price : v < price) out.push({ v, from: `${side}${n}` });
+      if (!isLevelCleared(side, v, price, bars)) out.push({ v, from: `${side}${n}` });
     }
     return out.map((l, i) => ({ name: `${side}${i + 1}` as LiveLevel["name"], v: l.v, from: l.from }));
   };
@@ -486,7 +527,7 @@ export function formatLevel(v: number | null | undefined, dp = 2): string {
 
 /** The #1–#3 card's level row: zone, the live R/S levels and R:R, at the pop-up's two decimals. */
 export function cardLevels(s: BoardStock): Array<{ k: "ZONE" | LiveLevel["name"] | "R:R"; v: string }> {
-  const ll = liveLevels(s.pivots, s.price);
+  const ll = liveLevels(s.pivots, s.price, s.bars);
   return [
     { k: "ZONE", v: s.zone ? `${formatLevel(s.zone.lo)}–${formatLevel(s.zone.hi)}` : "—" },
     ...(["R2", "R1", "S1", "S2"] as const).map((k) => ({ k, v: formatLevel(ll.find((l) => l.name === k)?.v) })),

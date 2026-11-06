@@ -351,12 +351,15 @@ describe("pivot levels renumber from the current price", () => {
     const l = liveLevels(pv, 324.0);
     assert.deepEqual(l.map((r) => [r.name, r.from]), [["R2", "R2"], ["R1", "R1"], ["S1", "S1"], ["S2", "S2"]]);
   });
-  it("once price touches or passes R1, R2 is called R1 and R3 is called R2", () => {
-    for (const px of [pv.r1!, 327.5]) {
-      const l = liveLevels(pv, px);
-      assert.deepEqual(l.filter((r) => r.name[0] === "R").map((r) => [r.name, r.from]), [["R2", "R3"], ["R1", "R2"]], String(px));
-      near(l.find((r) => r.name === "R1")!.v, pv.r2!);
-    }
+  it("once price passes R1 beyond buffer, R2 is called R1 and R3 is called R2", () => {
+    // pv.r1 is 326.65, buffer is 0.05% (~0.163)
+    const atLevel = liveLevels(pv, pv.r1!);
+    assert.equal(atLevel.find((r) => r.name === "R1")!.from, "R1"); // still R1 within buffer
+
+    const l = liveLevels(pv, 327.5); // safely past buffer
+    assert.deepEqual(l.filter((r) => r.name[0] === "R").map((r) => [r.name, r.from]), [["R2", "R3"], ["R1", "R2"]]);
+    near(l.find((r) => r.name === "R1")!.v, pv.r2!);
+
     const far = liveLevels(pv, 331); // above R3: R4 → R1, R5 → R2
     assert.deepEqual(far.filter((r) => r.name[0] === "R").map((r) => r.from), ["R5", "R4"]);
   });
@@ -431,7 +434,7 @@ describe("Money Flow pop-up: R/S lines on fixed rows", () => {
   });
   it("crossing R1 renames the rows, not their place: R2 moves into the R1 row", () => {
     const below = liveLevels(pv, pv.r1! - 0.01).map((l) => l.name);
-    const above = liveLevels(pv, pv.r1! + 0.01);
+    const above = liveLevels(pv, pv.r1! + 0.20);
     assert.deepEqual(below, ["R2", "R1", "S1", "S2"]);
     assert.deepEqual(above.map((l) => l.name), ["R2", "R1", "S1", "S2"]);
     assert.equal(above.find((l) => l.name === "R1")!.from, "R2");

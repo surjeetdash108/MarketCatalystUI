@@ -26,7 +26,7 @@ export function SparklineSvg({ stock, candles }: { stock: BoardStock; candles: O
   const cMax = Math.max(...candles.map((x) => x.h));
   const zone = stock.zone;
   const pv = stock.pivots;
-  const live = liveLevels(pv, cl[cl.length - 1]);
+  const live = liveLevels(pv, cl[cl.length - 1], candles);
   const lvl = (n: string) => live.find((l) => l.name === n)?.v ?? null;
   const lv = levelsInView([zone?.lo, zone?.hi, lvl("S1"), lvl("R1"), lvl("R2")], cMin, cMax);
   const mx = Math.max(cMax, ...lv);
@@ -247,7 +247,7 @@ export function FullChartSvg({
   const pv = stock.pivots;
 
   // Two levels each side of price, renumbered from price (liveLevels): past R1, R2 shows as R1, R3 as R2.
-  const rawLevels: Array<[string, number | null]> = liveLevels(pv, safeStockPx).map((l) => [l.name, l.v]);
+  const rawLevels: Array<[string, number | null]> = liveLevels(pv, safeStockPx, candles).map((l) => [l.name, l.v]);
 
   // Every level is shown, however far from price: each has its own fixed row (popLevelRows).
   const lv: Array<[string, number]> = rawLevels.filter(
