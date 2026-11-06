@@ -549,7 +549,8 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
   ctx.textAlign = "left";
   for (const p of ticks) {
     const y = yOf(p);
-    ctx.strokeStyle = pal.grid; ctx.beginPath(); ctx.moveTo(g.l, y); ctx.lineTo(g.r, y); ctx.stroke();
+    // Money Flow's pop-up chart (m.smc set) shows the prices only, no gridlines across its zones.
+    if (m.smc == null) { ctx.strokeStyle = pal.grid; ctx.beginPath(); ctx.moveTo(g.l, y); ctx.lineTo(g.r, y); ctx.stroke(); }
     ctx.fillStyle = pal.text; ctx.fillText(money(p), g.r + 9, y);
   }
 
