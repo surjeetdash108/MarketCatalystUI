@@ -352,7 +352,8 @@ function EarningsDrawer({ sym, liveEarnings, loading, onClose }: { sym: string; 
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <div className="drawer open">
+      {/* The wide popover Movers opens: the full stock screen, then the earnings line and the Open buttons. */}
+      <div className="drawer open wide">
         <div className="drawer-h">
           {/* The company logo, as every ticker row draws it. */}
           <StockLogo sym={sym} size={31} />
@@ -364,6 +365,8 @@ function EarningsDrawer({ sym, liveEarnings, loading, onClose }: { sym: string; 
         </div>
 
         <div className="drawer-b">
+          <StockScreenEmbed initialSym={sym} />
+          <div style={{ padding: "14px 20px 22px", borderTop: "1px solid var(--border)" }}>
           {!e ? (
             <DataState loading={loading} label={`No earnings data synced for ${sym} yet.`} />
           ) : (
@@ -412,6 +415,7 @@ function EarningsDrawer({ sym, liveEarnings, loading, onClose }: { sym: string; 
             >
               Open {sym} in Stock Intelligence →
             </button>
+          </div>
           </div>
         </div>
       </div>
