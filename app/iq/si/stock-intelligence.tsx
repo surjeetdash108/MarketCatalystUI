@@ -68,6 +68,7 @@ import type {
 } from "../types";
 import { computeTtmFcf, computeQuarterFcf, computeOperatingIncomeSeries, gaapQuarterEps, quarterYoY, surprisePct, quarterEpsSurprisePct } from "../types";
 import { useIQActions } from "../shell";
+import { useWatchlistsContext } from "../hooks/useWatchlists";
 import type { Stock13FResponse } from "../stock-13f-view";
 
 const toneColor = (tone?: "up" | "dn") =>
@@ -863,6 +864,32 @@ export function StockIntelligenceScreen() {
   }, [stock, liveCompany?.nextEarningsDate, liveEarningsList]);
 
   // 5 Major Catalysts derived dynamically from FMP data (bars, quarters, news, and stock metrics)
+  // "+ Watch" is the Market Catalyst watchlist (the shell's shared watchlist state).
+  const wl = useWatchlistsContext();
+  const [watchBusy, setWatchBusy] = useState(false);
+  const [watchMsg, setWatchMsg] = useState<string | null>(null);
+  const isWatched = !!stock && wl.watchlists.some((w) => w.tickers.includes(stock.t.toUpperCase()));
+  /** Watch → the first watchlist (one is created if there is none); Watching → removed from every list. */
+  const toggleWatch = async () => {
+    if (!stock || watchBusy) return;
+    const sym = stock.t.toUpperCase();
+    setWatchBusy(true);
+    setWatchMsg(null);
+    try {
+      if (isWatched) {
+        for (const w of wl.watchlists) if (w.tickers.includes(sym)) await wl.removeTicker(w.id, sym);
+      } else {
+        if (!wl.uid) { setWatchMsg("Sign in to add stocks to your watchlist."); return; }
+        const list = wl.watchlists[0] ?? (await wl.createList("My Watchlist"));
+        if (!list) { setWatchMsg(`Couldn't add ${sym}. Please try again.`); return; }
+        const res = await wl.addTicker(list.id, sym);
+        if (!res.ok) setWatchMsg(res.message);
+      }
+    } finally {
+      setWatchBusy(false);
+    }
+  };
+
   const majorEvents = useMemo(() => {
     if (!stock) return [];
     return getSixMonthMajorEvents(
@@ -1074,7 +1101,6 @@ export function StockIntelligenceScreen() {
   } | null>(null);
 
   // Watchlist state
-  const [isWatched, setIsWatched] = useState(false);
 
   // AI interactive prompt state
   const [aiQuery, setAiQuery] = useState("");
@@ -2187,7 +2213,9 @@ export function StockIntelligenceScreen() {
               )}
             </button>
             <button
-              onClick={() => setIsWatched(!isWatched)}
+              onClick={toggleWatch}
+              disabled={watchBusy}
+              title={watchMsg ?? (isWatched ? "In your Market Catalyst watchlist — click to remove" : "Add to your Market Catalyst watchlist")}
               style={{
                 height: 34,
                 padding: "0 12px",
@@ -2202,6 +2230,9 @@ export function StockIntelligenceScreen() {
             >
               {isWatched ? "✓ Watching" : "+ Watch"}
             </button>
+            {watchMsg && (
+              <span role="status" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--down, #dc2626)", maxWidth: 320 }}>{watchMsg}</span>
+            )}
             <button
               onClick={() => setActiveTab("mon")}
               style={{
