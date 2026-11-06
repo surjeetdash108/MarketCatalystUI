@@ -40,6 +40,8 @@ import {
   liveLevels,
   popLevelRows,
   layoutEdgeLabels,
+  declutterLabels,
+  type ChartLabel,
   calloutLaneRows,
   levelTag,
   computeFvgs,
@@ -770,5 +772,49 @@ describe("Money Flow glossary matches the page (Nov 3 test)", () => {
     assert.match(g, /shows up to four patterns/);
     assert.match(g, /six chart patterns/);
     assert.doesNotMatch(g, /candle marks/);
+  });
+});
+
+describe("in-chart overlay labels never overlap", () => {
+  const B = { top: 20, bottom: 400, left: 40, right: 900 };
+  const L = (key: string, text: string, x: number, y: number, dir: -1 | 1 = -1): ChartLabel =>
+    ({ key, text, x, y, fz: 12, anchor: "start", color: "#fff", dir });
+  const box = (l: ChartLabel & { y: number }) => {
+    const w = l.text.length * l.fz * 0.62, x0 = l.anchor === "start" ? l.x : l.anchor === "end" ? l.x - w : l.x - w / 2;
+    return { x0, x1: x0 + w, y0: l.y - l.fz * 0.8, y1: l.y + l.fz * 0.2 };
+  };
+  const clash = (a: ReturnType<typeof box>, b: ReturnType<typeof box>) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+  it("BEAR OB and ZONE drawn at the same spot (the screenshot) are separated; the first keeps its place", () => {
+    const out = declutterLabels([L("ob", "BEAR OB", 548, 250), L("zone", "ZONE 188.09–190.74", 690, 276), L("ob2", "BULL OB", 690, 280)], B);
+    assert.strictEqual(out[0].y, 250);
+    for (let i = 0; i < out.length; i++) for (let j = i + 1; j < out.length; j++) assert.ok(!clash(box(out[i]), box(out[j])), `${out[i].key} / ${out[j].key}`);
+  });
+  it("labels that don't touch are left exactly where they were", () => {
+    const ins = [L("a", "FVG", 100, 100), L("b", "BOS", 300, 200), L("c", "HH", 500, 300)];
+    assert.deepEqual(declutterLabels(ins, B).map((l) => l.y), [100, 200, 300]);
+  });
+  it("a pile of labels at one price all end up apart and inside the plot", () => {
+    const out = declutterLabels(Array.from({ length: 8 }, (_, i) => L("p" + i, "PREMIUM 1.00–2.00", 60, 200, i % 2 ? 1 : -1)), B);
+    for (let i = 0; i < out.length; i++) {
+      const b = box(out[i]);
+      assert.ok(b.y0 >= B.top - 0.01 && b.y1 <= B.bottom + 0.01, "inside the plot");
+      for (let j = i + 1; j < out.length; j++) assert.ok(!clash(b, box(out[j])));
+    }
+  });
+  it("when the plot is too crowded for a label, it is left out rather than printed over another", () => {
+    const tiny = { top: 20, bottom: 60, left: 40, right: 300 };
+    const out = declutterLabels(Array.from({ length: 10 }, (_, i) => L("q" + i, "BOS", 100, 40)), tiny);
+    const shown = out.filter((l) => !l.hidden);
+    assert.ok(shown.length >= 2 && shown.length < 10, `shown ${shown.length}`);
+    for (let i = 0; i < shown.length; i++) for (let j = i + 1; j < shown.length; j++) assert.ok(!clash(box(shown[i]), box(shown[j])));
+  });
+  it("fixed boxes (pattern tags, price tags) are avoided", () => {
+    const [o] = declutterLabels([L("a", "FVG", 100, 100)], B, 2, [{ x0: 90, x1: 200, y0: 85, y1: 105 }]);
+    assert.ok(o.y - 12 * 0.8 >= 105 || o.y + 12 * 0.2 <= 85);
+  });
+  it("a label running past the right edge is pulled back inside", () => {
+    const [o] = declutterLabels([L("z", "ZONE 188.09–190.74", 880, 200)], B);
+    assert.ok(box(o).x1 <= B.right + 0.01);
   });
 });

@@ -28,6 +28,7 @@ import { atr, boll, ema, etSessionDate, macd, rsi, sma, stoch, vwap, type Num } 
 import { chartPatterns, drawPatternOps, patternDrawOps } from "./chart-patterns";
 import type { PatternHit } from "./patterns";
 import { smcOverlays, type SmcLayers, type SmcOp } from "./money-flow/smc";
+import { declutterLabels, type ChartLabel, type LabelBox } from "./money-flow/engine";
 import type { PopTf } from "./money-flow/engine";
 import { elementScale } from "./chart-pointer";
 
@@ -709,10 +710,19 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
     kmHits.push({ k, x, y });
   });
   // ── patterns (the "Pattern" button): same detector and look as Money Flow ──
-  if (m.patterns && m.patterns.length)
-    drawPatternOps(ctx, patternDrawOps(m.patterns, view.from, view.to, xOf, yOf, { l: g.l, r: g.r, top: g.top, bottom: g.priceB }), pal.font, pal.bg);
-  // ── Money Flow lines and labels (liquidity, structure, zone labels) over the candles ──
-  if (m.smc) { drawSmc(ctx, m.smc, "over", g, xOf, yOf, g.w / span, pal.font); ctx.font = font; }
+  const patOps = m.patterns && m.patterns.length
+    ? patternDrawOps(m.patterns, view.from, view.to, xOf, yOf, { l: g.l, r: g.r, top: g.top, bottom: g.priceB }) : null;
+  if (patOps) drawPatternOps(ctx, patOps, pal.font, pal.bg);
+  // ── Money Flow lines and labels (liquidity, structure, zone labels) over the candles,
+  // kept clear of the pattern tags and point labels ──
+  if (m.smc) {
+    const patBoxes: LabelBox[] = patOps ? [
+      ...patOps.tags.map((t) => ({ x0: t.x, x1: t.x + t.w, y0: t.y, y1: t.y + t.h })),
+      ...patOps.points.map((p) => { const w = p.text.length * 11 * 0.62; return { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y - 7, y1: p.y + 7 }; }),
+    ] : [];
+    drawSmc(ctx, m.smc, "over", g, xOf, yOf, g.w / span, pal.font, patBoxes);
+    ctx.font = font;
+  }
   ctx.restore();
 
   // ── study panes ──
@@ -768,11 +778,17 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
 function drawSmc(
   ctx: CanvasRenderingContext2D, ops: SmcOp[], pass: "under" | "over", g: Geo,
   xOf: (i: number) => number, yOf: (p: number) => number, slot: number, fontFamily: string,
+  avoid: LabelBox[] = [],
 ) {
   const edgeL = (i: number | null) => (i == null ? g.l : xOf(i) - slot / 2);
   const edgeR = (i: number | null) => (i == null ? g.r : xOf(i) - slot / 2);
   ctx.font = `bold 11px ${fontFamily}`;
   ctx.textBaseline = "middle";
+  // Labels from every layer are collected on the "over" pass and drawn last, spread
+  // apart so none print over another (declutterLabels). `ym` is the text's middle.
+  const FZ = 11, labels: ChartLabel[] = [], fixed: LabelBox[] = [...avoid];
+  const put = (text: string, x: number, ym: number, color: string, anchor: ChartLabel["anchor"], dir: -1 | 1) =>
+    labels.push({ key: String(labels.length), text, x, y: ym + FZ * 0.35, fz: FZ, anchor, color, dir });
   for (const o of ops) {
     if (o.k === "box") {
       const x1 = Math.max(g.l, edgeL(o.i0)), x2 = Math.min(g.r, edgeR(o.i1));
@@ -788,14 +804,11 @@ function drawSmc(
           ctx.setLineDash([]);
         }
       } else if (o.label) {
-        ctx.fillStyle = `rgb(${o.rgb})`;
         if (o.stroke === 0) {
           // A shaded band (premium / discount): label inside it, at the right.
-          ctx.textAlign = "right";
-          ctx.fillText(o.label, g.r - 4, o.labelBelow ? yb - 7 : yt + 9);
+          put(o.label, g.r - 4, o.labelBelow ? yb - 7 : yt + 9, `rgb(${o.rgb})`, "end", o.labelBelow ? -1 : 1);
         } else {
-          ctx.textAlign = "left";
-          ctx.fillText(o.label, x1 + 3, o.labelBelow ? yb + 9 : yt - 7);
+          put(o.label, x1 + 3, o.labelBelow ? yb + 9 : yt - 7, `rgb(${o.rgb})`, "start", o.labelBelow ? 1 : -1);
         }
       }
       continue;
@@ -810,24 +823,32 @@ function drawSmc(
       ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
       ctx.setLineDash([]); ctx.lineWidth = 1; ctx.globalAlpha = 1;
       if (o.label) {
-        ctx.fillStyle = o.color;
-        const ly = y + (o.below ? 10 : -7);
-        if (o.at === "start") { ctx.textAlign = "left"; ctx.fillText(o.label, x1 + 4, ly); }
-        else if (o.at === "mid") { ctx.textAlign = "center"; ctx.fillText(o.label, o.label === "BOS" ? (x1 + x2) / 2 : x2, ly); }
-        else { ctx.textAlign = "right"; ctx.fillText(o.label, g.r - 4, ly); }
+        const ly = y + (o.below ? 10 : -7), d = o.below ? 1 : -1;
+        if (o.at === "start") put(o.label, x1 + 4, ly, o.color, "start", d);
+        else if (o.at === "mid") put(o.label, o.label === "BOS" ? (x1 + x2) / 2 : x2, ly, o.color, "middle", d);
+        else put(o.label, g.r - 4, ly, o.color, "end", d);
       }
     } else if (o.k === "text") {
       const x = xOf(o.i);
       if (x < g.l || x > g.r) continue;
-      ctx.fillStyle = o.color; ctx.textAlign = "center";
-      ctx.fillText(o.text, x, yOf(o.p) + (o.below ? 13 : -10));
+      put(o.text, x, yOf(o.p) + (o.below ? 13 : -10), o.color, "middle", o.below ? 1 : -1);
     } else {
       const w = ctx.measureText(o.text).width + 14;
       ctx.fillStyle = "rgba(8,9,10,.88)"; ctx.fillRect(g.l + 6, g.top + 4, w, 18);
       ctx.strokeStyle = o.color; ctx.strokeRect(g.l + 6.5, g.top + 4.5, w - 1, 17);
       ctx.fillStyle = o.color; ctx.textAlign = "left"; ctx.fillText(o.text, g.l + 13, g.top + 13);
+      fixed.push({ x0: g.l + 6, x1: g.l + 6 + w, y0: g.top + 4, y1: g.top + 22 });
     }
   }
+  if (pass !== "over") return;
+  ctx.textBaseline = "alphabetic";
+  for (const l of declutterLabels(labels, { top: g.top, bottom: g.priceB, left: g.l + 2, right: g.r - 2 }, 2, fixed)) {
+    if (l.hidden) continue;
+    ctx.fillStyle = l.color;
+    ctx.textAlign = l.anchor === "start" ? "left" : l.anchor === "end" ? "right" : "center";
+    ctx.fillText(l.text, l.x, l.y);
+  }
+  ctx.textBaseline = "middle";
 }
 
 function tag(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, bg: string, fg: string) {

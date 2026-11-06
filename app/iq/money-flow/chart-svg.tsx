@@ -7,7 +7,7 @@
 import React, { useEffect, useId, useRef } from "react";
 import type { BoardStock, IntradayView, OHLCVBar, SwingPoint } from "./engine";
 import { detectPatterns, layoutCallouts, patternGlyphs, patternsToShow } from "../patterns";
-import { candleIndexAt, chartFrame, chartRightGutter, computeFvgs, computeOrderBlocks, computeSwings, calloutLaneRows, formatCurrency, fullSessionView, layoutEdgeLabels, levelTag, liveLevels, panIntradayView, popLevelRows, popText, timeTicks, zoomIntradayView, type EdgeLabelIn } from "./engine";
+import { candleIndexAt, chartFrame, chartRightGutter, computeFvgs, computeOrderBlocks, computeSwings, calloutLaneRows, formatCurrency, fullSessionView, layoutEdgeLabels, declutterLabels, levelTag, type ChartLabel, type LabelBox, liveLevels, panIntradayView, popLevelRows, popText, timeTicks, zoomIntradayView, type EdgeLabelIn } from "./engine";
 
 /** Levels close enough to the day's candles to plot without flattening them. */
 function levelsInView(levels: Array<number | null | undefined>, lo: number, hi: number): number[] {
@@ -372,6 +372,15 @@ export function FullChartSvg({
   }
   const edgeFz = T(12);
   const edgeLabels = layoutEdgeLabels(edgeIn, y, pTop + edgeFz * 0.5, pBot - edgeFz * 0.3, edgeFz + 4);
+  // In-chart labels from every layer are collected while the layers render and
+  // drawn last, spread apart so none print over another (declutterLabels).
+  const chartLabels: ChartLabel[] = [];
+  // Boxes the labels must avoid but not move: pattern callouts and the pattern badge.
+  const fixedLabelBoxes: LabelBox[] = [];
+  const label = (l: Omit<ChartLabel, "anchor" | "dir"> & Partial<Pick<ChartLabel, "anchor" | "dir">>): null => {
+    chartLabels.push({ anchor: "start", dir: -1, ...l });
+    return null;
+  };
 
   return (
     <svg
@@ -430,15 +439,7 @@ export function FullChartSvg({
             height={Math.max(2, y(zone.lo) - y(zone.hi))}
             strokeWidth={1}
           />
-          <text style={{ fill: "var(--th-e0bb5e)" }}
-            x={Math.min(zx + 5, W - PR - 150)}
-            y={y(zone.hi) - 5}
-            fontSize={fz - 0.5}
-            fontFamily="'JetBrains Mono', monospace"
-            fontWeight={700}
-          >
-            {`ZONE ${formatCurrency(zone.lo)}–${formatCurrency(zone.hi)}`}
-          </text>
+          {label({ key: "zone", text: `ZONE ${formatCurrency(zone.lo)}–${formatCurrency(zone.hi)}`, x: zx + 5, y: y(zone.hi) - 5, fz: fz - 0.5, color: "var(--th-e0bb5e)" })}
           </>
           )}
 
@@ -456,17 +457,7 @@ export function FullChartSvg({
                   strokeDasharray={b.mit ? "3 3" : undefined}
                   strokeWidth={1}
                 />
-                {!b.mit && (
-                  <text style={{ fill: `rgb(${col})` }}
-                    x={x1 + 3}
-                    y={b.bull ? y(b.lo) + 12 : y(b.hi) - 4}
-                    fontSize={T(12.5)}
-                    fontFamily="'JetBrains Mono', monospace"
-                    fontWeight={700}
-                  >
-                    {b.bull ? "BULL OB" : "BEAR OB"}
-                  </text>
-                )}
+                {!b.mit && label({ key: `ob_${bi}`, text: b.bull ? "BULL OB" : "BEAR OB", x: x1 + 3, y: b.bull ? y(b.lo) + 12 : y(b.hi) - 4, fz: T(12.5), color: `rgb(${col})`, dir: b.bull ? 1 : -1 })}
               </g>
             );
           })}
@@ -556,17 +547,7 @@ export function FullChartSvg({
                 strokeWidth={0.8}
                 strokeDasharray="2 2"
               />
-              {end == null && (
-                <text style={{ fill: `rgb(${col})` }}
-                  x={x1 + 2}
-                  y={y(g.hi) - 4}
-                  fontSize={T(12)}
-                  fontFamily="'JetBrains Mono', monospace"
-                  fontWeight={700}
-                >
-                  FVG
-                </text>
-              )}
+              {end == null && label({ key: `fvg_${gi}`, text: "FVG", x: x1 + 2, y: y(g.hi) - 4, fz: T(12), color: `rgb(${col})` })}
             </g>
           );
         });
@@ -681,24 +662,8 @@ export function FullChartSvg({
               y2={y(eq)}
               strokeDasharray="1 4"
             />
-            <text style={{ fill: "rgba(240,86,90,.7)" }}
-              x={PL + 4}
-              y={y(hiAll) + 12}
-              fontSize={T(11)}
-              fontFamily="'JetBrains Mono', monospace"
-              fontWeight={700}
-            >
-              {`PREMIUM ${formatCurrency(eq)}–${formatCurrency(hiAll)}`}
-            </text>
-            <text style={{ fill: "rgba(61,220,132,.7)" }}
-              x={PL + 4}
-              y={y(loAll) - 5}
-              fontSize={T(11)}
-              fontFamily="'JetBrains Mono', monospace"
-              fontWeight={700}
-            >
-              {`DISCOUNT ${formatCurrency(loAll)}–${formatCurrency(eq)}`}
-            </text>
+            {label({ key: "premium", text: `PREMIUM ${formatCurrency(eq)}–${formatCurrency(hiAll)}`, x: PL + 4, y: y(hiAll) + 12, fz: T(11), color: "rgba(240,86,90,.7)", dir: 1 })}
+            {label({ key: "discount", text: `DISCOUNT ${formatCurrency(loAll)}–${formatCurrency(eq)}`, x: PL + 4, y: y(loAll) - 5, fz: T(11), color: "rgba(61,220,132,.7)" })}
 
             {pdh <= mx && pdh >= mn && (
               <>
@@ -783,19 +748,7 @@ export function FullChartSvg({
                   : tag === "LH" || tag === "LL"
                   ? "var(--th-f0565a)"
                   : "var(--th-aab3b0)";
-              return (
-                <text style={{ fill: col }}
-                  key={`sw_${pi}`}
-                  x={cx}
-                  y={p.hi ? y(p.p) - 7 : y(p.p) + 15}
-                  fontSize={T(12)}
-                  fontFamily="'JetBrains Mono', monospace"
-                  fontWeight={700}
-                  textAnchor="middle"
-                >
-                  {tag}
-                </text>
-              );
+              return label({ key: `sw_${pi}`, text: tag, x: cx, y: p.hi ? y(p.p) - 7 : y(p.p) + 15, fz: T(12), color: col, anchor: "middle", dir: p.hi ? -1 : 1 });
             })}
 
             {ev.slice(-3).map((e, ei) => {
@@ -812,21 +765,12 @@ export function FullChartSvg({
                     y2={y(e.p.p)}
                     strokeWidth={1}
                   />
-                  <text style={{ fill: col }}
-                    x={(x1 + x2) / 2}
-                    y={y(e.p.p) + (up ? -4 : 12)}
-                    fontSize={T(12)}
-                    fontFamily="'JetBrains Mono', monospace"
-                    fontWeight={700}
-                    textAnchor="middle"
-                  >
-                    BOS
-                  </text>
+                  {label({ key: `bos_${ei}`, text: "BOS", x: (x1 + x2) / 2, y: y(e.p.p) + (up ? -4 : 12), fz: T(12), color: col, anchor: "middle", dir: up ? -1 : 1 })}
                 </g>
               );
             })}
 
-            {pattern && (
+            {pattern && (fixedLabelBoxes.push({ x0: PL + 4, x1: PL + 18 + pattern.length * 7.5, y0: PT + 2, y1: PT + 20 }), true) && (
               <g key="pat_badge">
                 <rect style={{ fill: "rgb(var(--thr-08090a) / .85)", stroke: "var(--th-5a4a22)" }}
                   x={PL + 4}
@@ -900,6 +844,7 @@ export function FullChartSvg({
           PL + 2,
           W - PR - 4,
         );
+        for (const t of tags) fixedLabelBoxes.push({ x0: t.x, x1: t.x + t.w, y0: t.y, y1: t.y + t.h });
         const colors = [...new Set(glyphs.map((g) => g.color))];
         return (
           <g>
@@ -918,9 +863,8 @@ export function FullChartSvg({
                   {g.lines.map((l, li) => (
                     <line style={{ stroke: g.color }} key={li} x1={xi(l.i0)} y1={y(l.p0)} x2={xi(Math.min(l.i1, safeCandles.length - 1))} y2={y(l.p1)} strokeWidth={1.3} strokeOpacity={0.8} strokeDasharray={l.dash.join(" ") || undefined} />
                   ))}
-                  {g.points.map((p, pi) => (
-                    <text style={{ fill: g.color }} key={`pp${pi}`} x={xi(p.i)} y={y(p.p) + (g.label.above ? -5 : lf + 3)} textAnchor="middle" fontSize={T(10.5)} fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{p.label}</text>
-                  ))}
+                  {/* The pattern's point labels (LS, H, T2, B1 …) join the other labels, so two patterns' points never print over each other. */}
+                  {g.points.map((p, pi) => label({ key: `pp${hi}_${pi}`, text: p.label, x: xi(p.i), y: y(p.p) + (g.label.above ? -5 : lf + 3), fz: T(10.5), color: g.color, anchor: "middle", dir: g.label.above ? -1 : 1 }))}
                   <line style={{ stroke: g.color }} x1={tg.arrow.x1} y1={tg.arrow.y1} x2={tg.arrow.x2} y2={tg.arrow.y2} strokeWidth={1.2} strokeOpacity={0.9} markerEnd={`url(#mfArrow${g.color.slice(1)})`} />
                   <rect style={{ fill: "rgb(var(--thr-08090a) / .92)", stroke: g.color }} x={tg.x} y={tg.y} width={tg.w} height={tg.h} rx={4} strokeOpacity={0.75} />
                   <text style={{ fill: g.color }} x={tg.x + 5} y={tg.y + tg.h / 2 + lf * 0.36} fontSize={lf} fontFamily="Manrope, sans-serif" fontWeight={700}>{g.label.text}</text>
@@ -931,6 +875,17 @@ export function FullChartSvg({
         );
       })()}
 
+      </g>
+
+      {/* In-chart labels from every layer, spread apart (and clear of the right-edge tags) so none overlap */}
+      <g clipPath={`url(#${clipId}x)`}>
+        {declutterLabels(chartLabels, { top: rows.y.R1, bottom: rows.y.S1, left: PL + 2, right: W - PR - 4 }, 2,
+          [...fixedLabelBoxes, ...edgeLabels.map((l) => { const w = l.text.length * edgeFz * 0.6 + 8; return { x0: W - PR - 4 - w, x1: W - PR - 4, y0: l.y - edgeFz * 0.75, y1: l.y + edgeFz * 0.25 + 3 }; })],
+        ).filter((l) => !l.hidden).map((l) => (
+          <text key={l.key} style={{ fill: l.color }} x={l.x} y={l.y} fontSize={l.fz} fontFamily="'JetBrains Mono', monospace" fontWeight={700} textAnchor={l.anchor}>
+            {l.text}
+          </text>
+        ))}
       </g>
 
       {/* Right-edge labels: one per price, spaced apart, off-scale ones pinned with ▲ / ▼ */}

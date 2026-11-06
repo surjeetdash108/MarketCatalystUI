@@ -186,6 +186,53 @@ export function calloutLaneRows(labels: Array<{ above: boolean }>): { above: num
 export interface EdgeLabelIn { price: number; name: string; color: string }
 export interface EdgeLabelOut { y: number; text: string; color: string; offScale: "above" | "below" | null }
 
+/** A label drawn inside the chart (zone, order block, FVG, swing tag, BOS …). `y` is its baseline. */
+export interface ChartLabel {
+  key: string;
+  text: string;
+  x: number;
+  y: number;
+  fz: number;
+  anchor: "start" | "middle" | "end";
+  color: string;
+  /** Which way to move it first if it collides: -1 up (labels above their line), 1 down. */
+  dir: -1 | 1;
+  /** Set by declutterLabels when no free spot is left: the label is not drawn. */
+  hidden?: boolean;
+}
+
+/**
+ * In-chart labels from several overlays (order blocks, VWAP, FVG, liquidity,
+ * structure) were each placed on their own and printed over one another. Each
+ * label, in the order given, keeps its spot if free; otherwise it steps one
+ * line at a time in its preferred direction, then the other, until it touches
+ * no label already placed — staying inside the plot; with no free spot left it
+ * is marked hidden and not drawn. Text is pulled back from the left / right edges. `fixed` boxes (e.g. the right-edge price tags) are
+ * avoided but never moved.
+ */
+export type LabelBox = { x0: number; x1: number; y0: number; y1: number };
+export function declutterLabels(items: ChartLabel[], b: { top: number; bottom: number; left: number; right: number }, gap = 2, fixed: LabelBox[] = []): ChartLabel[] {
+  type Box = LabelBox;
+  const placed: Box[] = [...fixed];
+  const hits = (a: Box) => placed.some((p) => a.x0 < p.x1 && p.x0 < a.x1 && a.y0 < p.y1 && p.y0 < a.y1);
+  return items.map((l) => {
+    const w = l.text.length * l.fz * 0.62, asc = l.fz * 0.8, desc = l.fz * 0.2, step = l.fz + gap;
+    let x0 = l.anchor === "start" ? l.x : l.anchor === "end" ? l.x - w : l.x - w / 2;
+    x0 = Math.max(b.left, Math.min(b.right - w, x0));
+    const x = l.anchor === "start" ? x0 : l.anchor === "end" ? x0 + w : x0 + w / 2;
+    const inside = (yb: number) => yb - asc >= b.top && yb + desc <= b.bottom;
+    const boxAt = (yb: number): Box => ({ x0, x1: x0 + w, y0: yb - asc, y1: yb + desc });
+    const y0 = Math.max(b.top + asc, Math.min(b.bottom - desc, l.y));
+    const tries = [y0];
+    for (let k = 1; k <= 40; k++) tries.push(y0 + l.dir * k * step, y0 - l.dir * k * step);
+    const yb = tries.find((t) => inside(t) && !hits(boxAt(t)));
+    // No free spot in a crowded plot: leave it out rather than print it over another label.
+    if (yb == null) return { ...l, x, y: y0, hidden: true };
+    placed.push(boxAt(yb));
+    return { ...l, x, y: yb };
+  });
+}
+
 /**
  * The chart's right-edge labels (BSL / SSL, ORH / ORL, PDH / PDL, HOD / LOD,
  * EQ): labels at the same price become one ("ORL · LOD · SSL $143.65"); a
