@@ -252,6 +252,8 @@ const cs = (n: number) => Math.round(n * CHART_SCALE);
  *     for, which completes successfully with nothing to draw.
  */
 // Session-level caches so repeated renders across screens resolve synchronously in 0ms
+/** Bumped when the backend changes which logo it serves (browsers cache logos for 7 days): v2 = no white-on-transparent logos. */
+const LOGO_VERSION = "2";
 const knownMissingLogos = new Set<string>();
 const knownLoadedLogos = new Set<string>();
 
@@ -272,7 +274,7 @@ export function useTickerLogo(sym: string) {
 
   // Backend /live/logo checks Polygon -> FMP -> Parqet with server-side caching
   // and returns 204 No Content when unavailable (preventing browser 404 network errors).
-  const src = isKnownMissing ? "" : backendUrl(`/live/logo?ticker=${encodeURIComponent(s)}`);
+  const src = isKnownMissing ? "" : backendUrl(`/live/logo?ticker=${encodeURIComponent(s)}&v=${LOGO_VERSION}`);
 
   const handleFailure = useCallback(() => {
     knownMissingLogos.add(s);
