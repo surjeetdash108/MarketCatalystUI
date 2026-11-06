@@ -634,7 +634,7 @@ export default class StrategyLab extends Component {
       ["STOP" + (cfg.stopAtr ? " · " + cfg.stopAtr + "× ATR" : cfg.stop ? " · −" + +(cfg.stop * 100).toFixed(2) + "%" : ""), usd(stp), "var(--th-f0565a)", cfg.stopAtr ? "Last close − " + cfg.stopAtr + " × ATR(14), as the backtest sets it" : "Last close less the stop %"],
       ["TARGET" + (cfg.tpR ? " · " + cfg.tpR + "R" : cfg.tp ? " · +" + +(cfg.tp * 100).toFixed(2) + "%" : ""), usd(tgt), "var(--th-3ddc84)", cfg.tpR ? "Last close + " + cfg.tpR + " × the stop distance" : "Last close plus the target %"],
       ["TRAIL STARTS", usd(trS), "var(--th-f0d68c)", "Price at which the trailing stop switches on"],
-    ].filter(([kk, vv]) => vv != null || kk.startsWith("STOP") || kk.startsWith("TARGET")).map(([kk, vv, c, title]) => ({ k: kk, v: vv ?? "Not set", c: vv == null ? "var(--th-5f6966)" : c, title }));
+    ].filter(([kk, vv]) => vv != null || kk.startsWith("STOP") || kk.startsWith("TARGET")).map(([kk, vv, c, title]) => ({ k: kk, v: vv ?? "—", c: vv == null ? "var(--th-5f6966)" : c, title }));
     return {
       ...base, has: true,
       sub: tfL(tf) + " candles · " + (chip ? "return " + W.over : "the full " + wl + " backtest"),

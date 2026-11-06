@@ -83,7 +83,9 @@ export const POPULAR: Record<string, string> = {
 
 export const ORDER = Object.keys(POPULAR);
 
-export function usd(v: number): string {
+/** Dollars with cents; a missing value (no target, no price) reads "—". */
+export function usd(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
   return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
