@@ -30,6 +30,22 @@ const A = "var(--warn, #fbbf24)"; // Amber / Warning
 const DIM = "var(--text-dim-solid, #94a39b)"; // Legible Dim Gray
 const TEXT_HI = "var(--text-hi, #ffffff)"; // Crisp Primary Text
 const TEXT_MUTED = "var(--text-dim-solid, #c1ccc6)"; // Secondary / Muted Text
+const AMBER = "var(--warn, #f5b544)"; // Hold / neutral ratings
+
+/**
+ * A rating's colour: buy-type green (Buy, Outperform, Overweight, Positive…),
+ * sell-type red (Sell, Underperform, Underweight, Negative, Reduce…), hold-type
+ * amber (Hold, Neutral, Equal-Weight, Market Perform…); unknown keeps the text colour.
+ * Sell words are tested first so "Underperform" is not read as "perform".
+ */
+function ratingColor(rating: string | null | undefined): string {
+  const r = String(rating ?? "").toLowerCase();
+  if (!r || r === "—") return TEXT_HI;
+  if (/\b(sell|underperform|underweight|negative|reduce|below average)\b/.test(r)) return R;
+  if (/\b(buy|outperform|overweight|positive|accumulate|add|top pick|conviction)\b/.test(r)) return G;
+  if (/\b(hold|neutral|equal[- ]?weight|perform|in[- ]?line|sector weight|market weight|peer weight|fair value|average)\b/.test(r)) return AMBER;
+  return TEXT_HI;
+}
 /** Floor for the "Moving the needle" section on short windows to fit right deep-dive comfortably. */
 const NEEDLE_SECTION_MIN_HEIGHT = 740;
 /** Space kept between the section and the bottom of the screen. */
@@ -1419,7 +1435,7 @@ export function AnalystScreen() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${BORDER_DARK}`, borderRadius: 10 }}>
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
                     <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>RATING</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>{selectedStock.to}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, marginTop: 2, color: ratingColor(selectedStock.to) }}>{selectedStock.to}</div>
                   </div>
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
                     <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>TARGET</div>
@@ -1551,9 +1567,9 @@ export function AnalystScreen() {
                               style={{ display: "block", minWidth: 0, color: TEXT_HI, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                             >
                               {r.from && r.from !== "—" && r.from !== r.to ? (
-                                <span>{r.from} → <b>{r.to}</b></span>
+                                <span><span style={{ color: ratingColor(r.from) }}>{r.from}</span> → <b style={{ color: ratingColor(r.to) }}>{r.to}</b></span>
                               ) : (
-                                <b>{r.to}</b>
+                                <b style={{ color: ratingColor(r.to) }}>{r.to}</b>
                               )}
                             </span>
                             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: TEXT_HI, whiteSpace: "nowrap", textAlign: "right" }}>
@@ -2131,7 +2147,7 @@ export function AnalystScreen() {
                     </span>
 
                     <span style={{ color: TEXT_MUTED }}>
-                      {r.from} → <b style={{ color: TEXT_HI }}>{r.to}</b>
+                      <span style={{ color: ratingColor(r.from) }}>{r.from}</span> → <b style={{ color: ratingColor(r.to) }}>{r.to}</b>
                     </span>
 
                     {r.ptSource === "firm" ? (
