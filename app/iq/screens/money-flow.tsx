@@ -163,10 +163,6 @@ export function MoneyFlowScreen() {
   const { data: popBars, loading: popBarsLoading } = useApiResource<BarsResponse>(
     popSym ? `/live/bars?ticker=${encodeURIComponent(popSym)}&interval=1m` : null,
   );
-  const popCandles = useMemo(
-    () => (popBars?.bars && board ? sessionCandles(popBars.bars, board.sessionDate, popMin) : []),
-    [popBars, board, popMin],
-  );
 
   const gainers = useMemo(() => board?.gainers ?? [], [board]);
   const losers = useMemo(() => board?.losers ?? [], [board]);
@@ -194,6 +190,30 @@ export function MoneyFlowScreen() {
   const bullTiles: TileLayout[] = useMemo(() => computeSquarifiedTiles(next12Bull, true), [next12Bull]);
   const bearTiles: TileLayout[] = useMemo(() => computeSquarifiedTiles(next12Bear, false), [next12Bear]);
   const stockByT = useMemo(() => new Map(onBoard.map((s) => [s.t, s])), [onBoard]);
+
+  const popCandles = useMemo(() => {
+    if (popBars?.bars && board) {
+      return sessionCandles(popBars.bars, board.sessionDate, popMin);
+    }
+    // Instant fallback for 5m: use the stock's own board bars so the chart renders immediately with header
+    const active = hoveredStock ? (stockByT.get(hoveredStock.stock.t) ?? hoveredStock.stock) : null;
+    if (active && popMin === 5 && active.bars?.length) {
+      return boardCandles(active);
+    }
+    return [];
+  }, [popBars, board, popMin, hoveredStock, stockByT]);
+
+  // Prefetch visible tile 1m bars in background so popover chart appears with header
+  useEffect(() => {
+    if (!board) return;
+    const visibleTickers = [...board.gainers.slice(0, 15), ...board.losers.slice(0, 15)].map((s) => s.t);
+    const timer = setTimeout(() => {
+      for (const sym of visibleTickers) {
+        fetch(`/live/bars?ticker=${encodeURIComponent(sym)}&interval=1m`).catch(() => {});
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [board]);
 
   // Index cards from the FMP tape stream (identical to Dashboard Market Pulse)
   const { frame: tapeFrame } = useTapeStream();
@@ -2501,7 +2521,7 @@ export function MoneyFlowScreen() {
               width: boxW,
               maxWidth: "calc(100vw - 16px)",
               maxHeight: (vh - 16) / scale,
-              overflowY: vw < 768 ? "auto" : "hidden",
+              overflowY: "auto",
               transform: `scale(${scale})`,
               transformOrigin: "top left",
               // Open pop-ups take the pointer so it can move from the tile onto the preview.
@@ -2723,7 +2743,7 @@ export function MoneyFlowScreen() {
               }}
             >
               {popFull ? (
-                <PopFullChart sym={s.t} tf={popTf} layers={popLayers} height={POPOVER.chartH - 44} />
+                <PopFullChart sym={s.t} tf={popTf} layers={popLayers} height={POPOVER.chartH} />
               ) : popBarsLoading && popCandles.length === 0 ? (
                 <div
                   style={{
