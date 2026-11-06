@@ -22,7 +22,11 @@ import {
 // same per-branch pattern already used for NEXT_PUBLIC_BACKEND_URL.
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "AIzaSyDVjZmJ11qzbPIvruwOHiTiMWvjTcUmhuk",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "market-catalyst-502415.firebaseapp.com",
+  // The app's own address, so Google's account chooser says "to continue to
+  // app.marketcatalyst.ai" rather than the project's firebaseapp.com address.
+  // Firebase Hosting serves /__/auth/handler here; the OAuth client lists
+  // https://app.marketcatalyst.ai/__/auth/handler as a redirect URI.
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "app.marketcatalyst.ai",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "market-catalyst-502415",
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "market-catalyst-502415.firebasestorage.app",
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "741318166823",
