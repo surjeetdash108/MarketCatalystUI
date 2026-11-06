@@ -68,8 +68,8 @@ describe("Strategy Lab phone layout", () => {
     assert.match(panels, /minmax\(min\(100%,340px\),1fr\)/);
   });
 
-  it("header: the desktop-only balancing spacer is hidden on the phone", () => {
-    assert.match(screen, /className="sl-hdr-spacer"/);
-    assert.match(screen, /@media \(max-width:640px\)\{\.sl-hdr-spacer\{display:none\}\}/);
+  it("header: the right-hand slot (theme switch) moves to the top-right corner on the phone", () => {
+    assert.match(screen, /className="sl-hdr-right"/);
+    assert.match(screen, /@media \(max-width:640px\)\{\.sl-hdr-right\{position:absolute;top:10px;right:14px;width:auto !important\}\}/);
   });
 });

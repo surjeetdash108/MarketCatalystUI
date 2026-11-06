@@ -32,7 +32,7 @@ export function SparklineSvg({ stock, candles }: { stock: BoardStock; candles: O
   const mx = Math.max(cMax, ...lv);
   const mn = Math.min(cMin, ...lv);
   const y = (v: number) => 4 + ((mx - v) / (mx - mn || 1)) * (H - 8);
-  const col = stock.pctChange >= 0 ? "#3ddc84" : "#f0565a";
+  const col = stock.pctChange >= 0 ? "var(--th-3ddc84)" : "var(--th-f0565a)";
   // x spans the full 78-bar session, so the line's length shows time elapsed.
   const x = (i: number) => (i / 78) * W;
   const k = candles.length - 1;
@@ -42,45 +42,40 @@ export function SparklineSvg({ stock, candles }: { stock: BoardStock; candles: O
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", height: "100%" }}>
       {zone && zi >= 0 && inView(zone.hi) && inView(zone.lo) && (
-        <rect
+        <rect style={{ fill: "rgba(201,162,74,.22)", stroke: "var(--th-c9a24a)" }}
           x={x(zi)}
           y={y(zone.hi)}
           width={W - x(zi)}
           height={Math.max(2, y(zone.lo) - y(zone.hi))}
-          fill="rgba(201,162,74,.22)"
-          stroke="#c9a24a"
           vectorEffect="non-scaling-stroke"
         />
       )}
       {(
         [
-          ["s", lvl("S1"), "rgba(230,235,232,.45)"],
+          ["s", lvl("S1"), "rgb(var(--thr-e6ebe8) / .45)"],
           ["r1", lvl("R1"), "rgba(224,187,94,.6)"],
           ["r2", lvl("R2"), "rgba(224,187,94,.6)"],
         ] as Array<[string, number | null | undefined, string]>
       )
         .filter(([, v]) => inView(v))
         .map(([key, v, cc]) => (
-          <line
+          <line style={{ stroke: cc }}
             key={key}
             x1={0}
             x2={W}
             y1={y(v as number)}
             y2={y(v as number)}
-            stroke={cc}
             strokeDasharray="3 3"
             vectorEffect="non-scaling-stroke"
           />
         ))}
-      <polyline
+      <polyline style={{ fill: "none", stroke: col }}
         points={cl.map((v, i) => `${x(i)},${y(v)}`).join(" ")}
-        fill="none"
-        stroke={col}
         strokeWidth={1.5}
         vectorEffect="non-scaling-stroke"
       />
-      <line x1={x(k)} x2={x(k)} y1={0} y2={H} stroke="rgba(255,255,255,.15)" vectorEffect="non-scaling-stroke" />
-      <circle cx={x(k)} cy={y(cl[k])} r={2.5} fill="#fff" />
+      <line style={{ stroke: "rgb(var(--thr-ffffff) / .15)" }} x1={x(k)} x2={x(k)} y1={0} y2={H} vectorEffect="non-scaling-stroke" />
+      <circle style={{ fill: "var(--th-ffffff)" }} cx={x(k)} cy={y(cl[k])} r={2.5} />
     </svg>
   );
 }
@@ -114,7 +109,7 @@ export function MiniProfileSvg({ stock, candles }: { stock: BoardStock; candles:
   const last = candles[candles.length - 1];
   const vw = last.vw;
   const ly = y(last.c);
-  const lc = stock.pctChange >= 0 ? "#3ddc84" : "#f0565a";
+  const lc = stock.pctChange >= 0 ? "var(--th-3ddc84)" : "var(--th-f0565a)";
 
   return (
     <svg
@@ -125,14 +120,12 @@ export function MiniProfileSvg({ stock, candles }: { stock: BoardStock; candles:
       {obs.slice(-2).map((o, i) => {
         const col = o.bull ? "61,220,132" : "240,86,90";
         return (
-          <rect
+          <rect style={{ fill: `rgba(${col},.14)`, stroke: `rgba(${col},.6)` }}
             key={`ob_${i}`}
             x={0}
             y={y(o.hi)}
             width={W}
             height={Math.max(2, y(o.lo) - y(o.hi))}
-            fill={`rgba(${col},.14)`}
-            stroke={`rgba(${col},.6)`}
             strokeWidth={0.5}
             strokeDasharray="2 1.5"
           />
@@ -146,53 +139,47 @@ export function MiniProfileSvg({ stock, candles }: { stock: BoardStock; candles:
         const isP = j === poc;
         return (
           <g key={`b_${j}`}>
-            <rect
+            <rect style={{ fill: isP ? "var(--th-3ddc84)" : "rgba(61,220,132,.5)" }}
               x={W - wu - wd}
               y={yy + 0.4}
               width={wu}
               height={Math.max(1, bh - 0.8)}
-              fill={isP ? "#3ddc84" : "rgba(61,220,132,.5)"}
             />
-            <rect
+            <rect style={{ fill: isP ? "var(--th-f0565a)" : "rgba(240,86,90,.5)" }}
               x={W - wd}
               y={yy + 0.4}
               width={wd}
               height={Math.max(1, bh - 0.8)}
-              fill={isP ? "#f0565a" : "rgba(240,86,90,.5)"}
             />
           </g>
         );
       })}
 
-      <line
+      <line style={{ stroke: "var(--th-e0bb5e)" }}
         x1={0}
         x2={W}
         y1={H - 2 - (poc + 0.5) * bh}
         y2={H - 2 - (poc + 0.5) * bh}
-        stroke="#e0bb5e"
         strokeWidth={0.6}
       />
-      <line
+      <line style={{ stroke: "var(--th-8b7cf6)" }}
         x1={0}
         x2={W}
         y1={y(vw)}
         y2={y(vw)}
-        stroke="#8b7cf6"
         strokeWidth={0.6}
         strokeDasharray="2 1.5"
       />
-      <line
+      <line style={{ stroke: "var(--th-ffffff)" }}
         x1={0}
         x2={W}
         y1={ly}
         y2={ly}
-        stroke="#fff"
         strokeWidth={0.5}
         strokeOpacity={0.7}
       />
-      <polygon
+      <polygon style={{ fill: lc }}
         points={`0,${ly - 2.5} 4,${ly} 0,${ly + 2.5}`}
-        fill={lc}
       />
     </svg>
   );
@@ -291,7 +278,7 @@ export function FullChartSvg({
   if (!candles || candles.length === 0) {
     return (
       <svg viewBox={`0 0 ${width} ${height}`} style={{ display: "block", width: "100%", height: "100%" }}>
-        <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={T(13)} fill="#7a8481" fontFamily="'JetBrains Mono', monospace">
+        <text style={{ fill: "var(--th-7a8481)" }} x={width / 2} y={height / 2} textAnchor="middle" fontSize={T(13)} fontFamily="'JetBrains Mono', monospace">
           No regular-session bars yet
         </text>
       </svg>
@@ -371,17 +358,17 @@ export function FullChartSvg({
 
   // Right-edge labels, merged by price and spaced apart; off-scale ones pinned to the edge (layoutEdgeLabels).
   const edgeIn: EdgeLabelIn[] = [];
-  if (layers.liq) for (const l of liqShown) if (l.sw == null) edgeIn.push({ price: l.p.p, name: l.p.hi ? "BSL" : "SSL", color: l.p.hi ? "#f0a24a" : "#4ad0c9" });
+  if (layers.liq) for (const l of liqShown) if (l.sw == null) edgeIn.push({ price: l.p.p, name: l.p.hi ? "BSL" : "SSL", color: l.p.hi ? "var(--th-f0a24a)" : "var(--th-4ad0c9)" });
   if (layers.str) {
     edgeIn.push(
-      { price: eq, name: "EQ 50%", color: "#aab3b0" },
-      { price: orh, name: "ORH", color: "#9aa7ff" },
-      { price: orl, name: "ORL", color: "#9aa7ff" },
-      { price: hiAll, name: "HOD", color: "#e0bb5e" },
-      { price: loAll, name: "LOD", color: "#e0bb5e" },
+      { price: eq, name: "EQ 50%", color: "var(--th-aab3b0)" },
+      { price: orh, name: "ORH", color: "var(--th-9aa7ff)" },
+      { price: orl, name: "ORL", color: "var(--th-9aa7ff)" },
+      { price: hiAll, name: "HOD", color: "var(--th-e0bb5e)" },
+      { price: loAll, name: "LOD", color: "var(--th-e0bb5e)" },
     );
-    if (Number.isFinite(pdh)) edgeIn.push({ price: pdh, name: "PDH", color: "#9aa7ff" });
-    if (Number.isFinite(pdl)) edgeIn.push({ price: pdl, name: "PDL", color: "#9aa7ff" });
+    if (Number.isFinite(pdh)) edgeIn.push({ price: pdh, name: "PDH", color: "var(--th-9aa7ff)" });
+    if (Number.isFinite(pdl)) edgeIn.push({ price: pdl, name: "PDL", color: "var(--th-9aa7ff)" });
   }
   const edgeFz = T(12);
   const edgeLabels = layoutEdgeLabels(edgeIn, y, pTop + edgeFz * 0.5, pBot - edgeFz * 0.3, edgeFz + 4);
@@ -414,19 +401,18 @@ export function FullChartSvg({
         <clipPath id={`${clipId}x`}><rect x={0} y={0} width={W - PR + 1} height={H} /></clipPath>
       </defs>
       {/* Chart box: the price area only — the level column to its right sits outside it */}
-      {(() => { const f = chartFrame(W, H, PR); return <rect x={f.x + 0.5} y={f.y + 0.5} width={f.w - 1} height={f.h - 1} rx={8} fill="#08090a" stroke="#171c1e" />; })()}
+      {(() => { const f = chartFrame(W, H, PR); return <rect style={{ fill: "var(--th-08090a)", stroke: "var(--th-171c1e)" }} x={f.x + 0.5} y={f.y + 0.5} width={f.w - 1} height={f.h - 1} rx={8} />; })()}
 
       {/* Grid lines */}
       {[1, 2, 3, 4, 5].map((g) => {
         const gy = PT + (g * (H - PT - PB)) / 6;
         return (
-          <line
+          <line style={{ stroke: "var(--th-12171a)" }}
             key={`g_${g}`}
             x1={PL}
             x2={W - PR}
             y1={gy}
             y2={gy}
-            stroke="#12171a"
           />
         );
       })}
@@ -437,20 +423,17 @@ export function FullChartSvg({
         <>
           {zone && ZI >= 0 && (
           <>
-          <rect
+          <rect style={{ fill: "rgba(201,162,74,.16)", stroke: "var(--th-c9a24a)" }}
             x={zx}
             y={y(zone.hi)}
             width={Math.max(2, W - PR - zx)}
             height={Math.max(2, y(zone.lo) - y(zone.hi))}
-            fill="rgba(201,162,74,.16)"
-            stroke="#c9a24a"
             strokeWidth={1}
           />
-          <text
+          <text style={{ fill: "var(--th-e0bb5e)" }}
             x={Math.min(zx + 5, W - PR - 150)}
             y={y(zone.hi) - 5}
             fontSize={fz - 0.5}
-            fill="#e0bb5e"
             fontFamily="'JetBrains Mono', monospace"
             fontWeight={700}
           >
@@ -465,22 +448,19 @@ export function FullChartSvg({
             const col = b.bull ? "61,220,132" : "240,86,90";
             return (
               <g key={`ob_rect_${bi}`}>
-                <rect
+                <rect style={{ fill: `rgba(${col},${b.mit ? 0.06 : 0.16})`, stroke: `rgba(${col},${b.mit ? 0.3 : 0.85})` }}
                   x={x1}
                   y={y(b.hi)}
                   width={Math.max(2, x2 - x1)}
                   height={Math.max(2, y(b.lo) - y(b.hi))}
-                  fill={`rgba(${col},${b.mit ? 0.06 : 0.16})`}
-                  stroke={`rgba(${col},${b.mit ? 0.3 : 0.85})`}
                   strokeDasharray={b.mit ? "3 3" : undefined}
                   strokeWidth={1}
                 />
                 {!b.mit && (
-                  <text
+                  <text style={{ fill: `rgb(${col})` }}
                     x={x1 + 3}
                     y={b.bull ? y(b.lo) + 12 : y(b.hi) - 4}
                     fontSize={T(12.5)}
-                    fill={`rgb(${col})`}
                     fontFamily="'JetBrains Mono', monospace"
                     fontWeight={700}
                   >
@@ -499,50 +479,45 @@ export function FullChartSvg({
       {lv.map(([n, v]) => {
         const col =
           n === "R2"
-            ? "#ff9f43"
+            ? "var(--th-ff9f43)"
             : n === "R1"
-            ? "#f5c542"
+            ? "var(--th-f5c542)"
             : n === "S1"
-            ? "#4fd1e8"
-            : "#6ea8ff";
+            ? "var(--th-4fd1e8)"
+            : "var(--th-6ea8ff)";
         const tg = levelTag(n, v, fz, W - PR + 2);
         const ly = rows.y[n as keyof typeof rows.y];
         return (
           <g key={n}>
-            <line
+            <line style={{ stroke: col }}
               x1={PL}
               x2={W - PR}
               y1={ly}
               y2={ly}
-              stroke={col}
               strokeOpacity={0.6}
               strokeDasharray="5 4"
             />
-            <rect
+            <rect style={{ fill: "rgb(var(--thr-08090a) / .88)", stroke: col }}
               x={tg.box.x}
               y={ly - fz * 0.75 - 2}
               width={tg.box.w}
               height={fz + 4}
               rx={3}
-              fill="rgba(8,9,10,.88)"
-              stroke={col}
               strokeOpacity={0.55}
             />
-            <text
+            <text style={{ fill: col }}
               x={tg.box.x + 4}
               y={ly + fz * 0.36}
               fontSize={fz}
-              fill={col}
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
             >
               {tg.name}
             </text>
-            <text
+            <text style={{ fill: col }}
               x={tg.value.x}
               y={ly + fz * 0.36}
               fontSize={fz}
-              fill={col}
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
             >
@@ -555,12 +530,10 @@ export function FullChartSvg({
       <g clipPath={`url(#${clipId}p)`}>
       {/* VWAP */}
       {layers.vwap && (
-        <polyline
+        <polyline style={{ fill: "none", stroke: "var(--th-8b7cf6)" }}
           points={safeCandles
             .map((b, i) => `${sx(i) + cw / 2},${y(b.vw)}`)
             .join(" ")}
-          fill="none"
-          stroke="#8b7cf6"
           strokeWidth={1.3}
           strokeDasharray="4 3"
         />
@@ -575,22 +548,19 @@ export function FullChartSvg({
           const col = g.bull ? "90,169,230" : "230,120,190";
           return (
             <g key={`fvg_${gi}`}>
-              <rect
+              <rect style={{ fill: `rgba(${col},${end != null ? 0.07 : 0.2})`, stroke: `rgba(${col},${end != null ? 0.35 : 0.8})` }}
                 x={x1}
                 y={y(g.hi)}
                 width={Math.max(2, x2 - x1)}
                 height={Math.max(1.5, y(g.lo) - y(g.hi))}
-                fill={`rgba(${col},${end != null ? 0.07 : 0.2})`}
-                stroke={`rgba(${col},${end != null ? 0.35 : 0.8})`}
                 strokeWidth={0.8}
                 strokeDasharray="2 2"
               />
               {end == null && (
-                <text
+                <text style={{ fill: `rgb(${col})` }}
                   x={x1 + 2}
                   y={y(g.hi) - 4}
                   fontSize={T(12)}
-                  fill={`rgb(${col})`}
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
                 >
@@ -606,25 +576,23 @@ export function FullChartSvg({
       {layers.liq && liqShown.map(({ p, sw }, pi) => {
         const x1 = sx(p.i) + cw / 2;
         const x2 = sw != null ? sx(sw) + cw / 2 : W - PR;
-        const col = p.hi ? "#f0a24a" : "#4ad0c9";
+        const col = p.hi ? "var(--th-f0a24a)" : "var(--th-4ad0c9)";
         return (
           <g key={`liq_${pi}`}>
-            <line
+            <line style={{ stroke: col }}
               x1={x1}
               x2={x2}
               y1={y(p.p)}
               y2={y(p.p)}
-              stroke={col}
               strokeWidth={sw != null ? 0.8 : 1.2}
               strokeOpacity={sw != null ? 0.45 : 0.9}
               strokeDasharray="1 3"
             />
             {sw != null && (
-              <text
+              <text style={{ fill: col }}
                 x={x2}
                 y={y(p.p) + (p.hi ? -4 : 12)}
                 fontSize={T(12)}
-                fill={col}
                 fontFamily="'JetBrains Mono', monospace"
                 fontWeight={700}
                 textAnchor="middle"
@@ -694,43 +662,38 @@ export function FullChartSvg({
 
         return (
           <g key="str_layer">
-            <rect
+            <rect style={{ fill: "rgba(240,86,90,.035)" }}
               x={PL}
               y={y(hiAll)}
               width={W - PR - PL}
               height={Math.max(0, y(eq) - y(hiAll))}
-              fill="rgba(240,86,90,.035)"
             />
-            <rect
+            <rect style={{ fill: "rgba(61,220,132,.035)" }}
               x={PL}
               y={y(eq)}
               width={W - PR - PL}
               height={Math.max(0, y(loAll) - y(eq))}
-              fill="rgba(61,220,132,.035)"
             />
-            <line
+            <line style={{ stroke: "rgb(var(--thr-e6ebe8) / .35)" }}
               x1={PL}
               x2={W - PR}
               y1={y(eq)}
               y2={y(eq)}
-              stroke="rgba(230,235,232,.35)"
               strokeDasharray="1 4"
             />
-            <text
+            <text style={{ fill: "rgba(240,86,90,.7)" }}
               x={PL + 4}
               y={y(hiAll) + 12}
               fontSize={T(11)}
-              fill="rgba(240,86,90,.7)"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
             >
               {`PREMIUM ${formatCurrency(eq)}–${formatCurrency(hiAll)}`}
             </text>
-            <text
+            <text style={{ fill: "rgba(61,220,132,.7)" }}
               x={PL + 4}
               y={y(loAll) - 5}
               fontSize={T(11)}
-              fill="rgba(61,220,132,.7)"
               fontFamily="'JetBrains Mono', monospace"
               fontWeight={700}
             >
@@ -739,12 +702,11 @@ export function FullChartSvg({
 
             {pdh <= mx && pdh >= mn && (
               <>
-                <line
+                <line style={{ stroke: "var(--th-9aa7ff)" }}
                   x1={PL}
                   x2={W - PR}
                   y1={y(pdh)}
                   y2={y(pdh)}
-                  stroke="#9aa7ff"
                   strokeWidth={1}
                   strokeOpacity={0.6}
                   strokeDasharray="2 5"
@@ -753,12 +715,11 @@ export function FullChartSvg({
             )}
             {pdl <= mx && pdl >= mn && (
               <>
-                <line
+                <line style={{ stroke: "var(--th-9aa7ff)" }}
                   x1={PL}
                   x2={W - PR}
                   y1={y(pdl)}
                   y2={y(pdl)}
-                  stroke="#9aa7ff"
                   strokeWidth={1}
                   strokeOpacity={0.6}
                   strokeDasharray="2 5"
@@ -766,45 +727,39 @@ export function FullChartSvg({
               </>
             )}
 
-            <rect
+            <rect style={{ fill: "rgba(154,167,255,.07)", stroke: "rgba(154,167,255,.35)" }}
               x={sx(0)}
               y={y(orh)}
               width={Math.max(2, xi(orb.length - 1) - sx(0) + cw / 2)}
               height={Math.max(1, y(orl) - y(orh))}
-              fill="rgba(154,167,255,.07)"
-              stroke="rgba(154,167,255,.35)"
               strokeDasharray="3 3"
             />
-            <line
+            <line style={{ stroke: "rgba(154,167,255,.5)" }}
               x1={PL}
               x2={W - PR}
               y1={y(orh)}
               y2={y(orh)}
-              stroke="rgba(154,167,255,.5)"
               strokeDasharray="6 4"
             />
-            <line
+            <line style={{ stroke: "rgba(154,167,255,.5)" }}
               x1={PL}
               x2={W - PR}
               y1={y(orl)}
               y2={y(orl)}
-              stroke="rgba(154,167,255,.5)"
               strokeDasharray="6 4"
             />
 
             {ih >= 0 && (
               <>
-                <path
+                <path style={{ fill: "var(--th-e0bb5e)" }}
                   d={`M${xi(ih) - 4},${y(hiAll) - 9} L${xi(ih) + 4},${y(hiAll) - 9} L${xi(ih)},${y(hiAll) - 3}Z`}
-                  fill="#e0bb5e"
                 />
               </>
             )}
             {il >= 0 && (
               <>
-                <path
+                <path style={{ fill: "var(--th-e0bb5e)" }}
                   d={`M${xi(il) - 4},${y(loAll) + 9} L${xi(il) + 4},${y(loAll) + 9} L${xi(il)},${y(loAll) + 3}Z`}
-                  fill="#e0bb5e"
                 />
               </>
             )}
@@ -824,17 +779,16 @@ export function FullChartSvg({
               const cx = xi(p.i);
               const col =
                 tag === "HH" || tag === "HL"
-                  ? "#3ddc84"
+                  ? "var(--th-3ddc84)"
                   : tag === "LH" || tag === "LL"
-                  ? "#f0565a"
-                  : "#aab3b0";
+                  ? "var(--th-f0565a)"
+                  : "var(--th-aab3b0)";
               return (
-                <text
+                <text style={{ fill: col }}
                   key={`sw_${pi}`}
                   x={cx}
                   y={p.hi ? y(p.p) - 7 : y(p.p) + 15}
                   fontSize={T(12)}
-                  fill={col}
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
                   textAnchor="middle"
@@ -848,22 +802,20 @@ export function FullChartSvg({
               const up = e.p.hi;
               const x1 = xi(e.p.i);
               const x2 = xi(e.j);
-              const col = up ? "#3ddc84" : "#f0565a";
+              const col = up ? "var(--th-3ddc84)" : "var(--th-f0565a)";
               return (
                 <g key={`bos_${ei}`}>
-                  <line
+                  <line style={{ stroke: col }}
                     x1={x1}
                     x2={x2}
                     y1={y(e.p.p)}
                     y2={y(e.p.p)}
-                    stroke={col}
                     strokeWidth={1}
                   />
-                  <text
+                  <text style={{ fill: col }}
                     x={(x1 + x2) / 2}
                     y={y(e.p.p) + (up ? -4 : 12)}
                     fontSize={T(12)}
-                    fill={col}
                     fontFamily="'JetBrains Mono', monospace"
                     fontWeight={700}
                     textAnchor="middle"
@@ -876,20 +828,17 @@ export function FullChartSvg({
 
             {pattern && (
               <g key="pat_badge">
-                <rect
+                <rect style={{ fill: "rgb(var(--thr-08090a) / .85)", stroke: "var(--th-5a4a22)" }}
                   x={PL + 4}
                   y={PT + 2}
                   width={pattern.length * 7.5 + 14}
                   height={18}
                   rx={3}
-                  fill="rgba(8,9,10,.85)"
-                  stroke="#5a4a22"
                 />
-                <text
+                <text style={{ fill: "var(--th-f0d68c)" }}
                   x={PL + 10}
                   y={PT + 15}
                   fontSize={T(12)}
-                  fill="#f0d68c"
                   fontFamily="'JetBrains Mono', monospace"
                   fontWeight={700}
                 >
@@ -909,27 +858,25 @@ export function FullChartSvg({
         const cyH = y(b.h);
         const cyL = y(b.l);
         const green = b.c >= b.o;
-        const color = green ? "#3ddc84" : "#f0565a";
+        const color = green ? "var(--th-3ddc84)" : "var(--th-f0565a)";
         const bodyTop = Math.min(cyO, cyC);
         const bodyH = Math.max(1, Math.abs(cyC - cyO));
         const bw = Math.max(2, cw - 2);
 
         return (
           <g key={`c_${i}`}>
-            <line
+            <line style={{ stroke: color }}
               x1={cx}
               x2={cx}
               y1={cyH}
               y2={cyL}
-              stroke={color}
               strokeWidth={1}
             />
-            <rect
+            <rect style={{ fill: color }}
               x={cx - bw / 2}
               y={bodyTop}
               width={bw}
               height={bodyH}
-              fill={color}
             />
           </g>
         );
@@ -959,7 +906,7 @@ export function FullChartSvg({
             <defs>
               {colors.map((c) => (
                 <marker key={c} id={`mfArrow${c.slice(1)}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M0,0 L8,4 L0,8 z" fill={c} />
+                  <path style={{ fill: c }} d="M0,0 L8,4 L0,8 z" />
                 </marker>
               ))}
             </defs>
@@ -969,14 +916,14 @@ export function FullChartSvg({
                 <g key={`pat_${hi}`}>
                   <title>{g.title}</title>
                   {g.lines.map((l, li) => (
-                    <line key={li} x1={xi(l.i0)} y1={y(l.p0)} x2={xi(Math.min(l.i1, safeCandles.length - 1))} y2={y(l.p1)} stroke={g.color} strokeWidth={1.3} strokeOpacity={0.8} strokeDasharray={l.dash.join(" ") || undefined} />
+                    <line style={{ stroke: g.color }} key={li} x1={xi(l.i0)} y1={y(l.p0)} x2={xi(Math.min(l.i1, safeCandles.length - 1))} y2={y(l.p1)} strokeWidth={1.3} strokeOpacity={0.8} strokeDasharray={l.dash.join(" ") || undefined} />
                   ))}
                   {g.points.map((p, pi) => (
-                    <text key={`pp${pi}`} x={xi(p.i)} y={y(p.p) + (g.label.above ? -5 : lf + 3)} textAnchor="middle" fontSize={T(10.5)} fill={g.color} fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{p.label}</text>
+                    <text style={{ fill: g.color }} key={`pp${pi}`} x={xi(p.i)} y={y(p.p) + (g.label.above ? -5 : lf + 3)} textAnchor="middle" fontSize={T(10.5)} fontFamily="'JetBrains Mono', monospace" fontWeight={700}>{p.label}</text>
                   ))}
-                  <line x1={tg.arrow.x1} y1={tg.arrow.y1} x2={tg.arrow.x2} y2={tg.arrow.y2} stroke={g.color} strokeWidth={1.2} strokeOpacity={0.9} markerEnd={`url(#mfArrow${g.color.slice(1)})`} />
-                  <rect x={tg.x} y={tg.y} width={tg.w} height={tg.h} rx={4} fill="rgba(8,9,10,.92)" stroke={g.color} strokeOpacity={0.75} />
-                  <text x={tg.x + 5} y={tg.y + tg.h / 2 + lf * 0.36} fontSize={lf} fill={g.color} fontFamily="Manrope, sans-serif" fontWeight={700}>{g.label.text}</text>
+                  <line style={{ stroke: g.color }} x1={tg.arrow.x1} y1={tg.arrow.y1} x2={tg.arrow.x2} y2={tg.arrow.y2} strokeWidth={1.2} strokeOpacity={0.9} markerEnd={`url(#mfArrow${g.color.slice(1)})`} />
+                  <rect style={{ fill: "rgb(var(--thr-08090a) / .92)", stroke: g.color }} x={tg.x} y={tg.y} width={tg.w} height={tg.h} rx={4} strokeOpacity={0.75} />
+                  <text style={{ fill: g.color }} x={tg.x + 5} y={tg.y + tg.h / 2 + lf * 0.36} fontSize={lf} fontFamily="Manrope, sans-serif" fontWeight={700}>{g.label.text}</text>
                 </g>
               );
             })}
@@ -992,8 +939,8 @@ export function FullChartSvg({
           const w = l.text.length * edgeFz * 0.6 + 8;
           return (
             <g key={`edge_${li}`}>
-              <rect x={W - PR - 4 - w} y={l.y - edgeFz * 0.75} width={w} height={edgeFz + 3} rx={3} fill="rgba(8,9,10,.82)" />
-              <text x={W - PR - 8} y={l.y + edgeFz * 0.35} fontSize={edgeFz} fill={l.color} fontFamily="'JetBrains Mono', monospace" fontWeight={700} textAnchor="end">
+              <rect style={{ fill: "rgb(var(--thr-08090a) / .82)" }} x={W - PR - 4 - w} y={l.y - edgeFz * 0.75} width={w} height={edgeFz + 3} rx={3} />
+              <text style={{ fill: l.color }} x={W - PR - 8} y={l.y + edgeFz * 0.35} fontSize={edgeFz} fontFamily="'JetBrains Mono', monospace" fontWeight={700} textAnchor="end">
                 {l.text}
               </text>
             </g>
@@ -1007,8 +954,8 @@ export function FullChartSvg({
         const tx = sx(k.i);
         return (
           <g key={`tt_${k.i}`}>
-            <line x1={tx} x2={tx} y1={PT} y2={H - PB} stroke="rgba(255,255,255,.05)" strokeWidth={1} />
-            <text x={tx} y={H - PB + T(12) + 5} textAnchor={k.i === 0 ? "start" : "middle"} fontSize={T(12)} fill="#7a8481" fontFamily="'JetBrains Mono', monospace">
+            <line style={{ stroke: "rgb(var(--thr-ffffff) / .05)" }} x1={tx} x2={tx} y1={PT} y2={H - PB} strokeWidth={1} />
+            <text style={{ fill: "var(--th-7a8481)" }} x={tx} y={H - PB + T(12) + 5} textAnchor={k.i === 0 ? "start" : "middle"} fontSize={T(12)} fontFamily="'JetBrains Mono', monospace">
               {k.label}
             </text>
           </g>
@@ -1018,20 +965,18 @@ export function FullChartSvg({
       </g>
 
       {/* Current Price Marker */}
-      <line
+      <line style={{ stroke: "var(--th-ffffff)" }}
         x1={PL}
         x2={W - PR}
         y1={y(safeStockPx)}
         y2={y(safeStockPx)}
-        stroke="#ffffff"
         strokeWidth={0.8}
         strokeDasharray="2 2"
       />
-      <text
+      <text style={{ fill: "var(--th-ffffff)" }}
         x={W - PR + 4}
         y={y(safeStockPx) + 4}
         fontSize={T(13)}
-        fill="#ffffff"
         fontFamily="'JetBrains Mono', monospace"
         fontWeight={700}
       >

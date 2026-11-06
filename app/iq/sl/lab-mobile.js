@@ -25,7 +25,7 @@ export const LAB_MOBILE_CSS =
   ".sl-res-stock{grid-column:1 / 4}" +
   ".sl-res-px{grid-column:4}" +
   ".sl-res-stat{text-align:left !important;white-space:nowrap;font-size:11.5px !important}" +
-  ".sl-res-stat::before{content:attr(data-l);display:block;font-family:Manrope,system-ui,sans-serif;font-size:9px;font-weight:700;letter-spacing:.06em;color:#5f6966;margin-bottom:3px}" +
+  ".sl-res-stat::before{content:attr(data-l);display:block;font-family:Manrope,system-ui,sans-serif;font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--th-5f6966);margin-bottom:3px}" +
   ".sl-lib-grid{grid-template-columns:minmax(0,1fr) !important}" +
   ".sl-lib-side{position:static !important}" +
   ".sl-lib-list{max-height:300px !important}" +

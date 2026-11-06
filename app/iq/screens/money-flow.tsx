@@ -61,6 +61,7 @@ import { PopFullChart } from "../money-flow/full-chart";
 import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
 import { useLiveQuotes } from "../live-quotes-context";
+import { ModuleThemeToggle } from "../theme/theme-toggle";
 
 /** Board refresh: rebuilds and polls every 15s to keep rankings fresh. */
 const BOARD_POLL_MS = 15_000;
@@ -314,7 +315,7 @@ export function MoneyFlowScreen() {
     <div className="mf-page-wrap">
       <style>{`
         /* ── Base Money Flow Styles ── */
-        .mf-pop-layer:hover { border-color: #c9a24a !important; }
+        .mf-pop-layer:hover { border-color: var(--th-c9a24a) !important; }
         .mf-page-wrap {
           display: flex;
           flex-direction: column;
@@ -324,15 +325,15 @@ export function MoneyFlowScreen() {
           overflow-x: hidden;
           box-sizing: border-box;
           font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-          color: var(--si-text-hi, #eef2f4);
-          background: #08090a;
+          color: var(--si-text-hi, var(--th-eef2f4));
+          background: var(--th-08090a);
         }
         .mf-topbar {
           position: sticky;
           top: 0;
           z-index: 40;
-          background: #08090a;
-          border-bottom: 1px solid #171c1e;
+          background: var(--th-08090a);
+          border-bottom: 1px solid var(--th-171c1e);
           width: 100%;
         }
         .mf-nav-inner {
@@ -386,16 +387,16 @@ export function MoneyFlowScreen() {
           font-size: 15px;
           font-weight: 600;
           line-height: 1.4;
-          color: #ffffff;
+          color: var(--th-ffffff);
         }
         .mf-glossary-btn {
           flex: none;
           display: flex;
           align-items: center;
           gap: 6px;
-          border: 1px solid #5a4a22;
+          border: 1px solid var(--th-5a4a22);
           background: rgba(201,162,74,.08);
-          color: #f0d68c;
+          color: var(--th-f0d68c);
           border-radius: 8px;
           padding: 7px 12px;
           font-size: 12.5px;
@@ -405,8 +406,8 @@ export function MoneyFlowScreen() {
           white-space: nowrap;
         }
         .mf-board-wrap {
-          background: radial-gradient(ellipse at 30% 25%,rgba(61,220,132,.07),transparent 55%),radial-gradient(ellipse at 30% 80%,rgba(240,86,90,.07),transparent 55%),#08090a;
-          border: 1px solid var(--si-border-sec, #1e2427);
+          background: radial-gradient(ellipse at 30% 25%,rgba(61,220,132,.07),transparent 55%),radial-gradient(ellipse at 30% 80%,rgba(240,86,90,.07),transparent 55%),var(--th-08090a);
+          border: 1px solid var(--si-border-sec, var(--th-1e2427));
           border-radius: 14px;
           padding: 12px;
           display: flex;
@@ -461,8 +462,8 @@ export function MoneyFlowScreen() {
           gap: 2px;
           padding: 4px 6px 10px 0;
           overflow-y: auto;
-          background: #08090a;
-          border-right: 1px solid #1a2328;
+          background: var(--th-08090a);
+          border-right: 1px solid var(--th-1a2328);
           scrollbar-width: thin;
         }
         .mf-top2-breadth-pane {
@@ -632,7 +633,7 @@ export function MoneyFlowScreen() {
             width: 100% !important;
             max-height: 250px !important;
             border-right: none !important;
-            border-bottom: 1px solid #1a2328 !important;
+            border-bottom: 1px solid var(--th-1a2328) !important;
             padding-right: 0 !important;
             padding-bottom: 6px !important;
           }
@@ -673,7 +674,7 @@ export function MoneyFlowScreen() {
                   fontSize: 17,
                   letterSpacing: ".14em",
                   textTransform: "uppercase",
-                  color: "#eef2f4",
+                  color: "var(--th-eef2f4)",
                 }}
               >
                 Money Flow
@@ -683,7 +684,7 @@ export function MoneyFlowScreen() {
                   fontSize: 9.5,
                   fontWeight: 700,
                   letterSpacing: ".22em",
-                  color: "#e0bb5e",
+                  color: "var(--th-e0bb5e)",
                 }}
               >
                 BY MARKETCATALYST
@@ -702,7 +703,7 @@ export function MoneyFlowScreen() {
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 12.5,
-                color: "#cfd6d3",
+                color: "var(--th-cfd6d3)",
               }}
             >
               {navTime.day} · {navTime.time} ET
@@ -712,8 +713,8 @@ export function MoneyFlowScreen() {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                border: "1px solid #6b5216",
-                color: "#f2b33d",
+                border: "1px solid var(--th-6b5216)",
+                color: "var(--th-f2b33d)",
                 borderRadius: 999,
                 padding: "4px 10px",
                 fontWeight: 700,
@@ -725,11 +726,12 @@ export function MoneyFlowScreen() {
                   width: 6,
                   height: 6,
                   borderRadius: "50%",
-                  background: "#f2b33d",
+                  background: "var(--th-f2b33d)",
                 }}
               />
               {mkt.label}
             </span>
+            <ModuleThemeToggle />
           </div>
         </div>
       </div>
@@ -795,7 +797,7 @@ export function MoneyFlowScreen() {
                 { n: "WTI CRUDE", ...wti, action: () => openIndex?.("WTI Crude") },
                 { n: "GOLD", ...gold, action: () => openIndex?.("Gold") },
               ].map((ix) => {
-                const col = ix.isUp == null ? "#7a8481" : ix.isUp ? "#3ddc84" : "#f0565a";
+                const col = ix.isUp == null ? "var(--th-7a8481)" : ix.isUp ? "var(--th-3ddc84)" : "var(--th-f0565a)";
                 return (
                   <div
                     key={ix.n}
@@ -808,8 +810,8 @@ export function MoneyFlowScreen() {
                     title={`Click to view ${ix.n} index details`}
                     style={{
                       cursor: "pointer",
-                      border: "1px solid #1e2427",
-                      background: "#0c0f10",
+                      border: "1px solid var(--th-1e2427)",
+                      background: "var(--th-0c0f10)",
                       borderRadius: 7,
                       padding: "6px 8px",
                       display: "flex",
@@ -821,12 +823,12 @@ export function MoneyFlowScreen() {
                       transition: "border-color 0.15s, background 0.15s",
                     }}
                     onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.borderColor = "#c9a24a";
-                      (e.currentTarget as HTMLElement).style.background = "#121618";
+                      (e.currentTarget as HTMLElement).style.borderColor = "var(--th-c9a24a)";
+                      (e.currentTarget as HTMLElement).style.background = "var(--th-121618)";
                     }}
                     onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.borderColor = "#1e2427";
-                      (e.currentTarget as HTMLElement).style.background = "#0c0f10";
+                      (e.currentTarget as HTMLElement).style.borderColor = "var(--th-1e2427)";
+                      (e.currentTarget as HTMLElement).style.background = "var(--th-0c0f10)";
                     }}
                   >
                     <span
@@ -835,7 +837,7 @@ export function MoneyFlowScreen() {
                         fontWeight: 700,
                         letterSpacing: ".08em",
                         textTransform: "uppercase",
-                        color: "#7a8481",
+                        color: "var(--th-7a8481)",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -859,7 +861,7 @@ export function MoneyFlowScreen() {
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: 13,
                           fontWeight: 800,
-                          color: "#eef2f4",
+                          color: "var(--th-eef2f4)",
                           whiteSpace: "nowrap",
                         }}
                       >
@@ -904,8 +906,8 @@ export function MoneyFlowScreen() {
                   gap: 2,
                   padding: "4px 6px 10px 0",
                   overflowY: "auto",
-                  background: "#08090a",
-                  borderRight: "1px solid #1a2328",
+                  background: "var(--th-08090a)",
+                  borderRight: "1px solid var(--th-1a2328)",
                   scrollbarWidth: "thin",
                 }}
               >
@@ -924,7 +926,7 @@ export function MoneyFlowScreen() {
                       fontWeight: 700,
                       letterSpacing: ".12em",
                       textTransform: "uppercase",
-                      color: "#c9a24a",
+                      color: "var(--th-c9a24a)",
                     }}
                   >
                     Sectors ({remainingSectors.length})
@@ -936,7 +938,7 @@ export function MoneyFlowScreen() {
                       style={{
                         background: "none",
                         border: "none",
-                        color: "#f0d68c",
+                        color: "var(--th-f0d68c)",
                         fontSize: 10,
                         cursor: "pointer",
                         padding: 0,
@@ -975,7 +977,7 @@ export function MoneyFlowScreen() {
                           ? "rgba(201,162,74,0.22)"
                           : "transparent",
                         borderLeft: `2px solid ${sc.color}`,
-                        outline: isMatch ? "1px solid #e0bb5e" : "none",
+                        outline: isMatch ? "1px solid var(--th-e0bb5e)" : "none",
                         padding: "2px 5px",
                         borderRadius: "0 4px 4px 0",
                         opacity: isDimmed ? 0.35 : 1,
@@ -995,7 +997,7 @@ export function MoneyFlowScreen() {
                             fontFamily: "Manrope, sans-serif",
                             fontSize: 11,
                             fontWeight: 700,
-                            color: "#e6ebe8",
+                            color: "var(--th-e6ebe8)",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
@@ -1027,7 +1029,7 @@ export function MoneyFlowScreen() {
                           style={{
                             flex: 1,
                             height: 3,
-                            background: "#1a2328",
+                            background: "var(--th-1a2328)",
                             borderRadius: 2,
                             overflow: "hidden",
                           }}
@@ -1041,7 +1043,7 @@ export function MoneyFlowScreen() {
                             }}
                           />
                         </div>
-                        <span style={{ color: "#7a8481", fontSize: 9.5 }}>
+                        <span style={{ color: "var(--th-7a8481)", fontSize: 9.5 }}>
                           {sc.avgPctFormatted}
                         </span>
                       </div>
@@ -1085,9 +1087,9 @@ export function MoneyFlowScreen() {
                         pointerEvents: "none",
                         fontFamily: "'JetBrains Mono', monospace",
                         fontSize: 10,
-                        color: "#f0d68c",
-                        background: "rgba(11,13,14,0.96)",
-                        border: "1px solid #5a4a22",
+                        color: "var(--th-f0d68c)",
+                        background: "rgb(var(--thr-0b0d0e) / 0.96)",
+                        border: "1px solid var(--th-5a4a22)",
                         borderRadius: 6,
                         padding: "5px 7px",
                         lineHeight: 1.3,
@@ -1104,7 +1106,7 @@ export function MoneyFlowScreen() {
                       fontWeight: 800,
                       letterSpacing: ".12em",
                       textTransform: "uppercase",
-                      color: "#3ddc84",
+                      color: "var(--th-3ddc84)",
                     }}
                   >
                     Top {TOP_SECTORS} Sectors · Inflow
@@ -1134,7 +1136,7 @@ export function MoneyFlowScreen() {
                           justifyContent: "space-between",
                           borderRadius: 8,
                           border: `1px solid ${isMatch
-                            ? "#c9a24a"
+                            ? "var(--th-c9a24a)"
                             : "rgba(61,220,132,0.35)"
                             }`,
                           background: isMatch
@@ -1159,7 +1161,7 @@ export function MoneyFlowScreen() {
                             style={{
                               fontSize: 9,
                               fontWeight: 800,
-                              color: "#3ddc84",
+                              color: "var(--th-3ddc84)",
                               letterSpacing: ".08em",
                             }}
                           >
@@ -1169,7 +1171,7 @@ export function MoneyFlowScreen() {
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10,
-                              color: "#aab3b0",
+                              color: "var(--th-aab3b0)",
                             }}
                           >
                             {sc.avgPctFormatted}
@@ -1186,7 +1188,7 @@ export function MoneyFlowScreen() {
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 15,
                             fontWeight: 700,
-                            color: "#3ddc84",
+                            color: "var(--th-3ddc84)",
                           }}
                         >
                           {sc.flowFormatted}
@@ -1201,7 +1203,7 @@ export function MoneyFlowScreen() {
                       fontWeight: 800,
                       letterSpacing: ".12em",
                       textTransform: "uppercase",
-                      color: "#f0565a",
+                      color: "var(--th-f0565a)",
                       marginTop: 2,
                     }}
                   >
@@ -1232,7 +1234,7 @@ export function MoneyFlowScreen() {
                           justifyContent: "space-between",
                           borderRadius: 8,
                           border: `1px solid ${isMatch
-                            ? "#c9a24a"
+                            ? "var(--th-c9a24a)"
                             : "rgba(240,86,90,0.35)"
                             }`,
                           background: isMatch
@@ -1257,7 +1259,7 @@ export function MoneyFlowScreen() {
                             style={{
                               fontSize: 9,
                               fontWeight: 800,
-                              color: "#f0565a",
+                              color: "var(--th-f0565a)",
                               letterSpacing: ".08em",
                             }}
                           >
@@ -1267,7 +1269,7 @@ export function MoneyFlowScreen() {
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10,
-                              color: "#aab3b0",
+                              color: "var(--th-aab3b0)",
                             }}
                           >
                             {sc.avgPctFormatted}
@@ -1284,7 +1286,7 @@ export function MoneyFlowScreen() {
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 15,
                             fontWeight: 700,
-                            color: "#f0565a",
+                            color: "var(--th-f0565a)",
                           }}
                         >
                           {sc.flowFormatted}
@@ -1312,7 +1314,7 @@ export function MoneyFlowScreen() {
                     style={{
                       fontSize: 9,
                       fontWeight: 800,
-                      color: "#aab3b0",
+                      color: "var(--th-aab3b0)",
                       textAlign: "center",
                       lineHeight: 1.15,
                     }}
@@ -1320,7 +1322,7 @@ export function MoneyFlowScreen() {
                     S&P<br />500
                   </span>
                   <span
-                    style={{ fontSize: 10, fontWeight: 700, color: "#3ddc84" }}
+                    style={{ fontSize: 10, fontWeight: 700, color: "var(--th-3ddc84)" }}
                   >
                     {advCount} ▲
                   </span>
@@ -1332,25 +1334,25 @@ export function MoneyFlowScreen() {
                       overflow: "hidden",
                       display: "flex",
                       flexDirection: "column",
-                      background: "#1a2328",
+                      background: "var(--th-1a2328)",
                     }}
                   >
                     <span
                       style={{
                         flex: advCount,
-                        background: "#3ddc84",
+                        background: "var(--th-3ddc84)",
                         boxShadow: "0 0 10px rgba(61,220,132,.5)",
                       }}
                     />
                     <span
                       style={{
                         flex: decCount,
-                        background: "#f0565a",
+                        background: "var(--th-f0565a)",
                       }}
                     />
                   </div>
                   <span
-                    style={{ fontSize: 10, fontWeight: 700, color: "#f0565a" }}
+                    style={{ fontSize: 10, fontWeight: 700, color: "var(--th-f0565a)" }}
                   >
                     {decCount} ▼
                   </span>
@@ -1358,7 +1360,7 @@ export function MoneyFlowScreen() {
                     style={{
                       fontSize: 9,
                       fontWeight: 800,
-                      color: advPct == null ? "#7a8481" : advPct >= 50 ? "#3ddc84" : "#f0565a",
+                      color: advPct == null ? "var(--th-7a8481)" : advPct >= 50 ? "var(--th-3ddc84)" : "var(--th-f0565a)",
                     }}
                   >
                     {advPct == null ? "—" : `${advPct}%`}
@@ -1366,7 +1368,7 @@ export function MoneyFlowScreen() {
                       style={{
                         display: "block",
                         fontSize: 8,
-                        color: "#7a8481",
+                        color: "var(--th-7a8481)",
                         fontWeight: 600,
                       }}
                     >
@@ -1405,7 +1407,7 @@ export function MoneyFlowScreen() {
                   fontFamily: "'Barlow Condensed', Manrope, sans-serif",
                   fontWeight: 600,
                   fontSize: 17,
-                  color: "#3ddc84",
+                  color: "var(--th-3ddc84)",
                 }}
               >
                 {BOARD_HEADINGS.bull[0]}
@@ -1416,7 +1418,7 @@ export function MoneyFlowScreen() {
                   fontWeight: 700,
                   letterSpacing: ".12em",
                   textTransform: "uppercase",
-                  color: "#7a8481",
+                  color: "var(--th-7a8481)",
                 }}
               >
                 {BOARD_HEADINGS.bull[1]}
@@ -1442,10 +1444,10 @@ export function MoneyFlowScreen() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#7a8481",
+                    color: "var(--th-7a8481)",
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 12,
-                    border: "1px dashed #1e2427",
+                    border: "1px dashed var(--th-1e2427)",
                     borderRadius: 10,
                     padding: 16,
                     textAlign: "center",
@@ -1478,14 +1480,14 @@ export function MoneyFlowScreen() {
                         minHeight: 0,
                         borderRadius: 10,
                         border: isSecMatch
-                          ? "1px solid #f0d68c"
+                          ? "1px solid var(--th-f0d68c)"
                           : "1px solid rgba(61,220,132,.32)",
                         boxShadow: isSecMatch
                           ? "0 0 0 1px rgba(240,214,140,.6), 0 0 24px rgba(201,162,74,.3)"
                           : "none",
                         opacity: isDimmed ? 0.25 : 1,
                         background:
-                          "linear-gradient(150deg,rgba(61,220,132,.18),rgba(61,220,132,.04) 60%,rgba(8,9,10,.6))",
+                          "linear-gradient(150deg,rgba(61,220,132,.18),rgba(61,220,132,.04) 60%,rgb(var(--thr-08090a) / .6))",
                         padding: "5px 8px",
                         display: "flex",
                         flexDirection: "column",
@@ -1508,8 +1510,8 @@ export function MoneyFlowScreen() {
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 10,
                             fontWeight: 700,
-                            color: "#e6ebe8",
-                            border: "1px solid #3a4448",
+                            color: "var(--th-e6ebe8)",
+                            border: "1px solid var(--th-3a4448)",
                             borderRadius: 4,
                             padding: "1px 4px",
                             flex: "none",
@@ -1541,7 +1543,7 @@ export function MoneyFlowScreen() {
                             fontWeight: 600,
                             fontSize: 18,
                             lineHeight: 1,
-                            color: "#eef2f4",
+                            color: "var(--th-eef2f4)",
                           }}
                         >
                           {fc.t}
@@ -1558,13 +1560,13 @@ export function MoneyFlowScreen() {
                           <span
                             style={{
                               fontSize: 12,
-                              color: "#eef2f4",
+                              color: "var(--th-eef2f4)",
                               fontWeight: 700,
                             }}
                           >
                             {cardQuote.priceStr}
                           </span>
-                          <span style={{ fontSize: 10.5, color: cardQuote.isUp ? "#3ddc84" : "#f0565a" }}>
+                          <span style={{ fontSize: 10.5, color: cardQuote.isUp ? "var(--th-3ddc84)" : "var(--th-f0565a)" }}>
                             {cardQuote.pctStr}
                           </span>
                         </span>
@@ -1573,8 +1575,8 @@ export function MoneyFlowScreen() {
                             fontSize: 10,
                             fontWeight: 800,
                             letterSpacing: ".1em",
-                            color: hasNoSetup ? "#94a3b8" : "#08090a",
-                            background: hasNoSetup ? "#1e293b" : "#3ddc84",
+                            color: hasNoSetup ? "var(--th-94a3b8)" : "var(--th-08090a)",
+                            background: hasNoSetup ? "var(--th-1e293b)" : "var(--th-3ddc84)",
                             borderRadius: 4,
                             padding: "2px 6px",
                             whiteSpace: "nowrap",
@@ -1589,7 +1591,7 @@ export function MoneyFlowScreen() {
                             width: 28,
                             height: 28,
                             borderRadius: "50%",
-                            background: `conic-gradient(#3ddc84 ${(confScore ?? 0) * 3.6}deg, #1a2328 0)`,
+                            background: `conic-gradient(var(--th-3ddc84) ${(confScore ?? 0) * 3.6}deg, var(--th-1a2328) 0)`,
                             display: "grid",
                             placeItems: "center",
                           }}
@@ -1599,13 +1601,13 @@ export function MoneyFlowScreen() {
                               width: 22,
                               height: 22,
                               borderRadius: "50%",
-                              background: "#0d0f10",
+                              background: "var(--th-0d0f10)",
                               display: "grid",
                               placeItems: "center",
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10,
                               fontWeight: 700,
-                              color: "#3ddc84",
+                              color: "var(--th-3ddc84)",
                             }}
                           >
                             {confScore ?? "—"}
@@ -1620,7 +1622,7 @@ export function MoneyFlowScreen() {
                           flex: "1 1 0",
                           minHeight: 18,
                           borderRadius: 6,
-                          background: "rgba(8,9,10,.55)",
+                          background: "rgb(var(--thr-08090a) / .55)",
                           border: "1px solid rgba(61,220,132,.18)",
                           overflow: "hidden",
                         }}
@@ -1634,8 +1636,8 @@ export function MoneyFlowScreen() {
                             fontSize: 9,
                             fontWeight: 800,
                             letterSpacing: ".08em",
-                            color: hasNoSetup ? "#94a3b8" : "#3ddc84",
-                            background: "rgba(8,9,10,.75)",
+                            color: hasNoSetup ? "var(--th-94a3b8)" : "var(--th-3ddc84)",
+                            background: "rgb(var(--thr-08090a) / .75)",
                             border: `1px solid ${hasNoSetup ? "rgba(148,163,184,.4)" : "rgba(61,220,132,.4)"}`,
                             borderRadius: 3,
                             padding: "0 4px",
@@ -1660,7 +1662,7 @@ export function MoneyFlowScreen() {
                       >
                         {cardLevels(fc).map((x) => ({
                           ...x,
-                          c: x.k === "ZONE" || x.k === "R2" || x.k === "R1" ? "#e0bb5e" : x.k === "S2" ? "#f0565a" : "#e6ebe8",
+                          c: x.k === "ZONE" || x.k === "R2" || x.k === "R1" ? "var(--th-e0bb5e)" : x.k === "S2" ? "var(--th-f0565a)" : "var(--th-e6ebe8)",
                         })).map((l) => (
                           <span
                             key={l.k}
@@ -1676,7 +1678,7 @@ export function MoneyFlowScreen() {
                                 fontSize: 9,
                                 fontWeight: 700,
                                 letterSpacing: ".06em",
-                                color: "#7a8481",
+                                color: "var(--th-7a8481)",
                                 lineHeight: 1,
                               }}
                             >
@@ -1711,7 +1713,7 @@ export function MoneyFlowScreen() {
               style={{
                 height: 1,
                 background:
-                  "linear-gradient(90deg,transparent,#e6ebe8,transparent)",
+                  "linear-gradient(90deg,transparent,var(--th-e6ebe8),transparent)",
                 opacity: 0.35,
                 flex: "none",
               }}
@@ -1730,7 +1732,7 @@ export function MoneyFlowScreen() {
                   fontFamily: "'Barlow Condensed', Manrope, sans-serif",
                   fontWeight: 600,
                   fontSize: 17,
-                  color: "#f0565a",
+                  color: "var(--th-f0565a)",
                 }}
               >
                 {BOARD_HEADINGS.bear[0]}
@@ -1741,7 +1743,7 @@ export function MoneyFlowScreen() {
                   fontWeight: 700,
                   letterSpacing: ".12em",
                   textTransform: "uppercase",
-                  color: "#7a8481",
+                  color: "var(--th-7a8481)",
                 }}
               >
                 {BOARD_HEADINGS.bear[1]}
@@ -1767,10 +1769,10 @@ export function MoneyFlowScreen() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#7a8481",
+                    color: "var(--th-7a8481)",
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 12,
-                    border: "1px dashed #1e2427",
+                    border: "1px dashed var(--th-1e2427)",
                     borderRadius: 10,
                     padding: 16,
                     textAlign: "center",
@@ -1803,14 +1805,14 @@ export function MoneyFlowScreen() {
                         minHeight: 0,
                         borderRadius: 10,
                         border: isSecMatch
-                          ? "1px solid #f0d68c"
+                          ? "1px solid var(--th-f0d68c)"
                           : "1px solid rgba(240,86,90,.32)",
                         boxShadow: isSecMatch
                           ? "0 0 0 1px rgba(240,214,140,.6), 0 0 24px rgba(201,162,74,.3)"
                           : "none",
                         opacity: isDimmed ? 0.25 : 1,
                         background:
-                          "linear-gradient(150deg,rgba(240,86,90,.18),rgba(240,86,90,.04) 60%,rgba(8,9,10,.6))",
+                          "linear-gradient(150deg,rgba(240,86,90,.18),rgba(240,86,90,.04) 60%,rgb(var(--thr-08090a) / .6))",
                         padding: "5px 8px",
                         display: "flex",
                         flexDirection: "column",
@@ -1833,8 +1835,8 @@ export function MoneyFlowScreen() {
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 10,
                             fontWeight: 700,
-                            color: "#e6ebe8",
-                            border: "1px solid #3a4448",
+                            color: "var(--th-e6ebe8)",
+                            border: "1px solid var(--th-3a4448)",
                             borderRadius: 4,
                             padding: "1px 4px",
                             flex: "none",
@@ -1866,7 +1868,7 @@ export function MoneyFlowScreen() {
                             fontWeight: 600,
                             fontSize: 18,
                             lineHeight: 1,
-                            color: "#eef2f4",
+                            color: "var(--th-eef2f4)",
                           }}
                         >
                           {fc.t}
@@ -1883,13 +1885,13 @@ export function MoneyFlowScreen() {
                           <span
                             style={{
                               fontSize: 12,
-                              color: "#eef2f4",
+                              color: "var(--th-eef2f4)",
                               fontWeight: 700,
                             }}
                           >
                             {cardQuote.priceStr}
                           </span>
-                          <span style={{ fontSize: 10.5, color: cardQuote.isUp ? "#3ddc84" : "#f0565a" }}>
+                          <span style={{ fontSize: 10.5, color: cardQuote.isUp ? "var(--th-3ddc84)" : "var(--th-f0565a)" }}>
                             {cardQuote.pctStr}
                           </span>
                         </span>
@@ -1898,8 +1900,8 @@ export function MoneyFlowScreen() {
                             fontSize: 10,
                             fontWeight: 800,
                             letterSpacing: ".1em",
-                            color: hasNoSetup ? "#94a3b8" : "#08090a",
-                            background: hasNoSetup ? "#1e293b" : "#f0565a",
+                            color: hasNoSetup ? "var(--th-94a3b8)" : "var(--th-08090a)",
+                            background: hasNoSetup ? "var(--th-1e293b)" : "var(--th-f0565a)",
                             borderRadius: 4,
                             padding: "2px 6px",
                             whiteSpace: "nowrap",
@@ -1914,7 +1916,7 @@ export function MoneyFlowScreen() {
                             width: 28,
                             height: 28,
                             borderRadius: "50%",
-                            background: `conic-gradient(#f0565a ${(confScore ?? 0) * 3.6}deg, #1a2328 0)`,
+                            background: `conic-gradient(var(--th-f0565a) ${(confScore ?? 0) * 3.6}deg, var(--th-1a2328) 0)`,
                             display: "grid",
                             placeItems: "center",
                           }}
@@ -1924,13 +1926,13 @@ export function MoneyFlowScreen() {
                               width: 22,
                               height: 22,
                               borderRadius: "50%",
-                              background: "#0d0f10",
+                              background: "var(--th-0d0f10)",
                               display: "grid",
                               placeItems: "center",
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10,
                               fontWeight: 700,
-                              color: "#f0565a",
+                              color: "var(--th-f0565a)",
                             }}
                           >
                             {confScore ?? "—"}
@@ -1945,7 +1947,7 @@ export function MoneyFlowScreen() {
                           flex: "1 1 0",
                           minHeight: 18,
                           borderRadius: 6,
-                          background: "rgba(8,9,10,.55)",
+                          background: "rgb(var(--thr-08090a) / .55)",
                           border: "1px solid rgba(240,86,90,.18)",
                           overflow: "hidden",
                         }}
@@ -1959,8 +1961,8 @@ export function MoneyFlowScreen() {
                             fontSize: 9,
                             fontWeight: 800,
                             letterSpacing: ".08em",
-                            color: hasNoSetup ? "#94a3b8" : "#f0565a",
-                            background: "rgba(8,9,10,.75)",
+                            color: hasNoSetup ? "var(--th-94a3b8)" : "var(--th-f0565a)",
+                            background: "rgb(var(--thr-08090a) / .75)",
                             border: `1px solid ${hasNoSetup ? "rgba(148,163,184,.4)" : "rgba(240,86,90,.4)"}`,
                             borderRadius: 3,
                             padding: "0 4px",
@@ -1985,7 +1987,7 @@ export function MoneyFlowScreen() {
                       >
                         {cardLevels(fc).map((x) => ({
                           ...x,
-                          c: x.k === "ZONE" || x.k === "R2" || x.k === "R1" ? "#e0bb5e" : x.k === "S2" ? "#f0565a" : "#e6ebe8",
+                          c: x.k === "ZONE" || x.k === "R2" || x.k === "R1" ? "var(--th-e0bb5e)" : x.k === "S2" ? "var(--th-f0565a)" : "var(--th-e6ebe8)",
                         })).map((l) => (
                           <span
                             key={l.k}
@@ -2001,7 +2003,7 @@ export function MoneyFlowScreen() {
                                 fontSize: 9,
                                 fontWeight: 700,
                                 letterSpacing: ".06em",
-                                color: "#7a8481",
+                                color: "var(--th-7a8481)",
                                 lineHeight: 1,
                               }}
                             >
@@ -2060,10 +2062,10 @@ export function MoneyFlowScreen() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#7a8481",
+                    color: "var(--th-7a8481)",
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 12,
-                    border: "1px dashed #1e2427",
+                    border: "1px dashed var(--th-1e2427)",
                     borderRadius: 6,
                     padding: 16,
                     textAlign: "center",
@@ -2100,7 +2102,7 @@ export function MoneyFlowScreen() {
                         justifyContent: "flex-start",
                         alignItems: "stretch",
                         borderRadius: 5,
-                        border: isSecMatch ? "1px solid #f0d68c" : `1px solid ${x.bd}`,
+                        border: isSecMatch ? "1px solid var(--th-f0d68c)" : `1px solid ${x.bd}`,
                         boxShadow: isSecMatch
                           ? "0 0 0 1px rgba(240,214,140,.6), 0 0 16px rgba(201,162,74,.3)"
                           : "none",
@@ -2121,7 +2123,7 @@ export function MoneyFlowScreen() {
                           width: x.ringS,
                           height: x.ringS,
                           borderRadius: "50%",
-                          background: `conic-gradient(${x.confC} ${x.confDeg}, #1a2328 0)`,
+                          background: `conic-gradient(${x.confC} ${x.confDeg}, var(--th-1a2328) 0)`,
                           display: "grid",
                           placeItems: "center",
                           pointerEvents: "none",
@@ -2132,7 +2134,7 @@ export function MoneyFlowScreen() {
                             width: x.ringI,
                             height: x.ringI,
                             borderRadius: "50%",
-                            background: "#0d0f10",
+                            background: "var(--th-0d0f10)",
                             display: "grid",
                             placeItems: "center",
                             fontFamily: "'JetBrains Mono', monospace",
@@ -2174,16 +2176,16 @@ export function MoneyFlowScreen() {
                           gap: 1,
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: 9,
-                          color: "#aab3b0",
+                          color: "var(--th-aab3b0)",
                           pointerEvents: "none",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                         }}
                       >
-                        <span style={{ color: "#7a8481" }}>
+                        <span style={{ color: "var(--th-7a8481)" }}>
                           sec <b style={{ color: x.rsC }}>{x.rsTxt}</b>
                         </span>
-                        <span style={{ color: "#7a8481" }}>
+                        <span style={{ color: "var(--th-7a8481)" }}>
                           30m <b style={{ color: x.m30C }}>{x.m30}</b>
                         </span>
                       </div>
@@ -2240,7 +2242,7 @@ export function MoneyFlowScreen() {
                                 fontWeight: 600,
                                 fontSize: x.fs,
                                 lineHeight: 1,
-                                color: "#eef2f4",
+                                color: "var(--th-eef2f4)",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -2253,11 +2255,11 @@ export function MoneyFlowScreen() {
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10.5,
-                              color: tileQuote ? (tileQuote.isUp ? "#3ddc84" : "#f0565a") : "#3ddc84",
+                              color: tileQuote ? (tileQuote.isUp ? "var(--th-3ddc84)" : "var(--th-f0565a)") : "var(--th-3ddc84)",
                               whiteSpace: "nowrap",
                             }}
                           >
-                            <span style={{ fontSize: 9, color: "#7a8481" }}>
+                            <span style={{ fontSize: 9, color: "var(--th-7a8481)" }}>
                               #{x.rank}{" "}
                             </span>
                             {tileQuote?.isAH ? `AH ${tileQuote.pctStr}` : x.chg}
@@ -2275,7 +2277,7 @@ export function MoneyFlowScreen() {
               style={{
                 height: 1,
                 background:
-                  "linear-gradient(90deg,transparent,#e6ebe8,transparent)",
+                  "linear-gradient(90deg,transparent,var(--th-e6ebe8),transparent)",
                 opacity: 0.5,
                 flex: "none",
               }}
@@ -2297,10 +2299,10 @@ export function MoneyFlowScreen() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#7a8481",
+                    color: "var(--th-7a8481)",
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 12,
-                    border: "1px dashed #1e2427",
+                    border: "1px dashed var(--th-1e2427)",
                     borderRadius: 6,
                     padding: 16,
                     textAlign: "center",
@@ -2337,7 +2339,7 @@ export function MoneyFlowScreen() {
                         justifyContent: "flex-start",
                         alignItems: "stretch",
                         borderRadius: 5,
-                        border: isSecMatch ? "1px solid #f0d68c" : `1px solid ${x.bd}`,
+                        border: isSecMatch ? "1px solid var(--th-f0d68c)" : `1px solid ${x.bd}`,
                         boxShadow: isSecMatch
                           ? "0 0 0 1px rgba(240,214,140,.6), 0 0 16px rgba(201,162,74,.3)"
                           : "none",
@@ -2358,7 +2360,7 @@ export function MoneyFlowScreen() {
                           width: x.ringS,
                           height: x.ringS,
                           borderRadius: "50%",
-                          background: `conic-gradient(${x.confC} ${x.confDeg}, #1a2328 0)`,
+                          background: `conic-gradient(${x.confC} ${x.confDeg}, var(--th-1a2328) 0)`,
                           display: "grid",
                           placeItems: "center",
                           pointerEvents: "none",
@@ -2369,7 +2371,7 @@ export function MoneyFlowScreen() {
                             width: x.ringI,
                             height: x.ringI,
                             borderRadius: "50%",
-                            background: "#0d0f10",
+                            background: "var(--th-0d0f10)",
                             display: "grid",
                             placeItems: "center",
                             fontFamily: "'JetBrains Mono', monospace",
@@ -2411,16 +2413,16 @@ export function MoneyFlowScreen() {
                           gap: 1,
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: 9,
-                          color: "#aab3b0",
+                          color: "var(--th-aab3b0)",
                           pointerEvents: "none",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                         }}
                       >
-                        <span style={{ color: "#7a8481" }}>
+                        <span style={{ color: "var(--th-7a8481)" }}>
                           sec <b style={{ color: x.rsC }}>{x.rsTxt}</b>
                         </span>
-                        <span style={{ color: "#7a8481" }}>
+                        <span style={{ color: "var(--th-7a8481)" }}>
                           30m <b style={{ color: x.m30C }}>{x.m30}</b>
                         </span>
                       </div>
@@ -2477,7 +2479,7 @@ export function MoneyFlowScreen() {
                                 fontWeight: 600,
                                 fontSize: x.fs,
                                 lineHeight: 1,
-                                color: "#eef2f4",
+                                color: "var(--th-eef2f4)",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -2490,11 +2492,11 @@ export function MoneyFlowScreen() {
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10.5,
-                              color: tileQuote ? (tileQuote.isUp ? "#3ddc84" : "#f0565a") : "#f0565a",
+                              color: tileQuote ? (tileQuote.isUp ? "var(--th-3ddc84)" : "var(--th-f0565a)") : "var(--th-f0565a)",
                               whiteSpace: "nowrap",
                             }}
                           >
-                            <span style={{ fontSize: 9, color: "#7a8481" }}>
+                            <span style={{ fontSize: 9, color: "var(--th-7a8481)" }}>
                               #{x.rank}{" "}
                             </span>
                             {tileQuote?.isAH ? `AH ${tileQuote.pctStr}` : x.chg}
@@ -2522,10 +2524,10 @@ export function MoneyFlowScreen() {
         // A wider box has room for more stat columns, which keeps it short.
         const statCols = Math.max(2, Math.min(4, Math.floor(boxW / 240)));
         const bull = !board?.losers.some((l) => l.t === s.t) && (board?.gainers.some((g) => g.t === s.t) || s.pctChange >= 0);
-        const G = "#3ddc84";
-        const R = "#f0565a";
+        const G = "var(--th-3ddc84)";
+        const R = "var(--th-f0565a)";
         const c = bull ? G : R;
-        const toneColor: Record<PopTone, string> = { up: G, down: R, zone: "#e0bb5e", muted: "#7a8481", plain: "#e6ebe8" };
+        const toneColor: Record<PopTone, string> = { up: G, down: R, zone: "var(--th-e0bb5e)", muted: "var(--th-7a8481)", plain: "var(--th-e6ebe8)" };
         const stats = popoverStats(s, board ?? { gainers: [], losers: [] });
         const q = getDisplayQuote(s);
         const dChg = s.price - s.prevClose;
@@ -2555,7 +2557,7 @@ export function MoneyFlowScreen() {
               transformOrigin: "top left",
               // Open pop-ups take the pointer so it can move from the tile onto the preview.
               pointerEvents: popoverInteractive({ key: s.t, pinned: !!hoveredStock.pinned }) ? "auto" : "none",
-              background: `linear-gradient(180deg, ${bull ? "rgba(61,220,132,.10)" : "rgba(240,86,90,.10)"}, transparent 110px), #0b0d0e`,
+              background: `linear-gradient(180deg, ${bull ? "rgba(61,220,132,.10)" : "rgba(240,86,90,.10)"}, transparent 110px), var(--th-0b0d0e)`,
               border: `1px solid ${bull ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)"}`,
               borderBottom: `2px solid ${c}`,
               borderRadius: 12,
@@ -2595,7 +2597,7 @@ export function MoneyFlowScreen() {
                     fontWeight: 600,
                     fontSize: 24,
                     lineHeight: 1,
-                    color: "#eef2f4",
+                    color: "var(--th-eef2f4)",
                   }}
                 >
                   {s.t}
@@ -2603,7 +2605,7 @@ export function MoneyFlowScreen() {
                 <span
                   style={{
                     fontSize: popText(12, scale),
-                    color: "#7a8481",
+                    color: "var(--th-7a8481)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -2623,7 +2625,7 @@ export function MoneyFlowScreen() {
                   fontFamily: "'JetBrains Mono', monospace",
                 }}
               >
-                <span style={{ fontSize: 18, fontWeight: 700, color: "#eef2f4", lineHeight: 1.1 }}>{q.priceStr}</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: "var(--th-eef2f4)", lineHeight: 1.1 }}>{q.priceStr}</span>
                 <span style={{ fontSize: popText(13, scale), color: q.isUp ? G : R }}>
                   {q.pctStr}
                   {!q.isAH && ` · ${dChg >= 0 ? "+" : "−"}${Math.abs(dChg).toFixed(2)}`}
@@ -2631,7 +2633,7 @@ export function MoneyFlowScreen() {
               </div>
             </div>
 
-            <div style={{ height: 1, background: "#1a2328" }} />
+            <div style={{ height: 1, background: "var(--th-1a2328)" }} />
 
             {/* Stats: 2–4 columns by box width, divider between columns */}
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${statCols}, minmax(0, 1fr))`, gap: "7px 0" }}>
@@ -2646,7 +2648,7 @@ export function MoneyFlowScreen() {
                     gap: "2px 8px",
                     minWidth: 0,
                     padding: "0 12px",
-                    borderLeft: i % statCols !== 0 ? "1px solid #1a2328" : "none",
+                    borderLeft: i % statCols !== 0 ? "1px solid var(--th-1a2328)" : "none",
                   }}
                 >
                   <span
@@ -2655,7 +2657,7 @@ export function MoneyFlowScreen() {
                       fontWeight: 700,
                       letterSpacing: ".12em",
                       textTransform: "uppercase",
-                      color: "#7a8481",
+                      color: "var(--th-7a8481)",
                       flex: "none",
                     }}
                   >
@@ -2679,7 +2681,7 @@ export function MoneyFlowScreen() {
             {/* Chart toggle (Intra-Day Chart | Full Chart), then the timeframe — it drives both charts */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               {(() => {
-                const seg = { display: "flex", background: "#0f1213", border: "1px solid #1e2427", borderRadius: 7, padding: 2, gap: 2 } as const;
+                const seg = { display: "flex", background: "var(--th-0f1213)", border: "1px solid var(--th-1e2427)", borderRadius: 7, padding: 2, gap: 2 } as const;
                 const btn = (on: boolean) => ({
                   border: 0,
                   borderRadius: 5,
@@ -2689,8 +2691,8 @@ export function MoneyFlowScreen() {
                   fontWeight: 700,
                   cursor: "pointer",
                   whiteSpace: "nowrap" as const,
-                  background: on ? "#c9a24a" : "transparent",
-                  color: on ? "#08090a" : "#aab3b0",
+                  background: on ? "var(--th-c9a24a)" : "transparent",
+                  color: on ? "var(--th-08090a)" : "var(--th-aab3b0)",
                 });
                 return (
                   <>
@@ -2718,7 +2720,7 @@ export function MoneyFlowScreen() {
                         fontWeight: 700,
                         letterSpacing: ".12em",
                         textTransform: "uppercase",
-                        color: "#7a8481",
+                        color: "var(--th-7a8481)",
                       }}
                     >
                       Timeframe
@@ -2738,12 +2740,12 @@ export function MoneyFlowScreen() {
             {/* Layer toggles: one row */}
             <div style={{ display: "flex", flexWrap: "nowrap", gap: 4 }}>
               {[
-                { k: "ob", l: "Order blocks", c: "#e0bb5e" },
-                { k: "vwap", l: "VWAP", c: "#8b7cf6" },
-                { k: "fvg", l: "FVG", c: "#5aa9e6" },
-                { k: "liq", l: "Liquidity", c: "#f0a24a" },
-                { k: "str", l: "Structure", c: "#3ddc84" },
-                { k: "pat", l: "Patterns", c: "#c39bff" },
+                { k: "ob", l: "Order blocks", c: "var(--th-e0bb5e)" },
+                { k: "vwap", l: "VWAP", c: "var(--th-8b7cf6)" },
+                { k: "fvg", l: "FVG", c: "var(--th-5aa9e6)" },
+                { k: "liq", l: "Liquidity", c: "var(--th-f0a24a)" },
+                { k: "str", l: "Structure", c: "var(--th-3ddc84)" },
+                { k: "pat", l: "Patterns", c: "var(--th-c39bff)" },
               ].map((ly) => {
                 const active = popLayers[ly.k as keyof typeof popLayers];
                 return (
@@ -2763,9 +2765,9 @@ export function MoneyFlowScreen() {
                       justifyContent: "center",
                       gap: 5,
                       flex: "1 1 auto",
-                      border: `1px solid ${active ? ly.c : "#233038"}`,
-                      background: active ? "rgba(255,255,255,.04)" : "transparent",
-                      color: active ? ly.c : "#7a8481",
+                      border: `1px solid ${active ? ly.c : "var(--th-233038)"}`,
+                      background: active ? "rgb(var(--thr-ffffff) / .04)" : "transparent",
+                      color: active ? ly.c : "var(--th-7a8481)",
                       borderRadius: 5,
                       padding: "4px 6px",
                       fontSize: popText(11.5, scale),
@@ -2774,7 +2776,7 @@ export function MoneyFlowScreen() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    <span style={{ width: 6, height: 6, borderRadius: 2, background: active ? ly.c : "#3a4448" }} />
+                    <span style={{ width: 6, height: 6, borderRadius: 2, background: active ? ly.c : "var(--th-3a4448)" }} />
                     {ly.l}
                   </button>
                 );
@@ -2795,12 +2797,12 @@ export function MoneyFlowScreen() {
                 <div
                   style={{
                     height: POPOVER.chartH,
-                    border: "1px solid #171c1e",
+                    border: "1px solid var(--th-171c1e)",
                     borderRadius: 8,
-                    background: "#08090a",
+                    background: "var(--th-08090a)",
                     display: "grid",
                     placeItems: "center",
-                    color: "#7a8481",
+                    color: "var(--th-7a8481)",
                     fontSize: popText(13, scale),
                     fontFamily: "'JetBrains Mono', monospace",
                   }}
@@ -2817,8 +2819,8 @@ export function MoneyFlowScreen() {
             {/* Open the stock elsewhere */}
             <div style={{ display: "flex", gap: 6, flex: "none" }}>
               {[
-                { l: popoverButtons()[0], go: () => exitToMC(s.t), bg: "#4ade80", bd: "#22c55e", fg: "#05210f" },
-                { l: popoverButtons()[1], go: () => enterSI(s.t), bg: "#161b1d", bd: "#233038", fg: "#7fa8d0" },
+                { l: popoverButtons()[0], go: () => exitToMC(s.t), bg: "var(--th-4ade80)", bd: "var(--th-22c55e)", fg: "var(--th-05210f)" },
+                { l: popoverButtons()[1], go: () => enterSI(s.t), bg: "var(--th-161b1d)", bd: "var(--th-233038)", fg: "var(--th-7fa8d0)" },
               ].map((b) => (
                 <button
                   key={b.l}
@@ -2860,7 +2862,7 @@ export function MoneyFlowScreen() {
             position: "fixed",
             inset: 0,
             zIndex: 9999,
-            background: "rgba(4,5,6,.72)",
+            background: "rgb(var(--thr-040506) / .72)",
             display: "flex",
             justifyContent: "flex-end",
           }}
@@ -2871,8 +2873,8 @@ export function MoneyFlowScreen() {
               width: "min(1000px, 92vw)",
               height: "100%",
               overflowY: "auto",
-              background: "#0b0d0e",
-              borderLeft: "1px solid #1e2427",
+              background: "var(--th-0b0d0e)",
+              borderLeft: "1px solid var(--th-1e2427)",
               padding: "22px 24px",
               display: "flex",
               flexDirection: "column",
@@ -2893,7 +2895,7 @@ export function MoneyFlowScreen() {
                   fontFamily: "'Barlow Condensed', Manrope, sans-serif",
                   fontWeight: 600,
                   fontSize: 28,
-                  color: "#eef2f4",
+                  color: "var(--th-eef2f4)",
                 }}
               >
                 Money Flow — Glossary
@@ -2902,9 +2904,9 @@ export function MoneyFlowScreen() {
                 type="button"
                 onClick={() => setGlossaryOpen(false)}
                 style={{
-                  border: "1px solid #233038",
+                  border: "1px solid var(--th-233038)",
                   background: "transparent",
-                  color: "#cfd6d3",
+                  color: "var(--th-cfd6d3)",
                   borderRadius: 6,
                   padding: "5px 10px",
                   fontSize: 13,
@@ -3154,9 +3156,9 @@ export function MoneyFlowScreen() {
                     term: "Patterns",
                     desc: (
                       <>
-                        Rule-based detection of six chart patterns: <b style={{ color: "#eef2f4" }}>cup with handle</b>, <b style={{ color: "#eef2f4" }}>cup without handle</b>,{" "}
-                        <b style={{ color: "#eef2f4" }}>double bottom</b>, <b style={{ color: "#eef2f4" }}>double top</b>, <b style={{ color: "#eef2f4" }}>head and shoulders</b> and{" "}
-                        <b style={{ color: "#eef2f4" }}>high and tight flag</b> (daily bars only).
+                        Rule-based detection of six chart patterns: <b style={{ color: "var(--th-eef2f4)" }}>cup with handle</b>, <b style={{ color: "var(--th-eef2f4)" }}>cup without handle</b>,{" "}
+                        <b style={{ color: "var(--th-eef2f4)" }}>double bottom</b>, <b style={{ color: "var(--th-eef2f4)" }}>double top</b>, <b style={{ color: "var(--th-eef2f4)" }}>head and shoulders</b> and{" "}
+                        <b style={{ color: "var(--th-eef2f4)" }}>high and tight flag</b> (daily bars only).
                         Green = bullish, red = bearish; “(forming)” = not yet confirmed. Hover a pattern for its exact rule. The chart shows up to four patterns, for the candles in view.
                       </>
                     ),
@@ -3165,22 +3167,22 @@ export function MoneyFlowScreen() {
                     term: "Structure",
                     desc: (
                       <>
-                        <b style={{ color: "#eef2f4" }}>HH / HL / LH / LL</b>{" "}
-                        swing labels · <b style={{ color: "#eef2f4" }}>BOS</b>{" "}
+                        <b style={{ color: "var(--th-eef2f4)" }}>HH / HL / LH / LL</b>{" "}
+                        swing labels · <b style={{ color: "var(--th-eef2f4)" }}>BOS</b>{" "}
                         (a close beyond a prior swing) ·{" "}
-                        <b style={{ color: "#eef2f4" }}>Trendlines</b> through the
+                        <b style={{ color: "var(--th-eef2f4)" }}>Trendlines</b> through the
                         last two swing highs and lows, with the pattern they form
                         (ascending / descending / symmetrical triangle, rising /
                         falling wedge, channel or range) ·{" "}
-                        <b style={{ color: "#eef2f4" }}>HOD / LOD</b> high and
+                        <b style={{ color: "var(--th-eef2f4)" }}>HOD / LOD</b> high and
                         low of day ·{" "}
-                        <b style={{ color: "#eef2f4" }}>ORH / ORL</b> opening-range
+                        <b style={{ color: "var(--th-eef2f4)" }}>ORH / ORL</b> opening-range
                         high/low (first 30 min) ·{" "}
-                        <b style={{ color: "#eef2f4" }}>PDH / PDL</b> previous
+                        <b style={{ color: "var(--th-eef2f4)" }}>PDH / PDL</b> previous
                         session high/low ·{" "}
-                        <b style={{ color: "#eef2f4" }}>Premium / Discount</b>{" "}
+                        <b style={{ color: "var(--th-eef2f4)" }}>Premium / Discount</b>{" "}
                         halves of today’s range split at{" "}
-                        <b style={{ color: "#eef2f4" }}>EQ 50%</b>, each with its price range. Labels at the right edge show one label per price
+                        <b style={{ color: "var(--th-eef2f4)" }}>EQ 50%</b>, each with its price range. Labels at the right edge show one label per price
                         (“ORL · LOD $143.65”), spaced so they never overlap; a level beyond the candles’ scale is pinned to the edge with ▲ / ▼
                         rather than squeezing the candles.
                       </>
@@ -3204,7 +3206,7 @@ export function MoneyFlowScreen() {
                     fontFamily: "'Barlow Condensed', Manrope, sans-serif",
                     fontWeight: 600,
                     fontSize: 18,
-                    color: "#f0d68c",
+                    color: "var(--th-f0d68c)",
                   }}
                 >
                   {sec.title}
@@ -3216,7 +3218,7 @@ export function MoneyFlowScreen() {
                       display: "grid",
                       gridTemplateColumns: "190px minmax(0,1fr)",
                       gap: 12,
-                      borderBottom: "1px solid #161b1d",
+                      borderBottom: "1px solid var(--th-161b1d)",
                       paddingBottom: 7,
                     }}
                   >

@@ -1415,7 +1415,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             <SISweepOverlay />
             {isSlPage ? (
               <main
-                style={{ height: "100vh", overflowY: "auto", overflowX: "hidden", background: "#08090a", width: "100%" }}
+                style={{ height: "100vh", overflowY: "auto", overflowX: "hidden", background: "var(--th-08090a, #08090a)", width: "100%" }}
                 className="sl-main-scroll"
               >
                 {children}
@@ -1454,7 +1454,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   height: "100vh",
                   overflowY: "auto",
                   overflowX: "hidden",
-                  background: "#08090a",
+                  background: "var(--th-08090a, #08090a)",
                   width: "100%",
                 }}
                 className="mf-main-scroll"

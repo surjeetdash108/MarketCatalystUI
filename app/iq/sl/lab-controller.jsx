@@ -103,10 +103,10 @@ const tfL = (tf) => (Engine.TF[tf] || Engine.TF.d).l;
 const sgn1 = (x, unit) => { const r = Math.abs(x * 100).toFixed(1); return (+r === 0 ? "" : x > 0 ? "+" : "−") + r + unit; };
 const p1 = (v) => (v == null || !Number.isFinite(v) ? "n/a" : sgn1(v, "%"));
 const fx = (v) => (v == null ? "—" : Number.isFinite(v) ? v.toFixed(2).replace("-", "−") : "∞");
-const sc = (v) => (v > 0 ? "#3ddc84" : v < 0 ? "#f0565a" : "#8b9592");
+const sc = (v) => (v > 0 ? "var(--th-3ddc84)" : v < 0 ? "var(--th-f0565a)" : "var(--th-8b9592)");
 /** Difference of two returns, formatted as percentage difference. */
 const pp = (v) => (v == null || !Number.isFinite(v) ? "n/a" : sgn1(v, "%"));
-const C_MUTE = "#7a8481";
+const C_MUTE = "var(--th-7a8481)";
 /** Colour of a value shown to one decimal: what rounds to zero is neutral. */
 const sc1 = (v) => sc(v == null ? v : +(v * 100).toFixed(1));
 const fmtDt = (d) => { const s = String(d), [y, m, dd] = s.slice(0, 10).split("-"); return `${MON[+m - 1]} ${+dd}, ${y}` + (s.length > 10 ? " " + s.slice(11, 16) : ""); };
@@ -125,12 +125,12 @@ const IDESC = {close:'Last traded price of the candle.',open:'First traded price
   vwap:'Volume-weighted average price for the session.',orh:'Opening-range high — highest price in the first N candles of the session.',orl:'Opening-range low — lowest price in the first N candles of the session.',pdh:'Previous session high.',pdl:'Previous session low.',pdc:'Previous session close.',dayopen:'The session’s first price.',tod:'Minutes since the 9:30 ET open.',emergence:'MarketCatalyst Emergence Score. Needs score history.'};
 const ODESC = {'>':'Left side is greater than right side on this candle.','<':'Left side is less than right side on this candle.','≥':'Left side is greater than or equal to right side.','≤':'Left side is less than or equal to right side.','crosses above':'Left was at or below right on the previous candle and is above it now — fires once, on the cross.','crosses below':'Left was at or above right on the previous candle and is below it now — fires once, on the cross.'};
 const LOOK = [["20","20D"],["50","50D"],["63","3M"],["126","6M"],["252","52W"]];
-const BASE_CSS = `.sl-root{font-family:Manrope,system-ui,sans-serif;font-size:13px;color:#e6ebe8;-webkit-font-smoothing:antialiased}
+const BASE_CSS = `.sl-root{font-family:Manrope,system-ui,sans-serif;font-size:13px;color:var(--th-e6ebe8);-webkit-font-smoothing:antialiased}
 .sl-root *{box-sizing:border-box}
 .sl-root button{font-family:inherit}
 .sl-root input,.sl-root select{font-family:inherit}
-.sl-root button:focus-visible,.sl-root select:focus-visible,.sl-root input:focus-visible{outline:2px solid #c9a24a;outline-offset:2px}
-.sl-main-scroll::-webkit-scrollbar{width:8px;height:8px}.sl-main-scroll::-webkit-scrollbar-track{background:#15130c}.sl-main-scroll::-webkit-scrollbar-thumb{background:#c9a24a;border-radius:8px;border:2px solid #15130c}.sl-main-scroll::-webkit-scrollbar-thumb:hover{background:#f0d68c}`;
+.sl-root button:focus-visible,.sl-root select:focus-visible,.sl-root input:focus-visible{outline:2px solid var(--th-c9a24a);outline-offset:2px}
+.sl-main-scroll::-webkit-scrollbar{width:8px;height:8px}.sl-main-scroll::-webkit-scrollbar-track{background:var(--th-15130c)}.sl-main-scroll::-webkit-scrollbar-thumb{background:var(--th-c9a24a);border-radius:8px;border:2px solid var(--th-15130c)}.sl-main-scroll::-webkit-scrollbar-thumb:hover{background:var(--th-f0d68c)}`;
 
 /** Bars of history the data layer can serve per candle, and bars a test window uses. */
 function barBudget(tf, cfg) {
@@ -531,7 +531,7 @@ export default class StrategyLab extends Component {
       wpc: "Winning ÷ closed trades over " + over, trc: "Closed trades over " + over + ", plus a position still open",
     };
     const tiles = S ? [
-      ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "#3ddc84" : null, T.prof],
+      ["PROFITABLE", S.profitable + " / " + S.n, S.profitable > S.n / 2 ? "var(--th-3ddc84)" : null, T.prof],
       [chip ? "BEAT STOCK AVG" : "BEAT BUY & HOLD", S.beat + " / " + S.n, null, T.beat],
       ["WIN RATE", pct(S.win), null, T.win],
       ["MEDIAN SHARPE", fx(S.medSharpe), sc(S.medSharpe), "Median of each stock's Sharpe ratio over the full backtest period (" + periodLabel(periodOfCfg(v.cfg || this.engCfg(k))) + "), not just the window — upper median for an even count"],
@@ -611,8 +611,8 @@ export default class StrategyLab extends Component {
     const cs = bars.slice(r.start).map((b) => b.close), lo = Math.min(...cs), hi = Math.max(...cs);
     const trades = r.trades.map((x, n) => {
       const win = x.ret > 0, open = x.why === "Still open", a = fw ? fw.rets[n] : null;
-      return { n: n + 1, c: win ? "#3ddc84" : "#f0565a", ret: p1(x.ret), inD: fmtDt(x.inDate), outD: open ? "Open" : fmtDt(x.outDate), inPx: x.inPx.toFixed(2), outPx: x.outPx.toFixed(2), days: String(x.days), why: x.why, open,
-        after: a == null ? "—" : p1(a), afterC: a == null ? "#5f6966" : sc(a) };
+      return { n: n + 1, c: win ? "var(--th-3ddc84)" : "var(--th-f0565a)", ret: p1(x.ret), inD: fmtDt(x.inDate), outD: open ? "Open" : fmtDt(x.outDate), inPx: x.inPx.toFixed(2), outPx: x.outPx.toFixed(2), days: String(x.days), why: x.why, open,
+        after: a == null ? "—" : p1(a), afterC: a == null ? "var(--th-5f6966)" : sc(a) };
     }).reverse();
     // Levels if a position were opened at the last close, with the strategy's exit plan.
     const last = bars[N0 - 1].close, at = (op) => { const s = BT.series(bars, op); const v2 = s && s[N0 - 1]; return v2 != null && Number.isFinite(v2) ? v2 : null; };
@@ -625,28 +625,28 @@ export default class StrategyLab extends Component {
     const ruleLv = [];
     for (const [side, arr] of [["ENTRY", spec.entry], ["EXIT", spec.exit]]) for (const c of arr.flatMap(flat)) {
       const other = isPx(c.a) && !isPx(c.b) ? c.b : isPx(c.b) && !isPx(c.a) ? c.a : null, val = other && other.ind !== "num" ? at(other) : null;
-      if (val != null) ruleLv.push([side + " · " + BT.label(c), usd(val * (other.mult || 1)), side === "EXIT" ? "#f0a0a2" : "#f0d68c", "Value on the last bar: " + BT.opLabel(other)]);
+      if (val != null) ruleLv.push([side + " · " + BT.label(c), usd(val * (other.mult || 1)), side === "EXIT" ? "var(--th-f0a0a2)" : "var(--th-f0d68c)", "Value on the last bar: " + BT.opLabel(other)]);
     }
     const dma = (n) => (N0 >= n ? at({ ind: "sma", n }) : null);
     const lv = [
-      ["LAST", usd(last), "#eef2f4", "Last close"], ...ruleLv,
-      ...[20, 50, 200].map((n) => [tf === "d" ? n + "-DMA" : n + "-BAR SMA", usd(dma(n)), "#e6ebe8", "Simple average of the last " + n + " " + tfL(tf).toLowerCase() + " closes"]),
-      ["PERIOD HIGH", usd(hi), "#e6ebe8", "Highest close in the test window"], ["PERIOD LOW", usd(lo), "#e6ebe8", "Lowest close in the test window"],
-      ["STOP" + (cfg.stopAtr ? " · " + cfg.stopAtr + "× ATR" : cfg.stop ? " · −" + +(cfg.stop * 100).toFixed(2) + "%" : ""), usd(stp), "#f0565a", cfg.stopAtr ? "Last close − " + cfg.stopAtr + " × ATR(14), as the backtest sets it" : "Last close less the stop %"],
-      ["TARGET" + (cfg.tpR ? " · " + cfg.tpR + "R" : cfg.tp ? " · +" + +(cfg.tp * 100).toFixed(2) + "%" : ""), usd(tgt), "#3ddc84", cfg.tpR ? "Last close + " + cfg.tpR + " × the stop distance" : "Last close plus the target %"],
-      ["TRAIL STARTS", usd(trS), "#f0d68c", "Price at which the trailing stop switches on"],
-    ].filter(([kk, vv]) => vv != null || kk.startsWith("STOP") || kk.startsWith("TARGET")).map(([kk, vv, c, title]) => ({ k: kk, v: vv ?? "Not set", c: vv == null ? "#5f6966" : c, title }));
+      ["LAST", usd(last), "var(--th-eef2f4)", "Last close"], ...ruleLv,
+      ...[20, 50, 200].map((n) => [tf === "d" ? n + "-DMA" : n + "-BAR SMA", usd(dma(n)), "var(--th-e6ebe8)", "Simple average of the last " + n + " " + tfL(tf).toLowerCase() + " closes"]),
+      ["PERIOD HIGH", usd(hi), "var(--th-e6ebe8)", "Highest close in the test window"], ["PERIOD LOW", usd(lo), "var(--th-e6ebe8)", "Lowest close in the test window"],
+      ["STOP" + (cfg.stopAtr ? " · " + cfg.stopAtr + "× ATR" : cfg.stop ? " · −" + +(cfg.stop * 100).toFixed(2) + "%" : ""), usd(stp), "var(--th-f0565a)", cfg.stopAtr ? "Last close − " + cfg.stopAtr + " × ATR(14), as the backtest sets it" : "Last close less the stop %"],
+      ["TARGET" + (cfg.tpR ? " · " + cfg.tpR + "R" : cfg.tp ? " · +" + +(cfg.tp * 100).toFixed(2) + "%" : ""), usd(tgt), "var(--th-3ddc84)", cfg.tpR ? "Last close + " + cfg.tpR + " × the stop distance" : "Last close plus the target %"],
+      ["TRAIL STARTS", usd(trS), "var(--th-f0d68c)", "Price at which the trailing stop switches on"],
+    ].filter(([kk, vv]) => vv != null || kk.startsWith("STOP") || kk.startsWith("TARGET")).map(([kk, vv, c, title]) => ({ k: kk, v: vv ?? "Not set", c: vv == null ? "var(--th-5f6966)" : c, title }));
     return {
       ...base, has: true,
       sub: tfL(tf) + " candles · " + (chip ? "return " + W.over : "the full " + wl + " backtest"),
       stats: (chip ? [
         ["AVG RETURN · " + wl + " AFTER SIGNAL", w.ret == null ? "—" : p1(w.ret), sc(w.ret), "Average of each signal's return " + wl + " after entry (same as the table)"],
         ["STOCK AVG · " + wl, w.bret == null ? "—" : p1(w.bret), sc(w.bret), "The stock's own average " + wl + " return over the test period, from any day"],
-        ["SIGNALS", String(w.n), "#e6ebe8", "Entries in the backtest with " + wl + " of bars after them" + (w.n < r.trades.length ? " (" + (r.trades.length - w.n) + " too recent)" : "")],
-        ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Signals up " + wl + " after entry"],
+        ["SIGNALS", String(w.n), "var(--th-e6ebe8)", "Entries in the backtest with " + wl + " of bars after them" + (w.n < r.trades.length ? " (" + (r.trades.length - w.n) + " too recent)" : "")],
+        ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "var(--th-e6ebe8)", "Signals up " + wl + " after entry"],
       ] : [
         ["STRATEGY", p1(w.ret), sc(w.ret), "Strategy return over " + W.over + " (same as the table)"], ["BUY & HOLD", p1(w.bret), sc(w.bret), "Buy & hold return over the same span"],
-        ["TRADES", String(w.n) + (w.open ? " + " + w.open + " open" : ""), "#e6ebe8", "Closed trades over " + W.over + ", plus a position still open"], ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "#e6ebe8", "Winning ÷ closed trades over " + W.over],
+        ["TRADES", String(w.n) + (w.open ? " + " + w.open + " open" : ""), "var(--th-e6ebe8)", "Closed trades over " + W.over + ", plus a position still open"], ["WIN RATE", w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", "var(--th-e6ebe8)", "Winning ÷ closed trades over " + W.over],
       ]).map(([kk, vv, c, title]) => ({ k: kk, v: vv, c, title })),
       levels: lv, chart, trades, afterL: chip ? "AFTER " + wl : "",
       tradeNote: trades.length ? "" : "No trades in the backtest.",
@@ -746,14 +746,14 @@ export default class StrategyLab extends Component {
     const r = R.r;
     if (!r) { const hc = BT.historyCheck(bars, spec, R.ec); return { ...base, err: `Not enough ${tfL(tf).toLowerCase()} history for ${t}: the rules need ${hc.warm} bars before the window and at least ${BT.MIN_TEST_BARS} in it (have ${hc.start} before, ${hc.testBars} in).` }; }
     const ev = BT.buildEvidence(r, { symbol: t, strategy: k, spec, cfg, bars, tf, period });
-    const ST = { supported: ["#3ddc84", "#1f4a33", "SUPPORTED"], contradicted: ["#f0565a", "#5a2224", "CONTRADICTED"], unknown: ["#8b9592", "#2a3236", "UNKNOWN"] };
+    const ST = { supported: ["var(--th-3ddc84)", "var(--th-1f4a33)", "SUPPORTED"], contradicted: ["var(--th-f0565a)", "var(--th-5a2224)", "CONTRADICTED"], unknown: ["var(--th-8b9592)", "var(--th-2a3236)", "UNKNOWN"] };
     const ds = (a) => { const step = Math.max(1, Math.floor(a.length / 300)); return a.filter((_, i) => i % step === 0 || i === a.length - 1); };
     const es = ds(r.eq).map((q) => q.v), eb = ds(r.bh).map((q) => q.v), nn = Math.max(es.length - 1, 1), mx = Math.max(...es, ...eb), mn = Math.min(...es, ...eb);
     const X = (i) => (i * 600) / nn, Y = (v) => 190 - ((v - mn) / (mx - mn || 1)) * 175, line = (a) => a.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
     const m = r.m, mb = r.mb;
     const metrics = [
       ["CAGR", m.cagr == null ? "n/a" : p1(m.cagr), m.cagr == null ? "Under a year — see total return" : "Buy & hold " + p1(mb.cagr)], ["TOTAL RETURN", p1(m.tot), "Buy & hold " + p1(mb.tot), sc(m.tot)],
-      ["SHARPE", fx(m.sharpe), "Buy & hold " + fx(mb.sharpe) + (tf === "1w" ? " · ×√52" : " · ×√252")], ["SORTINO", fx(m.sortino), "Downside-only risk"], ["MAX DRAWDOWN", p1(m.dd), "Buy & hold " + p1(mb.dd), "#f0565a"],
+      ["SHARPE", fx(m.sharpe), "Buy & hold " + fx(mb.sharpe) + (tf === "1w" ? " · ×√52" : " · ×√252")], ["SORTINO", fx(m.sortino), "Downside-only risk"], ["MAX DRAWDOWN", p1(m.dd), "Buy & hold " + p1(mb.dd), "var(--th-f0565a)"],
       ["WIN RATE", m.trades ? Math.round(m.win * 100) + "%" : "—", "Of closed trades"], ["PROFIT FACTOR", Number.isFinite(m.pf) ? m.pf.toFixed(2) : "∞", "Gross win ÷ gross loss"], ["REWARD:RISK", m.rr === 0 ? "—" : fx(m.rr), "Avg win ÷ avg loss"],
       ["TRADES", String(m.trades), "Avg hold " + Math.round(m.hold) + " bars"], ["EXPOSURE", Math.round(m.exposure * 100) + "%", "Bars in a position"],
     ].map(([l, v, s, c]) => ({ l, v, s, c }));
@@ -769,7 +769,7 @@ export default class StrategyLab extends Component {
       vari: { run: () => this.setState((s) => ({ vari: { ...s.vari, [key]: true } })), head: vari ? vari.head : [], rows: vari ? vari.rows : null },
       cmp: this.compareVm(k, t, tf, cfg, key),
       ev: {
-        summary: `${ev.summary.supported} supported · ${ev.summary.contradicted} contradicted · ${ev.summary.unknown} unknown`, id: ev.evidence_id, cov: ev.coverage.status, covC: ev.coverage.status === "complete" ? "#3ddc84" : "#f08a4b",
+        summary: `${ev.summary.supported} supported · ${ev.summary.contradicted} contradicted · ${ev.summary.unknown} unknown`, id: ev.evidence_id, cov: ev.coverage.status, covC: ev.coverage.status === "complete" ? "var(--th-3ddc84)" : "var(--th-f08a4b)",
         covD: `${ev.coverage.bars} bars · ${ev.coverage.from} → ${ev.coverage.to} · span ${ev.coverage.span_days} of ${ev.coverage.requested_days} days · max gap ${ev.coverage.max_calendar_gap_days}d` + (ev.coverage.missing_sessions ? ` · ${ev.coverage.missing_sessions} missing sessions` : ""),
         claims: ev.claims.map((c) => ({ text: c.text, ev: c.reason ? c.evidence + " · " + c.reason : c.evidence, status: ST[c.status][2], col: ST[c.status][0], bd: ST[c.status][1] })),
         lims: ev.limitations, unk: ev.unknowns,
@@ -786,7 +786,7 @@ export default class StrategyLab extends Component {
     const all = cells.flatMap((x) => x.cells).filter((x) => x.r).map((x) => x.r.m.sharpe), hiS = Math.max(...all), loS = Math.min(...all);
     return {
       head: tps.map(([, l]) => l),
-      rows: cells.map((row) => ({ sl: row.sl, cells: row.cells.map(({ sk, tk, r, patch }) => { const s = r ? r.m.sharpe : 0, f = hiS > loS ? (s - loS) / (hiS - loS) : 0.5; return { sh: r ? fx(s) : "—", cg: r ? p1(r.m.cagr ?? r.m.tot) : tk === "r2" ? "needs a stop" : "", bg: r ? `rgba(201,162,74,${(0.08 + f * 0.5).toFixed(2)})` : "#12171a", bd: sk === sK && tk === tK ? "#f0d68c" : "transparent", onClick: () => { if (r) this.setCfg(k, patch); } }; }) })),
+      rows: cells.map((row) => ({ sl: row.sl, cells: row.cells.map(({ sk, tk, r, patch }) => { const s = r ? r.m.sharpe : 0, f = hiS > loS ? (s - loS) / (hiS - loS) : 0.5; return { sh: r ? fx(s) : "—", cg: r ? p1(r.m.cagr ?? r.m.tot) : tk === "r2" ? "needs a stop" : "", bg: r ? `rgba(201,162,74,${(0.08 + f * 0.5).toFixed(2)})` : "var(--th-12171a)", bd: sk === sK && tk === tK ? "var(--th-f0d68c)" : "transparent", onClick: () => { if (r) this.setCfg(k, patch); } }; }) })),
     };
   }
   compareVm(k, t, tf, cfg, key) {
@@ -810,7 +810,7 @@ export default class StrategyLab extends Component {
     const rows = [...c.rows].sort((a, b) => (sk === "name" ? a.x.name.localeCompare(b.x.name) : val(b) - val(a)));
     const H = [["Strategy", "name", "left"], [annual ? "CAGR" : "Return", "ret"], ["Sharpe", "sharpe"], ["Sortino", "sortino"], ["Max DD", "dd"], ["Win %", "win"], ["Trades", "trades"]];
     return {
-      run, rows: rows.map(({ x, r }) => ({ name: x.name, ret: r ? p1(annual ? r.m.cagr : r.m.tot) : "insufficient history", sh: r ? fx(r.m.sharpe) : "—", so: r ? fx(r.m.sortino) : "—", dd: r ? p1(r.m.dd) : "—", win: r && r.m.trades ? Math.round(r.m.win * 100) + "%" : "—", tr: r ? String(r.m.trades) : "—", bg: x.k === k ? "#1a160c" : "transparent", nc: x.k === k ? "#f0d68c" : "#e6ebe8", onClick: () => this.openReport(x.k, t, this.state.rep && this.state.rep.n) })),
+      run, rows: rows.map(({ x, r }) => ({ name: x.name, ret: r ? p1(annual ? r.m.cagr : r.m.tot) : "insufficient history", sh: r ? fx(r.m.sharpe) : "—", so: r ? fx(r.m.sortino) : "—", dd: r ? p1(r.m.dd) : "—", win: r && r.m.trades ? Math.round(r.m.win * 100) + "%" : "—", tr: r ? String(r.m.trades) : "—", bg: x.k === k ? "var(--th-1a160c)" : "transparent", nc: x.k === k ? "var(--th-f0d68c)" : "var(--th-e6ebe8)", onClick: () => this.openReport(x.k, t, this.state.rep && this.state.rep.n) })),
       head: H.map(([l, kk, al]) => ({ l: l + (sk === kk ? " ↓" : ""), k: kk, al: al || "right", on: sk === kk, onClick: () => this.setState((s) => ({ sorts: { ...s.sorts, ["cmp|" + key]: kk } })) })),
       note: c.skipped ? c.skipped + " strategies need data or candles this test doesn't have and were left out." : "",
     };
@@ -830,23 +830,23 @@ export default class StrategyLab extends Component {
       aiPh: "e.g. buy when price breaks the 52-week high on heavy volume, exit below the 20-day average", aiBtn: ai && ai.loading ? "Working…" : "Build & test", aiChips: chips.map((l) => ({ l, onClick: () => go(l) })),
       aiHas: !!ai, aiLoading: !!(ai && ai.loading), aiLoadingT: "Building rules…", aiErr: (ai && ai.err) || "", aiKind: "STRATEGY", aiTitle: ai ? (st.custom && has ? st.custom.name : ai.loading ? "Building…" : "") : "", aiSrc: (ai && ai.src) || "",
       aiParas: has && st.custom.why ? [st.custom.why] : [], aiF: has ? this.facts("custom") : null, hv: this.resultsVm("custom", has),
-      aiHasActs: has, aiActs: has ? [this.runAct("custom"), { l: "Edit rules", bg: "transparent", c: "#fbefc9", bd: "#5a4a22", onClick: () => this.openEdit("custom") }, { l: st.customSvId ? "Update saved strategy" : "Save strategy", bg: "transparent", c: "#fbefc9", bd: "#5a4a22", onClick: () => this.saveStrategy() }] : [],
+      aiHasActs: has, aiActs: has ? [this.runAct("custom"), { l: "Edit rules", bg: "transparent", c: "var(--th-fbefc9)", bd: "var(--th-5a4a22)", onClick: () => this.openEdit("custom") }, { l: st.customSvId ? "Update saved strategy" : "Save strategy", bg: "transparent", c: "var(--th-fbefc9)", bd: "var(--th-5a4a22)", onClick: () => this.saveStrategy() }] : [],
     };
   }
   /** Run / Re-run button: gold until this exact setup has results, then outlined. */
   runAct(k) {
     const v = this.state.vals[k] || {}, fresh = !!(v.at && v.sig === this.sigOf(k)), blocked = this.blockedOf(k);
-    return { l: v.busy ? "Running…" : fresh ? "Re-run backtest" : v.at ? "Re-run backtest →" : "Run backtest →", bg: fresh ? "transparent" : "#c9a24a", c: fresh ? "#fbefc9" : "#08090a", bd: fresh ? "#5a4a22" : "#c9a24a", disabled: !!v.busy || !!blocked, title: blocked, onClick: () => { if (!v.busy && !blocked) this.runValidate(k); } };
+    return { l: v.busy ? "Running…" : fresh ? "Re-run backtest" : v.at ? "Re-run backtest →" : "Run backtest →", bg: fresh ? "transparent" : "var(--th-c9a24a)", c: fresh ? "var(--th-fbefc9)" : "var(--th-08090a)", bd: fresh ? "var(--th-5a4a22)" : "var(--th-c9a24a)", disabled: !!v.busy || !!blocked, title: blocked, onClick: () => { if (!v.busy && !blocked) this.runValidate(k); } };
   }
   pickVals() {
     const st = this.state, BT = Engine, tab = st.libTab || "library", S = this.strategies(), nSaved = st.labSaved.length;
-    const tabs = { libTabs: [["library", "Custom", ""], ["saved", "Saved", String(nSaved)]].map(([k, l, n]) => ({ l, n, bd: tab === k ? "#c9a24a" : "transparent", c: tab === k ? "#eef2f4" : "#7a8481", onClick: () => this.setState({ libTab: k, labPick: null }) })), libEmpty: tab === "saved" && !nSaved, libHas: !(tab === "saved" && !nSaved) };
+    const tabs = { libTabs: [["library", "Custom", ""], ["saved", "Saved", String(nSaved)]].map(([k, l, n]) => ({ l, n, bd: tab === k ? "var(--th-c9a24a)" : "transparent", c: tab === k ? "var(--th-eef2f4)" : "var(--th-7a8481)", onClick: () => this.setState({ libTab: k, labPick: null }) })), libEmpty: tab === "saved" && !nSaved, libHas: !(tab === "saved" && !nSaved) };
     if (st.savedNote && tab === "saved") tabs.libNote = st.savedNote;
     const P0 = S.filter((x) => (tab === "saved" ? x.k.startsWith("sv_") : x.lib));
     const lq = (st.libQ || "").trim().toLowerCase(), P = lq ? P0.filter((x) => [x.name, x.fam, x.what, x.src].join(" ").toLowerCase().includes(lq)) : P0;
     Object.assign(tabs, { libQ: st.libQ || "", onLibQ: (e) => this.setState({ libQ: e.target.value, labPick: null }), libCount: (lq ? P.length + " of " + P0.length : P0.length) + " strategies", libNone: !!lq && !P.length, libClear: () => this.setState({ libQ: "" }), detRef: this.detRef });
     const pk = P.find((x) => x.k === st.labPick);
-    const item = (x) => { const need = BT.checkRules(this.specOf(x.k), this.tfOf(x.k)).length, on = pk && x.k === pk.k; return { tfL: tfL(this.tfOf(x.k)), auto: need ? "NOT TESTABLE" : "", name: x.name, fam: x.fam, hold: x.hold, bl: on ? "#5a4a22" : "transparent", bg: on ? "#1a160c" : "transparent", c: on ? "#eef2f4" : need ? "#5f6966" : "#cfd6d3", onClick: () => { this.setState({ labPick: x.k }); setTimeout(() => this.scrollTo(this.detRef.current), 40); } }; };
+    const item = (x) => { const need = BT.checkRules(this.specOf(x.k), this.tfOf(x.k)).length, on = pk && x.k === pk.k; return { tfL: tfL(this.tfOf(x.k)), auto: need ? "NOT TESTABLE" : "", name: x.name, fam: x.fam, hold: x.hold, bl: on ? "var(--th-5a4a22)" : "transparent", bg: on ? "var(--th-1a160c)" : "transparent", c: on ? "var(--th-eef2f4)" : need ? "var(--th-5f6966)" : "var(--th-cfd6d3)", onClick: () => { this.setState({ labPick: x.k }); setTimeout(() => this.scrollTo(this.detRef.current), 40); } }; };
     tabs.libNoPick = !pk && !!P.length;
     tabs.pickList = P.map(item);
     if (!pk) return { ...tabs, libShowDetail: false, pk: {}, dv: { show: false }, pkF: null };
@@ -854,10 +854,10 @@ export default class StrategyLab extends Component {
     return {
       ...tabs, libShowDetail: true, holdOpts: HOLDS, pkF: this.facts(k), dv: this.resultsVm(k, true),
       pk: {
-        whatOpen: st.whatOpen === k, whatBg: st.whatOpen === k ? "#2e2614" : "transparent", toggleWhat: () => this.setState({ whatOpen: st.whatOpen === k ? null : k }), whatIn: () => { if (this.state.whatOpen !== k) this.setState({ whatOpen: k }); }, whatOut: () => { if (this.state.whatOpen) this.setState({ whatOpen: null }); },
+        whatOpen: st.whatOpen === k, whatBg: st.whatOpen === k ? "var(--th-2e2614)" : "transparent", toggleWhat: () => this.setState({ whatOpen: st.whatOpen === k ? null : k }), whatIn: () => { if (this.state.whatOpen !== k) this.setState({ whatOpen: k }); }, whatOut: () => { if (this.state.whatOpen) this.setState({ whatOpen: null }); },
         tfL: tfL(this.tfOf(k)).toUpperCase() + " CANDLES", name: pk.name, fam: pk.fam, hold: pk.hold, src: pk.src, what: pk.what || WHAT[k] || pk.src,
         canSave: false, showFam: !isSv, canDel: isSv, canEdit: true, onEdit: () => this.openEdit(k), run: this.runAct(k),
-        canAuto: !needs.length, onAuto: () => this.setState({ auOpen: k, auMsg: "", auDraft: { broker: null, url: "", mode: "paper", type: "market", size: "1000", send: "both" } }), autoL: "Automate with broker", autoBd: "#5a4a22", autoC: "#fbefc9",
+        canAuto: !needs.length, onAuto: () => this.setState({ auOpen: k, auMsg: "", auDraft: { broker: null, url: "", mode: "paper", type: "market", size: "1000", send: "both" } }), autoL: "Automate with broker", autoBd: "var(--th-5a4a22)", autoC: "var(--th-fbefc9)",
         canHold: isSv, noHold: !isSv, onHold: (e) => this.setHold(k, e.target.value),
         onDel: () => this.setState({ delAsk: k }), delAsk: st.delAsk === k, delIdle: st.delAsk !== k, delNo: () => this.setState({ delAsk: null }), delYes: () => { this.setState({ delAsk: null }); this.delStrategy(k); },
       },
@@ -876,28 +876,28 @@ export default class StrategyLab extends Component {
     const BR = [["alpaca", "Alpaca", "Sign in · OAuth"], ["tradier", "Tradier", "Sign in · OAuth"], ["tradestation", "TradeStation", "Sign in · OAuth"], ["traderspost", "TradersPost", "Webhook → many brokers"], ["ibkr", "Interactive Brokers", "Webhook bridge"], ["custom", "Custom webhook", "Any HTTPS endpoint"]];
     const OAUTH = new Set(["alpaca", "tradier", "tradestation"]), HOOK = { traderspost: ["https://app.traderspost.io", "Open TradersPost →", "Create a strategy in TradersPost, link your broker there, then paste its webhook URL here."], ibkr: [null, "", "Interactive Brokers has no public webhook — paste the URL of your TWS / IB Gateway relay."], custom: [null, "", "Any HTTPS endpoint that accepts a JSON POST."] };
     const bName = (BR.find((b) => b[0] === d.broker) || [])[1] || "", isO = OAUTH.has(d.broker), okUrl = /^https:\/\/\S+$/.test(d.url || "");
-    const seg = (key, opts) => opts.map(([v, l]) => ({ l, bg: d[key] === v ? "#2e2614" : "transparent", c: d[key] === v ? "#fbefc9" : "#8b9592", onClick: () => put({ [key]: v }) }));
+    const seg = (key, opts) => opts.map(([v, l]) => ({ l, bg: d[key] === v ? "var(--th-2e2614)" : "transparent", c: d[key] === v ? "var(--th-fbefc9)" : "var(--th-8b9592)", onClick: () => put({ [key]: v }) }));
     const spec = this.specOf(k), payload = JSON.stringify({ strategy: x.name, strategy_id: k, signal: "entry", action: "buy", symbol: "{TICKER}", order_type: d.type, notional_usd: +d.size || 0, send: d.send === "both" ? "entries & exits" : "entries only", timeframe: tfL(this.tfOf(k)), mode: d.mode, price: "{LAST_PRICE}", triggered_at: "{ISO_TIME}", rules: { entry: spec.entry.map(Engine.label), exit: spec.exit.map(Engine.label), after_entry: exitPlanSummary(this.cfgOf(k)) } }, null, 2);
     const close = () => this.setState({ auOpen: null, auMsg: "" });
     return {
       auOpen: true, auName: x.name, auClose: close, stop: (e) => e.stopPropagation(),
-      auBrokers: BR.map(([b, l, sub]) => ({ l, sub, bd: d.broker === b ? "#c9a24a" : "#1a1f21", bg: d.broker === b ? "#15130c" : "#0b0d0e", onClick: () => { put({ broker: b }); if (OAUTH.has(b)) msg(l + " sign-in isn't available yet — it needs MarketCatalyst's registered " + l + " app. Use TradersPost or a webhook to reach " + l + " meanwhile.", "#f08a4b"); } })),
+      auBrokers: BR.map(([b, l, sub]) => ({ l, sub, bd: d.broker === b ? "var(--th-c9a24a)" : "var(--th-1a1f21)", bg: d.broker === b ? "var(--th-15130c)" : "var(--th-0b0d0e)", onClick: () => { put({ broker: b }); if (OAUTH.has(b)) msg(l + " sign-in isn't available yet — it needs MarketCatalyst's registered " + l + " app. Use TradersPost or a webhook to reach " + l + " meanwhile.", "var(--th-f08a4b)"); } })),
       auHasBroker: !!d.broker && !isO, auIsOauth: false, auIsHook: !!d.broker && !isO, auBrokerName: bName,
       auHookT: (HOOK[d.broker] || HOOK.custom)[2], auHasDash: !!(HOOK[d.broker] && HOOK[d.broker][0]), auDashL: (HOOK[d.broker] || [])[1] || "", auOpenDash: () => window.open(HOOK[d.broker][0], "_blank", "noopener"),
       auUrl: d.url || "", onAuUrl: (e) => put({ url: e.target.value.trim() }),
       auModes: seg("mode", [["paper", "Paper"], ["live", "Live"]]), auTypes: seg("type", [["market", "Market"], ["limit", "Limit at signal"]]), auSends: seg("send", [["entries", "Entries only"], ["both", "Entries & exits"]]),
       auSize: d.size ?? "1000", onAuSize: (e) => put({ size: e.target.value }), auPayload: payload,
-      auMsg: st.auMsg || "", auMsgC: st.auMsgC || "#8b9592", auIsOn: false, auDisconnect: close,
+      auMsg: st.auMsg || "", auMsgC: st.auMsgC || "var(--th-8b9592)", auIsOn: false, auDisconnect: close,
       auTest: async () => {
-        if (!d.broker || isO) { msg("Choose TradersPost, an IBKR bridge or a custom webhook to send a test signal.", "#f08a4b"); return; }
-        if (!okUrl) { msg("Enter a valid https:// webhook URL first.", "#f08a4b"); return; }
-        msg("Sending test signal…", "#8b9592");
+        if (!d.broker || isO) { msg("Choose TradersPost, an IBKR bridge or a custom webhook to send a test signal.", "var(--th-f08a4b)"); return; }
+        if (!okUrl) { msg("Enter a valid https:// webhook URL first.", "var(--th-f08a4b)"); return; }
+        msg("Sending test signal…", "var(--th-8b9592)");
         try {
           const r = await fetch(d.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...JSON.parse(payload), test: true, symbol: "TEST", price: 0, triggered_at: new Date().toISOString() }) });
-          msg(r.ok ? "Test delivered — the webhook responded " + r.status + "." : "The webhook responded " + r.status + ".", r.ok ? "#3ddc84" : "#f08a4b");
-        } catch { msg("Couldn't reach the webhook from the browser (often CORS). The test didn't arrive.", "#f08a4b"); }
+          msg(r.ok ? "Test delivered — the webhook responded " + r.status + "." : "The webhook responded " + r.status + ".", r.ok ? "var(--th-3ddc84)" : "var(--th-f08a4b)");
+        } catch { msg("Couldn't reach the webhook from the browser (often CORS). The test didn't arrive.", "var(--th-f08a4b)"); }
       },
-      auSave: () => msg("Automatic signals aren't live yet: MarketCatalyst doesn't run strategies on its servers after each bar, so nothing would be sent. Use “Send test signal” to check your webhook.", "#f08a4b"),
+      auSave: () => msg("Automatic signals aren't live yet: MarketCatalyst doesn't run strategies on its servers after each bar, so nothing would be sent. Use “Send test signal” to check your webhook.", "var(--th-f08a4b)"),
       auSaveL: "Connect · coming soon",
     };
   }
@@ -923,5 +923,5 @@ export default class StrategyLab extends Component {
 }
 
 function st_toast(t) {
-  return t ? <div style={{ position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", zIndex: 80, background: "#1a1f21", border: "1px solid #2a3235", borderRadius: 10, padding: "10px 16px", fontWeight: 600, boxShadow: "0 10px 30px rgba(0,0,0,.4)" }}>{t}</div> : null;
+  return t ? <div style={{ position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", zIndex: 80, background: "var(--th-1a1f21)", border: "1px solid var(--th-2a3235)", borderRadius: 10, padding: "10px 16px", fontWeight: 600, boxShadow: "0 10px 30px rgba(0,0,0,.4)" }}>{t}</div> : null;
 }
