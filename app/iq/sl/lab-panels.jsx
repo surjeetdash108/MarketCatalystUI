@@ -123,7 +123,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
   const grid = "minmax(0,1.5fr) minmax(0,1.1fr) repeat(4,minmax(0,1fr))";
   const hdr = { fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966", cursor: "default", whiteSpace: "nowrap" };
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0, ...(boxed ? { border: "1px solid #2a2618", background: "#0b0c0d", borderRadius: 12, padding: "16px 18px" } : {}) }}>
+    <div className={boxed ? "sl-res-box" : undefined} style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0, ...(boxed ? { border: "1px solid #2a2618", background: "#0b0c0d", borderRadius: 12, padding: "16px 18px" } : {}) }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", color: C.mute }}>{title}</span>
         <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 20, color: C.hi }}>
@@ -164,14 +164,14 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
         </div>
       ) : null}
       {r.rows && r.rows.length ? (
-        <div style={{ display: "flex", flexDirection: "column", maxHeight: 300, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
-          <div style={{ display: "grid", gridTemplateColumns: grid, gap: 6, padding: "0 8px 6px", position: "sticky", top: 0, background: boxed ? "#0b0c0d" : C.bg, zIndex: 1 }}>
+        <div className="sl-res-list" style={{ display: "flex", flexDirection: "column", maxHeight: 300, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
+          <div className="sl-res-hdr" style={{ display: "grid", gridTemplateColumns: grid, gap: 6, padding: "0 8px 6px", position: "sticky", top: 0, background: boxed ? "#0b0c0d" : C.bg, zIndex: 1 }}>
             {r.cols.map((c, i) => <span key={c.l} title={c.title} style={{ ...hdr, textAlign: i === 0 ? "left" : i === 2 || i === 5 ? "center" : "right" }}>{c.l}</span>)}
           </div>
           {r.rows.map((x) => (
-            <button key={x.t} type="button" onClick={x.onClick} title={`Open the ${x.t} chart`} className="slx7"
+            <button key={x.t} type="button" onClick={x.onClick} title={`Open the ${x.t} chart`} className="slx7 sl-res-row"
               style={{ display: "grid", gridTemplateColumns: grid, gap: 6, alignItems: "center", background: "transparent", border: 0, borderTop: "1px solid #15191b", borderRadius: 8, padding: 8, color: C.text, cursor: "pointer", textAlign: "left" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span className="sl-res-stock" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <span style={{ position: "relative", width: 24, height: 24, flex: "none", borderRadius: 6, background: "#1a1f21", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 800, color: C.goldHi, overflow: "hidden" }}>
                   {x.t.slice(0, 4)}
                   <img src={x.logo} onError={hideImg} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#fff", padding: 2 }} />
@@ -181,14 +181,14 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
                   <span style={{ fontSize: 10.5, color: C.mute, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.n}</span>
                 </span>
               </span>
-              <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+              <span className="sl-res-px" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
                 <span style={{ fontFamily: mono, fontSize: 12, color: C.hi }}>{x.px}</span>
                 <span style={{ fontFamily: mono, fontSize: 10.5, color: x.chgC }}>{x.chg}</span>
               </span>
-              <span style={{ fontFamily: mono, fontSize: 12, textAlign: "center", color: x.retC }}>{x.ret}</span>
-              <span style={{ fontFamily: mono, fontSize: 12, textAlign: "right", color: x.exC }}>{x.ex}</span>
-              <span style={{ fontFamily: mono, fontSize: 12, textAlign: "right" }}>{x.win}</span>
-              <span style={{ fontFamily: mono, fontSize: 12, textAlign: "center", color: "#aab3b0" }}>{x.tr}</span>
+              <span className="sl-res-stat" data-l={r.cols[2].l} style={{ fontFamily: mono, fontSize: 12, textAlign: "center", color: x.retC }}>{x.ret}</span>
+              <span className="sl-res-stat" data-l={r.cols[3].l} style={{ fontFamily: mono, fontSize: 12, textAlign: "right", color: x.exC }}>{x.ex}</span>
+              <span className="sl-res-stat" data-l={r.cols[4].l} style={{ fontFamily: mono, fontSize: 12, textAlign: "right" }}>{x.win}</span>
+              <span className="sl-res-stat" data-l={r.cols[5].l} style={{ fontFamily: mono, fontSize: 12, textAlign: "center", color: "#aab3b0" }}>{x.tr}</span>
             </button>
           ))}
           {r.more ? (
@@ -213,14 +213,14 @@ export function ChartModal({ c }) {
   const cols = "36px minmax(0,1fr) minmax(0,1.3fr) repeat(" + (c.afterL ? 4 : 3) + ",minmax(0,.8fr))";
   return (
     <div onClick={c.close} style={{ position: "fixed", inset: 0, background: "rgba(4,5,6,.74)", backdropFilter: "blur(3px)", zIndex: 85, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px", overflowY: "auto" }}>
-      <div onClick={c.stop} style={{ width: "100%", maxWidth: 1000, background: C.bg, border: "1px solid #2a2618", borderRadius: 14, boxShadow: "0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(201,162,74,.12)", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <div onClick={c.stop} className="sl-modal" style={{ width: "100%", maxWidth: 1000, background: C.bg, border: "1px solid #2a2618", borderRadius: 14, boxShadow: "0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(201,162,74,.12)", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="sl-modal-head" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 28, color: C.hi }}>{c.t}</span>
           <span style={{ fontSize: 13, color: C.dim }}>{c.n}</span>
           <span style={{ fontSize: 11.5, color: "#5f6966" }}>{c.sub}</span>
           <span style={{ marginLeft: "auto" }} />
           <button type="button" onClick={c.onReport} style={btn(false)}>Full report →</button>
-          <button type="button" onClick={c.close} title="Close" style={{ borderRadius: 8, background: "none", border: `1px solid ${C.line2}`, color: "#aab3b0", width: 30, height: 30, cursor: "pointer", fontSize: 16 }}>×</button>
+          <button type="button" onClick={c.close} title="Close" className="sl-modal-x" style={{ borderRadius: 8, background: "none", border: `1px solid ${C.line2}`, color: "#aab3b0", width: 30, height: 30, cursor: "pointer", fontSize: 16 }}>×</button>
         </div>
         {c.busy ? <div style={{ fontSize: 13, color: C.dim }}>{c.busy}</div> : null}
         {c.err ? <div style={{ fontSize: 13, color: C.down }}>{c.err}</div> : null}
@@ -248,7 +248,7 @@ export function ChartModal({ c }) {
             {/* The full report's price chart: the whole test window, every trade, stop / target lines. */}
             <ChartPanel ch={c.chart} />
             {c.tradeNote ? <div style={{ fontSize: 12.5, color: C.mute }}>{c.tradeNote}</div> : (
-              <div style={{ display: "flex", flexDirection: "column", maxHeight: 220, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
+              <div className="sl-trades" style={{ display: "flex", flexDirection: "column", maxHeight: 220, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
                 <div style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "0 8px 6px", fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: "#5f6966", position: "sticky", top: 0, background: C.bg }}>
                   <span>#</span><span>ENTRY</span><span>EXIT</span><span style={{ textAlign: "right" }}>IN</span><span style={{ textAlign: "right" }}>OUT</span><span style={{ textAlign: "right" }}>RETURN</span>{c.afterL ? <span style={{ textAlign: "right" }} title="Entry price → the close that long after entry">{c.afterL}</span> : null}
                 </div>
@@ -345,7 +345,7 @@ export function Report({ p }) {
             <div style={{ display: "flex", justifyContent: "space-between", fontFamily: mono, fontSize: 10.5, color: C.mute }}>{p.growth.axis.map((a) => <span key={a}>{a}</span>)}</div>
           </div>
           <ChartPanel ch={p.chart} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,340px),1fr))", gap: 12 }}>
             <div style={card}>
               <span style={label}>{p.years.title}</span>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>

@@ -16,6 +16,7 @@
 import React, { Component } from "react";
 import * as Engine from "./engine";
 import LabView, { LAB_HOVER_CSS } from "./lab-view";
+import { LAB_MOBILE_CSS } from "./lab-mobile";
 import { apiDelete, apiGet, apiPost, backendUrl } from "../backend";
 import { COST_OPTS, STOP_PCTS, TP_PCTS, exitPlanKeys, exitPlanSummary, periodChoices, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
 import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, forwardStats, prepBars, priceChart, progressiveView, SCAN_DOTS_CSS, scanChunk, universeUrl, windowLabel, windowOpts, windowPick, windowStats } from "./lab-run";
@@ -913,8 +914,8 @@ export default class StrategyLab extends Component {
     const vm = this.buildVm();
     return (
       <div className="sl-root">
-        <style>{BASE_CSS + "\n" + LAB_HOVER_CSS + "\n" + SCAN_DOTS_CSS}</style>
-        <div style={{ flex: 1, minWidth: 0, padding: "14px 24px 40px" }}><LabView vm={vm} refs={this.refsObj} /></div>
+        <style>{BASE_CSS + "\n" + LAB_HOVER_CSS + "\n" + SCAN_DOTS_CSS + "\n" + LAB_MOBILE_CSS}</style>
+        <div className="sl-pad" style={{ flex: 1, minWidth: 0, padding: "14px 24px 40px" }}><LabView vm={vm} refs={this.refsObj} /></div>
         {st_toast(this.state.toast)}
       </div>
     );

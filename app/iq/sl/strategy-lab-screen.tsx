@@ -14,7 +14,7 @@ export function StrategyLabScreen() {
   const { exitToMC } = useSI();
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#08090a", color: "#e6ebe8" }}>
-      <style>{`.sl-home:hover{border-color:#c9a24a !important;color:#e6ebe8 !important}`}</style>
+      <style>{`.sl-home:hover{border-color:#c9a24a !important;color:#e6ebe8 !important}@media (max-width:640px){.sl-hdr-spacer{display:none}}`}</style>
       <div style={{ position: "sticky", top: 0, zIndex: 30, background: "#08090a", borderBottom: "1px solid #171c1e" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "5px 18px", minHeight: 44, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flex: "none" }}>
@@ -40,7 +40,7 @@ export function StrategyLabScreen() {
           <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 290 }}>
             <ModuleSwitcher />
           </div>
-          <div style={{ flex: "none", width: 204 }} aria-hidden />
+          <div className="sl-hdr-spacer" style={{ flex: "none", width: 204 }} aria-hidden />
         </div>
       </div>
       <StrategyLab />

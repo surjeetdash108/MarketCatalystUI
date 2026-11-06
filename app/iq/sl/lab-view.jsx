@@ -301,8 +301,8 @@ export default function LabView({ vm, refs }) {
             ) : null}
             {(vm.libHas) ? (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,300px) minmax(0,1fr)", gap: "18px", alignItems: "start" }}>
-                  <div style={{ position: "relative", border: "1px solid #1a1f21", background: "#0d0f10", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "6px", padding: "8px", position: "sticky", top: "12px" }}>
+                <div className="sl-lib-grid" style={{ display: "grid", gridTemplateColumns: "minmax(220px,300px) minmax(0,1fr)", gap: "18px", alignItems: "start" }}>
+                  <div className="sl-lib-side" style={{ position: "relative", border: "1px solid #1a1f21", background: "#0d0f10", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "6px", padding: "8px", position: "sticky", top: "12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", border: "1px solid #263033", borderRadius: "10px", background: "#08090a", padding: "0 10px" }} className="slx41">
                       <svg width={"15"} height={"15"} viewBox={"0 0 24 24"} fill={"none"} stroke={"#7a8481"} strokeWidth={"1.5"}>
                         <circle cx={"11"} cy={"11"} r={"7"} />
@@ -331,7 +331,7 @@ export default function LabView({ vm, refs }) {
                         </div>
                       </>
                     ) : null}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxHeight: "640px", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "#c9a24a #15130c" }}>
+                    <div className="sl-lib-list" style={{ display: "flex", flexDirection: "column", gap: "4px", maxHeight: "640px", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "#c9a24a #15130c" }}>
                       {(vm.pickList || []).map((p, p__i) => (
                         <Fragment key={p__i}>
                           <button onClick={p?.onClick} style={{ borderRadius: "8px", display: "flex", flexDirection: "column", gap: "3px", textAlign: "left", border: `1px solid ${p?.bl ?? ''}`, borderRadius: "10px", background: p?.bg, padding: "11px 13px", cursor: "pointer", color: "#e6ebe8", transition: "background .15s,box-shadow .15s" }} className="slx42">
@@ -372,7 +372,7 @@ export default function LabView({ vm, refs }) {
                   ) : null}
                   {(vm.libShowDetail) ? (
                     <>
-                      <div ref={detRef} style={{ scrollMarginTop: "110px", position: "relative", border: "1px solid #2a2618", background: "#0d0f10", borderRadius: "14px", padding: "22px 24px", display: "flex", flexDirection: "column", gap: "20px", minWidth: "0" }}>
+                      <div ref={detRef} className="sl-box" style={{ scrollMarginTop: "110px", position: "relative", border: "1px solid #2a2618", background: "#0d0f10", borderRadius: "14px", padding: "22px 24px", display: "flex", flexDirection: "column", gap: "20px", minWidth: "0" }}>
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 18px" }}>
                           <div style={{ flex: "0 1 auto", minWidth: "0", maxWidth: "100%" }}>
                             {(vm.pk?.showFam) ? (
@@ -385,7 +385,7 @@ export default function LabView({ vm, refs }) {
                               </>
                             ) : null}
                             <div style={{ position: "relative", display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
-                              <span title={vm.pk?.name} style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: "600", fontSize: "30px", lineHeight: "1.05", color: "#eef2f4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: "0" }}>
+                              <span title={vm.pk?.name} className="sl-box-title" style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: "600", fontSize: "30px", lineHeight: "1.05", color: "#eef2f4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: "0" }}>
                                 {vm.pk?.name}
                               </span>
                               <span onMouseEnter={vm.pk?.whatIn} onMouseLeave={vm.pk?.whatOut} style={{ flex: "none", display: "flex", padding: "6px 0" }}>
