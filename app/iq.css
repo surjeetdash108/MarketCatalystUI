@@ -9157,8 +9157,12 @@ table.tbl tr:hover td {
      35% of the viewport, jammed into the right-hand third. Measured, not
      guessed. */
   .disclaimer-bar {
-    left: 0;
-    padding: 6px 12px;
+    /* A fixed bar covered a third of a phone screen over the content. On a
+       phone it is the last thing in the scrolling page instead, so it shows
+       when you reach the bottom and never sits on top of anything. */
+    position: static;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    margin-top: 16px;
     font-size: .6rem;
     line-height: 1.45;
     /* Side by side there is no room for both on a phone: the links take their
@@ -9168,10 +9172,9 @@ table.tbl tr:hover td {
     gap: 4px;
   }
 
-  /* The fixed footer overlaps the end of scrollable content; .main's 40px is
-     not enough once the bar wraps to two lines at this width. */
+  /* The bar is in the flow now, so .main needs no room reserved beneath it. */
   .main {
-    padding-bottom: 64px;
+    padding-bottom: 0;
   }
 
   /* HEADER — reclaim horizontal space; 18px side padding is a lot of a 375px
@@ -11511,6 +11514,17 @@ button.pill.lf-chip {
   min-width: 0;
 }
 
+/* The 200-day moving average is black. On the dark theme black would vanish
+   into the chart, so it takes the lightest ink there. On .iq-root, not .cc, so
+   the study dialog (portaled outside the chart) resolves it too. */
+.iq-root {
+  --cc-ma-ink: #e8edf5;
+}
+
+.iq-root[data-theme="light"] {
+  --cc-ma-ink: #000000;
+}
+
 .iq-root[data-theme="light"] .cc {
   --cc-grid: #e8ecf1;
   --cc-text: #5d6775;
@@ -11553,6 +11567,14 @@ button.pill.lf-chip {
   padding: 6px 10px;
   border-radius: 7px;
   margin: 0;
+}
+
+/* A selected toolbar button is a green box. The default selected fill
+   (--surface-3) is near-black on the dark theme and vanished into the chart.
+   Inside the SMA / EMA groups the dim periods stay dim, the bold ones are on. */
+.iq-root .cc-tools .rng.on {
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
 .cc-tool-sep {
