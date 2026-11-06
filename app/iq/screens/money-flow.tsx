@@ -2463,7 +2463,7 @@ export function MoneyFlowScreen() {
           Laid out at its design size (POPOVER) and scaled with the window, so
           it keeps the same proportions on every screen. */}
       {hoveredStock && typeof window !== "undefined" && (() => {
-        const s = hoveredStock.stock;
+        const s = (hoveredStock ? stockByT.get(hoveredStock.stock.t) : null) ?? hoveredStock.stock;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const boxW = popoverWidth(5);
