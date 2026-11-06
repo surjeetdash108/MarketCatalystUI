@@ -17,6 +17,7 @@ import { sectorFilterOptions, matchesSector } from "../sector-filter";
 import { TickerAnalysisDrawer } from "../ticker-analysis-drawer";
 import { StockScreenEmbed } from "../stock-panel";
 import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
+import { pageWindow } from "../paging";
 
 const TABS = ["Live", "Premarket", "After Hours", "My names", "Macro"];
 
@@ -952,6 +953,9 @@ export function CommentaryScreen() {
   // when no outlet or 8-K row carries it. Polled once a minute while News is open.
   const { data: earningsRows } = useApiResource<NewsArticleDoc[]>(mainTab === 0 ? "/live/earnings-wire" : null, 60_000);
   const [activeTab,     setActiveTab]     = useState(0);
+  // Intraday commentary is paged, FEED_PAGE_SIZE stories at a time.
+  const [feedPage, setFeedPage] = useState(0);
+  const feedBodyRef = useRef<HTMLDivElement>(null);
   const [search,        setSearch]        = useState("");
   const [secFilter,     setSecFilter]     = useState("All");
   const [capFilter,     setCapFilter]     = useState("All");
@@ -1079,10 +1083,19 @@ export function CommentaryScreen() {
      dashboard card (see news-feed.ts) so both pick the same ticker. */
   const feed = dedupeNews(displayFeed, companyByTicker);
 
+  // Paged: only one page of stories is rendered (and quoted). A new tab, search
+  // or filter starts again at page 1 (adjusted during render, remembered-key pattern).
+  const feedKey = `${activeTab}|${q}|${tagFilter}|${catFilter}|${effSec}|${capFilter}`;
+  const [prevFeedKey, setPrevFeedKey] = useState(feedKey);
+  if (prevFeedKey !== feedKey) { setPrevFeedKey(feedKey); setFeedPage(0); }
+  const pw = pageWindow(feed.length, feedPage);
+  const pageFeed = feed.slice(pw.from, pw.to);
+  const goPage = (p: number) => { setFeedPage(p); setOpenId(null); feedBodyRef.current?.scrollTo({ top: 0 }); };
+
   // LIVE %change for the tickers actually rendered in the feed, via the app-wide
   // shared poll — one timer for the whole app, so a story's %change here matches
   // the same ticker on the heatmap, movers and the stock drawer exactly.
-  const feedQuotes = useLiveQuotes(feed.map(n => n.ticker).filter(Boolean));
+  const feedQuotes = useLiveQuotes(pageFeed.map(n => n.ticker).filter(Boolean));
 
   const feedLabel = (() => {
     if (activeTab === 0) return { title: "Intraday commentary", badge: <span className="live"><span className="dot" />Live · streaming</span> };
@@ -1246,7 +1259,7 @@ export function CommentaryScreen() {
 
               {feedLabel.badge}
             </div>
-            <div className="card-b" style={{ paddingTop: 2, flex: 1, minHeight: 0, overflowY: "auto" }}>
+            <div ref={feedBodyRef} className="card-b" style={{ paddingTop: 2, flex: 1, minHeight: 0, overflowY: "auto" }}>
               {feed.length === 0 ? (
                 <DataState loading={liveNewsLoading} label={
                   q 
@@ -1254,11 +1267,11 @@ export function CommentaryScreen() {
                     : activeTab === 3
                       ? (uid ? "No live news matches your portfolio or watchlist names right now." : "Sign in and add names to your watchlist or portfolio to see this feed.")
                       : "No live news items in this category right now."} />
-              ) : feed.map((item, i) => (
+              ) : pageFeed.map((item, i) => (
                 <FeedItem
                   key={item.id}
                   item={item}
-                  i={i}
+                  i={pw.from + i}
                   total={feed.length}
                   isOpen={openId === item.id}
                   onToggle={() => setOpenId(cur => (cur === item.id ? null : item.id))}
@@ -1274,6 +1287,17 @@ export function CommentaryScreen() {
                   highlight={q}
                 />
               ))}
+              {pw.pages > 1 && (
+                <div className="feed-pager" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap", padding: "14px 0 6px" }}>
+                  <button className="chip" disabled={!pw.hasPrev} onClick={() => goPage(0)} style={{ opacity: pw.hasPrev ? 1 : 0.4 }}>« Start</button>
+                  <button className="chip" disabled={!pw.hasPrev} onClick={() => goPage(pw.page - 1)} style={{ opacity: pw.hasPrev ? 1 : 0.4 }}>‹ Prev</button>
+                  <span style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "0 8px", fontFamily: "var(--f-mono)" }}>
+                    {pw.from + 1}–{pw.to} of {feed.length} · page {pw.page + 1} / {pw.pages}
+                  </span>
+                  <button className="chip" disabled={!pw.hasNext} onClick={() => goPage(pw.page + 1)} style={{ opacity: pw.hasNext ? 1 : 0.4 }}>Next ›</button>
+                  <button className="chip" disabled={!pw.hasNext} onClick={() => goPage(pw.pages - 1)} style={{ opacity: pw.hasNext ? 1 : 0.4 }}>End »</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
