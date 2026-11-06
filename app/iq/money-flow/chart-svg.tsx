@@ -318,7 +318,10 @@ export function FullChartSvg({
     : [];
   const laneRows = calloutLaneRows(patGlyphs.map((g) => g.label));
   const laneRowH = calloutFz + 8;
-  const rows = popLevelRows(PT, H - PB, fz + 8, laneRows.above * laneRowH, laneRows.below * laneRowH);
+  // On 1m charts, keep candles at full height without callout lane intrusion; off-scale levels sit as edge markers
+  const laneTop = tf === 1 ? 0 : laneRows.above * laneRowH;
+  const laneBottom = tf === 1 ? 0 : laneRows.below * laneRowH;
+  const rows = popLevelRows(PT, H - PB, fz + 8, laneTop, laneBottom);
   const pTop = rows.band.top, pBot = rows.band.bottom;
   const y = (v: number) => {
     const val = Number.isFinite(v) ? v : safeStockPx;
@@ -375,8 +378,11 @@ export function FullChartSvg({
   // In-chart labels from every layer are collected while the layers render and
   // drawn last, spread apart so none print over another (declutterLabels).
   const chartLabels: ChartLabel[] = [];
-  // Boxes the labels must avoid but not move: pattern callouts and the pattern badge.
-  const fixedLabelBoxes: LabelBox[] = [];
+  // Boxes the labels must avoid but not move: pattern callouts, the pattern badge, and the live price marker line.
+  const priceY = y(safeStockPx);
+  const fixedLabelBoxes: LabelBox[] = [
+    { x0: PL, x1: W - PR, y0: priceY - 7, y1: priceY + 7 },
+  ];
   const label = (l: Omit<ChartLabel, "anchor" | "dir"> & Partial<Pick<ChartLabel, "anchor" | "dir">>): null => {
     chartLabels.push({ anchor: "start", dir: -1, ...l });
     return null;
@@ -905,17 +911,26 @@ export function FullChartSvg({
 
       <g clipPath={`url(#${clipId}x)`}>
       {/* Time axis (ET) */}
-      {timeTicks(tf).filter((k) => k.i < NB).map((k) => {
-        const tx = sx(k.i);
-        return (
-          <g key={`tt_${k.i}`}>
-            <line style={{ stroke: "rgb(var(--thr-ffffff) / .05)" }} x1={tx} x2={tx} y1={PT} y2={H - PB} strokeWidth={1} />
-            <text style={{ fill: "var(--th-7a8481)" }} x={tx} y={H - PB + T(12) + 5} textAnchor={k.i === 0 ? "start" : "middle"} fontSize={T(12)} fontFamily="'JetBrains Mono', monospace">
-              {k.label}
-            </text>
-          </g>
-        );
-      })}
+      {(() => {
+        const ticks = timeTicks(tf).filter((k) => k.i < NB);
+        let lastRenderedX = -Infinity;
+        const minGapPx = 48;
+        return ticks.map((k) => {
+          const tx = sx(k.i);
+          if (tx - lastRenderedX < minGapPx && k.i !== 0) {
+            return null;
+          }
+          lastRenderedX = tx;
+          return (
+            <g key={`tt_${k.i}`}>
+              <line style={{ stroke: "rgb(var(--thr-ffffff) / .05)" }} x1={tx} x2={tx} y1={PT} y2={H - PB} strokeWidth={1} />
+              <text style={{ fill: "var(--th-7a8481)" }} x={tx} y={H - PB + T(12) + 5} textAnchor={k.i === 0 ? "start" : "middle"} fontSize={T(12)} fontFamily="'JetBrains Mono', monospace">
+                {k.label}
+              </text>
+            </g>
+          );
+        });
+      })()}
 
       </g>
 

@@ -282,15 +282,17 @@ export function declutterLabels(items: ChartLabel[], b: { top: number; bottom: n
  * they are pushed apart by `gap` so none overlap, inside [top, bottom].
  */
 export function layoutEdgeLabels(labels: EdgeLabelIn[], y: (p: number) => number, top: number, bottom: number, gap: number): EdgeLabelOut[] {
-  const groups = new Map<string, { price: number; names: string[]; color: string }>();
+  const groups: Array<{ price: number; names: string[]; color: string }> = [];
   for (const l of labels) {
     if (!Number.isFinite(l.price)) continue;
-    const key = l.price.toFixed(2);
-    const g = groups.get(key);
-    if (!g) groups.set(key, { price: l.price, names: [l.name], color: l.color });
-    else if (!g.names.includes(l.name)) g.names.push(l.name);
+    const existing = groups.find((g) => Math.abs(g.price - l.price) / (g.price || 1) < 0.0015 || g.price.toFixed(2) === l.price.toFixed(2));
+    if (!existing) {
+      groups.push({ price: l.price, names: [l.name], color: l.color });
+    } else if (!existing.names.includes(l.name)) {
+      existing.names.push(l.name);
+    }
   }
-  const out: EdgeLabelOut[] = [...groups.values()].map((g) => {
+  const out: EdgeLabelOut[] = groups.map((g) => {
     const raw = y(g.price);
     const offScale = raw < top ? "above" : raw > bottom ? "below" : null;
     const text = `${offScale === "above" ? "▲ " : offScale === "below" ? "▼ " : ""}${g.names.join(" · ")} $${formatCurrency(g.price)}`;

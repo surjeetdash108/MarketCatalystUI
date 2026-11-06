@@ -63,12 +63,22 @@ export function patternsToShow(hits: PatternHit[], from: number, to: number, opt
   // Larger patterns: chart patterns first, then harmonics, setups and gaps, newest first within each.
   const order: Record<string, number> = { chart: 0, harmonic: 1, setup: 2, gap: 3 };
   const big = inView.filter((h) => h.group !== "candle" && h.group !== "bar").sort((a, b) => order[a.group] - order[b.group] || b.i1 - a.i1);
+  // Show only one direction of larger pattern at a time (latest/strongest),
+  // never contradictory bullish and bearish patterns together (e.g. Double Top + Double Bottom).
+  let dominantSignal: "bull" | "bear" | null = null;
+  for (const h of big) {
+    if (h.signal === "bull" || h.signal === "bear") {
+      dominantSignal = h.signal;
+      break;
+    }
+  }
+  const directionalBig = dominantSignal == null ? big : big.filter((h) => h.signal === dominantSignal || h.signal === "either");
   // One mark per bar for candles: the longest pattern ending there.
   const perBar = new Map<number, PatternHit>();
   for (const h of small) { const cur = perBar.get(h.at); if (!cur || h.i1 - h.i0 > cur.i1 - cur.i0) perBar.set(h.at, h); }
   // One of each larger pattern (the newest), so the same name never appears twice.
   const seen = new Set<string>();
-  const uniq = big.filter((h) => (seen.has(h.id) ? false : (seen.add(h.id), true)));
+  const uniq = directionalBig.filter((h) => (seen.has(h.id) ? false : (seen.add(h.id), true)));
   return [...[...perBar.values()].sort((a, b) => a.at - b.at).slice(-nC), ...uniq.slice(0, nO)];
 }
 
