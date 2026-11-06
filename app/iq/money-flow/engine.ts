@@ -959,9 +959,10 @@ export function popoverStats(s: BoardStock, board: Pick<MoneyFlowBoard, "gainers
       : "—";
   const noSetup = s.chop || s.entry == null;
   const dist = s.entry != null && s.price > 0 ? (Math.abs(s.price - s.entry) / s.price) * 100 : null;
+  const isWatch = (dist != null && dist > WATCH_DIST_PCT) || (s.rr != null && s.rr < 1);
   const rule = noSetup
     ? "NO SETUP"
-    : `${dist != null && dist > WATCH_DIST_PCT ? "WATCH" : "PICK"} · ${bull ? "BULLISH" : "BEARISH"}${i >= 0 ? ` #${i + 1}` : ""}`;
+    : `${isWatch ? "WATCH" : "PICK"} · ${bull ? "BULLISH" : "BEARISH"}${i >= 0 ? ` #${i + 1}` : ""}`;
   return [
     { k: "Confidence", v: s.confidence ? String(s.confidence.score) : "—", tone: dir, bold: true },
     // The side of the move only; whether there is a trade is the Rule (and the card badge).

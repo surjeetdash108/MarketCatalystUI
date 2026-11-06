@@ -3050,7 +3050,7 @@ export function MoneyFlowScreen() {
                   },
                   {
                     term: "Rule",
-                    desc: "NO SETUP if the stock is choppy or has no zone. Otherwise PICK when price is within 1.2% of the entry, WATCH when further away, with the side and rank.",
+                    desc: "NO SETUP if the stock is choppy or has no zone. Otherwise PICK only when price is within 1.2% of the entry and R:R ≥ 1; if it otherwise qualifies but R:R < 1 (or price is further from entry), WATCH, with the side and rank.",
                   },
                   {
                     term: "Timeframe",
