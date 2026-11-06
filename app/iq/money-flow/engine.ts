@@ -772,11 +772,25 @@ export const SECTOR_NAME_STYLE = {
  */
 export function withSectorLabels<B extends Pick<MoneyFlowBoard, "sectors" | "gainers" | "losers">>(b: B): B {
   const label = (n: string | null) => (n == null ? n : normalizeSector(n));
+  const sectors = b.sectors.map((x) => ({ ...x, name: normalizeSector(x.name) }));
+  const secAvgByName = new Map<string, number>();
+  for (const s of sectors) {
+    if (s.name && s.avgPct != null && Number.isFinite(s.avgPct)) {
+      secAvgByName.set(s.name, s.avgPct);
+    }
+  }
+  const updateStock = (x: BoardStock): BoardStock => {
+    const sec = label(x.sector);
+    const avg = sec ? secAvgByName.get(sec) : undefined;
+    const vsSector =
+      avg != null && Number.isFinite(x.pctChange) ? Number((x.pctChange - avg).toFixed(2)) : x.vsSector;
+    return { ...x, sector: sec, vsSector };
+  };
   return {
     ...b,
-    sectors: b.sectors.map((x) => ({ ...x, name: normalizeSector(x.name) })),
-    gainers: b.gainers.map((x) => ({ ...x, sector: label(x.sector) })),
-    losers: b.losers.map((x) => ({ ...x, sector: label(x.sector) })),
+    sectors,
+    gainers: b.gainers.map(updateStock),
+    losers: b.losers.map(updateStock),
   };
 }
 
