@@ -147,14 +147,15 @@ export function MoneyFlowScreen() {
   const [popView, setPopView] = useState<{ key: string; v: IntradayView } | null>(null);
   // "Full Chart": the stock screen's zoomable chart in place of the one-day chart.
   const [popFull, setPopFull] = useState(false);
-  const [popLayers, setPopLayers] = useState({
+  const DEFAULT_POP_LAYERS = {
     ob: true,
     vwap: true,
     fvg: false,
     liq: false,
     str: false,
     pat: false,
-  });
+  };
+  const [popLayers, setPopLayers] = useState(DEFAULT_POP_LAYERS);
 
   // Popover chart: the hovered stock's real 1-minute bars, grouped to the
   // chosen timeframe for the board's session.
@@ -263,6 +264,7 @@ export function MoneyFlowScreen() {
       if (!stock || !rect) return cur;
       setPopTf(5);
       setPopFull(false);
+      setPopLayers(DEFAULT_POP_LAYERS);
       return { stock, rect, pinned: nx.pinned };
     });
 
