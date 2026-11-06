@@ -62,6 +62,7 @@ import { useTapeStream } from "../hooks/useTapeStream";
 import { tapeItemsToIndexDocs } from "../live-market-indices";
 import { useLiveQuotes } from "../live-quotes-context";
 import { ModuleThemeToggle } from "../theme/theme-toggle";
+import { StockLogo } from "../utils";
 
 /** Board refresh: rebuilds and polls every 15s to keep rankings fresh. */
 const BOARD_POLL_MS = 15_000;
@@ -1533,24 +1534,7 @@ export function MoneyFlowScreen() {
                         >
                           #{i + 1}
                         </span>
-                        <span
-                          style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 6,
-                            background: "#fff",
-                            display: "grid",
-                            placeItems: "center",
-                            overflow: "hidden",
-                            flex: "none",
-                          }}
-                        >
-                          <img
-                            src={`https://financialmodelingprep.com/image-stock/${fc.t.replace(".", "-")}.png`}
-                            alt=""
-                            style={{ width: 19, height: 19, objectFit: "contain" }}
-                          />
-                        </span>
+                        <StockLogo sym={fc.t} size={16} style={{ width: 24, height: 24, borderRadius: 6, flex: "none", fontSize: 12 }} />
                         <span
                           style={{
                             fontFamily: "'Barlow Condensed', Manrope, sans-serif",
@@ -1858,24 +1842,7 @@ export function MoneyFlowScreen() {
                         >
                           #{i + 1}
                         </span>
-                        <span
-                          style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 6,
-                            background: "#fff",
-                            display: "grid",
-                            placeItems: "center",
-                            overflow: "hidden",
-                            flex: "none",
-                          }}
-                        >
-                          <img
-                            src={`https://financialmodelingprep.com/image-stock/${fc.t.replace(".", "-")}.png`}
-                            alt=""
-                            style={{ width: 19, height: 19, objectFit: "contain" }}
-                          />
-                        </span>
+                        <StockLogo sym={fc.t} size={16} style={{ width: 24, height: 24, borderRadius: 6, flex: "none", fontSize: 12 }} />
                         <span
                           style={{
                             fontFamily: "'Barlow Condensed', Manrope, sans-serif",
@@ -2232,24 +2199,7 @@ export function MoneyFlowScreen() {
                               paddingRight: x.padR,
                             }}
                           >
-                            <span
-                              style={{
-                                width: 16,
-                                height: 16,
-                                flex: "none",
-                                borderRadius: 4,
-                                background: "#fff",
-                                display: x.logoD as "none" | "grid",
-                                placeItems: "center",
-                                overflow: "hidden",
-                              }}
-                            >
-                              <img
-                                src={`https://financialmodelingprep.com/image-stock/${x.t.replace(".", "-")}.png`}
-                                alt=""
-                                style={{ width: 13, height: 13, objectFit: "contain" }}
-                              />
-                            </span>
+                            <StockLogo sym={x.t} size={11} style={{ width: 16, height: 16, borderRadius: 4, flex: "none", display: x.logoD === "none" ? "none" : "inline-flex", fontSize: 8 }} />
                             <span
                               style={{
                                 fontFamily: "'Barlow Condensed', Manrope, sans-serif",
@@ -2469,24 +2419,7 @@ export function MoneyFlowScreen() {
                               paddingRight: x.padR,
                             }}
                           >
-                            <span
-                              style={{
-                                width: 16,
-                                height: 16,
-                                flex: "none",
-                                borderRadius: 4,
-                                background: "#fff",
-                                display: x.logoD as "none" | "grid",
-                                placeItems: "center",
-                                overflow: "hidden",
-                              }}
-                            >
-                              <img
-                                src={`https://financialmodelingprep.com/image-stock/${x.t.replace(".", "-")}.png`}
-                                alt=""
-                                style={{ width: 13, height: 13, objectFit: "contain" }}
-                              />
-                            </span>
+                            <StockLogo sym={x.t} size={11} style={{ width: 16, height: 16, borderRadius: 4, flex: "none", display: x.logoD === "none" ? "none" : "inline-flex", fontSize: 8 }} />
                             <span
                               style={{
                                 fontFamily: "'Barlow Condensed', Manrope, sans-serif",
@@ -2585,25 +2518,7 @@ export function MoneyFlowScreen() {
           >
             {/* Header */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span
-                style={{
-                  width: 38,
-                  height: 38,
-                  flex: "none",
-                  borderRadius: 8,
-                  background: "#fff",
-                  display: "grid",
-                  placeItems: "center",
-                  overflow: "hidden",
-                  boxShadow: `0 0 0 1px ${c}`,
-                }}
-              >
-                <img
-                  src={`https://financialmodelingprep.com/image-stock/${s.t.replace(".", "-")}.png`}
-                  alt=""
-                  style={{ width: 30, height: 30, objectFit: "contain" }}
-                />
-              </span>
+              <StockLogo sym={s.t} size={25} style={{ width: 38, height: 38, borderRadius: 8, flex: "none", boxShadow: `0 0 0 1px ${c}`, fontSize: 19 }} />
               <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                 <span
                   style={{

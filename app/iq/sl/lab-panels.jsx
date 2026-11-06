@@ -3,6 +3,7 @@
 // row chart pop-up, single-stock report, edit-rules modal.
 import { Fragment } from "react";
 import { blinkParts } from "./lab-run";
+import { StockLogo } from "../utils";
 
 const C = {
   bg: "var(--th-0d0f10)", bg2: "var(--th-0b0e10)", line: "var(--th-1e2427)", line2: "var(--th-233038)", gold: "var(--th-c9a24a)", goldHi: "var(--th-f0d68c)", chipBg: "var(--th-2e2614)", chipFg: "var(--th-fbefc9)",
@@ -14,7 +15,6 @@ const btn = (primary, disabled) => ({
   borderRadius: 8, border: `1px solid ${primary ? C.gold : "var(--th-5a4a22)"}`, background: disabled ? "var(--th-1a1d1f)" : primary ? C.gold : "transparent",
   color: disabled ? "var(--th-5f6966)" : primary ? "var(--th-08090a)" : C.chipFg, padding: "8px 14px", fontWeight: 800, fontSize: 12.5, cursor: disabled ? "not-allowed" : "pointer",
 });
-const hideImg = (e) => { e.currentTarget.style.display = "none"; };
 
 /** Segmented options: [{l, on, off, onClick, title}]. */
 export function Seg({ opts, more, small }) {
@@ -172,10 +172,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
             <button key={x.t} type="button" onClick={x.onClick} title={`Open the ${x.t} chart`} className="slx7 sl-res-row"
               style={{ display: "grid", gridTemplateColumns: grid, gap: 6, alignItems: "center", background: "transparent", border: 0, borderTop: "1px solid var(--th-15191b)", borderRadius: 8, padding: 8, color: C.text, cursor: "pointer", textAlign: "left" }}>
               <span className="sl-res-stock" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span style={{ position: "relative", width: 24, height: 24, flex: "none", borderRadius: 6, background: "var(--th-1a1f21)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 800, color: C.goldHi, overflow: "hidden" }}>
-                  {x.t.slice(0, 4)}
-                  <img src={x.logo} onError={hideImg} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#fff", padding: 2 }} />
-                </span>
+                <StockLogo sym={x.t} size={16} style={{ width: 24, height: 24, borderRadius: 6, flex: "none", fontSize: 12 }} />
                 <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                   <span style={{ fontWeight: 800, fontSize: 12.5 }}>{x.t}</span>
                   <span style={{ fontSize: 10.5, color: C.mute, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.n}</span>

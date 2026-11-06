@@ -17,7 +17,7 @@ import React, { Component } from "react";
 import * as Engine from "./engine";
 import LabView, { LAB_HOVER_CSS } from "./lab-view";
 import { LAB_MOBILE_CSS } from "./lab-mobile";
-import { apiDelete, apiGet, apiPost, backendUrl } from "../backend";
+import { apiDelete, apiGet, apiPost } from "../backend";
 import { COST_OPTS, STOP_PCTS, TP_PCTS, exitPlanKeys, exitPlanSummary, periodChoices, periodLabel, periodOf, riskToCfg, runSig, savedCfgOf, valCfg } from "./lab-config";
 import { MAX_DAILY_DAYS, MAX_INTRADAY_DAYS, acceptRow, computeRow, engineCfg, fetchSpan, fetchWithRetry, newRunState, periodOfCfg, forwardStats, prepBars, priceChart, progressiveView, SCAN_DOTS_CSS, scanChunk, universeUrl, windowLabel, windowOpts, windowPick, windowStats } from "./lab-run";
 
@@ -96,7 +96,6 @@ const WHAT={hi52:'Buys a stock the day it closes at a new 52-week high on at lea
 
 const ALL_TF = ["1m", "5m", "15m", "30m", "1h", "4h", "d", "1w"];
 const INTRA_TF = ["1m", "5m", "15m", "30m", "1h", "4h"];
-const LOGO = (t) => backendUrl("/live/logo?ticker=" + encodeURIComponent(t));
 const SAVED_CACHE = "mc_lab_saved_v2", OLD_SAVED = "mc_lab_saved_v1", MIGRATED = "mc_lab_saved_migrated_v1", AUTO_KEY = "mc_lab_auto_v1";
 const tfL = (tf) => (Engine.TF[tf] || Engine.TF.d).l;
 // Signed to one decimal; anything that rounds to zero is shown unsigned ("0.0%", never "−0.0%").
@@ -560,7 +559,7 @@ export default class StrategyLab extends Component {
       cols: [["STOCK", "left", ""], ["PRICE", "right", "Live quote · day change"], ["RETURN · " + wl.toUpperCase(), "right", T.ret], [chip ? "VS STOCK AVG" : "VS B&H", "right", T.ex], ["WIN %", "right", T.wpc], [chip ? "SIGNALS" : "TRADES", "right", T.trc]].map(([l, al, title]) => ({ l, al, title })),
       rows: view ? view.visible.map((r) => {
         const w = statOf(r), q = st.quotes[r.t];
-        return { t: r.t, n: r.n, logo: LOGO(r.t), px: q ? "$" + q.p.toFixed(2) : "—", chg: q && q.c != null ? (q.c >= 0 ? "+" : "−") + Math.abs(q.c).toFixed(2) + "%" : "", chgC: q && q.c != null ? sc(q.c) : C_MUTE,
+        return { t: r.t, n: r.n, px: q ? "$" + q.p.toFixed(2) : "—", chg: q && q.c != null ? (q.c >= 0 ? "+" : "−") + Math.abs(q.c).toFixed(2) + "%" : "", chgC: q && q.c != null ? sc(q.c) : C_MUTE,
           ret: w.ret == null ? "—" : p1(w.ret), retC: sc1(w.ret), ex: w.ex == null ? "—" : pp(w.ex), exC: sc1(w.ex), win: w.n ? Math.round((100 * w.w) / w.n) + "%" : "—", tr: String(w.n) + (w.open ? " + " + w.open + " open" : ""),
           onClick: () => this.openChart(k, r.t, r.n) };
       }) : [],
