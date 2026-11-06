@@ -2140,7 +2140,7 @@ export function EarningsScreen() {
                   {(() => {
                     const c = consensusForSel;
                     const px = liveCompanySel?.price ?? null;
-                    const pt = c?.priceTargetConsensus ?? null;
+                    const pt = c?.priceTargetConsensus != null && c.priceTargetConsensus > 0 ? c.priceTargetConsensus : null; // 0 = no target
                     const upside = pt != null && px != null && px > 0 ? ((pt - px) / px) * 100 : null;
                     const votes = c ? c.strongBuy + c.buy + c.hold + c.sell + c.strongSell : 0;
                     const buyPct = votes ? Math.round(((c!.strongBuy + c!.buy) / votes) * 100) : null;
@@ -2268,7 +2268,7 @@ export function EarningsScreen() {
               {(() => {
                 const c = consensusForSel;
                 const px = liveCompanySel?.price ?? null;
-                const pt = c?.priceTargetConsensus ?? null;
+                const pt = c?.priceTargetConsensus != null && c.priceTargetConsensus > 0 ? c.priceTargetConsensus : null; // 0 = no target
                 const upside = pt != null && px != null && px > 0 ? ((pt - px) / px) * 100 : null;
                 const votes = c ? c.strongBuy + c.buy + c.hold + c.sell + c.strongSell : 0;
                 const buyPct = votes ? Math.round(((c!.strongBuy + c!.buy) / votes) * 100) : null;

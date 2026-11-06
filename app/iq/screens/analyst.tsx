@@ -202,6 +202,12 @@ function fmtMoney(v: number | null | undefined): string {
   return "$" + v.toFixed(2);
 }
 
+/** An analyst price target: missing (null, 0, NaN — "no target given") reads "—", never "$0.00". */
+const hasTarget = (v: number | null | undefined): v is number => v != null && Number.isFinite(v) && v > 0;
+function fmtTarget(v: number | null | undefined): string {
+  return v != null && Number.isFinite(v) && v > 0 ? "$" + v.toFixed(2) : "—";
+}
+
 function fmtMoneyCompact(v: number | null | undefined): string {
   if (v == null || isNaN(v)) return "—";
   return "$" + (v >= 10 ? Math.round(v).toString() : v.toFixed(2));
@@ -799,7 +805,7 @@ export function AnalystScreen() {
   const sliderCalc = useMemo(() => {
     if (!selectedStock) return { lo: 0, hi: 100, pL: 50, nL: 50, bandL: "50%", bandW: "0%", ticks: [] };
 
-    const vals = [...selectedStock.street, selectedStock.pt1, selectedStock.px];
+    const vals = [...selectedStock.street, ...(hasTarget(selectedStock.pt1) ? [selectedStock.pt1] : []), selectedStock.px];
     const lo = Math.floor(Math.min(...vals) * 0.94);
     const hi = Math.ceil(Math.max(...vals) * 1.04);
     const range = hi - lo || 1;
@@ -807,7 +813,7 @@ export function AnalystScreen() {
     const p = (v: number) => Math.max(2, Math.min(98, ((v - lo) / range) * 100));
 
     const pL = p(selectedStock.px);
-    const nL = p(selectedStock.pt1);
+    const nL = hasTarget(selectedStock.pt1) ? p(selectedStock.pt1) : pL;
 
     return {
       lo,
@@ -1092,7 +1098,7 @@ export function AnalystScreen() {
                     {summaryMetrics.portCalls.map(c => (
                       <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontWeight: 700, color: TEXT_HI }}>{c.t} ({c.firm})</span>
-                        <span style={{ color: c.dir >= 0 ? G : R, fontWeight: 700 }}>{c.act} → {fmtMoney(c.pt1)}</span>
+                        <span style={{ color: c.dir >= 0 ? G : R, fontWeight: 700 }}>{c.act} → {fmtTarget(c.pt1)}</span>
                       </div>
                     ))}
                   </div>
@@ -1130,7 +1136,7 @@ export function AnalystScreen() {
                     {summaryMetrics.watchCalls.map(c => (
                       <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontWeight: 700, color: TEXT_HI }}>{c.t} ({c.firm})</span>
-                        <span style={{ color: c.dir >= 0 ? G : R, fontWeight: 700 }}>{c.act} → {fmtMoney(c.pt1)}</span>
+                        <span style={{ color: c.dir >= 0 ? G : R, fontWeight: 700 }}>{c.act} → {fmtTarget(c.pt1)}</span>
                       </div>
                     ))}
                   </div>
@@ -1418,7 +1424,7 @@ export function AnalystScreen() {
                   <div style={{ padding: "10px 12px", borderRight: `1px solid ${BORDER_DARK}` }}>
                     <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED }}>TARGET</div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, marginTop: 2, color: TEXT_HI }}>
-                      {fmtMoney(selectedStock.pt1)}
+                      {fmtTarget(selectedStock.pt1)}
                     </div>
                   </div>
                   <div style={{ padding: "10px 12px" }}>
@@ -1449,24 +1455,32 @@ export function AnalystScreen() {
                       {fmtMoneyCompact(selectedStock.px)}
                     </div>
 
-                    {/* New Target Pin */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 24,
-                        left: `${sliderCalc.nL}%`,
-                        transform: "translateX(-50%)",
-                        width: 18,
-                        height: 18,
-                        borderRadius: "50%",
-                        border: `3px solid ${selectedStock.dir >= 0 ? G : R}`,
-                        background: BG_SURFACE,
-                        boxShadow: `0 0 0 4px ${selectedStock.dir >= 0 ? (isLight ? "rgba(31,122,70,.2)" : "rgba(74,222,128,.15)") : (isLight ? "rgba(138,46,21,.2)" : "rgba(248,113,113,.15)")}`,
-                      }}
-                    />
-                    <div style={{ position: "absolute", top: 4, left: `${sliderCalc.nL}%`, transform: "translateX(-50%)", fontSize: 12, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R, whiteSpace: "nowrap" }}>
-                      New {fmtMoneyCompact(selectedStock.pt1)}
-                    </div>
+                    {hasTarget(selectedStock.pt1) && (
+
+                      <>
+  
+                      {/* New Target Pin */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 24,
+                          left: `${sliderCalc.nL}%`,
+                          transform: "translateX(-50%)",
+                          width: 18,
+                          height: 18,
+                          borderRadius: "50%",
+                          border: `3px solid ${selectedStock.dir >= 0 ? G : R}`,
+                          background: BG_SURFACE,
+                          boxShadow: `0 0 0 4px ${selectedStock.dir >= 0 ? (isLight ? "rgba(31,122,70,.2)" : "rgba(74,222,128,.15)") : (isLight ? "rgba(138,46,21,.2)" : "rgba(248,113,113,.15)")}`,
+                        }}
+                      />
+                      <div style={{ position: "absolute", top: 4, left: `${sliderCalc.nL}%`, transform: "translateX(-50%)", fontSize: 12, fontWeight: 700, color: selectedStock.dir >= 0 ? G : R, whiteSpace: "nowrap" }}>
+                        New {fmtTarget(selectedStock.pt1)}
+                      </div>
+
+                      </>
+
+                    )}
 
                     {/* Min / Max bounds */}
                     <div style={{ position: "absolute", top: 56, left: -10, fontSize: 11, color: TEXT_MUTED, fontFamily: "'JetBrains Mono', monospace" }}>${sliderCalc.lo}</div>
@@ -2122,7 +2136,7 @@ export function AnalystScreen() {
 
                     {r.ptSource === "firm" ? (
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", textAlign: "right", color: TEXT_HI, fontWeight: 700 }}>
-                        ${r.pt1.toFixed(2)}
+                        {fmtTarget(r.pt1)}
                       </span>
                     ) : (
                       <span
@@ -2333,7 +2347,7 @@ export function AnalystScreen() {
                   <div>
                     <div style={{ fontSize: 10, color: TEXT_MUTED }}>TARGET</div>
                     <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: TEXT_HI }}>
-                      {fmtMoney(singleCallModal.action.pt1)}
+                      {fmtTarget(singleCallModal.action.pt1)}
                     </div>
                   </div>
                   <div>

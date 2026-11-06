@@ -2192,7 +2192,7 @@ export function StockScreen({
                     <span style={{ color: "var(--text-dim-solid)" }}>Hold<b>{consensusDoc.hold}</b></span>
                     <span style={{ color: "var(--up)" }}>Buy<b>{consensusDoc.strongBuy + consensusDoc.buy}</b></span>
                   </div>
-                  {consensusDoc.priceTargetConsensus != null && (
+                  {consensusDoc.priceTargetConsensus != null && consensusDoc.priceTargetConsensus > 0 && (
                     <div className="counts" style={{ marginTop: 8, borderTop: "1px solid var(--border-soft)", paddingTop: 8 }}>
                       <span style={{ color: "var(--text-dim-solid)" }}>Target<b style={{ color: "var(--text-hi)" }}>${consensusDoc.priceTargetConsensus.toFixed(0)}</b></span>
                       {dispPrice != null && dispPrice > 0 && (
@@ -2200,7 +2200,7 @@ export function StockScreen({
                           Upside<b>{consensusDoc.priceTargetConsensus >= dispPrice ? "+" : ""}{(((consensusDoc.priceTargetConsensus - dispPrice) / dispPrice) * 100).toFixed(1)}%</b>
                         </span>
                       )}
-                      {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetHigh != null && (
+                      {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetLow > 0 && consensusDoc.priceTargetHigh != null && consensusDoc.priceTargetHigh > 0 && (
                         <span style={{ color: "var(--text-dim-solid)" }}>Range<b>${consensusDoc.priceTargetLow.toFixed(0)}–${consensusDoc.priceTargetHigh.toFixed(0)}</b></span>
                       )}
                       {consensusDoc.ptAvgLastYear != null && (
@@ -3484,7 +3484,7 @@ export function StockScreen({
                       <span style={{ color: "var(--up)" }}><i>Buy</i>{consensusDoc.strongBuy + consensusDoc.buy}</span>
                     </div>
                   </div>
-                  {consensusDoc.priceTargetConsensus != null && (
+                  {consensusDoc.priceTargetConsensus != null && consensusDoc.priceTargetConsensus > 0 && (
                     <div className="sd-target">
                       <div><span>Target</span>${consensusDoc.priceTargetConsensus.toFixed(0)}</div>
                       {dispPrice != null && dispPrice > 0 && (
@@ -3495,7 +3495,7 @@ export function StockScreen({
                           </b>
                         </div>
                       )}
-                      {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetHigh != null && (
+                      {consensusDoc.priceTargetLow != null && consensusDoc.priceTargetLow > 0 && consensusDoc.priceTargetHigh != null && consensusDoc.priceTargetHigh > 0 && (
                         <div><span>Range</span>${consensusDoc.priceTargetLow.toFixed(0)}–${consensusDoc.priceTargetHigh.toFixed(0)}</div>
                       )}
                     </div>
