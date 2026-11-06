@@ -3511,6 +3511,11 @@ table.tbl tr:hover td {
   width: min(960px, 96vw);
 }
 
+/* Calendar → VIX-sensitive stock: the stock's chart and its dividends, 2.5× the 520px drawer. */
+.side-drawer.vix-stock-drawer {
+  width: min(1300px, 96vw);
+}
+
 .side-drawer.index-side-drawer .metric-grid {
   grid-template-columns: repeat(4, 1fr);
 }

@@ -158,7 +158,7 @@ function DividendDrawer({ stock, onClose, showStock = false }: { stock: DivStock
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <div className="side-drawer">
+      <div className={showStock ? "side-drawer vix-stock-drawer" : "side-drawer"}>
         <div className="drawer-h">
           <StockLogo sym={stock.sym} size={30} />
           <div style={{ flex: 1 }}>

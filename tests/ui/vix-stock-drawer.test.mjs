@@ -20,3 +20,14 @@ describe("VIX-sensitive row → stock first, then dividends", () => {
     assert.match(macro, /<DividendDrawer stock=\{vixSel\} showStock onClose=/);
   });
 });
+
+describe("VIX-sensitive drawer is 2.5× the normal drawer", () => {
+  const css = fs.readFileSync(new URL("../../app/iq.css", import.meta.url), "utf8");
+  it("the base drawer is 520px; the VIX stock drawer 1300px (2.5×), never wider than the screen", () => {
+    assert.match(css, /\.side-drawer \{[^}]*width: min\(520px, 96vw\);/);
+    assert.match(css, /\.side-drawer\.vix-stock-drawer \{\s*width: min\(1300px, 96vw\);\s*\}/);
+  });
+  it("only the VIX-sensitive (showStock) drawer gets the wide class", () => {
+    assert.match(drawer, /className=\{showStock \? "side-drawer vix-stock-drawer" : "side-drawer"\}/);
+  });
+});
