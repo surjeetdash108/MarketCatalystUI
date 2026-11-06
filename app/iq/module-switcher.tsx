@@ -116,7 +116,6 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
           )}
           {SEGMENTS.map(([m, label], i) => {
             const on = m === activeModule;
-            const isNew = m === "SL";
             return (
               <span
                 key={m}
@@ -152,22 +151,6 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
                 }}
               >
                 <span>{label}</span>
-                {isNew && !on && (
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 800,
-                      letterSpacing: ".06em",
-                      padding: "1px 5px",
-                      borderRadius: 4,
-                      background: "rgba(201,162,74,.2)",
-                      color: "#f0d68c",
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    NEW
-                  </span>
-                )}
               </span>
             );
           })}
