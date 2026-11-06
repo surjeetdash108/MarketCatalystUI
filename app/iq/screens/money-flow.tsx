@@ -573,6 +573,15 @@ export function MoneyFlowScreen() {
             height: 400px !important;
             flex: none !important;
           }
+          /* The top-3 cards: a column that sizes to its cards (flex-basis 0 collapsed it to nothing). */
+          .mf-mid-cards-col {
+            flex: none !important;
+            overflow: visible !important;
+          }
+          .mf-mid-card {
+            height: 320px !important;
+            flex: none !important;
+          }
         }
 
         /* ── Mobile Mode (< 768px) ── */
@@ -592,6 +601,8 @@ export function MoneyFlowScreen() {
           .mf-nav-status {
             order: 2 !important;
             gap: 8px !important;
+            width: 100% !important;
+            justify-content: space-between !important;
           }
           .mf-nav-switcher {
             order: 3 !important;
@@ -640,11 +651,14 @@ export function MoneyFlowScreen() {
           .mf-top2-breadth-pane {
             padding: 8px 0 !important;
           }
+          /* The top-3 cards: a column that sizes to its cards (flex-basis 0 collapsed it to nothing). */
           .mf-mid-cards-col {
             gap: 10px !important;
+            flex: none !important;
+            overflow: visible !important;
           }
           .mf-mid-card {
-            min-height: 130px !important;
+            height: 300px !important;
             flex: none !important;
           }
           .mf-treemap-box {
