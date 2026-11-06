@@ -10,6 +10,8 @@ const C = {
   text: "var(--th-e6ebe8)", hi: "var(--th-eef2f4)", dim: "var(--th-8b9592)", mute: "var(--th-7a8481)", up: "var(--th-3ddc84)", down: "var(--th-f0565a)", warn: "var(--th-f08a4b)",
 };
 const mono = "'JetBrains Mono',monospace";
+/** Helper notes under the results (scan summary, return-window hint, candle note, run meta): semibold, white in dark / near-black in light. */
+const NOTE = { fontSize: 12, fontWeight: 600, color: "var(--th-ffffff)", lineHeight: 1.45 };
 const label = { fontSize: 10, fontWeight: 800, letterSpacing: ".12em", color: C.mute, textTransform: "uppercase" };
 const btn = (primary, disabled) => ({
   borderRadius: 8, border: `1px solid ${primary ? C.gold : "var(--th-5a4a22)"}`, background: disabled ? "var(--th-1a1d1f)" : primary ? C.gold : "transparent",
@@ -81,7 +83,7 @@ export function DetailFacts({ f }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "0 1 auto", minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={rowLabel}>CANDLE</span><Seg opts={f.candleOpts} />
-            {f.candleNote ? <span style={{ fontSize: 11, color: "var(--th-5f6966)" }}>{f.candleNote}</span> : null}
+            {f.candleNote ? <span style={NOTE}>{f.candleNote}</span> : null}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={rowLabel}>BACKTEST PERIOD</span><Seg opts={f.periodOpts} more={f.periodMore} />
@@ -109,7 +111,7 @@ export function AiFacts({ f }) {
         {k("ENTRY")}<span style={{ fontFamily: mono, color: C.text }}>{f.entry}</span>
         {k("EXIT")}<span style={{ fontFamily: mono, color: C.text }}>{f.exit}</span>
         {k("RISK")}<span style={{ fontFamily: mono, color: C.text }}>{f.riskLine}</span>
-        {k("CANDLE", 7)}<span style={{ justifySelf: "start", display: "flex", flexDirection: "column", gap: 4 }}><Seg opts={f.candleOpts} small />{f.candleNote ? <span style={{ fontSize: 11, color: "var(--th-5f6966)" }}>{f.candleNote}</span> : null}</span>
+        {k("CANDLE", 7)}<span style={{ justifySelf: "start", display: "flex", flexDirection: "column", gap: 4 }}><Seg opts={f.candleOpts} small />{f.candleNote ? <span style={NOTE}>{f.candleNote}</span> : null}</span>
         {k("PERIOD", 7)}<span style={{ justifySelf: "start" }}><Seg opts={f.periodOpts} more={f.periodMore} small /></span>
       </div>
       <RuleNotes f={f} />
@@ -129,7 +131,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
         <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 20, color: C.hi }}>
           {blinkParts(r.head || "", r.busy).map((p, i) => (p.dots ? <span key={i} className="sl-dots" aria-label="…"><i>.</i><i>.</i><i>.</i></span> : <Fragment key={i}>{p.t}</Fragment>))}
         </span>
-        {r.meta ? <span style={{ fontSize: 11.5, color: "var(--th-5f6966)", marginLeft: "auto" }}>{r.meta}</span> : null}
+        {r.meta ? <span style={{ ...NOTE, marginLeft: "auto" }}>{r.meta}</span> : null}
       </div>
       {r.err ? <div style={{ fontSize: 13, color: C.warn }}>{r.err}</div> : null}
       {r.stale ? (
@@ -149,7 +151,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
               </div>
             ))}
           </div>
-          <div style={{ fontSize: 11, color: "var(--th-5f6966)", display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ ...NOTE, display: "flex", alignItems: "center", gap: 6 }}>
             {r.soFar ? <span title="The scan is still running; the tiles update as stocks finish" style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".08em", color: C.goldHi, border: "1px solid var(--th-5a4a22)", borderRadius: 999, padding: "1px 7px" }}>SO FAR</span> : null}
             {r.sumNote}
           </div>
@@ -160,7 +162,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", color: C.mute }}>RETURN OVER</span>
           <Seg opts={r.winOpts} more={r.winMore} small />
-          <span style={{ fontSize: 11, color: "var(--th-5f6966)" }}>{r.winNote}</span>
+          <span style={NOTE}>{r.winNote}</span>
         </div>
       ) : null}
       {r.rows && r.rows.length ? (
