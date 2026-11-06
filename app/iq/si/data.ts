@@ -906,6 +906,31 @@ function earningsMetrics(
   return out;
 }
 
+/** Words too common in company names to identify one ("First Solar" ≠ every "first"). */
+const GENERIC_NAME_WORDS = new Set(["the", "first", "american", "general", "united", "national", "international", "global", "new", "us", "group", "holdings", "corp", "inc", "company", "bank", "capital", "energy", "health", "technologies", "technology", "systems", "financial", "realty", "trust"]);
+
+/**
+ * Whether an article is about this stock: its headline names the ticker (a
+ * whole word, in capitals) or the company. Vendors tag an article with every
+ * ticker it mentions, so AMD's feed carried "NVDA vs AAPL: …".
+ */
+export function aboutTicker(article: { headline?: unknown; title?: unknown }, ticker: string, name?: string | null): boolean {
+  const headline = String(article.headline ?? article.title ?? "");
+  if (!headline) return false;
+  const sym = ticker.toUpperCase().replace(/[.-]/g, "[.-]?");
+  if (new RegExp(`(^|[^A-Za-z0-9])\\$?${sym}([^A-Za-z0-9]|$)`).test(headline)) return true;
+  const core = String(name ?? "")
+    .replace(/[,.]/g, " ")
+    .replace(/\b(inc|incorporated|corp|corporation|co|company|ltd|limited|plc|holdings?|group|class [a-c]|n ?v|s ?a|ag|se)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!core) return false;
+  const lower = headline.toLowerCase();
+  if (lower.includes(core.toLowerCase())) return true;
+  const first = core.split(" ")[0].replace(/'s$/i, "");
+  return first.length >= 4 && !GENERIC_NAME_WORDS.has(first.toLowerCase()) && new RegExp(`\\b${first.replace(/[^A-Za-z0-9]/g, "")}`, "i").test(headline);
+}
+
 /**
  * The five largest daily moves of the last six months (one per sixth of the
  * window), each labelled from real data: an FMP earnings report within 4 days
@@ -923,6 +948,8 @@ export function getSixMonthMajorEvents(
 ): MajorSixMonthEvent[] {
   if (!bars || bars.length < 15) return [];
   const stockName = s.name || sym;
+  // Only the stock's own news can explain its move (aboutTicker).
+  news = (news || []).filter((x: any) => aboutTicker(x, sym, s.name));
   type MoveSession = { idx: number; t: number; ret: number; absRet: number };
   const moves: MoveSession[] = [];
   for (let i = 1; i < bars.length; i++) {
