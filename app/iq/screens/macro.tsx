@@ -10,6 +10,7 @@ import type { MacroEventDoc, DividendHistoryDoc, CompanyDoc } from "../types";
 import type { MarketStatusPayload } from "../types/market-status";
 import { fmtMonthDay, isoDay, addDays, mondayOf, fmtDate, etTodayIso } from "../calendar-range";
 import { resolveDividends } from "../dividend.util";
+import { ChartCard } from "../stock-panel";
 
 // ── Economic calendar ────────────────────────────────────────────────────────
 interface MacroEvent {
@@ -150,7 +151,8 @@ function DivHistoryChart({ data }: { data: { year: number; div: number }[] }) {
 }
 
 // ── Dividend sliding drawer ──────────────────────────────────────────────────
-function DividendDrawer({ stock, onClose }: { stock: DivStock; onClose: () => void }) {
+/** `showStock`: open on the stock itself (quote + price chart) above its dividends — the VIX-sensitive list. */
+function DividendDrawer({ stock, onClose, showStock = false }: { stock: DivStock; onClose: () => void; showStock?: boolean }) {
   const { data: dh, loading: dhLoading } = useApiResource<DividendHistoryDoc>(`/live/dividend-history?ticker=${encodeURIComponent(stock.sym)}`);
   const hist = (dh?.annualTotals ?? []).map(a => ({ year: a.year, div: a.total ?? 0 })).sort((a, b) => a.year - b.year);
   return (
@@ -162,7 +164,7 @@ function DividendDrawer({ stock, onClose }: { stock: DivStock; onClose: () => vo
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text-hi)", fontFamily: "var(--f-display)" }}>
-                {stock.sym} · Dividend History
+                {showStock ? stock.sym : `${stock.sym} · Dividend History`}
               </div>
               <VendorTag v={["fmp", "polygon"]} />
             </div>
@@ -171,6 +173,12 @@ function DividendDrawer({ stock, onClose }: { stock: DivStock; onClose: () => vo
           <button className="closebtn" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-b">
+          {showStock && (
+            <div style={{ marginBottom: 14 }}>
+              <ChartCard sym={stock.sym} px={0} />
+              <div className="ai-sec" style={{ marginTop: 16 }}><div className="h">Dividends</div></div>
+            </div>
+          )}
           {!dh ? (
             <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Loading…</div>
           ) : !resolveDividends({ dh }).isPayer ? (
@@ -507,7 +515,7 @@ export function MacroScreen() {
 
       {/* ── Dividend drawer from high-beta row click ── */}
       {vixSel && (
-        <DividendDrawer stock={vixSel} onClose={() => setVixSel(null)} />
+        <DividendDrawer stock={vixSel} showStock onClose={() => setVixSel(null)} />
       )}
 
       {/* ── High-beta hover popup (fixed, smart above/below) ── */}
