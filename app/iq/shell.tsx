@@ -616,7 +616,7 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
     <>
       <div className="scrim open" onClick={onClose} />
       <div className="side-drawer index-side-drawer">
-        <div className="drawer-h">
+        <div className="drawer-h" style={{ flexWrap: "wrap" }}>
           <div className="sd-logo" style={{ background: "linear-gradient(135deg,#14181B,#0E1013)", color: "var(--brand)" }}>
             {x.label[0]}
           </div>
@@ -628,17 +628,18 @@ function IndexDrawerInner({ x, sectorsLive, loading, phase, onClose }: {
               {sub} · {QUOTE_DELAY_LABEL}
             </div>
           </div>
-          <button className="closebtn" onClick={onClose}>✕</button>
-        </div>
-        <div className="drawer-b">
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
-            <div className="mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-hi)" }}>
+          {/* The price beside the name (it had a line of its own under the header). */}
+          <div className="idx-head-px">
+            <div className="mono" style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-hi)", lineHeight: 1.25 }}>
               {fmt(x.value, dec)}
             </div>
-            <div className={c} style={{ fontWeight: 600 }}>
+            <div className={c} style={{ fontSize: ".78rem", fontWeight: 600 }}>
               {arr(x.change)} {x.change >= 0 ? "+" : ""}{fmt(Math.abs(dollar), dec)} ({sign(x.change)})
             </div>
           </div>
+          <button className="closebtn" onClick={onClose}>✕</button>
+        </div>
+        <div className="drawer-b">
 
           <div className="metric-grid">
             <div className="m"><div className="k">{priorSession ? "Session open" : "Open"}</div><div className="v">{fmt(x.open, dec)}</div></div>
