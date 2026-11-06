@@ -1963,6 +1963,18 @@ export function StockIntelligenceScreen() {
         .iq-root[data-theme="light"] .si-screen input::placeholder {
           color: #94a3b8 !important;
         }
+        /* ── Phone (≤760px): the stat columns stack under the name instead of crushing to one character a line ── */
+        @media (max-width: 760px) {
+          .si-main { padding: 14px 12px 100px !important; }
+          .si-hero { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .si-hero-id { grid-column: 1 / -1; min-width: 0 !important; border-right: none !important; border-bottom: 1px solid var(--si-border, #1c2733); }
+          .si-hero-stat { border-right: none !important; border-bottom: 1px solid var(--si-border, #1c2733); padding: 12px 14px !important; }
+          .si-hero-stat:last-child { grid-column: 1 / -1; border-bottom: none; }
+          .si-ph-head { height: auto !important; flex-wrap: wrap; padding: 10px 12px !important; row-gap: 8px; }
+          .si-ph-head > div { margin-left: 0 !important; flex-wrap: wrap; }
+          .si-cat-row { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important; padding: 12px 14px !important; }
+          .si-cat-imp { text-align: left !important; display: flex; gap: 10px; align-items: baseline; }
+        }
       `}</style>
 
       {/* ====================================================
@@ -2284,7 +2296,7 @@ export function StockIntelligenceScreen() {
       </div>
 
       {/* Main Container */}
-      <div style={{ maxWidth: 1480, margin: "0 auto", padding: "24px 24px 120px 24px" }}>
+      <div className="si-main" style={{ maxWidth: 1480, margin: "0 auto", padding: "24px 24px 120px 24px" }}>
         {/* ====================================================
             TAB 1: OVERVIEW (Issue 1 & 7 Complete Implementation)
             ==================================================== */}
@@ -2292,6 +2304,7 @@ export function StockIntelligenceScreen() {
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             {/* Header Identity & Key Stats Grid */}
             <div
+              className="si-hero"
               style={{
                 position: "relative",
                 border: "1px solid var(--si-border, #1c2733)",
@@ -2307,7 +2320,7 @@ export function StockIntelligenceScreen() {
               <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
 
               {/* Identity Box with Logo */}
-              <div style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260 }}>
+              <div className="si-hero-id" style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <StockLogo sym={stock.t} size={40} />
                   <div>
@@ -2333,6 +2346,7 @@ export function StockIntelligenceScreen() {
               {statsRow.map((st, i) => (
                 <div
                   key={st.k}
+                  className="si-hero-stat"
                   style={{
                     padding: "16px 18px",
                     borderRight:
@@ -2376,7 +2390,7 @@ export function StockIntelligenceScreen() {
 
             {/* Price History Chart Card with Interactive Crosshair & Detailed X-Axis */}
             <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
-              <div style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+              <div className="si-ph-head" style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                 <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                   PRICE HISTORY
                 </span>
@@ -4188,6 +4202,7 @@ export function StockIntelligenceScreen() {
                 {cats.map((cItem, i) => (
                   <div
                     key={pageStart + i}
+                    className="si-cat-row"
                     style={{
                       border: `1px solid ${cItem.bd}`,
                       background: "var(--si-card, rgba(12, 17, 24, 0.9))",
@@ -4206,8 +4221,8 @@ export function StockIntelligenceScreen() {
                         {cItem.when}
                       </div>
                     </div>
-                    <div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                         <span
                           style={{
                             fontFamily: "'JetBrains Mono', monospace",
@@ -4243,7 +4258,7 @@ export function StockIntelligenceScreen() {
                         {cItem.note}
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
+                    <div className="si-cat-imp" style={{ textAlign: "right" }}>
                       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: cItem.impCol }}>
                         {cItem.imp} IMPACT
                       </div>
