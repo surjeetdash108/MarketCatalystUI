@@ -118,6 +118,10 @@ function EventContextBlocks({ ev, compact, metricsOnly }: { ev: MajorSixMonthEve
   );
 }
 
+/** Height of every "Why it moved" catalyst card, so the row is even; the full text is in its pop-up. */
+const SI_EVENT_CARD_H = 196;
+const clampLines = (n: number): React.CSSProperties => ({ display: "-webkit-box", WebkitLineClamp: n, WebkitBoxOrient: "vertical", overflow: "hidden" });
+
 function SixMonthAreaChart({
   ticker,
   stock,
@@ -130,6 +134,8 @@ function SixMonthAreaChart({
   events: MajorSixMonthEvent[];
 }) {
   const [hoveredEventId, setHoveredEventId] = useState<number | null>(null);
+  // The card whose full text is open in its pop-up: on hover, or pinned by a click / tap.
+  const [openCard, setOpenCard] = useState<{ num: number; pinned: boolean } | null>(null);
 
   // Real 6-month daily bars
   const chartBars = useMemo(() => {
@@ -384,16 +390,25 @@ function SixMonthAreaChart({
         )}
       </div>
 
-      {/* 5 Major Event Cards Below */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10, marginTop: 18, alignItems: "start" }}>
+      {/* 5 Major Event Cards Below — all one size (SI_EVENT_CARD_H); the full text opens in a pop-up on hover or click */}
+      <div className="si-event-cards" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10, marginTop: 18, alignItems: "stretch" }}>
         {mappedEvents.map((ev) => {
           const isHover = hoveredEventId === ev.num;
+          const isOpen = openCard?.num === ev.num;
           return (
+            <div key={ev.num} style={{ position: "relative" }}>
             <div
-              key={ev.num}
-              onMouseEnter={() => setHoveredEventId(ev.num)}
-              onMouseLeave={() => setHoveredEventId(null)}
+              role="button"
+              tabIndex={0}
+              aria-expanded={isOpen}
+              onMouseEnter={() => { setHoveredEventId(ev.num); setOpenCard((o) => (o?.pinned ? o : { num: ev.num, pinned: false })); }}
+              onMouseLeave={() => { setHoveredEventId(null); setOpenCard((o) => (o?.pinned ? o : null)); }}
+              onClick={() => setOpenCard((o) => (o?.num === ev.num && o.pinned ? null : { num: ev.num, pinned: true }))}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenCard((o) => (o?.num === ev.num && o.pinned ? null : { num: ev.num, pinned: true })); } if (e.key === "Escape") setOpenCard(null); }}
               style={{
+                height: SI_EVENT_CARD_H,
+                overflow: "hidden",
+                boxSizing: "border-box",
                 border: isHover ? "1px solid var(--si-accent-soft, #7fa8d0)" : "1px solid var(--si-border, #1c2733)",
                 borderTop: `2px solid ${isHover ? "var(--si-accent, #5980a6)" : "var(--si-accent-soft, #7fa8d0)"}`,
                 background: isHover ? "var(--si-accent-bg, rgba(89,128,166,0.12))" : "var(--si-card-sec, rgba(12,17,24,0.6))",
@@ -416,13 +431,42 @@ function SixMonthAreaChart({
               <div style={{ display: "inline-block", alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 6px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "var(--si-accent-light, #93a1af)", borderRadius: 2 }}>
                 {ev.category.toUpperCase()}
               </div>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.35 }}>
+              <div style={{ ...clampLines(2), fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.35 }}>
                 {ev.label}
               </div>
-              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.35, marginTop: 2 }}>
+              <div style={{ ...clampLines(3), fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-hi, #e8eef4)", opacity: 0.85, lineHeight: 1.35, marginTop: 2 }}>
                 {ev.details}
               </div>
-              <EventContextBlocks ev={ev} />
+              <span style={{ marginTop: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-accent-soft, #7fa8d0)" }}>
+                {isOpen ? "▲ DETAILS" : "▼ HOVER OR TAP FOR DETAILS"}
+              </span>
+            </div>
+            {isOpen && (
+              <div
+                className="si-event-pop"
+                role="dialog"
+                aria-label={`Catalyst #${ev.num}`}
+                onMouseEnter={() => setOpenCard((o) => (o ? o : { num: ev.num, pinned: false }))}
+                onMouseLeave={() => setOpenCard((o) => (o?.pinned ? o : null))}
+                style={{
+                  position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 40,
+                  width: "max(100%, min(420px, 92vw))", maxHeight: 420, overflowY: "auto", boxSizing: "border-box",
+                  background: "var(--si-card-solid, #0c1118)", border: "1px solid var(--si-accent-soft, #7fa8d0)",
+                  boxShadow: "var(--si-shadow, 0 8px 24px rgba(0,0,0,0.4))", padding: "12px 14px", borderRadius: 4,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-accent-soft, #a9c6e3)" }}>#{ev.num} · {ev.date}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: ev.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>{ev.mv >= 0 ? "+" : ""}{ev.mv.toFixed(2)}%</span>
+                  {openCard?.pinned && (
+                    <button type="button" aria-label="Close" onClick={() => setOpenCard(null)} style={{ marginLeft: 6, background: "none", border: "1px solid var(--si-border-sec, #2a3a4a)", color: "var(--si-text-hi, #e8eef4)", width: 24, height: 24, cursor: "pointer" }}>✕</button>
+                  )}
+                </div>
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.4, marginTop: 6 }}>{ev.label}</div>
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.5, marginTop: 6 }}>{ev.details}</div>
+                <EventContextBlocks ev={ev} />
+              </div>
+            )}
             </div>
           );
         })}
@@ -3168,7 +3212,7 @@ export function StockIntelligenceScreen() {
                   {stockDetail.invalid.map((iv, i) => (
                     <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
                       <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[0]}</span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{iv[1]}</span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[1]}</span>
                     </div>
                   ))}
                 </div>
