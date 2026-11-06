@@ -31,6 +31,7 @@ const PIN_MIN = 1024;
  * without covering MC's or SI's search).
  */
 const PIN_CSS = `
+.mod-switch-pin [role="group"]::-webkit-scrollbar{display:none}
 @media (min-width: ${PIN_MIN}px) {
   .si-main-scroll .mod-switch-pin,
   .sl-main-scroll .mod-switch-pin,
@@ -61,7 +62,11 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
   useLayoutEffect(() => {
     const update = () => {
       const el = refs.current[activeModule];
-      if (el) setBox({ left: el.offsetLeft, width: el.offsetWidth });
+      if (!el) return;
+      setBox({ left: el.offsetLeft, width: el.offsetWidth });
+      // On a phone narrower than the four labels the pill scrolls: keep the active one in view.
+      const g = el.parentElement;
+      if (g && g.scrollWidth > g.clientWidth) g.scrollLeft = el.offsetLeft - (g.clientWidth - el.offsetWidth) / 2;
     };
     update();
     window.addEventListener("resize", update);
@@ -96,6 +101,9 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
             alignItems: "center",
             boxShadow: "var(--si-shadow, 0 4px 16px rgba(0,0,0,0.5))",
             userSelect: "none",
+            // Narrower than the four labels (a phone): scroll sideways rather than clip "Money Flow".
+            overflowX: "auto",
+            scrollbarWidth: "none",
           }}
         >
           {box && (
