@@ -131,6 +131,13 @@ describe("Money Flow view helpers", () => {
     assert.strictEqual(sectorView(allUp).topOutflow.length, 0);
   });
 
+  it("a sector's % move is green when up, red when down, grey when flat — whichever box it sits in", () => {
+    // An inflow sector whose stocks fell (net buying on a down day) shows its % in red, and vice versa.
+    const v = sectorView([[900, -0.9], [500, 0.5], [300, 0], [-200, 2.2], [-700, -8.9]].map(([f, p], i) => ({ ...board.sectors[0], name: `P${i}`, netFlow: f, avgPct: p })));
+    assert.deepEqual(v.topInflow.map((s) => s.pctColor), ["var(--th-f0565a)", "var(--th-3ddc84)", "var(--th-7a8481)"]);
+    assert.deepEqual(v.topOutflow.map((s) => s.pctColor), ["var(--th-f0565a)", "var(--th-3ddc84)"]);
+  });
+
   it("pulls the top 3 each side: biggest inflows first, biggest outflows first", () => {
     assert.strictEqual(TOP_SECTORS, 3);
     const flows = [900, 500, 300, 100, -50, -200, -700, -1000];

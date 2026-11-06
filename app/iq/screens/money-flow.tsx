@@ -1185,7 +1185,7 @@ export function MoneyFlowScreen() {
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10,
-                              color: "var(--th-aab3b0)",
+                              color: sc.pctColor,
                             }}
                           >
                             {sc.avgPctFormatted}
@@ -1283,7 +1283,7 @@ export function MoneyFlowScreen() {
                             style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10,
-                              color: "var(--th-aab3b0)",
+                              color: sc.pctColor,
                             }}
                           >
                             {sc.avgPctFormatted}

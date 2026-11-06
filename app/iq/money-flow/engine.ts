@@ -635,6 +635,8 @@ export interface SectorFlowItem {
   flowFormatted: string;
   avgPct: number;
   avgPctFormatted: string;
+  /** The % move's colour: green up, red down, grey flat (independent of the flow's direction). */
+  pctColor: string;
   buyPct: number | null;
   barWidthPct: string;
   color: string;
@@ -709,6 +711,7 @@ export function sectorView(sectors: BoardSector[]): {
       flowFormatted: formatCompactDollars(s.netFlow),
       avgPct: s.avgPct,
       avgPctFormatted: formatPct(s.avgPct),
+      pctColor: s.avgPct > 0 ? "var(--th-3ddc84)" : s.avgPct < 0 ? "var(--th-f0565a)" : "var(--th-7a8481)",
       buyPct: s.buyPct,
       barWidthPct: `${Math.max(4, Math.min(100, (Math.abs(s.netFlow) / maxAbs) * 100))}%`,
       color: s.netFlow >= 0 ? "var(--th-3ddc84)" : "var(--th-f0565a)",
