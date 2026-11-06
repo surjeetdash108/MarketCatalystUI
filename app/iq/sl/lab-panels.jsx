@@ -127,7 +127,7 @@ export function ResultsPanel({ r, title = "BACKTEST RESULTS", boxed = false }) {
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", color: C.mute }}>{title}</span>
         <span style={{ fontFamily: "'Barlow Condensed',Manrope,sans-serif", fontWeight: 600, fontSize: 20, color: C.hi }}>
-          {blinkParts(r.head || "", r.busy).map((p, i) => (p.dots ? <span key={i} className="sl-blink">{p.t}</span> : <Fragment key={i}>{p.t}</Fragment>))}
+          {blinkParts(r.head || "", r.busy).map((p, i) => (p.dots ? <span key={i} className="sl-dots" aria-label="…"><i>.</i><i>.</i><i>.</i></span> : <Fragment key={i}>{p.t}</Fragment>))}
         </span>
         {r.meta ? <span style={{ fontSize: 11.5, color: "#5f6966", marginLeft: "auto" }}>{r.meta}</span> : null}
       </div>

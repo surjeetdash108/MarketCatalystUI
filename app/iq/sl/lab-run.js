@@ -291,7 +291,19 @@ export function acceptRow(state, runId, row) {
   return next;
 }
 
-/** Status text split so each "…" can blink while the run is busy (the panel animates the dots parts). */
+/**
+ * The busy "…" counts up: ".", "..", "...", then again. The panel draws it as
+ * three dots; the first always shows, the second joins a third of the way
+ * through the cycle and the third two thirds (steps: no fading in between).
+ */
+export const SCAN_DOTS_CSS =
+  ".sl-dots i{font-style:normal}" +
+  ".sl-dots i:nth-child(2){animation:slDot2 1.2s steps(1,end) infinite}" +
+  ".sl-dots i:nth-child(3){animation:slDot3 1.2s steps(1,end) infinite}" +
+  "@keyframes slDot2{0%{opacity:0}33.33%{opacity:1}}" +
+  "@keyframes slDot3{0%{opacity:0}66.67%{opacity:1}}";
+
+/** Status text split so each "…" can count up while the run is busy (the panel animates the dots parts). */
 export function blinkParts(text, busy) {
   if (!busy) return [{ t: text, dots: false }];
   return String(text).split(/(…)/).filter(Boolean).map((t) => ({ t, dots: t === "…" }));
