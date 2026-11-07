@@ -3772,7 +3772,7 @@ export function StockIntelligenceScreen() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    {stock.t} · LIVE TECHNICAL CHART
+                    {stock.t}
                   </span>
                   <span style={{ fontSize: 12, color: "var(--si-text-mid, #8b9bb0)", letterSpacing: "0.06em" }}>
                     {stock.name || liveCompany?.name}

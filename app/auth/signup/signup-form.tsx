@@ -40,6 +40,7 @@ const label: React.CSSProperties = {
 
 export function SignupForm() {
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [profile, setProfile] = useState<InvestorProfile>(emptyInvestorProfile);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [legalModal, setLegalModal] = useState<"terms" | "privacy" | null>(null);
@@ -78,6 +79,10 @@ export function SignupForm() {
     try {
       if (!acceptedTerms) {
         const msg = "Please agree to our Terms and conditions and Privacy policy to create an account.";
+        setError(msg); showError(msg); return;
+      }
+      if (password !== confirmPassword) {
+        const msg = "Passwords do not match. Please re-enter your password.";
         setError(msg); showError(msg); return;
       }
       // Temporarily disabled while preferred asset classes input is commented out
@@ -143,15 +148,15 @@ export function SignupForm() {
     }
   }
 
-  const pwStyle: React.CSSProperties = {
+  const pwInputStyle = (key: string): React.CSSProperties => ({
     width: "100%", height: 42,
     background: "var(--surface-0)",
-    border: `1px solid ${focused === "pw" ? "var(--brand)" : "var(--border)"}`,
-    boxShadow: focused === "pw" ? "0 0 0 3px var(--brand-dim)" : "none",
+    border: `1px solid ${focused === key ? "var(--brand)" : "var(--border)"}`,
+    boxShadow: focused === key ? "0 0 0 3px var(--brand-dim)" : "none",
     borderRadius: "var(--r)", padding: "0 14px",
     fontSize: ".88rem", color: "var(--text-hi)",
     fontFamily: "var(--f-body)", outline: "none", transition: "border-color .14s",
-  };
+  });
 
   return (
     <div>
@@ -194,7 +199,7 @@ export function SignupForm() {
       <div style={divider}><span style={divLine} />or use email<span style={divLine} /></div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <ProfileFields profile={profile} onChange={handleProfileChange} />
+        <ProfileFields profile={profile} onChange={handleProfileChange} hideContactDetails />
 
         <div>
           <label style={label} htmlFor="password">Password</label>
@@ -206,7 +211,21 @@ export function SignupForm() {
             onChange={e => setPassword(e.target.value)}
             onFocus={() => setFocused("pw")}
             onBlur={() => setFocused("")}
-            style={pwStyle}
+            style={pwInputStyle("pw")}
+          />
+        </div>
+
+        <div>
+          <label style={label} htmlFor="confirm-password">Confirm password</label>
+          <input
+            id="confirm-password" type="password" required minLength={6}
+            placeholder="Re-enter your password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            onFocus={() => setFocused("pw2")}
+            onBlur={() => setFocused("")}
+            style={pwInputStyle("pw2")}
           />
         </div>
 
