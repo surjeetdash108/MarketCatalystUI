@@ -71,6 +71,8 @@ type ProfileFieldsProps = {
   profile: InvestorProfile;
   onChange: (field: keyof InvestorProfile, value: string | string[]) => void;
   emailReadOnly?: boolean;
+  /** Hide mobile number and age (e.g. on the signup form, which only asks name + email). */
+  hideContactDetails?: boolean;
 };
 
 function TextField({
@@ -138,6 +140,7 @@ export function ProfileFields({
   profile,
   onChange,
   emailReadOnly = false,
+  hideContactDetails = false,
 }: Readonly<ProfileFieldsProps>) {
   function toggleAssetClass(assetClass: string) {
     const next = profile.preferredAssetClasses.includes(assetClass)
@@ -207,8 +210,12 @@ export function ProfileFields({
  
       <TextField id="profile-name" label="Name" value={profile.name} onChange={v => onChange("name", v)} />
       <TextField id="profile-email" label="Email" type="email" value={profile.email} readOnly={emailReadOnly} onChange={v => onChange("email", v)} />
-      <TextField id="profile-mobile" label="Mobile number" type="tel" value={profile.mobileNumber} onChange={v => onChange("mobileNumber", v)} />
-      <TextField id="profile-age" label="Age" type="number" value={profile.age} onChange={v => onChange("age", v)} />
+      {!hideContactDetails && (
+        <>
+          <TextField id="profile-mobile" label="Mobile number" type="tel" value={profile.mobileNumber} onChange={v => onChange("mobileNumber", v)} />
+          <TextField id="profile-age" label="Age" type="number" value={profile.age} onChange={v => onChange("age", v)} />
+        </>
+      )}
       {/* <SelectField id="profile-income" label="Income range" options={incomeRanges} value={profile.incomeRange} onChange={v => onChange("incomeRange", v)} />
       <SelectField id="profile-experience" label="Investment experience" options={investmentExperienceOptions} value={profile.investmentExperience} onChange={v => onChange("investmentExperience", v)} />
       <SelectField id="profile-goals" label="Investment goals" options={investmentGoalOptions} value={profile.investmentGoals} onChange={v => onChange("investmentGoals", v)} />
