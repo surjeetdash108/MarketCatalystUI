@@ -293,24 +293,6 @@ export function CatalystHero({ ticker, isUp, catalystDoc, newsList }: {
         <span>
           Updated: {catalystDoc?.updatedAt ? `${new Date(catalystDoc.updatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET` : "Just now"}
         </span>
-
-        {catalystDoc?.newsUrl && (
-          <a
-            href={catalystDoc.newsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              color: "var(--brand, #4ADE80)",
-              textDecoration: "none",
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            Read Source Article ↗
-          </a>
-        )}
       </div>
     </div>
   );

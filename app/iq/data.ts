@@ -16,6 +16,8 @@ export interface PulseItem {
 }
 export interface Earning {
   ticker: string; name: string; session: string; marketCap: string; sector: string;
+  /** Reporting date (YYYY-MM-DD) when the feed supplies it — used to match the right 8-K. */
+  date?: string;
   // nullable: the live earnings feed supplies estimate/actual only, and not
   // for every row — a 0 default would read as a real forecast of zero.
   epsEstimate: number | null; epsActual: number | null;

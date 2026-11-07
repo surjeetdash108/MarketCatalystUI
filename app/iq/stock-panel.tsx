@@ -261,7 +261,6 @@ export function StockChart({
       </>}
       toolbarEnd={<>
         <VendorTag v={["fmp", "polygon"]} />
-        {realBars && <span className="cc-chip live">live</span>}
         {expandable && (
           <ExpandBtn
             title={`${sym} · Price Chart`}

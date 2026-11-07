@@ -1280,11 +1280,11 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
       </td>
       {showDate && <td className="r ecal-num" style={{ whiteSpace: "nowrap", color: "var(--text-dim-solid)" }}>{it.date ? it.date.slice(5) : "—"}</td>}
       <td className={`r ecal-num ${fmtUpDn(epsPct)}`}>{fmtPctSigned(epsPct, 1)}</td>
-      <td className={`r ecal-num ${fmtUpDn(salesPct)}`}>{fmtPctSigned(salesPct, 1)}</td>
       <td className={`r ecal-num ${isUp == null ? "" : isUp ? "up" : "dn"}`}>{epsSurpStr}</td>
-      <td className={`r ecal-num ${fmtUpDn(salesSurp)}`}>{fmtPctSigned(salesSurp, 1)}</td>
       <td className="r ecal-num">{it.epsA != null ? `$${it.epsA.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{it.epsE != null ? `$${it.epsE.toFixed(2)}` : "—"}</td>
+      <td className={`r ecal-num ${fmtUpDn(salesPct)}`}>{fmtPctSigned(salesPct, 1)}</td>
+      <td className={`r ecal-num ${fmtUpDn(salesSurp)}`}>{fmtPctSigned(salesSurp, 1)}</td>
       <td className="r ecal-num">{fmtRev(it.revA)}</td>
       <td className="r ecal-num">{fmtRev(it.revE)}</td>
       {/* Today's pre-market move. The vendor keeps this populated through the
@@ -1432,7 +1432,7 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
     : items;
   const shown = expanded ? ordered : ordered.slice(0, GLANCE_MAX);
   const canExpand = items.length > GLANCE_MAX;
-  // Company, EPS %, Sales %, EPS Surp, Sales Surp, Actual, Consensus, Actual
+  // Company, EPS %, EPS Surp, Actual, Consensus, Sales %, Sales Surp, Actual
   // Rev, Cons. Rev, Pre-market, Post-market, Guidance — plus Date when it is
   // shown. Kept next to the header it counts so the two move together.
   const colCount = 12 + (showDate ? 1 : 0);
@@ -1458,11 +1458,11 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
               {sortTh("company", "Company", false)}
               {showDate && sortTh("date", "Date")}
               {sortTh("epsPct", "EPS %")}
-              {sortTh("salesPct", "Sales %")}
               {sortTh("epsSurp", "EPS Surp")}
-              {sortTh("salesSurp", "Sales Surp")}
               {sortTh("actual", "Actual")}
               {sortTh("consensus", "Consensus")}
+              {sortTh("salesPct", "Sales %")}
+              {sortTh("salesSurp", "Sales Surp")}
               {sortTh("actualRev", "Actual Rev")}
               {sortTh("consRev", "Cons. Rev")}
               <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-market</th>

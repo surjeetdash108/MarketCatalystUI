@@ -479,6 +479,13 @@
   .topbar-clock {
     display: none;
   }
+  /* The clock's margin-left:auto is what parks the icon cluster on the right —
+     with the clock hidden here, nothing was absorbing the free space and the
+     theme / ✦ / bell / avatar bunched up beside the logo. The last item on the
+     left (hamburger + logo) takes it instead. */
+  .mob-brand {
+    margin-right: auto;
+  }
 }
 
 .logo {

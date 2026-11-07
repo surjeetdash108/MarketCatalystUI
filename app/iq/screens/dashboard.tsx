@@ -174,6 +174,7 @@ function mergeEarningsData(live: LiveEarningsDoc[]): Earning[] {
     .sort((a, b) => b.date.localeCompare(a.date))
     .map(l => ({
       ticker: l.ticker, name: l.companyName ?? l.ticker, session: "", marketCap: "", sector: "",
+      date: l.date,
       epsEstimate: l.epsEstimate, epsActual: l.epsActual,
       revenueEstimate: null, revenueActual: l.revenueActual ?? null,
       guidanceStatus: null, priceReaction: null, impliedMove: null,
@@ -192,6 +193,26 @@ function pctBorderColor(pct: number | null | undefined): string {
   const t = Math.min(1, Math.abs(pct) / 3);
   const ch = (i: number) => Math.round(neutral[i] + (target[i] - neutral[i]) * t);
   return `rgb(${ch(0)},${ch(1)},${ch(2)})`;
+}
+
+/** An 8-K can be filed a day or two off the calendar's reporting date. */
+const ANN_MATCH_DAYS = 3;
+const dayNum = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86_400_000;
+
+/** The announcement for THIS report: the one nearest `reportDate` within
+ *  ±ANN_MATCH_DAYS, so last quarter's session/guidance is never shown against
+ *  this quarter's EPS. Without a report date, falls back to the newest filing. */
+function pickAnnouncement(list: EarningsAnnouncementDoc[], reportDate?: string): EarningsAnnouncementDoc | undefined {
+  if (list.length === 0) return undefined;
+  if (!reportDate) return [...list].sort((a, b) => b.announceDate.localeCompare(a.announceDate))[0];
+  const target = dayNum(reportDate);
+  let best: EarningsAnnouncementDoc | undefined;
+  let bestGap = Infinity;
+  for (const a of list) {
+    const gap = Math.abs(dayNum(a.announceDate) - target);
+    if (gap <= ANN_MATCH_DAYS && gap < bestGap) { best = a; bestGap = gap; }
+  }
+  return best;
 }
 
 function DashPopContent({
@@ -215,26 +236,32 @@ function DashPopContent({
   const newsResolved = bulkNews != null || sym in onDemandNews;
   const latestNews = bulkNews ?? onDemandNews[sym] ?? null;
   const mv  = movers.find(x => x.ticker ===sym);
-  const er  = earnings.find(x => x.ticker ===sym);
+  // `earnings` is every report, newest date first — including future ones — so
+  // a bare find() lands on the NEXT quarter's row. Prefer the report that
+  // happened today (what the Earnings Today list row shows), then the newest.
+  const todayEt = etTodayIso();
+  const er  = earnings.find(x => x.ticker === sym && x.date === todayEt) ?? earnings.find(x => x.ticker === sym);
   const an  = consensus.find(x => x.ticker === sym);
   const w   = watchlist.find(x => x.ticker ===sym);
   const pf  = portfolio.find(x => x.ticker ===sym);
   const scr = companies.find(x => x.ticker ===sym);
   const ins = insiderMini.find(x => x.s === sym);
-  const ann = announcements
-    .filter(a => a.ticker === sym)
-    .sort((a, b) => b.announceDate.localeCompare(a.announceDate))[0];
+  const ann = pickAnnouncement(announcements.filter(a => a.ticker === sym), er?.date);
   const name = mv?.name ?? er?.name ?? w?.name ?? scr?.name ?? sym;
 
   let body: React.ReactNode;
 
   if (block === "earnings") {
     if (er) {
+      // No 8-K for THIS report on record yet (the filings sync runs a few times a
+      // day, so a company that reported today often has none until later). Say
+      // so, rather than N/A — which reads like missing data, or an old filing.
+      const awaiting8k = <NotAvailable label="Awaiting 8-K" title="This report's SEC 8-K filing hasn't been recorded yet" />;
       body = <>
         <DpRow label="EPS est → act">
           {er.epsEstimate != null ? `$${er.epsEstimate}` : "—"}{er.epsActual != null && er.epsEstimate != null && <> → ${er.epsActual} <span className={er.epsActual >= er.epsEstimate ? "up" : "down"}>({er.epsActual >= er.epsEstimate ? "beat" : "miss"})</span></>}
         </DpRow>
-        <DpRow label="Session">{ann?.session ?? <NotAvailable />}</DpRow>
+        <DpRow label="Session">{!ann ? awaiting8k : (ann.session ?? <NotAvailable />)}</DpRow>
         <DpRow label="Guidance">
           {ann?.guidanceDirection ? (
             <span className={ann.guidanceDirection === "raised" ? "up" : ann.guidanceDirection === "cut" ? "down" : "dim"}>
@@ -244,13 +271,24 @@ function DashPopContent({
             <span>{ann.guidanceRange}</span>
           ) : ann?.guidanceMentioned ? (
             <span className="dim">Guidance provided</span>
+          ) : ann ? (
+            // The filing is on file but its release gave no guidance — that is
+            // an answer ("none given"), not missing data.
+            <NotAvailable label="Not provided" title="The earnings release did not include guidance" />
           ) : (
-            <NotAvailable />
+            awaiting8k
           )}
         </DpRow>
-        <DpRow label="Reaction">{ann?.reactionPct != null ? <span className={cls(ann.reactionPct)}>{sign(ann.reactionPct)}</span> : <NotAvailable />}</DpRow>
-        <div className="dp-note">Session, guidance &amp; price reaction from the SEC-EDGAR 8-K (item 2.02) announcement.</div>
-      </>;
+        <DpRow label="Reaction">
+          {!ann
+            ? awaiting8k
+            : ann.reactionPct != null
+              ? <span className={cls(ann.reactionPct)}>{sign(ann.reactionPct)}</span>
+              : ann.session === "AMC"
+                ? <NotAvailable label="Pending" title="After-close report — the reaction is the next session's move" />
+                : <NotAvailable />}
+        </DpRow>
+        <div className="dp-note">Session, guidance &amp; price reaction from the SEC-EDGAR 8-K (item 2.02) announcement.</div>      </>;
     } else {
       body = <div className="dp-note">On this week&apos;s earnings calendar.</div>;
     }
@@ -875,7 +913,7 @@ export function DashboardScreen() {
                         alignItems: "center",
                         gap: 8,
                       }}
-                        onClick={() => openEarnings(e.ticker)}
+                        onClick={() => openEarnings(e.ticker, earningsToday.slice(0, 10).map(x => x.ticker))}
                         {...mr(e.ticker, "earnings")}
                       >
                         <StockLogo sym={e.ticker} size={26} />
@@ -1123,7 +1161,7 @@ export function DashboardScreen() {
         <div className="col-4">
           <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
             <div className="card-h">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Screener · Leaders &amp; Laggards</h3><VendorTag v={["fmp", "polygon"]} /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}><h3>Leaders &amp; Laggards</h3><VendorTag v={["fmp", "polygon"]} /></div>
               <Link className="link" href="/menu/screener">View all →</Link>
             </div>
             <div style={{ display: "flex", gap: 4, padding: "6px 13px 0" }}>
@@ -1633,7 +1671,7 @@ export function DashboardScreen() {
           onMouseLeave={hidePop}
           onClick={() => {
             setPop(null);
-            if (pop.block === "earnings") openEarnings(pop.sym);
+            if (pop.block === "earnings") openEarnings(pop.sym, earningsToday.slice(0, 10).map(x => x.ticker));
             else if (pop.block === "movers") openMoverModal(pop.sym);
             else if (pop.block === "searched") openStockDetail(pop.sym, searchedDeduped.map(x => x.ticker));
             else openStock(pop.sym);
