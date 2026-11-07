@@ -659,12 +659,22 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
     const d = computed.get(s.id);
     if (d?.kind === "bb") { line(d.u, s.col, yOf, 1); line(d.lo, s.col, yOf, 1); line(d.mid, s.col, yOf, 1, [4, 4]); }
     else if (d?.kind === "line" && s.k === "rsi") {
-      ctx.setLineDash([3, 4]); ctx.strokeStyle = pal.band;
-      for (const v of [30, 70]) { ctx.beginPath(); ctx.moveTo(g.l, rsiY(v)); ctx.lineTo(g.r, rsiY(v)); ctx.stroke(); }
-      ctx.setLineDash([]);
-      ctx.fillStyle = pal.text; ctx.textAlign = "left";
-      for (const v of [30, 70]) ctx.fillText(String(v), g.l + 5, rsiY(v) - 8);
       line(d.v, s.col, rsiY, 1.5);
+      // Tag the line's right-hand end with its current value ("RSI-38") instead
+      // of the 30/70 guide lines — the number is what a reader wants.
+      let li = i1;
+      while (li >= i0 && !(at(d.v, li) != null && isFinite(at(d.v, li) as number))) li--;
+      if (li >= i0) {
+        const v = at(d.v, li) as number;
+        const lx = xOf(li), ly = rsiY(v);
+        const text = `RSI-${Math.round(v)}`;
+        ctx.save();
+        ctx.font = `bold 11px ${pal.font}`; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+        const ty = ly - 12 < g.top + 6 ? ly + 12 : ly - 12; // flip below the line near the top edge
+        ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.strokeStyle = pal.bg; ctx.strokeText(text, lx - 6, ty); // halo keeps it legible over candles
+        ctx.fillStyle = s.col; ctx.fillText(text, lx - 6, ty);
+        ctx.restore();
+      }
     }
     else if (d?.kind === "line") line(d.v, s.col, yOf, 1.6, lineDash(s.k));
   }
