@@ -33,6 +33,15 @@ const TREND_COLOR: Record<Trend, string> = {
 const ACTION_CLS: Record<ActionKey, string> = { act: "up", alert: "vio", watch: "dim", avoid: "down" };
 const DAY = 86_400_000;
 
+/** Colours explicitly signed percentages in a screen's "why" sentence: +N% green, -N% red. */
+const SIGNED_PCT = /((?<![\w.])[+\-−]\d[\d,]*(?:\.\d+)?%)/g;
+const colorSigned = (text: string) =>
+  text.split(SIGNED_PCT).map((part, i) =>
+    i % 2 === 1
+      ? <span key={i} className={part.startsWith("+") ? "up" : "down"}>{part}</span>
+      : part,
+  );
+
 const fmtDay = (iso: string | null | undefined): string | null => {
   if (!iso) return null;
   const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
@@ -374,7 +383,7 @@ export function AlphaSignals() {
                   </div>
                   <div className="alp-on">
                     <span className="k">On {screen.label}</span>
-                    <span className="w">{curRow.why}{screen.model && <small>Based on MarketCatalyst Emergence components</small>}</span>
+                    <span className="w">{colorSigned(curRow.why)}{screen.model && <small>Based on MarketCatalyst Emergence components</small>}</span>
                   </div>
                   <p className="alp-sum">{curSig.why.map(w => w.title).join(", ")}. {curSig.action.why}</p>
                   <div>
@@ -391,7 +400,7 @@ export function AlphaSignals() {
                 <div className="alp-unscored">
                   <span className="ring">—</span>
                   <b>Emergence Score pending</b>
-                  <p>{curRow.why}</p>
+                  <p>{colorSigned(curRow.why)}</p>
                   <small>{curRow.ticker} doesn&apos;t have enough signal inputs yet to be scored — at least two of the five components need data.</small>
                 </div>
               )}

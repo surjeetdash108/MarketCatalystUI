@@ -21,6 +21,8 @@ export interface StockItem {
 
 export interface UpcomingEvent {
   date: string;
+  /** Event day as YYYY-MM-DD — what the timeline sorts and windows on (`date` is display text). Absent for "TBD". */
+  iso?: string;
   days: string;
   n: string;
   txt: string;

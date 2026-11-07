@@ -121,6 +121,17 @@ function EventContextBlocks({ ev, compact, metricsOnly }: { ev: MajorSixMonthEve
 
 /** Height of every "Why it moved" catalyst card, so the row is even; the full text is in its pop-up. */
 const SI_EVENT_CARD_H = 196;
+/** Upcoming Catalysts timeline: how many days ahead an event may be and still show. */
+const CATALYST_WINDOW_DAYS = 45;
+
+/** Colours explicitly signed percentages in a sentence: +N% green, -N% red. Unsigned figures (margins, ratios) stay as they are. */
+const SIGNED_PCT = /((?<![\w.])[+\-−]\d[\d,]*(?:\.\d+)?%)/g;
+const colorSigned = (text: string | null | undefined): React.ReactNode =>
+  (text ?? "").split(SIGNED_PCT).map((part, i) =>
+    i % 2 === 1
+      ? <span key={i} style={{ color: part.startsWith("+") ? "var(--up, #16a34a)" : "var(--down, #dc2626)", fontWeight: 700 }}>{part}</span>
+      : part,
+  );
 const clampLines = (n: number): React.CSSProperties => ({ display: "-webkit-box", WebkitLineClamp: n, WebkitBoxOrient: "vertical", overflow: "hidden" });
 
 function SixMonthAreaChart({
@@ -809,6 +820,7 @@ export function StockIntelligenceScreen() {
 
       items.push({
         date: `${fmtDateStr}${estBadge}`,
+        iso: realErDate,
         days: daysStr,
         n: upcomingEr?.session ? `Earnings Release (${upcomingEr.session})` : "Quarterly Earnings Release",
         txt: `${estTxt}; historical event volatility window`,
@@ -840,6 +852,7 @@ export function StockIntelligenceScreen() {
       const fmtDateStr = dObj.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(diffDays > 180 ? { year: "numeric" as const } : {}) });
       items.push({
         date: fmtDateStr,
+        iso: ev.date,
         days: daysStr,
         n: ev.name,
         txt: ev.desc,
@@ -860,7 +873,17 @@ export function StockIntelligenceScreen() {
       });
     }
 
-    return items.slice(0, 6);
+    // Only what is coming up soon, and strictly in date order. Without the
+    // window a far-off calendar item (e.g. a Sep-2027 funding deadline) landed
+    // on the timeline, and the earnings card — pushed first — sat ahead of
+    // nearer macro dates. The "TBD" placeholder has no date and stays first.
+    const cutoff = new Date(`${todayStr}T12:00:00Z`);
+    cutoff.setUTCDate(cutoff.getUTCDate() + CATALYST_WINDOW_DAYS);
+    const cutoffIso = cutoff.toISOString().slice(0, 10);
+    return items
+      .filter((it) => !it.iso || it.iso <= cutoffIso)
+      .sort((a, b) => (a.iso ?? "").localeCompare(b.iso ?? ""))
+      .slice(0, 6);
   }, [stock, liveCompany?.nextEarningsDate, liveEarningsList]);
 
   // 5 Major Catalysts derived dynamically from FMP data (bars, quarters, news, and stock metrics)
@@ -1055,6 +1078,30 @@ export function StockIntelligenceScreen() {
     }
     return combined;
   }, [rawPeerTickers, companiesList, peerQuotesMap, enrichedPeers, stock, liveCompany?.sector, isBumble]);
+
+  // YTD for the peer table. The backend returns each peer's prior-year-end close
+  // and the % is measured here against the price the row shows, so the two agree.
+  // Fetched for every peer on screen (universe peers included — the enrichment
+  // request above only covers peers missing from the universe).
+  const peerTickersKey = peersAll.map((p) => p.t).join(",");
+  const [peerYtdBase, setPeerYtdBase] = useState<Map<string, number | null>>(new Map());
+  useEffect(() => {
+    if (!peerTickersKey) return;
+    let active = true;
+    apiGet<Array<{ ticker: string; ytdBaseClose?: number | null }>>(
+      `/live/peers-summary?tickers=${encodeURIComponent(peerTickersKey)}`,
+    )
+      .then((rows) => {
+        if (!active || !Array.isArray(rows)) return;
+        setPeerYtdBase((prev) => {
+          const next = new Map(prev);
+          for (const r of rows) next.set(r.ticker, r.ytdBaseClose ?? null);
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [peerTickersKey]);
 
   // Expandable sections state
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
@@ -2278,14 +2325,14 @@ export function StockIntelligenceScreen() {
                   padding: "0 16px",
                   border: "none",
                   background: "transparent",
-                  color: "var(--si-text-hi, #e8eef4)",
+                  color: isActive ? "var(--up, #16a34a)" : "var(--si-text-hi, #e8eef4)",
                   fontFamily: "'Barlow Condensed', sans-serif",
                   fontSize: 15,
                   fontWeight: 600,
                   letterSpacing: "0.12em",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
-                  boxShadow: isActive ? `inset 0 -2px 0 ${STEEL}` : "none",
+                  boxShadow: isActive ? "inset 0 -2px 0 var(--up, #16a34a)" : "none",
                 }}
               >
                 {label}
@@ -3612,10 +3659,11 @@ export function StockIntelligenceScreen() {
                       Click any peer to open in SI
                     </span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(5, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <span>COMPANY</span>
                     <span style={{ textAlign: "right" }}>PRICE</span>
                     <span style={{ textAlign: "right" }}>CHANGE</span>
+                    <span style={{ textAlign: "right" }} title="Year to date: price vs the last close of the prior year">YTD</span>
                     <span style={{ textAlign: "right" }}>MKT CAP</span>
                     <span style={{ textAlign: "right" }}>P/E</span>
                     <span style={{ textAlign: "right" }}>RS RANK</span>
@@ -3634,6 +3682,12 @@ export function StockIntelligenceScreen() {
                     peersAll.map((peer) => {
                       const chgCol = (peer.c ?? 0) >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
                       const chgStr = peer.c != null ? `${peer.c >= 0 ? "+" : ""}${peer.c.toFixed(2)}%` : "—";
+                      const ytdBase = peerYtdBase.get(peer.t) ?? null;
+                      const ytd = peer.price != null && peer.price > 0 && ytdBase != null && ytdBase > 0
+                        ? (peer.price / ytdBase - 1) * 100
+                        : null;
+                      const ytdCol = (ytd ?? 0) >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
+                      const ytdStr = ytd != null ? `${ytd >= 0 ? "+" : ""}${ytd.toFixed(2)}%` : "—";
                       const pStr = peer.price != null ? `$${peer.price >= 10 ? peer.price.toFixed(2) : peer.price.toFixed(3)}` : "—";
                       const mcapStr = peer.marketCap != null ? `$${peer.marketCap >= 1000 ? (peer.marketCap / 1000).toFixed(2) + "T" : peer.marketCap.toFixed(1) + "B"}` : "—";
                       const peStr = peer.peRatio != null && Number.isFinite(peer.peRatio) && peer.peRatio > 0 ? `${peer.peRatio.toFixed(1)}×` : "—";
@@ -3654,7 +3708,7 @@ export function StockIntelligenceScreen() {
                           }}
                           style={{
                             display: "grid",
-                            gridTemplateColumns: "minmax(140px, 1.4fr) repeat(5, minmax(75px, 1fr))",
+                            gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))",
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 13,
                             color: "var(--si-text-hi, #e8eef4)",
@@ -3680,6 +3734,7 @@ export function StockIntelligenceScreen() {
                           </span>
                           <span style={{ textAlign: "right" }}>{pStr}</span>
                           <span style={{ textAlign: "right", color: chgCol, fontWeight: 600 }}>{chgStr}</span>
+                          <span style={{ textAlign: "right", color: ytd == null ? "var(--si-text-mid, #93a1af)" : ytdCol, fontWeight: 600 }}>{ytdStr}</span>
                           <span style={{ textAlign: "right" }}>{mcapStr}</span>
                           <span style={{ textAlign: "right" }}>{peStr}</span>
                           <span style={{ textAlign: "right", color: "var(--si-text-mid, #93a1af)" }}>{rsStr}</span>
@@ -3714,7 +3769,7 @@ export function StockIntelligenceScreen() {
                     ✦ AI FUNDAMENTALS READ
                   </span>
                   <div style={{ flex: 1, minWidth: 260, fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
-                    {stockDetail.fundTxt}
+                    {colorSigned(stockDetail.fundTxt)}
                   </div>
                   <button
                     onClick={() => setShowFundEv(!showFundEv)}
@@ -3739,7 +3794,7 @@ export function StockIntelligenceScreen() {
                     {(stockDetail.fundEv || []).map((fe, i) => (
                       <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8, lineHeight: 1.45 }}>
                         <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                        <span>{fe}</span>
+                        <span>{colorSigned(fe)}</span>
                       </div>
                     ))}
                   </div>
@@ -3772,7 +3827,7 @@ export function StockIntelligenceScreen() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    {stock.t} · LIVE TECHNICAL CHART
+                    {stock.t}
                   </span>
                   <span style={{ fontSize: 12, color: "var(--si-text-mid, #8b9bb0)", letterSpacing: "0.06em" }}>
                     {stock.name || liveCompany?.name}
@@ -4353,8 +4408,11 @@ export function StockIntelligenceScreen() {
                     style={{
                       alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                       maxWidth: "85%",
-                      border: m.role === "user" ? "1px solid #5980a6" : "1px solid #1c2733",
-                      background: m.role === "user" ? "rgba(89,128,166,0.18)" : "rgba(12,17,24,0.95)",
+                      // Theme tokens, not fixed dark values: the reply bubble was a
+                      // hard-coded near-black, so in day mode the (dark) text sat
+                      // on a dark box and could not be read.
+                      border: m.role === "user" ? "1px solid #5980a6" : "1px solid var(--si-border, #1c2733)",
+                      background: m.role === "user" ? "rgba(89,128,166,0.18)" : "var(--si-card, rgba(12,17,24,0.95))",
                       padding: "12px 16px",
                       fontFamily: "'Manrope', sans-serif",
                       fontSize: 14.5,
@@ -4737,10 +4795,12 @@ export function StockIntelligenceScreen() {
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
                       {[
                         ["RETURN", pct1(hsRet), hsRet >= 0 ? UP : DN],
-                        ["HIGH", usd(Math.max(...hs)), "#e8eef4"],
-                        ["LOW", usd(Math.min(...hs)), "#e8eef4"],
-                        ["MAX DRAWDOWN", pct1(hsDD * 100), DN],
-                        ["VOLATILITY", Math.round(hsVolA) + "% ann.", "#e8eef4"],
+                        // Neutral figures use the theme's text colour — a fixed
+                        // near-white was invisible on the day-mode (white) tile.
+                        ["HIGH", usd(Math.max(...hs)), "var(--si-text-hi, #e8eef4)"],
+                        ["LOW", usd(Math.min(...hs)), "var(--si-text-hi, #e8eef4)"],
+                        ["MAX DRAWDOWN", pct1(hsDD * 100), "var(--down, #dc2626)"],
+                        ["VOLATILITY", Math.round(hsVolA) + "% ann.", "var(--si-text-hi, #e8eef4)"],
                       ].map(([k, v, c], idx) => (
                         <div key={idx} style={{ padding: "10px 12px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>
@@ -5147,7 +5207,7 @@ export function StockIntelligenceScreen() {
 
                         {[
                           ["BEAR", TT.dn, DN],
-                          ["NOW", stock.p, "#e8eef4"],
+                          ["NOW", stock.p, "var(--si-text-hi, #e8eef4)"],
                           ["BASE", TT.base, STEEL],
                           ["BULL", TT.up, UP],
                         ].map(([k, v, c], idx) => (
