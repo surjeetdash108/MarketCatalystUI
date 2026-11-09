@@ -469,8 +469,8 @@ export function SettingsScreen() {
           <div className="card-b">
             <div style={{ fontSize: "0.8125rem", color: "var(--text)", marginBottom: 12 }}>
               {isPremium
-                ? "You have access to all MarketCatalyst features."
-                : "Upgrade to Premium to unlock AI Copilot, full screener, portfolio tools, and more."}
+                ? "Your paid plan is active."
+                : "Paid plans are launching soon. You won't be charged anything until then."}
             </div>
             <button className="planbtn" style={{ maxWidth: 180 }} onClick={() => window.location.href = "/manage-plan"}>
               <span style={{ fontSize: "0.8125rem" }}>◈</span>
