@@ -9,6 +9,8 @@ import type { StoredProfile } from "../../store/profile-slice";
 import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
 import { hasConfirmedPaidPlan } from "../plan-status";
+import { useEntitlements } from "../hooks/useEntitlements";
+import { ContactCard } from "./manage-plan-extras";
 
 const FONTS: { key: FontKey; rank: number; label: string; desc: string; stack: string }[] = [
   { key: "geist", rank: 6,         label: "Geist",         desc: "Clean & neutral · Minimal sans",      stack: "var(--font-geist-sans,'Geist Sans',sans-serif)" },
@@ -214,6 +216,7 @@ export function SettingsScreen() {
   }
 
   const isPremium = hasConfirmedPaidPlan(profile);
+  const isStaff = useEntitlements().data?.staff === true;
 
   // Fields the user must fill in themselves (name arrives from Google, email from
   // auth). If any is blank the profile is flagged incomplete so the user knows to update it.
@@ -463,12 +466,14 @@ export function SettingsScreen() {
               color: isPremium ? "var(--brand-2)" : "var(--text-dim-solid)",
               border: `1px solid ${isPremium ? "var(--brand)" : "var(--border)"}`,
             }}>
-              {isPremium ? "◈ Premium" : "Free"}
+              {isStaff ? "Staff" : isPremium ? "◈ Premium" : "Free"}
             </span>
           </div>
           <div className="card-b">
             <div style={{ fontSize: "0.8125rem", color: "var(--text)", marginBottom: 12 }}>
-              {isPremium
+              {isStaff
+                ? "Staff access: every feature, never billed."
+                : isPremium
                 ? "Your paid plan is active."
                 : "Paid plans are launching soon. You won't be charged anything until then."}
             </div>
@@ -478,6 +483,8 @@ export function SettingsScreen() {
             </button>
           </div>
         </div>
+
+        <ContactCard />
 
         {/* Schedule & share recap */}
         <div className="card col-12">
