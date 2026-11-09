@@ -25,7 +25,8 @@ export function AdminBilling() {
   if (allowed === null) return null;
   if (!allowed) return <Notice tone="error" testId="admin-denied">Admin account only.</Notice>;
   return (
-    <div style={{ maxWidth: 1200, margin: "24px auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }} data-testid="admin-billing">
+    <div className="iq-root" data-theme="dark" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", padding: "24px 0" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }} data-testid="admin-billing">
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <h2 style={{ margin: 0, color: "var(--text-hi)" }}>Billing</h2>
         <div style={{ marginLeft: 16, display: "flex", gap: 6 }}>
@@ -39,6 +40,7 @@ export function AdminBilling() {
       {tab === "subscribers" && <Subscribers />}
       {tab === "promos" && <Promos />}
       {tab === "audit" && <AuditLog />}
+    </div>
     </div>
   );
 }
