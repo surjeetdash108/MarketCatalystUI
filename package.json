@@ -9,7 +9,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test \"app/**/*.spec.ts\" \"tests/ui/*.test.mjs\"",
+    "test": "tsx --tsconfig tsconfig.test.json --test \"app/**/*.spec.ts\" \"app/**/*.spec.tsx\" \"tests/ui/*.test.mjs\"",
     "test:rules": "firebase emulators:exec --project demo-mc-rules --only firestore \"node --test tests/rules/*.test.mjs\""
   },
   "dependencies": {

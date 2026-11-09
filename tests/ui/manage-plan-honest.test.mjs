@@ -6,7 +6,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
-const plan = read("app/iq/screens/manage-plan.tsx");
+// The pre-launch state lives in manage-plan-soon.tsx; manage-plan.tsx shows it
+// whenever paid plans are unavailable.
+const plan = read("app/iq/screens/manage-plan-soon.tsx");
+const live = read("app/iq/screens/manage-plan.tsx");
 const settings = read("app/iq/screens/settings.tsx");
 
 describe("Manage Plan before billing is live", () => {
@@ -26,6 +29,12 @@ describe("Manage Plan before billing is live", () => {
   it("shows no hardcoded prices and no unenforced limits", () => {
     assert.doesNotMatch(plan, /amountMinor|2999|4999|\$\d/);
     assert.doesNotMatch(plan, /up to 5 stocks|3 symbols/);
+  });
+  it("the billing screen falls back to it whenever paid plans are unavailable", () => {
+    assert.match(live, /if \(!ent\.paidPlansAvailable\) return <ManagePlanSoon \/>/);
+  });
+  it("the live billing screen takes every price from the catalog (no amounts typed in)", () => {
+    assert.doesNotMatch(live, /\$\d|\b(3900|5900|19900|37440|56640|179100|2999|4999)\b/);
   });
   it("Settings no longer promises features behind an upgrade that does not exist", () => {
     assert.doesNotMatch(settings, /Upgrade to Premium to unlock/);
