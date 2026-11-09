@@ -50,7 +50,7 @@ export function FirebaseListener() {
           dispatch(setProfileLoading());
           try {
             const raw = await apiGet<Record<string, unknown> | null>("/api/profile");
-            if (!cancelled) dispatch(setProfile(raw ? (raw as StoredProfile) : null));
+            if (!cancelled) dispatch(setProfile(raw ? (raw as unknown as StoredProfile) : null));
           } catch {
             if (!cancelled) dispatch(setProfile(null));
           }

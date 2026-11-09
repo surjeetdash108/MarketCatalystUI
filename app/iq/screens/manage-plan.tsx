@@ -1,6 +1,7 @@
 "use client";
 
 import { useAppSelector } from "../../store/hooks";
+import { hasConfirmedPaidPlan } from "../plan-status";
 
 const FEATURES = [
   { label: "Market Dashboard", free: true, premium: true },
@@ -51,7 +52,7 @@ export function ManagePlanScreen() {
   const { data: profile } = useAppSelector(state => state.profile);
   const { user } = useAppSelector(state => state.auth);
 
-  const isPremium = profile?.tier !== "free";
+  const isPremium = hasConfirmedPaidPlan(profile);
   const tier = profile?.tier ?? "free";
   const displayName = profile?.name || user?.displayName || "User";
   const email = user?.email ?? "";
