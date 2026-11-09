@@ -18,7 +18,6 @@ import {
   previewPromo,
   resumePlan,
   retentionOffer,
-  startCheckout,
   type BillingSummary,
   type ChangePreview,
   type HistoryRow,
@@ -27,7 +26,7 @@ import {
   type RetentionOffer,
 } from "../billing/api";
 import { displayPrice, formatMoney, INTERVALS, isPaid, longDate, type BillingInterval, type CatalogPlan } from "../billing/catalog";
-import { parsePlanParams } from "../billing/plan-intent";
+import { checkoutPath, parsePlanParams } from "../billing/plan-intent";
 import { Button, Modal, Notice, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
 
@@ -110,8 +109,8 @@ export function BillingScreen() {
 
   async function choose(plan: CatalogPlan) {
     if (!subscribed) {
-      const r = await run(() => startCheckout({ planId: plan.id, interval, ...(promoPreview ? { promoCode: promoPreview.code } : {}) }));
-      if (r) window.location.href = r.url;
+      // New subscription: the one purchase page (billing period, payment, consent).
+      window.location.href = checkoutPath({ planId: plan.id, interval });
       return;
     }
     const preview = await run(() => previewChange({ planId: plan.id, interval }));

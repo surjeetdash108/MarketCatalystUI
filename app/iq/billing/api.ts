@@ -28,8 +28,51 @@ export interface PlansResponse { plans: CatalogPlan[]; paidPlansAvailable: boole
 export const fetchPlans = () =>
   apiGet<PlansResponse>("/plans").then((r) => ({ plans: [...r.plans].sort((a, b) => a.sortOrder - b.sortOrder), paidPlansAvailable: r.paidPlansAvailable === true }));
 
-export interface CheckoutResponse { sessionId: string; url: string; amountDueToday: number; currency: string }
-export const startCheckout = (body: { planId: string; interval: BillingInterval; promoCode?: string }) => apiPost<CheckoutResponse>("/api/billing/checkout", body);
+export interface CheckoutResponse { sessionId: string; url: string; amountDueToday: number; tax: number; currency: string; payment: { provider: string } }
+export interface CheckoutBody {
+  planId: string;
+  interval: BillingInterval;
+  promoCode?: string;
+  consent: { accepted: boolean; version: string };
+  phone: string;
+  marketingOptIn: boolean;
+  billing: { name: string; address: { line1: string; line2: string | null; city: string; state: string | null; postalCode: string | null; country: string } };
+}
+export const startCheckout = (body: CheckoutBody) => apiPost<CheckoutResponse>("/api/billing/checkout", body);
+
+export interface CheckoutPreview {
+  planId: string;
+  interval: BillingInterval;
+  currency: string;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  taxLabel: string | null;
+  taxPending: boolean;
+  promo: { code: string; description: string } | null;
+  renewsAt: string;
+  renewalAmount: number;
+  consent: { version: string; text: string };
+  refundPolicy: { enabled: boolean; windowDays: number; checkoutLine: string };
+}
+export const previewCheckout = (body: { planId: string; interval: BillingInterval; promoCode?: string; region?: { country: string; state?: string | null; postalCode?: string | null } }) =>
+  apiPost<CheckoutPreview>("/api/billing/checkout/preview", body);
+
+/** Fake provider only (TEST MODE): the simulated payment form confirms through these. */
+export type FakeCompletion = { status: "complete"; subscriptionId: string; redirectUrl: string } | { status: "requires_action"; actionId: string } | { status: "failed"; code: string };
+export const fakeCompleteCheckout = (sessionId: string, card: string) => apiPost<FakeCompletion>(`/api/billing/fake/checkout/${encodeURIComponent(sessionId)}/complete`, { card });
+export const fakeConfirmAction = (actionId: string, approve: boolean) => apiPost<FakeCompletion>(`/api/billing/fake/actions/${encodeURIComponent(actionId)}`, { approve });
+
+export interface Contact { phone: string | null; marketingOptIn: { optedIn: boolean; at: string | null } }
+export const getContact = () => apiGet<Contact>("/api/billing/contact");
+export const updateContact = (body: { phone?: string; marketingOptIn?: boolean }) => apiPost<Contact>("/api/billing/contact", body);
+
+export type RefundEligibility =
+  | { eligible: true; kind: "first_payment" | "annual_renewal"; paymentId: string; amount: number; currency: string; refundableUntil: string; windowDays: number }
+  | { eligible: false; reason: string; windowDays: number };
+export const refundEligibility = () => apiGet<RefundEligibility>("/api/billing/refund");
+export const requestRefund = () => apiPost<{ refunded: true; amount: number; currency: string }>("/api/billing/refund");
 export const checkoutStatus = (id: string) => apiGet<{ status: string; planId: string; active: boolean; currentPlan: string }>(`/api/billing/checkout/${encodeURIComponent(id)}`);
 
 export interface PromoPreview { code: string; amount: number; discountAmount: number; amountDueToday: number; description: string; currency: string }
