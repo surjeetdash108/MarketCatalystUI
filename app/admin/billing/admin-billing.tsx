@@ -86,6 +86,7 @@ function Subscribers() {
     </select>
   );
   return (
+    <>
     <div className="card" data-testid="subscribers">
       <div className="card-b" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input placeholder="Search name or email" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} style={{ ...input, width: 220 }} data-testid="sub-search" />
@@ -112,6 +113,7 @@ function Subscribers() {
           </tbody>
         </table>
       </div>
+    </div>
       {detail && (
         <Modal title={`${String(detail.name ?? detail.email ?? detail.uid)}`} onClose={() => setDetail(null)} testId="sub-detail">
           <div style={{ fontSize: ".8rem" }}>{String(detail.planName)} · {String(detail.status).toLowerCase()} · MRR {formatMoney(Number(detail.mrrMinor ?? 0))}</div>
@@ -124,7 +126,7 @@ function Subscribers() {
           <div style={{ fontSize: ".74rem" }}>{Object.entries(detail.entitlements as Record<string, boolean>).filter(([, v]) => v).map(([k]) => escapeHtml(k)).join(", ")}</div>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
 

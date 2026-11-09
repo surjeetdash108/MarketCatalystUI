@@ -83,6 +83,10 @@ describe("checkout page wiring", () => {
     assert.match(page, /window\.location\.replace\(`\/manage-plan\?plan=/);
     assert.match(page, /setPhase\(user\.emailVerified \? "checkout" : "verify"\)/);
   });
+  it("checkout buttons beat the app's global button reset (.iq-root button { background:none })", () => {
+    const css = src("app/iq/billing/checkout/checkout.css");
+    for (const c of ["co-cta", "co-method", "co-radio", "co-iconbtn"]) assert.match(css, new RegExp(`\\.iq-root button\\.${c} \\{[^}]*background:`));
+  });
   it("mobile: the two columns stack", () => {
     const css = src("app/iq/billing/checkout/checkout.css");
     assert.match(css, /@media \(max-width: 860px\) \{\s*\.co-wrap \{ grid-template-columns: minmax\(0, 1fr\);/);
