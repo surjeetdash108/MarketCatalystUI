@@ -32,3 +32,21 @@ describe("Privacy discloses billing data handling", () => {
     assert.match(privacy, /\[EMAIL PROVIDER PLACEHOLDER\]/);
   });
 });
+
+describe("checkout v2 copy (draft, flagged for legal review)", () => {
+  it("Terms §12 refund paragraph is the generated REFUND_WINDOW_DAYS copy (one switch)", () => {
+    assert.match(terms, /<strong>Refunds\.<\/strong> <span data-testid="terms-refunds">\{REFUND_POLICY\.termsParagraph\}<\/span>/);
+    assert.match(terms, /import \{ REFUND_POLICY \} from "\.\.\/\.\.\/iq\/billing\/refund-policy\.generated"/);
+    assert.doesNotMatch(terms, /We do not provide refunds or credits for partial billing periods or unused time, except as required by law or where we decide otherwise/);
+  });
+  it("Terms §12 describes renewal at the full price and the recorded renewal consent", () => {
+    assert.match(terms, /Renewals are charged at the full price of your plan/);
+    assert.match(terms, /ticking the renewal consent box; we keep a record of when you agreed, the wording you saw, the plan, billing period and price, and your IP address/);
+  });
+  it("Privacy: phone for account and billing contact; no marketing texts without opt-in; only country/state/ZIP of the address", () => {
+    assert.match(privacy, /mobile number you give at checkout\. We use it for account and billing contact/);
+    assert.match(privacy, /We do not send marketing text messages unless you opt in/);
+    assert.match(privacy, /We keep only your country, state and ZIP\/postal code/);
+    assert.match(privacy, /We do not collect government ID numbers or your date of birth/);
+  });
+});

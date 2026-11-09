@@ -1,3 +1,4 @@
+import { REFUND_POLICY } from "../../iq/billing/refund-policy.generated";
 export function TermsContent() {
   return (
     <div className="legal-content-root">
@@ -179,13 +180,13 @@ export function TermsContent() {
                                     <li>
                                       <strong>Automatic renewal.</strong> <strong>Paid subscriptions renew automatically at the end of each billing period (every month for monthly plans, every year for annual plans) at the then-current price, and your payment method is charged automatically, unless you cancel before the renewal date.</strong> We email you before an annual plan renews.</li>
                                     <li>
-                                      <strong>Authorization.</strong> By purchasing a subscription, you authorize us and our payment processor to charge your payment method the price shown at checkout, plus any applicable taxes, at the start of each billing period until you cancel.</li>
+                                      <strong>Authorization.</strong> By purchasing a subscription, you authorize us and our payment processor to charge your payment method the price shown at checkout, plus any applicable taxes, at the start of each billing period until you cancel. Renewals are charged at the full price of your plan; a promotion applies only to the payments it states. At checkout you confirm this by ticking the renewal consent box; we keep a record of when you agreed, the wording you saw, the plan, billing period and price, and your IP address.</li>
                                     <li>
                                       <strong>How to cancel.</strong> Cancel anytime on the Manage Plan page in the app, or by emailing <a href="mailto:support@example.com">support@example.com</a> [SUPPORT EMAIL PLACEHOLDER]. Cancellation takes effect at the end of your current billing period: you keep access to your paid plan until that date, which we show you when you cancel, and then your account moves to the Free plan. You can resume a cancelled subscription before that date.</li>
                                     <li>
                                       <strong>Retention offer.</strong> When you cancel, we may offer a discount to stay (for example 50% off your next two monthly invoices, or an equivalent credit on your next annual invoice). You can decline it and cancel in the same step. This offer is available once per person: we keep a one-way (hashed) record of the email address that accepted it so it is not offered again, including on a new account. It cannot be combined with another discount of 50% or more.</li>
                                     <li>
-                                      <strong>Refunds.</strong> We do not provide refunds or credits for partial billing periods or unused time, except as required by law or where we decide otherwise at our discretion, for example for a duplicate or mistaken charge. Contact [SUPPORT CONTACT PLACEHOLDER] about a charge you believe is wrong.</li>
+                                      <strong>Refunds.</strong> <span data-testid="terms-refunds">{REFUND_POLICY.termsParagraph}</span> Contact [SUPPORT CONTACT PLACEHOLDER] about a charge you believe is wrong.</li>
                                     <li>
                                       <strong>Plan changes.</strong> Upgrades (to a higher plan, or from monthly to annual billing) take effect immediately; we charge a prorated amount for the rest of the current period, and you see that amount before you confirm. Downgrades (to a lower plan, or from annual to monthly) take effect at the end of the current billing period, with no refund or credit for the remainder; you can keep your current plan instead until that date.</li>
                                     <li>
