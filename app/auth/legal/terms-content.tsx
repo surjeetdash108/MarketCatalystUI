@@ -173,27 +173,32 @@ export function TermsContent() {
                                   <h2 id="subscriptions">12. Subscriptions, Billing, Auto-Renewal, and Cancellation</h2>
                                   <ul>
                                     <li>
-                                      <strong>Plans.</strong> We offer a free plan and paid subscription plans. The features, price, and billing period of each plan are shown on our pricing page and at checkout.</li>
-                                      <li>
-                                        <strong>Automatic renewal.</strong>
-                                        <strong>Paid subscriptions automatically renew at the end of each billing period (for example, monthly) for the same period at the then-current price, and your payment method will be charged automatically, unless you cancel before the renewal date.</strong> Before you purchase, we will clearly show the price, billing frequency, and the fact that your subscription renews automatically, and we will ask for your consent. After purchase, we will send you a confirmation email that includes these terms and how to cancel.</li>
-                                        <li>
-                                          <strong>Authorization.</strong> By purchasing a subscription, you authorize us and our payment processor to charge your payment method the applicable fees, plus any applicable taxes, at the start of each billing period until you cancel. Fees are charged in advance.</li>
-                                          <li>
-                                            <strong>How to cancel.</strong> You may cancel at any time, online, through your account settings, or by emailing <a href="mailto:contact@marketcatalyst.ai">contact@marketcatalyst.ai</a>. Cancellation takes effect at the end of your current billing period. You keep access to your paid features until then, and you will not be charged again.</li>
-                                            <li>
-                                              <strong>Refunds.</strong> Because you can cancel at any time, we do not provide refunds or credits for partial billing periods or unused time, except as required by law or as we may decide in our discretion. If you believe you were charged in error, contact us at <a href="mailto:contact@marketcatalyst.ai">contact@marketcatalyst.ai</a> within 60 days of the charge.</li>
-                                              <li>
-                                                <strong>Free trials and promotions.</strong> If we offer a free trial or promotional price, we will disclose its length, the price you will be charged afterward, and how to cancel before you sign up. Unless you cancel before the trial or promotional period ends, your subscription will convert to a paid subscription and you will be charged the regular price. Where required by law, we will remind you before the trial ends. Trials are limited to one per customer per plan.</li>
-                                                <li>
-                                                  <strong>Price changes.</strong> We may change subscription prices. We will give existing subscribers at least 30 days&apos; advance notice by email before a price change takes effect. If you do not want to pay the new price, you may cancel before it takes effect; otherwise, the new price will apply starting with your next billing period after the change takes effect.</li>
-                                                  <li>
-                                                    <strong>Plan changes.</strong> If you upgrade or downgrade, the change and any resulting charge or credit will be explained when you make the change.</li>
-                                                    <li>
-                                                      <strong>Failed payments.</strong> If a payment fails, we may retry the charge and may suspend or downgrade your paid features until payment is made.</li>
-                                                      <li>
-                                                        <strong>Taxes.</strong> Prices do not include taxes unless stated. You are responsible for any applicable sales, use, or similar taxes.</li>
-                                                      </ul>
+                                      <strong>Draft — legal review required.</strong> This section describes how subscriptions work in the Service. [LEGAL REVIEW PLACEHOLDER: to be reviewed and approved by counsel before paid plans launch; reviewer and date: [LEGAL REVIEW DATE PLACEHOLDER].]</li>
+                                    <li>
+                                      <strong>Plans.</strong> We offer a Free plan and paid plans (currently Starter, Pro and Elite), each billed monthly or annually. The features, price and billing period of each plan are shown on our pricing page, on the Manage Plan page and at checkout. Prices are in US dollars and do not include taxes unless stated.</li>
+                                    <li>
+                                      <strong>Automatic renewal.</strong> <strong>Paid subscriptions renew automatically at the end of each billing period (every month for monthly plans, every year for annual plans) at the then-current price, and your payment method is charged automatically, unless you cancel before the renewal date.</strong> We email you before an annual plan renews.</li>
+                                    <li>
+                                      <strong>Authorization.</strong> By purchasing a subscription, you authorize us and our payment processor to charge your payment method the price shown at checkout, plus any applicable taxes, at the start of each billing period until you cancel.</li>
+                                    <li>
+                                      <strong>How to cancel.</strong> Cancel anytime on the Manage Plan page in the app, or by emailing <a href="mailto:support@example.com">support@example.com</a> [SUPPORT EMAIL PLACEHOLDER]. Cancellation takes effect at the end of your current billing period: you keep access to your paid plan until that date, which we show you when you cancel, and then your account moves to the Free plan. You can resume a cancelled subscription before that date.</li>
+                                    <li>
+                                      <strong>Retention offer.</strong> When you cancel, we may offer a discount to stay (for example 50% off your next two monthly invoices, or an equivalent credit on your next annual invoice). You can decline it and cancel in the same step. This offer is available once per person: we keep a one-way (hashed) record of the email address that accepted it so it is not offered again, including on a new account. It cannot be combined with another discount of 50% or more.</li>
+                                    <li>
+                                      <strong>Refunds.</strong> We do not provide refunds or credits for partial billing periods or unused time, except as required by law or where we decide otherwise at our discretion, for example for a duplicate or mistaken charge. Contact [SUPPORT CONTACT PLACEHOLDER] about a charge you believe is wrong.</li>
+                                    <li>
+                                      <strong>Plan changes.</strong> Upgrades (to a higher plan, or from monthly to annual billing) take effect immediately; we charge a prorated amount for the rest of the current period, and you see that amount before you confirm. Downgrades (to a lower plan, or from annual to monthly) take effect at the end of the current billing period, with no refund or credit for the remainder; you can keep your current plan instead until that date.</li>
+                                    <li>
+                                      <strong>Promotions and trials.</strong> Promo codes are subject to the terms shown when you apply them (amount, duration, eligible plans and billing periods, expiry and usage limits) and are validated before you pay. We do not currently offer free trials on paid plans. Existing users at launch may receive a limited period of a paid plan at no charge; when it ends, the account moves to the Free plan unless you choose a paid plan, and you will not be charged unless you do.</li>
+                                    <li>
+                                      <strong>Price changes.</strong> We may change subscription prices. We will give existing subscribers at least 30 days&apos; advance notice by email before a price change takes effect. If you do not want to pay the new price, you can cancel or change your plan before it applies.</li>
+                                    <li>
+                                      <strong>Failed payments.</strong> If a renewal payment fails, we retry it over the following 7 days and you keep access to your plan during that time. If payment still fails, your subscription ends and your account moves to the Free plan; your data is kept.</li>
+                                    <li>
+                                      <strong>Taxes.</strong> Prices do not include taxes unless stated. You are responsible for any applicable sales, use, value-added or similar taxes.</li>
+                                    <li>
+                                      <strong>Who you contract with.</strong> Subscriptions are provided by MarketCatalyst LLC [PLACEHOLDER], [ADDRESS PLACEHOLDER], [PHONE PLACEHOLDER].</li>
+                                  </ul>
                                                       <h2 id="dmca">13. Copyright Complaints (DMCA)</h2>
                                                       <p>We respect intellectual property rights. If you believe material on the Service infringes your copyright, send a notice to our designated copyright agent that includes: (a) your physical or electronic signature; (b) identification of the copyrighted work; (c) identification of the allegedly infringing material and where it is located on the Service; (d) your contact information; (e) a statement that you have a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law; and (f) a statement, under penalty of perjury, that the information in your notice is accurate and that you are the copyright owner or authorized to act on the owner&apos;s behalf.</p>
                                                       <p>
