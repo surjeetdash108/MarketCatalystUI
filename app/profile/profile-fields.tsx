@@ -67,6 +67,23 @@ export const emptyInvestorProfile: InvestorProfile = {
   preferredAssetClasses: [],
 };
 
+/**
+ * The body for PATCH /api/profile: investor-profile fields only. Plan, billing
+ * and identity fields (tier, currentPlan, subscription*, stripe*, uid, email)
+ * are server-owned — email comes from the Firebase Auth account — so they are
+ * never sent, even when the in-memory profile carries them from a GET.
+ */
+export const PROFILE_PATCH_FIELDS = [
+  "profile_image", "name", "mobileNumber", "age", "incomeRange", "investmentExperience",
+  "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue", "preferredAssetClasses",
+] as const satisfies readonly (keyof InvestorProfile)[];
+
+export function toProfilePatch(profile: Partial<InvestorProfile>): Partial<InvestorProfile> {
+  const out: Partial<Record<keyof InvestorProfile, unknown>> = {};
+  for (const k of PROFILE_PATCH_FIELDS) if (profile[k] !== undefined) out[k] = profile[k];
+  return out as Partial<InvestorProfile>;
+}
+
 type ProfileFieldsProps = {
   profile: InvestorProfile;
   onChange: (field: keyof InvestorProfile, value: string | string[]) => void;

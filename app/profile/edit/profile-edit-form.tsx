@@ -8,7 +8,7 @@ import { firebaseAuth } from "../../firebase";
 import { apiPatch } from "../../iq/backend";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { updateProfileData } from "../../store/profile-slice";
-import { InvestorProfile, ProfileFields, emptyInvestorProfile } from "../profile-fields";
+import { InvestorProfile, ProfileFields, emptyInvestorProfile, toProfilePatch } from "../profile-fields";
 
 function getSaveErrorMessage(error: unknown) {
   if (error instanceof FirebaseError) return error.message;
@@ -61,7 +61,7 @@ export function ProfileEditForm() {
       if (firebaseAuth.currentUser) {
         await updateProfile(firebaseAuth.currentUser, { displayName: profile.name });
       }
-      await apiPatch("/api/profile", profile);
+      await apiPatch("/api/profile", toProfilePatch(profile));
       dispatch(updateProfileData({ ...profile, uid: user.uid, tier: savedProfile?.tier ?? "free" }));
       setSuccess("Profile updated successfully.");
     } catch (saveError) {
