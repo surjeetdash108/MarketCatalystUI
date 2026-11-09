@@ -428,6 +428,7 @@ export function AlphaSignals() {
               onStar={e => void toggleWatch(pick.c.ticker, e)}
               onInfo={openInfo} onPrev={() => nextPick(-1)} onNext={() => nextPick(1)} onClose={() => setPickSym(null)}
               onExplore={() => { setPickSym(null); enterSI(pick.c.ticker); }}
+              onViewFullChart={() => { setPickSym(null); openStockDetail(pick.c.ticker, picks.map(p => p.c.ticker)); }}
             />
           </div>
         </div>, modalHost)}
@@ -452,10 +453,11 @@ export function AlphaSignals() {
   );
 }
 
-function PickBody({ p, pos, now, starred, onStar, onInfo, onPrev, onNext, onClose, onExplore }: {
+function PickBody({ p, pos, now, starred, onStar, onInfo, onPrev, onNext, onClose, onExplore, onViewFullChart }: {
   p: Signal; pos: string; now: number; starred: boolean;
   onStar: (e: React.MouseEvent<HTMLButtonElement>) => void;
   onInfo: () => void; onPrev: () => void; onNext: () => void; onClose: () => void; onExplore: () => void;
+  onViewFullChart?: () => void;
 }) {
   const c = p.c;
   const plan = planOf(c.price, p.risk);
@@ -556,7 +558,10 @@ function PickBody({ p, pos, now, starred, onStar, onInfo, onPrev, onNext, onClos
         </div>
       </div>
 
-      <div className="alp-modal-f"><button type="button" className="alp-btn" onClick={onExplore}>Stock Intelligence →</button></div>
+      <div className="alp-modal-f" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        {onViewFullChart && <button type="button" className="alp-btn ghost" onClick={onViewFullChart}>View Full Chart</button>}
+        <button type="button" className="alp-btn" onClick={onExplore}>Stock Intelligence →</button>
+      </div>
     </>
   );
 }

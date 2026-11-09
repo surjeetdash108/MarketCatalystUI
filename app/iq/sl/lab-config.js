@@ -94,7 +94,7 @@ export function periodOf(cfg = {}, tf = "d") {
   const T = TF[tf] || TF.d;
   if (!T.fmp) {
     const y = num(cfg.yrs);
-    return { years: YEAR_OPTS.includes(String(cfg.yrs)) || (y >= 1 && y <= 10) ? y : 5 };
+    return { years: YEAR_OPTS.includes(String(cfg.yrs)) || (y >= 1 && y <= 10) ? y : 1 };
   }
   const opts = [...(IPER[tf] || [T.days]), ...(IPERX[tf] || [])], v = num(cfg["idays_" + tf]);
   return { days: opts.includes(v) ? v : T.days };

@@ -173,7 +173,7 @@ export default class StrategyLab extends Component {
   specOf(k) { return this.state.labConds[k] || (this.strategyOf(k) || {}).cond || { entry: [], exit: [] }; }
   candleOpts(spec) { const ID = Engine.IND, ni = [...spec.entry, ...spec.exit].some(function f(c) { return c.any ? c.any.some(f) : [c.a, c.b].some((o) => o && ID[o.ind] && ID[o.ind].intraday); }); return ni ? INTRA_TF : ALL_TF; }
   tfOf(k) { const x = this.strategyOf(k) || {}, want = this.state.candles[k] || x.tf || "d", ok = this.candleOpts(this.specOf(k)); return ok.includes(want) ? want : ok.includes(x.tf) ? x.tf : ok[0]; }
-  defaultCfg(x) { return x && x.cfg ? { ...x.cfg } : { ...riskToCfg((x && x.risk) || {}), cost: "5", yrs: "5" }; }
+  defaultCfg(x) { return x && x.cfg ? { ...x.cfg } : { ...riskToCfg((x && x.risk) || {}), cost: "5", yrs: "1" }; }
   cfgOf(k) { return this.state.cfgs[k] || this.defaultCfg(this.strategyOf(k)); }
   engCfg(k) { return valCfg(this.cfgOf(k), this.tfOf(k)); }
   setCfg(k, patch) { this.setState((s) => ({ cfgs: { ...s.cfgs, [k]: { ...(s.cfgs[k] || this.defaultCfg(this.strategyOf(k))), ...patch } } })); }
@@ -354,7 +354,7 @@ export default class StrategyLab extends Component {
     for (const v of old) {
       if (!v || !v.cond || have.has(v.id)) continue;
       const id = /^[a-z0-9]{4,24}$/.test(String(v.id)) ? v.id : newId(), tf = v.tf || "d";
-      const doc = { name: v.name || "Saved strategy", tf, cond: v.cond, cfg: savedCfgOf({ ...migrateRisk(v.risk), cost: "5", yrs: "5" }, tf), hold: v.hold || "", q: v.q || "", why: v.why || "" };
+      const doc = { name: v.name || "Saved strategy", tf, cond: v.cond, cfg: savedCfgOf({ ...migrateRisk(v.risk), cost: "5", yrs: "1" }, tf), hold: v.hold || "", q: v.q || "", why: v.why || "" };
       try { out.unshift(await apiPost("/live/strategy-lab/saved/" + id, doc)); } catch { return arr; }
     }
     try { localStorage.setItem(MIGRATED, "1"); } catch { /* ignore */ }
@@ -443,7 +443,7 @@ export default class StrategyLab extends Component {
       return {
         custom: { cond: { entry: spec.entry, exit: spec.exit }, name: spec.name || "Your strategy", q, why, src, unparsed },
         unparsedAck: false, customSvId: null, labConds: drop(s.labConds), vals: drop(s.vals),
-        cfgs: { ...s.cfgs, custom: { ...riskToCfg(risk), cost: "5", yrs: "5" } }, candles: { ...s.candles, custom: tf },
+        cfgs: { ...s.cfgs, custom: { ...riskToCfg(risk), cost: "5", yrs: "1" } }, candles: { ...s.candles, custom: tf },
         ai: { q, src, name: spec.name || "Your strategy", why },
       };
     }, () => { if (!this.blockedOf("custom")) this.runValidate("custom"); });

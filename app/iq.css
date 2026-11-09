@@ -13973,7 +13973,7 @@ h6.sd-sec {
 .iq-root .alp-four { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 24px; }
 .iq-root .alp-four .alp-k { display: block; margin-bottom: 6px; }
 .iq-root .alp-four .alp-li { padding: 3px 0; }
-.iq-root .alp-modal-f { display: flex; justify-content: flex-end; padding: 14px 22px; border-top: 1px solid var(--border-soft); }
+.iq-root .alp-modal-f { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--border-soft); }
 .iq-root .alp-modal-f .alp-btn { padding: 9px 16px; font-size: .81rem; }
 
 .iq-root .alp-info-h { display: flex; align-items: center; gap: 10px; }

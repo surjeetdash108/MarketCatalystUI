@@ -19,4 +19,18 @@ describe("Money Flow on a phone / tablet", () => {
   it("phone header: clock, market status and the theme switch get their own row", () => {
     assert.match(block("@media (max-width: 767px)"), /\.mf-nav-status \{[^}]*width: 100% !important;/);
   });
+
+  it("popover occupies 80% screen width on mobile and is centered with backdrop scrim", () => {
+    assert.match(mf, /const isMobile = vw < 768;/);
+    assert.match(mf, /boxW = isMobile \? Math\.round\(vw \* 0\.8\) : popoverWidth\(5\);/);
+    assert.match(mf, /width: isMobile \? "80vw" : boxW/);
+    assert.match(mf, /left: isMobile \? "50%" :/);
+    assert.match(mf, /transform: isMobile \? "translate\(-50%, -50%\)" :/);
+    assert.match(mf, /isMobile && \(\s*<div[^>]*position:\s*"fixed"[^>]*background:\s*"rgba\(0,0,0,0\.65\)"/);
+  });
+
+  it("popover on mobile provides 2 stat columns and close button", () => {
+    assert.match(mf, /statCols = isMobile \? 2 :/);
+    assert.match(mf, /isMobile && \(\s*<button[^>]*aria-label="Close"[^>]*onClick=\{[^}]*setHoveredStock\(null\)[^}]*\}[\s\S]*?>\s*×\s*<\/button>/);
+  });
 });

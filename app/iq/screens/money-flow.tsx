@@ -2488,10 +2488,12 @@ export function MoneyFlowScreen() {
         const s = (hoveredStock ? stockByT.get(hoveredStock.stock.t) : null) ?? hoveredStock.stock;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const boxW = popoverWidth(5);
-        const scale = popoverScale(vw, vh, boxW);
+        const isMobile = vw < 768;
+        const boxW = isMobile ? Math.round(vw * 0.8) : popoverWidth(5);
+        const scale = isMobile ? 1 : popoverScale(vw, vh, boxW);
         // A wider box has room for more stat columns, which keeps it short.
-        const statCols = Math.max(2, Math.min(4, Math.floor(boxW / 240)));
+        const statCols = isMobile ? 2 : Math.max(2, Math.min(4, Math.floor(boxW / 240)));
+        const chartH = isMobile ? 240 : POPOVER.chartH;
         const bull = !board?.losers.some((l) => l.t === s.t) && (board?.gainers.some((g) => g.t === s.t) || s.pctChange >= 0);
         const G = "var(--th-3ddc84)";
         const R = "var(--th-f0565a)";
@@ -2500,44 +2502,60 @@ export function MoneyFlowScreen() {
         const stats = popoverStats(s, board ?? { gainers: [], losers: [] });
         const q = getDisplayQuote(s);
         const dChg = s.price - s.prevClose;
-        const chartW = popoverChartWidth(5);
+        const chartW = isMobile ? Math.max(boxW - 32, 280) : popoverChartWidth(5);
         const rect = hoveredStock.rect;
         return (
-          <div
-            data-mf-pop=""
-            onMouseEnter={() => {
-              if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-            }}
-            onMouseLeave={handleTileLeave}
-            ref={(el) => {
-              // Vertical position needs the rendered height.
-              if (!el) return;
-              el.style.top = `${popoverPlacement(rect, vw, vh, scale, el.offsetHeight * scale, boxW).top}px`;
-            }}
-            style={{
-              position: "fixed",
-              zIndex: 9999,
-              left: popoverPlacement(rect, vw, vh, scale, 0, boxW).left,
-              width: boxW,
-              maxWidth: "calc(100vw - 16px)",
-              maxHeight: (vh - 16) / scale,
-              overflowY: "auto",
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-              // Open pop-ups take the pointer so it can move from the tile onto the preview.
-              pointerEvents: popoverInteractive({ key: s.t, pinned: !!hoveredStock.pinned }) ? "auto" : "none",
-              background: `linear-gradient(180deg, ${bull ? "rgba(61,220,132,.10)" : "rgba(240,86,90,.10)"}, transparent 110px), var(--th-0b0d0e)`,
-              border: `1px solid ${bull ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)"}`,
-              borderBottom: `2px solid ${c}`,
-              borderRadius: 12,
-              boxShadow: `0 24px 60px rgba(0,0,0,.65), 0 0 34px ${bull ? "rgba(61,220,132,.12)" : "rgba(240,86,90,.12)"}`,
-              padding: 14,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              boxSizing: "border-box",
-            }}
-          >
+          <>
+            {isMobile && (
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 9998,
+                  background: "rgba(0,0,0,0.65)",
+                  backdropFilter: "blur(2px)",
+                }}
+                onClick={() => setHoveredStock(null)}
+              />
+            )}
+            <div
+              data-mf-pop=""
+              onMouseEnter={() => {
+                if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+              }}
+              onMouseLeave={handleTileLeave}
+              ref={(el) => {
+                // Vertical position needs the rendered height.
+                if (!el) return;
+                if (!isMobile) {
+                  el.style.top = `${popoverPlacement(rect, vw, vh, scale, el.offsetHeight * scale, boxW).top}px`;
+                }
+              }}
+              style={{
+                position: "fixed",
+                zIndex: 9999,
+                left: isMobile ? "50%" : popoverPlacement(rect, vw, vh, scale, 0, boxW).left,
+                top: isMobile ? "50%" : undefined,
+                width: isMobile ? "80vw" : boxW,
+                maxWidth: isMobile ? "80vw" : "calc(100vw - 16px)",
+                maxHeight: isMobile ? "85vh" : (vh - 16) / scale,
+                overflowY: "auto",
+                transform: isMobile ? "translate(-50%, -50%)" : `scale(${scale})`,
+                transformOrigin: isMobile ? "center center" : "top left",
+                // Open pop-ups take the pointer so it can move from the tile onto the preview.
+                pointerEvents: isMobile || popoverInteractive({ key: s.t, pinned: !!hoveredStock.pinned }) ? "auto" : "none",
+                background: `linear-gradient(180deg, ${bull ? "rgba(61,220,132,.10)" : "rgba(240,86,90,.10)"}, transparent 110px), var(--th-0b0d0e)`,
+                border: `1px solid ${bull ? "rgba(61,220,132,.45)" : "rgba(240,86,90,.45)"}`,
+                borderBottom: `2px solid ${c}`,
+                borderRadius: 12,
+                boxShadow: `0 24px 60px rgba(0,0,0,.65), 0 0 34px ${bull ? "rgba(61,220,132,.12)" : "rgba(240,86,90,.12)"}`,
+                padding: isMobile ? 12 : 14,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                boxSizing: "border-box",
+              }}
+            >
             {/* Header */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <StockLogo sym={s.t} size={25} style={{ width: 38, height: 38, borderRadius: 8, flex: "none", boxShadow: `0 0 0 1px ${c}`, fontSize: 19 }} />
@@ -2582,31 +2600,51 @@ export function MoneyFlowScreen() {
                   {!q.isAH && ` · ${dChg >= 0 ? "+" : "−"}${Math.abs(dChg).toFixed(2)}`}
                 </span>
               </div>
+              {isMobile && (
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setHoveredStock(null)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--th-7a8481)",
+                    fontSize: 24,
+                    lineHeight: 1,
+                    cursor: "pointer",
+                    padding: "0 4px",
+                    marginLeft: 4,
+                    flex: "none",
+                  }}
+                >
+                  ×
+                </button>
+              )}
             </div>
 
             <div style={{ height: 1, background: "var(--th-1a2328)" }} />
 
             {/* Stats: 2–4 columns by box width, divider between columns */}
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${statCols}, minmax(0, 1fr))`, gap: "7px 0" }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${statCols}, minmax(0, 1fr))`, gap: isMobile ? "6px 8px" : "7px 0" }}>
               {stats.map((st, i) => (
                 <div
                   key={st.k}
                   style={{
                     display: "flex",
-                    flexWrap: "wrap",
+                    flexWrap: isMobile ? "nowrap" : "wrap",
                     justifyContent: "space-between",
                     alignItems: "center",
                     gap: "2px 8px",
                     minWidth: 0,
-                    padding: "0 12px",
-                    borderLeft: i % statCols !== 0 ? "1px solid var(--th-1a2328)" : "none",
+                    padding: isMobile ? "2px 6px" : "0 12px",
+                    borderLeft: !isMobile && i % statCols !== 0 ? "1px solid var(--th-1a2328)" : isMobile && i % 2 !== 0 ? "1px solid var(--th-1a2328)" : "none",
                   }}
                 >
                   <span
                     style={{
                       fontSize: popText(11, scale),
                       fontWeight: 700,
-                      letterSpacing: ".12em",
+                      letterSpacing: isMobile ? ".06em" : ".12em",
                       textTransform: "uppercase",
                       color: "var(--th-7a8481)",
                       flex: "none",
@@ -2739,7 +2777,9 @@ export function MoneyFlowScreen() {
               style={{
                 flex: "none",
                 // The chart draws its own box around the price area; R1/R2/S1/S2 sit outside it.
-                overflow: "hidden",
+                overflowX: "auto",
+                overflowY: "hidden",
+                WebkitOverflowScrolling: "touch",
               }}
             >
               {popFull ? (
@@ -2768,7 +2808,7 @@ export function MoneyFlowScreen() {
             </div>
 
             {/* Open the stock elsewhere */}
-            <div style={{ display: "flex", gap: 6, flex: "none" }}>
+            <div style={{ display: "flex", gap: 6, flex: "none", flexWrap: isMobile ? "wrap" : "nowrap" }}>
               {[
                 { l: popoverButtons()[0], go: () => exitToMC(s.t), bg: "var(--th-4ade80)", bd: "var(--th-22c55e)", fg: "var(--th-05210f)" },
                 { l: popoverButtons()[1], go: () => enterSI(s.t), bg: "var(--th-161b1d)", bd: "var(--th-233038)", fg: "var(--th-7fa8d0)" },
@@ -2781,9 +2821,9 @@ export function MoneyFlowScreen() {
                     b.go();
                   }}
                   style={{
-                    flex: "1 1 0",
+                    flex: isMobile ? "1 1 100%" : "1 1 0",
                     minWidth: 0,
-                    padding: "6px 8px",
+                    padding: isMobile ? "8px 10px" : "6px 8px",
                     borderRadius: 6,
                     background: b.bg,
                     border: `1px solid ${b.bd}`,
@@ -2795,6 +2835,7 @@ export function MoneyFlowScreen() {
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
+                    textAlign: "center",
                   }}
                 >
                   {b.l}
@@ -2802,6 +2843,7 @@ export function MoneyFlowScreen() {
               ))}
             </div>
           </div>
+          </>
         );
       })()}
 
