@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { firebaseAuth } from "../../firebase";
-import { apiDownload, apiGet, apiPost } from "../../iq/backend";
+import { apiDelete, apiDownload, apiGet, apiPost } from "../../iq/backend";
 import { errorBody } from "../../iq/billing/api";
 import { formatMoney, longDate } from "../../iq/billing/catalog";
 import { Button, Modal, Notice, pill } from "../../iq/billing/ui";
 import { escapeHtml } from "../admin-metrics";
 import { ADMIN_EMAIL } from "../admin-email";
 
-interface Row { uid: string; name: string | null; email: string | null; planId: string; planName: string; interval: string | null; status: string; startedAt: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; promoCode: string | null; retentionUsed: boolean; mrrMinor: number }
+interface Row { uid: string; name: string | null; email: string | null; planId: string; planName: string; interval: string | null; status: string; startedAt: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; promoCode: string | null; retentionUsed: boolean; mrrMinor: number; staff: boolean }
 interface Promo { id: string; code: string; percentOff: number | null; amountOff: number | null; duration: string; durationInMonths: number | null; appliesToPlans: string[]; appliesToIntervals: string[]; expiresAt: string | null; maxRedemptions: number | null; timesRedeemed: number; firstTimeOnly: boolean; active: boolean }
 interface Audit { actor: string; method: string; path: string; outcome: string; at: string }
 
@@ -18,7 +18,7 @@ const input: React.CSSProperties = { height: 32, borderRadius: 8, border: "1px s
 /** /admin/billing — subscribers, promo codes and the audit log. Admin account only. */
 export function AdminBilling() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<"subscribers" | "promos" | "audit">("subscribers");
+  const [tab, setTab] = useState<"subscribers" | "staff" | "promos" | "audit">("subscribers");
   useEffect(() => {
     void firebaseAuth.authStateReady().then(() => setAllowed((firebaseAuth.currentUser?.email ?? "").toLowerCase() === ADMIN_EMAIL));
   }, []);
@@ -30,7 +30,7 @@ export function AdminBilling() {
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <h2 style={{ margin: 0, color: "var(--text-hi)" }}>Billing</h2>
         <div style={{ marginLeft: 16, display: "flex", gap: 6 }}>
-          {(["subscribers", "promos", "audit"] as const).map((t) => (
+          {(["subscribers", "staff", "promos", "audit"] as const).map((t) => (
             <button key={t} type="button" style={pill(tab === t)} onClick={() => setTab(t)} data-testid={`tab-${t}`}>{t[0].toUpperCase() + t.slice(1)}</button>
           ))}
         </div>
@@ -38,6 +38,7 @@ export function AdminBilling() {
       </div>
       <TestClock />
       {tab === "subscribers" && <Subscribers />}
+      {tab === "staff" && <StaffAccess />}
       {tab === "promos" && <Promos />}
       {tab === "audit" && <AuditLog />}
     </div>
@@ -65,13 +66,15 @@ function TestClock() {
 function Subscribers() {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
-  const [f, setF] = useState({ q: "", plan: "", status: "", interval: "", cancelAtPeriodEnd: "", promo: "" });
+  const [f, setF] = useState({ q: "", plan: "", status: "", interval: "", cancelAtPeriodEnd: "", promo: "", staff: "" });
+  const [counts, setCounts] = useState<{ subscriberCount: number; staffCount: number }>({ subscriberCount: 0, staffCount: 0 });
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const query = new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
   const load = useCallback(async () => {
-    const r = await apiGet<{ subscribers: Row[]; totalMrrMinor: number }>(`/api/admin/billing/subscribers${query ? `?${query}` : ""}`);
+    const r = await apiGet<{ subscribers: Row[]; totalMrrMinor: number; subscriberCount: number; staffCount: number }>(`/api/admin/billing/subscribers${query ? `?${query}` : ""}`);
     setRows(r.subscribers);
     setTotal(r.totalMrrMinor);
+    setCounts({ subscriberCount: r.subscriberCount ?? 0, staffCount: r.staffCount ?? 0 });
   }, [query]);
   useEffect(() => {
     void load();
@@ -90,9 +93,10 @@ function Subscribers() {
         {sel("status", ["ACTIVE", "TRIALING", "PAST_DUE", "CANCELLED", "EXPIRED", "NONE"])}
         {sel("interval", ["monthly", "annual"])}
         {sel("cancelAtPeriodEnd", ["true", "false"])}
+        {sel("staff", ["true", "false"])}
         <input placeholder="Promo code" value={f.promo} onChange={(e) => setF({ ...f, promo: e.target.value })} style={{ ...input, width: 120 }} />
         <Button kind="secondary" testId="sub-csv" onClick={() => void apiDownload(`/api/admin/billing/subscribers?${query ? `${query}&` : ""}format=csv`, "subscribers.csv")}>Export CSV</Button>
-        <span style={{ marginLeft: "auto", fontSize: ".82rem" }} data-testid="sub-mrr">{rows.length} shown · MRR {formatMoney(total)}</span>
+        <span style={{ marginLeft: "auto", fontSize: ".82rem" }} data-testid="sub-mrr">{rows.length} shown · {counts.subscriberCount} paying (staff excluded) · MRR {formatMoney(total)}</span>
       </div>
       <div className="tbl-wrap">
         <table className="tbl">
@@ -100,7 +104,7 @@ function Subscribers() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.uid} onClick={() => void apiGet<Record<string, unknown>>(`/api/admin/billing/subscribers/${r.uid}`).then(setDetail)} style={{ cursor: "pointer" }}>
-                <td>{r.name ?? "—"}</td><td>{r.email ?? "—"}</td><td>{r.planName}</td><td>{r.interval ?? "—"}</td><td>{r.status.toLowerCase()}</td>
+                <td>{r.name ?? "—"}{r.staff && <span data-testid="staff-badge" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--brand-dim)", color: "var(--brand-2)", border: "1px solid var(--brand)" }}>Staff</span>}</td><td>{r.email ?? "—"}</td><td>{r.planName}</td><td>{r.interval ?? "—"}</td><td>{r.status.toLowerCase()}</td>
                 <td>{r.startedAt ? longDate(r.startedAt) : "—"}</td><td>{r.currentPeriodEnd ? longDate(r.currentPeriodEnd) : "—"}</td>
                 <td>{r.cancelAtPeriodEnd ? "yes" : ""}</td><td>{r.promoCode ?? ""}</td><td>{r.retentionUsed ? "used" : ""}</td><td style={{ textAlign: "right" }}>{r.mrrMinor ? formatMoney(r.mrrMinor) : "—"}</td>
               </tr>
@@ -111,6 +115,7 @@ function Subscribers() {
       {detail && (
         <Modal title={`${String(detail.name ?? detail.email ?? detail.uid)}`} onClose={() => setDetail(null)} testId="sub-detail">
           <div style={{ fontSize: ".8rem" }}>{String(detail.planName)} · {String(detail.status).toLowerCase()} · MRR {formatMoney(Number(detail.mrrMinor ?? 0))}</div>
+          <SubscriberContact detail={detail} onRefunded={() => void apiGet<Record<string, unknown>>(`/api/admin/billing/subscribers/${String(detail.uid)}`).then(setDetail).then(load)} />
           <b>Invoices</b>
           {(detail.invoices as Array<Record<string, unknown>>).map((i) => <div key={String(i.paymentId)} style={{ fontSize: ".78rem" }}>{longDate(String(i.paymentDate))} · {String(i.planName)} · {formatMoney(Number(i.amount))} · {String(i.paymentStatus)}</div>)}
           <b>History</b>
@@ -216,6 +221,89 @@ function AuditLog() {
         <table className="tbl">
           <thead><tr>{["When", "Who", "Action", "Outcome"].map((h) => <th key={h} style={{ textAlign: "left" }}>{h}</th>)}</tr></thead>
           <tbody>{rows.map((r, i) => <tr key={i}><td>{new Date(r.at).toISOString().slice(0, 16).replace("T", " ")}</td><td>{r.actor}</td><td>{r.method} {r.path}</td><td>{r.outcome}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Phone (masked except the last 4; reveal is audited), renewal consent, billing region and the refund action. */
+function SubscriberContact({ detail, onRefunded }: { detail: Record<string, unknown>; onRefunded: () => void }) {
+  const uid = String(detail.uid);
+  const [phone, setPhone] = useState<string | null>(null);
+  const [refund, setRefund] = useState<{ eligible: boolean; amount?: number; currency?: string; reason?: string } | null | "off">(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    apiGet<{ eligible: boolean; amount?: number; currency?: string; reason?: string }>(`/api/admin/billing/subscribers/${uid}/refund`)
+      .then(setRefund)
+      .catch((e) => setRefund(errorBody(e).status === 404 ? "off" : null));
+  }, [uid]);
+  const consent = detail.consent as Record<string, unknown> | null;
+  const region = detail.billingRegion as Record<string, unknown> | null;
+  return (
+    <div data-testid="sub-contact" style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: ".78rem" }}>
+      <div>
+        <b>Mobile</b>{" "}
+        <span data-testid="sub-phone">{phone ?? (detail.phoneMasked as string | null) ?? "—"}</span>{" "}
+        {detail.phoneMasked && !phone ? (
+          <button type="button" className="btn" data-testid="sub-phone-reveal" onClick={() => void apiPost<{ phone: string | null }>(`/api/admin/billing/subscribers/${uid}/phone/reveal`).then((r) => setPhone(r.phone))}>Reveal (audited)</button>
+        ) : null}
+      </div>
+      {region && <div><b>Billing region</b> {[region.postalCode, region.state, region.country].filter(Boolean).join(", ")}</div>}
+      <div data-testid="sub-consent">
+        <b>Renewal consent</b>{" "}
+        {consent ? `${longDate(String(consent.acceptedAt))} · v${String(consent.version)} · ${String(consent.planId)} ${String(consent.interval)} at ${formatMoney(Number(consent.price), String(consent.currency ?? "USD"))} · IP ${String(consent.ip ?? "—")}` : "—"}
+      </div>
+      {refund !== "off" && refund?.eligible && (
+        <div>
+          <Button kind="danger" testId="sub-refund" onClick={() => void apiPost<{ amount: number }>(`/api/admin/billing/subscribers/${uid}/refund`).then((r) => { setMsg(`Refunded ${formatMoney(r.amount)}; the plan has ended.`); onRefunded(); }).catch((e) => setMsg(errorBody(e).message ?? "Refund failed."))}>
+            Refund {formatMoney(Number(refund.amount ?? 0), refund.currency ?? "USD")} and end the plan
+          </Button>
+        </div>
+      )}
+      {msg && <Notice testId="sub-refund-msg">{msg}</Notice>}
+    </div>
+  );
+}
+
+/** The staff allowlist (config/staff_access): full access, never billed, not admin. Every change is audited. */
+function StaffAccess() {
+  const [emails, setEmails] = useState<string[]>([]);
+  const [email, setEmail] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => apiGet<{ emails: string[] }>("/api/admin/staff-access").then((r) => setEmails(r.emails)), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const add = async () => {
+    setErr(null);
+    try {
+      setEmails((await apiPost<{ emails: string[] }>("/api/admin/staff-access", { email })).emails);
+      setEmail("");
+    } catch (e) {
+      setErr(errorBody(e).message ?? "Couldn't add.");
+    }
+  };
+  const remove = async (e: string) => setEmails((await apiDelete<{ emails: string[] }>(`/api/admin/staff-access/${encodeURIComponent(e)}`)).emails);
+  return (
+    <div className="card" data-testid="staff-access">
+      <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
+          Staff get every feature and are never billed. Access needs a verified email (Google, or a verified email/password account). Staff is not admin. Changes take effect at the user&apos;s next sign-in or token refresh, and are recorded in the audit log.
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...input, width: 280 }} data-testid="staff-email" />
+          <Button testId="staff-add" onClick={() => void add()} disabled={!email.trim()}>Add</Button>
+        </div>
+        {err && <Notice tone="error">{err}</Notice>}
+        <table className="tbl" data-testid="staff-list">
+          <thead><tr><th style={{ textAlign: "left" }}>Email</th><th /></tr></thead>
+          <tbody>
+            {emails.map((e) => (
+              <tr key={e}><td>{e}</td><td style={{ textAlign: "right" }}><Button kind="danger" testId={`staff-remove-${e}`} onClick={() => void remove(e)}>Remove</Button></td></tr>
+            ))}
+            {!emails.length && <tr><td colSpan={2} style={{ color: "var(--text-dim-solid)" }}>No staff accounts.</td></tr>}
+          </tbody>
         </table>
       </div>
     </div>
