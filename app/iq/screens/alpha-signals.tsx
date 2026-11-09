@@ -90,7 +90,7 @@ function CardFoot({ c, now }: { c: CompanyDoc; now: number }) {
   const er = c.nextEarningsDate && Date.parse(c.nextEarningsDate) >= now - DAY ? fmtDay(c.nextEarningsDate) : null;
   const txt = er ? `Earnings ${er}`
     : c.pctFromHigh52 != null ? (c.pctFromHigh52 > -0.05 ? "At 52W high" : `${Math.abs(c.pctFromHigh52).toFixed(1)}% below 52W high`)
-    : `RS ${Math.round(c.rsRating ?? 0)} · RVOL ${(c.rvol ?? 0).toFixed(1)}×`;
+      : `RS ${Math.round(c.rsRating ?? 0)} · RVOL ${(c.rvol ?? 0).toFixed(1)}×`;
   return (
     <div className="alp-card-foot">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
@@ -113,8 +113,8 @@ function CompRow({ x }: { x: Comp }) {
 /** Price-history windows. Every one is cut from DAILY closes: the backend's own "1M"
  *  is 30-minute bars, and it has no 9M — "1Y" is the shortest daily series covering it. */
 const PRICE_RANGES = [
-  { key: "1M", tf: "3M", days: 31,  aria: "month" },
-  { key: "3M", tf: "3M", days: 92,  aria: "3 months" },
+  { key: "1M", tf: "3M", days: 31, aria: "month" },
+  { key: "3M", tf: "3M", days: 92, aria: "3 months" },
   { key: "6M", tf: "6M", days: 184, aria: "6 months" },
   { key: "9M", tf: "1Y", days: 275, aria: "9 months" },
 ] as const;
@@ -405,7 +405,7 @@ export function AlphaSignals() {
                 </div>
               )}
               <div className="alp-detail-f">
-                <button type="button" className="alp-btn ghost" onClick={() => openStockDetail(curRow.ticker, rows.map(r => r.ticker))}>Open Stock</button>
+                <button type="button" className="alp-btn ghost" onClick={() => openStockDetail(curRow.ticker, rows.map(r => r.ticker))}>Open Full Chart</button>
                 <button type="button" className="alp-btn" onClick={() => enterSI(curRow.ticker)}>Stock Intelligence →</button>
               </div>
             </>
