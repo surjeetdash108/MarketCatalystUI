@@ -7,6 +7,7 @@ import {
   browserLocalPersistence,
   browserPopupRedirectResolver,
   GoogleAuthProvider,
+  connectAuthEmulator,
 } from "firebase/auth";
 
 // Env-driven so each branch/environment authenticates against its OWN Firebase
@@ -62,6 +63,20 @@ function createAuth() {
 }
 
 export const firebaseAuth = createAuth();
+
+/**
+ * Local development / walkthroughs only: NEXT_PUBLIC_AUTH_EMULATOR_HOST
+ * (e.g. 127.0.0.1:9099) points sign-in at the Firebase Auth emulator so no
+ * production account is touched. Ignored on the production hostnames.
+ */
+const AUTH_EMULATOR = process.env.NEXT_PUBLIC_AUTH_EMULATOR_HOST?.trim();
+if (
+  AUTH_EMULATOR &&
+  typeof window !== "undefined" &&
+  !["app.marketcatalyst.ai", "marketcatalyst.web.app", "marketcatalyst.firebaseapp.com"].includes(window.location.hostname)
+) {
+  connectAuthEmulator(firebaseAuth, `http://${AUTH_EMULATOR}`, { disableWarnings: true });
+}
 export const googleAuthProvider = new GoogleAuthProvider();
 
 export async function getFirebaseAnalytics() {

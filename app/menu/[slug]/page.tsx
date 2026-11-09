@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { menuItems } from "../../dashboard/menu-items";
 import { IQShell } from "../../iq/shell";
+import { EntitlementGate } from "../../iq/entitlement-gate";
 import { EarningsScreen } from "../../iq/screens/earnings";
 import { MoversScreen } from "../../iq/screens/movers";
 import { HeatmapScreen } from "../../iq/screens/heatmap";
@@ -63,5 +64,9 @@ export default async function MenuPage({
   const screen = SCREENS[slug];
   if (!screen) notFound();
 
-  return <IQShell>{screen}</IQShell>;
+  return (
+    <IQShell>
+      <EntitlementGate slug={slug}>{screen}</EntitlementGate>
+    </IQShell>
+  );
 }

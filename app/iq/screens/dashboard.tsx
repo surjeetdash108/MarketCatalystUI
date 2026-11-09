@@ -9,6 +9,8 @@ import { type Mover, type SectorRow, type Earning, type FolioItem, type WatchIte
 import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, NotAvailable, VendorTag, useShowVendorTags, vendorText, cleanCatalystText, headlineLeadsWithTicker } from "../utils";
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
+import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
+import { EntitlementGate } from "../entitlement-gate";
 import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
 import { useApiResource } from "../hooks/useApiResource";
 import { WmnCarousel, type WmnSlide } from "../wmn-carousel";
@@ -441,7 +443,12 @@ export function DashboardScreen() {
   }, [liveEarnings]);
   const { data: companies, loading: companiesLoading } = useApiList<CompanyDoc>("/market-data/companies");
   const { data: sectorsLive } = useApiList<SectorApiDoc>("/market-data/sectors");
-  const { data: liveInsiderTx, loading: insiderLoading } = useApiList<InsiderTxDoc>("/market-data/insider-transactions?limit=200");
+  // Starter widgets: fetch only when the plan includes them, so a Free user
+  // makes no request the backend would refuse (403); the card shows a lock.
+  const entitlementState = useEntitlements();
+  const insiderAllowed = featureDecision(entitlementState, "ownership").kind === "allow";
+  const analystAllowed = featureDecision(entitlementState, "workspaces").kind === "allow";
+  const { data: liveInsiderTx, loading: insiderLoading } = useApiList<InsiderTxDoc>(insiderAllowed ? "/market-data/insider-transactions?limit=200" : null);
   // Per-ticker news — powers the "why it moved" line in the hover popup AND the
   // latest-headlines list inside the "What Matters Now" card.
   // Still needed by the ticker popovers, but no longer for a loading state —
@@ -462,7 +469,7 @@ export function DashboardScreen() {
   const { data: fgHistory } = useApiList<MarketSentimentHistoryDoc>("/market-data/market-sentiment-history");
   // EDGAR 8-K earnings announcements (session + price reaction).
   const { data: earningsAnnouncements } = useApiList<EarningsAnnouncementDoc>("/market-data/earnings-announcements");
-  const { data: consensusLive, loading: consensusLoading } = useApiList<AnalystConsensusDoc>("/market-data/analyst-actions");
+  const { data: consensusLive, loading: consensusLoading } = useApiList<AnalystConsensusDoc>(analystAllowed ? "/market-data/analyst-actions" : null);
   const { data: recaps, loading: recapsLoading } = useApiList<RecapDoc>("/market-data/recaps");
   const latestRecap = [...recaps].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))[0] ?? null;
   const { data: mostSearched, loading: mostSearchedLoading } = useApiResource<{ results: Array<{ ticker: string; count: number }> }>("/live/most-searched-tickers?limit=18");
@@ -609,7 +616,8 @@ export function DashboardScreen() {
   // list renders DataState instead of a fabricated $128,430 showcase.
   const uid = firebaseAuth.currentUser?.uid ?? null;
   const { data: watchlistsRes, loading: watchlistLoading } = useApiResource<{ watchlists: { id: string; name: string; tickers: string[] }[] }>(uid ? "/api/watchlists" : null);
-  const { data: portfolioDoc, loading: portfolioLoading } = useApiResource<{ holdings: HoldingDoc[] }>(uid ? "/api/portfolio" : null);
+  const portfolioAllowed = featureDecision(entitlementState, "portfolio").kind === "allow";
+  const { data: portfolioDoc, loading: portfolioLoading } = useApiResource<{ holdings: HoldingDoc[] }>(uid && portfolioAllowed ? "/api/portfolio" : null);
   // A user can keep several named watchlists (backend GET /api/watchlists). The
   // widget shows one at a time; a dropdown appears in its header only when there
   // is more than one list to switch between.
@@ -1128,6 +1136,7 @@ export function DashboardScreen() {
               <Link className="link" href="/menu/analyst">View all →</Link>
             </div>
             <div className="card-b" style={{ paddingTop: 4, flex: 1, minHeight: 0, maxHeight: 440, overflowY: "auto" }}>
+              <EntitlementGate entitlement="workspaces" variant="widget">
               {analystRated.length === 0 ? (
                 <DataState loading={consensusLoading} label="No analyst consensus synced yet." height={80} />
               ) : (
@@ -1160,6 +1169,7 @@ export function DashboardScreen() {
                   ))}
                 </>
               )}
+              </EntitlementGate>
             </div>
           </div>
         </div>
@@ -1219,6 +1229,7 @@ export function DashboardScreen() {
               <Link className="link" href="/menu/portfolio">View all →</Link>
             </div>
             <div className="card-b" style={{ paddingTop: 8 }}>
+              <EntitlementGate entitlement="portfolio" variant="widget">
               {isRealFolio ? (() => {
                 // Value only holdings with a real synced price. A holding whose
                 // price hasn't synced must NEVER be treated as $0 — that silently
@@ -1272,6 +1283,7 @@ export function DashboardScreen() {
                   </div>
                 );
               })}
+              </EntitlementGate>
             </div>
           </div>
         </div>
@@ -1322,6 +1334,7 @@ export function DashboardScreen() {
               <Link className="link" href="/menu/insider">View all →</Link>
             </div>
             <div className="card-b" style={{ paddingTop: 4 }}>
+              <EntitlementGate entitlement="ownership" variant="widget">
               {INSIDER_MINI.length === 0 ? (
                 <DataState loading={insiderLoading} label="No insider filings synced yet." height={80} />
               ) : INSIDER_MINI.map(x => (
@@ -1337,6 +1350,7 @@ export function DashboardScreen() {
                   </span>
                 </div>
               ))}
+              </EntitlementGate>
             </div>
           </div>
         </div>

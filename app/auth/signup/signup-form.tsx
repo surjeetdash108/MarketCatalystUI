@@ -24,6 +24,8 @@ import {
   showError,
 } from "../auth-utils";
 import { LegalModal } from "../legal/legal-modal";
+import { PlanPicker } from "../../iq/billing/plan-picker";
+import { afterSignupPath } from "../../iq/billing/plan-intent";
 
 const divider: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 12,
@@ -94,7 +96,8 @@ export function SignupForm() {
       const cred = await createUserWithEmailAndPassword(firebaseAuth, profile.email, password);
       await updateProfile(cred.user, { displayName: profile.name });
       await apiPatch("/api/profile", toProfilePatch(profile));
-      window.location.href = "/dashboard";
+      // A paid plan chosen on the picker continues to checkout; Free goes home.
+      window.location.href = afterSignupPath("/dashboard");
     } catch (err) {
       const msg = getAuthErrorMessage(err);
       setError(msg); showError(msg);
@@ -170,6 +173,9 @@ export function SignupForm() {
       <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
         Set up your market intelligence workspace in seconds.
       </p>
+
+      {/* Plan (preselected from the website tile) */}
+      <PlanPicker />
 
       {/* Google */}
       <button

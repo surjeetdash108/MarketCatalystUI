@@ -1,0 +1,223 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { firebaseAuth } from "../../firebase";
+import { apiDownload, apiGet, apiPost } from "../../iq/backend";
+import { errorBody } from "../../iq/billing/api";
+import { formatMoney, longDate } from "../../iq/billing/catalog";
+import { Button, Modal, Notice, pill } from "../../iq/billing/ui";
+import { escapeHtml } from "../admin-metrics";
+import { ADMIN_EMAIL } from "../admin-email";
+
+interface Row { uid: string; name: string | null; email: string | null; planId: string; planName: string; interval: string | null; status: string; startedAt: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; promoCode: string | null; retentionUsed: boolean; mrrMinor: number }
+interface Promo { id: string; code: string; percentOff: number | null; amountOff: number | null; duration: string; durationInMonths: number | null; appliesToPlans: string[]; appliesToIntervals: string[]; expiresAt: string | null; maxRedemptions: number | null; timesRedeemed: number; firstTimeOnly: boolean; active: boolean }
+interface Audit { actor: string; method: string; path: string; outcome: string; at: string }
+
+const input: React.CSSProperties = { height: 32, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-1)", color: "var(--text-hi)", padding: "0 8px" };
+
+/** /admin/billing — subscribers, promo codes and the audit log. Admin account only. */
+export function AdminBilling() {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [tab, setTab] = useState<"subscribers" | "promos" | "audit">("subscribers");
+  useEffect(() => {
+    void firebaseAuth.authStateReady().then(() => setAllowed((firebaseAuth.currentUser?.email ?? "").toLowerCase() === ADMIN_EMAIL));
+  }, []);
+  if (allowed === null) return null;
+  if (!allowed) return <Notice tone="error" testId="admin-denied">Admin account only.</Notice>;
+  return (
+    <div className="iq-root" data-theme="dark" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", padding: "24px 0" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }} data-testid="admin-billing">
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <h2 style={{ margin: 0, color: "var(--text-hi)" }}>Billing</h2>
+        <div style={{ marginLeft: 16, display: "flex", gap: 6 }}>
+          {(["subscribers", "promos", "audit"] as const).map((t) => (
+            <button key={t} type="button" style={pill(tab === t)} onClick={() => setTab(t)} data-testid={`tab-${t}`}>{t[0].toUpperCase() + t.slice(1)}</button>
+          ))}
+        </div>
+        <a href="/admin" style={{ marginLeft: "auto", fontSize: ".8rem" }}>← Admin console</a>
+      </div>
+      <TestClock />
+      {tab === "subscribers" && <Subscribers />}
+      {tab === "promos" && <Promos />}
+      {tab === "audit" && <AuditLog />}
+    </div>
+    </div>
+  );
+}
+
+function TestClock() {
+  const [now, setNow] = useState<string | null>(null);
+  useEffect(() => {
+    apiGet<{ now: string }>("/api/billing/fake/clock").then((r) => setNow(r.now)).catch(() => setNow(null));
+  }, []);
+  if (!now) return null; // only with the fake provider
+  const advance = async (days: number) => setNow((await apiPost<{ now: string }>("/api/billing/fake/clock/advance", { days })).now);
+  return (
+    <Notice tone="warn" testId="test-clock">
+      Fake billing provider · simulated time {new Date(now).toISOString().slice(0, 16).replace("T", " ")} UTC{" "}
+      {[1, 7, 31, 366].map((d) => (
+        <button key={d} type="button" className="btn" style={{ marginLeft: 6 }} onClick={() => void advance(d)}>+{d}d</button>
+      ))}
+    </Notice>
+  );
+}
+
+function Subscribers() {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [total, setTotal] = useState(0);
+  const [f, setF] = useState({ q: "", plan: "", status: "", interval: "", cancelAtPeriodEnd: "", promo: "" });
+  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const query = new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
+  const load = useCallback(async () => {
+    const r = await apiGet<{ subscribers: Row[]; totalMrrMinor: number }>(`/api/admin/billing/subscribers${query ? `?${query}` : ""}`);
+    setRows(r.subscribers);
+    setTotal(r.totalMrrMinor);
+  }, [query]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const sel = (k: keyof typeof f, opts: string[]) => (
+    <select value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} style={input} aria-label={k}>
+      <option value="">{k}: all</option>
+      {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+  return (
+    <div className="card" data-testid="subscribers">
+      <div className="card-b" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <input placeholder="Search name or email" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} style={{ ...input, width: 220 }} data-testid="sub-search" />
+        {sel("plan", ["free", "starter", "pro", "elite"])}
+        {sel("status", ["ACTIVE", "TRIALING", "PAST_DUE", "CANCELLED", "EXPIRED", "NONE"])}
+        {sel("interval", ["monthly", "annual"])}
+        {sel("cancelAtPeriodEnd", ["true", "false"])}
+        <input placeholder="Promo code" value={f.promo} onChange={(e) => setF({ ...f, promo: e.target.value })} style={{ ...input, width: 120 }} />
+        <Button kind="secondary" testId="sub-csv" onClick={() => void apiDownload(`/api/admin/billing/subscribers?${query ? `${query}&` : ""}format=csv`, "subscribers.csv")}>Export CSV</Button>
+        <span style={{ marginLeft: "auto", fontSize: ".82rem" }} data-testid="sub-mrr">{rows.length} shown · MRR {formatMoney(total)}</span>
+      </div>
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead><tr>{["Name", "Email", "Plan", "Interval", "Status", "Start", "Period end", "Cancels", "Promo", "Retention", "MRR"].map((h) => <th key={h} style={{ textAlign: "left" }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.uid} onClick={() => void apiGet<Record<string, unknown>>(`/api/admin/billing/subscribers/${r.uid}`).then(setDetail)} style={{ cursor: "pointer" }}>
+                <td>{r.name ?? "—"}</td><td>{r.email ?? "—"}</td><td>{r.planName}</td><td>{r.interval ?? "—"}</td><td>{r.status.toLowerCase()}</td>
+                <td>{r.startedAt ? longDate(r.startedAt) : "—"}</td><td>{r.currentPeriodEnd ? longDate(r.currentPeriodEnd) : "—"}</td>
+                <td>{r.cancelAtPeriodEnd ? "yes" : ""}</td><td>{r.promoCode ?? ""}</td><td>{r.retentionUsed ? "used" : ""}</td><td style={{ textAlign: "right" }}>{r.mrrMinor ? formatMoney(r.mrrMinor) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {detail && (
+        <Modal title={`${String(detail.name ?? detail.email ?? detail.uid)}`} onClose={() => setDetail(null)} testId="sub-detail">
+          <div style={{ fontSize: ".8rem" }}>{String(detail.planName)} · {String(detail.status).toLowerCase()} · MRR {formatMoney(Number(detail.mrrMinor ?? 0))}</div>
+          <b>Invoices</b>
+          {(detail.invoices as Array<Record<string, unknown>>).map((i) => <div key={String(i.paymentId)} style={{ fontSize: ".78rem" }}>{longDate(String(i.paymentDate))} · {String(i.planName)} · {formatMoney(Number(i.amount))} · {String(i.paymentStatus)}</div>)}
+          <b>History</b>
+          {(detail.history as Array<Record<string, unknown>>).map((h, k) => <div key={k} style={{ fontSize: ".78rem" }}>{longDate(String(h.at))} · {String(h.type).replace(/_/g, " ")}</div>)}
+          <b>Entitlements</b>
+          <div style={{ fontSize: ".74rem" }}>{Object.entries(detail.entitlements as Record<string, boolean>).filter(([, v]) => v).map(([k]) => escapeHtml(k)).join(", ")}</div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function Promos() {
+  const [promos, setPromos] = useState<Promo[]>([]);
+  const [form, setForm] = useState({ code: "", type: "percent", value: "10", duration: "once", months: "3", plans: [] as string[], intervals: [] as string[], expiresAt: "", maxRedemptions: "", firstTimeOnly: false });
+  const [msg, setMsg] = useState<string | null>(null);
+  const [redemptions, setRedemptions] = useState<{ code: string; rows: Array<Record<string, unknown>> } | null>(null);
+  const load = useCallback(async () => setPromos((await apiGet<{ promos: Promo[] }>("/api/admin/billing/promos")).promos), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  async function create() {
+    setMsg(null);
+    try {
+      await apiPost("/api/admin/billing/promos", {
+        code: form.code,
+        ...(form.type === "percent" ? { percentOff: Number(form.value) } : { amountOff: Math.round(Number(form.value) * 100) }),
+        duration: form.duration,
+        ...(form.duration === "repeating" ? { durationInMonths: Number(form.months) } : {}),
+        appliesToPlans: form.plans,
+        appliesToIntervals: form.intervals,
+        ...(form.expiresAt ? { expiresAt: new Date(form.expiresAt).toISOString() } : {}),
+        ...(form.maxRedemptions ? { maxRedemptions: Number(form.maxRedemptions) } : {}),
+        firstTimeOnly: form.firstTimeOnly,
+      });
+      setMsg(`Created ${form.code.toUpperCase()}.`);
+      setForm({ ...form, code: "" });
+      await load();
+    } catch (e) {
+      setMsg(errorBody(e).message ?? "Could not create the code.");
+    }
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }} data-testid="promos">
+      <div className="card">
+        <div className="card-h"><h3>New promo code</h3></div>
+        <div className="card-b" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: ".8rem" }}>
+          <input placeholder="CODE" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} style={{ ...input, width: 130 }} data-testid="promo-code" />
+          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={input}><option value="percent">% off</option><option value="fixed">$ off</option></select>
+          <input value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} style={{ ...input, width: 70 }} aria-label="value" />
+          <select value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} style={input} aria-label="duration"><option value="once">once</option><option value="repeating">N months</option><option value="forever">forever</option></select>
+          {form.duration === "repeating" && <input value={form.months} onChange={(e) => setForm({ ...form, months: e.target.value })} style={{ ...input, width: 50 }} aria-label="months" />}
+          {["starter", "pro", "elite"].map((p) => <label key={p}><input type="checkbox" checked={form.plans.includes(p)} onChange={() => setForm({ ...form, plans: toggle(form.plans, p) })} /> {p}</label>)}
+          {["monthly", "annual"].map((i) => <label key={i}><input type="checkbox" checked={form.intervals.includes(i)} onChange={() => setForm({ ...form, intervals: toggle(form.intervals, i) })} /> {i}</label>)}
+          <label>expires <input type="date" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} style={input} /></label>
+          <input placeholder="max uses" value={form.maxRedemptions} onChange={(e) => setForm({ ...form, maxRedemptions: e.target.value })} style={{ ...input, width: 80 }} />
+          <label><input type="checkbox" checked={form.firstTimeOnly} onChange={(e) => setForm({ ...form, firstTimeOnly: e.target.checked })} /> first-time customers only</label>
+          <Button testId="promo-create" onClick={() => void create()} disabled={!form.code}>Create</Button>
+          {msg && <span data-testid="promo-msg">{msg}</span>}
+        </div>
+      </div>
+      <div className="card">
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr>{["Code", "Discount", "Duration", "Plans", "Intervals", "Expires", "Used", "First-time", "Status", ""].map((h) => <th key={h} style={{ textAlign: "left" }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {promos.map((p) => (
+                <tr key={p.id}>
+                  <td><b>{p.code}</b></td>
+                  <td>{p.percentOff != null ? `${p.percentOff}%` : formatMoney(p.amountOff ?? 0)}</td>
+                  <td>{p.duration === "repeating" ? `${p.durationInMonths} months` : p.duration}</td>
+                  <td>{p.appliesToPlans.join(", ") || "all"}</td><td>{p.appliesToIntervals.join(", ") || "both"}</td>
+                  <td>{p.expiresAt ? longDate(p.expiresAt) : "—"}</td>
+                  <td><button type="button" className="btn" onClick={() => void apiGet<{ redemptions: Array<Record<string, unknown>> }>(`/api/admin/billing/promos/${p.id}/redemptions`).then((r) => setRedemptions({ code: p.code, rows: r.redemptions }))}>{p.timesRedeemed}{p.maxRedemptions ? ` / ${p.maxRedemptions}` : ""}</button></td>
+                  <td>{p.firstTimeOnly ? "yes" : ""}</td>
+                  <td>{p.active ? "active" : "inactive"}</td>
+                  <td>{p.active && <button type="button" className="btn" data-testid={`deactivate-${p.code}`} onClick={() => void apiPost(`/api/admin/billing/promos/${p.id}/deactivate`).then(load)}>Deactivate</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {redemptions && (
+        <Modal title={`Redemptions of ${redemptions.code}`} onClose={() => setRedemptions(null)} testId="redemptions">
+          {redemptions.rows.length === 0 && <div>None yet.</div>}
+          {redemptions.rows.map((r) => <div key={String(r.id)} style={{ fontSize: ".8rem" }}>{longDate(String(r.redeemedAt))} · {String(r.uid)} · {String(r.planId)} ({String(r.interval)})</div>)}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function AuditLog() {
+  const [rows, setRows] = useState<Audit[]>([]);
+  useEffect(() => {
+    apiGet<{ audit: Audit[] }>("/api/admin/billing/audit").then((r) => setRows(r.audit)).catch(() => setRows([]));
+  }, []);
+  return (
+    <div className="card" data-testid="audit">
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead><tr>{["When", "Who", "Action", "Outcome"].map((h) => <th key={h} style={{ textAlign: "left" }}>{h}</th>)}</tr></thead>
+          <tbody>{rows.map((r, i) => <tr key={i}><td>{new Date(r.at).toISOString().slice(0, 16).replace("T", " ")}</td><td>{r.actor}</td><td>{r.method} {r.path}</td><td>{r.outcome}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

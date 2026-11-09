@@ -6,7 +6,8 @@ import { menuItems } from "../dashboard/menu-items";
 
 describe("SLUG_ENTITLEMENT", () => {
   it("only names screens that exist in the menu", () => {
-    const slugs = new Set<string>(menuItems.map((m) => m.slug));
+    // Plus the two screens with their own routes: /money-flow and /sl.
+    const slugs = new Set<string>([...menuItems.map((m) => m.slug), "money-flow", "sl"]);
     for (const s of Object.keys(SLUG_ENTITLEMENT)) assert.ok(slugs.has(s), `unknown screen slug ${s}`);
   });
   it("only uses catalog keys that are sellable (not staff-only, not unbuilt)", () => {
@@ -19,7 +20,10 @@ describe("SLUG_ENTITLEMENT", () => {
   });
   it("resolves mapped screens and fails open for unmapped ones", () => {
     assert.equal(entitlementForSlug("screener"), "screener");
-    assert.equal(entitlementForSlug("analyst"), null);
+    assert.equal(entitlementForSlug("analyst"), "workspaces");
+    assert.equal(entitlementForSlug("money-flow"), "moneyFlow");
+    assert.equal(entitlementForSlug("sl"), "strategyLab");
+    assert.equal(entitlementForSlug("stock"), null);
     assert.equal(entitlementForSlug("no-such-screen"), null);
   });
 });
