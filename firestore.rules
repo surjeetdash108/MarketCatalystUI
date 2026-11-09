@@ -39,22 +39,28 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == uid;
     }
 
-    // Read subscription tier from custom claim (set by backend on Stripe events)
-    // Defaults to "free" if claim is not yet set
-    function tier() {
-      return request.auth.token.get('tier', 'free');
+    // Plan from the `plan` custom claim, set only by the backend's billing
+    // event handler (catalog ids: free | starter | pro | elite).
+    function plan() {
+      return request.auth.token.get('plan', 'free');
     }
 
-    function isFree() {
-      return tier() == 'free';
+    function planAtLeast(minimum) {
+      return (minimum == 'starter' && plan() in ['starter', 'pro', 'elite'])
+          || (minimum == 'pro' && plan() in ['pro', 'elite'])
+          || (minimum == 'elite' && plan() == 'elite');
     }
 
-    function isProOrPremium() {
-      return tier() in ['pro', 'premium'];
+    // The SUBSCRIPTIONS_ENABLED release switch (admin toggle, Firestore
+    // override). Off or unset → no plan gating, today's behaviour.
+    function subscriptionsEnabled() {
+      return exists(/databases/$(database)/documents/feature_flags/default)
+          && get(/databases/$(database)/documents/feature_flags/default).data.get('flags', {}).get('SUBSCRIPTIONS_ENABLED', false) == true;
     }
 
-    function isPremium() {
-      return tier() == 'premium';
+    // Signed in, and on `minimum` or above while subscriptions are live.
+    function canReadOnPlan(minimum) {
+      return isAuthenticated() && (!subscriptionsEnabled() || planAtLeast(minimum));
     }
 
     // Investor-profile fields a user may write on their own users/{uid} doc.
@@ -108,12 +114,9 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // AI-generated earnings summaries
-    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions
-    // are wired up. Relaxed to all authenticated users during the backend
-    // migration since no code sets the `tier` custom claim yet.
+    // AI-generated earnings summaries — Starter (earnings detail)
     match /earnings_summaries/{summaryId} {
-      allow read:  if isAuthenticated();
+      allow read:  if canReadOnPlan('starter');
       allow write: if false;
     }
 
@@ -149,49 +152,45 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Options flow (unusual activity)
-    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions exist.
+    // Options flow (unusual activity) — Pro
     match /options_flow/{flowId} {
-      allow read:  if isAuthenticated();
+      allow read:  if canReadOnPlan('pro');
       allow write: if false;
     }
 
-    // Block trades
-    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions exist.
+    // Block trades — Pro
     match /block_trades/{tradeId} {
-      allow read:  if isAuthenticated();
+      allow read:  if canReadOnPlan('pro');
       allow write: if false;
     }
 
     // 13F fund holdings
     // Covers fund document, filings sub-collection, and positions sub-sub-collection
-    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions exist.
+    // Starter (13F & insider)
     match /fund_holdings/{cik} {
-      allow read:  if isAuthenticated();
+      allow read:  if canReadOnPlan('starter');
       allow write: if false;
 
       match /filings/{filingId} {
-        allow read:  if isAuthenticated();
+        allow read:  if canReadOnPlan('starter');
         allow write: if false;
 
         match /positions/{ticker} {
-          allow read:  if isAuthenticated();
+          allow read:  if canReadOnPlan('starter');
           allow write: if false;
         }
       }
     }
 
-    // Story stocks
-    // TODO(tier-gating): restore `isPremium()` once Stripe/subscriptions exist.
+    // Story stocks — Pro
     match /story_stocks/{storyId} {
-      allow read:  if isAuthenticated();
+      allow read:  if canReadOnPlan('pro');
       allow write: if false;
     }
 
-    // EOD and weekly recaps
-    // TODO(tier-gating): restore `isProOrPremium()` once Stripe/subscriptions exist.
+    // EOD and weekly recaps — Starter (all workspaces)
     match /recaps/{recapId} {
-      allow read:  if isAuthenticated();
+      allow read:  if canReadOnPlan('starter');
       allow write: if false;
     }
 
@@ -351,6 +350,32 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // BILLING — backend-only. Written by the billing event handler (Admin SDK,
+    // which bypasses rules) and read through the API. No client access at all.
+    // ═════════════════════════════════════════════════════════════════════════
+    match /customers/{d=**}             { allow read, write: if false; }
+    match /subscriptions/{d=**}         { allow read, write: if false; }
+    match /payments/{d=**}              { allow read, write: if false; }
+    match /subscription_events/{d=**}   { allow read, write: if false; }
+    match /promo_codes/{d=**}           { allow read, write: if false; }
+    match /promo_redemptions/{d=**}     { allow read, write: if false; }
+    match /promo_attempts/{d=**}        { allow read, write: if false; }
+    match /retention_offers/{d=**}      { allow read, write: if false; }
+    match /stripe_events/{d=**}         { allow read, write: if false; }
+    match /checkout_sessions/{d=**}     { allow read, write: if false; }
+    match /launch_offers/{d=**}         { allow read, write: if false; }
+    match /admin_audit/{d=**}           { allow read, write: if false; }
+    match /fake_billing_customers/{d=**}         { allow read, write: if false; }
+    match /fake_billing_subscriptions/{d=**}     { allow read, write: if false; }
+    match /fake_billing_invoices/{d=**}          { allow read, write: if false; }
+    match /fake_billing_checkouts/{d=**}         { allow read, write: if false; }
+    match /fake_billing_actions/{d=**}           { allow read, write: if false; }
+    match /fake_billing_events/{d=**}            { allow read, write: if false; }
+    match /fake_billing_portal_sessions/{d=**}   { allow read, write: if false; }
+    match /fake_billing_promotions/{d=**}        { allow read, write: if false; }
 
     // ═════════════════════════════════════════════════════════════════════════
     // DENY ALL — catch-all for any path not explicitly matched above
