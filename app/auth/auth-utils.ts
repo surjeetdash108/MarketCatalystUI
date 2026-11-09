@@ -3,7 +3,7 @@ import { UserCredential } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
 import { apiGet, apiPatch } from "../iq/backend";
 import { emptyInvestorProfile, toProfilePatch } from "../profile/profile-fields";
-import { afterLoginPath, afterSignupPath } from "../iq/billing/plan-intent";
+import { routeAfterLogin, routeAfterSignup } from "../iq/billing/auth-routing";
 import { postLoginPath } from "../admin/admin-email";
 
 export function getAuthErrorMessage(error: unknown): string {
@@ -56,11 +56,12 @@ export async function completeGoogleLogin(userCredential: UserCredential) {
       ...emptyInvestorProfile,
       name: userCredential.user.displayName ?? "",
     }));
-    // New Google account: a paid plan chosen on the signup picker continues
-    // to checkout (the choice survived the redirect in sessionStorage).
-    window.location.href = afterSignupPath("/profile/edit");
+    // New Google account (already verified): plan from the website tile →
+    // /checkout (the intent survived the redirect in sessionStorage); no plan →
+    // Free → dashboard.
+    window.location.href = await routeAfterSignup("google");
     return;
   }
 
-  window.location.href = afterLoginPath(postLoginPath(userCredential.user.email));
+  window.location.href = await routeAfterLogin(postLoginPath(userCredential.user.email));
 }

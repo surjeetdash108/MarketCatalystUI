@@ -1,40 +1,53 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { afterLoginPath, afterSignupPath, loadIntent, managePlanPath, parsePlanParams, saveIntent } from "./plan-intent";
+import { checkoutPath, currentIntent, loadIntent, nextAfterLogin, nextAfterSignup, parsePlanParams, saveIntent, type PlanIntent } from "./plan-intent";
 
 const IDS = ["free", "starter", "pro", "elite"];
-function mem() {
+const mem = () => {
   const m = new Map<string, string>();
   return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) };
-}
+};
+const TILES: PlanIntent[] = ["starter", "pro", "elite"].flatMap((planId) => (["monthly", "annual"] as const).map((interval) => ({ planId, interval })));
 
-describe("signup preselection from website tiles", () => {
-  for (const plan of ["starter", "pro", "elite"]) {
-    for (const interval of ["monthly", "annual"] as const) {
-      it(`?plan=${plan}&interval=${interval} preselects ${plan} ${interval}`, () => {
-        assert.deepEqual(parsePlanParams(`?plan=${plan}&interval=${interval}`, IDS), { planId: plan, interval });
-      });
-    }
+describe("website tile → /checkout routing (all 6 plan/interval combinations)", () => {
+  for (const t of TILES) {
+    const co = `/checkout?plan=${t.planId}&interval=${t.interval}`;
+    it(`${t.planId} ${t.interval}`, () => {
+      assert.equal(checkoutPath(t), co);
+      // Signed out → sign up with email: verify first, then straight to checkout (no plan choice in between).
+      assert.equal(nextAfterSignup(t, "password", true), `/verify-email?next=${encodeURIComponent(co)}`);
+      // Signed out → sign up with Google (already verified).
+      assert.equal(nextAfterSignup(t, "google", true), co);
+      // Existing account signs in (email or Google).
+      assert.equal(nextAfterLogin(t, "/dashboard", true), co);
+      // The tile link carries the intent; it survives the Google redirect via sessionStorage.
+      const s = mem();
+      const fromUrl = parsePlanParams(`?plan=${t.planId}&interval=${t.interval}`, IDS);
+      assert.deepEqual(fromUrl, t);
+      saveIntent(fromUrl, s);
+      assert.deepEqual(currentIntent("", IDS, s), t);
+    });
   }
-  it("defaults to annual (the website's default view) when interval is absent", () => {
-    assert.deepEqual(parsePlanParams("?plan=pro", IDS), { planId: "pro", interval: "annual" });
+
+  it("plain signup (no intent) → Free → dashboard; plain login → its usual home", () => {
+    assert.equal(nextAfterSignup(null, "password", true), "/dashboard");
+    assert.equal(nextAfterSignup(null, "google", true), "/dashboard");
+    assert.equal(nextAfterLogin(null, "/admin", true), "/admin");
   });
-  it("invalid params mean no preselection", () => {
-    for (const q of ["?plan=foo", "?plan=plus", "?plan=pro&interval=weekly", "", "?interval=annual"]) assert.equal(parsePlanParams(q, IDS), null, q);
-  });
-  it("the choice survives a Google redirect via sessionStorage, and decides where the user lands", () => {
+
+  it("paid plans unavailable (flag off / no provider): dashboard (banner), intent kept", () => {
+    const t = TILES[3];
     const s = mem();
-    saveIntent({ planId: "elite", interval: "monthly", promoCode: "WELCOME10" }, s);
-    assert.deepEqual(loadIntent(IDS, s), { planId: "elite", interval: "monthly", promoCode: "WELCOME10" });
-    assert.equal(afterSignupPath("/dashboard", s), "/billing/start");
-    assert.equal(afterLoginPath("/dashboard", s), "/manage-plan?plan=elite&interval=monthly");
-    saveIntent(null, s);
-    assert.equal(afterSignupPath("/dashboard", s), "/dashboard");
-    assert.equal(managePlanPath({ planId: "pro", interval: "annual" }), "/manage-plan?plan=pro&interval=annual");
+    saveIntent(t, s);
+    assert.equal(nextAfterSignup(t, "password", false), "/dashboard");
+    assert.equal(nextAfterSignup(t, "google", false), "/dashboard");
+    assert.equal(nextAfterLogin(t, "/dashboard", false), "/dashboard");
+    assert.deepEqual(loadIntent(IDS, s), t);
   });
-  it("rejects a tampered stored intent", () => {
-    const s = mem();
-    s.setItem("mc:plan-intent", JSON.stringify({ planId: "plus", interval: "monthly" }));
-    assert.equal(loadIntent(IDS, s), null);
+
+  it("invalid params are no intent; no interval means annual", () => {
+    assert.equal(parsePlanParams("?plan=plus&interval=monthly", IDS), null);
+    assert.equal(parsePlanParams("?plan=pro&interval=weekly", IDS), null);
+    assert.deepEqual(parsePlanParams("?plan=PRO", IDS), { planId: "pro", interval: "annual" });
   });
 });

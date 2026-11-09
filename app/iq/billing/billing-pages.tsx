@@ -4,86 +4,24 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../backend";
 import { refreshEntitlements } from "../hooks/useEntitlements";
-import { checkoutStatus, errorBody, fetchPlans, previewPromo, startCheckout, type PromoPreview } from "./api";
-import { displayPrice, formatMoney, type CatalogPlan } from "./catalog";
-import { clearIntent, loadIntent, type PlanIntent } from "./plan-intent";
+import { checkoutStatus, errorBody, fetchPlans } from "./api";
+import { formatMoney } from "./catalog";
+import { checkoutPath, currentIntent } from "./plan-intent";
 import { Button, Notice, TEST_MODE_BANNER, pill } from "./ui";
 
 const qs = (k: string) => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get(k));
 
-/** /billing/start — confirm the chosen plan (and promo), then go to checkout. */
+/** /billing/start (old links) → the one purchase page, /checkout, with the same plan. */
 export function BillingStart() {
-  const [state, setState] = useState<{ intent: PlanIntent | null; plan: CatalogPlan | null; available: boolean; promo: PromoPreview | null; promoError: string | null; error: string | null; busy: boolean; ready: boolean }>({ intent: null, plan: null, available: false, promo: null, promoError: null, error: null, busy: false, ready: false });
-
   useEffect(() => {
-    void (async () => {
-      const { plans, paidPlansAvailable } = await fetchPlans();
-      const intent = loadIntent(plans.map((p) => p.id));
-      const plan = plans.find((p) => p.id === intent?.planId) ?? null;
-      let promo: PromoPreview | null = null;
-      let promoError: string | null = null;
-      if (intent?.promoCode && paidPlansAvailable) {
-        try {
-          promo = await previewPromo({ code: intent.promoCode, planId: intent.planId, interval: intent.interval });
-        } catch (e) {
-          promoError = errorBody(e).message ?? "This code can't be applied.";
-        }
-      }
-      setState((s) => ({ ...s, intent, plan, available: paidPlansAvailable, promo, promoError, ready: true }));
-    })();
+    void fetchPlans()
+      .then(({ plans }) => {
+        const intent = currentIntent(window.location.search, plans.map((p) => p.id));
+        window.location.replace(intent ? checkoutPath(intent) : "/manage-plan");
+      })
+      .catch(() => window.location.replace("/manage-plan"));
   }, []);
-
-  if (!state.ready) return null;
-  if (!state.intent || !state.plan) {
-    return <Notice testId="start-no-plan">No paid plan selected. <Link href="/dashboard">Go to your dashboard</Link> or <Link href="/manage-plan">see plans</Link>.</Notice>;
-  }
-  if (!state.available) {
-    return <Notice testId="start-soon">Paid plans launching soon. Your account is on the Free plan for now. <Link href="/dashboard">Continue</Link></Notice>;
-  }
-  const price = state.plan.prices[state.intent.interval]!;
-  const shown = displayPrice(state.plan, state.intent.interval)!;
-
-  const intent = state.intent;
-  async function pay() {
-    setState((s) => ({ ...s, busy: true, error: null }));
-    try {
-      const r = await startCheckout({ planId: intent.planId, interval: intent.interval, ...(state.promo ? { promoCode: state.promo.code } : {}) });
-      clearIntent();
-      window.location.href = r.url;
-    } catch (e) {
-      const b = errorBody(e);
-      if (b.code === "already_subscribed") window.location.href = "/manage-plan";
-      setState((s) => ({ ...s, busy: false, error: b.message ?? "Could not start checkout." }));
-    }
-  }
-
-  return (
-    <div className="card col-12" data-testid="billing-start" style={{ maxWidth: 520, margin: "32px auto" }}>
-      <div className="card-h"><h3>Confirm your plan</h3></div>
-      <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: "1.05rem", color: "var(--text-hi)" }}>
-          <b>{state.plan.name}</b> · {state.intent.interval === "annual" ? "Annual" : "Monthly"}
-        </div>
-        <div data-testid="start-price">
-          {state.promo ? (
-            <>
-              <s style={{ color: "var(--text-dim-solid)" }}>{formatMoney(price.amount, state.plan.currency)}</s>{" "}
-              <b style={{ fontSize: "1.2rem" }}>{formatMoney(state.promo.amountDueToday, state.plan.currency)}</b> today with <b>{state.promo.code}</b> ({state.promo.description})
-            </>
-          ) : (
-            <>
-              <b style={{ fontSize: "1.2rem" }}>{formatMoney(price.amount, state.plan.currency)}</b> today · {shown.billed}
-            </>
-          )}
-        </div>
-        {state.promoError && <Notice tone="error" testId="start-promo-error">{state.promoError}</Notice>}
-        <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Renews automatically. Cancel anytime. You keep access until the end of your billing period.</div>
-        {state.error && <Notice tone="error">{state.error}</Notice>}
-        <Button testId="start-pay" onClick={() => void pay()} disabled={state.busy}>Continue to payment</Button>
-        <Link href="/dashboard" style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }} onClick={() => clearIntent()}>Not now — stay on Free</Link>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 /** /billing/success — polls until the event handler has activated the plan. */

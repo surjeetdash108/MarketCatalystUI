@@ -24,8 +24,7 @@ import {
   showError,
 } from "../auth-utils";
 import { LegalModal } from "../legal/legal-modal";
-import { PlanPicker } from "../../iq/billing/plan-picker";
-import { afterSignupPath } from "../../iq/billing/plan-intent";
+import { routeAfterSignup, useCaptureIntent, withSearch } from "../../iq/billing/auth-routing";
 
 const divider: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 12,
@@ -50,6 +49,7 @@ export function SignupForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState("");
+  useCaptureIntent();
 
   // Pick up any pending redirect result (fallback for when popup was blocked
   // and signInWithRedirect was used instead).
@@ -96,8 +96,8 @@ export function SignupForm() {
       const cred = await createUserWithEmailAndPassword(firebaseAuth, profile.email, password);
       await updateProfile(cred.user, { displayName: profile.name });
       await apiPatch("/api/profile", toProfilePatch(profile));
-      // A paid plan chosen on the picker continues to checkout; Free goes home.
-      window.location.href = afterSignupPath("/dashboard");
+      // Plan from the website tile → verify email → /checkout; no plan → Free → dashboard.
+      window.location.href = await routeAfterSignup("password");
     } catch (err) {
       const msg = getAuthErrorMessage(err);
       setError(msg); showError(msg);
@@ -173,9 +173,6 @@ export function SignupForm() {
       <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
         Set up your market intelligence workspace in seconds.
       </p>
-
-      {/* Plan (preselected from the website tile) */}
-      <PlanPicker />
 
       {/* Google */}
       <button
@@ -342,7 +339,7 @@ export function SignupForm() {
 
       <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
         Already have access?{" "}
-        <Link href="/" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
+        <Link href={withSearch("/auth/login")} style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Sign in
         </Link>
       </p>
