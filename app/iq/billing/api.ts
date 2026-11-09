@@ -91,3 +91,9 @@ export const listInvoices = () => apiGet<{ invoices: InvoiceRow[] }>("/api/billi
 export interface HistoryRow { type: string; from: unknown; to: unknown; at: string }
 export const listHistory = () => apiGet<{ history: HistoryRow[] }>("/api/billing/history").then((r) => r.history);
 export const openPortal = () => apiPost<{ url: string }>("/api/billing/portal");
+
+// ── account: email verification + staff claim ───────────────────────────────
+export const emailVerificationStatus = () => apiGet<{ email: string | null; verified: boolean }>("/api/account/email-verification");
+export const sendEmailCode = () => apiPost<{ sent?: true; alreadyVerified?: true; expiresInSeconds?: number; resendInSeconds?: number }>("/api/account/email-verification/send");
+export const verifyEmailCode = (code: string) => apiPost<{ verified: true }>("/api/account/email-verification/verify", { code });
+export const syncClaims = () => apiPost<{ staff: boolean; refreshToken: boolean }>("/api/account/sync-claims");
