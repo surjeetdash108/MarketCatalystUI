@@ -11,6 +11,7 @@ import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
 import { EntitlementGate } from "../entitlement-gate";
+import { LaunchingSoonBanner } from "../billing/launching-soon-banner";
 import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
 import { useApiResource } from "../hooks/useApiResource";
 import { WmnCarousel, type WmnSlide } from "../wmn-carousel";
@@ -758,6 +759,7 @@ export function DashboardScreen() {
   return (
     <div className="dash-pg">
       {/* ── Header ── */}
+      <LaunchingSoonBanner />
       <div className="dash" style={{ alignItems: "stretch" }}>
 
         {/* ── 1. Pulse strip ── */}
