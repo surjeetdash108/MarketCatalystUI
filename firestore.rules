@@ -188,9 +188,9 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // EOD and weekly recaps — Starter (all workspaces)
+    // EOD and weekly recaps — Free (shown on every user's dashboard)
     match /recaps/{recapId} {
-      allow read:  if canReadOnPlan('starter');
+      allow read:  if isAuthenticated();
       allow write: if false;
     }
 

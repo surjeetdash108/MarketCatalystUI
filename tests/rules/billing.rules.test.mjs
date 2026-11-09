@@ -8,7 +8,6 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 const BILLING = ["customers", "subscriptions", "payments", "subscription_events", "promo_codes", "promo_redemptions", "promo_attempts", "retention_offers", "stripe_events", "checkout_sessions", "launch_offers", "admin_audit", "fake_billing_subscriptions", "fake_billing_invoices", "fake_billing_checkouts", "fake_billing_customers"];
 const GATED = [
   ["earnings_summaries", "s1", "starter"],
-  ["recaps", "r1", "starter"],
   ["fund_holdings", "cik1", "starter"],
   ["options_flow", "o1", "pro"],
   ["block_trades", "b1", "pro"],
@@ -28,6 +27,7 @@ async function seed(flag) {
     for (const c of BILLING) await setDoc(doc(db, c, "alice"), { userId: "alice", uid: "alice" });
     for (const [c, id] of GATED) await setDoc(doc(db, c, id), { x: 1 });
     await setDoc(doc(db, "news", "n1"), { x: 1 });
+    await setDoc(doc(db, "recaps", "r1"), { x: 1 });
     if (flag !== undefined) await setDoc(doc(db, "feature_flags", "default"), { flags: { SUBSCRIPTIONS_ENABLED: flag } });
   });
 }
@@ -57,8 +57,9 @@ describe("plan-gated market data (TODO(tier-gating) restored)", () => {
         }
       });
     }
-    it("ungated collections stay readable on Free", async () => {
+    it("ungated collections stay readable on Free (news; recaps feed every dashboard)", async () => {
       await assertSucceeds(getDoc(doc(as(), "news", "n1")));
+      await assertSucceeds(getDoc(doc(as(), "recaps", "r1")));
     });
     it("signed-out users read nothing", async () => {
       await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "recaps", "r1")));

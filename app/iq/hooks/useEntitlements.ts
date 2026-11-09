@@ -83,3 +83,15 @@ export function gateDecisionFor(e: Entitlements | null, key: string | null): { k
   if (e.entitlements[key] === true) return { kind: "allow" };
   return { kind: "locked", requiredPlan: e.requiredPlan[key] ?? null };
 }
+
+/**
+ * Decision for a component that both fetches and renders gated data (e.g. a
+ * dashboard widget): fetch only on "allow", so a locked user never makes a
+ * request the backend would refuse with 403. If entitlements could not be
+ * loaded at all, fail OPEN to "allow" — the backend still enforces the plan,
+ * and a blank widget would hide data from paying users.
+ */
+export function featureDecision(state: { data: Entitlements | null; error: boolean }, key: string | null): ReturnType<typeof gateDecisionFor> {
+  if (!state.data && state.error) return { kind: "allow" };
+  return gateDecisionFor(state.data, key);
+}
