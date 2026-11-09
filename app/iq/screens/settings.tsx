@@ -8,6 +8,7 @@ import { useAppSelector } from "../../store/hooks";
 import type { StoredProfile } from "../../store/profile-slice";
 import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
+import { hasConfirmedPaidPlan } from "../plan-status";
 
 const FONTS: { key: FontKey; rank: number; label: string; desc: string; stack: string }[] = [
   { key: "geist", rank: 6,         label: "Geist",         desc: "Clean & neutral · Minimal sans",      stack: "var(--font-geist-sans,'Geist Sans',sans-serif)" },
@@ -212,7 +213,7 @@ export function SettingsScreen() {
     setTimeout(() => setSchMsg(""), 4000);
   }
 
-  const isPremium = profile?.tier !== "free";
+  const isPremium = hasConfirmedPaidPlan(profile);
 
   // Fields the user must fill in themselves (name arrives from Google, email from
   // auth). If any is blank the profile is flagged incomplete so the user knows to update it.
@@ -468,8 +469,8 @@ export function SettingsScreen() {
           <div className="card-b">
             <div style={{ fontSize: "0.8125rem", color: "var(--text)", marginBottom: 12 }}>
               {isPremium
-                ? "You have access to all MarketCatalyst features."
-                : "Upgrade to Premium to unlock AI Copilot, full screener, portfolio tools, and more."}
+                ? "Your paid plan is active."
+                : "Paid plans are launching soon. You won't be charged anything until then."}
             </div>
             <button className="planbtn" style={{ maxWidth: 180 }} onClick={() => window.location.href = "/manage-plan"}>
               <span style={{ fontSize: "0.8125rem" }}>◈</span>

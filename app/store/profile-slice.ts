@@ -1,7 +1,8 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { InvestorProfile } from "../profile/profile-fields";
+import type { PlanFields } from "../iq/plan-status";
 
-export type StoredProfile = InvestorProfile & {
+export type StoredProfile = InvestorProfile & PlanFields & {
   uid: string;
   tier: string;
 };

@@ -57,10 +57,23 @@ service cloud.firestore {
       return tier() == 'premium';
     }
 
-    // Incoming data must not attempt to change uid or tier fields
-    function noTierOrUidChange() {
-      return !request.resource.data.diff(resource.data).affectedKeys()
-               .hasAny(['uid', 'tier', 'stripeCustomerId', 'stripeSubId']);
+    // Investor-profile fields a user may write on their own users/{uid} doc.
+    // Mirrors PROFILE_FIELDS in MarketCatalystBackEnd/src/user-data/profile.dto.ts.
+    // Everything else on that doc — uid, email, tier, currentPlan,
+    // subscription*, featureFlags, stripe* — is server-owned (Admin SDK only;
+    // billing fields only via the Stripe webhook). An allowlist, not a denylist:
+    // a new server-owned field is protected without touching these rules.
+    function profileFields() {
+      return ['profile_image', 'name', 'mobileNumber', 'age', 'incomeRange',
+              'investmentExperience', 'investmentGoals', 'riskTolerance',
+              'investmentHorizon', 'currentPortfolioValue',
+              'preferredAssetClasses', 'updatedAt'];
+    }
+
+    // An update touches investor-profile fields only.
+    function onlyProfileFieldsChange() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(profileFields());
     }
 
 
@@ -244,14 +257,20 @@ service cloud.firestore {
       // Only the user can read their own profile
       allow read: if isOwner(uid);
 
-      // Create: server creates user doc on first sign-in via Admin SDK.
-      // Allow client create only if uid matches and required fields are present.
+      // Create: the backend creates this doc (PATCH /api/profile, Admin SDK)
+      // with server-set plan defaults. A client create may carry only profile
+      // fields plus its own uid, its own verified auth email and createdAt —
+      // never a plan, subscription, Stripe or feature-flag field.
       allow create: if isOwner(uid)
-                    && request.resource.data.keys().hasAll(['uid', 'email', 'tier', 'createdAt'])
-                    && request.resource.data.tier == 'free';  // always starts free
+                    && request.resource.data.keys().hasAll(['uid', 'createdAt'])
+                    && request.resource.data.keys()
+                         .hasOnly(profileFields().concat(['uid', 'email', 'createdAt']))
+                    && request.resource.data.uid == request.auth.uid
+                    && (!('email' in request.resource.data)
+                        || request.resource.data.email == request.auth.token.email);
 
-      // Update: user can update display name / photo only; tier + stripe fields are server-only
-      allow update: if isOwner(uid) && noTierOrUidChange();
+      // Update: investor-profile fields only (allowlist).
+      allow update: if isOwner(uid) && onlyProfileFieldsChange();
 
       // Hard deletes blocked — use deletedAt soft-delete via API
       allow delete: if false;

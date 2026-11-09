@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet, streamUrl } from "../backend";
-import { subscribeStream } from "./shared-event-source";
+import { apiGet } from "../backend";
+import { subscribeAuthedStream } from "./shared-event-source";
 import type { TapeFrame } from "../types/tape";
 
 /** How stale the last SSE frame must be before the JSON poll steps in (ms). */
@@ -50,7 +50,7 @@ function startSharedTape() {
       sharedConnected = false;
       notify();
     };
-    streamUnsub = subscribeStream(streamUrl("/live/tape/stream"), {
+    streamUnsub = subscribeAuthedStream("/live/tape/stream", {
       tape: onTape,
       heartbeat: () => {},
       error: onError,

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet, streamUrl } from "../backend";
-import { subscribeStream } from "./shared-event-source";
+import { apiGet } from "../backend";
+import { subscribeAuthedStream } from "./shared-event-source";
 import { tickFromQuoteRow, type QuoteRow } from "../quote-row";
 
 /** How stale the last SSE tick must be before the JSON poll steps in (ms). */
@@ -156,7 +156,7 @@ export function useLiveTick(sym: string): UseLiveTickResult {
     const onError = () => setConnected(false);
 
     // One connection per ticker per page, shared by every subscriber to it.
-    const unsubscribe = subscribeStream(streamUrl(`/live/stream?ticker=${encodeURIComponent(upper)}`), {
+    const unsubscribe = subscribeAuthedStream(`/live/stream?ticker=${encodeURIComponent(upper)}`, {
       tick: onTick,
       snapshot: onSnapshot,
       status: () => {},

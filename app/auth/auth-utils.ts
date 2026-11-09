@@ -2,7 +2,7 @@ import { FirebaseError } from "firebase/app";
 import { UserCredential } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
 import { apiGet, apiPatch } from "../iq/backend";
-import { emptyInvestorProfile } from "../profile/profile-fields";
+import { emptyInvestorProfile, toProfilePatch } from "../profile/profile-fields";
 import { postLoginPath } from "../admin/admin-email";
 
 export function getAuthErrorMessage(error: unknown): string {
@@ -51,12 +51,10 @@ export async function completeGoogleLogin(userCredential: UserCredential) {
   const existing = await apiGet<Record<string, unknown> | null>("/api/profile");
 
   if (!existing) {
-    await apiPatch("/api/profile", {
+    await apiPatch("/api/profile", toProfilePatch({
       ...emptyInvestorProfile,
       name: userCredential.user.displayName ?? "",
-      email: userCredential.user.email ?? "",
-      tier: "free",
-    });
+    }));
     window.location.href = "/profile/edit";
     return;
   }

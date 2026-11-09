@@ -2,6 +2,7 @@ import { apiGet } from "../iq/backend";
 import { TRACKED_FEATURES, FEATURE_LABEL, FEATURE_GROUP } from "../iq/feature-adoption";
 import { ENTITLEMENTS } from "./entitlement-catalog";
 import { ADMIN_EMAIL } from "./admin-email";
+import { escapeHtml, mrrFromPayments, toConsoleStatus } from "./admin-metrics";
 
 /**
  * Builds the admin console's dataset — sourced ENTIRELY from the backend.
@@ -224,6 +225,8 @@ interface BackendPaymentRow {
   currency?: string;
   paymentStatus?: string;         // SUCCESS | ...
   paymentDate?: string | null;
+  billingCycle?: string | null;   // monthly | annual
+  subscriptionExpiryDate?: string | null;
 }
 interface BackendPlan {
   id: string;
@@ -310,18 +313,6 @@ export async function fetchAdminBlogs(): Promise<ConsoleBlogRow[]> {
   }
 }
 
-/** The console's status vocabulary, lower-case. */
-function toConsoleStatus(status: string): string {
-  switch ((status || "").toUpperCase()) {
-    case "ACTIVE": return "active";
-    case "TRIALING": return "trialing";
-    case "PAST_DUE": return "past_due";
-    case "CANCELLED": return "canceled";
-    case "EXPIRED": return "canceled";
-    default: return "active"; // free users with no subscription read as active
-  }
-}
-
 function initialsOf(name: string, email: string): string {
   const src = (name || email || "?").trim();
   const parts = src.split(/[\s@._-]+/).filter(Boolean);
@@ -329,8 +320,8 @@ function initialsOf(name: string, email: string): string {
 }
 
 /**
- * Monthly-equivalent price in major units, so a yearly plan does not overstate
- * MRR 12×. Rounded to 2dp so every downstream sum stays on clean cents.
+ * Monthly-equivalent list price in major units, for display only (MRR comes from
+ * payments; see admin-metrics.ts). Rounded to 2dp.
  */
 function monthlyMajor(amountMinor: number, billingCycle: string): number {
   const major = (amountMinor ?? 0) / 100;
@@ -392,6 +383,7 @@ export async function buildAdminDataset(): Promise<ConsoleDataset> {
   const adoption = adoptRes.adoption ?? [];
   const apiHealth = apiHealthRes ?? null;
 
+  // Plan list prices for display (plan cards, drawer). Not used for MRR.
   const price: Record<string, number> = {};
   for (const p of plans) {
     price[p.name ?? p.id] = monthlyMajor(p.amount ?? 0, p.billingCycle ?? "none");
@@ -409,21 +401,22 @@ export async function buildAdminDataset(): Promise<ConsoleDataset> {
     const planId = u.planId ?? "free";
     const planLabel = u.planName ?? (planId.charAt(0).toUpperCase() + planId.slice(1));
     const status = toConsoleStatus(u.status);
-    const isPaying =
-      (status === "active" || status === "trialing" || status === "past_due") && planId !== "free";
     const name = u.name ?? (u.email ?? u.uid).split("@")[0];
     const email = u.email ?? "—";
     const remaining = typeof u.daysRemaining === "number" && u.daysRemaining >= 0 ? u.daysRemaining : null;
 
     return {
       id: u.uid,
-      name,
-      email,
-      plan: planLabel,
+      // Escaped: the console renders these with innerHTML, and both are
+      // user-controlled (profile name, sign-up email).
+      name: escapeHtml(name),
+      email: escapeHtml(email),
+      plan: escapeHtml(planLabel),
       status,
-      mrr: isPaying ? (price[planLabel] ?? 0) : 0,
+      // Payments only — the Stripe webhook's record of money actually received.
+      mrr: mrrFromPayments(payments, u.uid),
       color: AVATAR_COLORS[i % AVATAR_COLORS.length],
-      initials: initialsOf(name, email),
+      initials: escapeHtml(initialsOf(name, email)),
       // The backend read-model does not carry country; shown as "—" rather than
       // guessed. Add it to the /admin/users projection to populate this.
       country: "—",

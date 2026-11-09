@@ -15,6 +15,7 @@ import {
   InvestorProfile,
   ProfileFields,
   emptyInvestorProfile,
+  toProfilePatch,
 } from "../../profile/profile-fields";
 import {
   completeGoogleLogin,
@@ -92,11 +93,7 @@ export function SignupForm() {
       // }
       const cred = await createUserWithEmailAndPassword(firebaseAuth, profile.email, password);
       await updateProfile(cred.user, { displayName: profile.name });
-      await apiPatch("/api/profile", {
-        ...profile,
-        email: cred.user.email ?? profile.email,
-        tier: "free",
-      });
+      await apiPatch("/api/profile", toProfilePatch(profile));
       window.location.href = "/dashboard";
     } catch (err) {
       const msg = getAuthErrorMessage(err);

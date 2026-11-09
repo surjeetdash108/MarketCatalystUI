@@ -15,6 +15,9 @@
  * while the browser receives nothing. The callers' JSON polls cover the data.
  */
 
+import { apiPost, streamUrl } from "../backend";
+import { createTicketCache, withTicket, type TicketResponse } from "./stream-ticket";
+
 type Handler = (ev: MessageEvent<string>) => void;
 
 /** Longest a fresh stream may stay silent before it is treated as stuck. */
@@ -105,5 +108,64 @@ export function subscribeStream(url: string, handlers: Record<string, Handler>):
       e.es.close();
       if (streams.get(url) === e) streams.delete(url);
     }
+  };
+}
+
+/** One ticket cache for every authenticated stream on the page. */
+const tickets = createTicketCache(() => apiPost<TicketResponse>("/api/stream-ticket"));
+
+/** Consecutive failures without a single event before giving up for this subscription. */
+const MAX_FAILURES = 3;
+
+/**
+ * Subscribe to an authenticated SSE endpoint by PATH (e.g. "/live/tape/stream").
+ *
+ * Fetches a short-lived stream ticket, opens the stream at the direct stream
+ * origin with `?ticket=`, and — because a refused or expired ticket closes an
+ * EventSource for good — reconnects with a freshly issued ticket on error, up
+ * to MAX_FAILURES times in a row. Any received event resets the count. If no
+ * ticket can be issued, "error" handlers fire once and the caller's REST poll
+ * carries the data, exactly as when a proxy buffers the stream.
+ */
+export function subscribeAuthedStream(path: string, handlers: Record<string, Handler>): () => void {
+  let closed = false;
+  let inner: (() => void) | null = null;
+  let failures = 0;
+  let retry: ReturnType<typeof setTimeout> | null = null;
+
+  const connect = async (force: boolean) => {
+    const ticket = await tickets.get(force);
+    if (closed) return;
+    if (!ticket) {
+      handlers.error?.(new MessageEvent("error"));
+      return;
+    }
+    inner?.();
+    const wrapped: Record<string, Handler> = {};
+    for (const [type, h] of Object.entries(handlers)) {
+      if (type === "error") continue;
+      wrapped[type] = (ev) => {
+        failures = 0;
+        h(ev);
+      };
+    }
+    wrapped.error = (ev) => {
+      handlers.error?.(ev);
+      if (closed || retry || failures >= MAX_FAILURES) return;
+      failures++;
+      retry = setTimeout(() => {
+        retry = null;
+        void connect(true);
+      }, 2_000 * failures);
+    };
+    inner = subscribeStream(withTicket(streamUrl(path), ticket), wrapped);
+  };
+
+  void connect(false);
+  return () => {
+    closed = true;
+    if (retry) clearTimeout(retry);
+    inner?.();
+    inner = null;
   };
 }
