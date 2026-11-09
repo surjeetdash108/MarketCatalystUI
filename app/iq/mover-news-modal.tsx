@@ -115,8 +115,10 @@ function vendorBadge(vendor?: string, source?: string) {
       <span
         style={{
           background: "linear-gradient(135deg, rgba(74,222,128,0.2), rgba(74,222,128,0.25))",
-          color: "#A7F3C0",
-          border: "1px solid rgba(167,243,192,0.4)",
+          // --brand-2 is pale mint in dark mode and deep green in light mode;
+          // the old hard-coded #A7F3C0 vanished on the light card.
+          color: "var(--brand-2)",
+          border: "1px solid color-mix(in srgb, var(--brand-2) 40%, transparent)",
           padding: "3px 9px",
           borderRadius: 6,
           fontSize: ".7rem",

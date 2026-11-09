@@ -740,6 +740,13 @@ export function DashboardScreen() {
     onMouseLeave: hidePop,
   });
 
+  // Tickers each widget shows, in row order. Passed to openStockDetail so the
+  // popover's ◀ ▶ arrows page through that widget's list (as Movers/Earnings do).
+  const analystIds  = [...analystTopBuy, ...analystTopSell].map(a => a.ticker);
+  const screenerIds = (scrTab === "leaders" ? leaders : laggards).map(s => s.ticker);
+  const watchIds    = watchMini.map(w => w.ticker);
+  const insiderIds  = INSIDER_MINI.map(x => x.s);
+
   return (
     <div className="dash-pg">
       {/* ── Header ── */}
@@ -1128,7 +1135,7 @@ export function DashboardScreen() {
                   <div style={{ fontSize: ".62rem", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--up)", margin: "2px 0 4px" }}>Most buy-rated</div>
                   {analystTopBuy.map(a => (
                     <div key={a.ticker} className="minirow" style={{ cursor: "pointer" }}
-                      onClick={() => openStock(a.ticker)}
+                      onClick={() => openStockDetail(a.ticker, analystIds)}
                       {...mr(a.ticker, "analyst")}
                     >
                       <StockLogo sym={a.ticker} size={26} />
@@ -1142,7 +1149,7 @@ export function DashboardScreen() {
                   )}
                   {analystTopSell.map(a => (
                     <div key={a.ticker} className="minirow" style={{ cursor: "pointer" }}
-                      onClick={() => openStock(a.ticker)}
+                      onClick={() => openStockDetail(a.ticker, analystIds)}
                       {...mr(a.ticker, "analyst")}
                     >
                       <StockLogo sym={a.ticker} size={26} />
@@ -1186,7 +1193,7 @@ export function DashboardScreen() {
                 const tag = ext ? (ext === "pre-market" ? "PM" : ext === "after hours" ? "AH" : "EXT") : null;
                 return (
                   <div key={s.ticker} className="minirow" style={{ cursor: "pointer" }}
-                    onClick={() => openStock(s.ticker)}
+                    onClick={() => openStockDetail(s.ticker, screenerIds)}
                     {...mr(s.ticker, "screener")}
                   >
                     <StockLogo sym={s.ticker} size={26} />
@@ -1294,7 +1301,7 @@ export function DashboardScreen() {
                 <DataState loading={watchlistLoading} label={activeWatchlist ? `“${activeWatchlist.name}” has no names yet.` : "No saved watchlist yet."} height={80} />
               ) : watchMini.map(w => (
                 <div key={w.ticker} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(w.ticker)}
+                  onClick={() => openStockDetail(w.ticker, watchIds)}
                   {...mr(w.ticker, "watchlist")}
                 >
                   <StockLogo sym={w.ticker} size={26} />
@@ -1319,7 +1326,7 @@ export function DashboardScreen() {
                 <DataState loading={insiderLoading} label="No insider filings synced yet." height={80} />
               ) : INSIDER_MINI.map(x => (
                 <div key={x.key} className="minirow" style={{ cursor: "pointer" }}
-                  onClick={() => openStock(x.s)}
+                  onClick={() => openStockDetail(x.s, insiderIds)}
                   {...mr(x.s, "insider")}
                 >
                   <StockLogo sym={x.s} size={26} />
@@ -1674,6 +1681,10 @@ export function DashboardScreen() {
             if (pop.block === "earnings") openEarnings(pop.sym, earningsToday.slice(0, 10).map(x => x.ticker));
             else if (pop.block === "movers") openMoverModal(pop.sym);
             else if (pop.block === "searched") openStockDetail(pop.sym, searchedDeduped.map(x => x.ticker));
+            else if (pop.block === "analyst") openStockDetail(pop.sym, analystIds);
+            else if (pop.block === "screener") openStockDetail(pop.sym, screenerIds);
+            else if (pop.block === "watchlist") openStockDetail(pop.sym, watchIds);
+            else if (pop.block === "insider") openStockDetail(pop.sym, insiderIds);
             else openStock(pop.sym);
           }}
         >
