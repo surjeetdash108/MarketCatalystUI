@@ -316,6 +316,28 @@ export async function apiUpload<T>(
   });
 }
 
+/**
+ * Downloads an authenticated file (e.g. an invoice) and saves it in the
+ * browser. A JSON `{ url }` reply (a provider-hosted document) is opened instead.
+ */
+export async function apiDownload(path: string, filename: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+  if (!res.ok) throw new BackendApiError(res.status, await res.text());
+  if ((res.headers.get("content-type") ?? "").includes("application/json")) {
+    const { url } = (await res.json()) as { url?: string };
+    if (url) window.open(url, "_blank", "noopener");
+    return;
+  }
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+}
+
 /** Absolute backend URL for a path — for EventSource/WebSocket construction, which can't go through fetch. */
 export function backendUrl(path: string): string {
   return `${BASE_URL}${path}`;

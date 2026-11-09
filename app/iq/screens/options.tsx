@@ -131,6 +131,15 @@ export function OptionsScreen() {
                     Curated universe only · {OPTIONS_UNIVERSE.join(", ")}
                   </div>
                 )}
+                {/* Bid/ask, IV, greeks and open interest are not on the current data plan
+                    and are simulated (see firestore.rules options_chains); say so. */}
+                <span
+                  data-testid="options-simulated"
+                  title="Strikes, expirations and traded prices are real; bid/ask, implied volatility, greeks and open interest are simulated."
+                  style={{ padding: "2px 9px", borderRadius: 99, fontSize: ".66rem", fontWeight: 700, background: "var(--surface-3)", color: "var(--text-dim-solid)", border: "1px solid var(--border)" }}
+                >
+                  some data simulated
+                </span>
                 <span style={{ marginLeft: "auto" }}><VendorTag v="polygon" /></span>
               </div>
 
