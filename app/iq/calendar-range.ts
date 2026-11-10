@@ -143,6 +143,13 @@ export function nextMonthlyOpex(fromIso: string = etTodayIso()): string {
   return thisMonth >= fromIso ? thisMonth : thirdFriday(m === 12 ? y + 1 : y, m % 12);
 }
 
+/** Most recent monthly options expiration strictly BEFORE `fromIso`. */
+export function previousMonthlyOpex(fromIso: string = etTodayIso()): string {
+  const [y, m] = fromIso.split("-").map(Number);
+  const thisMonth = thirdFriday(y, m - 1);
+  return thisMonth < fromIso ? thisMonth : thirdFriday(m === 1 ? y - 1 : y, (m + 10) % 12);
+}
+
 /** FOMC rate-decision days (the second day of each scheduled meeting), as
  *  published by the Federal Reserve. Extend when the next year's schedule is set. */
 export const FOMC_DECISION_DAYS: readonly string[] = [
@@ -153,6 +160,11 @@ export const FOMC_DECISION_DAYS: readonly string[] = [
 /** Next FOMC decision day on or after `fromIso`, or null past the known schedule. */
 export function nextFomcDecision(fromIso: string = etTodayIso()): string | null {
   return FOMC_DECISION_DAYS.find((d) => d >= fromIso) ?? null;
+}
+
+/** Most recent FOMC decision day strictly BEFORE `fromIso`, or null before the known schedule. */
+export function previousFomcDecision(fromIso: string = etTodayIso()): string | null {
+  return [...FOMC_DECISION_DAYS].reverse().find((d) => d < fromIso) ?? null;
 }
 
 export interface PoliticalEvent {
@@ -219,15 +231,29 @@ export function upcomingPoliticalEvents(
 }
 
 /** 13F filings are due 45 days after quarter end (next business day if that is a weekend). */
+function thirteenFDeadlines(year: number): string[] {
+  return ([[1, 14], [4, 15], [7, 14], [10, 14]] as const).map(([m0, d]) => {
+    const dt = new Date(Date.UTC(year, m0, d));
+    while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) dt.setUTCDate(dt.getUTCDate() + 1);
+    return isoDay(dt);
+  });
+}
+
 export function next13fDeadline(fromIso: string = etTodayIso()): string {
   const [y] = fromIso.split("-").map(Number);
   for (const yr of [y, y + 1]) {
-    for (const [m0, d] of [[1, 14], [4, 15], [7, 14], [10, 14]] as const) {
-      const dt = new Date(Date.UTC(yr, m0, d));
-      while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) dt.setUTCDate(dt.getUTCDate() + 1);
-      const iso = isoDay(dt);
-      if (iso >= fromIso) return iso;
-    }
+    const hit = thirteenFDeadlines(yr).find((iso) => iso >= fromIso);
+    if (hit) return hit;
+  }
+  return fromIso;
+}
+
+/** Most recent 13F filing deadline strictly BEFORE `fromIso`. */
+export function previous13fDeadline(fromIso: string = etTodayIso()): string {
+  const [y] = fromIso.split("-").map(Number);
+  for (const yr of [y, y - 1]) {
+    const hit = [...thirteenFDeadlines(yr)].reverse().find((iso) => iso < fromIso);
+    if (hit) return hit;
   }
   return fromIso;
 }

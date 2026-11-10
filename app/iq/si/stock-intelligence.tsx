@@ -45,7 +45,7 @@ import { nextEarningsDate, withOneUpcomingReport } from "../next-earnings";
 import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
-import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex, upcomingPoliticalEvents } from "../calendar-range";
+import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex, previous13fDeadline, previousFomcDecision, previousMonthlyOpex, upcomingPoliticalEvents } from "../calendar-range";
 import { StockLogo, VendorTag, useShowVendorTags, vendorText, withoutVendorNames } from "../utils";
 import { resolveActionMeta } from "../analyst-actions-engine";
 import { useHeadlineQuote } from "../quote-headline";
@@ -123,6 +123,10 @@ function EventContextBlocks({ ev, compact, metricsOnly }: { ev: MajorSixMonthEve
 const SI_EVENT_CARD_H = 196;
 /** Upcoming Catalysts timeline: how many days ahead an event may be and still show. */
 const CATALYST_WINDOW_DAYS = 45;
+/** ...and how many days back an event that already happened stays on the timeline. */
+const CATALYST_LOOKBACK_DAYS = 14;
+/** At most this many past events are shown, the most recent ones, so they never crowd out what is ahead. */
+const CATALYST_MAX_PAST = 3;
 
 /** Colours explicitly signed percentages in a sentence: +N% green, -N% red. Unsigned figures (margins, ratios) stay as they are. */
 const SIGNED_PCT = /((?<![\w.])[+\-−]\d[\d,]*(?:\.\d+)?%)/g;
@@ -798,6 +802,34 @@ export function StockIntelligenceScreen() {
 
     const items: UpcomingEvent[] = [];
 
+    // Earliest day an already-happened event may be and still show.
+    const lookback = new Date(`${todayStr}T12:00:00Z`);
+    lookback.setUTCDate(lookback.getUTCDate() - CATALYST_LOOKBACK_DAYS);
+    const lookbackIso = lookback.toISOString().slice(0, 10);
+
+    // 0. The report this stock just made (inside the look-back window), with its result.
+    const lastReport = [...symEvents]
+      .reverse()
+      .find((e) => e.date < todayStr && e.date >= lookbackIso && (e.epsActual != null || e.revenueActual != null));
+    if (lastReport) {
+      const erMs = new Date(lastReport.date + "T09:30:00-04:00").getTime();
+      const ago = Math.max(1, Math.round((todayMs - erMs) / 86_400_000));
+      const eps = lastReport.epsActual != null ? `EPS $${lastReport.epsActual.toFixed(2)}` : null;
+      const epsVs = lastReport.epsActual != null && lastReport.epsEstimate != null ? ` vs $${lastReport.epsEstimate.toFixed(2)} est` : "";
+      const rev = lastReport.revenueActual != null ? `Rev $${(lastReport.revenueActual / 1e9).toFixed(1)}B` : null;
+      items.push({
+        date: fmtMarketDate(lastReport.date),
+        iso: lastReport.date,
+        days: ago === 1 ? "yesterday" : `${ago} days ago`,
+        n: lastReport.session ? `Earnings Reported (${lastReport.session})` : "Quarterly Earnings Reported",
+        txt: [eps ? `${eps}${epsVs}` : null, rev].filter(Boolean).join(" · ") || `${stock.t} reported quarterly results`,
+        imp: "HIGH",
+        col: "#f5b031",
+        cat: "Earnings",
+        past: true,
+      });
+    }
+
     // 1. Real Earnings Report from backend/FMP
     if (realErDate && realErDate >= todayStr) {
       const erMs = new Date(realErDate + "T09:30:00-04:00").getTime();
@@ -832,14 +864,22 @@ export function StockIntelligenceScreen() {
 
     // 2. Upcoming Macro & Regulatory Dates
     const fomcDay = nextFomcDecision(todayStr);
-    // Political events keep the last few days, so an election that just
-    // happened still shows ("yesterday") while its result is moving the market.
+    const prevFomcDay = previousFomcDecision(todayStr);
+    // Events that already happened stay for CATALYST_LOOKBACK_DAYS (an election
+    // or a Fed decision is still moving the market for a while); the window
+    // filter below drops anything older.
     const POLITICAL_COL = "#a78bfa";
+    const OPEX = { name: "Monthly Options Expiry (OpEx)", desc: `Pinning pressure expected around key ${stock.t} open interest strikes`, imp: "LOW" as const, col: "#93a1af", cat: "Market" };
+    const FOMC = { name: "FOMC Rate Decision", desc: "Federal Reserve policy decision and press conference; macro equity multiple driver", imp: "HIGH" as const, col: STEEL, cat: "Macro" };
+    const F13 = { name: "13F Filing Deadline", desc: "Institutional ownership updates and hedge fund positioning reports filed with SEC", imp: "MED" as const, col: STEEL, cat: "Market" };
     const calendarEvents: Array<{ date: string; name: string; desc: string; imp: "HIGH" | "MED" | "LOW"; col: string; cat: string }> = [
-      { date: nextMonthlyOpex(todayStr), name: "Monthly Options Expiry (OpEx)", desc: `Pinning pressure expected around key ${stock.t} open interest strikes`, imp: "LOW", col: "#93a1af", cat: "Market" },
-      ...(fomcDay ? [{ date: fomcDay, name: "FOMC Rate Decision", desc: "Federal Reserve policy decision and press conference; macro equity multiple driver", imp: "HIGH" as const, col: STEEL, cat: "Macro" }] : []),
-      { date: next13fDeadline(todayStr), name: "13F Filing Deadline", desc: "Institutional ownership updates and hedge fund positioning reports filed with SEC", imp: "MED", col: STEEL, cat: "Market" },
-      ...upcomingPoliticalEvents(todayStr).map((p) => ({ ...p, col: POLITICAL_COL, cat: "Political" })),
+      { date: previousMonthlyOpex(todayStr), ...OPEX },
+      { date: nextMonthlyOpex(todayStr), ...OPEX },
+      ...(prevFomcDay ? [{ date: prevFomcDay, ...FOMC }] : []),
+      ...(fomcDay ? [{ date: fomcDay, ...FOMC }] : []),
+      { date: previous13fDeadline(todayStr), ...F13 },
+      { date: next13fDeadline(todayStr), ...F13 },
+      ...upcomingPoliticalEvents(todayStr, CATALYST_LOOKBACK_DAYS).map((p) => ({ ...p, col: POLITICAL_COL, cat: "Political" })),
     ];
     calendarEvents.sort((a, b) => a.date.localeCompare(b.date));
 
@@ -859,6 +899,7 @@ export function StockIntelligenceScreen() {
         imp: ev.imp,
         col: ev.col,
         cat: ev.cat,
+        past: ev.date < todayStr,
       });
     });
 
@@ -880,10 +921,15 @@ export function StockIntelligenceScreen() {
     const cutoff = new Date(`${todayStr}T12:00:00Z`);
     cutoff.setUTCDate(cutoff.getUTCDate() + CATALYST_WINDOW_DAYS);
     const cutoffIso = cutoff.toISOString().slice(0, 10);
-    return items
-      .filter((it) => !it.iso || it.iso <= cutoffIso)
-      .sort((a, b) => (a.iso ?? "").localeCompare(b.iso ?? ""))
-      .slice(0, 6);
+    // The look-back adds the last CATALYST_MAX_PAST events that already
+    // happened (oldest first) ahead of the usual six upcoming ones. "TBD" has no
+    // date and sorts at today's edge: after what happened, before what is next.
+    const inWindow = items.filter((it) => !it.iso || (it.iso >= lookbackIso && it.iso <= cutoffIso));
+    const ordered = [...inWindow].sort((a, b) => (a.iso ?? todayStr).localeCompare(b.iso ?? todayStr));
+    return [
+      ...ordered.filter((it) => it.past).slice(-CATALYST_MAX_PAST),
+      ...ordered.filter((it) => !it.past).slice(0, 6),
+    ];
   }, [stock, liveCompany?.nextEarningsDate, liveEarningsList]);
 
   // 5 Major Catalysts derived dynamically from FMP data (bars, quarters, news, and stock metrics)
@@ -1333,7 +1379,7 @@ export function StockIntelligenceScreen() {
       }),
       signals: stock.sig,
       invalidation: stockDetail.invalid.map(([title, cond]) => `${title}: ${cond}`),
-      upcoming: upcomingCatalysts.slice(0, 4).map((c) => `${c.date} (${c.days}): ${c.n}. ${c.txt}`),
+      upcoming: upcomingCatalysts.filter((c) => !c.past).slice(0, 4).map((c) => `${c.date} (${c.days}): ${c.n}. ${c.txt}`),
       today: stockDetail.movedTxt,
       peers: peersAll.slice(0, 5).map((p) => `${p.t}: P/E ${p.peRatio != null ? p.peRatio.toFixed(1) : "n/a"}, ${p.c != null ? pct(p.c) : "n/a"} today`),
       newsSummary: aiAnalysisDoc?.analysis?.newsSummary,
@@ -1361,7 +1407,7 @@ export function StockIntelligenceScreen() {
             facts: siFacts,
             signals: stock.sig,
             invalid: stockDetail.invalid,
-            catalysts: upcomingCatalysts.map((c) => ({ date: c.date, days: c.days, n: c.n, txt: c.txt })),
+            catalysts: upcomingCatalysts.filter((c) => !c.past).map((c) => ({ date: c.date, days: c.days, n: c.n, txt: c.txt })),
             peers: peersAll.map((p) => ({ t: p.t, pe: p.peRatio, changePct: p.c })),
             movedTxt: stockDetail.movedTxt,
           }),
@@ -1881,7 +1927,7 @@ export function StockIntelligenceScreen() {
     { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },
     { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? (showVendor ? "y/y, FMP reported" : "y/y, reported") : "y/y, latest qtr" },
     { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, GAAP diluted" : "y/y, latest qtr" },
-    { k: "52W HIGH / LOW", v: `${hi52 != null ? usd(hi52) : "—"} / ${lo52 != null ? usd(lo52) : "—"}`, sub: "Range" },
+    { k: "52W LOW / HIGH", v: `${lo52 != null ? usd(lo52) : "—"} / ${hi52 != null ? usd(hi52) : "—"}`, sub: "Range" },
   ];
 
   // Overview signal scores, confidence and confluence come from the same
@@ -3062,14 +3108,17 @@ export function StockIntelligenceScreen() {
               {/* Upcoming Catalysts Timeline */}
               <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px" }}>
                 <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 22 }}>
-                  UPCOMING CATALYSTS
+                  CATALYSTS · RECENT &amp; UPCOMING
                 </div>
                 <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
                   <div style={{ position: "absolute", left: 0, right: 0, top: 12, height: 2, background: "linear-gradient(90deg, #5980a6, rgba(89,128,166,0.2))", zIndex: 0 }} />
                   {upcomingCatalysts.map((up, i) => (
-                    <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, zIndex: 1 }}>
-                      <span style={{ width: 26, height: 26, borderRadius: 99, background: "var(--si-bg, #080b10)", border: "2px solid #7fa8d0", boxShadow: "0 0 0 6px rgba(127,168,208,0.12)" }} />
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "var(--si-accent-light, #a9c6e3)", marginTop: 4 }}>
+                    <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, zIndex: 1, opacity: up.past ? 0.72 : 1 }}>
+                      {/* An event that already happened: a filled, muted marker instead of the open ring. */}
+                      <span style={up.past
+                        ? { width: 26, height: 26, borderRadius: 99, background: "#2a3a4a", border: "2px solid #5d6b79", boxShadow: "0 0 0 6px rgba(93,107,121,0.12)" }
+                        : { width: 26, height: 26, borderRadius: 99, background: "var(--si-bg, #080b10)", border: "2px solid #7fa8d0", boxShadow: "0 0 0 6px rgba(127,168,208,0.12)" }} />
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: up.past ? "var(--si-text-mid, #93a1af)" : "var(--si-accent-light, #a9c6e3)", marginTop: 4 }}>
                         {up.date} · {up.days}
                       </span>
                       {up.cat && (

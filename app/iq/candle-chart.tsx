@@ -224,13 +224,21 @@ interface CatEntry {
   badge?: "new" | "beta";
 }
 
+/**
+ * RSI's own colour, a blue. It used to be a pink that, on the dark theme, was
+ * hard to tell from the purple 9/10-day moving average it is drawn beside.
+ * RSI_COLOR_OLD is that pink: a saved chart still holding it is moved over.
+ */
+const RSI_COLOR = "#4da3ff";
+const RSI_COLOR_OLD = "#e07be0";
+
 /** One entry per study. `k` present = it really draws; the rest are listed as coming soon. */
 const CAT: CatEntry[] = [
   { k: "atr", name: "ATR", alias: "Average True Range", type: "pane", col: "#c9a227", param: { label: "Length", def: 14, opts: [7, 14, 21] } },
   { k: "bb", name: "BB", alias: "Bollinger Bands", type: "overlay", col: "#8b7ef0", param: { label: "Length", def: 20, opts: [10, 20, 50] }, suffix: ", 2" },
   { k: "ema", name: "EMA", alias: "Exponential Moving Average", type: "overlay", col: "#2fd9d0", param: { label: "Length", def: 21, opts: [9, 21, 50, 100, 200] } },
   { k: "macd", name: "MACD", alias: "Moving Average Convergence Divergence", type: "pane", col: "#4a67d8", fixed: "12, 26, 9" },
-  { k: "rsi", name: "RSI", alias: "Relative Strength Index", type: "overlay", col: "#e07be0", param: { label: "Length", def: 14, opts: [7, 14, 21] } },
+  { k: "rsi", name: "RSI", alias: "Relative Strength Index", type: "overlay", col: RSI_COLOR, param: { label: "Length", def: 14, opts: [7, 14, 21] } },
   { k: "sma", name: "SMA", alias: "Simple Moving Average", type: "overlay", col: "#f3b24a", param: { label: "Length", def: 50, opts: [9, 21, 50, 100, 200] } },
   { k: "stoch", name: "Stoch", alias: "Stochastic", type: "pane", col: "#4bd99a", param: { label: "Length", def: 14, opts: [5, 9, 14, 21] }, suffix: ", 3, 3" },
   { k: "vol", name: "Volume", type: "pane", col: "#6b7688" },
@@ -277,9 +285,13 @@ const MA_INK = "#000000";
 const MA_COLORS: Record<number, string> = { 9: "#b44fc8", 10: "#b44fc8", 21: "#2e9d2e", 50: "#e5282e", 200: MA_INK };
 const maColor = (k: StudyKind, len: number | null): string | null =>
   (k === "sma" || k === "ema") && len != null ? MA_COLORS[len] ?? null : null;
-/** Pins every standard-length moving average to its colour, whatever an older saved setting held. */
+/** Pins every standard-length moving average to its colour, whatever an older saved setting held; moves a saved RSI off its old pink. */
 const withMaColors = (studies: Study[]): Study[] =>
-  studies.map(s => { const c = maColor(s.k, s.len); return c && c !== s.col ? { ...s, col: c } : s; });
+  studies.map(s => {
+    if (s.k === "rsi" && s.col === RSI_COLOR_OLD) return { ...s, col: RSI_COLOR };
+    const c = maColor(s.k, s.len);
+    return c && c !== s.col ? { ...s, col: c } : s;
+  });
 
 /** Overlay line dash: EMA dotted, VWAP dash-dot-ish, SMA and the rest solid. */
 const DOTS = [0.1, 5];
@@ -655,25 +667,23 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
   };
   // RSI is drawn over the price area on a fixed 0-100 scale of its own, not the price axis.
   const rsiY = (v: number) => g.top + ((100 - v) / 100) * ph;
+  // The RSI line's current value, drawn as a tag in the right-hand price column
+  // after the plot is unclipped (see "RSI value tag" below).
+  let rsiTag: { y: number; text: string; col: string } | null = null;
   for (const s of overlays) {
     const d = computed.get(s.id);
     if (d?.kind === "bb") { line(d.u, s.col, yOf, 1); line(d.lo, s.col, yOf, 1); line(d.mid, s.col, yOf, 1, [4, 4]); }
     else if (d?.kind === "line" && s.k === "rsi") {
       line(d.v, s.col, rsiY, 1.5);
       // Tag the line's right-hand end with its current value ("RSI-38") instead
-      // of the 30/70 guide lines — the number is what a reader wants.
+      // of the 30/70 guide lines — the number is what a reader wants. It used to
+      // be written on the plot, over the candles and lines at the right edge,
+      // hiding them; it now sits beside the line, in the price column.
       let li = i1;
       while (li >= i0 && !(at(d.v, li) != null && isFinite(at(d.v, li) as number))) li--;
       if (li >= i0) {
         const v = at(d.v, li) as number;
-        const lx = xOf(li), ly = rsiY(v);
-        const text = `RSI-${Math.round(v)}`;
-        ctx.save();
-        ctx.font = `bold 11px ${pal.font}`; ctx.textAlign = "right"; ctx.textBaseline = "middle";
-        const ty = ly - 12 < g.top + 6 ? ly + 12 : ly - 12; // flip below the line near the top edge
-        ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.strokeStyle = pal.bg; ctx.strokeText(text, lx - 6, ty); // halo keeps it legible over candles
-        ctx.fillStyle = s.col; ctx.fillText(text, lx - 6, ty);
-        ctx.restore();
+        rsiTag = { y: rsiY(v), text: `RSI-${Math.round(v)}`, col: s.col };
       }
     }
     else if (d?.kind === "line") line(d.v, s.col, yOf, 1.6, lineDash(s.k));
@@ -756,6 +766,25 @@ function drawChart(ctx: CanvasRenderingContext2D, m: DrawModel): Hits {
     ctx.setLineDash([4, 4]); ctx.strokeStyle = pal.last;
     ctx.beginPath(); ctx.moveTo(g.l, ly); ctx.lineTo(g.r, ly); ctx.stroke(); ctx.setLineDash([]);
     tag(ctx, g.r, ly, money(last.c), pal.last, pal.lastInk);
+  }
+
+  // ── RSI value tag: beside the line's end, in the price column, so it never covers a candle or line ──
+  if (rsiTag) {
+    // Keep clear of the price labels and the last-price tag that share the column.
+    const busy: Array<[number, number]> = ticks.map((p): [number, number] => [yOf(p), 16]);
+    if (ly > g.top && ly < g.priceB) busy.push([ly, 19]);
+    const lo2 = g.top + 9, hi2 = g.priceB - 9;
+    const free = (y: number) => y >= lo2 && y <= hi2 && busy.every(([by, gap]) => Math.abs(y - by) >= gap);
+    const y0 = Math.max(lo2, Math.min(hi2, rsiTag.y));
+    let ty = y0;
+    for (let k = 1; !free(ty) && k <= 12; k++) {
+      const down = y0 + k * 6, up = y0 - k * 6; // nearest free spot, either side
+      ty = free(down) ? down : free(up) ? up : y0;
+    }
+    ctx.save();
+    ctx.font = `bold 11px ${pal.font}`;
+    tag(ctx, g.r, ty, rsiTag.text, rsiTag.col, pal.lastInk);
+    ctx.restore();
   }
 
   // ── crosshair ──
