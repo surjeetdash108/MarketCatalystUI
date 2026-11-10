@@ -9,6 +9,7 @@ import type { StoredProfile } from "../../store/profile-slice";
 import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
 import { hasConfirmedPaidPlan } from "../plan-status";
+import { isLifetimeElite } from "../billing/lifetime-elite";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { ContactCard } from "./manage-plan-extras";
 
@@ -215,7 +216,8 @@ export function SettingsScreen() {
     setTimeout(() => setSchMsg(""), 4000);
   }
 
-  const isPremium = hasConfirmedPaidPlan(profile);
+  const isLifetime = isLifetimeElite(user?.email);
+  const isPremium = hasConfirmedPaidPlan(profile, Date.now(), user?.email);
   const isStaff = useEntitlements().data?.staff === true;
 
   // Fields the user must fill in themselves (name arrives from Google, email from
@@ -466,13 +468,15 @@ export function SettingsScreen() {
               color: isPremium ? "var(--brand-2)" : "var(--text-dim-solid)",
               border: `1px solid ${isPremium ? "var(--brand)" : "var(--border)"}`,
             }}>
-              {isStaff ? "Staff" : isPremium ? "◈ Premium" : "Free"}
+              {isStaff ? "Staff" : isLifetime ? "◈ Elite (Lifetime)" : isPremium ? "◈ Premium" : "Free"}
             </span>
           </div>
           <div className="card-b">
             <div style={{ fontSize: "0.8125rem", color: "var(--text)", marginBottom: 12 }}>
               {isStaff
                 ? "Staff access: every feature, never billed."
+                : isLifetime
+                ? "Your complimentary Lifetime Elite plan is active with full access to every feature."
                 : isPremium
                 ? "Your paid plan is active."
                 : "Paid plans are launching soon. You won't be charged anything until then."}
