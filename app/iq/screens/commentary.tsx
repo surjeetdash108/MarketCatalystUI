@@ -6,6 +6,7 @@ import { StockLogo, DataState, VendorTag, useShowVendorTags, vendorText, cls, si
 import { useIQActions } from "../shell";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useApiList } from "../hooks/useApiList";
+import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
 import { useApiResource } from "../hooks/useApiResource";
 import { useNewsWire } from "../hooks/useNewsWire";
 import { firebaseAuth } from "../../firebase";
@@ -981,16 +982,23 @@ export function CommentaryScreen() {
   const companyByTicker = new Map(companies.map(c => [c.ticker, c]));
 
   const [mySymbols, setMySymbols] = useState<Set<string>>(new Set());
+  // Portfolio is a Starter feature: check entitlements BEFORE calling /api/portfolio,
+  // so a Free user makes no request the backend would refuse (403).
+  const portfolioGate = featureDecision(useEntitlements(), "portfolio").kind;
+  const portfolioLocked = portfolioGate === "locked";
   useEffect(() => {
+    if (portfolioGate === "loading") return;
     (async () => {
       if (!uid) return new Set<string>();
       const [w, p] = await Promise.all([
         apiGet<WatchlistDoc>("/api/watchlist").catch(() => ({ tickers: [] as string[] })),
-        apiGet<{ holdings: HoldingDoc[] }>("/api/portfolio").catch(() => ({ holdings: [] as HoldingDoc[] })),
+        portfolioGate === "allow"
+          ? apiGet<{ holdings: HoldingDoc[] }>("/api/portfolio").catch(() => ({ holdings: [] as HoldingDoc[] }))
+          : Promise.resolve({ holdings: [] as HoldingDoc[] }),
       ]);
       return new Set([...w.tickers, ...p.holdings.map(h => h.ticker)]);
     })().then(setMySymbols);
-  }, [uid]);
+  }, [uid, portfolioGate]);
 
   const symbolList = [...companies].filter(c => !!c.ticker).sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0)).map(c => ({ s: c.ticker, n: c.name ?? c.ticker }));
   const topSymbols = symbolList.slice(0, 8).map(x => x.s);
@@ -1101,7 +1109,12 @@ export function CommentaryScreen() {
     if (activeTab === 0) return { title: "Intraday commentary", badge: <span className="live"><span className="dot" />Live · streaming</span> };
     if (activeTab === 1) return { title: "Pre-market · before 9:30a ET", badge: <span className="pill" style={{ background: "var(--surface-3)", color: "var(--brand-2)" }}>Pre-market</span> };
     if (activeTab === 2) return { title: "After hours · post 4:00p ET", badge: <span className="pill amc">After hours</span> };
-    if (activeTab === 3) return { title: `My names · ${mySymbols.size} tracked`, badge: <span className="pill ai">Portfolio + Watchlist</span> };
+    if (activeTab === 3) return {
+      title: `My names · ${mySymbols.size} tracked`,
+      badge: portfolioLocked
+        ? <span className="pill" data-testid="portfolio-lock-line" title="Portfolio holdings are included on Starter">Watchlist · 🔒 portfolio on Starter</span>
+        : <span className="pill ai">Portfolio + Watchlist</span>,
+    };
     if (activeTab === 4) return { title: "Macro & rates", badge: <span className="pill" style={{ background: "var(--surface-3)", color: "var(--warn)" }}>Macro</span> };
     return { title: "Commentary", badge: null };
   })();
