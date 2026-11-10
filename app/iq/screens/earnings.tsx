@@ -1279,14 +1279,14 @@ function GlanceRow({ it, showDate, onSelect, colSpan, prePct, postPct }: { it: E
         </div>
       </td>
       {showDate && <td className="r ecal-num" style={{ whiteSpace: "nowrap", color: "var(--text-dim-solid)" }}>{it.date ? it.date.slice(5) : "—"}</td>}
-      <td className={`r ecal-num ${fmtUpDn(epsPct)}`}>{fmtPctSigned(epsPct, 1)}</td>
-      <td className={`r ecal-num ${isUp == null ? "" : isUp ? "up" : "dn"}`}>{epsSurpStr}</td>
-      <td className="r ecal-num">{it.epsA != null ? `$${it.epsA.toFixed(2)}` : "—"}</td>
       <td className="r ecal-num">{it.epsE != null ? `$${it.epsE.toFixed(2)}` : "—"}</td>
-      <td className={`r ecal-num ${fmtUpDn(salesPct)}`}>{fmtPctSigned(salesPct, 1)}</td>
-      <td className={`r ecal-num ${fmtUpDn(salesSurp)}`}>{fmtPctSigned(salesSurp, 1)}</td>
-      <td className="r ecal-num">{fmtRev(it.revA)}</td>
+      <td className="r ecal-num">{it.epsA != null ? `$${it.epsA.toFixed(2)}` : "—"}</td>
+      <td className={`r ecal-num ${isUp == null ? "" : isUp ? "up" : "dn"}`}>{epsSurpStr}</td>
+      <td className={`r ecal-num ${fmtUpDn(epsPct)}`}>{fmtPctSigned(epsPct, 1)}</td>
       <td className="r ecal-num">{fmtRev(it.revE)}</td>
+      <td className="r ecal-num">{fmtRev(it.revA)}</td>
+      <td className={`r ecal-num ${fmtUpDn(salesSurp)}`}>{fmtPctSigned(salesSurp, 1)}</td>
+      <td className={`r ecal-num ${fmtUpDn(salesPct)}`}>{fmtPctSigned(salesPct, 1)}</td>
       {/* Today's pre-market move. The vendor keeps this populated through the
           regular session rather than clearing it at the open — measured with the
           market open, AAPL read 0.047, DELL 0.399, MDB -2.20 — so the column
@@ -1432,8 +1432,8 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
     : items;
   const shown = expanded ? ordered : ordered.slice(0, GLANCE_MAX);
   const canExpand = items.length > GLANCE_MAX;
-  // Company, EPS %, EPS Surp, Actual, Consensus, Sales %, Sales Surp, Actual
-  // Rev, Cons. Rev, Pre-market, Post-market, Guidance — plus Date when it is
+  // Company, Consensus EPS, Actual EPS, EPS Surprise, EPS %, Cons. Rev, Actual
+  // Rev, Sales Surp, Sales %, Pre-market, Post-market, Guidance — plus Date when it is
   // shown. Kept next to the header it counts so the two move together.
   const colCount = 12 + (showDate ? 1 : 0);
 
@@ -1457,14 +1457,14 @@ function GlanceTable({ title, items, showDate, onSelect }: { title: string; item
             <tr>
               {sortTh("company", "Company", false)}
               {showDate && sortTh("date", "Date")}
+              {sortTh("consensus", "Consensus EPS")}
+              {sortTh("actual", "Actual EPS")}
+              {sortTh("epsSurp", "EPS Surprise")}
               {sortTh("epsPct", "EPS %")}
-              {sortTh("epsSurp", "EPS Surp")}
-              {sortTh("actual", "Actual")}
-              {sortTh("consensus", "Consensus")}
-              {sortTh("salesPct", "Sales %")}
-              {sortTh("salesSurp", "Sales Surp")}
-              {sortTh("actualRev", "Actual Rev")}
               {sortTh("consRev", "Cons. Rev")}
+              {sortTh("actualRev", "Actual Rev")}
+              {sortTh("salesSurp", "Sales Surp")}
+              {sortTh("salesPct", "Sales %")}
               <th className="r" title="Today's pre-market move (04:00-09:30 ET), ~15 min delayed">Pre-market</th>
               <th className="r" title={showVendor ? "After-hours move (16:00–20:00 ET): FMP's latest extended-hours trade vs the regular-session close." : "After-hours move (16:00–20:00 ET): latest extended-hours trade vs the regular-session close."}>Post-market</th>
               {sortTh("guidance", "Guidance")}

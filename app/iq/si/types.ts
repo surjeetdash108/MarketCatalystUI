@@ -30,6 +30,8 @@ export interface UpcomingEvent {
   col: string;
   /** Short kind tag shown above the name, e.g. "Political" or "Earnings". */
   cat?: string;
+  /** True for an event that already happened (inside the timeline's look-back window). */
+  past?: boolean;
 }
 
 /** One labelled figure on a major-move card, e.g. EPS surprise +4.2%; `tone` tints it green/red. */
