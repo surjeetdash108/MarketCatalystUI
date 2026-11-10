@@ -35,16 +35,10 @@ export function parsePlanParams(search: string, knownPlanIds: string[]): PlanInt
 }
 
 /**
- * On the signup page: invalid params or missing params fall back to Starter monthly.
+ * On the signup page: parse any ?plan=&interval= from the URL (null if not provided).
  */
-export function parseSignupParams(search: string, knownPlanIds: string[]): PlanIntent {
-  const q = new URLSearchParams(search);
-  const rawPlan = (q.get("plan") ?? "").trim().toLowerCase();
-  const rawInterval = (q.get("interval") ?? "").trim().toLowerCase();
-  const promo = (q.get("promo") ?? "").trim().slice(0, 40);
-  const planId = knownPlanIds.includes(rawPlan) ? rawPlan : "starter";
-  const interval: BillingInterval = rawInterval === "annual" ? "annual" : "monthly";
-  return { planId, interval, ...(promo ? { promoCode: promo } : {}) };
+export function parseSignupParams(search: string, knownPlanIds: string[]): PlanIntent | null {
+  return parsePlanParams(search, knownPlanIds);
 }
 
 export function saveIntent(intent: PlanIntent | null, store: Store | null = safeSession()): void {
@@ -80,27 +74,28 @@ export function checkoutPath(intent: Pick<PlanIntent, "planId" | "interval"> & {
   return intent.promoCode ? `${p}&promo=${encodeURIComponent(intent.promoCode)}` : p;
 }
 
+/** The manage-plan path with the chosen plan, interval and optional promo. */
+export function managePlanPath(intent: Pick<PlanIntent, "planId" | "interval"> & { promoCode?: string }): string {
+  const p = `/manage-plan?plan=${encodeURIComponent(intent.planId)}&interval=${intent.interval}`;
+  return intent.promoCode ? `${p}&promo=${encodeURIComponent(intent.promoCode)}` : p;
+}
+
 export type AuthMethod = "password" | "google";
 
 /**
- * Where a just-created account goes.
- *  - no plan intent → Free → dashboard
- *  - intent, paid plans unavailable (flag off / no provider) → dashboard, where a
- *    banner says "<Plan> is launching soon" (the intent is kept for later)
- *  - intent → /checkout with the same plan and interval; email/password accounts
- *    verify their email first (Google accounts arrive verified)
+ * Where a just-created account goes:
+ *  - no plan intent → dashboard
+ *  - selected a plan → /manage-plan with that plan pre-selected and option to proceed to payment
  */
-export function nextAfterSignup(intent: PlanIntent | null, method: AuthMethod, paidPlansAvailable: boolean): string {
-  if (!intent || !paidPlansAvailable) return "/dashboard";
-  const co = checkoutPath(intent);
-  return method === "password" ? `/verify-email?next=${encodeURIComponent(co)}` : co;
+export function nextAfterSignup(intent: PlanIntent | null, method: AuthMethod, paidPlansAvailable?: boolean): string {
+  if (!intent) return "/dashboard";
+  return managePlanPath(intent);
 }
 
-/** Where an existing account that just signed in goes (/checkout shows the code step if still unverified). */
-export function nextAfterLogin(intent: PlanIntent | null, fallback: string, paidPlansAvailable: boolean): string {
+/** Where an existing account that just signed in goes. */
+export function nextAfterLogin(intent: PlanIntent | null, fallback: string, paidPlansAvailable?: boolean): string {
   if (!intent) return fallback;
-  if (!paidPlansAvailable) return "/dashboard";
-  return checkoutPath(intent);
+  return managePlanPath(intent);
 }
 
 /** The intent from the URL (?plan=&interval=) or the session, validated against the catalog. */

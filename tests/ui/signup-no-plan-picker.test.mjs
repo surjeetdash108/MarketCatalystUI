@@ -7,11 +7,9 @@ import { parseSignupParams, checkoutPath, nextAfterSignup } from "../../app/iq/b
 
 const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 
-test("the signup page has a plan picker and promo field", () => {
+test("the signup page does not show plan picker cards", () => {
   const src = read("app/auth/signup/signup-form.tsx");
-  assert.match(src, /PlanPicker/);
-  assert.match(src, /promoCode/);
-  assert.equal(fs.existsSync(new URL("../../app/iq/billing/plan-picker.tsx", import.meta.url)), true);
+  assert.doesNotMatch(src, /<PlanPicker/);
 });
 
 test("6 tile × interval preselection cases, including invalid params", () => {
@@ -53,23 +51,14 @@ test("6 tile × interval preselection cases, including invalid params", () => {
     interval: "annual",
   });
 
-  // Invalid plan -> falls back to starter
-  assert.deepEqual(parseSignupParams("?plan=bogus&interval=annual", plans), {
-    planId: "starter",
-    interval: "annual",
-  });
+  // Invalid plan -> null (no plan preselection)
+  assert.equal(parseSignupParams("?plan=bogus&interval=annual", plans), null);
 
-  // Invalid interval -> falls back to monthly
-  assert.deepEqual(parseSignupParams("?plan=pro&interval=lifetime", plans), {
-    planId: "pro",
-    interval: "monthly",
-  });
+  // Invalid interval -> null
+  assert.equal(parseSignupParams("?plan=pro&interval=lifetime", plans), null);
 
-  // Missing params -> falls back to starter monthly
-  assert.deepEqual(parseSignupParams("", plans), {
-    planId: "starter",
-    interval: "monthly",
-  });
+  // Missing params -> null
+  assert.equal(parseSignupParams("", plans), null);
 
   // Promo in query string is captured
   assert.deepEqual(parseSignupParams("?plan=pro&interval=annual&promo=SAVE20", plans), {
@@ -87,20 +76,19 @@ test("email signup, Google signup and both sign-ins route through the plan inten
   assert.match(read("app/auth/login/login-form.tsx"), /routeAfterLogin\(postLoginPath\(email\)\)/);
 });
 
-test("the promo is carried to checkout, including the Google path", () => {
+test("the intent routes to /manage-plan after signup", () => {
   const intentWithPromo = {
     planId: "pro",
     interval: "annual",
     promoCode: "WELCOME20",
   };
-  const path = checkoutPath(intentWithPromo);
-  assert.equal(path, "/checkout?plan=pro&interval=annual&promo=WELCOME20");
+  const path = "/manage-plan?plan=pro&interval=annual&promo=WELCOME20";
 
-  // For password signup: goes through verify-email with next
-  const nextPw = nextAfterSignup(intentWithPromo, "password", true);
-  assert.equal(nextPw, `/verify-email?next=${encodeURIComponent(path)}`);
+  // For password signup: goes directly to /manage-plan with intent
+  const nextPw = nextAfterSignup(intentWithPromo, "password");
+  assert.equal(nextPw, path);
 
-  // For Google signup: goes directly to checkout with promo
-  const nextGoogle = nextAfterSignup(intentWithPromo, "google", true);
+  // For Google signup: goes directly to /manage-plan with intent
+  const nextGoogle = nextAfterSignup(intentWithPromo, "google");
   assert.equal(nextGoogle, path);
 });
