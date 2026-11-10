@@ -8,8 +8,9 @@ import { billingSummary, errorBody, fetchPlans, previewCheckout, previewPromo, s
 import { formatMoney, type BillingInterval, type CatalogPlan } from "../catalog";
 import { EmailCodeStep } from "../email-code-step";
 import { currentIntent, saveIntent } from "../plan-intent";
-import { Notice, TEST_MODE_BANNER } from "../ui";
+import { Notice, PREVIEW_BANNER, TEST_MODE_BANNER } from "../ui";
 import { paymentAdapterFor } from "./adapters";
+import { notConnectedAdapter } from "./not-connected-form";
 import { fieldStyle, labelStyle } from "./address-fields";
 import { annualOffer, canComplete, cadence, exitPath, type BillingAddress } from "./model";
 import type { PaymentAdapter, PaymentFormValue, PaymentResult } from "./payment-form";
@@ -24,6 +25,7 @@ const FROM_KEY = "mc:checkout-from";
 
 export function CheckoutPage() {
   const [phase, setPhase] = useState<Phase>("loading");
+  const [inPreview, setInPreview] = useState(false);
   const [plan, setPlan] = useState<CatalogPlan | null>(null);
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const [step, setStep] = useState<1 | 2>(1);
@@ -66,14 +68,18 @@ export function CheckoutPage() {
       setPlan(chosen);
       setInterval(intent.interval);
       const ent = await refreshEntitlements();
-      if (ent?.staff) return live && setPhase("staff");
-      if (!paidPlansAvailable) return live && setPhase("soon");
+      // Staff checkout preview: this staff account may buy (Stripe test mode)
+      // while paid plans stay "launching soon" for everyone else.
+      const preview = ent?.staff === true && ent.checkoutPreview === true;
+      if (live) setInPreview(preview);
+      if (ent?.staff && !preview) return live && setPhase("staff");
+      if (!paidPlansAvailable && !preview) return live && setPhase("soon");
       const s = await billingSummary();
       if (s.interval && s.source !== "launch_trial" && LIVE.includes(s.status)) {
         // Existing subscribers change plans with the preview/confirm flow in Manage Plan.
         return window.location.replace(`/manage-plan?plan=${intent.planId}&interval=${intent.interval}`);
       }
-      setAdapter(paymentAdapterFor(s.provider));
+      setAdapter(paymentAdapterFor(s.provider) ?? (preview ? notConnectedAdapter : null));
       if (!live) return;
       setPhase(user.emailVerified ? "checkout" : "verify");
     })().catch(() => live && setError("Couldn't load checkout. Refresh to try again."));
@@ -212,6 +218,7 @@ export function CheckoutPage() {
       <div className="iq-root co-page" data-theme="dark">
         {header}
         <div style={{ maxWidth: 520, margin: "24px auto", padding: "0 16px" }}>
+          {inPreview && <Notice tone="warn" testId="co-preview-banner">{PREVIEW_BANNER}</Notice>}
           {error && <Notice tone="error">{error}</Notice>}
           {phase === "soon" && plan && (
             <div className="co-card" data-testid="co-soon">
@@ -246,6 +253,9 @@ export function CheckoutPage() {
   return (
     <div className="iq-root co-page" data-theme="dark" data-testid="checkout-page">
       {header}
+      {inPreview && (
+        <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}><Notice tone="warn" testId="co-preview-banner">{PREVIEW_BANNER}</Notice></div>
+      )}
       {adapter?.provider === "fake" && (
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}><Notice tone="warn" testId="test-mode">{TEST_MODE_BANNER}</Notice></div>
       )}

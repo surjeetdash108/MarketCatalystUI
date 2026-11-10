@@ -28,7 +28,7 @@ import {
 } from "../billing/api";
 import { displayPrice, formatMoney, INTERVALS, isPaid, longDate, type BillingInterval, type CatalogPlan } from "../billing/catalog";
 import { checkoutPath, parsePlanParams } from "../billing/plan-intent";
-import { Button, Modal, Notice, pill } from "../billing/ui";
+import { Button, Modal, Notice, PREVIEW_BANNER, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
 import { REFUND_POLICY } from "../billing/refund-policy.generated";
 import { ContactCard, StaffPlan } from "./manage-plan-extras";
@@ -43,9 +43,11 @@ import { handleStripeAction } from "../billing/checkout/stripe-payment-form";
 export function ManagePlanScreen() {
   const { data: ent } = useEntitlements();
   if (!ent) return null;
-  if (ent.staff) return <StaffPlan />;
+  // Staff see "Staff access" — except in the staff checkout preview, where the
+  // plan picker opens for them (Stripe test mode, no real charges).
+  if (ent.staff && !ent.checkoutPreview) return <StaffPlan />;
   if (!ent.paidPlansAvailable) return <ManagePlanSoon />;
-  return <BillingScreen />;
+  return <BillingScreen preview={ent.checkoutPreview === true} />;
 }
 
 type Dialog =
@@ -58,7 +60,7 @@ type Dialog =
 
 const LIVE = ["ACTIVE", "TRIALING", "PAST_DUE"];
 
-export function BillingScreen() {
+export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   const [plans, setPlans] = useState<CatalogPlan[]>([]);
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -176,6 +178,7 @@ export function BillingScreen() {
         </div>
       </div>
       <div className="dash" data-testid="billing-screen" style={{ maxWidth: 980, gap: 14, gridTemplateColumns: "1fr" }}>
+        {preview && <div className="col-12"><Notice tone="warn" testId="billing-preview-banner">{PREVIEW_BANNER}</Notice></div>}
         <div className="card col-12">
           <div className="card-h"><h3>Current plan</h3></div>
           <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>

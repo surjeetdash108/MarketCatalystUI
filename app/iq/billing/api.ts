@@ -110,6 +110,8 @@ export const acceptRetention = () => apiPost<{ applied: true; description: strin
 export interface BillingSummary {
   subscriptionsLive: boolean;
   paidPlansAvailable: boolean;
+  /** Staff checkout preview (Stripe test mode, no real charges). */
+  checkoutPreview?: boolean;
   provider: string;
   planId: string;
   planName: string;
