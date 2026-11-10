@@ -29,7 +29,8 @@ describe("Privacy discloses billing data handling", () => {
   it("mentions the retained hashed email for the retention offer and the email provider", () => {
     assert.match(privacy, /one-way cryptographic hash of your email address/);
     assert.match(privacy, /kept after you close your account/);
-    assert.match(privacy, /\[EMAIL PROVIDER PLACEHOLDER\]/);
+    assert.match(privacy, /through our email provider, Twilio SendGrid,/);
+    assert.doesNotMatch(privacy, /\[EMAIL PROVIDER PLACEHOLDER\]/);
   });
 });
 

@@ -28,4 +28,7 @@ describe("admin billing v2", () => {
     const sub = src.slice(src.indexOf("function Subscribers()"), src.indexOf("function SubscriberContact"));
     assert.match(sub, /<\/table>\s*<\/div>\s*<\/div>\s*\{detail && \(/);
   });
+  it("legacy currentPlan=pro users show a 'Legacy Pro' badge", () => {
+    assert.match(src, /\{r\.legacyPro && <span data-testid="legacy-pro-badge"[^>]*>Legacy Pro<\/span>\}/);
+  });
 });
