@@ -9,7 +9,7 @@ import { Button, Modal, Notice, pill } from "../../iq/billing/ui";
 import { escapeHtml } from "../admin-metrics";
 import { ADMIN_EMAIL } from "../admin-email";
 
-interface Row { uid: string; name: string | null; email: string | null; planId: string; planName: string; interval: string | null; status: string; startedAt: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; promoCode: string | null; retentionUsed: boolean; mrrMinor: number; staff: boolean }
+interface Row { uid: string; name: string | null; email: string | null; planId: string; planName: string; interval: string | null; status: string; startedAt: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; promoCode: string | null; retentionUsed: boolean; mrrMinor: number; staff: boolean; legacyPro?: boolean }
 interface Promo { id: string; code: string; percentOff: number | null; amountOff: number | null; duration: string; durationInMonths: number | null; appliesToPlans: string[]; appliesToIntervals: string[]; expiresAt: string | null; maxRedemptions: number | null; timesRedeemed: number; firstTimeOnly: boolean; active: boolean }
 interface Audit { actor: string; method: string; path: string; outcome: string; at: string }
 
@@ -105,7 +105,7 @@ function Subscribers() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.uid} onClick={() => void apiGet<Record<string, unknown>>(`/api/admin/billing/subscribers/${r.uid}`).then(setDetail)} style={{ cursor: "pointer" }}>
-                <td>{r.name ?? "—"}{r.staff && <span data-testid="staff-badge" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--brand-dim)", color: "var(--brand-2)", border: "1px solid var(--brand)" }}>Staff</span>}</td><td>{r.email ?? "—"}</td><td>{r.planName}</td><td>{r.interval ?? "—"}</td><td>{r.status.toLowerCase()}</td>
+                <td>{r.name ?? "—"}{r.staff && <span data-testid="staff-badge" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--brand-dim)", color: "var(--brand-2)", border: "1px solid var(--brand)" }}>Staff</span>}{r.legacyPro && <span data-testid="legacy-pro-badge" title="Pre-billing manual Pro grant: Pro for 90 days at launch, then normal plans" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--surface-3)", color: "var(--warn)", border: "1px solid var(--warn)" }}>Legacy Pro</span>}</td><td>{r.email ?? "—"}</td><td>{r.planName}</td><td>{r.interval ?? "—"}</td><td>{r.status.toLowerCase()}</td>
                 <td>{r.startedAt ? longDate(r.startedAt) : "—"}</td><td>{r.currentPeriodEnd ? longDate(r.currentPeriodEnd) : "—"}</td>
                 <td>{r.cancelAtPeriodEnd ? "yes" : ""}</td><td>{r.promoCode ?? ""}</td><td>{r.retentionUsed ? "used" : ""}</td><td style={{ textAlign: "right" }}>{r.mrrMinor ? formatMoney(r.mrrMinor) : "—"}</td>
               </tr>
