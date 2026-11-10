@@ -53,7 +53,7 @@ describe("payment form adapter", () => {
     const page = src("app/iq/billing/checkout/checkout-page.tsx");
     assert.doesNotMatch(page, /cardNumber|cc-number|cvc|cvv|expiry/i);
     assert.doesNotMatch(src("app/iq/billing/checkout/fake-payment-form.tsx"), /cc-number|cvc|cvv/i);
-    assert.match(src("app/iq/billing/checkout/stripe-payment-form.tsx"), /Never enable crypto or UPI/);
+    assert.match(src("app/iq/billing/checkout/stripe-payment-form.tsx"), /Never crypto or UPI/);
   });
   it("the simulated address element has Stripe's fields in Stripe's order", () => {
     const html = renderToStaticMarkup(<SimulatedAddressFields value={{ name: "", line1: "", line2: null, city: "", state: null, postalCode: null, country: "US" }} onChange={() => {}} />);
@@ -90,5 +90,47 @@ describe("checkout page wiring", () => {
   it("mobile: the two columns stack", () => {
     const css = src("app/iq/billing/checkout/checkout.css");
     assert.match(css, /@media \(max-width: 860px\) \{\s*\.co-wrap \{ grid-template-columns: minmax\(0, 1fr\);/);
+  });
+});
+
+describe("Stripe adapter (Payment Element + Address Element, deferred intent)", () => {
+  it("payment method types come from config; crypto and UPI are filtered out", async () => {
+    const { stripePaymentMethodTypes } = await import("./stripe-payment-form");
+    assert.deepEqual(stripePaymentMethodTypes(undefined), ["card", "link"]);
+    assert.deepEqual(stripePaymentMethodTypes("card,link,paypal,crypto,upi"), ["card", "link", "paypal"]);
+    assert.deepEqual(stripePaymentMethodTypes("crypto"), ["card"]);
+  });
+  it("needs a real publishable key; without one it says payments are being set up (never a broken form)", async () => {
+    const { stripeConfigured, stripePaymentAdapter } = await import("./stripe-payment-form");
+    assert.equal(stripeConfigured("pk_test_abc"), true);
+    assert.equal(stripeConfigured("__PLACEHOLDER__"), false);
+    assert.equal(stripeConfigured(""), false);
+    const Form = stripePaymentAdapter.Form;
+    const html = renderToStaticMarkup(<Form onChange={() => {}} amount={5900} currency="USD" />);
+    assert.match(html, /Card payments are being set up/);
+  });
+  it("maps the Address Element value to our address (we keep only country/state/ZIP server-side)", async () => {
+    const { addressFromStripe } = await import("./stripe-payment-form");
+    assert.deepEqual(addressFromStripe({ name: "Tex", address: { line1: "500 Congress Ave", line2: "", city: "Austin", state: "TX", postal_code: "78701", country: "US" } }), {
+      name: "Tex", line1: "500 Congress Ave", line2: null, city: "Austin", state: "TX", postalCode: "78701", country: "US",
+    });
+  });
+  it("confirm without a client secret fails cleanly (no charge attempt)", async () => {
+    const { confirmWithStripe } = await import("./stripe-payment-form");
+    assert.equal((await confirmWithStripe("sub_1", null)).status, "failed");
+  });
+  it("the page validates with the provider before creating the session, then confirms with the returned client secret", () => {
+    const page = src("app/iq/billing/checkout/checkout-page.tsx");
+    const prep = page.indexOf("await adapter.prepare()");
+    const start = page.indexOf("await startCheckout({");
+    assert.ok(prep > 0 && start > prep);
+    assert.match(page, /adapter\.confirm\(co\.sessionId, co\.payment\.clientSecret \?\? null\)/);
+    const stripeSrc = src("app/iq/billing/checkout/stripe-payment-form.tsx");
+    assert.match(stripeSrc, /mode: "subscription" as const/);
+    assert.match(stripeSrc, /redirect: "if_required"/);
+    assert.match(stripeSrc, /await live\.elements\.submit\(\)/);
+  });
+  it("Manage Plan: an upgrade needing 3-D Secure is handled by Stripe", () => {
+    assert.match(src("app/iq/screens/manage-plan.tsx"), /if \(r\.status === "requires_action" && r\.clientSecret\) \{[\s\S]*?handleStripeAction\(r\.clientSecret\)/);
   });
 });

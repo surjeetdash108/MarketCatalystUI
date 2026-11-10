@@ -18,6 +18,9 @@ export interface PaymentFormValue {
 export interface PaymentFormProps {
   onChange: (v: PaymentFormValue) => void;
   disabled?: boolean;
+  /** Amount due today (minor units) and currency, for wallets / the Payment Element. */
+  amount: number;
+  currency: string;
 }
 
 export type PaymentResult =
@@ -28,8 +31,10 @@ export type PaymentResult =
 export interface PaymentAdapter {
   provider: string;
   Form: ComponentType<PaymentFormProps>;
-  /** Pays the session created by POST /api/billing/checkout. */
-  confirm(sessionId: string): Promise<PaymentResult>;
+  /** Validates the provider's fields before the session is created (Stripe: elements.submit()). */
+  prepare?(): Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Pays the session created by POST /api/billing/checkout (clientSecret: Stripe's confirmation secret). */
+  confirm(sessionId: string, clientSecret: string | null): Promise<PaymentResult>;
   /** 3-D Secure / bank challenge (Stripe handles it inside confirm). */
   completeAction?(actionId: string, approve: boolean): Promise<PaymentResult>;
 }

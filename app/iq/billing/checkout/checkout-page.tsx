@@ -147,6 +147,14 @@ export function CheckoutPage() {
     setBusy(true);
     setError(null);
     try {
+      // Provider-side validation first (Stripe: elements.submit()), before anything is created.
+      if (adapter.prepare) {
+        const ok = await adapter.prepare();
+        if (!ok.ok) {
+          setError(ok.message);
+          return;
+        }
+      }
       const a = payment.address;
       const co = await startCheckout({
         planId: plan.id,
@@ -158,7 +166,7 @@ export function CheckoutPage() {
         billing: { name: a.name, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country } },
       });
       session.current = co.sessionId;
-      await finish(await adapter.confirm(co.sessionId), co.sessionId);
+      await finish(await adapter.confirm(co.sessionId, co.payment.clientSecret ?? null), co.sessionId);
     } catch (e) {
       setError(errorBody(e).message ?? "The payment didn't go through. Try again.");
     } finally {
@@ -275,7 +283,11 @@ export function CheckoutPage() {
             <>
               <div className="co-card" data-testid="co-step2">
                 <h2 className="co-title" style={{ fontSize: "1.15rem", marginBottom: 14 }}>Payment</h2>
-                {Form ? <Form onChange={onPayment} disabled={busy} /> : <Notice tone="warn">Payments aren&apos;t available right now.</Notice>}
+                {Form ? (
+                  <Form onChange={onPayment} disabled={busy} amount={preview?.total ?? plan.prices[interval]?.amount ?? 0} currency={plan.currency} />
+                ) : (
+                  <Notice tone="warn">Payments aren&apos;t available right now.</Notice>
+                )}
               </div>
               <div className="co-card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <label>
