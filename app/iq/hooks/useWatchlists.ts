@@ -17,7 +17,7 @@ export type AddTickerResult = { ok: true } | { ok: false; message: string };
 
 /** The message shown when a list is at the plan's ticker limit. */
 export function watchlistFullMessage(limit: number): string {
-  return `This watchlist is full. The Free plan holds up to ${limit} stocks per watchlist — remove one, or upgrade to add more.`;
+  return `This watchlist is full. Your plan holds up to ${limit} stocks per watchlist — remove one, or upgrade to add more.`;
 }
 
 /** Backend errors arrive as a JSON body string; pull out its `message`. */

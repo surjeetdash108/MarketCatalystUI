@@ -25,7 +25,7 @@ export function ManagePlanSoon() {
   const isPremium = hasConfirmedPaidPlan(profile);
   const planName = isPremium && profile?.currentPlan
     ? profile.currentPlan.charAt(0).toUpperCase() + profile.currentPlan.slice(1)
-    : "Free";
+    : "Current Access";
   const displayName = profile?.name || user?.displayName || "User";
   const email = user?.email ?? "";
 

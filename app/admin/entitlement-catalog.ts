@@ -25,7 +25,7 @@ export const ENTITLEMENTS: EntitlementDef[] = [
   { key: "stockIntelligence", label: "Stock Intelligence", group: "Stock Intelligence", featureGroup: "stockIntelligence", description: "Open any stock's page: quote, profile, news and key statistics." },
   { key: "chartsDaily", label: "Daily Charts", group: "Stock Intelligence", featureGroup: "stockIntelligence", description: "View 3-month, 6-month and 1-year price charts." },
   { key: "watchlist", label: "Watchlist", group: "Market Desk", featureGroup: "marketDesk", description: "Build and track a personal watchlist of stocks." },
-  { key: "workspaces", label: "All 15 Workspaces", group: "Market Desk", featureGroup: "marketDesk", description: "Open every Market Desk workspace, including Analyst Actions, Recaps, ETF Corner and AI Companies." },
+  { key: "workspaces", label: "All workspaces", group: "Market Desk", featureGroup: "marketDesk", description: "Open every Market Desk workspace, including Analyst Actions, Recaps, ETF Corner and AI Companies." },
   { key: "chartsIntraday", label: "Intraday Charts", group: "Stock Intelligence", featureGroup: "stockIntelligence", description: "View 1-day, 1-week and 1-month charts built from minute bars." },
   { key: "chartsHistory", label: "Long History (5Y)", group: "Stock Intelligence", featureGroup: "stockIntelligence", description: "View the full five-year price history on any chart." },
   { key: "chartIndicators", label: "Chart Indicators", group: "Stock Intelligence", featureGroup: "stockIntelligence", description: "Overlay moving averages, EMAs, volume and the RSI pane." },

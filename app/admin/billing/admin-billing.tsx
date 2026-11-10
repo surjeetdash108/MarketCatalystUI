@@ -90,7 +90,7 @@ function Subscribers() {
     <div className="card" data-testid="subscribers">
       <div className="card-b" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input placeholder="Search name or email" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} style={{ ...input, width: 220 }} data-testid="sub-search" />
-        {sel("plan", ["free", "starter", "pro", "elite"])}
+        {sel("plan", ["starter", "pro", "elite"])}
         {sel("status", ["ACTIVE", "TRIALING", "PAST_DUE", "CANCELLED", "EXPIRED", "NONE"])}
         {sel("interval", ["monthly", "annual"])}
         {sel("cancelAtPeriodEnd", ["true", "false"])}
@@ -117,9 +117,25 @@ function Subscribers() {
       {detail && (
         <Modal title={`${String(detail.name ?? detail.email ?? detail.uid)}`} onClose={() => setDetail(null)} testId="sub-detail">
           <div style={{ fontSize: ".8rem" }}>{String(detail.planName)} · {String(detail.status).toLowerCase()} · MRR {formatMoney(Number(detail.mrrMinor ?? 0))}</div>
+          {detail.creditBalance != null && Number(detail.creditBalance) > 0 && (
+            <div data-testid="sub-credit-balance" style={{ fontSize: ".8rem", color: "var(--brand-2)", fontWeight: 600 }}>
+              Account credit balance: {formatMoney(Number(detail.creditBalance))}
+            </div>
+          )}
           <SubscriberContact detail={detail} onRefunded={() => void apiGet<Record<string, unknown>>(`/api/admin/billing/subscribers/${String(detail.uid)}`).then(setDetail).then(load)} />
           <b>Invoices</b>
-          {(detail.invoices as Array<Record<string, unknown>>).map((i) => <div key={String(i.paymentId)} style={{ fontSize: ".78rem" }}>{longDate(String(i.paymentDate))} · {String(i.planName)} · {formatMoney(Number(i.amount))} · {String(i.paymentStatus)}</div>)}
+          {(detail.invoices as Array<Record<string, unknown>>).map((i) => (
+            <div key={String(i.paymentId)} style={{ fontSize: ".78rem", borderBottom: "1px solid var(--border-soft)", paddingBottom: 4 }}>
+              <div>{longDate(String(i.paymentDate))} · {String(i.planName)} · {formatMoney(Number(i.amount))} · {String(i.paymentStatus)}</div>
+              {Array.isArray(i.lines) && i.lines.length > 0 && (
+                <div data-testid={`admin-invoice-lines-${String(i.paymentId)}`} style={{ paddingLeft: 8, fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                  {(i.lines as Array<{ description?: string; amount?: number; proration?: boolean }>).map((l, lIdx) => (
+                    <div key={lIdx}>↳ {l.description ?? "Line"}: {formatMoney(Number(l.amount ?? 0))}{l.proration ? " (prorated)" : ""}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
           <b>History</b>
           {(detail.history as Array<Record<string, unknown>>).map((h, k) => <div key={k} style={{ fontSize: ".78rem" }}>{longDate(String(h.at))} · {String(h.type).replace(/_/g, " ")}</div>)}
           <b>Entitlements</b>

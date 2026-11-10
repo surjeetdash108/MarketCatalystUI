@@ -1,4 +1,5 @@
 import type { BillingInterval } from "./catalog";
+export type { BillingInterval };
 
 /**
  * The plan a visitor chose on the marketing site (?plan=&interval=), kept in
@@ -25,11 +26,25 @@ export function parsePlanParams(search: string, knownPlanIds: string[]): PlanInt
   const q = new URLSearchParams(search);
   const planId = (q.get("plan") ?? "").trim().toLowerCase();
   const rawInterval = (q.get("interval") ?? "").trim().toLowerCase();
+  const promo = (q.get("promo") ?? "").trim().slice(0, 40);
   if (!planId || !knownPlanIds.includes(planId)) return null;
   // No interval → annual (the website shows annual prices by default).
   if (rawInterval !== "" && rawInterval !== "monthly" && rawInterval !== "annual") return null;
   const interval: BillingInterval = rawInterval === "monthly" ? "monthly" : "annual";
-  return { planId, interval };
+  return { planId, interval, ...(promo ? { promoCode: promo } : {}) };
+}
+
+/**
+ * On the signup page: invalid params or missing params fall back to Starter monthly.
+ */
+export function parseSignupParams(search: string, knownPlanIds: string[]): PlanIntent {
+  const q = new URLSearchParams(search);
+  const rawPlan = (q.get("plan") ?? "").trim().toLowerCase();
+  const rawInterval = (q.get("interval") ?? "").trim().toLowerCase();
+  const promo = (q.get("promo") ?? "").trim().slice(0, 40);
+  const planId = knownPlanIds.includes(rawPlan) ? rawPlan : "starter";
+  const interval: BillingInterval = rawInterval === "annual" ? "annual" : "monthly";
+  return { planId, interval, ...(promo ? { promoCode: promo } : {}) };
 }
 
 export function saveIntent(intent: PlanIntent | null, store: Store | null = safeSession()): void {
@@ -59,9 +74,10 @@ export function clearIntent(store: Store | null = safeSession()): void {
   saveIntent(null, store);
 }
 
-/** The one purchase page: /checkout with the chosen plan and interval. */
-export function checkoutPath(intent: Pick<PlanIntent, "planId" | "interval">): string {
-  return `/checkout?plan=${encodeURIComponent(intent.planId)}&interval=${intent.interval}`;
+/** The one purchase page: /checkout with the chosen plan, interval and optional promo. */
+export function checkoutPath(intent: Pick<PlanIntent, "planId" | "interval"> & { promoCode?: string }): string {
+  const p = `/checkout?plan=${encodeURIComponent(intent.planId)}&interval=${intent.interval}`;
+  return intent.promoCode ? `${p}&promo=${encodeURIComponent(intent.promoCode)}` : p;
 }
 
 export type AuthMethod = "password" | "google";

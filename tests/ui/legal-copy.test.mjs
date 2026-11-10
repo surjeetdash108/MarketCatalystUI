@@ -11,13 +11,19 @@ describe("Terms §12 matches the subscription system", () => {
   for (const phrase of [
     "Manage Plan page",
     "you keep access to your paid plan until that date",
-    "take effect immediately; we charge a prorated amount",
-    "take effect at the end of the current billing period",
+    "charge a prorated amount for the rest of the current period",
+    "takes effect at the end of the current billing period",
     "we retry it over the following 7 days",
     "once per person",
     "We do not currently offer free trials on paid plans",
     "at least 30 days",
+    "There is no free plan",
+    "unused portion of your current plan is credited to your account balance",
   ]) it(`says: ${phrase}`, () => assert.ok(terms.includes(phrase), phrase));
+  it("never mentions 'Free plan' in Terms §12", () => {
+    const sec12 = terms.slice(terms.indexOf('<h2 id="subscriptions">'), terms.indexOf("</ul>", terms.indexOf('<h2 id="subscriptions">')));
+    assert.doesNotMatch(sec12, /Free plan/);
+  });
   it("is flagged for legal review and uses placeholders, not invented details", () => {
     assert.match(terms, /\[LEGAL REVIEW PLACEHOLDER/);
     assert.match(terms, /MarketCatalyst LLC \[PLACEHOLDER\]/);

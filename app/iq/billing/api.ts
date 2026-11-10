@@ -78,12 +78,42 @@ export const checkoutStatus = (id: string) => apiGet<{ status: string; planId: s
 export interface PromoPreview { code: string; amount: number; discountAmount: number; amountDueToday: number; description: string; currency: string }
 export const previewPromo = (body: { code: string; planId: string; interval: BillingInterval }) => apiPost<PromoPreview>("/api/billing/promo/preview", body);
 
+export interface SignupPromoResponse {
+  valid: true;
+  code: string;
+  amount: number;
+  discountAmount: number;
+  amountDueToday: number;
+}
+export const checkSignupPromo = (body: { code: string; planId: string; interval: BillingInterval }) =>
+  apiPost<SignupPromoResponse>("/api/billing/signup/promo", body);
+
+export interface ChangeBreakdown {
+  fromPlanName: string;
+  toPlanName: string;
+  periodStart: string;
+  today: string;
+  periodEnd: string;
+  usedOnCurrent: number;
+  newPlanCharge: number;
+  alreadyPaid: number;
+  net: number;
+  chargedNow: number;
+  creditToBalance: number;
+}
+
 export interface ChangePreview {
-  kind: "upgrade" | "downgrade";
+  kind: "upgrade" | "downgrade" | "scheduled";
   planId: string;
   interval: BillingInterval;
   currency: string;
   amountDueNow: number;
+  creditToBalance: number;
+  currentPeriodStart?: string;
+  currentPeriodEnd?: string;
+  breakdown: ChangeBreakdown | null;
+  creditBalanceAfter: number;
+  nextInvoiceAfterCredit: number;
   prorationDate: number;
   effectiveAt: string;
   nextRenewalAmount: number;
@@ -92,13 +122,14 @@ export interface ChangePreview {
   fromInterval: BillingInterval;
   cancelsPendingDowngrade: boolean;
   resumesCancelledPlan: boolean;
+  keepsCancelDate?: boolean;
 }
 export const previewChange = (body: { planId: string; interval: BillingInterval }) => apiPost<ChangePreview>("/api/billing/change/preview", body);
 export type ChangeResult =
-  | { kind: string; status: "applied"; amountCharged: number }
+  | { kind: string; status: "applied"; amountCharged: number; creditToBalance?: number }
   | { kind: string; status: "scheduled"; effectiveAt: string }
   | { kind: string; status: "requires_action"; actionId: string; amountDue: number; clientSecret?: string | null };
-export const applyChange = (body: { planId: string; interval: BillingInterval; expectedAmountDue?: number; prorationDate?: number }) => apiPost<ChangeResult>("/api/billing/change", body);
+export const applyChange = (body: { planId: string; interval: BillingInterval; expectedAmountDue?: number; expectedCredit?: number; prorationDate?: number }) => apiPost<ChangeResult>("/api/billing/change", body);
 export const keepCurrentPlan = () => apiPost<{ kept: boolean }>("/api/billing/change/keep");
 export const cancelPlan = () => apiPost<{ endsAt: string }>("/api/billing/cancel");
 export const resumePlan = () => apiPost<{ renewsAt: string }>("/api/billing/resume");
@@ -118,6 +149,8 @@ export interface BillingSummary {
   status: string;
   interval: BillingInterval | null;
   source: string | null;
+  /** Account credit used automatically on next invoices. Minor units. */
+  creditBalance: number;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   renewsAt: string | null;
@@ -131,7 +164,30 @@ export interface BillingSummary {
 }
 export const billingSummary = () => apiGet<BillingSummary>("/api/billing/summary");
 
-export interface InvoiceRow { id: string; number: string; date: string; planName: string; interval: string; amount: number; currency: string; discountAmount: number; creditApplied: number; amountRefunded: number; status: string; reason: string | null; documentPath: string }
+export interface InvoiceLine {
+  description: string;
+  amount: number;
+  proration: boolean;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+}
+
+export interface InvoiceRow {
+  id: string;
+  number: string;
+  date: string;
+  planName: string;
+  interval: string;
+  amount: number;
+  currency: string;
+  discountAmount: number;
+  creditApplied: number;
+  amountRefunded: number;
+  lines?: InvoiceLine[] | null;
+  status: string;
+  reason: string | null;
+  documentPath: string;
+}
 export const listInvoices = () => apiGet<{ invoices: InvoiceRow[] }>("/api/billing/invoices").then((r) => r.invoices);
 export interface HistoryRow { type: string; from: unknown; to: unknown; at: string }
 export const listHistory = () => apiGet<{ history: HistoryRow[] }>("/api/billing/history").then((r) => r.history);

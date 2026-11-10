@@ -19,6 +19,7 @@ import {
   refundEligibility,
   requestRefund,
   retentionOffer,
+  syncClaims,
   type RefundEligibility,
   type BillingSummary,
   type ChangePreview,
@@ -111,6 +112,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   }
 
   async function afterChange(title: string, text: string) {
+    await syncClaims().catch(() => {});
     await refreshEntitlements();
     await reload();
     setDialog({ kind: "done", title, text });
@@ -127,18 +129,39 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   }
 
   async function confirmChange(preview: ChangePreview, plan: CatalogPlan) {
-    const r = await run(() => applyChange({ planId: plan.id, interval: preview.interval, ...(preview.kind === "upgrade" ? { expectedAmountDue: preview.amountDueNow, prorationDate: preview.prorationDate } : {}) }));
-    if (!r) return;
-    if (r.status === "requires_action" && r.clientSecret) {
-      // Stripe: the bank's 3-D Secure challenge for the prorated invoice; the plan changes once paid.
-      const ok = await handleStripeAction(r.clientSecret);
-      if (ok) return afterChange(`You're on ${plan.name}`, "Payment confirmed. The new features are available now.");
-      setError("Authentication failed. Your plan has not changed.");
-      return;
+    const payload = {
+      planId: plan.id,
+      interval: preview.interval,
+      prorationDate: preview.prorationDate,
+      ...(preview.kind === "upgrade" ? { expectedAmountDue: preview.amountDueNow } : {}),
+      ...(preview.kind === "downgrade" ? { expectedCredit: preview.creditToBalance } : {}),
+    };
+    try {
+      const r = await run(() => applyChange(payload));
+      if (!r) return;
+      if (r.status === "requires_action" && r.clientSecret) {
+        // Stripe: the bank's 3-D Secure challenge for the prorated invoice; the plan changes once paid.
+        const ok = await handleStripeAction(r.clientSecret);
+        if (ok) return afterChange(`You're on ${plan.name}`, "Payment confirmed. The new features are available now.");
+        setError("Authentication failed. Your plan has not changed.");
+        return;
+      }
+      if (r.status === "requires_action") return setDialog({ kind: "action", actionId: r.actionId, amountDue: r.amountDue });
+      if (r.status === "scheduled") return afterChange("Change scheduled", `You keep ${current?.name ?? "your plan"} until ${longDate(r.effectiveAt)}, then move to ${plan.name}.`);
+      if (preview.kind === "downgrade") {
+        return afterChange(`You're on ${plan.name}`, `Credit of ${formatMoney(r.creditToBalance ?? preview.creditToBalance)} added to your account.`);
+      }
+      return afterChange(`You're on ${plan.name}`, `Charged ${formatMoney(r.amountCharged)} today (prorated). The new features are available now.`);
+    } catch (err) {
+      const b = errorBody(err);
+      if (b.code === "preview_stale") {
+        const fresh = await run(() => previewChange({ planId: plan.id, interval: preview.interval }));
+        if (fresh) setDialog({ kind: "preview", preview: fresh, plan });
+        setError("The price changed since your preview. Review it again.");
+        return;
+      }
+      setError(b.message ?? "Something went wrong.");
     }
-    if (r.status === "requires_action") return setDialog({ kind: "action", actionId: r.actionId, amountDue: r.amountDue });
-    if (r.status === "scheduled") return afterChange("Change scheduled", `You keep ${current?.name ?? "your plan"} until ${longDate(r.effectiveAt)}, then move to ${plan.name}.`);
-    return afterChange(`You're on ${plan.name}`, `Charged ${formatMoney(r.amountCharged)} today (prorated). The new features are available now.`);
   }
 
   async function confirmAction(actionId: string, approve: boolean) {
@@ -156,7 +179,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
 
   async function doCancel() {
     const r = await run(() => cancelPlan());
-    if (r) await afterChange("Your plan is cancelled", `You keep full access until ${longDate(r.endsAt)}, then your account moves to Free. No further charges.`);
+    if (r) await afterChange("Your plan is cancelled", `You keep full access until ${longDate(r.endsAt)}, then your plan ends. No further charges.`);
   }
 
   async function keepWithDiscount() {
@@ -166,7 +189,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
 
   async function confirmRefund() {
     const r = await run(() => requestRefund());
-    if (r) await afterChange("Refund on its way", `We've refunded ${formatMoney(r.amount, r.currency)}. Your plan has ended and you're on Free.`);
+    if (r) await afterChange("Refund on its way", `We've refunded ${formatMoney(r.amount, r.currency)}. Your plan has ended.`);
   }
 
   return (
@@ -187,9 +210,14 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
               {summary.interval ? ` · ${summary.interval === "annual" ? "Annual" : "Monthly"}` : ""}
               {summary.source === "launch_trial" ? " · launch trial" : ""}
             </div>
+            {summary.creditBalance > 0 && (
+              <div data-testid="credit-balance" style={{ fontSize: ".88rem", color: "var(--brand-2)", fontWeight: 600 }}>
+                Account credit: {formatMoney(summary.creditBalance, summary.nextCharge?.currency ?? "USD")} (used automatically on your next invoice, not refunded to card)
+              </div>
+            )}
             {summary.renewsAt && <div data-testid="renews">Renews on {longDate(summary.renewsAt)}{summary.nextCharge ? ` for ${formatMoney(summary.nextCharge.amount, summary.nextCharge.currency)}` : ""}.</div>}
-            {summary.endsAt && <Notice tone="warn" testId="ends">Your plan ends on {longDate(summary.endsAt)}. You keep full access until then, then move to Free.</Notice>}
-            {summary.source === "launch_trial" && summary.currentPeriodEnd && <Notice testId="trial">You have {summary.planName} free until {longDate(summary.currentPeriodEnd)}. Choose a plan to keep it.</Notice>}
+            {summary.endsAt && <Notice tone="warn" testId="ends">Your plan ends on {longDate(summary.endsAt)}. You keep full access until then.</Notice>}
+            {summary.source === "launch_trial" && summary.currentPeriodEnd && <Notice testId="trial">You have complimentary {summary.planName} until {longDate(summary.currentPeriodEnd)}. Choose a plan to keep it.</Notice>}
             {summary.inGrace && <Notice tone="error" testId="grace">Your last payment failed. You keep access until {longDate(summary.graceEndsAt)} while we retry — update your card to avoid losing it.</Notice>}
             {summary.scheduledChange && (
               <Notice testId="scheduled">
@@ -223,9 +251,9 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
             </div>
           </div>
           <div className="card-b" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 }}>
-            {plans.map((p) => {
-              const price = isPaid(p) ? displayPrice(p, interval) : null;
-              const isCurrent = summary.planId === p.id && (!isPaid(p) || summary.interval === interval) && (subscribed || !isPaid(p));
+            {plans.filter(isPaid).map((p) => {
+              const price = displayPrice(p, interval);
+              const isCurrent = summary.planId === p.id && summary.interval === interval && subscribed;
               const rankCur = current?.sortOrder ?? 0;
               let label = `Choose ${p.name}`;
               if (subscribed) {
@@ -240,15 +268,12 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
                   </div>
                   <div style={{ fontSize: "1.25rem", fontWeight: 700 }}>{price ? `${price.perMonth}/mo` : formatMoney(0, p.currency)}</div>
                   <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
-                    {price ? price.billed : "Free forever"}
+                    {price ? price.billed : "—"}
                     {price?.savingPct ? ` · save ${price.savingPct}%` : ""}
                   </div>
                   <div style={{ fontSize: ".76rem", color: "var(--text)" }}>{p.description}</div>
-                  {isPaid(p) && !isCurrent && (
+                  {!isCurrent && (
                     <Button testId={`choose-${p.id}`} onClick={() => { setSelected(p.id); void choose(p); }} disabled={busy}>{label}</Button>
-                  )}
-                  {!isPaid(p) && subscribed && !summary.cancelAtPeriodEnd && (
-                    <Button kind="secondary" testId="choose-free" onClick={() => void startCancel()}>Move to Free</Button>
                   )}
                 </div>
               );
@@ -266,7 +291,18 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
                 {invoices.map((i) => (
                   <tr key={i.id}>
                     <td>{longDate(i.date)}</td>
-                    <td>{i.planName} · {i.interval}{i.reason === "subscription_update" ? " (prorated change)" : ""}</td>
+                    <td>
+                      <div>{i.planName} · {i.interval}{i.reason === "subscription_update" ? " (prorated change)" : ""}</div>
+                      {Array.isArray(i.lines) && i.lines.length > 0 && (
+                        <div data-testid={`invoice-lines-${i.id}`} style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2, fontSize: ".72rem", color: "var(--text-dim-solid)" }}>
+                          {i.lines.map((l, lIdx) => (
+                            <div key={lIdx}>
+                              • {l.description}: {formatMoney(l.amount, i.currency)}{l.proration ? " (prorated)" : ""}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ textAlign: "right" }}>{formatMoney(i.amount, i.currency)}{i.discountAmount ? ` (−${formatMoney(i.discountAmount)})` : ""}{i.creditApplied ? ` (credit −${formatMoney(i.creditApplied)})` : ""}</td>
                     <td style={{ textAlign: "center" }}>{i.status.toLowerCase()}</td>
                     <td><button type="button" className="btn" onClick={() => void apiDownload(i.documentPath, `invoice-${i.number}.html`)}>Download</button></td>
@@ -289,15 +325,55 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       </div>
 
       {dialog?.kind === "preview" && (
-        <Modal title={dialog.preview.kind === "upgrade" ? `Upgrade to ${dialog.plan.name}` : `Downgrade to ${dialog.plan.name}`} onClose={() => setDialog(null)} testId="preview-dialog">
-          {dialog.preview.kind === "upgrade" ? (
-            <div data-testid="preview-amount">You'll be charged <b>{formatMoney(dialog.preview.amountDueNow, dialog.preview.currency)}</b> today (prorated). Then {formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)} on {longDate(dialog.preview.nextRenewalDate)}.</div>
+        <Modal
+          title={
+            dialog.preview.kind === "upgrade"
+              ? `Upgrade to ${dialog.plan.name}`
+              : dialog.preview.kind === "downgrade"
+              ? `Downgrade to ${dialog.plan.name}`
+              : `Change to ${dialog.plan.name}`
+          }
+          onClose={() => setDialog(null)}
+          testId="preview-dialog"
+        >
+          {dialog.preview.kind === "scheduled" ? (
+            <div data-testid="preview-scheduled">
+              Takes effect on <b>{longDate(dialog.preview.effectiveAt)}</b>. You keep {current?.name ?? "your plan"} until then, then move to {dialog.plan.name} at {formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)}.
+            </div>
+          ) : dialog.preview.breakdown ? (
+            <div data-testid="preview-breakdown" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: ".86rem" }}>
+              <div>{dialog.preview.breakdown.fromPlanName}: {longDate(dialog.preview.breakdown.periodStart)} to today: {formatMoney(dialog.preview.breakdown.usedOnCurrent, dialog.preview.currency)}</div>
+              <div>{dialog.preview.breakdown.toPlanName}: today to {longDate(dialog.preview.breakdown.periodEnd)}: {formatMoney(dialog.preview.breakdown.newPlanCharge, dialog.preview.currency)}</div>
+              <div>Already paid for {dialog.preview.breakdown.fromPlanName}: −{formatMoney(dialog.preview.breakdown.alreadyPaid, dialog.preview.currency)}</div>
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, fontWeight: 700 }}>
+                {dialog.preview.kind === "upgrade" ? (
+                  <span data-testid="preview-amount">
+                    Charged now: {formatMoney(dialog.preview.amountDueNow, dialog.preview.currency)}
+                  </span>
+                ) : (
+                  <span data-testid="preview-credit">
+                    Credit to your account: {formatMoney(dialog.preview.creditToBalance, dialog.preview.currency)} (used automatically on your next invoice(s), not refunded to the card)
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
+                Next renewal: {formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)} on {longDate(dialog.preview.nextRenewalDate)}
+                {dialog.preview.nextInvoiceAfterCredit !== dialog.preview.nextRenewalAmount && (
+                  <span> (after credit: {formatMoney(dialog.preview.nextInvoiceAfterCredit, dialog.preview.currency)})</span>
+                )}
+              </div>
+            </div>
           ) : (
-            <div data-testid="preview-amount">No charge today. You keep {current?.name} until {longDate(dialog.preview.effectiveAt)}, then move to {dialog.plan.name} at {formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)}.</div>
+            <div data-testid="preview-amount">
+              {dialog.preview.kind === "upgrade"
+                ? `You'll be charged ${formatMoney(dialog.preview.amountDueNow, dialog.preview.currency)} today (prorated). Then ${formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)} on ${longDate(dialog.preview.nextRenewalDate)}.`
+                : `Credit to your account: ${formatMoney(dialog.preview.creditToBalance, dialog.preview.currency)}.`}
+            </div>
           )}
           {dialog.preview.cancelsPendingDowngrade && <Notice>This replaces your scheduled downgrade.</Notice>}
           {dialog.preview.resumesCancelledPlan && <Notice>This also resumes your cancelled plan.</Notice>}
-          <div style={{ display: "flex", gap: 8 }}>
+          {dialog.preview.keepsCancelDate && <Notice>Your plan still ends on {longDate(summary.endsAt)}.</Notice>}
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <Button testId="confirm-change" onClick={() => void confirmChange(dialog.preview, dialog.plan)} disabled={busy}>Confirm</Button>
             <Button kind="secondary" onClick={() => setDialog(null)}>Back</Button>
           </div>
@@ -318,7 +394,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       {dialog?.kind === "confirm-refund" && (
         <Modal title="Request a refund?" onClose={() => setDialog(null)} testId="refund-dialog">
           <div>{REFUND_POLICY.managePlanLine}</div>
-          <div>You&apos;ll get {formatMoney(dialog.amount, dialog.currency)} back and your account moves to Free right away.</div>
+          <div>You&apos;ll get {formatMoney(dialog.amount, dialog.currency)} back and your plan ends right away.</div>
           <div style={{ display: "flex", gap: 8 }}>
             <Button kind="danger" testId="refund-confirm" onClick={() => void confirmRefund()} disabled={busy}>Refund and end my plan</Button>
             <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
@@ -327,7 +403,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       )}
       {dialog?.kind === "confirm-cancel" && (
         <Modal title="Cancel your plan?" onClose={() => setDialog(null)} testId="cancel-dialog">
-          <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your account moves to Free. No further charges.</div>
+          <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your plan ends. No further charges.</div>
           <div style={{ display: "flex", gap: 8 }}>
             <Button kind="danger" testId="cancel-confirm" onClick={() => void doCancel()} disabled={busy}>Cancel my plan</Button>
             <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
