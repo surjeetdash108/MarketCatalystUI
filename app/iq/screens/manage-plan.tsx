@@ -15,21 +15,23 @@ import {
   listInvoices,
   openPortal,
   previewChange,
-  previewPromo,
   resumePlan,
+  refundEligibility,
+  requestRefund,
   retentionOffer,
-  startCheckout,
+  type RefundEligibility,
   type BillingSummary,
   type ChangePreview,
   type HistoryRow,
   type InvoiceRow,
-  type PromoPreview,
   type RetentionOffer,
 } from "../billing/api";
 import { displayPrice, formatMoney, INTERVALS, isPaid, longDate, type BillingInterval, type CatalogPlan } from "../billing/catalog";
-import { parsePlanParams } from "../billing/plan-intent";
+import { checkoutPath, parsePlanParams } from "../billing/plan-intent";
 import { Button, Modal, Notice, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
+import { REFUND_POLICY } from "../billing/refund-policy.generated";
+import { ContactCard, StaffPlan } from "./manage-plan-extras";
 
 /**
  * Manage Plan. While paid plans are unavailable it is the honest
@@ -40,6 +42,7 @@ import { ManagePlanSoon } from "./manage-plan-soon";
 export function ManagePlanScreen() {
   const { data: ent } = useEntitlements();
   if (!ent) return null;
+  if (ent.staff) return <StaffPlan />;
   if (!ent.paidPlansAvailable) return <ManagePlanSoon />;
   return <BillingScreen />;
 }
@@ -49,6 +52,7 @@ type Dialog =
   | { kind: "action"; actionId: string; amountDue: number }
   | { kind: "retention"; offer: RetentionOffer }
   | { kind: "confirm-cancel" }
+  | { kind: "confirm-refund"; amount: number; currency: string }
   | { kind: "done"; title: string; text: string };
 
 const LIVE = ["ACTIVE", "TRIALING", "PAST_DUE"];
@@ -63,11 +67,12 @@ export function BillingScreen() {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [promo, setPromo] = useState("");
-  const [promoPreview, setPromoPreview] = useState<PromoPreview | null>(null);
+  const [refund, setRefund] = useState<RefundEligibility | null>(null);
 
   const reload = useCallback(async () => {
     const [{ plans: p }, s, inv, hist] = await Promise.all([fetchPlans(), billingSummary(), listInvoices(), listHistory()]);
+    // The refund button exists only while REFUND_WINDOW_DAYS > 0 (the endpoint is 404 otherwise).
+    if (REFUND_POLICY.enabled) setRefund(await refundEligibility().catch(() => null));
     setPlans(p);
     setSummary(s);
     setInvoices(inv);
@@ -110,8 +115,8 @@ export function BillingScreen() {
 
   async function choose(plan: CatalogPlan) {
     if (!subscribed) {
-      const r = await run(() => startCheckout({ planId: plan.id, interval, ...(promoPreview ? { promoCode: promoPreview.code } : {}) }));
-      if (r) window.location.href = r.url;
+      // New subscription: the one purchase page (billing period, payment, consent).
+      window.location.href = checkoutPath({ planId: plan.id, interval });
       return;
     }
     const preview = await run(() => previewChange({ planId: plan.id, interval }));
@@ -149,12 +154,9 @@ export function BillingScreen() {
     if (r) await afterChange("Discount applied", `${r.description}. Your subscription stays active.`);
   }
 
-  async function applyPromo() {
-    const target = plans.find((p) => p.id === selected && isPaid(p));
-    if (!target || !promo.trim()) return;
-    setPromoPreview(null);
-    const r = await run(() => previewPromo({ code: promo.trim(), planId: target.id, interval }));
-    if (r) setPromoPreview(r);
+  async function confirmRefund() {
+    const r = await run(() => requestRefund());
+    if (r) await afterChange("Refund on its way", `We've refunded ${formatMoney(r.amount, r.currency)}. Your plan has ended and you're on Free.`);
   }
 
   return (
@@ -188,12 +190,17 @@ export function BillingScreen() {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {subscribed && !summary.cancelAtPeriodEnd && <Button kind="danger" testId="cancel" onClick={() => void startCancel()} disabled={busy}>Cancel subscription</Button>}
               {subscribed && summary.cancelAtPeriodEnd && <Button testId="resume" onClick={() => void run(() => resumePlan()).then((r) => r && afterChange("Plan resumed", `Your plan renews on ${longDate(r.renewsAt)}.`))}>Resume subscription</Button>}
+              {REFUND_POLICY.enabled && refund?.eligible && (
+                <Button kind="secondary" testId="request-refund" disabled={busy} onClick={() => refund.eligible && setDialog({ kind: "confirm-refund", amount: refund.amount, currency: refund.currency })}>Request refund</Button>
+              )}
               {summary.hasBillingAccount && <Button kind="secondary" testId="update-card" onClick={() => void run(() => openPortal()).then((r) => r && (window.location.href = r.url))}>Update card</Button>}
             </div>
           </div>
         </div>
 
         {error && <Notice tone="error" testId="billing-error">{error}</Notice>}
+
+        <ContactCard />
 
         <div className="card col-12">
           <div className="card-h">
@@ -236,13 +243,6 @@ export function BillingScreen() {
               );
             })}
           </div>
-          {!subscribed && (
-            <div className="card-b" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input data-testid="mp-promo" value={promo} onChange={(e) => setPromo(e.target.value.toUpperCase())} placeholder="Promo code" maxLength={40} style={{ height: 34, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-1)", color: "var(--text-hi)", padding: "0 10px" }} />
-              <Button kind="secondary" testId="mp-promo-apply" onClick={() => void applyPromo()} disabled={!selected || !promo.trim()}>Apply to selected plan</Button>
-              {promoPreview && <span data-testid="mp-promo-result">{promoPreview.code}: <s>{formatMoney(promoPreview.amount)}</s> <b>{formatMoney(promoPreview.amountDueToday)}</b> today ({promoPreview.description})</span>}
-            </div>
-          )}
         </div>
 
         <div className="card col-12">
@@ -303,6 +303,16 @@ export function BillingScreen() {
       )}
       {dialog?.kind === "retention" && (
         <RetentionChoice offer={dialog.offer} busy={busy} onKeep={() => void keepWithDiscount()} onCancel={() => void doCancel()} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === "confirm-refund" && (
+        <Modal title="Request a refund?" onClose={() => setDialog(null)} testId="refund-dialog">
+          <div>{REFUND_POLICY.managePlanLine}</div>
+          <div>You&apos;ll get {formatMoney(dialog.amount, dialog.currency)} back and your account moves to Free right away.</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button kind="danger" testId="refund-confirm" onClick={() => void confirmRefund()} disabled={busy}>Refund and end my plan</Button>
+            <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
+          </div>
+        </Modal>
       )}
       {dialog?.kind === "confirm-cancel" && (
         <Modal title="Cancel your plan?" onClose={() => setDialog(null)} testId="cancel-dialog">

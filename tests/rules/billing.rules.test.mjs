@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
-const BILLING = ["customers", "subscriptions", "payments", "subscription_events", "promo_codes", "promo_redemptions", "promo_attempts", "retention_offers", "stripe_events", "checkout_sessions", "launch_offers", "admin_audit", "fake_billing_subscriptions", "fake_billing_invoices", "fake_billing_checkouts", "fake_billing_customers"];
+const BILLING = ["config", "email_verifications", "email_verification_ips", "refund_claims", "customers", "subscriptions", "payments", "subscription_events", "promo_codes", "promo_redemptions", "promo_attempts", "retention_offers", "stripe_events", "checkout_sessions", "launch_offers", "admin_audit", "fake_billing_subscriptions", "fake_billing_invoices", "fake_billing_checkouts", "fake_billing_customers"];
 const GATED = [
   ["earnings_summaries", "s1", "starter"],
   ["fund_holdings", "cik1", "starter"],
@@ -32,6 +32,7 @@ async function seed(flag) {
   });
 }
 const as = (plan) => env.authenticatedContext("alice", { email: "alice@example.com", ...(plan ? { plan } : {}) }).firestore();
+const asClaims = (claims) => env.authenticatedContext("alice", { email: "alice@example.com", ...claims }).firestore();
 
 describe("billing collections are backend-only", () => {
   beforeEach(() => seed(true));
@@ -73,4 +74,31 @@ describe("plan-gated market data (TODO(tier-gating) restored)", () => {
       });
     });
   }
+});
+
+describe("staff full access (claim set by the backend for a verified allowlisted email)", () => {
+  for (const flag of [true, false]) {
+    describe(`SUBSCRIPTIONS_ENABLED ${flag ? "on" : "off"}`, () => {
+      beforeEach(() => seed(flag));
+      for (const [c, id] of GATED) {
+        it(`${c}: verified staff can read`, async () => {
+          await assertSucceeds(getDoc(doc(asClaims({ staff: true, email_verified: true }), c, id)));
+        });
+      }
+    });
+  }
+  describe("SUBSCRIPTIONS_ENABLED on", () => {
+    beforeEach(() => seed(true));
+    it("a staff claim without a verified email gets nothing extra", async () => {
+      for (const [c, id, min] of GATED) {
+        if (min === "starter" || min === "pro") await assertFails(getDoc(doc(asClaims({ staff: true, email_verified: false }), c, id)));
+      }
+    });
+    it("staff still can't read or write config/staff_access, customers (phone) or any billing collection", async () => {
+      const staff = asClaims({ staff: true, email_verified: true });
+      await assertFails(getDoc(doc(staff, "config", "staff_access")));
+      await assertFails(setDoc(doc(staff, "config", "staff_access"), { emails: ["me@example.com"] }));
+      await assertFails(getDoc(doc(staff, "customers", "alice")));
+    });
+  });
 });

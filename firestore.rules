@@ -58,9 +58,17 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/feature_flags/default).data.get('flags', {}).get('SUBSCRIPTIONS_ENABLED', false) == true;
     }
 
-    // Signed in, and on `minimum` or above while subscriptions are live.
+    // Staff full access: the `staff` custom claim (set by the backend only when
+    // the VERIFIED email is on config/staff_access) AND a verified email on the
+    // token. Staff is not admin.
+    function isStaff() {
+      return request.auth.token.get('staff', false) == true
+          && request.auth.token.get('email_verified', false) == true;
+    }
+
+    // Signed in, and on `minimum` or above (or staff) while subscriptions are live.
     function canReadOnPlan(minimum) {
-      return isAuthenticated() && (!subscriptionsEnabled() || planAtLeast(minimum));
+      return isAuthenticated() && (!subscriptionsEnabled() || isStaff() || planAtLeast(minimum));
     }
 
     // Investor-profile fields a user may write on their own users/{uid} doc.
@@ -376,6 +384,11 @@ service cloud.firestore {
     match /fake_billing_events/{d=**}            { allow read, write: if false; }
     match /fake_billing_portal_sessions/{d=**}   { allow read, write: if false; }
     match /fake_billing_promotions/{d=**}        { allow read, write: if false; }
+    // Account/staff — backend-only.
+    match /config/{d=**}                { allow read, write: if false; }
+    match /email_verifications/{d=**}   { allow read, write: if false; }
+    match /email_verification_ips/{d=**} { allow read, write: if false; }
+    match /refund_claims/{d=**}         { allow read, write: if false; }
 
     // ═════════════════════════════════════════════════════════════════════════
     // DENY ALL — catch-all for any path not explicitly matched above

@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import { firebaseAuth, googleAuthProvider } from "../../firebase";
 import { postLoginPath } from "../../admin/admin-email";
+import { routeAfterLogin, useCaptureIntent, withSearch } from "../../iq/billing/auth-routing";
 import {
   completeGoogleLogin,
   getAuthErrorMessage,
@@ -63,6 +64,7 @@ export function LoginForm({ initialError = "" }: Readonly<{ initialError?: strin
       : ""),
   );
   const [focused, setFocused] = useState("");
+  useCaptureIntent();
 
   useEffect(() => {
     if (initialError) showError(initialError);
@@ -73,8 +75,9 @@ export function LoginForm({ initialError = "" }: Readonly<{ initialError?: strin
     setError(""); setIsSubmitting(true);
     try {
       await signInWithEmailAndPassword(firebaseAuth, email, password);
-      // The admin account lands on the admin console, everyone else on the app.
-      window.location.href = postLoginPath(email);
+      // Arrived from a website plan tile → /checkout; otherwise the admin account
+      // lands on the admin console, everyone else on the app.
+      window.location.href = await routeAfterLogin(postLoginPath(email));
     } catch (err) {
       const msg = getAuthErrorMessage(err);
       setError(msg); showError(msg);
@@ -236,7 +239,7 @@ export function LoginForm({ initialError = "" }: Readonly<{ initialError?: strin
 
       <p style={{ marginTop: 20, textAlign: "center", fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
         New to MarketCatalyst?{" "}
-        <Link href="/auth/signup" style={{ color: "var(--brand-2)", fontWeight: 600 }}>
+        <Link href={withSearch("/auth/signup")} style={{ color: "var(--brand-2)", fontWeight: 600 }}>
           Create an account
         </Link>
       </p>

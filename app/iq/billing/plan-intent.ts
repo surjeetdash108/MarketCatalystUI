@@ -59,9 +59,37 @@ export function clearIntent(store: Store | null = safeSession()): void {
   saveIntent(null, store);
 }
 
-/** Where a signed-in visitor with an intent goes: Manage Plan with that plan selected. */
-export function managePlanPath(intent: PlanIntent | null): string {
-  return intent ? `/manage-plan?plan=${encodeURIComponent(intent.planId)}&interval=${intent.interval}` : "/manage-plan";
+/** The one purchase page: /checkout with the chosen plan and interval. */
+export function checkoutPath(intent: Pick<PlanIntent, "planId" | "interval">): string {
+  return `/checkout?plan=${encodeURIComponent(intent.planId)}&interval=${intent.interval}`;
+}
+
+export type AuthMethod = "password" | "google";
+
+/**
+ * Where a just-created account goes.
+ *  - no plan intent → Free → dashboard
+ *  - intent, paid plans unavailable (flag off / no provider) → dashboard, where a
+ *    banner says "<Plan> is launching soon" (the intent is kept for later)
+ *  - intent → /checkout with the same plan and interval; email/password accounts
+ *    verify their email first (Google accounts arrive verified)
+ */
+export function nextAfterSignup(intent: PlanIntent | null, method: AuthMethod, paidPlansAvailable: boolean): string {
+  if (!intent || !paidPlansAvailable) return "/dashboard";
+  const co = checkoutPath(intent);
+  return method === "password" ? `/verify-email?next=${encodeURIComponent(co)}` : co;
+}
+
+/** Where an existing account that just signed in goes (/checkout shows the code step if still unverified). */
+export function nextAfterLogin(intent: PlanIntent | null, fallback: string, paidPlansAvailable: boolean): string {
+  if (!intent) return fallback;
+  if (!paidPlansAvailable) return "/dashboard";
+  return checkoutPath(intent);
+}
+
+/** The intent from the URL (?plan=&interval=) or the session, validated against the catalog. */
+export function currentIntent(search: string, knownPlanIds: string[], store: Store | null = safeSession()): PlanIntent | null {
+  return parsePlanParams(search, knownPlanIds) ?? loadIntent(knownPlanIds, store);
 }
 
 function safeSession(): Store | null {
@@ -69,30 +97,5 @@ function safeSession(): Store | null {
     return typeof window !== "undefined" ? window.sessionStorage : null;
   } catch {
     return null;
-  }
-}
-
-/**
- * Where a just-created account goes: /billing/start (confirm price, then
- * checkout) when a paid plan was chosen, otherwise `fallback`.
- */
-export function afterSignupPath(fallback: string, store: Store | null = safeSession()): string {
-  try {
-    const raw = store?.getItem(INTENT_KEY);
-    return raw ? "/billing/start" : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-/** Where an existing account that just signed in goes when it arrived with a plan. */
-export function afterLoginPath(fallback: string, store: Store | null = safeSession()): string {
-  try {
-    const raw = store?.getItem(INTENT_KEY);
-    if (!raw) return fallback;
-    const v = JSON.parse(raw) as PlanIntent;
-    return managePlanPath({ planId: v.planId, interval: v.interval });
-  } catch {
-    return fallback;
   }
 }

@@ -7,6 +7,8 @@ import { firebaseAuth } from "../../firebase";
 /** GET /api/me/entitlements — what the signed-in user's plan includes. */
 export interface Entitlements {
   subscriptionsEnabled: boolean;
+  /** Staff full access (verified email on the backend allowlist): every feature, never billed. */
+  staff?: boolean;
   paidPlansAvailable: boolean;
   provider: string;
   planId: string;

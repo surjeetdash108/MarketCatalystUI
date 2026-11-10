@@ -22,7 +22,7 @@ const read = (p) => fs.readFileSync(new URL(p, import.meta.url), "utf8");
 // nested 13F docs, own vs someone else's user subtree, billing, and paths only
 // the catch-all covers).
 const MARKET = ["companies", "tickers", "ohlcv_bars", "earnings_events", "earnings_summaries", "news", "analyst_actions", "macro_events", "market_movers", "market_movers_history", "options_flow", "block_trades", "fund_holdings", "story_stocks", "recaps", "market_indices", "market_indices_history", "sectors", "sectors_history", "ipos", "dividends", "insider_transactions", "options_chains"];
-const BILLING = ["customers", "subscriptions", "payments", "subscription_events", "promo_codes", "promo_redemptions", "promo_attempts", "retention_offers", "stripe_events", "checkout_sessions", "launch_offers", "admin_audit", "fake_billing_customers", "fake_billing_subscriptions", "fake_billing_invoices", "fake_billing_checkouts", "fake_billing_actions", "fake_billing_events", "fake_billing_portal_sessions", "fake_billing_promotions"];
+const BILLING = ["config", "email_verifications", "email_verification_ips", "refund_claims", "customers", "subscriptions", "payments", "subscription_events", "promo_codes", "promo_redemptions", "promo_attempts", "retention_offers", "stripe_events", "checkout_sessions", "launch_offers", "admin_audit", "fake_billing_customers", "fake_billing_subscriptions", "fake_billing_invoices", "fake_billing_checkouts", "fake_billing_actions", "fake_billing_events", "fake_billing_portal_sessions", "fake_billing_promotions"];
 const DOCS = [
   ...MARKET.map((c) => `${c}/d1`),
   "fund_holdings/d1/filings/f1",
@@ -51,6 +51,8 @@ const CLAIMS = {
   "tier=premium": { tier: "premium" },
   "tier=premium + plan=plus": { tier: "premium", plan: "plus" },
   "admin claim": { admin: true },
+  "staff claim, verified": { staff: true, email_verified: true },
+  "staff claim, unverified": { staff: true, email_verified: false },
 };
 const FLAG_OFF_STATES = {
   "no flag doc": undefined,

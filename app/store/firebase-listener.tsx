@@ -1,12 +1,13 @@
 "use client";
 
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, onIdTokenChanged } from "firebase/auth";
 import { useEffect } from "react";
 import { postLoginPath } from "../admin/admin-email";
 import { writeAuthHint } from "../auth/auth-gate";
 import { firebaseAuth } from "../firebase";
 import { apiGet } from "../iq/backend";
 import { clearSession } from "../iq/session";
+import { syncStaffClaim } from "../iq/staff-sync";
 import { setAuthReady, setUser } from "./auth-slice";
 import { useAppDispatch } from "./hooks";
 import { setProfile, setProfileLoading, StoredProfile } from "./profile-slice";
@@ -17,11 +18,17 @@ export function FirebaseListener() {
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
+    let unsubscribeToken: (() => void) | undefined;
 
     // Wait for Firebase to restore the persisted session from IndexedDB before
     // subscribing, so the first onAuthStateChanged call reflects the real state.
     void firebaseAuth.authStateReady().then(() => {
       if (cancelled) return;
+
+      // Staff claim: synced on sign-in and on every token refresh (staff-sync.ts).
+      unsubscribeToken = onIdTokenChanged(firebaseAuth, (user) => {
+        if (!cancelled) void syncStaffClaim(user);
+      });
 
       unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
         if (cancelled) return;
@@ -68,6 +75,7 @@ export function FirebaseListener() {
     return () => {
       cancelled = true;
       unsubscribe?.();
+      unsubscribeToken?.();
     };
   }, [dispatch]);
 
