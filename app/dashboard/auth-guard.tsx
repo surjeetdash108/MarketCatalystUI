@@ -8,7 +8,8 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
 
   useEffect(() => {
     if (status === "ready" && !user) {
-      window.location.href = "/auth/login";
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      window.location.href = search ? `/auth/signup${search}` : "/auth/login";
     }
   }, [status, user]);
 

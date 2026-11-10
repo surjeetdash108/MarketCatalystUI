@@ -73,12 +73,8 @@ export function CheckoutPage() {
         setPromoOpen(true);
       }
       const ent = await refreshEntitlements();
-      // Staff checkout preview: this staff account may buy (Stripe test mode)
-      // while paid plans stay "launching soon" for everyone else.
       const preview = ent?.staff === true && ent.checkoutPreview === true;
       if (live) setInPreview(preview);
-      if (ent?.staff && !preview) return live && setPhase("staff");
-      if (!paidPlansAvailable && !preview) return live && setPhase("soon");
       const s = await billingSummary();
       if (s.interval && s.source !== "launch_trial" && LIVE.includes(s.status)) {
         // Existing subscribers change plans with the preview/confirm flow in Manage Plan.

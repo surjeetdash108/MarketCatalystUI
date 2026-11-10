@@ -25,9 +25,7 @@ import {
 } from "../auth-utils";
 import { LegalModal } from "../legal/legal-modal";
 import { routeAfterSignup, useCaptureIntent, withSearch } from "../../iq/billing/auth-routing";
-import { PlanPicker } from "../../iq/billing/plan-picker";
-import { parseSignupParams, saveIntent, loadIntent, type BillingInterval } from "../../iq/billing/plan-intent";
-import type { SignupPromoResponse } from "../../iq/billing/api";
+import { parseSignupParams, saveIntent } from "../../iq/billing/plan-intent";
 
 const divider: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 12,
@@ -52,29 +50,15 @@ export function SignupForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState<string>("starter");
-  const [interval, setInterval] = useState<BillingInterval>("monthly");
-  const [promoCode, setPromoCode] = useState<string>("");
-  const [promoResult, setPromoResult] = useState<SignupPromoResponse | null>(null);
-  const [promoError, setPromoError] = useState<string | null>(null);
   useCaptureIntent();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const fromParams = parseSignupParams(window.location.search, ["starter", "pro", "elite"]);
-    const existing = loadIntent(["starter", "pro", "elite"]);
-    const intent = window.location.search ? fromParams : (existing ?? fromParams);
+    const intent = parseSignupParams(window.location.search, ["starter", "pro", "elite"]);
     if (intent) {
-      setSelectedPlan(intent.planId);
-      setInterval(intent.interval);
-      if (intent.promoCode) setPromoCode(intent.promoCode);
       saveIntent(intent);
     }
   }, []);
-
-  const persistIntent = (planId = selectedPlan, inv = interval, promo = promoResult?.code ?? promoCode.trim()) => {
-    saveIntent({ planId, interval: inv, ...(promo ? { promoCode: promo } : {}) });
-  };
 
   // Pick up any pending redirect result (fallback for when popup was blocked
   // and signInWithRedirect was used instead).
@@ -104,7 +88,6 @@ export function SignupForm() {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(""); setIsSubmitting(true);
-    persistIntent();
     try {
       if (!acceptedTerms) {
         const msg = "Please agree to our Terms and conditions and Privacy policy to create an account.";
@@ -114,16 +97,9 @@ export function SignupForm() {
         const msg = "Passwords do not match. Please re-enter your password.";
         setError(msg); showError(msg); return;
       }
-      // Temporarily disabled while preferred asset classes input is commented out
-      // if (profile.preferredAssetClasses.length === 0) {
-      //   const msg = "Select at least one preferred asset class.";
-      //   setError(msg); showError(msg); return;
-      // }
-      persistIntent();
       const cred = await createUserWithEmailAndPassword(firebaseAuth, profile.email, password);
       await updateProfile(cred.user, { displayName: profile.name });
       await apiPatch("/api/profile", toProfilePatch(profile));
-      // Plan from the website tile → verify email → /checkout.
       window.location.href = await routeAfterSignup("password");
     } catch (err) {
       const msg = getAuthErrorMessage(err);
@@ -137,7 +113,6 @@ export function SignupForm() {
       setError(msg); showError(msg); return;
     }
     setError(""); setIsSubmitting(true);
-    persistIntent();
 
     // Standalone PWA environment cannot open popup windows — use redirect flow there
     if (shouldUseGoogleRedirect()) {
@@ -256,31 +231,6 @@ export function SignupForm() {
             style={pwInputStyle("pw2")}
           />
         </div>
-
-        <PlanPicker
-          selectedPlan={selectedPlan}
-          onSelectPlan={(p) => {
-            setSelectedPlan(p);
-            persistIntent(p, interval);
-          }}
-          interval={interval}
-          onChangeInterval={(i) => {
-            setInterval(i);
-            persistIntent(selectedPlan, i);
-          }}
-          promoCode={promoCode}
-          onPromoChange={(code) => {
-            setPromoCode(code);
-            persistIntent(selectedPlan, interval, code);
-          }}
-          promoResult={promoResult}
-          setPromoResult={(r) => {
-            setPromoResult(r);
-            if (r) persistIntent(selectedPlan, interval, r.code);
-          }}
-          promoError={promoError}
-          setPromoError={setPromoError}
-        />
 
         {/* Terms & Privacy acceptance */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "2px 0 2px" }}>

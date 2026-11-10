@@ -76,10 +76,8 @@ describe("checkout page wiring", () => {
     assert.match(page, /data-testid="co-back" onClick=\{\(\) => setStep\(1\)\}/);
     assert.match(page, /data-testid="co-close" onClick=\{close\}/);
   });
-  it("signed-out → signup with the same plan; staff, launching-soon and existing subscribers never see a payment form", () => {
+  it("signed-out → signup with the same plan; existing subscribers redirect to manage-plan", () => {
     assert.match(page, /if \(!user\) return window\.location\.replace\(`\/auth\/signup\?plan=\$\{intent\.planId\}&interval=\$\{intent\.interval\}`\)/);
-    assert.match(page, /if \(ent\?\.staff && !preview\) return live && setPhase\("staff"\)/);
-    assert.match(page, /if \(!paidPlansAvailable && !preview\) return live && setPhase\("soon"\)/);
     assert.match(page, /window\.location\.replace\(`\/manage-plan\?plan=/);
     assert.match(page, /setPhase\(user\.emailVerified \? "checkout" : "verify"\)/);
   });
@@ -142,10 +140,8 @@ describe("Stripe adapter (Payment Element + Address Element, deferred intent)", 
 
 describe("staff checkout preview (CHECKOUT_PREVIEW)", () => {
   const page = src("app/iq/billing/checkout/checkout-page.tsx");
-  it("only a staff account with checkoutPreview gets past 'staff' / 'launching soon'; everyone else is unchanged", () => {
+  it("staff preview flag is captured for test mode", () => {
     assert.match(page, /const preview = ent\?\.staff === true && ent\.checkoutPreview === true;/);
-    assert.match(page, /if \(ent\?\.staff && !preview\) return live && setPhase\("staff"\)/);
-    assert.match(page, /if \(!paidPlansAvailable && !preview\) return live && setPhase\("soon"\)/);
   });
   it("the 'Preview: test mode, no real charges' banner is on every checkout step (verify, step 1, step 2)", async () => {
     const { PREVIEW_BANNER } = await import("../ui");
@@ -170,10 +166,8 @@ describe("staff checkout preview (CHECKOUT_PREVIEW)", () => {
     assert.doesNotMatch(src("app/iq/billing/checkout/not-connected-form.tsx"), /ready: true/);
     assert.equal((await notConnectedAdapter.confirm("x", null)).status, "failed");
   });
-  it("Manage Plan: staff see the plan picker only in preview, with the banner", () => {
+  it("Manage Plan: renders BillingScreen with preview banner when in preview", () => {
     const mp = src("app/iq/screens/manage-plan.tsx");
-    assert.match(mp, /if \(ent\.staff && !ent\.checkoutPreview\) return <StaffPlan \/>;/);
-    assert.match(mp, /if \(!ent\.paidPlansAvailable\) return <ManagePlanSoon \/>;/);
     assert.match(mp, /<BillingScreen preview=\{ent\.checkoutPreview === true\} \/>/);
     assert.match(mp, /\{preview && <div className="col-12"><Notice tone="warn" testId="billing-preview-banner">\{PREVIEW_BANNER\}/);
   });

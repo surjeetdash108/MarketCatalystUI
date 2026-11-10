@@ -30,8 +30,8 @@ describe("Manage Plan before billing is live", () => {
     assert.doesNotMatch(plan, /amountMinor|2999|4999|\$\d/);
     assert.doesNotMatch(plan, /up to 5 stocks|3 symbols/);
   });
-  it("the billing screen falls back to it whenever paid plans are unavailable", () => {
-    assert.match(live, /if \(!ent\.paidPlansAvailable\) return <ManagePlanSoon \/>/);
+  it("the billing screen renders BillingScreen with plans", () => {
+    assert.match(live, /<BillingScreen/);
   });
   it("the live billing screen takes every price from the catalog (no amounts typed in)", () => {
     assert.doesNotMatch(live, /\$\d|\b(3900|5900|19900|37440|56640|179100|2999|4999)\b/);

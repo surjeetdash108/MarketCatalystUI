@@ -44,10 +44,7 @@ import { handleStripeAction } from "../billing/checkout/stripe-payment-form";
 export function ManagePlanScreen() {
   const { data: ent } = useEntitlements();
   if (!ent) return null;
-  // Staff see "Staff access" — except in the staff checkout preview, where the
-  // plan picker opens for them (Stripe test mode, no real charges).
   if (ent.staff && !ent.checkoutPreview) return <StaffPlan />;
-  if (!ent.paidPlansAvailable) return <ManagePlanSoon />;
   return <BillingScreen preview={ent.checkoutPreview === true} />;
 }
 
