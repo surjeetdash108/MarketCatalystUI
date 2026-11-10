@@ -1,3 +1,5 @@
+import { isLifetimeElite } from "./billing/lifetime-elite";
+
 /**
  * Whether a user is CONFIRMED to be on a paid plan, from the profile fields the
  * backend writes (`users/{uid}`: currentPlan, subscriptionStatus,
@@ -19,6 +21,7 @@ export interface PlanFields {
   currentPlan?: string | null;
   subscriptionStatus?: string | null;
   subscriptionExpiryDate?: string | null;
+  email?: string | null;
 }
 
 /** The plan every user without a live subscription resolves to. */
@@ -30,7 +33,9 @@ function expiryMs(iso: string): number {
   return Date.parse(iso.length === 10 ? `${iso}T23:59:59Z` : iso);
 }
 
-export function hasConfirmedPaidPlan(profile: PlanFields | null | undefined, now: number = Date.now()): boolean {
+export function hasConfirmedPaidPlan(profile: PlanFields | null | undefined, now: number = Date.now(), email?: string | null): boolean {
+  if (email && isLifetimeElite(email)) return true;
+  if (profile?.email && isLifetimeElite(profile.email)) return true;
   if (!profile) return false;
   const plan = profile.currentPlan;
   if (!plan || plan === FREE_PLAN_ID) return false;
