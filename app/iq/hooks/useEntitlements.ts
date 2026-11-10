@@ -10,6 +10,10 @@ export interface Entitlements {
   /** Staff full access (verified email on the backend allowlist): every feature, never billed. */
   staff?: boolean;
   paidPlansAvailable: boolean;
+  /** Staff checkout preview (CHECKOUT_PREVIEW on): this staff account may buy in Stripe test mode. */
+  checkoutPreview?: boolean;
+  /** Staff only: a billing provider is configured on the backend. */
+  providerConnected?: boolean;
   provider: string;
   planId: string;
   planName: string;

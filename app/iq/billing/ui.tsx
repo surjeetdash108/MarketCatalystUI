@@ -52,3 +52,5 @@ export function Modal({ title, children, onClose, testId }: { title: string; chi
 }
 
 export const TEST_MODE_BANNER = "TEST MODE — simulated by the fake billing provider. No real card is charged.";
+/** Staff checkout preview (CHECKOUT_PREVIEW): shown on every checkout step. */
+export const PREVIEW_BANNER = "Preview: test mode, no real charges";

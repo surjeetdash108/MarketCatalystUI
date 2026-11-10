@@ -1,6 +1,8 @@
 import type { CompanyDoc } from "./types";
 // ============================================================
-// STOCKWISE — MOCK DATA (TypeScript)
+// Shared screen types, small display helpers and the screener
+// presets. No mock data: every value on screen comes from the
+// backend.
 // ============================================================
 
 export interface PulseItem {

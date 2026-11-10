@@ -9,7 +9,7 @@ import { Button, Modal, Notice, pill } from "../../iq/billing/ui";
 import { escapeHtml } from "../admin-metrics";
 import { ADMIN_EMAIL } from "../admin-email";
 
-interface Row { uid: string; name: string | null; email: string | null; planId: string; planName: string; interval: string | null; status: string; startedAt: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; promoCode: string | null; retentionUsed: boolean; mrrMinor: number; staff: boolean; legacyPro?: boolean }
+interface Row { uid: string; name: string | null; email: string | null; planId: string; planName: string; interval: string | null; status: string; startedAt: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; promoCode: string | null; retentionUsed: boolean; mrrMinor: number; staff: boolean; legacyPro?: boolean; test?: boolean }
 interface Promo { id: string; code: string; percentOff: number | null; amountOff: number | null; duration: string; durationInMonths: number | null; appliesToPlans: string[]; appliesToIntervals: string[]; expiresAt: string | null; maxRedemptions: number | null; timesRedeemed: number; firstTimeOnly: boolean; active: boolean }
 interface Audit { actor: string; method: string; path: string; outcome: string; at: string }
 
@@ -67,14 +67,14 @@ function Subscribers() {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [f, setF] = useState({ q: "", plan: "", status: "", interval: "", cancelAtPeriodEnd: "", promo: "", staff: "" });
-  const [counts, setCounts] = useState<{ subscriberCount: number; staffCount: number }>({ subscriberCount: 0, staffCount: 0 });
+  const [counts, setCounts] = useState<{ subscriberCount: number; staffCount: number; testCount: number }>({ subscriberCount: 0, staffCount: 0, testCount: 0 });
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const query = new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
   const load = useCallback(async () => {
-    const r = await apiGet<{ subscribers: Row[]; totalMrrMinor: number; subscriberCount: number; staffCount: number }>(`/api/admin/billing/subscribers${query ? `?${query}` : ""}`);
+    const r = await apiGet<{ subscribers: Row[]; totalMrrMinor: number; subscriberCount: number; staffCount: number; testCount?: number }>(`/api/admin/billing/subscribers${query ? `?${query}` : ""}`);
     setRows(r.subscribers);
     setTotal(r.totalMrrMinor);
-    setCounts({ subscriberCount: r.subscriberCount ?? 0, staffCount: r.staffCount ?? 0 });
+    setCounts({ subscriberCount: r.subscriberCount ?? 0, staffCount: r.staffCount ?? 0, testCount: r.testCount ?? 0 });
   }, [query]);
   useEffect(() => {
     void load();
@@ -97,7 +97,7 @@ function Subscribers() {
         {sel("staff", ["true", "false"])}
         <input placeholder="Promo code" value={f.promo} onChange={(e) => setF({ ...f, promo: e.target.value })} style={{ ...input, width: 120 }} />
         <Button kind="secondary" testId="sub-csv" onClick={() => void apiDownload(`/api/admin/billing/subscribers?${query ? `${query}&` : ""}format=csv`, "subscribers.csv")}>Export CSV</Button>
-        <span style={{ marginLeft: "auto", fontSize: ".82rem" }} data-testid="sub-mrr">{rows.length} shown · {counts.subscriberCount} paying (staff excluded) · MRR {formatMoney(total)}</span>
+        <span style={{ marginLeft: "auto", fontSize: ".82rem" }} data-testid="sub-mrr">{rows.length} shown · {counts.subscriberCount} paying (staff and test excluded){counts.testCount ? ` · ${counts.testCount} test` : ""} · MRR {formatMoney(total)}</span>
       </div>
       <div className="tbl-wrap">
         <table className="tbl">
@@ -105,7 +105,7 @@ function Subscribers() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.uid} onClick={() => void apiGet<Record<string, unknown>>(`/api/admin/billing/subscribers/${r.uid}`).then(setDetail)} style={{ cursor: "pointer" }}>
-                <td>{r.name ?? "—"}{r.staff && <span data-testid="staff-badge" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--brand-dim)", color: "var(--brand-2)", border: "1px solid var(--brand)" }}>Staff</span>}{r.legacyPro && <span data-testid="legacy-pro-badge" title="Pre-billing manual Pro grant: Pro for 90 days at launch, then normal plans" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--surface-3)", color: "var(--warn)", border: "1px solid var(--warn)" }}>Legacy Pro</span>}</td><td>{r.email ?? "—"}</td><td>{r.planName}</td><td>{r.interval ?? "—"}</td><td>{r.status.toLowerCase()}</td>
+                <td>{r.name ?? "—"}{r.staff && <span data-testid="staff-badge" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--brand-dim)", color: "var(--brand-2)", border: "1px solid var(--brand)" }}>Staff</span>}{r.legacyPro && <span data-testid="legacy-pro-badge" title="Pre-billing manual Pro grant: Pro for 90 days at launch, then normal plans" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--surface-3)", color: "var(--warn)", border: "1px solid var(--warn)" }}>Legacy Pro</span>}{r.test && <TestBadge />}</td><td>{r.email ?? "—"}</td><td>{r.planName}</td><td>{r.interval ?? "—"}</td><td>{r.status.toLowerCase()}</td>
                 <td>{r.startedAt ? longDate(r.startedAt) : "—"}</td><td>{r.currentPeriodEnd ? longDate(r.currentPeriodEnd) : "—"}</td>
                 <td>{r.cancelAtPeriodEnd ? "yes" : ""}</td><td>{r.promoCode ?? ""}</td><td>{r.retentionUsed ? "used" : ""}</td><td style={{ textAlign: "right" }}>{r.mrrMinor ? formatMoney(r.mrrMinor) : "—"}</td>
               </tr>
@@ -309,5 +309,14 @@ function StaffAccess() {
         </table>
       </div>
     </div>
+  );
+}
+
+/** Stripe test mode (livemode:false): never counted in MRR, revenue or subscribers; purgeable. */
+export function TestBadge() {
+  return (
+    <span data-testid="test-badge" title="Stripe test mode: no real charge; excluded from MRR, revenue and counts" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--surface-3)", color: "var(--text-dim-solid)", border: "1px dashed var(--border)" }}>
+      Test
+    </span>
   );
 }

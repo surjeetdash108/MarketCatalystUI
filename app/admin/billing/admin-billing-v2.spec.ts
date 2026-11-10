@@ -15,7 +15,7 @@ describe("admin billing v2", () => {
   it("subscribers: Staff badge, staff filter, paying count excludes staff", () => {
     assert.match(src, /\{r\.staff && <span data-testid="staff-badge"/);
     assert.match(src, /sel\("staff", \["true", "false"\]\)/);
-    assert.match(src, /paying \(staff excluded\)/);
+    assert.match(src, /paying \(staff and test excluded\)/);
   });
   it("detail: phone masked, click-to-reveal is a POST (audited); consent and refund action", () => {
     assert.match(src, /detail\.phoneMasked/);
