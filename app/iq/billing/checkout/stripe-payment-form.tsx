@@ -33,8 +33,17 @@ export function stripePaymentMethodTypes(raw: string | undefined): string[] {
 }
 const METHOD_TYPES = stripePaymentMethodTypes(process.env.NEXT_PUBLIC_STRIPE_PAYMENT_METHOD_TYPES);
 
-export function stripeConfigured(key: string = PUBLISHABLE_KEY): boolean {
-  return /^pk_(test|live)_/.test(key) && !key.includes("PLACEHOLDER");
+/**
+ * A usable publishable key. Live keys (pk_live_) also need
+ * NEXT_PUBLIC_STRIPE_LIVE_APPROVED=true — until then only test mode runs (the
+ * staff checkout preview), matching the backend's STRIPE_LIVE_APPROVED.
+ */
+export function stripeConfigured(
+  key: string = PUBLISHABLE_KEY,
+  liveApproved: boolean = process.env.NEXT_PUBLIC_STRIPE_LIVE_APPROVED === "true",
+): boolean {
+  if (!/^pk_(test|live)_/.test(key) || key.includes("PLACEHOLDER")) return false;
+  return key.startsWith("pk_test_") || liveApproved;
 }
 
 let stripePromise: Promise<Stripe | null> | null = null;

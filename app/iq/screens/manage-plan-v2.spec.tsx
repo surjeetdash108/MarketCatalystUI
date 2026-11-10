@@ -23,7 +23,7 @@ describe("Manage Plan v2", () => {
     assert.equal(REFUND_POLICY.windowDays, 14);
   });
   it("staff see 'Staff access' — no plans, checkout, upgrade prompts or retention", () => {
-    assert.match(mp, /if \(ent\.staff\) return <StaffPlan \/>;/);
+    assert.match(mp, /if \(ent\.staff && !ent\.checkoutPreview\) return <StaffPlan \/>;/);
     const html = renderToStaticMarkup(<StaffPlan />);
     assert.match(html, /Staff access/);
     assert.match(html, /never billed/);

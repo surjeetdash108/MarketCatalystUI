@@ -78,8 +78,8 @@ describe("checkout page wiring", () => {
   });
   it("signed-out → signup with the same plan; staff, launching-soon and existing subscribers never see a payment form", () => {
     assert.match(page, /if \(!user\) return window\.location\.replace\(`\/auth\/signup\?plan=\$\{intent\.planId\}&interval=\$\{intent\.interval\}`\)/);
-    assert.match(page, /if \(ent\?\.staff\) return live && setPhase\("staff"\)/);
-    assert.match(page, /if \(!paidPlansAvailable\) return live && setPhase\("soon"\)/);
+    assert.match(page, /if \(ent\?\.staff && !preview\) return live && setPhase\("staff"\)/);
+    assert.match(page, /if \(!paidPlansAvailable && !preview\) return live && setPhase\("soon"\)/);
     assert.match(page, /window\.location\.replace\(`\/manage-plan\?plan=/);
     assert.match(page, /setPhase\(user\.emailVerified \? "checkout" : "verify"\)/);
   });
@@ -103,6 +103,11 @@ describe("Stripe adapter (Payment Element + Address Element, deferred intent)", 
   it("needs a real publishable key; without one it says payments are being set up (never a broken form)", async () => {
     const { stripeConfigured, stripePaymentAdapter } = await import("./stripe-payment-form");
     assert.equal(stripeConfigured("pk_test_abc"), true);
+    // Live keys need the separate approval (matches the backend's STRIPE_LIVE_APPROVED).
+    assert.equal(stripeConfigured("pk_live_abc"), false);
+    assert.equal(stripeConfigured("pk_live_abc", false), false);
+    assert.equal(stripeConfigured("pk_live_abc", true), true);
+    assert.equal(stripeConfigured("pk_test_abc", false), true);
     assert.equal(stripeConfigured("__PLACEHOLDER__"), false);
     assert.equal(stripeConfigured(""), false);
     const Form = stripePaymentAdapter.Form;
@@ -132,5 +137,51 @@ describe("Stripe adapter (Payment Element + Address Element, deferred intent)", 
   });
   it("Manage Plan: an upgrade needing 3-D Secure is handled by Stripe", () => {
     assert.match(src("app/iq/screens/manage-plan.tsx"), /if \(r\.status === "requires_action" && r\.clientSecret\) \{[\s\S]*?handleStripeAction\(r\.clientSecret\)/);
+  });
+});
+
+describe("staff checkout preview (CHECKOUT_PREVIEW)", () => {
+  const page = src("app/iq/billing/checkout/checkout-page.tsx");
+  it("only a staff account with checkoutPreview gets past 'staff' / 'launching soon'; everyone else is unchanged", () => {
+    assert.match(page, /const preview = ent\?\.staff === true && ent\.checkoutPreview === true;/);
+    assert.match(page, /if \(ent\?\.staff && !preview\) return live && setPhase\("staff"\)/);
+    assert.match(page, /if \(!paidPlansAvailable && !preview\) return live && setPhase\("soon"\)/);
+  });
+  it("the 'Preview: test mode, no real charges' banner is on every checkout step (verify, step 1, step 2)", async () => {
+    const { PREVIEW_BANNER } = await import("../ui");
+    assert.equal(PREVIEW_BANNER, "Preview: test mode, no real charges");
+    assert.equal(page.match(/\{inPreview && [\s\S]{0,160}?testId="co-preview-banner">\{PREVIEW_BANNER\}/g)?.length, 2);
+    assert.match(src("app/iq/billing/billing-pages.tsx"), /ent\?\.checkoutPreview && <Notice tone="warn" testId="success-preview-banner">\{PREVIEW_BANNER\}/);
+  });
+  it("no provider connected: the not-connected form only in preview; never a fake card form", () => {
+    assert.match(page, /setAdapter\(paymentAdapterFor\(s\.provider\) \?\? \(preview \? notConnectedAdapter : null\)\)/);
+    assert.equal(paymentAdapterFor("none"), null);
+  });
+  it("'Payment provider not connected': address renders, no card inputs, never ready (Complete purchase stays disabled)", async () => {
+    const { notConnectedAdapter, PROVIDER_NOT_CONNECTED } = await import("./not-connected-form");
+    const Form = notConnectedAdapter.Form;
+    const seen: Array<{ ready: boolean }> = [];
+    const html = renderToStaticMarkup(<Form onChange={(v) => seen.push(v)} amount={5900} currency="USD" />);
+    assert.equal(PROVIDER_NOT_CONNECTED, "Payment provider not connected");
+    assert.match(html, /data-testid="co-provider-missing"[^>]*>[\s\S]*Payment provider not connected/);
+    for (const id of ["addr-name", "addr-country", "addr-line1", "addr-city", "addr-zip"]) assert.match(html, new RegExp(`data-testid="${id}"`));
+    assert.doesNotMatch(html, /cc-number|cc-csc|cc-exp|cvc|cvv|card number|fake-card|payment-element/i);
+    assert.ok(seen.every((v) => v.ready === false));
+    assert.doesNotMatch(src("app/iq/billing/checkout/not-connected-form.tsx"), /ready: true/);
+    assert.equal((await notConnectedAdapter.confirm("x", null)).status, "failed");
+  });
+  it("Manage Plan: staff see the plan picker only in preview, with the banner", () => {
+    const mp = src("app/iq/screens/manage-plan.tsx");
+    assert.match(mp, /if \(ent\.staff && !ent\.checkoutPreview\) return <StaffPlan \/>;/);
+    assert.match(mp, /if \(!ent\.paidPlansAvailable\) return <ManagePlanSoon \/>;/);
+    assert.match(mp, /<BillingScreen preview=\{ent\.checkoutPreview === true\} \/>/);
+    assert.match(mp, /\{preview && <div className="col-12"><Notice tone="warn" testId="billing-preview-banner">\{PREVIEW_BANNER\}/);
+  });
+  it("admin: test-mode rows get a Test badge; counts say test is excluded", async () => {
+    const { TestBadge } = await import("../../../admin/billing/admin-billing");
+    assert.match(renderToStaticMarkup(<TestBadge />), /data-testid="test-badge"[^>]*>\s*Test\s*</);
+    const admin = src("app/admin/billing/admin-billing.tsx");
+    assert.match(admin, /\{r\.test && <TestBadge \/>\}/);
+    assert.match(admin, /paying \(staff and test excluded\)/);
   });
 });

@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../backend";
-import { refreshEntitlements } from "../hooks/useEntitlements";
+import { refreshEntitlements, useEntitlements } from "../hooks/useEntitlements";
 import { checkoutStatus, errorBody, fetchPlans } from "./api";
 import { formatMoney } from "./catalog";
 import { checkoutPath, currentIntent } from "./plan-intent";
-import { Button, Notice, TEST_MODE_BANNER, pill } from "./ui";
+import { Button, Notice, PREVIEW_BANNER, TEST_MODE_BANNER, pill } from "./ui";
 
 const qs = (k: string) => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get(k));
 
@@ -26,6 +26,7 @@ export function BillingStart() {
 
 /** /billing/success — polls until the event handler has activated the plan. */
 export function BillingSuccess() {
+  const { data: ent } = useEntitlements();
   const [view, setView] = useState<{ phase: "waiting" | "active" | "slow" | "error"; planId?: string }>({ phase: "waiting" });
   useEffect(() => {
     const session = qs("session");
@@ -59,6 +60,7 @@ export function BillingSuccess() {
   return (
     <div className="card col-12" data-testid="billing-success" style={{ maxWidth: 520, margin: "32px auto" }}>
       <div className="card-b" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+        {ent?.checkoutPreview && <Notice tone="warn" testId="success-preview-banner">{PREVIEW_BANNER}</Notice>}
         {view.phase === "waiting" && <div data-testid="success-waiting">Payment received. Activating your plan…</div>}
         {view.phase === "active" && (
           <>
