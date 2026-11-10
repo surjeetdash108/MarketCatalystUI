@@ -32,6 +32,7 @@ import { Button, Modal, Notice, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
 import { REFUND_POLICY } from "../billing/refund-policy.generated";
 import { ContactCard, StaffPlan } from "./manage-plan-extras";
+import { handleStripeAction } from "../billing/checkout/stripe-payment-form";
 
 /**
  * Manage Plan. While paid plans are unavailable it is the honest
@@ -126,6 +127,13 @@ export function BillingScreen() {
   async function confirmChange(preview: ChangePreview, plan: CatalogPlan) {
     const r = await run(() => applyChange({ planId: plan.id, interval: preview.interval, ...(preview.kind === "upgrade" ? { expectedAmountDue: preview.amountDueNow, prorationDate: preview.prorationDate } : {}) }));
     if (!r) return;
+    if (r.status === "requires_action" && r.clientSecret) {
+      // Stripe: the bank's 3-D Secure challenge for the prorated invoice; the plan changes once paid.
+      const ok = await handleStripeAction(r.clientSecret);
+      if (ok) return afterChange(`You're on ${plan.name}`, "Payment confirmed. The new features are available now.");
+      setError("Authentication failed. Your plan has not changed.");
+      return;
+    }
     if (r.status === "requires_action") return setDialog({ kind: "action", actionId: r.actionId, amountDue: r.amountDue });
     if (r.status === "scheduled") return afterChange("Change scheduled", `You keep ${current?.name ?? "your plan"} until ${longDate(r.effectiveAt)}, then move to ${plan.name}.`);
     return afterChange(`You're on ${plan.name}`, `Charged ${formatMoney(r.amountCharged)} today (prorated). The new features are available now.`);

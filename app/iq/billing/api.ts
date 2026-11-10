@@ -28,7 +28,7 @@ export interface PlansResponse { plans: CatalogPlan[]; paidPlansAvailable: boole
 export const fetchPlans = () =>
   apiGet<PlansResponse>("/plans").then((r) => ({ plans: [...r.plans].sort((a, b) => a.sortOrder - b.sortOrder), paidPlansAvailable: r.paidPlansAvailable === true }));
 
-export interface CheckoutResponse { sessionId: string; url: string; amountDueToday: number; tax: number; currency: string; payment: { provider: string } }
+export interface CheckoutResponse { sessionId: string; url: string; amountDueToday: number; tax: number; currency: string; payment: { provider: string; clientSecret?: string | null } }
 export interface CheckoutBody {
   planId: string;
   interval: BillingInterval;
@@ -97,7 +97,7 @@ export const previewChange = (body: { planId: string; interval: BillingInterval 
 export type ChangeResult =
   | { kind: string; status: "applied"; amountCharged: number }
   | { kind: string; status: "scheduled"; effectiveAt: string }
-  | { kind: string; status: "requires_action"; actionId: string; amountDue: number };
+  | { kind: string; status: "requires_action"; actionId: string; amountDue: number; clientSecret?: string | null };
 export const applyChange = (body: { planId: string; interval: BillingInterval; expectedAmountDue?: number; prorationDate?: number }) => apiPost<ChangeResult>("/api/billing/change", body);
 export const keepCurrentPlan = () => apiPost<{ kept: boolean }>("/api/billing/change/keep");
 export const cancelPlan = () => apiPost<{ endsAt: string }>("/api/billing/cancel");
