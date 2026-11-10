@@ -64,6 +64,8 @@ import { LiveQuotesProvider, QUOTE_DELAY_LABEL } from "./live-quotes-context";
 import { SIProvider, useSI } from "./si/si-context";
 import { SISweepOverlay } from "./si/si-switcher";
 import { ModuleSwitcher } from "./module-switcher";
+import { useEntitlements } from "./hooks/useEntitlements";
+import { ChoosePlanScreen } from "./billing/choose-plan-screen";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -1078,6 +1080,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
+  const { data: ent } = useEntitlements();
+  const planRequired = ent?.subscriptionsEnabled === true && !ent?.staff && ent?.planId === "none";
 
   // Same live merge Dashboard's Market Pulse widget uses — keeps the top
   // ticker strip and the index drawer it opens in sync with each other.
@@ -1090,9 +1094,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   // Shared live data for the shell-level drawers (stock/sector/earnings/index
   // quick-preview popups reachable from every screen via useIQActions()).
-  const { data: shellCompanies, loading: shellCompaniesLoading } = useApiList<CompanyDoc>("/market-data/companies");
-  const { data: shellSectors, loading: shellSectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
-  const { data: shellEarnings, loading: shellEarningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
+  const { data: shellCompanies, loading: shellCompaniesLoading } = useApiList<CompanyDoc>(planRequired ? null : "/market-data/companies");
+  const { data: shellSectors, loading: shellSectorsLoading } = useApiList<SectorApiDoc>(planRequired ? null : "/market-data/sectors");
+  const { data: shellEarnings, loading: shellEarningsLoading } = useApiList<LiveEarningsDoc>(planRequired ? null : "/market-data/earnings");
 
   const [theme, setThemeState] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark";
@@ -1774,7 +1778,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             {/* Main content */}
             <main className="main">
               {/* <SessionNotice phase={tapeFrame?.marketPhase ?? "unknown"} pathname={pathname} /> */}
-              {children}
+              {planRequired ? <ChoosePlanScreen /> : children}
               <footer className="disclaimer-bar">
                 <span className="disclaimer-text">
                   MarketCatalyst LLC is not a registered investment advisor and does not manage client assets. Information and tools on this platform are for informational and educational purposes only and do not constitute investment advice. MarketCatalyst is a data provider, not a stock-picks or alert service. Trading stocks and options carries risk — consult your own financial advisor.

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { fetchPlans } from "./api";
-import { currentIntent, nextAfterLogin, nextAfterSignup, saveIntent, type AuthMethod } from "./plan-intent";
+import { currentIntent, loadIntent, nextAfterLogin, nextAfterSignup, saveIntent, type AuthMethod } from "./plan-intent";
 
 /** Plans + availability; a failed lookup means "not available" (never send someone to a dead checkout). */
 async function catalog(): Promise<{ ids: string[]; paidPlansAvailable: boolean }> {
@@ -17,7 +17,8 @@ async function catalog(): Promise<{ ids: string[]; paidPlansAvailable: boolean }
 /** Where a just-created account goes (see nextAfterSignup). */
 export async function routeAfterSignup(method: AuthMethod): Promise<string> {
   const { ids, paidPlansAvailable } = await catalog();
-  return nextAfterSignup(currentIntent(window.location.search, ids), method, paidPlansAvailable);
+  const intent = loadIntent(ids) ?? currentIntent(window.location.search, ids);
+  return nextAfterSignup(intent, method, paidPlansAvailable);
 }
 
 /** Where an existing account goes after signing in (see nextAfterLogin). */

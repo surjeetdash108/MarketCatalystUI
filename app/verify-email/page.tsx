@@ -25,7 +25,7 @@ export default function VerifyEmailPage() {
       <div className="card" style={{ width: "min(440px, 100%)", padding: 24 }}>
         {ready && <EmailCodeStep onVerified={() => window.location.replace(next)} />}
         <p style={{ margin: "18px 0 0", fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-          <Link href="/dashboard" style={{ color: "var(--brand-2)" }}>Do this later</Link> — you can use the Free plan now and verify before you buy.
+          <Link href={next} style={{ color: "var(--brand-2)" }}>Do this later</Link> — verify before completing checkout.
         </p>
       </div>
     </div>

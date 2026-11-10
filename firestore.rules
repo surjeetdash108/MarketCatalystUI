@@ -40,16 +40,27 @@ service cloud.firestore {
     }
 
     // Plan from the `plan` custom claim, set only by the backend's billing
-    // event handler (catalog ids: free | starter | pro | elite).
+    // event handler (starter | pro | elite; "none" = no active plan).
     function plan() {
-      return request.auth.token.get('plan', 'free');
+      return request.auth.token.get('plan', 'none');
     }
 
+    // ── BEGIN GENERATED: feature map (scripts/export-catalog.ts) ──
+    // Plans in ladder order (no free plan; an account without a plan has none).
     function planAtLeast(minimum) {
       return (minimum == 'starter' && plan() in ['starter', 'pro', 'elite'])
           || (minimum == 'pro' && plan() in ['pro', 'elite'])
-          || (minimum == 'elite' && plan() == 'elite');
+          || (minimum == 'elite' && plan() in ['elite']);
     }
+
+    // No browser reads these (every screen goes through the backend); they
+    // were plan-gated before. Client reads are denied outright.
+    match /earnings_summaries/{d=**} { allow read, write: if false; }
+    match /options_flow/{d=**} { allow read, write: if false; }
+    match /block_trades/{d=**} { allow read, write: if false; }
+    match /fund_holdings/{d=**} { allow read, write: if false; }
+    match /story_stocks/{d=**} { allow read, write: if false; }
+    // ── END GENERATED: feature map ──
 
     // The SUBSCRIPTIONS_ENABLED release switch (admin toggle, Firestore
     // override). Off or unset → no plan gating, today's behaviour.
@@ -122,12 +133,6 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // AI-generated earnings summaries — Starter (earnings detail)
-    match /earnings_summaries/{summaryId} {
-      allow read:  if canReadOnPlan('starter');
-      allow write: if false;
-    }
-
     // News feed — all authenticated users
     match /news/{newsId} {
       allow read:  if isAuthenticated();
@@ -157,42 +162,6 @@ service cloud.firestore {
     // (date, direction, ticker), never overwritten by a later sync.
     match /market_movers_history/{docId} {
       allow read:  if isAuthenticated();
-      allow write: if false;
-    }
-
-    // Options flow (unusual activity) — Pro
-    match /options_flow/{flowId} {
-      allow read:  if canReadOnPlan('pro');
-      allow write: if false;
-    }
-
-    // Block trades — Pro
-    match /block_trades/{tradeId} {
-      allow read:  if canReadOnPlan('pro');
-      allow write: if false;
-    }
-
-    // 13F fund holdings
-    // Covers fund document, filings sub-collection, and positions sub-sub-collection
-    // Starter (13F & insider)
-    match /fund_holdings/{cik} {
-      allow read:  if canReadOnPlan('starter');
-      allow write: if false;
-
-      match /filings/{filingId} {
-        allow read:  if canReadOnPlan('starter');
-        allow write: if false;
-
-        match /positions/{ticker} {
-          allow read:  if canReadOnPlan('starter');
-          allow write: if false;
-        }
-      }
-    }
-
-    // Story stocks — Pro
-    match /story_stocks/{storyId} {
-      allow read:  if canReadOnPlan('pro');
       allow write: if false;
     }
 

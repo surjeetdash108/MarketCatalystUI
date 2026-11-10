@@ -35,7 +35,7 @@ export function WatchlistScreen() {
   }, [watchlists]);
 
   const active = watchlists.find(w => w.id === activeId) ?? null;
-  // At the plan's per-list cap (Free plan); null limit = unlimited.
+  // At the plan's per-list cap; null limit = unlimited.
   const isFull = tickerLimit != null && active != null && active.tickers.length >= tickerLimit;
 
   // Cumulative AI read for the list currently on screen. Deferred until the
@@ -201,7 +201,7 @@ export function WatchlistScreen() {
               {tickerLimit != null ? (
                 <span
                   className={`wl-usage${isFull ? " full" : ""}`}
-                  title={isFull ? watchlistFullMessage(tickerLimit) : `The Free plan holds up to ${tickerLimit} stocks per watchlist`}
+                  title={isFull ? watchlistFullMessage(tickerLimit) : `Up to ${tickerLimit} stocks per watchlist`}
                 >{items.length} / {tickerLimit} stocks</span>
               ) : <>{items.length} stocks</>}
               {priced.length > 0 && <> · {up} up / {dn} down today</>}
@@ -276,7 +276,7 @@ export function WatchlistScreen() {
                 <div className="wl-full" role="status">
                   <div className="wl-full-title">This watchlist is full</div>
                   <div className="wl-full-text">
-                    The Free plan holds up to {tickerLimit} stocks per watchlist. Remove a stock from{" "}
+                    Your plan holds up to {tickerLimit} stocks per watchlist. Remove a stock from{" "}
                     <b>{active?.name}</b>, or upgrade for unlimited stocks.
                   </div>
                   <div className="wl-full-actions">
@@ -291,7 +291,7 @@ export function WatchlistScreen() {
                     <TickerSearchField value={newSym} onChange={v => { setAddError(null); setNewSym(v); }} onEnter={() => void addStock()} />
                     {tickerLimit != null && (
                       <div style={{ fontSize: ".7rem", color: "var(--text-dim-solid)", marginTop: 6 }}>
-                        {tickerLimit - items.length} of {tickerLimit} spots left on the Free plan.
+                        {tickerLimit - items.length} of {tickerLimit} spots left.
                       </div>
                     )}
                   </div>

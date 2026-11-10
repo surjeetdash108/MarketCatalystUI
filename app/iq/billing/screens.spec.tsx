@@ -27,19 +27,20 @@ const render = (profile: Record<string, unknown> | null) =>
   );
 
 describe("Premium badge / Manage Plan (rendered)", () => {
-  it("shows Free — never Premium — when the profile is missing", () => {
+  it("shows Current Access — never Premium or Free — when the profile is missing", () => {
     const html = render(null);
-    assert.match(html, />Free</);
+    assert.match(html, />Current Access</);
     assert.doesNotMatch(html, /Premium/);
+    assert.doesNotMatch(html, />Free</);
     assert.match(html, /Paid plans launching soon/);
     assert.match(html, /won&#x27;t be charged anything/);
   });
-  it("shows Free for a profile with only the legacy tier field", () => {
-    assert.match(render({ uid: "u1", tier: "pro" }), />Free</);
+  it("shows Current Access for a profile with only the legacy tier field", () => {
+    assert.match(render({ uid: "u1", tier: "pro" }), />Current Access</);
   });
   it("shows the paid plan only for a confirmed live subscription", () => {
     assert.match(render({ uid: "u1", currentPlan: "pro", subscriptionStatus: "ACTIVE", subscriptionExpiryDate: "2099-01-01" }), />Pro</);
-    assert.match(render({ uid: "u1", currentPlan: "pro", subscriptionStatus: "EXPIRED" }), />Free</);
+    assert.match(render({ uid: "u1", currentPlan: "pro", subscriptionStatus: "EXPIRED" }), />Current Access</);
   });
   it("has no price and no button without an action in the launching-soon state", () => {
     const html = render(null);

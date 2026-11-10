@@ -31,4 +31,12 @@ describe("admin billing v2", () => {
   it("legacy currentPlan=pro users show a 'Legacy Pro' badge", () => {
     assert.match(src, /\{r\.legacyPro && <span data-testid="legacy-pro-badge"[^>]*>Legacy Pro<\/span>\}/);
   });
+  it("subscribers filter has no free plan option", () => {
+    assert.match(src, /sel\("plan", \["starter", "pro", "elite"\]\)/);
+    assert.doesNotMatch(src, /sel\("plan", \[.*"free".*\]\)/);
+  });
+  it("subscriber detail displays credit balance and invoice lines", () => {
+    assert.match(src, /data-testid="sub-credit-balance"/);
+    assert.match(src, /Array\.isArray\(i\.lines\)/);
+  });
 });

@@ -67,6 +67,11 @@ export function CheckoutPage() {
       if (!live) return;
       setPlan(chosen);
       setInterval(intent.interval);
+      if (intent.promoCode) {
+        setPromoCode(intent.promoCode);
+        setPromoInput(intent.promoCode);
+        setPromoOpen(true);
+      }
       const ent = await refreshEntitlements();
       // Staff checkout preview: this staff account may buy (Stripe test mode)
       // while paid plans stay "launching soon" for everyone else.
@@ -223,7 +228,7 @@ export function CheckoutPage() {
           {phase === "soon" && plan && (
             <div className="co-card" data-testid="co-soon">
               <h2 className="co-title">{plan.name} is launching soon</h2>
-              <p className="co-sub">Paid plans aren&apos;t available yet. You&apos;re on Free until then — we&apos;ll keep your choice.</p>
+              <p className="co-sub">Paid plans aren&apos;t available yet. You have full access until then — we&apos;ll keep your choice.</p>
               <p style={{ marginTop: 14 }}><Link href="/dashboard" style={{ color: "var(--brand-2)" }}>Go to your dashboard</Link></p>
             </div>
           )}

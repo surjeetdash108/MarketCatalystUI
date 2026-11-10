@@ -21,7 +21,7 @@ describe("hasConfirmedPaidPlan", () => {
     assert.equal(hasConfirmedPaidPlan({ currentPlan: "pro", subscriptionStatus: "ACTIVE" }, NOW), true);
     assert.equal(hasConfirmedPaidPlan({ currentPlan: "elite", subscriptionStatus: "TRIALING", subscriptionExpiryDate: "2026-12-09" }, NOW), true);
   });
-  it("is false for the free plan, or any non-live status", () => {
+  it("is false for none/free/unrecognized plan, or any non-live status", () => {
     assert.equal(hasConfirmedPaidPlan({ currentPlan: "free", subscriptionStatus: "ACTIVE" }, NOW), false);
     for (const s of ["NONE", "EXPIRED", "CANCELLED", "PAST_DUE", "", undefined]) {
       assert.equal(hasConfirmedPaidPlan({ currentPlan: "pro", subscriptionStatus: s as never }, NOW), false, String(s));

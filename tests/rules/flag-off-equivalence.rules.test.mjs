@@ -105,13 +105,17 @@ for (const [state, flagDoc] of Object.entries(FLAG_OFF_STATES)) {
         await seed(live, flagDoc); // writes above may have changed docs; reseed both identically
         await seed(next, flagDoc);
         const b = await matrix(next, claims);
-        const diffs = Object.keys(a).filter((k) => a[k] !== b[k]).map((k) => `${k}: live=${a[k]} new=${b[k]}`);
+        // The only intended difference: collections no browser reads now deny
+        // client reads outright (generated from CLIENT_DENIED_COLLECTIONS).
+        const DENIED = ["earnings_summaries", "options_flow", "block_trades", "fund_holdings", "story_stocks"];
+        const intended = (k) => DENIED.some((c) => k === `get ${c}/d1` || k === `list ${c}` || k.startsWith(`get ${c}/`)) && b[k] === "deny";
+        const diffs = Object.keys(a).filter((k) => a[k] !== b[k] && !intended(k)).map((k) => `${k}: live=${a[k]} new=${b[k]}`);
         assert.deepEqual(diffs, []);
         if (claims) {
           // Sanity: the matrix exercises real access, not an all-deny fluke.
           assert.equal(b["get news/d1"], "allow");
           assert.equal(b["get recaps/d1"], "allow");
-          assert.equal(b["get options_flow/d1"], "allow");
+          assert.equal(b["get options_flow/d1"], "deny");
           assert.equal(b["get users/bob"], "deny");
         }
       });
