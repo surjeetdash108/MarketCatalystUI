@@ -8,27 +8,33 @@ export interface DialCountry {
   iso: string;
   name: string;
   dial: string;
+  placeholder?: string;
 }
 
 /** US first (preselected); the rest alphabetical. */
 export const DIAL_COUNTRIES: DialCountry[] = [
-  { iso: "US", name: "United States", dial: "+1" },
-  { iso: "AU", name: "Australia", dial: "+61" },
-  { iso: "BR", name: "Brazil", dial: "+55" },
-  { iso: "CA", name: "Canada", dial: "+1" },
-  { iso: "FR", name: "France", dial: "+33" },
-  { iso: "DE", name: "Germany", dial: "+49" },
-  { iso: "IN", name: "India", dial: "+91" },
-  { iso: "IE", name: "Ireland", dial: "+353" },
-  { iso: "JP", name: "Japan", dial: "+81" },
-  { iso: "MX", name: "Mexico", dial: "+52" },
-  { iso: "NL", name: "Netherlands", dial: "+31" },
-  { iso: "SG", name: "Singapore", dial: "+65" },
-  { iso: "ES", name: "Spain", dial: "+34" },
-  { iso: "AE", name: "United Arab Emirates", dial: "+971" },
-  { iso: "GB", name: "United Kingdom", dial: "+44" },
+  { iso: "US", name: "United States", dial: "+1", placeholder: "(512) 555-0147" },
+  { iso: "AU", name: "Australia", dial: "+61", placeholder: "412 345 678" },
+  { iso: "BR", name: "Brazil", dial: "+55", placeholder: "11 91234-5678" },
+  { iso: "CA", name: "Canada", dial: "+1", placeholder: "(416) 555-0147" },
+  { iso: "FR", name: "France", dial: "+33", placeholder: "6 12 34 56 78" },
+  { iso: "DE", name: "Germany", dial: "+49", placeholder: "1512 3456789" },
+  { iso: "IN", name: "India", dial: "+91", placeholder: "98765 43210" },
+  { iso: "IE", name: "Ireland", dial: "+353", placeholder: "87 123 4567" },
+  { iso: "JP", name: "Japan", dial: "+81", placeholder: "90 1234 5678" },
+  { iso: "MX", name: "Mexico", dial: "+52", placeholder: "55 1234 5678" },
+  { iso: "NL", name: "Netherlands", dial: "+31", placeholder: "6 12345678" },
+  { iso: "SG", name: "Singapore", dial: "+65", placeholder: "8123 4567" },
+  { iso: "ES", name: "Spain", dial: "+34", placeholder: "612 34 56 78" },
+  { iso: "AE", name: "United Arab Emirates", dial: "+971", placeholder: "50 123 4567" },
+  { iso: "GB", name: "United Kingdom", dial: "+44", placeholder: "7911 123456" },
 ];
 export const DEFAULT_DIAL_COUNTRY = "US";
+
+export function phonePlaceholder(iso: string): string {
+  const c = DIAL_COUNTRIES.find((d) => d.iso === iso);
+  return c?.placeholder ?? "(512) 555-0147";
+}
 
 const E164 = /^\+[1-9]\d{7,14}$/;
 const NANP = /^\+1[2-9]\d{2}[2-9]\d{6}$/;

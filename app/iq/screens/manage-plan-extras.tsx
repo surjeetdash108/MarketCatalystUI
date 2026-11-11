@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { errorBody, getContact, updateContact, type Contact } from "../billing/api";
-import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, toE164 } from "../billing/checkout/phone";
+import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, phonePlaceholder, toE164 } from "../billing/checkout/phone";
 import { Button, Notice } from "../billing/ui";
 
 /** Staff full access: no plans, checkout, upgrade prompts or retention — nothing is billed. */
@@ -66,7 +66,7 @@ export function ContactCard() {
             <select aria-label="Country code" value={dialIso} onChange={(e) => setDialIso(e.target.value)} style={{ height: 34, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-hi)" }}>
               {DIAL_COUNTRIES.map((d) => <option key={d.iso} value={d.iso}>{d.iso} {d.dial}</option>)}
             </select>
-            <input data-testid="contact-input" type="tel" inputMode="tel" value={national} onChange={(e) => setNational(e.target.value)} placeholder="(512) 555-0147" style={{ height: 34, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-hi)", padding: "0 10px" }} />
+            <input data-testid="contact-input" type="tel" inputMode="tel" value={national} onChange={(e) => setNational(e.target.value)} placeholder={phonePlaceholder(dialIso)} style={{ height: 34, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text-hi)", padding: "0 10px" }} />
             <Button testId="contact-save" disabled={!e164} onClick={() => e164 && void save({ phone: e164 })}>Save</Button>
             <Button kind="secondary" onClick={() => setEditing(false)}>Cancel</Button>
           </div>
