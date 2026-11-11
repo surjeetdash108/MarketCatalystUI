@@ -291,18 +291,13 @@ export function CheckoutPage() {
               </div>
             </div>
           ) : (
-            <>
-              <div className="co-card" data-testid="co-step2">
-                <h2 className="co-title" style={{ fontSize: "1.15rem", marginBottom: 14 }}>Payment</h2>
-                {Form ? (
-                  <Form onChange={onPayment} disabled={busy} amount={preview?.total ?? plan.prices[interval]?.amount ?? 0} currency={plan.currency} />
-                ) : (
-                  <Notice tone="warn">Payments aren&apos;t available right now.</Notice>
-                )}
-              </div>
-              <div className="co-card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="co-card" data-testid="co-step2">
+              <h2 className="co-title" style={{ fontSize: "1.15rem", marginBottom: 14 }}>Payment</h2>
+              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
                 <label>
-                  <span style={labelStyle}>Mobile number</span>
+                  <span style={labelStyle}>
+                    Mobile number <span style={{ color: "#ef4444" }}>*</span>
+                  </span>
                   <div className="co-phone">
                     <select aria-label="Country code" data-testid="phone-country" style={fieldStyle} value={dialIso} onChange={(e) => setDialIso(e.target.value)}>
                       {DIAL_COUNTRIES.map((d) => <option key={d.iso} value={d.iso}>{d.iso} {d.dial}</option>)}
@@ -311,12 +306,17 @@ export function CheckoutPage() {
                   </div>
                   {national !== "" && !phoneE164 && <span data-testid="phone-error" style={{ fontSize: ".74rem", color: "var(--down)" }}>Enter a valid mobile number.</span>}
                 </label>
-                <label className="co-check">
+                <label className="co-check" style={{ marginTop: 10 }}>
                   <input type="checkbox" data-testid="optin" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} />
                   <span>Text me product updates (optional)</span>
                 </label>
               </div>
-            </>
+              {Form ? (
+                <Form onChange={onPayment} disabled={busy} amount={preview?.total ?? plan.prices[interval]?.amount ?? 0} currency={plan.currency} />
+              ) : (
+                <Notice tone="warn">Payments aren&apos;t available right now.</Notice>
+              )}
+            </div>
           )}
         </div>
         <aside className="co-side">
@@ -344,12 +344,18 @@ export function CheckoutPage() {
               </div>
             }
             consentSlot={
-              preview && (
-                <label className="co-check" data-testid="consent">
-                  <input type="checkbox" data-testid="consent-box" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-                  <span><ConsentText text={preview.consent.text} onOpen={setLegal} /></span>
-                </label>
-              )
+              <label className="co-check" data-testid="consent">
+                <input type="checkbox" data-testid="consent-box" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+                <span>
+                  <ConsentText
+                    text={
+                      preview?.consent?.text ??
+                      `I agree that my ${plan.name} plan renews ${c.word} at the price shown until I cancel. I agree to the Terms of Use and have read the Privacy Policy.`
+                    }
+                    onOpen={setLegal}
+                  /> <span style={{ color: "#ef4444" }}>*</span>
+                </span>
+              </label>
             }
             action={
               <>
@@ -357,9 +363,22 @@ export function CheckoutPage() {
                 {step === 1 ? (
                   <button className="co-cta" data-testid="co-next" onClick={() => setStep(2)}>Next</button>
                 ) : (
-                  <button className="co-cta" data-testid="co-complete" disabled={!ready} onClick={() => void complete()}>
-                    {busy ? "Processing…" : "Complete purchase"}
-                  </button>
+                  <>
+                    <button className="co-cta" data-testid="co-complete" disabled={!ready} onClick={() => void complete()}>
+                      {busy ? "Processing…" : "Complete purchase"}
+                    </button>
+                    {!ready && (
+                      <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", textAlign: "center", marginTop: 4 }}>
+                        {!phoneE164
+                          ? "Enter a valid mobile number to continue"
+                          : !payment.ready
+                            ? "Complete card details and billing address to continue"
+                            : !consent
+                              ? "Tick the agreement checkbox above to continue"
+                              : "Complete required fields to continue"}
+                      </div>
+                    )}
+                  </>
                 )}
                 {step === 2 && <p style={{ margin: 0, fontSize: ".72rem", color: "var(--text-dim-solid)", textAlign: "center" }}>Renews {c.word} until you cancel.</p>}
               </>

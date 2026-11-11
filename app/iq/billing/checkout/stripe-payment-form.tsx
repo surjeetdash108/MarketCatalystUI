@@ -87,7 +87,7 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
         />
       </div>
       <div data-testid="address-element">
-        <span style={{ ...labelStyle, marginBottom: 10 }}>Billing address</span>
+        <span style={{ ...labelStyle, marginBottom: 10 }}>Billing address <span style={{ color: "#ef4444" }}>*</span></span>
         <AddressElement
           options={{ mode: "billing", defaultValues: { address: { country: "US" } } }}
           onChange={(e) => {

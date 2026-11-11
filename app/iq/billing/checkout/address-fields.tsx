@@ -21,16 +21,32 @@ export function SimulatedAddressFields({ value, onChange, disabled }: { value: B
   const set = (k: keyof BillingAddress, v: string) => onChange({ ...value, [k]: v === "" && (k === "line2" || k === "state" || k === "postalCode") ? null : v });
   return (
     <div className="co-grid2" data-testid="address-element">
-      <label className="co-span2"><span style={labelStyle}>Full name</span><input style={fieldStyle} autoComplete="name" disabled={disabled} value={value.name} onChange={(e) => set("name", e.target.value)} data-testid="addr-name" /></label>
-      <label className="co-span2"><span style={labelStyle}>Country</span>
+      <label className="co-span2">
+        <span style={labelStyle}>Full name <span style={{ color: "#ef4444" }}>*</span></span>
+        <input style={fieldStyle} autoComplete="name" disabled={disabled} value={value.name} onChange={(e) => set("name", e.target.value)} data-testid="addr-name" />
+      </label>
+      <label className="co-span2">
+        <span style={labelStyle}>Country <span style={{ color: "#ef4444" }}>*</span></span>
         <select style={fieldStyle} autoComplete="country" disabled={disabled} value={value.country} onChange={(e) => set("country", e.target.value)} data-testid="addr-country">
           {ADDRESS_COUNTRIES.map(([iso, name]) => <option key={iso} value={iso}>{name}</option>)}
         </select>
       </label>
-      <label className="co-span2"><span style={labelStyle}>Address line 1</span><input style={fieldStyle} autoComplete="address-line1" disabled={disabled} value={value.line1} onChange={(e) => set("line1", e.target.value)} data-testid="addr-line1" /></label>
-      <label className="co-span2"><span style={labelStyle}>Address line 2 (optional)</span><input style={fieldStyle} autoComplete="address-line2" disabled={disabled} value={value.line2 ?? ""} onChange={(e) => set("line2", e.target.value)} data-testid="addr-line2" /></label>
-      <label><span style={labelStyle}>City</span><input style={fieldStyle} autoComplete="address-level2" disabled={disabled} value={value.city} onChange={(e) => set("city", e.target.value)} data-testid="addr-city" /></label>
-      <label><span style={labelStyle}>{value.country === "US" ? "State" : "State / region"}</span>
+      <label className="co-span2">
+        <span style={labelStyle}>Address line 1 <span style={{ color: "#ef4444" }}>*</span></span>
+        <input style={fieldStyle} autoComplete="address-line1" disabled={disabled} value={value.line1} onChange={(e) => set("line1", e.target.value)} data-testid="addr-line1" />
+      </label>
+      <label className="co-span2">
+        <span style={labelStyle}>Address line 2 (optional)</span>
+        <input style={fieldStyle} autoComplete="address-line2" disabled={disabled} value={value.line2 ?? ""} onChange={(e) => set("line2", e.target.value)} data-testid="addr-line2" />
+      </label>
+      <label>
+        <span style={labelStyle}>City <span style={{ color: "#ef4444" }}>*</span></span>
+        <input style={fieldStyle} autoComplete="address-level2" disabled={disabled} value={value.city} onChange={(e) => set("city", e.target.value)} data-testid="addr-city" />
+      </label>
+      <label>
+        <span style={labelStyle}>
+          {value.country === "US" ? "State" : "State / region"} <span style={{ color: "#ef4444" }}>*</span>
+        </span>
         {value.country === "US" ? (
           <select style={fieldStyle} autoComplete="address-level1" disabled={disabled} value={value.state ?? ""} onChange={(e) => set("state", e.target.value)} data-testid="addr-state">
             <option value="">Select…</option>
@@ -40,7 +56,12 @@ export function SimulatedAddressFields({ value, onChange, disabled }: { value: B
           <input style={fieldStyle} autoComplete="address-level1" disabled={disabled} value={value.state ?? ""} onChange={(e) => set("state", e.target.value)} data-testid="addr-state" />
         )}
       </label>
-      <label><span style={labelStyle}>{value.country === "US" ? "ZIP" : "Postal code"}</span><input style={fieldStyle} autoComplete="postal-code" disabled={disabled} value={value.postalCode ?? ""} onChange={(e) => set("postalCode", e.target.value)} data-testid="addr-zip" /></label>
+      <label>
+        <span style={labelStyle}>
+          {value.country === "US" ? "ZIP" : "Postal code"} <span style={{ color: "#ef4444" }}>*</span>
+        </span>
+        <input style={fieldStyle} autoComplete="postal-code" disabled={disabled} value={value.postalCode ?? ""} onChange={(e) => set("postalCode", e.target.value)} data-testid="addr-zip" />
+      </label>
     </div>
   );
 }
