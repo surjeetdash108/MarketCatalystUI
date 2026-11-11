@@ -336,7 +336,7 @@ export function CheckoutPage() {
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: 8 }}>
-                    <input data-testid="promo-input" style={fieldStyle} placeholder="Promo code" value={promoInput} onChange={(e) => setPromoInput(e.target.value.toUpperCase())} />
+                    <input data-testid="promo-input" style={fieldStyle} placeholder="Promo code (optional)" value={promoInput} onChange={(e) => setPromoInput(e.target.value.toUpperCase())} />
                     <button className="co-iconbtn" style={{ width: "auto", padding: "0 14px", fontWeight: 700 }} data-testid="promo-apply" onClick={() => void applyPromo()}>Apply</button>
                   </div>
                 )}
