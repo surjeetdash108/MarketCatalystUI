@@ -14,7 +14,7 @@ import { notConnectedAdapter } from "./not-connected-form";
 import { fieldStyle, labelStyle } from "./address-fields";
 import { annualOffer, canComplete, cadence, exitPath, type BillingAddress } from "./model";
 import type { PaymentAdapter, PaymentFormValue, PaymentResult } from "./payment-form";
-import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, toE164 } from "./phone";
+import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, phonePlaceholder, toE164 } from "./phone";
 import { ConsentText, SummaryCard } from "./summary-card";
 import { LegalModal } from "../../../auth/legal/legal-modal";
 import "./checkout.css";
@@ -307,7 +307,7 @@ export function CheckoutPage() {
                     <select aria-label="Country code" data-testid="phone-country" style={fieldStyle} value={dialIso} onChange={(e) => setDialIso(e.target.value)}>
                       {DIAL_COUNTRIES.map((d) => <option key={d.iso} value={d.iso}>{d.iso} {d.dial}</option>)}
                     </select>
-                    <input data-testid="phone-input" style={fieldStyle} type="tel" autoComplete="tel-national" inputMode="tel" placeholder="(512) 555-0147" value={national} onChange={(e) => setNational(e.target.value)} aria-invalid={national !== "" && !phoneE164} />
+                    <input data-testid="phone-input" style={fieldStyle} type="tel" autoComplete="tel-national" inputMode="tel" placeholder={phonePlaceholder(dialIso)} value={national} onChange={(e) => setNational(e.target.value)} aria-invalid={national !== "" && !phoneE164} />
                   </div>
                   {national !== "" && !phoneE164 && <span data-testid="phone-error" style={{ fontSize: ".74rem", color: "var(--down)" }}>Enter a valid mobile number.</span>}
                 </label>

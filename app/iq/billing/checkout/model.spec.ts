@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { addressComplete, annualOffer, canComplete, exitPath, renewalLine, type BillingAddress } from "./model";
-import { DIAL_COUNTRIES, toE164 } from "./phone";
+import { DIAL_COUNTRIES, phonePlaceholder, toE164 } from "./phone";
 
 const pro = { id: "pro", name: "Pro", description: "", currency: "USD", sortOrder: 2, prices: { monthly: { amount: 5900, lookupKey: "pro_monthly" }, annual: { amount: 56640, lookupKey: "pro_annual" } } };
 const TX: BillingAddress = { name: "Tex", line1: "500 Congress Ave", line2: null, city: "Austin", state: "TX", postalCode: "78701", country: "US" };
@@ -19,6 +19,12 @@ describe("mobile number (E.164, US preselected)", () => {
     assert.equal(toE164("+1", "1 512 555 0147"), "+15125550147");
     assert.equal(toE164("+44", "07911 123456"), "+447911123456");
     for (const bad of ["555-0147", "012 555 0147", "512 155 0147", ""]) assert.equal(toE164("+1", bad), null);
+  });
+  it("provides country-specific placeholders", () => {
+    assert.equal(phonePlaceholder("US"), "(512) 555-0147");
+    assert.equal(phonePlaceholder("IN"), "98765 43210");
+    assert.equal(phonePlaceholder("GB"), "7911 123456");
+    assert.equal(phonePlaceholder("UNKNOWN"), "(512) 555-0147");
   });
 });
 
