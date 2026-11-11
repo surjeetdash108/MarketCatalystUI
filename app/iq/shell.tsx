@@ -153,7 +153,7 @@ export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
  * any size, theme-aware (the gradient's bright stop tracks var(--brand)
  * per theme).
  */
-function BrandLogo({ height = 28 }: { height?: number }) {
+export function BrandLogo({ height = 28 }: { height?: number }) {
   const width = Math.round(height * (66 / 60));
   return (
     <span className="brand-logo" style={{ gap: Math.round(height * 0.3), lineHeight: 1, display: "inline-flex", alignItems: "center" }}>
@@ -1599,6 +1599,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     </button>
                     <button className="pd-item" onClick={() => { router.push("/manage-plan"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">◈</span> Manage Account
+                    </button>
+                    <button className="pd-item" onClick={() => { router.push("/refer-a-friend"); setProfileDropdownOpen(false); }}>
+                      <span className="pd-icon">🎁</span> Refer a Friend
                     </button>
                     <button className="pd-item" onClick={() => { router.push("/requests"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">💡</span> Feature Requests

@@ -243,6 +243,37 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
 
         <ContactCard />
 
+        {subscribed && (
+          <div className="card col-12" style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%)", border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+            <div className="card-b" style={{ padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: "1.2rem" }}>🎁</span>
+                  <h4 style={{ margin: 0, color: "#fff", fontSize: "1rem", fontWeight: 700 }}>Refer a Friend &amp; Earn Referral Credits</h4>
+                </div>
+                <p style={{ margin: 0, fontSize: ".84rem", color: "rgba(255, 255, 255, 0.7)" }}>
+                  Give your friends credits off their subscription and get credits automatically deducted from your next monthly renewal.
+                </p>
+              </div>
+              <a
+                href="/refer-a-friend"
+                style={{
+                  padding: "9px 20px",
+                  borderRadius: 8,
+                  background: "#10b981",
+                  color: "#05210f",
+                  fontWeight: 800,
+                  fontSize: ".84rem",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Get Referral Link →
+              </a>
+            </div>
+          </div>
+        )}
+
         <div className="card col-12">
           <div className="card-h">
             <h3>Plans</h3>
@@ -407,11 +438,27 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       )}
       {dialog?.kind === "confirm-cancel" && (
         <Modal title="Cancel your plan?" onClose={() => setDialog(null)} testId="cancel-dialog">
-          <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your plan ends. No further charges.</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button kind="danger" testId="cancel-confirm" onClick={() => void doCancel()} disabled={busy}>Cancel my plan</Button>
-            <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
-          </div>
+          {refund?.eligible ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                If you cancel today, your subscription will only deduct for your elapsed usage, and the remaining balance (<b>{formatMoney(refund.amount, refund.currency)}</b>) will be refunded immediately back to your original payment method.
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <Button kind="danger" testId="cancel-refund-confirm" onClick={() => void confirmRefund()} disabled={busy}>
+                  Cancel and refund {formatMoney(refund.amount, refund.currency)}
+                </Button>
+                <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your plan ends. No further charges.</div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <Button kind="danger" testId="cancel-confirm" onClick={() => void doCancel()} disabled={busy}>Cancel my plan</Button>
+                <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
       {dialog?.kind === "done" && (

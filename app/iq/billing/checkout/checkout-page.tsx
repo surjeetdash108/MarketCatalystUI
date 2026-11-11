@@ -17,6 +17,7 @@ import type { PaymentAdapter, PaymentFormValue, PaymentResult } from "./payment-
 import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, phonePlaceholder, toE164 } from "./phone";
 import { ConsentText, SummaryCard } from "./summary-card";
 import { LegalModal } from "../../../auth/legal/legal-modal";
+import { OnboardingStepper } from "../onboarding-stepper";
 import "./checkout.css";
 
 type Phase = "loading" | "soon" | "staff" | "verify" | "checkout";
@@ -254,6 +255,9 @@ export function CheckoutPage() {
   return (
     <div className="iq-root co-page" data-theme="dark" data-testid="checkout-page">
       {header}
+      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}>
+        <OnboardingStepper currentStep={2} />
+      </div>
       {inPreview && (
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}><Notice tone="warn" testId="co-preview-banner">{PREVIEW_BANNER}</Notice></div>
       )}

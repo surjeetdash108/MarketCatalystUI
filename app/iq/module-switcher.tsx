@@ -236,17 +236,11 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
               </button>
             </div>
 
-            <h2 style={{ margin: "0 0 10px", fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }}>
+            <h2 style={{ margin: "0 0 18px", fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }}>
               {upgradeModal === "MF"
-                ? "Upgrade to Pro or Elite to access Money Flow"
-                : "Upgrade to Elite to access Strategy Lab"}
+                ? "Upgrade to Pro for Money Flow"
+                : "Upgrade to Elite for Strategy Lab"}
             </h2>
-
-            <p style={{ margin: "0 0 22px", fontSize: ".86rem", color: "#8a96a3", lineHeight: 1.55 }}>
-              {upgradeModal === "MF"
-                ? "Track institutional capital rotation by sector, spot real-time institutional movers, and inspect full live options chains."
-                : "Build quantitative trading strategies from presets or plain English, backtest across multi-year historical data, and get automated entry, stop, and target levels."}
-            </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {upgradeModal === "MF" ? (

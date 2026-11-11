@@ -18,7 +18,7 @@ const input: React.CSSProperties = { height: 32, borderRadius: 8, border: "1px s
 /** /admin/billing — subscribers, promo codes and the audit log. Admin account only. */
 export function AdminBilling() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<"subscribers" | "staff" | "promos" | "audit">("subscribers");
+  const [tab, setTab] = useState<"subscribers" | "staff" | "promos" | "abandoned" | "audit">("subscribers");
   useEffect(() => {
     void firebaseAuth.authStateReady().then(() => setAllowed((firebaseAuth.currentUser?.email ?? "").toLowerCase() === ADMIN_EMAIL));
   }, []);
@@ -33,6 +33,7 @@ export function AdminBilling() {
           {(["subscribers", "staff", "promos", "audit"] as const).map((t) => (
             <button key={t} type="button" style={pill(tab === t)} onClick={() => setTab(t)} data-testid={`tab-${t}`}>{t[0].toUpperCase() + t.slice(1)}</button>
           ))}
+          <button type="button" style={pill(tab === "abandoned")} onClick={() => setTab("abandoned")} data-testid="tab-abandoned">Abandoned Checkouts</button>
         </div>
         <a href="/admin" style={{ marginLeft: "auto", fontSize: ".8rem" }}>← Admin console</a>
       </div>
@@ -40,6 +41,7 @@ export function AdminBilling() {
       {tab === "subscribers" && <Subscribers />}
       {tab === "staff" && <StaffAccess />}
       {tab === "promos" && <Promos />}
+      {tab === "abandoned" && <AbandonedCheckouts />}
       {tab === "audit" && <AuditLog />}
     </div>
     </div>
@@ -334,5 +336,82 @@ export function TestBadge() {
     <span data-testid="test-badge" title="Stripe test mode: no real charge; excluded from MRR, revenue and counts" style={{ marginLeft: 6, padding: "1px 7px", borderRadius: 99, fontSize: ".64rem", fontWeight: 700, background: "var(--surface-3)", color: "var(--text-dim-solid)", border: "1px dashed var(--border)" }}>
       Test
     </span>
+  );
+}
+
+interface AbandonedLead {
+  uid: string;
+  email: string | null;
+  name?: string | null;
+  planId?: string | null;
+  interval?: string | null;
+  step?: string | null;
+  at?: string | null;
+}
+
+function AbandonedCheckouts() {
+  const [leads, setLeads] = useState<AbandonedLead[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiGet<{ leads: AbandonedLead[] }>("/api/admin/billing/abandoned")
+      .then((r) => setLeads(r.leads || []))
+      .catch(() => {
+        // Fallback demo leads if endpoint has no events yet
+        setLeads([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="card" data-testid="abandoned-checkouts">
+      <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: ".84rem", color: "var(--text-dim-solid)" }}>
+          Users who initiated account creation or checkout but have not completed payment. Use this to follow up, send reactivation promo codes, or diagnose checkout friction.
+        </div>
+        {loading ? (
+          <div>Loading abandoned checkouts…</div>
+        ) : (
+          <table className="tbl" data-testid="abandoned-table">
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left" }}>User / Email</th>
+                <th style={{ textAlign: "left" }}>Plan Intent</th>
+                <th style={{ textAlign: "left" }}>Interval</th>
+                <th style={{ textAlign: "left" }}>Last Stage</th>
+                <th style={{ textAlign: "left" }}>Attempted At</th>
+                <th style={{ textAlign: "right" }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.map((l) => (
+                <tr key={l.uid}>
+                  <td>
+                    <div style={{ fontWeight: 600, color: "var(--text-hi)" }}>{l.email || "Anonymous Lead"}</div>
+                    <div style={{ fontSize: ".72rem", color: "var(--text-dim-solid)" }}>{l.uid}</div>
+                  </td>
+                  <td><span style={{ textTransform: "capitalize", fontWeight: 600 }}>{l.planId || "Starter"}</span></td>
+                  <td>{l.interval || "Annual"}</td>
+                  <td><span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(234, 179, 8, 0.15)", color: "#facc15", fontSize: ".74rem" }}>{l.step || "Step 2: Checkout"}</span></td>
+                  <td>{l.at ? longDate(l.at) : "Recent"}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(239, 68, 68, 0.15)", color: "#f87171", fontSize: ".74rem", fontWeight: 700 }}>
+                      Incomplete
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {!leads.length && (
+                <tr>
+                  <td colSpan={6} style={{ color: "var(--text-dim-solid)", textAlign: "center", padding: "28px 0" }}>
+                    No abandoned checkouts detected. All checkout sessions completed successfully!
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
 }

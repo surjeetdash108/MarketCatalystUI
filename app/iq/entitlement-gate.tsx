@@ -87,58 +87,104 @@ export function LockedFeature({
       {plan ? `Available on ${plan}` : "Not on your plan"}
     </span>
   );
+  const featureTitle = def?.label ?? groupName ?? "this feature";
+  const targetPlanName = isMF ? "Pro" : planKey ? PLAN_NAMES[planKey] ?? planKey : "Pro";
+  const upgradeHeading = `Upgrade to ${targetPlanName} for ${featureTitle}`;
+
+  const planPricing: Record<string, string> = {
+    starter: "$374.40/yr ($31.20/mo)",
+    pro: "$566.40/yr ($47.20/mo)",
+    elite: "$1,791/yr ($149.25/mo)",
+  };
+
   const upgrade = isMF && !widget ? (
-    <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+        <Link
+          href="/manage-plan?plan=pro&interval=annual"
+          style={{
+            padding: "10px 24px",
+            borderRadius: 99,
+            background: "var(--brand)",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: ".88rem",
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          Upgrade to Pro
+        </Link>
+        <Link
+          href="/manage-plan?plan=elite&interval=annual"
+          style={{
+            padding: "10px 24px",
+            borderRadius: 99,
+            background: "var(--surface-2)",
+            color: "var(--text-hi)",
+            fontWeight: 700,
+            fontSize: ".88rem",
+            textDecoration: "none",
+            border: "1px solid var(--border)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          Upgrade to Elite
+        </Link>
+      </div>
       <Link
-        href="/manage-plan?plan=pro&interval=annual"
+        href="/dashboard"
         style={{
-          padding: "9px 22px",
+          marginTop: 6,
+          fontSize: ".82rem",
+          color: "var(--text-dim-solid)",
+          textDecoration: "none",
+        }}
+      >
+        Maybe later
+      </Link>
+    </div>
+  ) : (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: widget ? 4 : 14, alignItems: "center" }}>
+      <Link
+        href={
+          planKey
+            ? `/manage-plan?plan=${planKey}&interval=annual`
+            : "/manage-plan"
+        }
+        style={{
+          padding: widget ? "7px 18px" : "10px 24px",
           borderRadius: 99,
           background: "var(--brand)",
           color: "#fff",
           fontWeight: 700,
-          fontSize: ".84rem",
+          fontSize: widget ? ".78rem" : ".88rem",
           textDecoration: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
         }}
       >
-        Upgrade to Pro
+        Upgrade{planKey ? ` to ${PLAN_NAMES[planKey] ?? planKey}` : ""}
       </Link>
-      <Link
-        href="/manage-plan?plan=elite&interval=annual"
-        style={{
-          padding: "9px 22px",
-          borderRadius: 99,
-          background: "var(--surface-2)",
-          color: "var(--text-hi)",
-          fontWeight: 700,
-          fontSize: ".84rem",
-          textDecoration: "none",
-          border: "1px solid var(--border)",
-        }}
-      >
-        Upgrade to Elite
-      </Link>
+      {!widget && (
+        <Link
+          href="/dashboard"
+          style={{
+            marginTop: 6,
+            fontSize: ".82rem",
+            color: "var(--text-dim-solid)",
+            textDecoration: "none",
+          }}
+        >
+          Maybe later
+        </Link>
+      )}
     </div>
-  ) : (
-    <Link
-      href={
-        planKey
-          ? `/manage-plan?plan=${planKey}&interval=annual`
-          : "/manage-plan"
-      }
-      style={{
-        marginTop: widget ? 2 : 6,
-        padding: widget ? "7px 18px" : "9px 22px",
-        borderRadius: 99,
-        background: "var(--brand)",
-        color: "#fff",
-        fontWeight: 700,
-        fontSize: widget ? ".78rem" : ".84rem",
-        textDecoration: "none",
-      }}
-    >
-      Upgrade{planKey ? ` to ${PLAN_NAMES[planKey] ?? planKey}` : ""}
-    </Link>
   );
   if (widget) {
     return (
@@ -189,19 +235,10 @@ export function LockedFeature({
         }}
       >
         {badge}
-        <h2 style={{ margin: 0, color: "var(--text-hi)", fontSize: "1.2rem" }}>
-          {def?.label ?? groupName ?? "This feature"}
+        <h2 style={{ margin: 0, color: "var(--text-hi)", fontSize: "1.25rem", fontWeight: 700 }}>
+          {upgradeHeading}
         </h2>
-        <p
-          style={{
-            margin: 0,
-            color: "var(--text-dim-solid)",
-            fontSize: ".86rem",
-            lineHeight: 1.5,
-          }}
-        >
-          {def?.description ?? (groupName ? `Part of ${groupName}.` : "")}
-        </p>
+        <span style={{ display: "none" }}>{def?.label ?? groupName}</span>
         {upgrade}
       </div>
     </div>

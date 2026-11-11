@@ -38,3 +38,4 @@ describe("ModuleSwitcher access by plan", () => {
     assert.equal(canAccessModule("SL", "none"), false);
   });
 });
+
