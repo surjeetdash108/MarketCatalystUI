@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { BrandLogo } from "../iq/shell";
 import { ManagePlanScreen } from "../iq/screens/manage-plan";
 import { ChoosePlanScreen } from "../iq/billing/choose-plan-screen";
+import { ProfileMenu } from "../iq/profile-menu";
 import { firebaseAuth } from "../firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { parsePlanParams, saveIntent } from "../iq/billing/plan-intent";
@@ -81,25 +82,28 @@ export default function ManagePlanPage() {
           <span>←</span> Back to Dashboard
         </Link>
         <BrandLogo height={26} />
-        <Link
-          href="/dashboard"
-          aria-label="Close"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--text-dim-solid, #8a96a3)",
-            background: "rgba(255, 255, 255, 0.04)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            textDecoration: "none",
-            fontSize: ".88rem",
-          }}
-        >
-          ✕
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {authState.user && <ProfileMenu />}
+          <Link
+            href="/dashboard"
+            aria-label="Close"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--text-dim-solid, #8a96a3)",
+              background: "rgba(255, 255, 255, 0.04)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              textDecoration: "none",
+              fontSize: ".88rem",
+            }}
+          >
+            ✕
+          </Link>
+        </div>
       </header>
 
       <main style={{ maxWidth: 1120, margin: "0 auto", padding: "28px 16px 80px" }}>

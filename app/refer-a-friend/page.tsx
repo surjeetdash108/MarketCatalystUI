@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "../iq/shell";
+import { ProfileMenu } from "../iq/profile-menu";
 import { firebaseAuth } from "../firebase";
 import { useEntitlements } from "../iq/hooks/useEntitlements";
 
@@ -90,17 +91,28 @@ export default function ReferAFriendPage() {
           <span>←</span> Back to Dashboard
         </Link>
         <BrandLogo height={26} />
-        <Link
-          href="/manage-plan"
-          style={{
-            fontSize: ".86rem",
-            color: "var(--brand-2, #10b981)",
-            textDecoration: "none",
-            fontWeight: 600,
-          }}
-        >
-          Manage Plan
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <ProfileMenu />
+          <Link
+            href="/dashboard"
+            aria-label="Close"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--text-dim-solid, #8a96a3)",
+              background: "rgba(255, 255, 255, 0.04)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              textDecoration: "none",
+              fontSize: ".88rem",
+            }}
+          >
+            ✕
+          </Link>
+        </div>
       </header>
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "40px 16px 80px" }}>

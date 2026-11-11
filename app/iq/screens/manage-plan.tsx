@@ -271,10 +271,15 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
           <div className="card-h"><h3>Current plan</h3></div>
           <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div data-testid="current-plan" style={{ fontSize: "1.05rem", color: "var(--text-hi)" }}>
-              <b>{summary.planName}</b>
-              {summary.source === "lifetime" ? " · Lifetime" : summary.interval ? (summary.interval === "annual" ? " · Annual" : " · Monthly") : ""}
+              <b>{subscribed ? summary.planName : "Free Tier"}</b>
+              {summary.source === "lifetime" ? " · Lifetime" : subscribed && summary.interval ? (summary.interval === "annual" ? " · Annual" : " · Monthly") : ""}
               {summary.source === "launch_trial" ? " · launch trial" : summary.source === "lifetime" ? " · complimentary" : ""}
             </div>
+            {!subscribed && summary.source !== "lifetime" && (
+              <p style={{ margin: 0, fontSize: ".86rem", color: "var(--text-dim-solid)" }}>
+                You do not have an active paid subscription. Select a plan below to get full access.
+              </p>
+            )}
             {summary.source === "lifetime" && (
               <Notice testId="lifetime-plan">
                 You have complimentary Lifetime Elite access with full access to every feature.
@@ -302,7 +307,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
               {REFUND_POLICY.enabled && refund?.eligible && (
                 <Button kind="secondary" testId="request-refund" disabled={busy} onClick={() => refund.eligible && setDialog({ kind: "confirm-refund", amount: refund.amount, currency: refund.currency })}>Request refund</Button>
               )}
-              {summary.hasBillingAccount && <Button kind="secondary" testId="update-card" onClick={() => void run(() => openPortal()).then((r) => r && (window.location.href = r.url))}>Update card</Button>}
+              {subscribed && summary.hasBillingAccount && <Button kind="secondary" testId="update-card" onClick={() => void run(() => openPortal()).then((r) => r && (window.location.href = r.url))}>Update card</Button>}
             </div>
           </div>
         </div>
@@ -419,10 +424,14 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
         <div className="card col-12">
           <div className="card-h"><h3>Plan history</h3></div>
           <div className="card-b" data-testid="history" style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: ".8rem" }}>
-            {history.length === 0 && <div style={{ color: "var(--text-dim-solid)" }}>No changes yet.</div>}
-            {history.map((h, idx) => (
-              <div key={idx}>{longDate(h.at)} — {h.type.replace(/_/g, " ")}{describe(h.to)}</div>
-            ))}
+            {history.filter((h) => !(h.type === "subscribed" && (h.to as Record<string, unknown> | undefined)?.status === "NONE")).length === 0 && (
+              <div style={{ color: "var(--text-dim-solid)" }}>No changes yet.</div>
+            )}
+            {history
+              .filter((h) => !(h.type === "subscribed" && (h.to as Record<string, unknown> | undefined)?.status === "NONE"))
+              .map((h, idx) => (
+                <div key={idx}>{longDate(h.at)} — {h.type.replace(/_/g, " ")}{describe(h.to)}</div>
+              ))}
           </div>
         </div>
       </div>

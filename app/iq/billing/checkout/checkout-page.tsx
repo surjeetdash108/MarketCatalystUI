@@ -19,6 +19,7 @@ import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, phonePlaceholder, toE164 } from "
 import { ConsentText, SummaryCard } from "./summary-card";
 import { LegalModal } from "../../../auth/legal/legal-modal";
 import { OnboardingStepper } from "../onboarding-stepper";
+import { ProfileMenu } from "../../profile-menu";
 import "./checkout.css";
 
 type Phase = "loading" | "soon" | "staff" | "verify" | "checkout";
@@ -239,7 +240,10 @@ export function CheckoutPage() {
         <span style={{ width: 36 }} />
       )}
       <h1>Checkout</h1>
-      <button className="co-iconbtn" aria-label="Close checkout" data-testid="co-close" onClick={close}>✕</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <ProfileMenu />
+        <button className="co-iconbtn" aria-label="Close checkout" data-testid="co-close" onClick={close}>✕</button>
+      </div>
     </div>
   );
 

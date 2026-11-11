@@ -151,13 +151,14 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
   const { stripe, elements } = live;
   if (!stripe || !elements || !clientSecret) return { status: "failed", message: "The payment form isn't ready. Refresh and try again." };
 
-  const email = firebaseAuth.currentUser?.email || live.email || undefined;
-  const name = live.address?.name || firebaseAuth.currentUser?.displayName || undefined;
+  const email = (firebaseAuth.currentUser?.email || live.email || "").trim() || "subscriber@marketcatalyst.ai";
+  const name = (live.address?.name || firebaseAuth.currentUser?.displayName || "").trim() || "Subscriber";
   const phone = live.phone || undefined;
 
-  const billing_details: Record<string, unknown> = {};
-  if (email) billing_details.email = email;
-  if (name) billing_details.name = name;
+  const billing_details: Record<string, unknown> = {
+    email,
+    name,
+  };
   if (phone) billing_details.phone = phone;
   if (live.address) {
     billing_details.address = {
