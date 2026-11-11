@@ -11,6 +11,7 @@ import { currentIntent, saveIntent } from "../plan-intent";
 import { Notice, PREVIEW_BANNER, TEST_MODE_BANNER } from "../ui";
 import { paymentAdapterFor } from "./adapters";
 import { notConnectedAdapter } from "./not-connected-form";
+import { setStripeCheckoutContext } from "./stripe-payment-form";
 import { fieldStyle, labelStyle } from "./address-fields";
 import { annualOffer, canComplete, cadence, exitPath, type BillingAddress } from "./model";
 import type { PaymentAdapter, PaymentFormValue, PaymentResult } from "./payment-form";
@@ -196,6 +197,11 @@ export function CheckoutPage() {
         billing: { name: a.name, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country } },
       });
       session.current = co.sessionId;
+      setStripeCheckoutContext({
+        address: a,
+        phone: phoneE164,
+        email: firebaseAuth.currentUser?.email ?? null,
+      });
       await finish(await adapter.confirm(co.sessionId, co.payment.clientSecret ?? null), co.sessionId);
     } catch (e) {
       setError(errorBody(e).message ?? "The payment didn't go through. Try again.");

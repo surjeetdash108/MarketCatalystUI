@@ -3,6 +3,7 @@
 import { AddressElement, Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
 import { useEffect, useMemo, useRef } from "react";
+import { firebaseAuth } from "../../../firebase";
 import { Notice } from "../ui";
 import { labelStyle } from "./address-fields";
 import { addressComplete, type BillingAddress } from "./model";
@@ -50,7 +51,19 @@ let stripePromise: Promise<Stripe | null> | null = null;
 const getStripe = () => (stripePromise ??= loadStripe(PUBLISHABLE_KEY));
 
 /** Handles live between the mounted Elements and the adapter's prepare/confirm. */
-const live: { stripe: Stripe | null; elements: StripeElements | null } = { stripe: null, elements: null };
+const live: {
+  stripe: Stripe | null;
+  elements: StripeElements | null;
+  address: BillingAddress | null;
+  email: string | null;
+  phone: string | null;
+} = { stripe: null, elements: null, address: null, email: null, phone: null };
+
+export function setStripeCheckoutContext(ctx: { address?: BillingAddress | null; email?: string | null; phone?: string | null }) {
+  if (ctx.address !== undefined) live.address = ctx.address;
+  if (ctx.email !== undefined) live.email = ctx.email;
+  if (ctx.phone !== undefined) live.phone = ctx.phone;
+}
 
 /** Maps the Address Element value to our address shape. */
 export function addressFromStripe(v: { name?: string; address?: { line1?: string | null; line2?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null } }): BillingAddress {
@@ -74,7 +87,10 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
     live.stripe = stripe;
     live.elements = elements;
   }, [stripe, elements]);
-  const emit = () => onChange({ ready: state.current.ready && (state.current.addressDone || addressComplete(state.current.address)), address: state.current.address });
+  const emit = () => {
+    live.address = state.current.address;
+    onChange({ ready: state.current.ready && (state.current.addressDone || addressComplete(state.current.address)), address: state.current.address });
+  };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div data-testid="payment-element">
@@ -134,10 +150,35 @@ function StripeForm({ onChange, amount, currency }: PaymentFormProps) {
 export async function confirmWithStripe(sessionId: string, clientSecret: string | null): Promise<PaymentResult> {
   const { stripe, elements } = live;
   if (!stripe || !elements || !clientSecret) return { status: "failed", message: "The payment form isn't ready. Refresh and try again." };
+
+  const email = firebaseAuth.currentUser?.email || live.email || undefined;
+  const name = live.address?.name || firebaseAuth.currentUser?.displayName || undefined;
+  const phone = live.phone || undefined;
+
+  const billing_details: Record<string, unknown> = {};
+  if (email) billing_details.email = email;
+  if (name) billing_details.name = name;
+  if (phone) billing_details.phone = phone;
+  if (live.address) {
+    billing_details.address = {
+      line1: live.address.line1,
+      line2: live.address.line2 || undefined,
+      city: live.address.city,
+      state: live.address.state || undefined,
+      postal_code: live.address.postalCode || undefined,
+      country: live.address.country,
+    };
+  }
+
   const { error, paymentIntent } = await stripe.confirmPayment({
     elements,
     clientSecret,
-    confirmParams: { return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}` },
+    confirmParams: {
+      return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}`,
+      payment_method_data: {
+        billing_details,
+      },
+    },
     redirect: "if_required",
   });
   if (error) return { status: "failed", message: error.message ?? "The payment didn't go through. Try another payment method." };
