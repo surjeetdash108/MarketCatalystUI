@@ -42,8 +42,28 @@ import { handleStripeAction } from "../billing/checkout/stripe-payment-form";
  * retention offer), resume, invoices, history and card updates.
  */
 export function ManagePlanScreen() {
-  const { data: ent } = useEntitlements();
-  if (!ent) return null;
+  const { data: ent, loading: entLoading } = useEntitlements();
+  if (!ent) {
+    if (entLoading) {
+      return (
+        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-dim-solid)" }}>
+          <div
+            style={{
+              display: "inline-block",
+              width: 24,
+              height: 24,
+              border: "2px solid rgba(255,255,255,0.15)",
+              borderTopColor: "var(--brand, #22c55e)",
+              borderRadius: "50%",
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+          <p style={{ marginTop: 12, fontSize: ".85rem" }}>Loading subscription status…</p>
+        </div>
+      );
+    }
+    return <BillingScreen preview={false} />;
+  }
   if (ent.staff && !ent.checkoutPreview) return <StaffPlan />;
   return <BillingScreen preview={ent.checkoutPreview === true} />;
 }
@@ -69,29 +89,77 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [refund, setRefund] = useState<RefundEligibility | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
-    const [{ plans: p }, s, inv, hist] = await Promise.all([fetchPlans(), billingSummary(), listInvoices(), listHistory()]);
-    // The refund button exists only while REFUND_WINDOW_DAYS > 0 (the endpoint is 404 otherwise).
-    if (REFUND_POLICY.enabled) setRefund(await refundEligibility().catch(() => null));
-    setPlans(p);
-    setSummary(s);
-    setInvoices(inv);
-    setHistory(hist);
-    return { p, s };
+    try {
+      setLoading(true);
+      setError(null);
+      const [{ plans: p }, s, inv, hist] = await Promise.all([
+        fetchPlans(),
+        billingSummary().catch((e) => {
+          console.warn("billingSummary failed:", e);
+          return null;
+        }),
+        listInvoices().catch(() => []),
+        listHistory().catch(() => []),
+      ]);
+      // The refund button exists only while REFUND_WINDOW_DAYS > 0 (the endpoint is 404 otherwise).
+      if (REFUND_POLICY.enabled) setRefund(await refundEligibility().catch(() => null));
+      setPlans(p);
+      setSummary(s);
+      setInvoices(inv);
+      setHistory(hist);
+      return { p, s };
+    } catch (err) {
+      console.error("reload failed:", err);
+      setError("Unable to load billing data. Please try again.");
+      return null;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    void reload().then(({ p, s }) => {
+    void reload().then((res) => {
+      if (!res) return;
+      const { p, s } = res;
       const intent = typeof window !== "undefined" ? parsePlanParams(window.location.search, p.map((x) => x.id)) : null;
       if (intent) {
         setSelected(intent.planId);
         setInterval(intent.interval);
-      } else if (s.interval) setInterval(s.interval);
+      } else if (s?.interval) setInterval(s.interval);
     });
   }, [reload]);
 
-  if (!summary) return null;
+  if (loading && !summary) {
+    return (
+      <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-dim-solid)" }}>
+        <div
+          style={{
+            display: "inline-block",
+            width: 24,
+            height: 24,
+            border: "2px solid rgba(255,255,255,0.15)",
+            borderTopColor: "var(--brand, #22c55e)",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <p style={{ marginTop: 12, fontSize: ".85rem" }}>Loading plans and subscription…</p>
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div style={{ maxWidth: 640, margin: "40px auto", textAlign: "center" }}>
+        {error && <Notice tone="error">{error}</Notice>}
+        <p style={{ color: "var(--text-dim-solid)", marginTop: 16 }}>Unable to load your subscription summary.</p>
+        <Button onClick={() => void reload()} style={{ marginTop: 12 }}>Retry</Button>
+      </div>
+    );
+  }
   const subscribed = !!summary.interval && summary.source !== "launch_trial" && summary.source !== "lifetime" && LIVE.includes(summary.status);
   const current = plans.find((p) => p.id === summary.planId);
 

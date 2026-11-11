@@ -49,10 +49,14 @@ export default function ReferAFriendPage() {
 
   return (
     <div
-      className="iq-root"
+      className="iq-root manage-plan-page"
       data-theme="dark"
       style={{
         minHeight: "100vh",
+        height: "auto",
+        maxHeight: "none",
+        overflowY: "auto",
+        overflowX: "hidden",
         background: "var(--bg, #08090a)",
         color: "var(--text, #f0f4f8)",
       }}
@@ -337,6 +341,23 @@ export default function ReferAFriendPage() {
           </div>
         </div>
       </main>
+
+      <style jsx global>{`
+        html:has(.manage-plan-page),
+        body:has(.manage-plan-page) {
+          height: auto !important;
+          min-height: 100% !important;
+          overflow-y: auto !important;
+        }
+        .iq-root.manage-plan-page {
+          min-height: 100vh !important;
+          min-height: 100dvh !important;
+          height: auto !important;
+          max-height: none !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+      `}</style>
     </div>
   );
 }
