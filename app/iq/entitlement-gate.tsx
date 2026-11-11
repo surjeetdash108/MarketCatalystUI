@@ -234,6 +234,7 @@ export function LockedFeature({
           alignItems: "center",
         }}
       >
+        <div style={{ fontSize: "2.4rem", marginBottom: 2 }} aria-hidden="true">🔒</div>
         {badge}
         <h2 style={{ margin: 0, color: "var(--text-hi)", fontSize: "1.25rem", fontWeight: 700 }}>
           {upgradeHeading}

@@ -151,3 +151,4 @@ export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
     </div>
   );
 }
+

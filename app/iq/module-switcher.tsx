@@ -238,7 +238,7 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
 
             <h2 style={{ margin: "0 0 18px", fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }}>
               {upgradeModal === "MF"
-                ? "Upgrade to Pro for Money Flow"
+                ? "Upgrade to Pro or Elite for Money Flow"
                 : "Upgrade to Elite for Strategy Lab"}
             </h2>
 

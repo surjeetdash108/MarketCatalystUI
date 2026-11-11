@@ -5,7 +5,7 @@ import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js"
 import { useEffect, useMemo, useRef } from "react";
 import { Notice } from "../ui";
 import { labelStyle } from "./address-fields";
-import type { BillingAddress } from "./model";
+import { addressComplete, type BillingAddress } from "./model";
 import type { PaymentAdapter, PaymentFormProps, PaymentResult } from "./payment-form";
 
 /**
@@ -22,7 +22,7 @@ import type { PaymentAdapter, PaymentFormProps, PaymentResult } from "./payment-
  * backend's STRIPE_PAYMENT_METHOD_TYPES. Never crypto or UPI.
  */
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
-const ALLOWED = new Set(["card", "link", "paypal", "us_bank_account", "cashapp", "amazon_pay"]);
+const ALLOWED = new Set(["card", "link", "paypal", "cashapp", "amazon_pay"]);
 
 export function stripePaymentMethodTypes(raw: string | undefined): string[] {
   const types = String(raw ?? "card,link")
@@ -74,12 +74,16 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
     live.stripe = stripe;
     live.elements = elements;
   }, [stripe, elements]);
-  const emit = () => onChange({ ready: state.current.ready && state.current.addressDone, address: state.current.address });
+  const emit = () => onChange({ ready: state.current.ready && (state.current.addressDone || addressComplete(state.current.address)), address: state.current.address });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div data-testid="payment-element">
         <PaymentElement
-          options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto" } }}
+          options={{
+            layout: "tabs",
+            wallets: { applePay: "auto", googlePay: "auto" },
+            fields: { billingDetails: { name: "never", email: "never", phone: "never", address: "never" } },
+          }}
           onChange={(e) => {
             state.current.ready = e.complete;
             emit();
@@ -107,7 +111,7 @@ function StripeForm({ onChange, amount, currency }: PaymentFormProps) {
       mode: "subscription" as const,
       amount: Math.max(0, amount),
       currency: currency.toLowerCase(),
-      paymentMethodTypes: METHOD_TYPES,
+      paymentMethodTypes: ["card"],
       appearance: { theme: "night" as const, variables: { colorPrimary: "#22c55e", borderRadius: "8px" } },
     }),
     // Elements is created once; amount changes are pushed with elements.update() below.

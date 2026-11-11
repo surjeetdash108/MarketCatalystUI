@@ -1074,6 +1074,48 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
 // a stale darkMode from the backend would flip the theme on every switch.
 let pendingThemeWrite: Promise<unknown> | null = null;
 
+function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["data"] }) {
+  if (!ent || ent.staff) return null;
+  const isTrial = ent.status === "TRIALING" || ent.status === "trialing";
+  const isCanceling = ent.cancelAtPeriodEnd && !!ent.currentPeriodEnd;
+  const isFree = ent.planId === "none";
+
+  if (isCanceling) {
+    const endStr = ent.currentPeriodEnd
+      ? new Date(ent.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "the end of your period";
+    return (
+      <div style={{ background: "rgba(234, 179, 8, 0.12)", borderBottom: "1px solid rgba(234, 179, 8, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#fef08a", zIndex: 10 }}>
+        <span>ℹ️ Your {ent.planName} plan ends on {endStr}. You have full access until then and will not be charged again.</span>
+        <Link href="/manage-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Resume plan</Link>
+      </div>
+    );
+  }
+
+  if (isTrial) {
+    const endStr = ent.currentPeriodEnd
+      ? new Date(ent.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "";
+    return (
+      <div style={{ background: "rgba(34, 197, 94, 0.12)", borderBottom: "1px solid rgba(34, 197, 94, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#86efac", zIndex: 10 }}>
+        <span>🎁 Starter free trial active{endStr ? ` until ${endStr}` : ""}. You will not be charged until your trial ends.</span>
+        <Link href="/manage-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Manage plan</Link>
+      </div>
+    );
+  }
+
+  if (isFree && ent.subscriptionsEnabled) {
+    return (
+      <div style={{ background: "rgba(59, 130, 246, 0.12)", borderBottom: "1px solid rgba(59, 130, 246, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#93c5fd", zIndex: 10 }}>
+        <span>✨ You are exploring MarketCatalyst with limited access. Unlock every workspace with Starter.</span>
+        <Link href="/checkout?plan=starter&interval=annual" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Start 7-day free trial →</Link>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ---- Main IQ Shell ----
 export function IQShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -1780,6 +1822,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
             {/* Main content */}
             <main className="main">
+              <ContextualBanner ent={ent} />
               {/* <SessionNotice phase={tapeFrame?.marketPhase ?? "unknown"} pathname={pathname} /> */}
               {planRequired ? <ChoosePlanScreen /> : children}
               <footer className="disclaimer-bar">

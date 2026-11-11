@@ -98,6 +98,28 @@ export function CheckoutPage() {
   useEffect(() => {
     if (phase !== "checkout" || !plan) return;
     let live = true;
+    const cNow = cadence(interval);
+    setPreview((curr) => curr ?? {
+      planId: plan.id,
+      interval,
+      currency: plan.currency,
+      subtotal: plan.prices[interval]?.amount ?? 0,
+      discount: 0,
+      tax: 0,
+      total: plan.id === "starter" ? 0 : plan.prices[interval]?.amount ?? 0,
+      taxLabel: null,
+      taxPending: false,
+      promo: null,
+      renewsAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+      renewalAmount: plan.prices[interval]?.amount ?? 0,
+      consent: {
+        version: "v1",
+        text: plan.id === "starter"
+          ? `I agree that my Starter 7-day free trial renews ${cNow.word} at ${formatMoney(plan.prices[interval]?.amount ?? 0, plan.currency)} after 7 days until I cancel. I agree to the Terms of Use and have read the Privacy Policy.`
+          : `I agree that my ${plan.name} plan renews ${cNow.word} at the price shown until I cancel. I agree to the Terms of Use and have read the Privacy Policy.`,
+      },
+      refundPolicy: { enabled: true, windowDays: 14, checkoutLine: "Cancel anytime in Manage Plan." },
+    });
     const t = window.setTimeout(() => {
       previewCheckout({ planId: plan.id, interval, ...(promoCode ? { promoCode } : {}), ...(region && (region.country !== "US" || region.state) ? { region } : {}) })
         .then((p) => live && setPreview(p))
@@ -151,7 +173,7 @@ export function CheckoutPage() {
 
   const session = useRef<string | null>(null);
   async function complete() {
-    if (!plan || !adapter || !preview || !payment.address || !phoneE164) return;
+    if (!plan || !adapter || !payment.address || !phoneE164) return;
     setBusy(true);
     setError(null);
     try {
@@ -168,7 +190,7 @@ export function CheckoutPage() {
         planId: plan.id,
         interval,
         ...(promoCode ? { promoCode } : {}),
-        consent: { accepted: consent, version: preview.consent.version },
+        consent: { accepted: consent, version: preview?.consent?.version ?? "v1" },
         phone: phoneE164,
         marketingOptIn: optIn,
         billing: { name: a.name, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country } },
@@ -296,7 +318,14 @@ export function CheckoutPage() {
             </div>
           ) : (
             <div className="co-card" data-testid="co-step2">
-              <h2 className="co-title" style={{ fontSize: "1.15rem", marginBottom: 14 }}>Payment</h2>
+              <h2 className="co-title" style={{ fontSize: "1.15rem", marginBottom: 6 }}>
+                {plan.id === "starter" ? "Start your 7 day free trial" : `Subscribe to ${plan.name}`}
+              </h2>
+              <p className="co-sub" style={{ marginBottom: 14, fontSize: ".84rem" }}>
+                {plan.id === "starter"
+                  ? "Add your card to begin. You are not charged today ($0 due today). Cancel anytime during your 7-day trial and pay nothing."
+                  : `Pay securely with Stripe. ${plan.name} is charged today and renews ${c.word}. Cancel anytime in Manage Plan.`}
+              </p>
               <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
                 <label>
                   <span style={labelStyle}>
@@ -316,7 +345,7 @@ export function CheckoutPage() {
                 </label>
               </div>
               {Form ? (
-                <Form onChange={onPayment} disabled={busy} amount={preview?.total ?? plan.prices[interval]?.amount ?? 0} currency={plan.currency} />
+                <Form onChange={onPayment} disabled={busy} amount={preview?.total ?? (plan.id === "starter" ? 0 : plan.prices[interval]?.amount ?? 0)} currency={plan.currency} />
               ) : (
                 <Notice tone="warn">Payments aren&apos;t available right now.</Notice>
               )}
@@ -354,7 +383,9 @@ export function CheckoutPage() {
                   <ConsentText
                     text={
                       preview?.consent?.text ??
-                      `I agree that my ${plan.name} plan renews ${c.word} at the price shown until I cancel. I agree to the Terms of Use and have read the Privacy Policy.`
+                      (plan.id === "starter"
+                        ? `I agree that my Starter 7-day free trial renews ${c.word} at ${money(plan.prices[interval]?.amount ?? 0)} after 7 days until I cancel. I agree to the Terms of Use and have read the Privacy Policy.`
+                        : `I agree that my ${plan.name} plan renews ${c.word} at the price shown until I cancel. I agree to the Terms of Use and have read the Privacy Policy.`)
                     }
                     onOpen={setLegal}
                   /> <span style={{ color: "#ef4444" }}>*</span>
@@ -369,7 +400,7 @@ export function CheckoutPage() {
                 ) : (
                   <>
                     <button className="co-cta" data-testid="co-complete" disabled={!ready} onClick={() => void complete()}>
-                      {busy ? "Processing…" : "Complete purchase"}
+                      {busy ? "Processing…" : plan.id === "starter" ? "Start my 7 day free trial" : `Pay ${money(preview?.total ?? plan.prices[interval]?.amount ?? 0)} and start ${plan.name}`}
                     </button>
                     {!ready && (
                       <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", textAlign: "center", marginTop: 4 }}>

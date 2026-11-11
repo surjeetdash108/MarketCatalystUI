@@ -162,7 +162,7 @@ export function ChoosePlanScreen() {
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  alignItems: "baseline",
+                  alignItems: "center",
                   marginBottom: 8,
                 }}
               >
@@ -176,6 +176,11 @@ export function ChoosePlanScreen() {
                 >
                   {p.name}
                 </h2>
+                {p.id === "starter" && (
+                  <span style={{ padding: "2px 8px", borderRadius: 99, fontSize: ".68rem", fontWeight: 700, background: "rgba(34,197,94,0.18)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.35)", letterSpacing: ".04em", textTransform: "uppercase" }}>
+                    7-Day Free Trial
+                  </span>
+                )}
               </div>
 
               <div
@@ -276,7 +281,7 @@ export function ChoosePlanScreen() {
                   transition: "filter .14s",
                 }}
               >
-                Subscribe to {p.name}
+                {p.id === "starter" ? "Start 7-day free trial" : `Subscribe to ${p.name}`}
               </Link>
             </div>
           );
