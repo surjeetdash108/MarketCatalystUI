@@ -227,3 +227,4 @@ const iconStyle: React.CSSProperties = {
   textAlign: "center",
   display: "inline-block",
 };
+

@@ -12,7 +12,7 @@
  * itself — the backend's EntitlementGuard does — and it is a no-op while
  * SUBSCRIPTIONS_ENABLED is off. A slug absent here is on every plan.
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ENTITLEMENTS } from "../admin/entitlement-catalog";
 import {
@@ -63,6 +63,7 @@ export function LockedFeature({
   requiredPlan: string | null;
   variant?: "screen" | "widget";
 }) {
+  const [gateInterval, setGateInterval] = useState<"monthly" | "annual">("annual");
   const def = ENTITLEMENTS.find((e) => e.key === entitlement);
   const planKey =
     requiredPlan ??
@@ -91,17 +92,49 @@ export function LockedFeature({
   const targetPlanName = isMF ? "Pro" : planKey ? PLAN_NAMES[planKey] ?? planKey : "Pro";
   const upgradeHeading = `Upgrade to ${targetPlanName} for ${featureTitle}`;
 
-  const planPricing: Record<string, string> = {
-    starter: "$374.40/yr ($31.20/mo)",
-    pro: "$566.40/yr ($47.20/mo)",
-    elite: "$1,791/yr ($149.25/mo)",
-  };
+  const intervalToggle = !widget && (
+    <div style={{ display: "inline-flex", background: "rgba(255,255,255,0.06)", borderRadius: 99, padding: 3, border: "1px solid rgba(255,255,255,0.12)", marginBottom: 12 }}>
+      <button
+        type="button"
+        onClick={() => setGateInterval("monthly")}
+        style={{
+          padding: "4px 12px",
+          borderRadius: 99,
+          border: "none",
+          fontSize: ".75rem",
+          fontWeight: 700,
+          cursor: "pointer",
+          background: gateInterval === "monthly" ? "var(--brand, #22c55e)" : "transparent",
+          color: gateInterval === "monthly" ? "#000" : "var(--text-dim-solid, #8a96a3)",
+        }}
+      >
+        Monthly
+      </button>
+      <button
+        type="button"
+        onClick={() => setGateInterval("annual")}
+        style={{
+          padding: "4px 12px",
+          borderRadius: 99,
+          border: "none",
+          fontSize: ".75rem",
+          fontWeight: 700,
+          cursor: "pointer",
+          background: gateInterval === "annual" ? "var(--brand, #22c55e)" : "transparent",
+          color: gateInterval === "annual" ? "#000" : "var(--text-dim-solid, #8a96a3)",
+        }}
+      >
+        Annual <span style={{ opacity: 0.8, fontSize: ".68rem" }}>· Save 20%</span>
+      </button>
+    </div>
+  );
 
   const upgrade = isMF && !widget ? (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14, alignItems: "center" }}>
+      {intervalToggle}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
         <Link
-          href="/manage-plan?plan=pro&interval=annual"
+          href={`/checkout?plan=pro&interval=${gateInterval}`}
           style={{
             padding: "10px 24px",
             borderRadius: 99,
@@ -115,10 +148,10 @@ export function LockedFeature({
             gap: 8,
           }}
         >
-          Upgrade to Pro
+          Upgrade to Pro ({gateInterval === "annual" ? "$566.40/yr" : "$59/mo"})
         </Link>
         <Link
-          href="/manage-plan?plan=elite&interval=annual"
+          href={`/checkout?plan=elite&interval=${gateInterval}`}
           style={{
             padding: "10px 24px",
             borderRadius: 99,
@@ -133,7 +166,7 @@ export function LockedFeature({
             gap: 8,
           }}
         >
-          Upgrade to Elite
+          Upgrade to Elite ({gateInterval === "annual" ? "$1,791/yr" : "$199/mo"})
         </Link>
       </div>
       <Link
@@ -150,10 +183,11 @@ export function LockedFeature({
     </div>
   ) : (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: widget ? 4 : 14, alignItems: "center" }}>
+      {intervalToggle}
       <Link
         href={
           planKey
-            ? `/manage-plan?plan=${planKey}&interval=annual`
+            ? `/checkout?plan=${planKey}&interval=${gateInterval}`
             : "/manage-plan"
         }
         style={{

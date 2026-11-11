@@ -4,16 +4,28 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { firebaseAuth } from "../../../firebase";
 import { refreshEntitlements } from "../../hooks/useEntitlements";
-import { billingSummary, errorBody, fetchPlans, previewCheckout, previewPromo, startCheckout, type CheckoutPreview } from "../api";
-import { formatMoney, type BillingInterval, type CatalogPlan } from "../catalog";
+import {
+  applyChange,
+  billingSummary,
+  errorBody,
+  fetchPlans,
+  previewChange,
+  previewCheckout,
+  previewPromo,
+  startCheckout,
+  type BillingSummary,
+  type ChangePreview,
+  type CheckoutPreview,
+} from "../api";
+import { formatMoney, longDate, type BillingInterval, type CatalogPlan } from "../catalog";
 import { EmailCodeStep } from "../email-code-step";
 import { currentIntent, saveIntent } from "../plan-intent";
 import { Notice, PREVIEW_BANNER, TEST_MODE_BANNER } from "../ui";
 import { paymentAdapterFor } from "./adapters";
 import { notConnectedAdapter } from "./not-connected-form";
-import { setStripeCheckoutContext } from "./stripe-payment-form";
+import { handleStripeAction, setStripeCheckoutContext } from "./stripe-payment-form";
 import { fieldStyle, labelStyle } from "./address-fields";
-import { annualOffer, canComplete, cadence, exitPath, type BillingAddress } from "./model";
+import { annualOffer, canComplete, cadence, exitPath, formatDuration, type BillingAddress } from "./model";
 import type { PaymentAdapter, PaymentFormValue, PaymentResult } from "./payment-form";
 import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, phonePlaceholder, toE164 } from "./phone";
 import { ConsentText, SummaryCard } from "./summary-card";
@@ -22,7 +34,7 @@ import { OnboardingStepper } from "../onboarding-stepper";
 import { ProfileMenu } from "../../profile-menu";
 import "./checkout.css";
 
-type Phase = "loading" | "soon" | "staff" | "verify" | "checkout";
+type Phase = "loading" | "soon" | "staff" | "verify" | "checkout" | "upgrade";
 const LIVE = ["ACTIVE", "TRIALING", "PAST_DUE"];
 const FROM_KEY = "mc:checkout-from";
 
@@ -31,6 +43,8 @@ export function CheckoutPage() {
   const [inPreview, setInPreview] = useState(false);
   const [plan, setPlan] = useState<CatalogPlan | null>(null);
   const [interval, setInterval] = useState<BillingInterval>("annual");
+  const [existingSub, setExistingSub] = useState<BillingSummary | null>(null);
+  const [changePrev, setChangePrev] = useState<ChangePreview | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
   const [adapter, setAdapter] = useState<PaymentAdapter | null>(null);
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
@@ -80,8 +94,21 @@ export function CheckoutPage() {
       if (live) setInPreview(preview);
       const s = await billingSummary();
       if (s.interval && s.source !== "launch_trial" && LIVE.includes(s.status)) {
-        // Existing subscribers change plans with the preview/confirm flow in Manage Plan.
-        return window.location.replace(`/manage-plan?plan=${intent.planId}&interval=${intent.interval}`);
+        if (s.planId === intent.planId && s.interval === intent.interval) {
+          return window.location.replace(`/manage-plan?plan=${intent.planId}&interval=${intent.interval}`);
+        }
+        setExistingSub(s);
+        try {
+          const cp = await previewChange({ planId: intent.planId, interval: intent.interval });
+          setChangePrev(cp);
+          if (live) {
+            setPhase("upgrade");
+            setStep(2);
+          }
+          return;
+        } catch (e) {
+          console.warn("previewChange failed:", e);
+        }
       }
       setAdapter(paymentAdapterFor(s.provider) ?? (preview ? notConnectedAdapter : null));
       if (!live) return;
@@ -223,6 +250,33 @@ export function CheckoutPage() {
     }
   }
 
+  async function handleUpgradeConfirm() {
+    if (!plan || !changePrev) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await applyChange({
+        planId: plan.id,
+        interval,
+        prorationDate: changePrev.prorationDate,
+        expectedAmountDue: changePrev.amountDueNow,
+      });
+      if (res.status === "requires_action" && res.clientSecret) {
+        const ok = await handleStripeAction(res.clientSecret);
+        if (!ok) {
+          setError("Your bank could not authenticate the payment. Please try again or update your card in Manage Plan.");
+          return;
+        }
+      }
+      await refreshEntitlements();
+      window.location.replace(`/billing/success?session=upgraded&plan=${encodeURIComponent(plan.id)}`);
+    } catch (e) {
+      setError(errorBody(e).message ?? "Unable to complete upgrade. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const close = () => {
     try {
       sessionStorage.removeItem(FROM_KEY);
@@ -246,6 +300,154 @@ export function CheckoutPage() {
       </div>
     </div>
   );
+
+  if (phase === "upgrade" && plan && changePrev) {
+    const targetPrice = plan.prices[interval]?.amount ?? 0;
+    const amountDueNow = changePrev.amountDueNow;
+    const remainingCredits = Math.max(0, targetPrice - amountDueNow);
+    const prevPlanCadence = existingSub?.interval === "annual" ? "Annual" : "Monthly";
+    const prevPlanName = existingSub?.planName || changePrev.fromPlanId || "Starter";
+    const durationDone = formatDuration(changePrev.currentPeriodStart || existingSub?.currentPeriodStart, new Date().toISOString());
+    const prevPlanAmount = existingSub?.planId === "starter" ? 3900 : (existingSub?.planId === "pro" ? 5900 : targetPrice);
+    const usageDeduction = Math.max(0, prevPlanAmount - remainingCredits);
+
+    return (
+      <div className="iq-root co-page" data-theme="dark" data-testid="checkout-upgrade-page">
+        {header}
+        <div style={{ maxWidth: 680, margin: "24px auto", padding: "0 16px" }}>
+          {error && <div style={{ marginBottom: 16 }}><Notice tone="error">{error}</Notice></div>}
+          <div className="co-card" style={{ padding: "28px 24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <span style={{ fontSize: "1.4rem" }}>⚡</span>
+              <h2 className="co-title" style={{ margin: 0, fontSize: "1.35rem" }}>
+                Upgrade to {plan.name} ({interval === "annual" ? "Annual" : "Monthly"})
+              </h2>
+            </div>
+            <p className="co-sub" style={{ marginBottom: 24 }}>
+              Review your transparent upgrade calculation. Your new plan and higher limits activate immediately.
+            </p>
+
+            {/* Detailed calculation box */}
+            <div
+              style={{
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: 12,
+                padding: "20px 22px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 14,
+                marginBottom: 24,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".9rem" }}>
+                <span style={{ color: "var(--text-dim-solid)" }}>Plan price:</span>
+                <span style={{ fontWeight: 700, color: "var(--text-hi)" }}>
+                  {formatMoney(targetPrice, plan.currency)}{interval === "annual" ? "/yr" : "/mo"}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".9rem" }}>
+                <span style={{ color: "var(--text-dim-solid)" }}>Current plan:</span>
+                <span style={{ fontWeight: 600, color: "var(--text)" }}>
+                  {prevPlanName} ({prevPlanCadence})
+                </span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".9rem" }}>
+                <span style={{ color: "var(--text-dim-solid)" }}>Duration done in current plan:</span>
+                <span style={{ fontWeight: 600, color: "var(--brand-2)" }}>
+                  {durationDone}
+                </span>
+              </div>
+
+              {usageDeduction > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".88rem", color: "var(--text-dim-solid)" }}>
+                  <span>Usage on current plan:</span>
+                  <span style={{ color: "#ef4444" }}>
+                    −{formatMoney(usageDeduction, plan.currency)}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".9rem" }}>
+                <span style={{ color: "var(--text-dim-solid)" }}>Remaining credits:</span>
+                <span style={{ fontWeight: 600, color: "var(--up)" }}>
+                  {formatMoney(remainingCredits, plan.currency)}{usageDeduction > 0 ? ` (${formatMoney(prevPlanAmount, plan.currency)} − usage)` : ""}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  height: 1,
+                  background: "rgba(255, 255, 255, 0.1)",
+                  margin: "4px 0",
+                }}
+              />
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1.1rem" }}>
+                <div>
+                  <b style={{ color: "var(--text-hi)" }}>Total pay today:</b>
+                  <div style={{ fontSize: ".75rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
+                    Plan price − Remaining credits
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--brand-2)" }}>
+                    {formatMoney(amountDueNow, plan.currency)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Next renewal notice */}
+            <div
+              style={{
+                background: "rgba(34, 197, 94, 0.05)",
+                border: "1px solid rgba(34, 197, 94, 0.2)",
+                borderRadius: 10,
+                padding: "14px 18px",
+                fontSize: ".84rem",
+                color: "var(--text)",
+                marginBottom: 24,
+                lineHeight: 1.5,
+              }}
+            >
+              💳 Charged to your card on file today. Next renewal will be {formatMoney(changePrev.nextRenewalAmount || targetPrice, plan.currency)}{interval === "annual" ? "/year" : "/month"} on {longDate(changePrev.nextRenewalDate || changePrev.effectiveAt)}. Cancel or switch anytime in Manage Plan.
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <button
+                type="button"
+                className="co-btn"
+                style={{ width: "100%", padding: "14px", fontSize: "1rem", fontWeight: 700 }}
+                onClick={() => void handleUpgradeConfirm()}
+                disabled={busy}
+              >
+                {busy ? "Processing upgrade…" : `Pay ${formatMoney(amountDueNow, plan.currency)} & Upgrade to ${plan.name}`}
+              </button>
+              <button
+                type="button"
+                onClick={close}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-dim-solid)",
+                  fontSize: ".85rem",
+                  cursor: "pointer",
+                  padding: "8px",
+                  textDecoration: "underline",
+                }}
+              >
+                Cancel and return
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (phase !== "checkout" || !plan) {
     return (

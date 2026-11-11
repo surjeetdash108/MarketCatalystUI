@@ -189,6 +189,8 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       window.location.href = checkoutPath({ planId: plan.id, interval });
       return;
     }
+    // Subscribers upgrade on the checkout page with transparent prorated breakdown:
+    window.location.href = checkoutPath({ planId: plan.id, interval });
     const preview = await run(() => previewChange({ planId: plan.id, interval }));
     if (preview) setDialog({ kind: "preview", preview, plan });
   }

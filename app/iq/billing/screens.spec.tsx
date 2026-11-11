@@ -69,7 +69,7 @@ describe("locked feature (rendered)", () => {
     const html = renderToStaticMarkup(<LockedFeature entitlement="moneyFlow" requiredPlan="pro" />);
     assert.match(html, /Available on Pro/);
     assert.match(html, />Money Flow</);
-    assert.match(html, /href="\/manage-plan\?plan=pro&amp;interval=annual"/);
+    assert.match(html, /href="\/checkout\?plan=pro&amp;interval=annual"/);
     assert.match(html, /Upgrade to Pro/);
   });
 });

@@ -61,7 +61,7 @@ const live: {
 
 export function setStripeCheckoutContext(ctx: { address?: BillingAddress | null; email?: string | null; phone?: string | null }) {
   if (ctx.address !== undefined) live.address = ctx.address;
-  if (ctx.email !== undefined) live.email = ctx.email;
+  if (ctx.email) live.email = ctx.email;
   if (ctx.phone !== undefined) live.phone = ctx.phone;
 }
 
@@ -151,7 +151,13 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
   const { stripe, elements } = live;
   if (!stripe || !elements || !clientSecret) return { status: "failed", message: "The payment form isn't ready. Refresh and try again." };
 
-  const email = (firebaseAuth.currentUser?.email || live.email || "").trim() || "subscriber@marketcatalyst.ai";
+  const sessionEmail = typeof window !== "undefined" ? window.sessionStorage.getItem("mc:checkout-email") : null;
+  const email = (
+    firebaseAuth.currentUser?.email ||
+    live.email ||
+    sessionEmail ||
+    ""
+  ).trim() || "subscriber@marketcatalyst.ai";
   const name = (live.address?.name || firebaseAuth.currentUser?.displayName || "").trim() || "Subscriber";
   const phone = live.phone || undefined;
 
@@ -177,7 +183,10 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
     confirmParams: {
       return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}`,
       payment_method_data: {
-        billing_details,
+        billing_details: {
+          ...billing_details,
+          email,
+        },
       },
     },
     redirect: "if_required",

@@ -49,6 +49,18 @@ export function cadence(interval: BillingInterval): { word: string; unit: string
   return interval === "annual" ? { word: "annually", unit: "year" } : { word: "monthly", unit: "month" };
 }
 
+export function formatDuration(startIso?: string | null, endIso?: string | null): string {
+  if (!startIso) return "0 Year 0 Month 1 Day";
+  const start = new Date(startIso);
+  const end = endIso ? new Date(endIso) : new Date();
+  const diffMs = Math.max(0, end.getTime() - start.getTime());
+  const diffDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const years = Math.floor(diffDays / 365);
+  const months = Math.floor((diffDays % 365) / 30);
+  const days = (diffDays % 365) % 30;
+  return `${years} Year ${months} Month ${days} Day${days === 1 ? "" : "s"}`;
+}
+
 /** Where X goes: the page the buyer came from (same site only), else the dashboard. */
 export function exitPath(referrer: string | null | undefined, origin: string): string {
   try {

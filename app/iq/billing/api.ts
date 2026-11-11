@@ -151,6 +151,7 @@ export interface BillingSummary {
   source: string | null;
   /** Account credit used automatically on next invoices. Minor units. */
   creditBalance: number;
+  currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   renewsAt: string | null;

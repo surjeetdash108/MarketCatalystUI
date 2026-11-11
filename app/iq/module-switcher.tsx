@@ -66,6 +66,7 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
   const plan = effectivePlanId(entitlements);
   const [hover, setHover] = useState<AppModule | null>(null);
   const [upgradeModal, setUpgradeModal] = useState<"MF" | "SL" | null>(null);
+  const [modalInterval, setModalInterval] = useState<"monthly" | "annual">("annual");
   const refs = useRef<Record<AppModule, HTMLSpanElement | null>>({ MC: null, SI: null, SL: null, MF: null });
   const [box, setBox] = useState<{ left: number; width: number } | null>(null);
 
@@ -236,17 +237,65 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
               </button>
             </div>
 
-            <h2 style={{ margin: "0 0 18px", fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }}>
+            <h2 style={{ margin: "0 0 14px", fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }}>
               {upgradeModal === "MF"
                 ? "Upgrade to Pro or Elite for Money Flow"
                 : "Upgrade to Elite for Strategy Lab"}
             </h2>
 
+            {/* Monthly / Annual Toggle */}
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  background: "rgba(255,255,255,0.06)",
+                  borderRadius: 99,
+                  padding: 3,
+                  border: "1px solid rgba(255,255,255,0.12)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setModalInterval("monthly")}
+                  style={{
+                    padding: "5px 14px",
+                    borderRadius: 99,
+                    border: "none",
+                    fontSize: ".75rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: modalInterval === "monthly" ? "var(--brand, #22c55e)" : "transparent",
+                    color: modalInterval === "monthly" ? "#000" : "var(--text-dim-solid, #8a96a3)",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalInterval("annual")}
+                  style={{
+                    padding: "5px 14px",
+                    borderRadius: 99,
+                    border: "none",
+                    fontSize: ".75rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: modalInterval === "annual" ? "var(--brand, #22c55e)" : "transparent",
+                    color: modalInterval === "annual" ? "#000" : "var(--text-dim-solid, #8a96a3)",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  Annual <span style={{ opacity: 0.8, fontSize: ".68rem" }}>· Save 20%</span>
+                </button>
+              </div>
+            </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {upgradeModal === "MF" ? (
                 <>
                   <Link
-                    href="/manage-plan?plan=pro&interval=annual"
+                    href={`/checkout?plan=pro&interval=${modalInterval}`}
                     onClick={() => setUpgradeModal(null)}
                     style={{
                       display: "flex",
@@ -262,10 +311,12 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
                     }}
                   >
                     <span>Upgrade to Pro</span>
-                    <span style={{ fontSize: ".82rem", fontWeight: 700, opacity: 0.9 }}>$566.40/yr ($47.20/mo)</span>
+                    <span style={{ fontSize: ".82rem", fontWeight: 700, opacity: 0.9 }}>
+                      {modalInterval === "annual" ? "$566.40/yr ($47.20/mo)" : "$59/mo"}
+                    </span>
                   </Link>
                   <Link
-                    href="/manage-plan?plan=elite&interval=annual"
+                    href={`/checkout?plan=elite&interval=${modalInterval}`}
                     onClick={() => setUpgradeModal(null)}
                     style={{
                       display: "flex",
@@ -282,12 +333,14 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
                     }}
                   >
                     <span>Upgrade to Elite</span>
-                    <span style={{ fontSize: ".82rem", fontWeight: 600, color: "#9aa3a8" }}>$1,791/yr ($149.25/mo)</span>
+                    <span style={{ fontSize: ".82rem", fontWeight: 600, color: "#9aa3a8" }}>
+                      {modalInterval === "annual" ? "$1,791/yr ($149.25/mo)" : "$199/mo"}
+                    </span>
                   </Link>
                 </>
               ) : (
                 <Link
-                  href="/manage-plan?plan=elite&interval=annual"
+                  href={`/checkout?plan=elite&interval=${modalInterval}`}
                   onClick={() => setUpgradeModal(null)}
                   style={{
                     display: "flex",
@@ -303,7 +356,9 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
                   }}
                 >
                   <span>Upgrade to Elite</span>
-                  <span style={{ fontSize: ".82rem", fontWeight: 700, opacity: 0.9 }}>$1,791/yr ($149.25/mo)</span>
+                  <span style={{ fontSize: ".82rem", fontWeight: 700, opacity: 0.9 }}>
+                    {modalInterval === "annual" ? "$1,791/yr ($149.25/mo)" : "$199/mo"}
+                  </span>
                 </Link>
               )}
               <button

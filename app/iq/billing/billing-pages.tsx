@@ -37,6 +37,13 @@ export function BillingSuccess() {
       setView({ phase: "error" });
       return;
     }
+    if (session === "upgraded" || session === "upgrade") {
+      const plan = qs("plan") || ent?.planId;
+      void refreshEntitlements().then(() => {
+        setView({ phase: "active", planId: plan || undefined });
+      });
+      return;
+    }
     let tries = 0;
     let stop = false;
     const tick = async () => {

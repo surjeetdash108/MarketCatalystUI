@@ -1123,7 +1123,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
   const { data: ent } = useEntitlements();
-  const planRequired = ent?.subscriptionsEnabled === true && !ent?.staff && ent?.planId === "none";
+  const isBillingRoute = pathname?.startsWith("/billing") || pathname?.startsWith("/manage-plan") || pathname?.startsWith("/refer-a-friend");
+  const planRequired = !isBillingRoute && ent?.subscriptionsEnabled === true && !ent?.staff && ent?.planId === "none";
 
   // Same live merge Dashboard's Market Pulse widget uses — keeps the top
   // ticker strip and the index drawer it opens in sync with each other.
