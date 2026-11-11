@@ -15,6 +15,7 @@ export interface Entitlements {
   /** Staff only: a billing provider is configured on the backend. */
   providerConnected?: boolean;
   provider: string;
+  subscriptionPlanId?: string | null;
   planId: string;
   planName: string;
   status: string;
@@ -78,6 +79,13 @@ export function useEntitlements(): State & { refresh: () => Promise<Entitlements
     };
   }, []);
   return { ...state, refresh: refreshEntitlements };
+}
+
+/** Resolves the plan ID, taking an active subscription into account even for staff in preview. */
+export function effectivePlanId(e: Entitlements | null | undefined): string {
+  if (!e) return "none";
+  if (e.subscriptionPlanId && e.subscriptionPlanId !== "none") return e.subscriptionPlanId;
+  return e.planId ?? "none";
 }
 
 /** Pure decision used by the gate (tested without React). */

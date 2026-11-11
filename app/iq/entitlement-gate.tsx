@@ -68,7 +68,8 @@ export function LockedFeature({
     requiredPlan ??
     (LOWEST_PLAN as Record<string, string>)[entitlement] ??
     null;
-  const plan = planKey ? PLAN_NAMES[planKey] ?? planKey : null;
+  const isMF = entitlement === "moneyFlow";
+  const plan = isMF ? "Pro or Elite" : planKey ? PLAN_NAMES[planKey] ?? planKey : null;
   const groupName = groupForEntitlement(entitlement);
   const widget = variant === "widget";
   const badge = (
@@ -86,7 +87,39 @@ export function LockedFeature({
       {plan ? `Available on ${plan}` : "Not on your plan"}
     </span>
   );
-  const upgrade = (
+  const upgrade = isMF && !widget ? (
+    <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
+      <Link
+        href="/manage-plan?plan=pro&interval=annual"
+        style={{
+          padding: "9px 22px",
+          borderRadius: 99,
+          background: "var(--brand)",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: ".84rem",
+          textDecoration: "none",
+        }}
+      >
+        Upgrade to Pro
+      </Link>
+      <Link
+        href="/manage-plan?plan=elite&interval=annual"
+        style={{
+          padding: "9px 22px",
+          borderRadius: 99,
+          background: "var(--surface-2)",
+          color: "var(--text-hi)",
+          fontWeight: 700,
+          fontSize: ".84rem",
+          textDecoration: "none",
+          border: "1px solid var(--border)",
+        }}
+      >
+        Upgrade to Elite
+      </Link>
+    </div>
+  ) : (
     <Link
       href={
         planKey
@@ -104,7 +137,7 @@ export function LockedFeature({
         textDecoration: "none",
       }}
     >
-      Upgrade{plan ? ` to ${plan}` : ""}
+      Upgrade{planKey ? ` to ${PLAN_NAMES[planKey] ?? planKey}` : ""}
     </Link>
   );
   if (widget) {
