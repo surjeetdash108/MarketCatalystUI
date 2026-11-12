@@ -364,6 +364,9 @@ export function CheckoutPage() {
                 {row(`${bd.fromPlanName}: ${longDate(bd.periodStart)} to today`, money(bd.usedOnCurrent), "bd-used")}
                 {row(`${bd.toPlanName}: today to ${longDate(cp.nextRenewalDate || bd.periodEnd)}`, money(bd.newPlanCharge), "bd-new")}
                 {row(`Already paid for ${bd.fromPlanName}`, `−${money(bd.alreadyPaid)}`, "bd-paid")}
+                {bd.discount > 0 && row("Discount", `−${money(bd.discount)}`, "bd-discount", "up")}
+                {bd.tax > 0 && row("Tax", money(bd.tax), "bd-tax")}
+                {bd.creditUsed > 0 && row("Account credit used", `−${money(bd.creditUsed)}`, "bd-credit-used", "up")}
                 <div style={{ height: 1, background: "rgba(255, 255, 255, 0.1)" }} />
                 {cp.kind === "upgrade"
                   ? row("Charged now", money(cp.amountDueNow), "bd-charged")

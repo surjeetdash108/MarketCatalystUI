@@ -103,6 +103,9 @@ export interface ChangeBreakdown {
   usedOnCurrent: number;
   newPlanCharge: number;
   alreadyPaid: number;
+  discount: number;
+  tax: number;
+  creditUsed: number;
   net: number;
   chargedNow: number;
   creditToBalance: number;

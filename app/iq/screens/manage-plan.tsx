@@ -477,11 +477,25 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
             <div data-testid="preview-scheduled">
               Takes effect on <b>{longDate(dialog.preview.effectiveAt)}</b>. You keep {current?.name ?? "your plan"} until then, then move to {dialog.plan.name} at {formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)}.
             </div>
+          ) : dialog.preview.trialEndsAt ? (
+            <div data-testid="preview-trial" style={{ fontSize: ".86rem" }}>
+              You&apos;re in your free trial, so nothing is charged now. {dialog.plan.name} starts right away, and your first charge of{" "}
+              <b>{formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)}</b> is on <b>{longDate(dialog.preview.trialEndsAt)}</b> unless you cancel before then.
+            </div>
           ) : dialog.preview.breakdown ? (
             <div data-testid="preview-breakdown" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: ".86rem" }}>
               <div>{dialog.preview.breakdown.fromPlanName}: {longDate(dialog.preview.breakdown.periodStart)} to today: {formatMoney(dialog.preview.breakdown.usedOnCurrent, dialog.preview.currency)}</div>
-              <div>{dialog.preview.breakdown.toPlanName}: today to {longDate(dialog.preview.breakdown.periodEnd)}: {formatMoney(dialog.preview.breakdown.newPlanCharge, dialog.preview.currency)}</div>
+              <div>{dialog.preview.breakdown.toPlanName}: today to {longDate(dialog.preview.nextRenewalDate || dialog.preview.breakdown.periodEnd)}: {formatMoney(dialog.preview.breakdown.newPlanCharge, dialog.preview.currency)}</div>
               <div>Already paid for {dialog.preview.breakdown.fromPlanName}: −{formatMoney(dialog.preview.breakdown.alreadyPaid, dialog.preview.currency)}</div>
+              {dialog.preview.breakdown.discount > 0 && (
+                <div data-testid="preview-discount">Discount: −{formatMoney(dialog.preview.breakdown.discount, dialog.preview.currency)}</div>
+              )}
+              {dialog.preview.breakdown.tax > 0 && (
+                <div data-testid="preview-tax">Tax: {formatMoney(dialog.preview.breakdown.tax, dialog.preview.currency)}</div>
+              )}
+              {dialog.preview.breakdown.creditUsed > 0 && (
+                <div data-testid="preview-credit-used">Account credit used: −{formatMoney(dialog.preview.breakdown.creditUsed, dialog.preview.currency)}</div>
+              )}
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, fontWeight: 700 }}>
                 {dialog.preview.kind === "upgrade" ? (
                   <span data-testid="preview-amount">
