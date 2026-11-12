@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { CheckoutPreview } from "../api";
 import { formatMoney, type BillingInterval, type CatalogPlan } from "../catalog";
 import { REFUND_POLICY } from "../refund-policy.generated";
-import { cadence, renewalLine } from "./model";
+import { cadence } from "./model";
 
 /** Turns "Terms of Use" / "Privacy Policy" in the consent sentence into links (opening the legal modal). */
 export function ConsentText({ text, onOpen }: { text: string; onOpen: (doc: "terms" | "privacy") => void }) {
@@ -23,6 +23,17 @@ export function ConsentText({ text, onOpen }: { text: string; onOpen: (doc: "ter
   return <>{parts}</>;
 }
 
+/** "November 19, 2026" */
+function day(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * The order summary on the payment page. Everything comes from the server's
+ * preview: the price, discount and tax of the first charge; whether there is a
+ * free trial, when it ends, what is due today and when the first charge is.
+ */
 export function SummaryCard(props: {
   plan: CatalogPlan;
   interval: BillingInterval;
@@ -33,17 +44,13 @@ export function SummaryCard(props: {
   action: ReactNode;
 }) {
   const { plan, interval, step, preview } = props;
-  const isStarter = plan.id === "starter";
   const price = plan.prices[interval]?.amount ?? 0;
   const c = cadence(interval);
   const money = (n: number) => formatMoney(n, plan.currency);
-  const dueToday = isStarter ? 0 : step === 2 && preview ? preview.total : price;
-
-  const trialEndStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  }, []);
+  const trial = preview?.trial ?? null;
+  const taxKnown = !!preview && !preview.taxPending;
+  const firstCharge = preview?.firstCharge?.amount ?? preview?.total ?? price;
+  const dueToday = trial ? 0 : (preview?.dueToday ?? preview?.total ?? price);
 
   return (
     <div className="co-card" data-testid="summary-card" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -60,49 +67,40 @@ export function SummaryCard(props: {
         {!!preview?.discount && (
           <div className="co-row" style={{ color: "var(--up)" }}><span>Discount{preview.promo ? ` (${preview.promo.code})` : ""}</span><span data-testid="summary-discount">−{money(preview.discount)}</span></div>
         )}
-        {step === 2 && !isStarter && (
-          <div className="co-row">
-            <span>{preview?.taxLabel ?? "Tax"}</span>
-            <span data-testid="summary-tax">{!preview || preview.taxPending ? "Added after you enter your address" : money(preview.tax)}</span>
+        <div className="co-row">
+          <span>{preview?.taxLabel ?? "Tax"}</span>
+          <span data-testid="summary-tax">{taxKnown ? money(preview!.tax) : "Added after you enter your address"}</span>
+        </div>
+        {trial && (
+          <div className="co-row" style={{ color: "var(--brand-2)" }} data-testid="summary-trial">
+            <span>{trial.days}-day free trial</span>
+            <span>−{money(firstCharge)}</span>
           </div>
         )}
-        {isStarter && (
-          <div className="co-row" style={{ color: "var(--brand-2)" }}>
-            <span>Free trial (7 days)</span>
-            <span>−{money(preview?.subtotal ?? price)}</span>
-          </div>
-        )}
-        <div className="co-row total"><span>Total due today</span><span data-testid="summary-total">{money(dueToday)}{step === 1 && !isStarter ? " + tax" : ""}</span></div>
+        <div className="co-row total"><span>Due today</span><span data-testid="summary-total">{money(dueToday)}{!trial && !taxKnown ? " + tax" : ""}</span></div>
       </div>
       {step === 2 && (
         <>
-          {isStarter ? (
+          {trial ? (
             <div className="co-box" data-testid="trial-box" style={{ background: "rgba(34, 197, 94, 0.08)", borderColor: "rgba(34, 197, 94, 0.25)" }}>
-              <h4 style={{ color: "var(--brand-2)" }}>🎁 7 days free</h4>
-              Your trial ends on {trialEndStr}. Cancel before then and you will not be charged.
+              <h4 style={{ color: "var(--brand-2)" }}>🎁 {trial.days} days free</h4>
+              Your free trial ends on <b>{day(trial.endsAt)}</b>. Cancel before then and you pay nothing.
             </div>
-          ) : (
-            <div className="co-box plain" data-testid="no-trial-box">
-              <h4>ℹ️ Charged today</h4>
-              No free trial on {plan.name}. You are charged today. (Want to try first? Starter includes a 7-day free trial).
-            </div>
-          )}
-          {preview && (
-            <div className="co-box" data-testid="next-payment">
-              <h4>Next payment</h4>
-              {isStarter
-                ? `Renews on ${trialEndStr} at ${money(preview.renewalAmount || price)} plus any applicable tax.`
-                : `${renewalLine(preview.renewsAt, money(preview.renewalAmount))} plus any applicable tax.`}
-            </div>
-          )}
+          ) : null}
+          <div className="co-box" data-testid="next-payment">
+            <h4>{trial ? "First charge" : "Charged today"}</h4>
+            {trial
+              ? `${money(firstCharge)}${taxKnown ? "" : " plus any applicable tax"} on ${day(trial.endsAt)}, then ${money(preview?.renewalAmount ?? price)} every ${c.unit} until you cancel.`
+              : `${money(dueToday)}${taxKnown ? "" : " plus any applicable tax"} today, then ${money(preview?.renewalAmount ?? price)} every ${c.unit} from ${day(preview?.renewsAt)} until you cancel.`}
+          </div>
           <div className="co-box" data-testid="how-it-works">
             <h4>How your subscription works</h4>
             <ul>
-              {isStarter ? (
+              {trial ? (
                 <>
-                  <li>7 days completely free. $0.00 charged today.</li>
-                  <li>Cancel anytime before the trial ends in Manage Plan and you will not be charged.</li>
-                  <li>After 7 days, renews at the regular price every {c.unit} until you cancel.</li>
+                  <li>{trial.days} days free — nothing is charged today.</li>
+                  <li>Cancel in Manage Plan before {day(trial.endsAt)} and you are not charged.</li>
+                  <li>Then it renews at the full price every {c.unit} until you cancel.</li>
                 </>
               ) : (
                 <>

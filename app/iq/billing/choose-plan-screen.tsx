@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PLANS } from "../feature-map.generated";
+import { PLANS, TRIAL_DAYS } from "../feature-map.generated";
+import { firebaseAuth } from "../../firebase";
 import { fetchPlans } from "./api";
 import {
   displayPrice,
+  formatMoney,
   type BillingInterval,
   type CatalogPlan,
 } from "./catalog";
@@ -24,18 +26,25 @@ export interface ChoosePlanScreenProps {
   initialPlan?: string;
   initialInterval?: BillingInterval;
   showStepper?: boolean;
+  /** Reached through the new-account flow: carry it to checkout (step 3). */
+  onboarding?: boolean;
 }
 
 export function ChoosePlanScreen({
   initialPlan,
   initialInterval = "annual",
   showStepper = false,
+  onboarding = false,
 }: ChoosePlanScreenProps = {}) {
   const [interval, setInterval] = useState<BillingInterval>(initialInterval);
   const [catalogPlans, setCatalogPlans] = useState<CatalogPlan[]>([]);
   const { data: ent } = useEntitlements();
-  const currentPlanId = (ent?.planId || "none").toLowerCase();
-  const userHasActivePlan = currentPlanId !== "none" && currentPlanId !== "free";
+  const signedIn = !!firebaseAuth.currentUser;
+  // A paying (or trialing) subscriber; the intro / no plan are not subscriptions.
+  const currentPlanId = (ent?.subscriptionPlanId ?? "none").toLowerCase();
+  const userHasActivePlan = currentPlanId !== "none";
+  // Signed out: a new person, so the trial applies; signed in: what the server says.
+  const trialDays = signedIn ? (ent?.trialDays ?? 0) : TRIAL_DAYS;
 
   useEffect(() => {
     let active = true;
@@ -48,6 +57,11 @@ export function ChoosePlanScreen({
       active = false;
     };
   }, []);
+
+  const maxSaving = Math.max(
+    0,
+    ...catalogPlans.map((cp) => displayPrice(cp, "annual")?.savingPct ?? 0),
+  );
 
   return (
     <div
@@ -133,7 +147,7 @@ export function ChoosePlanScreen({
               textTransform: "uppercase",
             }}
           >
-            SAVE UP TO 25%
+            SAVE UP TO {maxSaving}%
           </span>
         </button>
       </div>
@@ -152,7 +166,6 @@ export function ChoosePlanScreen({
           const livePlan = catalogPlans.find((cp) => cp.id === p.id);
           const isHot = p.id === "pro";
           const isElite = p.id === "elite";
-          const isStarter = p.id === "starter";
 
           const isCurrent = userHasActivePlan && currentPlanId === p.id;
           const currentRank = TIER_ORDER[currentPlanId] ?? 0;
@@ -160,36 +173,23 @@ export function ChoosePlanScreen({
           const isUpgrade = currentRank > 0 && targetRank > currentRank;
           const isDowngrade = currentRank > 0 && targetRank < currentRank;
 
-          let ctaText = `Start with ${p.name}`;
-          if (isCurrent) {
-            ctaText = "Current plan";
-          } else if (isUpgrade) {
-            ctaText = `Upgrade to ${p.name}`;
-          } else if (isDowngrade) {
-            ctaText = `Downgrade to ${p.name}`;
-          }
+          const highlighted = initialPlan === p.id;
+          let ctaText = trialDays > 0 ? `Start your ${trialDays} day free trial` : `Subscribe to ${p.name}`;
+          if (isCurrent) ctaText = "Current plan";
+          else if (isUpgrade) ctaText = `Upgrade to ${p.name}`;
+          else if (isDowngrade) ctaText = `Change to ${p.name}`;
+          // Signed out → step 1 (create an account) with this plan; signed in → payment.
+          const ctaHref = signedIn
+            ? `/checkout?plan=${encodeURIComponent(p.id)}&interval=${interval}${onboarding ? "&onboarding=1" : ""}`
+            : `/auth/signup?plan=${encodeURIComponent(p.id)}&interval=${interval}`;
 
-          // Exact prices matching Image 3:
-          const wasPrice = isStarter ? "$39" : isHot ? "$59" : "$199";
-          const annualPerMonth = isStarter ? "$31.20" : isHot ? "$47.20" : "$149.25";
-          const monthlyPrice = isStarter ? "$39" : isHot ? "$59" : "$199";
-          const billedText =
-            interval === "annual"
-              ? isStarter
-                ? "Billed $374.40/year"
-                : isHot
-                ? "Billed $566.40/year"
-                : "Billed $1,791/year"
-              : "Billed monthly";
-
-          const saveText =
-            interval === "annual"
-              ? isStarter
-                ? "YOU SAVE 20%"
-                : isHot
-                ? "YOU SAVE 20%"
-                : ""
-              : "";
+          // Prices come from the catalog (GET /plans), never from code.
+          const price = livePlan ? displayPrice(livePlan, interval) : null;
+          const monthlyAmount = livePlan?.prices?.monthly?.amount ?? null;
+          const wasPrice = monthlyAmount != null && livePlan ? formatMoney(monthlyAmount, livePlan.currency) : "";
+          const shownPrice = price?.perMonth ?? "—";
+          const billedText = price?.billed ?? "";
+          const saveText = interval === "annual" && price?.savingPct ? `YOU SAVE ${price.savingPct}%` : "";
 
           return (
             <div
@@ -202,7 +202,7 @@ export function ChoosePlanScreen({
                 padding: "26px 24px 22px",
                 borderRadius: 16,
                 background: "rgba(18, 22, 28, 0.85)",
-                border: isHot
+                border: highlighted || isHot
                   ? "2px solid var(--brand, #4ADE80)"
                   : isCurrent
                   ? "2px solid var(--brand-line, rgba(74, 222, 128, 0.35))"
@@ -262,7 +262,7 @@ export function ChoosePlanScreen({
                   >
                     MOST POPULAR
                   </span>
-                ) : isElite && interval === "annual" ? (
+                ) : isElite && interval === "annual" && price?.savingPct ? (
                   <span
                     style={{
                       background: "rgba(56, 189, 248, 0.2)",
@@ -274,7 +274,7 @@ export function ChoosePlanScreen({
                       letterSpacing: ".04em",
                     }}
                   >
-                    SAVE 25%
+                    SAVE {price?.savingPct}%
                   </span>
                 ) : null}
               </div>
@@ -288,7 +288,7 @@ export function ChoosePlanScreen({
                   marginBottom: 4,
                 }}
               >
-                {interval === "annual" && (
+                {interval === "annual" && wasPrice && (
                   <s
                     style={{
                       fontSize: "1.35rem",
@@ -308,7 +308,7 @@ export function ChoosePlanScreen({
                     lineHeight: 1,
                   }}
                 >
-                  {interval === "annual" ? annualPerMonth : monthlyPrice}
+                  {shownPrice}
                   <span
                     style={{
                       fontSize: ".84rem",
@@ -351,11 +351,7 @@ export function ChoosePlanScreen({
                   minHeight: 42,
                 }}
               >
-                {p.id === "starter"
-                  ? "For investors who want the daily picture and research on any stock."
-                  : p.id === "pro"
-                  ? "For active traders who want to see where institutions are moving."
-                  : "For traders who backtest before every trade."}
+                {p.description}
               </p>
 
               {/* Features list */}
@@ -419,7 +415,7 @@ export function ChoosePlanScreen({
                 </button>
               ) : (
                 <Link
-                  href={`/checkout?plan=${encodeURIComponent(p.id)}&interval=${interval}`}
+                  href={ctaHref}
                   data-testid={`choose-plan-subscribe-${p.id}`}
                   style={{
                     display: "block",
@@ -442,6 +438,11 @@ export function ChoosePlanScreen({
           );
         })}
       </div>
+      {trialDays > 0 && !userHasActivePlan && (
+        <p data-testid="choose-plan-trial-note" style={{ margin: 0, fontSize: ".86rem", color: "var(--text-dim-solid)", textAlign: "center" }}>
+          Every plan starts with a {trialDays}-day free trial: $0 today, cancel before it ends and you pay nothing.
+        </p>
+      )}
     </div>
   );
 }

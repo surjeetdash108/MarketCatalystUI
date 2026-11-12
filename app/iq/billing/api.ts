@@ -34,7 +34,7 @@ export interface CheckoutBody {
   interval: BillingInterval;
   promoCode?: string;
   consent: { accepted: boolean; version: string };
-  phone: string;
+  phone?: string;
   marketingOptIn: boolean;
   billing: { name: string; address: { line1: string; line2: string | null; city: string; state: string | null; postalCode: string | null; country: string } };
 }

@@ -6,16 +6,18 @@ import { BrandLogo } from "../iq/shell";
 import { ChoosePlanScreen } from "../iq/billing/choose-plan-screen";
 import { firebaseAuth } from "../firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { parsePlanParams, type BillingInterval } from "../iq/billing/plan-intent";
+import { isOnboarding, parsePlanParams, type BillingInterval } from "../iq/billing/plan-intent";
 
 export default function ChoosePlanPage() {
   const [user, setUser] = useState<User | null>(null);
   const [initialPlan, setInitialPlan] = useState<string | undefined>();
   const [initialInterval, setInitialInterval] = useState<BillingInterval>("annual");
   const [hasPlanIntent, setHasPlanIntent] = useState(false);
+  const [onboarding, setOnboarding] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      setOnboarding(isOnboarding(window.location.search));
       const intent = parsePlanParams(window.location.search, ["starter", "pro", "elite"]);
       if (intent) {
         setInitialPlan(intent.planId);
@@ -94,7 +96,8 @@ export default function ChoosePlanPage() {
         <ChoosePlanScreen
           initialPlan={initialPlan}
           initialInterval={initialInterval}
-          showStepper={hasPlanIntent}
+          showStepper={onboarding}
+          onboarding={onboarding}
         />
       </main>
 

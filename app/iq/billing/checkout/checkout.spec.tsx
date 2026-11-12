@@ -19,12 +19,20 @@ const preview: CheckoutPreview = {
 const src = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
 describe("checkout summary card", () => {
-  it("step 1: plan, price, total (+ tax), no tax line yet", () => {
-    const html = renderToStaticMarkup(<SummaryCard plan={pro} interval="annual" step={1} preview={null} action={null} />);
+  it("before the server's preview arrives: plan, price, total + tax, tax added after the address", () => {
+    const html = renderToStaticMarkup(<SummaryCard plan={pro} interval="annual" step={2} preview={null} action={null} />);
     assert.match(html, /Pro<\/b> · Annual/);
     assert.match(html, /\$566\.40\/year/);
     assert.match(html, /\$566\.40 \+ tax/);
-    assert.doesNotMatch(html, /summary-tax/);
+    assert.match(html, /data-testid="summary-tax">Added after you enter your address/);
+  });
+  it("with a free trial: the trial line, $0 due today, when the trial ends, and the first charge (incl. tax) and date", () => {
+    const trial = { ...preview, trial: { days: 7, endsAt: "2026-11-17T12:00:00.000Z" }, dueToday: 0, firstCharge: { amount: 5748, at: "2026-11-17T12:00:00.000Z" } };
+    const html = renderToStaticMarkup(<SummaryCard plan={pro} interval="monthly" step={2} preview={trial} action={null} />);
+    assert.match(html, /data-testid="summary-trial"><span>7-day free trial<\/span><span>−\$57\.48/);
+    assert.match(html, /Due today<\/span><span data-testid="summary-total">\$0</);
+    assert.match(html, /Your free trial ends on <b>November 17, 2026<\/b>/);
+    assert.match(html, /First charge<\/h4>\$57\.48 on November 17, 2026, then \$59 every month until you cancel\./);
   });
   it("step 2: subtotal, discount, tax from the provider preview, total, next payment, how it works (refund line from REFUND_WINDOW_DAYS)", () => {
     const html = renderToStaticMarkup(<SummaryCard plan={pro} interval="monthly" step={2} preview={preview} action={null} />);
@@ -32,7 +40,7 @@ describe("checkout summary card", () => {
     assert.match(html, /Discount \(SAVE10\)<\/span><span data-testid="summary-discount">−\$5\.90/);
     assert.match(html, /Sales tax \(TX, simulated\)<\/span><span data-testid="summary-tax">\$4\.38/);
     assert.match(html, /data-testid="summary-total">\$57\.48/);
-    assert.match(html, /Renews on December 10, 2026 at \$59 plus any applicable tax/);
+    assert.match(html, /Charged today<\/h4>\$57\.48 today, then \$59 every month from December 10, 2026 until you cancel\./);
     assert.match(html, /Renews at the full price every month until you cancel/);
     assert.match(html, /Cancel anytime in Manage Plan and keep access until the end of the period/);
     assert.ok(html.includes(REFUND_POLICY.checkoutLine.replace(/'/g, "&#x27;")));
@@ -71,10 +79,12 @@ describe("checkout page wiring", () => {
     assert.match(page, /data-testid="consent-box" checked=\{consent\}/);
     assert.match(page, /useState\(false\);\n  const \[busy/); // consent starts unticked
   });
-  it("the plan can't be changed on the page except via 'Change plan' → Manage Plan; X/back navigation", () => {
-    assert.match(page, /href="\/manage-plan"[^>]*data-testid="co-change-plan"/);
-    assert.match(page, /data-testid="co-back" onClick=\{\(\) => setStep\(1\)\}/);
+  it("checkout is the payment step: 'Change plan' and back both return to the plans page; X closes", () => {
+    assert.match(page, /href=\{`\/choose-plan\?plan=\$\{plan\.id\}&interval=\$\{interval\}\$\{onboarding \? "&onboarding=1" : ""\}`\} className="co-link" data-testid="co-change-plan"/);
+    assert.match(page, /data-testid="co-back" href=\{`\/choose-plan/);
     assert.match(page, /data-testid="co-close" onClick=\{close\}/);
+    assert.doesNotMatch(page, /data-testid="co-step1"/);
+    assert.match(page, /\{onboarding && <OnboardingStepper currentStep=\{3\} \/>\}/);
   });
   it("signed-out → signup with the same plan; existing subscribers redirect to manage-plan", () => {
     assert.match(page, /if \(!user\) return window\.location\.replace\(`\/auth\/signup\?plan=\$\{intent\.planId\}&interval=\$\{intent\.interval\}`\)/);

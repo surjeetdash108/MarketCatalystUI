@@ -99,6 +99,10 @@ export const EVERY_PLAN_INCLUDES = [
   "Watchlist — unlimited tickers"
 ] as const;
 
+export const TRIAL_DAYS = 7 as const;
+
+export const INTRO_DAYS = 7 as const;
+
 export const SCREEN_FEATURES = {
   "dashboard": "marketCatalyst",
   "commentary": "news",
