@@ -30,10 +30,10 @@ describe("mobile number (E.164, US preselected)", () => {
 
 describe("Complete purchase gate", () => {
   const ok = { consent: true, phoneE164: "+15125550147", address: TX, paymentReady: true, busy: false };
-  it("enabled only with consent ticked, valid phone, full address and a ready payment method", () => {
+  it("enabled only with consent ticked, full address and a ready payment method (phone is optional/not required)", () => {
     assert.equal(canComplete(ok), true);
     assert.equal(canComplete({ ...ok, consent: false }), false);
-    assert.equal(canComplete({ ...ok, phoneE164: null }), false);
+    assert.equal(canComplete({ ...ok, phoneE164: null }), true);
     assert.equal(canComplete({ ...ok, address: { ...TX, postalCode: "787" } }), false);
     assert.equal(canComplete({ ...ok, paymentReady: false }), false);
     assert.equal(canComplete({ ...ok, busy: true }), false);

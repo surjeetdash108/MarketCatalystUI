@@ -316,8 +316,6 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
 
         {error && <Notice tone="error" testId="billing-error">{error}</Notice>}
 
-        <ContactCard />
-
         {subscribed && (
           <div className="card col-12" style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%)", border: "1px solid rgba(16, 185, 129, 0.25)" }}>
             <div className="card-b" style={{ padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
@@ -351,7 +349,10 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
 
         <div className="card col-12">
           <div className="card-h">
-            <h3>Plans</h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <h3 style={{ margin: 0 }}>Plans</h3>
+              <span style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", fontWeight: 500 }}>(Cancel anytime, no questions asked)</span>
+            </div>
             <div role="group" aria-label="Billing period" style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
               {INTERVALS.map((i) => (
                 <button key={i} type="button" aria-pressed={interval === i} style={pill(interval === i)} onClick={() => setInterval(i)}>{i === "monthly" ? "Monthly" : "Annual"}</button>

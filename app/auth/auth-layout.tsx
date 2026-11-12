@@ -13,6 +13,9 @@ const PILLS = [
   { label: "VIX & macro",            d: "1.35s" },
 ];
 
+// Switch: Set to true if you want the "MarketCatalyst" brand header above the form card again
+export const SHOW_CARD_HEADER_BRAND = false;
+
 interface AuthLayoutProps {
   children: ReactNode;
 }
@@ -49,26 +52,32 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
       <div className="lp-auth-cols">
 
         {/* ── LEFT: marketing panel ── */}
-        <div className="lp-auth-left">
+        <div className="lp-auth-left" style={{ transform: "translateY(-40px)" }}>
 
-          {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "24px" }}>
+          {/* Logo on the left of MarketCatalyst wordmark */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "14px",
+            marginBottom: "12px",
+            animation: "spUp .7s ease .5s both",
+            opacity: 0,
+          }}>
             <img
               src="/logo-mark.webp"
               alt="MarketCatalyst"
-              width={53}
-              height={48}
-              style={{ display: "block", height: 48, width: "auto", filter: "drop-shadow(0 0 24px rgba(0, 209, 143, 0.45))" }}
+              width={48}
+              height={44}
+              style={{ display: "block", height: 44, width: "auto", filter: "drop-shadow(0 0 24px rgba(0, 209, 143, 0.45))" }}
             />
-          </div>
-
-          {/* Word mark */}
-          <div style={{
-            fontFamily: "var(--f-display)", fontSize: "2.7rem", fontWeight: 700,
-            color: "var(--text-hi)", letterSpacing: "-.02em",
-            animation: "spUp .7s ease .5s both", opacity: 0,
-          }}>
-            MarketCatalyst
+            <div style={{
+              fontFamily: "var(--f-display)", fontSize: "2.6rem", fontWeight: 700,
+              letterSpacing: "-.02em", lineHeight: 1,
+            }}>
+              <span style={{ color: "#ffffff" }}>Market</span>
+              <span style={{ color: "var(--brand, #4ADE80)" }}>Catalyst</span>
+            </div>
           </div>
 
           {/* Shimmer tag */}
@@ -118,19 +127,21 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
         {/* ── RIGHT: form card ── */}
         <div className="lp-auth-form">
           <div className="lp-auth-card">
-            {/* Stays put while the form scrolls under it. */}
-            <Link href="/" className="lp-auth-brand">
-              <img
-                src="/logo-mark.webp"
-                alt="MarketCatalyst"
-                width={26}
-                height={24}
-                style={{ display: "block", height: 24, width: "auto", flexShrink: 0 }}
-              />
-              <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: ".95rem", color: "var(--text-hi)" }}>
-                MarketCatalyst
-              </span>
-            </Link>
+            {/* Stays put while the form scrolls under it (toggleable via SHOW_CARD_HEADER_BRAND). */}
+            {SHOW_CARD_HEADER_BRAND && (
+              <Link href="/" className="lp-auth-brand">
+                <img
+                  src="/logo-mark.webp"
+                  alt="MarketCatalyst"
+                  width={26}
+                  height={24}
+                  style={{ display: "block", height: 24, width: "auto", flexShrink: 0 }}
+                />
+                <span style={{ fontFamily: "var(--f-display)", fontWeight: 700, fontSize: ".95rem", color: "var(--text-hi)" }}>
+                  MarketCatalyst
+                </span>
+              </Link>
+            )}
 
             <div className="lp-auth-scroll">{children}</div>
           </div>

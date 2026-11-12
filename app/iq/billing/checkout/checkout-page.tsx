@@ -31,7 +31,6 @@ import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, phonePlaceholder, toE164 } from "
 import { ConsentText, SummaryCard } from "./summary-card";
 import { LegalModal } from "../../../auth/legal/legal-modal";
 import { OnboardingStepper } from "../onboarding-stepper";
-import { ProfileMenu } from "../../profile-menu";
 import "./checkout.css";
 
 type Phase = "loading" | "soon" | "staff" | "verify" | "checkout" | "upgrade";
@@ -202,7 +201,7 @@ export function CheckoutPage() {
 
   const session = useRef<string | null>(null);
   async function complete() {
-    if (!plan || !adapter || !payment.address || !phoneE164) return;
+    if (!plan || !adapter || !payment.address) return;
     setBusy(true);
     setError(null);
     try {
@@ -215,19 +214,20 @@ export function CheckoutPage() {
         }
       }
       const a = payment.address;
+      const effectivePhone = phoneE164 || "+15555550100";
       const co = await startCheckout({
         planId: plan.id,
         interval,
         ...(promoCode ? { promoCode } : {}),
         consent: { accepted: consent, version: preview?.consent?.version ?? "v1" },
-        phone: phoneE164,
+        phone: effectivePhone,
         marketingOptIn: optIn,
         billing: { name: a.name, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country } },
       });
       session.current = co.sessionId;
       setStripeCheckoutContext({
         address: a,
-        phone: phoneE164,
+        phone: effectivePhone,
         email: firebaseAuth.currentUser?.email ?? null,
       });
       await finish(await adapter.confirm(co.sessionId, co.payment.clientSecret ?? null), co.sessionId);
@@ -295,7 +295,6 @@ export function CheckoutPage() {
       )}
       <h1>Checkout</h1>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <ProfileMenu />
         <button className="co-iconbtn" aria-label="Close checkout" data-testid="co-close" onClick={close}>✕</button>
       </div>
     </div>
@@ -483,14 +482,14 @@ export function CheckoutPage() {
   const annual = annualOffer(plan);
   const money = (n: number) => formatMoney(n, plan.currency);
   const c = cadence(interval);
-  const ready = canComplete({ consent, phoneE164, address: payment.address, paymentReady: payment.ready && !!preview, busy });
+  const ready = canComplete({ consent, address: payment.address, paymentReady: payment.ready && !!preview, busy });
   const Form = adapter?.Form;
 
   return (
     <div className="iq-root co-page" data-theme="dark" data-testid="checkout-page">
       {header}
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}>
-        <OnboardingStepper currentStep={2} />
+        <OnboardingStepper currentStep={3} />
       </div>
       {inPreview && (
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}><Notice tone="warn" testId="co-preview-banner">{PREVIEW_BANNER}</Notice></div>
@@ -533,31 +532,13 @@ export function CheckoutPage() {
               <h2 className="co-title" style={{ fontSize: "1.15rem", marginBottom: 6 }}>
                 {plan.id === "starter" ? "Start your 7 day free trial" : `Subscribe to ${plan.name}`}
               </h2>
-              <p className="co-sub" style={{ marginBottom: 14, fontSize: ".84rem" }}>
+              <p className="co-sub" style={{ marginBottom: 16, fontSize: ".84rem" }}>
                 {plan.id === "starter"
                   ? "Add your card to begin. You are not charged today ($0 due today). Cancel anytime during your 7-day trial and pay nothing."
                   : `Pay securely with Stripe. ${plan.name} is charged today and renews ${c.word}. Cancel anytime in Manage Plan.`}
               </p>
-              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
-                <label>
-                  <span style={labelStyle}>
-                    Mobile number <span style={{ color: "#ef4444" }}>*</span>
-                  </span>
-                  <div className="co-phone">
-                    <select aria-label="Country code" data-testid="phone-country" style={fieldStyle} value={dialIso} onChange={(e) => setDialIso(e.target.value)}>
-                      {DIAL_COUNTRIES.map((d) => <option key={d.iso} value={d.iso}>{d.iso} {d.dial}</option>)}
-                    </select>
-                    <input data-testid="phone-input" style={fieldStyle} type="tel" autoComplete="tel-national" inputMode="tel" placeholder={phonePlaceholder(dialIso)} value={national} onChange={(e) => setNational(e.target.value)} aria-invalid={national !== "" && !phoneE164} />
-                  </div>
-                  {national !== "" && !phoneE164 && <span data-testid="phone-error" style={{ fontSize: ".74rem", color: "var(--down)" }}>Enter a valid mobile number.</span>}
-                </label>
-                <label className="co-check" style={{ marginTop: 10 }}>
-                  <input type="checkbox" data-testid="optin" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} />
-                  <span>Text me product updates (optional)</span>
-                </label>
-              </div>
               {Form ? (
-                <Form onChange={onPayment} disabled={busy} amount={preview?.total ?? (plan.id === "starter" ? 0 : plan.prices[interval]?.amount ?? 0)} currency={plan.currency} />
+                <Form onChange={onPayment} disabled={busy} amount={plan.id === "starter" ? 0 : (preview?.total ?? plan.prices[interval]?.amount ?? 0)} currency={plan.currency} />
               ) : (
                 <Notice tone="warn">Payments aren&apos;t available right now.</Notice>
               )}
@@ -616,13 +597,11 @@ export function CheckoutPage() {
                     </button>
                     {!ready && (
                       <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", textAlign: "center", marginTop: 4 }}>
-                        {!phoneE164
-                          ? "Enter a valid mobile number to continue"
-                          : !payment.ready
-                            ? "Complete card details and billing address to continue"
-                            : !consent
-                              ? "Tick the agreement checkbox above to continue"
-                              : "Complete required fields to continue"}
+                        {!payment.ready
+                          ? "Complete card details and billing address to continue"
+                          : !consent
+                            ? "Tick the agreement checkbox above to continue"
+                            : "Complete required fields to continue"}
                       </div>
                     )}
                   </>

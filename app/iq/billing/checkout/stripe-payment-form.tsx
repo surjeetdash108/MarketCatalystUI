@@ -128,7 +128,7 @@ function StripeForm({ onChange, amount, currency }: PaymentFormProps) {
       amount: Math.max(0, amount),
       currency: currency.toLowerCase(),
       paymentMethodTypes: ["card"],
-      appearance: { theme: "night" as const, variables: { colorPrimary: "#22c55e", borderRadius: "8px" } },
+      appearance: { theme: "night" as const, variables: { colorPrimary: "#4ade80", borderRadius: "8px" } },
     }),
     // Elements is created once; amount changes are pushed with elements.update() below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,14 +167,33 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
   };
   if (phone) billing_details.phone = phone;
   if (live.address) {
-    billing_details.address = {
+    const addr: Record<string, string> = {
       line1: live.address.line1,
-      line2: live.address.line2 || undefined,
       city: live.address.city,
-      state: live.address.state || undefined,
-      postal_code: live.address.postalCode || undefined,
       country: live.address.country,
     };
+    if (live.address.line2?.trim()) addr.line2 = live.address.line2.trim();
+    if (live.address.state?.trim()) addr.state = live.address.state.trim();
+    if (live.address.postalCode?.trim()) addr.postal_code = live.address.postalCode.trim();
+    billing_details.address = addr;
+  }
+
+  const isSetup = clientSecret.startsWith("seti_");
+  if (isSetup) {
+    const { error, setupIntent } = await stripe.confirmSetup({
+      elements,
+      clientSecret,
+      confirmParams: {
+        return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}`,
+        payment_method_data: {
+          billing_details,
+        },
+      },
+      redirect: "if_required",
+    });
+    if (error) return { status: "failed", message: error.message ?? "The card setup didn't go through. Try another payment method." };
+    if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "processing")) return { status: "succeeded" };
+    return { status: "failed", message: "Card setup could not be completed. Try again." };
   }
 
   const { error, paymentIntent } = await stripe.confirmPayment({
@@ -183,10 +202,7 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
     confirmParams: {
       return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}`,
       payment_method_data: {
-        billing_details: {
-          ...billing_details,
-          email,
-        },
+        billing_details,
       },
     },
     redirect: "if_required",

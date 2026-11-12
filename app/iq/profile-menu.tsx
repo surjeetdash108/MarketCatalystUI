@@ -4,12 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { firebaseAuth } from "../firebase";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { useEntitlements } from "./hooks/useEntitlements";
+import { clearOnboardingSession } from "./billing/plan-intent";
 
 export function ProfileMenu() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { data: ent } = useEntitlements();
+  const hasActivePlan = !!ent && ent.planId !== "none" && ent.planId !== "free" && (ent.status === "active" || ent.status === "trialing" || !!ent.staff);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(firebaseAuth, (u) => setUser(u));
@@ -46,6 +50,7 @@ export function ProfileMenu() {
 
   const handleLogout = async () => {
     setOpen(false);
+    clearOnboardingSession();
     try {
       await signOut(firebaseAuth);
       window.location.href = "/auth/login";
@@ -99,7 +104,7 @@ export function ProfileMenu() {
             border: "1px solid var(--border, rgba(255,255,255,0.1))",
             borderRadius: 14,
             boxShadow: "0 14px 40px rgba(0,0,0,0.65)",
-            zIndex: 1000,
+            zIndex: 99999,
             overflow: "hidden",
             animation: "iq-dropdownIn 0.15s ease both",
           }}
@@ -173,14 +178,16 @@ export function ProfileMenu() {
             >
               <span style={iconStyle}>◈</span> Manage Account
             </button>
-            <button
-              type="button"
-              className="pd-item"
-              onClick={() => navigate("/refer-a-friend")}
-              style={itemStyle}
-            >
-              <span style={iconStyle}>🎁</span> Refer a Friend
-            </button>
+            {hasActivePlan && (
+              <button
+                type="button"
+                className="pd-item"
+                onClick={() => navigate("/refer-a-friend")}
+                style={itemStyle}
+              >
+                <span style={iconStyle}>🎁</span> Refer a Friend
+              </button>
+            )}
             <button
               type="button"
               className="pd-item"

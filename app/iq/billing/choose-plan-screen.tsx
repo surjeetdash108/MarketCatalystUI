@@ -2,20 +2,40 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PLANS, EVERY_PLAN_INCLUDES } from "../feature-map.generated";
-import { fetchPlans, type PlansResponse } from "./api";
+import { PLANS } from "../feature-map.generated";
+import { fetchPlans } from "./api";
 import {
   displayPrice,
-  formatMoney,
-  INTERVALS,
   type BillingInterval,
   type CatalogPlan,
 } from "./catalog";
-import { pill } from "./ui";
+import { OnboardingStepper } from "./onboarding-stepper";
+import { useEntitlements } from "../hooks/useEntitlements";
 
-export function ChoosePlanScreen() {
-  const [interval, setInterval] = useState<BillingInterval>("annual");
+const TIER_ORDER: Record<string, number> = {
+  none: 0,
+  free: 0,
+  starter: 1,
+  pro: 2,
+  elite: 3,
+};
+
+export interface ChoosePlanScreenProps {
+  initialPlan?: string;
+  initialInterval?: BillingInterval;
+  showStepper?: boolean;
+}
+
+export function ChoosePlanScreen({
+  initialPlan,
+  initialInterval = "annual",
+  showStepper = false,
+}: ChoosePlanScreenProps = {}) {
+  const [interval, setInterval] = useState<BillingInterval>(initialInterval);
   const [catalogPlans, setCatalogPlans] = useState<CatalogPlan[]>([]);
+  const { data: ent } = useEntitlements();
+  const currentPlanId = (ent?.planId || "none").toLowerCase();
+  const userHasActivePlan = currentPlanId !== "none" && currentPlanId !== "free";
 
   useEffect(() => {
     let active = true;
@@ -33,51 +53,19 @@ export function ChoosePlanScreen() {
     <div
       data-testid="choose-plan-screen"
       style={{
-        maxWidth: 1040,
-        margin: "32px auto",
-        padding: "0 20px 48px",
+        maxWidth: 1080,
+        margin: "0 auto",
+        padding: "0 16px 48px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
       }}
     >
-      <div style={{ textAlign: "center", marginBottom: 28 }}>
-        <span
-          style={{
-            fontSize: ".72rem",
-            fontWeight: 700,
-            letterSpacing: ".12em",
-            textTransform: "uppercase",
-            color: "var(--brand-2)",
-            display: "inline-block",
-            marginBottom: 8,
-          }}
-        >
-          Subscription required
-        </span>
-        <h1
-          style={{
-            margin: "0 0 10px",
-            fontSize: "1.9rem",
-            fontWeight: 800,
-            color: "var(--text-hi)",
-            letterSpacing: "-.02em",
-          }}
-        >
-          Choose a plan to continue
-        </h1>
-        <p
-          style={{
-            margin: 0,
-            fontSize: ".95rem",
-            color: "var(--text-dim-solid)",
-            maxWidth: 580,
-            lineHeight: 1.5,
-          }}
-        >
-          Select a plan to access your market intelligence workspace. Cancel anytime.
-        </p>
-      </div>
+      {showStepper && (
+        <div style={{ width: "100%", maxWidth: 620, margin: "0 auto 16px" }}>
+          <OnboardingStepper currentStep={2} />
+        </div>
+      )}
 
       {/* Interval switcher */}
       <div
@@ -86,32 +74,75 @@ export function ChoosePlanScreen() {
         style={{
           display: "inline-flex",
           gap: 6,
-          background: "var(--surface-1)",
-          padding: 4,
+          background: "rgba(255, 255, 255, 0.05)",
+          padding: "4px 6px",
           borderRadius: 99,
-          border: "1px solid var(--border)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
           marginBottom: 32,
         }}
       >
-        {INTERVALS.map((i) => (
-          <button
-            key={i}
-            type="button"
-            aria-pressed={interval === i}
-            style={pill(interval === i)}
-            onClick={() => setInterval(i)}
-            data-testid={`choose-interval-${i}`}
+        <button
+          type="button"
+          aria-pressed={interval === "monthly"}
+          style={{
+            padding: "8px 20px",
+            borderRadius: 99,
+            border: "none",
+            fontSize: ".86rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            background: interval === "monthly" ? "rgba(255, 255, 255, 0.15)" : "transparent",
+            color: interval === "monthly" ? "#ffffff" : "var(--text-dim-solid)",
+            transition: "all 0.2s ease",
+          }}
+          onClick={() => setInterval("monthly")}
+          data-testid="choose-interval-monthly"
+        >
+          Monthly
+        </button>
+        <button
+          type="button"
+          aria-pressed={interval === "annual"}
+          style={{
+            padding: "8px 20px",
+            borderRadius: 99,
+            border: "none",
+            fontSize: ".86rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            background: interval === "annual" ? "var(--brand, #4ADE80)" : "transparent",
+            color: interval === "annual" ? "var(--on-brand, #07080A)" : "var(--text-dim-solid)",
+            transition: "all 0.2s ease",
+          }}
+          onClick={() => setInterval("annual")}
+          data-testid="choose-interval-annual"
+        >
+          <span>Annual</span>
+          <span
+            style={{
+              fontSize: ".66rem",
+              fontWeight: 800,
+              padding: "2px 8px",
+              borderRadius: 99,
+              background: interval === "annual" ? "var(--on-brand, #07080A)" : "var(--brand, #4ADE80)",
+              color: interval === "annual" ? "var(--brand, #4ADE80)" : "var(--on-brand, #07080A)",
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+            }}
           >
-            {i === "monthly" ? "Monthly" : "Annual (save up to 25%)"}
-          </button>
-        ))}
+            SAVE UP TO 25%
+          </span>
+        </button>
       </div>
 
-      {/* 3 Plan Cards */}
+      {/* 3 Plan Cards matching Image 3 */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))",
           gap: 20,
           width: "100%",
           marginBottom: 36,
@@ -119,8 +150,47 @@ export function ChoosePlanScreen() {
       >
         {PLANS.map((p) => {
           const livePlan = catalogPlans.find((cp) => cp.id === p.id);
-          const price = livePlan ? displayPrice(livePlan, interval) : null;
           const isHot = p.id === "pro";
+          const isElite = p.id === "elite";
+          const isStarter = p.id === "starter";
+
+          const isCurrent = userHasActivePlan && currentPlanId === p.id;
+          const currentRank = TIER_ORDER[currentPlanId] ?? 0;
+          const targetRank = TIER_ORDER[p.id] ?? 0;
+          const isUpgrade = currentRank > 0 && targetRank > currentRank;
+          const isDowngrade = currentRank > 0 && targetRank < currentRank;
+
+          let ctaText = `Start with ${p.name}`;
+          if (isCurrent) {
+            ctaText = "Current plan";
+          } else if (isUpgrade) {
+            ctaText = `Upgrade to ${p.name}`;
+          } else if (isDowngrade) {
+            ctaText = `Downgrade to ${p.name}`;
+          }
+
+          // Exact prices matching Image 3:
+          const wasPrice = isStarter ? "$39" : isHot ? "$59" : "$199";
+          const annualPerMonth = isStarter ? "$31.20" : isHot ? "$47.20" : "$149.25";
+          const monthlyPrice = isStarter ? "$39" : isHot ? "$59" : "$199";
+          const billedText =
+            interval === "annual"
+              ? isStarter
+                ? "Billed $374.40/year"
+                : isHot
+                ? "Billed $566.40/year"
+                : "Billed $1,791/year"
+              : "Billed monthly";
+
+          const saveText =
+            interval === "annual"
+              ? isStarter
+                ? "YOU SAVE 20%"
+                : isHot
+                ? "YOU SAVE 20%"
+                : ""
+              : "";
+
           return (
             <div
               key={p.id}
@@ -129,110 +199,171 @@ export function ChoosePlanScreen() {
               style={{
                 display: "flex",
                 flexDirection: "column",
-                padding: 24,
-                borderRadius: "var(--r-lg, 14px)",
-                background: "var(--surface-1)",
+                padding: "26px 24px 22px",
+                borderRadius: 16,
+                background: "rgba(18, 22, 28, 0.85)",
                 border: isHot
-                  ? "2px solid var(--brand)"
-                  : "1px solid var(--border)",
+                  ? "2px solid var(--brand, #4ADE80)"
+                  : isCurrent
+                  ? "2px solid var(--brand-line, rgba(74, 222, 128, 0.35))"
+                  : "1px solid rgba(255, 255, 255, 0.08)",
+                boxShadow: isHot ? "0 0 32px rgba(74, 222, 128, 0.22)" : "none",
                 position: "relative",
               }}
             >
-              {isHot && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: -11,
-                    left: 20,
-                    background: "var(--brand)",
-                    color: "var(--on-brand, #000)",
-                    fontSize: ".68rem",
-                    fontWeight: 700,
-                    padding: "2px 10px",
-                    borderRadius: 99,
-                    letterSpacing: ".06em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Most popular
-                </div>
-              )}
-
+              {/* Header tags */}
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: 8,
+                  marginBottom: 16,
                 }}
               >
-                <h2
+                <span
                   style={{
-                    margin: 0,
-                    fontSize: "1.3rem",
+                    fontSize: ".74rem",
                     fontWeight: 700,
-                    color: "var(--text-hi)",
+                    letterSpacing: ".12em",
+                    textTransform: "uppercase",
+                    color: "rgba(255, 255, 255, 0.6)",
                   }}
                 >
-                  {p.name}
-                </h2>
-                {p.id === "starter" && (
-                  <span style={{ padding: "2px 8px", borderRadius: 99, fontSize: ".68rem", fontWeight: 700, background: "rgba(34,197,94,0.18)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.35)", letterSpacing: ".04em", textTransform: "uppercase" }}>
-                    7-Day Free Trial
+                  {p.name.toUpperCase()}
+                </span>
+                {isCurrent ? (
+                  <span
+                    style={{
+                      background: "rgba(74, 222, 128, 0.16)",
+                      color: "var(--brand, #4ADE80)",
+                      border: "1px solid var(--brand-line, rgba(74, 222, 128, 0.3))",
+                      fontSize: ".66rem",
+                      fontWeight: 800,
+                      padding: "3px 10px",
+                      borderRadius: 99,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    CURRENT PLAN
+                  </span>
+                ) : isHot ? (
+                  <span
+                    style={{
+                      background: "var(--brand, #4ADE80)",
+                      color: "var(--on-brand, #07080A)",
+                      fontSize: ".66rem",
+                      fontWeight: 800,
+                      padding: "3px 10px",
+                      borderRadius: 99,
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    MOST POPULAR
+                  </span>
+                ) : isElite && interval === "annual" ? (
+                  <span
+                    style={{
+                      background: "rgba(56, 189, 248, 0.2)",
+                      color: "#38bdf8",
+                      fontSize: ".68rem",
+                      fontWeight: 800,
+                      padding: "3px 10px",
+                      borderRadius: 6,
+                      letterSpacing: ".04em",
+                    }}
+                  >
+                    SAVE 25%
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Price row */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 10,
+                  marginBottom: 4,
+                }}
+              >
+                {interval === "annual" && (
+                  <s
+                    style={{
+                      fontSize: "1.35rem",
+                      fontWeight: 600,
+                      color: "rgba(255, 255, 255, 0.35)",
+                    }}
+                  >
+                    {wasPrice}
+                  </s>
+                )}
+                <div
+                  style={{
+                    fontSize: "2.4rem",
+                    fontWeight: 800,
+                    color: "#ffffff",
+                    letterSpacing: "-0.02em",
+                    lineHeight: 1,
+                  }}
+                >
+                  {interval === "annual" ? annualPerMonth : monthlyPrice}
+                  <span
+                    style={{
+                      fontSize: ".84rem",
+                      fontWeight: 500,
+                      color: "rgba(255, 255, 255, 0.5)",
+                      marginLeft: 4,
+                    }}
+                  >
+                    /mo
+                  </span>
+                </div>
+              </div>
+
+              {/* Billing subline */}
+              <div
+                style={{
+                  fontSize: ".78rem",
+                  color: "rgba(255, 255, 255, 0.6)",
+                  marginBottom: 16,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span>{billedText}</span>
+                {saveText && (
+                  <span style={{ color: "var(--brand, #4ADE80)", fontWeight: 700 }}>
+                    {saveText}
                   </span>
                 )}
               </div>
 
-              <div
-                style={{
-                  fontSize: "1.75rem",
-                  fontWeight: 800,
-                  color: "var(--text-hi)",
-                  marginBottom: 4,
-                }}
-              >
-                {price ? price.perMonth : "—"}
-                <span
-                  style={{
-                    fontSize: ".85rem",
-                    fontWeight: 500,
-                    color: "var(--text-dim-solid)",
-                    marginLeft: 4,
-                  }}
-                >
-                  /month
-                </span>
-              </div>
-
-              <div
-                style={{
-                  fontSize: ".78rem",
-                  color: "var(--text-dim-solid)",
-                  marginBottom: 16,
-                  minHeight: 18,
-                }}
-              >
-                {price ? price.billed : "—"}
-                {price?.savingPct ? ` · save ${price.savingPct}%` : ""}
-              </div>
-
+              {/* Blurb */}
               <p
                 style={{
                   margin: "0 0 20px",
-                  fontSize: ".84rem",
-                  color: "var(--text)",
-                  lineHeight: 1.45,
-                  minHeight: 38,
+                  fontSize: ".86rem",
+                  color: "rgba(255, 255, 255, 0.75)",
+                  lineHeight: 1.5,
+                  minHeight: 42,
                 }}
               >
-                {p.description}
+                {p.id === "starter"
+                  ? "For investors who want the daily picture and research on any stock."
+                  : p.id === "pro"
+                  ? "For active traders who want to see where institutions are moving."
+                  : "For traders who backtest before every trade."}
               </p>
 
+              {/* Features list */}
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 10,
+                  gap: 11,
                   marginBottom: 24,
                   flex: 1,
                 }}
@@ -242,17 +373,17 @@ export function ChoosePlanScreen() {
                     key={i}
                     style={{
                       display: "flex",
-                      gap: 9,
+                      gap: 10,
                       alignItems: "flex-start",
-                      fontSize: ".82rem",
-                      color: "var(--text-hi)",
-                      lineHeight: 1.4,
+                      fontSize: ".84rem",
+                      color: "rgba(255, 255, 255, 0.9)",
+                      lineHeight: 1.45,
                     }}
                   >
                     <span
                       style={{
-                        color: "var(--brand-2)",
-                        fontWeight: 700,
+                        color: "var(--brand, #4ADE80)",
+                        fontWeight: 800,
                         flexShrink: 0,
                       }}
                       aria-hidden="true"
@@ -264,85 +395,53 @@ export function ChoosePlanScreen() {
                 ))}
               </div>
 
-              <Link
-                href={`/checkout?plan=${encodeURIComponent(p.id)}&interval=${interval}`}
-                data-testid={`choose-plan-subscribe-${p.id}`}
-                style={{
-                  display: "block",
-                  textAlign: "center",
-                  padding: "11px 18px",
-                  borderRadius: "var(--r, 8px)",
-                  background: isHot ? "var(--brand)" : "var(--surface-3)",
-                  color: isHot ? "var(--on-brand, #000)" : "var(--text-hi)",
-                  border: isHot ? "none" : "1px solid var(--border-strong)",
-                  fontSize: ".88rem",
-                  fontWeight: 700,
-                  textDecoration: "none",
-                  transition: "filter .14s",
-                }}
-              >
-                {p.id === "starter" ? "Start 7-day free trial" : `Subscribe to ${p.name}`}
-              </Link>
+              {/* Action Button */}
+              {isCurrent ? (
+                <button
+                  type="button"
+                  disabled
+                  data-testid={`choose-plan-subscribe-${p.id}`}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "center",
+                    padding: "13px 20px",
+                    borderRadius: 10,
+                    background: "rgba(255, 255, 255, 0.05)",
+                    color: "var(--text-dim-solid, rgba(255, 255, 255, 0.4))",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    fontSize: ".9rem",
+                    fontWeight: 800,
+                    cursor: "not-allowed",
+                  }}
+                >
+                  Current plan
+                </button>
+              ) : (
+                <Link
+                  href={`/checkout?plan=${encodeURIComponent(p.id)}&interval=${interval}`}
+                  data-testid={`choose-plan-subscribe-${p.id}`}
+                  style={{
+                    display: "block",
+                    textAlign: "center",
+                    padding: "13px 20px",
+                    borderRadius: 10,
+                    background: (isHot || isUpgrade) ? "var(--brand, #4ADE80)" : "rgba(255, 255, 255, 0.08)",
+                    color: (isHot || isUpgrade) ? "var(--on-brand, #07080A)" : "#ffffff",
+                    border: (isHot || isUpgrade) ? "none" : "1px solid rgba(255, 255, 255, 0.12)",
+                    fontSize: ".9rem",
+                    fontWeight: 800,
+                    textDecoration: "none",
+                    transition: "all .16s ease",
+                  }}
+                >
+                  {ctaText}
+                </Link>
+              )}
             </div>
           );
         })}
       </div>
-
-      {/* Every plan includes */}
-      <div
-        className="card"
-        style={{
-          width: "100%",
-          padding: 24,
-          background: "var(--surface-0)",
-          border: "1px solid var(--border-soft)",
-          borderRadius: "var(--r-lg, 14px)",
-        }}
-      >
-        <div
-          style={{
-            fontSize: ".75rem",
-            fontWeight: 700,
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
-            color: "var(--text-dim-solid)",
-            marginBottom: 14,
-            textAlign: "center",
-          }}
-        >
-          Every plan includes
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {EVERY_PLAN_INCLUDES.map((item, idx) => (
-            <div
-              key={idx}
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "flex-start",
-                fontSize: ".8rem",
-                color: "var(--text)",
-                lineHeight: 1.45,
-              }}
-            >
-              <span
-                style={{ color: "var(--brand-2)", fontWeight: 700 }}
-                aria-hidden="true"
-              >
-                ✓
-              </span>
-              <span>{item}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
-

@@ -22,7 +22,6 @@ import {
   FEATURE_GROUP_OF,
 } from "./feature-map.generated";
 import { featureDecision, useEntitlements } from "./hooks/useEntitlements";
-import { ChoosePlanScreen } from "./billing/choose-plan-screen";
 
 const KNOWN_KEYS = new Set(ENTITLEMENTS.map((e) => e.key));
 
@@ -252,30 +251,43 @@ export function LockedFeature({
   }
   return (
     <div
-      className="card"
       data-testid="locked-feature"
       data-variant="screen"
       data-entitlement={entitlement}
-      style={{ maxWidth: 560, margin: "48px auto", textAlign: "center" }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "80px 20px",
+        gap: 16,
+        textAlign: "center",
+        margin: "0 auto",
+      }}
     >
-      <div
-        className="card-b"
-        style={{
-          padding: 28,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          alignItems: "center",
-        }}
-      >
-        <div style={{ fontSize: "2.4rem", marginBottom: 2 }} aria-hidden="true">🔒</div>
-        {badge}
-        <h2 style={{ margin: 0, color: "var(--text-hi)", fontSize: "1.25rem", fontWeight: 700 }}>
-          {upgradeHeading}
-        </h2>
-        <span style={{ display: "none" }}>{def?.label ?? groupName}</span>
-        {upgrade}
+      <div style={{ fontSize: "2.8rem", lineHeight: 1 }} aria-hidden="true">
+        🔒
       </div>
+      <Link
+        href="/choose-plan"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "11px 26px",
+          borderRadius: 99,
+          background: "var(--brand, #4ADE80)",
+          color: "var(--on-brand, #07080A)",
+          fontWeight: 700,
+          fontSize: ".92rem",
+          textDecoration: "none",
+          transition: "all .16s ease",
+          boxShadow: "0 2px 16px rgba(74, 222, 128, 0.25)",
+        }}
+        data-testid="explore-plans-btn"
+      >
+        Explore Plans
+      </Link>
     </div>
   );
 }
@@ -297,18 +309,6 @@ export function EntitlementGate({
 }) {
   const key = entitlement ?? (slug ? entitlementForSlug(slug) : null);
   const state = useEntitlements();
-  if (state.data?.subscriptionsEnabled && !state.data?.staff && state.data?.planId === "none") {
-    if (variant === "widget") {
-      return (
-        <LockedFeature
-          entitlement={key as string}
-          requiredPlan="starter"
-          variant="widget"
-        />
-      );
-    }
-    return <ChoosePlanScreen />;
-  }
   const d = featureDecision(state, key);
   if (d.kind === "allow") return <>{children}</>;
   if (d.kind === "loading") return null;

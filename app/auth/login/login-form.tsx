@@ -8,7 +8,7 @@ import {
   signInWithRedirect,
 } from "firebase/auth";
 import { firebaseAuth, googleAuthProvider } from "../../firebase";
-import { postLoginPath } from "../../admin/admin-email";
+import { isAdminEmail, postLoginPath } from "../../admin/admin-email";
 import { routeAfterLogin, useCaptureIntent, withSearch } from "../../iq/billing/auth-routing";
 import {
   completeGoogleLogin,
@@ -16,6 +16,11 @@ import {
   shouldUseGoogleRedirect,
   showError,
 } from "../auth-utils";
+import { OnboardingStepper } from "../../iq/billing/onboarding-stepper";
+import { clearOnboardingSession, parseSignupParams } from "../../iq/billing/plan-intent";
+
+// Switch: Set to true if you want "Sign in to MarketCatalyst" heading and description visible again
+export const SHOW_LOGIN_HEADING = false;
 
 /* ---- shared inline style helpers ---- */
 const label: React.CSSProperties = {
@@ -64,7 +69,14 @@ export function LoginForm({ initialError = "" }: Readonly<{ initialError?: strin
       : ""),
   );
   const [focused, setFocused] = useState("");
+  const [hasPlanIntent, setHasPlanIntent] = useState(false);
   useCaptureIntent();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const intent = parseSignupParams(window.location.search, ["starter", "pro", "elite"]);
+    if (intent) setHasPlanIntent(true);
+  }, []);
 
   useEffect(() => {
     if (initialError) showError(initialError);
@@ -75,6 +87,11 @@ export function LoginForm({ initialError = "" }: Readonly<{ initialError?: strin
     setError(""); setIsSubmitting(true);
     try {
       await signInWithEmailAndPassword(firebaseAuth, email, password);
+      if (isAdminEmail(email)) {
+        clearOnboardingSession();
+        window.location.href = "/admin";
+        return;
+      }
       // Arrived from a website plan tile → /checkout; otherwise the admin account
       // lands on the admin console, everyone else on the app.
       window.location.href = await routeAfterLogin(postLoginPath(email));
@@ -133,19 +150,24 @@ export function LoginForm({ initialError = "" }: Readonly<{ initialError?: strin
 
   return (
     <div>
+      {hasPlanIntent && <OnboardingStepper currentStep={1} />}
       {/* Header */}
       <div style={{
         fontSize: ".64rem", fontWeight: 600, letterSpacing: ".14em",
         textTransform: "uppercase", color: "var(--brand-2)",
-        fontFamily: "var(--f-display)", marginBottom: 8,
+        fontFamily: "var(--f-display)", marginBottom: SHOW_LOGIN_HEADING ? 8 : 14,
       }}>Welcome back</div>
-      <h1 style={{
-        fontFamily: "var(--f-display)", fontSize: "1.55rem",
-        fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
-      }}>Sign in to MarketCatalyst</h1>
-      <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
-        Access your market intelligence terminal.
-      </p>
+      {SHOW_LOGIN_HEADING && (
+        <>
+          <h1 style={{
+            fontFamily: "var(--f-display)", fontSize: "1.55rem",
+            fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
+          }}>Sign in to MarketCatalyst</h1>
+          <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
+            Access your market intelligence terminal.
+          </p>
+        </>
+      )}
 
       {/* Google */}
       <button

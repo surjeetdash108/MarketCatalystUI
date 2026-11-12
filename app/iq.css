@@ -4814,7 +4814,7 @@ table.tbl tr:hover td {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: 0 12px 36px rgba(0, 0, 0, .6);
-  z-index: 100;
+  z-index: 99999;
   overflow: hidden;
   animation: iq-dropdownIn .15s ease both;
   transform-origin: top right;
@@ -14056,7 +14056,7 @@ h6.sd-sec {
 
 /* Top row sits above the sub-bar so the profile / notification dropdowns that
    hang down from it are not painted over by the search row. */
-.iq-root .topbar { position: relative; z-index: 12; }
+.iq-root .topbar { position: relative; z-index: 100; }
 
 /* Community Pulse fills its grid row (like the design): the panel is positioned inside
    the cell, so the row height comes from the left column, not from the panel. */
