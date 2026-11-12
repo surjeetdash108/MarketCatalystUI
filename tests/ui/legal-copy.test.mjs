@@ -11,15 +11,17 @@ describe("Terms §12 matches the subscription system", () => {
   for (const phrase of [
     "Manage Plan page",
     "you keep access to your paid plan until that date",
-    "charge a prorated amount for the rest of the current period",
-    "takes effect at the end of the current billing period",
+    "charges a prorated amount for the rest of the current period",
+    "takes effect at the end of your current billing period",
     "we retry it over the following 7 days",
     "once per person",
-    "We do not currently offer free trials on paid plans",
+    "Each paid plan can start with a 7-day free trial, once per person",
     "at least 30 days",
     "There is no free plan",
-    "unused portion of your current plan is credited to your account balance",
+    "Every plan change is made on the checkout page, where you enter your card and billing address",
   ]) it(`says: ${phrase}`, () => assert.ok(terms.includes(phrase), phrase));
+  for (const gone of ["credited to your account balance", "We do not currently offer free trials", "take effect immediately. Upgrades"])
+    it(`no longer says: ${gone}`, () => assert.ok(!terms.includes(gone), gone));
   it("never mentions 'Free plan' in Terms §12", () => {
     const sec12 = terms.slice(terms.indexOf('<h2 id="subscriptions">'), terms.indexOf("</ul>", terms.indexOf('<h2 id="subscriptions">')));
     assert.doesNotMatch(sec12, /Free plan/);

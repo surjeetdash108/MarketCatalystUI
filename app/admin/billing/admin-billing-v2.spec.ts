@@ -17,10 +17,9 @@ describe("admin billing v2", () => {
     assert.match(src, /sel\("staff", \["true", "false"\]\)/);
     assert.match(src, /paying \(staff and test excluded\)/);
   });
-  it("detail: consent and refund action", () => {
+  it("detail: consent shown; no refund action (there are no refunds)", () => {
     assert.match(src, /data-testid="sub-consent"/);
-    assert.match(src, /apiPost<\{ amount: number \}>\(`\/api\/admin\/billing\/subscribers\/\$\{uid\}\/refund`\)/);
-    assert.match(src, /errorBody\(e\)\.status === 404 \? "off"/); // REFUND_WINDOW_DAYS = 0 → no refund action
+    assert.doesNotMatch(src, /\/refund`|sub-refund/);
   });
   it("the subscriber detail renders outside the table card (a fixed drawer inside the card gets clipped)", () => {
     const sub = src.slice(src.indexOf("function Subscribers()"), src.indexOf("function SubscriberContact"));

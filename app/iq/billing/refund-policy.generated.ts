@@ -3,9 +3,9 @@
 // by hand; change that one line and re-run the script.
 
 export const REFUND_POLICY = {
-  "enabled": true,
-  "windowDays": 14,
-  "checkoutLine": "Full refund within 14 days of your first payment (once per person) or of an annual renewal. Monthly renewals aren't refundable.",
-  "termsParagraph": "You can ask for a full refund within 14 days of your first subscription payment; this is available once per person (per email address). Annual renewal charges can also be refunded in full within 14 days of the renewal. Monthly renewal charges are not refundable. A refund ends your subscription immediately; to keep using MarketCatalyst you choose a plan again. Otherwise we do not refund partial billing periods, except where the law requires it. When you move to a lower plan, the unused part of your current plan is credited to your account and used automatically on your next invoices; credits are not paid out to your card.",
-  "managePlanLine": "Within 14 days of your first payment, or of an annual renewal, you can get a full refund. Your plan ends right away."
+  "enabled": false,
+  "windowDays": 0,
+  "checkoutLine": "No refunds. Cancel anytime — your plan stays active until the end of the period you've paid for.",
+  "termsParagraph": "Payments are non-refundable, including for partial billing periods and unused time, except where the law requires it. You can cancel at any time in Manage Plan: your plan stays active until the end of the billing period you have already paid for and is not renewed after that. When you move to a lower plan, or from annual to monthly billing, the change takes effect at the end of your current billing period; until then you keep your current plan. When you move to a higher plan, it starts right away and you pay the prorated difference for the rest of the current period.",
+  "managePlanLine": "No refunds. If you cancel, your plan stays active until the end of the period you've paid for, then it isn't renewed."
 } as const;

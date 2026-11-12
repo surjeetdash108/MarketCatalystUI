@@ -53,6 +53,7 @@ export interface CheckoutPreview {
   renewsAt: string;
   renewalAmount: number;
   consent: { version: string; text: string };
+  /** The billing policy copy (no refunds). */
   refundPolicy: { enabled: boolean; windowDays: number; checkoutLine: string };
   /** Free trial for this buyer, or null (already used / has paid before). */
   trial?: { days: number; endsAt: string } | null;
@@ -73,11 +74,6 @@ export interface Contact { phone: string | null; marketingOptIn: { optedIn: bool
 export const getContact = () => apiGet<Contact>("/api/billing/contact");
 export const updateContact = (body: { phone?: string; marketingOptIn?: boolean }) => apiPost<Contact>("/api/billing/contact", body);
 
-export type RefundEligibility =
-  | { eligible: true; kind: "first_payment" | "annual_renewal"; paymentId: string; amount: number; currency: string; refundableUntil: string; windowDays: number }
-  | { eligible: false; reason: string; windowDays: number };
-export const refundEligibility = () => apiGet<RefundEligibility>("/api/billing/refund");
-export const requestRefund = () => apiPost<{ refunded: true; amount: number; currency: string }>("/api/billing/refund");
 export const checkoutStatus = (id: string) => apiGet<{ status: string; planId: string; active: boolean; currentPlan: string }>(`/api/billing/checkout/${encodeURIComponent(id)}`);
 
 export interface PromoPreview { code: string; amount: number; discountAmount: number; amountDueToday: number; description: string; currency: string }
