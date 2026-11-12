@@ -243,7 +243,7 @@ export function CheckoutPage() {
     setError(null);
     try {
       let paymentMethodId: string | undefined;
-      if (changePrev.kind === "upgrade" && adapter?.createPaymentMethod) {
+      if (changePrev.kind === "upgrade" && changePrev.amountDueNow > 0 && adapter?.createPaymentMethod) {
         const pm = await adapter.createPaymentMethod();
         if (!pm.ok) {
           setError(pm.message);
@@ -326,7 +326,8 @@ export function CheckoutPage() {
     const bd = cp.breakdown;
     const money = (n: number) => formatMoney(n, plan.currency);
     const cadenceLabel = interval === "annual" ? "Annual" : "Monthly";
-    const needsCard = cp.kind === "upgrade" && !!adapter?.createPaymentMethod;
+    // A card is entered only when something is charged now ($0 during the trial).
+    const needsCard = cp.kind === "upgrade" && cp.amountDueNow > 0 && !!adapter?.createPaymentMethod;
     const PayForm = needsCard ? adapter?.Form : undefined;
     const canConfirm = !busy && (!needsCard || payment.ready);
     const title =
@@ -337,7 +338,9 @@ export function CheckoutPage() {
           : `Switch to ${plan.name} (${cadenceLabel})`;
     const cta =
       cp.kind === "upgrade"
-        ? `Pay ${money(cp.amountDueNow)} & upgrade to ${plan.name}`
+        ? cp.amountDueNow > 0
+          ? `Pay ${money(cp.amountDueNow)} & upgrade to ${plan.name}`
+          : `Upgrade to ${plan.name}`
         : cp.kind === "downgrade"
           ? `Confirm change to ${plan.name}`
           : `Schedule switch to ${plan.name}`;
@@ -368,6 +371,11 @@ export function CheckoutPage() {
                 {cp.kind === "downgrade" && (
                   <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Used automatically on your next invoice(s), not refunded to your card.</div>
                 )}
+              </div>
+            ) : cp.trialEndsAt ? (
+              <div data-testid="change-in-trial" style={{ fontSize: ".9rem", marginBottom: 20 }}>
+                You&apos;re in your free trial, so nothing is charged now. {plan.name} starts right away, and your first charge of{" "}
+                <b>{money(cp.nextRenewalAmount)}</b> is on <b>{longDate(cp.trialEndsAt)}</b> unless you cancel before then.
               </div>
             ) : (
               <div data-testid="change-scheduled" style={{ fontSize: ".9rem", marginBottom: 20 }}>

@@ -129,6 +129,8 @@ export interface ChangePreview {
   cancelsPendingDowngrade: boolean;
   resumesCancelledPlan: boolean;
   keepsCancelDate?: boolean;
+  /** During the free trial: when it ends (the first charge date); no breakdown then. */
+  trialEndsAt?: string | null;
 }
 export const previewChange = (body: { planId: string; interval: BillingInterval }) => apiPost<ChangePreview>("/api/billing/change/preview", body);
 export type ChangeResult =

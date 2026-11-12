@@ -78,4 +78,11 @@ describe("checkout bug fixes (2026-11-12)", () => {
     assert.doesNotMatch(stripe, /subscriber@marketcatalyst\.ai|"Subscriber"/);
     assert.match(stripe, /if \(email\) billing_details\.email = email;/);
   });
+
+  it("during the free trial a plan change charges nothing, needs no card, and says when the first charge is", () => {
+    const p = page();
+    assert.match(p, /const needsCard = cp\.kind === "upgrade" && cp\.amountDueNow > 0 && !!adapter\?\.createPaymentMethod;/);
+    assert.match(p, /data-testid="change-in-trial"/);
+    assert.match(p, /: `Upgrade to \$\{plan\.name\}`/);
+  });
 });
