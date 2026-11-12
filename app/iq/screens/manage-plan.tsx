@@ -32,7 +32,7 @@ import { checkoutPath, parsePlanParams } from "../billing/plan-intent";
 import { Button, Modal, Notice, PREVIEW_BANNER, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
 import { REFUND_POLICY } from "../billing/refund-policy.generated";
-import { ContactCard, StaffPlan } from "./manage-plan-extras";
+import { StaffPlan } from "./manage-plan-extras";
 import { handleStripeAction } from "../billing/checkout/stripe-payment-form";
 
 /**

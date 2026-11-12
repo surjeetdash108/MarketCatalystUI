@@ -90,8 +90,6 @@ export function PrivacyContent() {
                       <li>
                         <strong>Marketing preferences:</strong> whether you have opted in to or out of marketing emails.</li>
                       <li>
-                        <strong>Phone number:</strong> the mobile number you give at checkout. We use it for account and billing contact and share it with our payment processor as your billing phone. We do not send marketing text messages unless you opt in (&quot;Text me product updates&quot;); we record that choice and when you made it, and you can change it in Manage Plan or account settings. [LEGAL REVIEW PLACEHOLDER]</li>
-                      <li>
                         <strong>Billing address:</strong> entered at checkout and kept by our payment processor. We keep only your country, state and ZIP/postal code, to calculate tax. We do not collect government ID numbers or your date of birth.</li>
                       </ul>
                       <p>

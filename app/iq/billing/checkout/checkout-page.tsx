@@ -208,7 +208,6 @@ export function CheckoutPage() {
       session.current = co.sessionId;
       setStripeCheckoutContext({
         address: a,
-        phone: null,
         email: firebaseAuth.currentUser?.email ?? null,
       });
       await finish(await adapter.confirm(co.sessionId, co.payment.clientSecret ?? null), co.sessionId);
