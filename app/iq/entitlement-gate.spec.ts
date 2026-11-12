@@ -44,7 +44,7 @@ describe("SCREEN_FEATURES", () => {
   });
 
   it("resolves feature group names for entitlements", () => {
-    assert.equal(groupForEntitlement("workspaces"), "Market Desk");
+    assert.equal(groupForEntitlement("workspaces"), "Market Catalyst");
     assert.equal(groupForEntitlement("stockIntelligence"), "Stock Intelligence");
     assert.equal(groupForEntitlement("moneyFlow"), "Money Flow");
     assert.equal(groupForEntitlement("strategyLab"), "Strategy Lab");
