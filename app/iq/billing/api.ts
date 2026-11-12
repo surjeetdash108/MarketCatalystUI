@@ -129,13 +129,32 @@ export interface ChangePreview {
   keepsCancelDate?: boolean;
   /** During the free trial: when it ends (the first charge date); no breakdown then. */
   trialEndsAt?: string | null;
+  /** When the new plan starts: now, or the end of the current period for a scheduled change. */
+  startsAt: string;
+  /** The renewal consent for the new plan (ticked on the checkout page). */
+  consent: { version: string; text: string };
 }
 export const previewChange = (body: { planId: string; interval: BillingInterval }) => apiPost<ChangePreview>("/api/billing/change/preview", body);
 export type ChangeResult =
   | { kind: string; status: "applied"; amountCharged: number; creditToBalance?: number }
   | { kind: string; status: "scheduled"; effectiveAt: string }
   | { kind: string; status: "requires_action"; actionId: string; amountDue: number; clientSecret?: string | null };
-export const applyChange = (body: { planId: string; interval: BillingInterval; expectedAmountDue?: number; expectedCredit?: number; prorationDate?: number; paymentMethodId?: string }) => apiPost<ChangeResult>("/api/billing/change", body);
+export interface ChangeBilling {
+  name: string;
+  address: { line1: string; line2: string | null; city: string; state: string | null; postalCode: string | null; country: string };
+}
+export const applyChange = (body: {
+  planId: string;
+  interval: BillingInterval;
+  expectedAmountDue?: number;
+  expectedCredit?: number;
+  prorationDate?: number;
+  /** The card entered on the checkout page for this change (Stripe pm_ id). */
+  paymentMethodId?: string;
+  /** The billing name and address entered on the checkout page. */
+  billing?: ChangeBilling;
+  consent?: { accepted: boolean; version: string };
+}) => apiPost<ChangeResult>("/api/billing/change", body);
 export const keepCurrentPlan = () => apiPost<{ kept: boolean }>("/api/billing/change/keep");
 export const cancelPlan = () => apiPost<{ endsAt: string }>("/api/billing/cancel");
 export const resumePlan = () => apiPost<{ renewsAt: string }>("/api/billing/resume");

@@ -79,11 +79,11 @@ describe("checkout bug fixes (2026-11-12)", () => {
     assert.match(stripe, /if \(email\) billing_details\.email = email;/);
   });
 
-  it("during the free trial a plan change charges nothing, needs no card, and says when the first charge is", () => {
+  it("during the free trial a plan change charges nothing today, still asks for the card, and says when the first charge is", () => {
     const p = page();
-    assert.match(p, /const needsCard = cp\.kind === "upgrade" && cp\.amountDueNow > 0 && !!adapter\?\.createPaymentMethod;/);
-    assert.match(p, /data-testid="change-in-trial"/);
-    assert.match(p, /: `Upgrade to \$\{plan\.name\}`/);
+    assert.doesNotMatch(p, /needsCard/);
+    assert.match(p, /You're in your free trial, so nothing is charged today\. The card below is charged \$\{money\(cp\.nextRenewalAmount\)\} on \$\{longDate\(cp\.trialEndsAt\)\}/);
+    assert.match(p, /: `Start \$\{plan\.name\} now`/);
   });
 
   it("free trial: the card is saved first (Stripe setup mode, $0) and charged when the trial ends", async () => {

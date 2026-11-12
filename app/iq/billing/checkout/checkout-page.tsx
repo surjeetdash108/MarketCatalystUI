@@ -231,18 +231,19 @@ export function CheckoutPage() {
   }
 
   /**
-   * Confirms a plan change from Manage Plan. Upgrade: the card entered in the
-   * payment step is charged for exactly the previewed amount (never a card on
-   * file). Downgrade: applies now; the previewed credit goes to the account.
-   * Annual → monthly: scheduled for the end of the annual period.
+   * Confirms a plan change. Every change is paid like a first purchase: the
+   * card and billing address entered here, and the renewal consent — never a
+   * card on file. Upgrade: the previewed prorated amount is charged to that
+   * card now. Lower plan / annual → monthly: scheduled for the end of the
+   * current period; that card pays the new plan from its start date.
    */
   async function handleChangeConfirm() {
-    if (!plan || !changePrev) return;
+    if (!plan || !changePrev || !payment.address) return;
     setBusy(true);
     setError(null);
     try {
       let paymentMethodId: string | undefined;
-      if (changePrev.kind === "upgrade" && changePrev.amountDueNow > 0 && adapter?.createPaymentMethod) {
+      if (adapter?.createPaymentMethod) {
         const pm = await adapter.createPaymentMethod();
         if (!pm.ok) {
           setError(pm.message);
@@ -250,6 +251,7 @@ export function CheckoutPage() {
         }
         paymentMethodId = pm.id;
       }
+      const a = payment.address;
       const res = await applyChange({
         planId: plan.id,
         interval,
@@ -257,6 +259,8 @@ export function CheckoutPage() {
         ...(changePrev.kind === "upgrade" ? { expectedAmountDue: changePrev.amountDueNow } : {}),
         ...(changePrev.kind === "downgrade" ? { expectedCredit: changePrev.creditToBalance } : {}),
         ...(paymentMethodId ? { paymentMethodId } : {}),
+        billing: { name: a.name, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country } },
+        consent: { accepted: consent, version: changePrev.consent?.version ?? "" },
       });
       if (res.status === "requires_action" && res.clientSecret) {
         const ok = await handleStripeAction(res.clientSecret);
@@ -325,24 +329,23 @@ export function CheckoutPage() {
     const bd = cp.breakdown;
     const money = (n: number) => formatMoney(n, plan.currency);
     const cadenceLabel = interval === "annual" ? "Annual" : "Monthly";
-    // A card is entered only when something is charged now ($0 during the trial).
-    const needsCard = cp.kind === "upgrade" && cp.amountDueNow > 0 && !!adapter?.createPaymentMethod;
-    const PayForm = needsCard ? adapter?.Form : undefined;
-    const canConfirm = !busy && (!needsCard || payment.ready);
+    // Every change asks for the card and billing address, like a first purchase.
+    const PayForm = adapter?.Form;
+    const canConfirm = !busy && !!PayForm && payment.ready && !!payment.address && consent && !!cp.consent?.version;
+    const scheduled = cp.kind === "scheduled";
+    const inTrial = !!cp.trialEndsAt;
+    const startsAt = cp.startsAt ?? (scheduled ? cp.effectiveAt : new Date(cp.prorationDate).toISOString());
     const title =
       cp.kind === "upgrade"
         ? `Upgrade to ${plan.name} (${cadenceLabel})`
         : cp.kind === "downgrade"
           ? `Change to ${plan.name} (${cadenceLabel})`
           : `Switch to ${plan.name} (${cadenceLabel})`;
-    const cta =
-      cp.kind === "upgrade"
-        ? cp.amountDueNow > 0
-          ? `Pay ${money(cp.amountDueNow)} & upgrade to ${plan.name}`
-          : `Upgrade to ${plan.name}`
-        : cp.kind === "downgrade"
-          ? `Confirm change to ${plan.name}`
-          : `Schedule switch to ${plan.name}`;
+    const cta = scheduled
+      ? `Schedule ${plan.name} from ${longDate(startsAt)}`
+      : cp.amountDueNow > 0
+        ? `Pay ${money(cp.amountDueNow)} & start ${plan.name} now`
+        : `Start ${plan.name} now`;
     const row = (label: string, value: string, testId: string, tone?: "up" | "down") => (
       <div data-testid={testId} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: ".9rem" }}>
         <span style={{ color: "var(--text-dim-solid)" }}>{label}</span>
@@ -358,6 +361,21 @@ export function CheckoutPage() {
           <div className="co-card" style={{ padding: "28px 24px" }}>
             <h2 className="co-title" style={{ margin: "0 0 18px", fontSize: "1.35rem" }}>{title}</h2>
 
+            <div data-testid="change-starts" style={{ background: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.35)", borderRadius: 12, padding: "14px 18px", marginBottom: 20, fontSize: ".95rem" }}>
+              <div style={{ fontWeight: 700, color: "var(--text-hi)" }}>
+                {scheduled ? `${plan.name} starts on ${longDate(startsAt)}` : `${plan.name} starts today, ${longDate(startsAt)}`}
+              </div>
+              <div style={{ marginTop: 4, color: "var(--text-dim-solid)", fontSize: ".85rem" }}>
+                {scheduled
+                  ? `You keep ${bd?.fromPlanName ?? existingSub?.planName ?? "your current plan"} until then. Nothing is charged today. On ${longDate(startsAt)} the card below is charged ${money(cp.nextRenewalAmount)}${interval === "annual" ? "/year" : "/month"}.`
+                  : inTrial
+                    ? `You're in your free trial, so nothing is charged today. The card below is charged ${money(cp.nextRenewalAmount)} on ${longDate(cp.trialEndsAt)} unless you cancel before then.`
+                    : cp.amountDueNow > 0
+                      ? `The new features are available as soon as the payment below goes through.`
+                      : `Nothing is charged today.`}
+              </div>
+            </div>
+
             {bd ? (
               <div data-testid="change-breakdown" style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 12, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
                 {row(`${bd.fromPlanName}: ${longDate(bd.periodStart)} to today`, money(bd.usedOnCurrent), "bd-used")}
@@ -370,20 +388,8 @@ export function CheckoutPage() {
                 {cp.kind === "upgrade"
                   ? row("Charged now", money(cp.amountDueNow), "bd-charged")
                   : row("Credit to your account", money(cp.creditToBalance), "bd-credit", "up")}
-                {cp.kind === "downgrade" && (
-                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Used automatically on your next invoice(s), not refunded to your card.</div>
-                )}
               </div>
-            ) : cp.trialEndsAt ? (
-              <div data-testid="change-in-trial" style={{ fontSize: ".9rem", marginBottom: 20 }}>
-                You&apos;re in your free trial, so nothing is charged now. {plan.name} starts right away, and your first charge of{" "}
-                <b>{money(cp.nextRenewalAmount)}</b> is on <b>{longDate(cp.trialEndsAt)}</b> unless you cancel before then.
-              </div>
-            ) : (
-              <div data-testid="change-scheduled" style={{ fontSize: ".9rem", marginBottom: 20 }}>
-                Takes effect on <b>{longDate(cp.effectiveAt)}</b>, at the end of your current period. Nothing is charged today.
-              </div>
-            )}
+            ) : null}
 
             <div style={{ fontSize: ".84rem", color: "var(--text)", marginBottom: 20 }} data-testid="change-next">
               {cp.kind === "downgrade"
@@ -391,12 +397,21 @@ export function CheckoutPage() {
                 : `Then ${money(cp.nextRenewalAmount)}${interval === "annual" ? "/year" : "/month"} from ${longDate(cp.nextRenewalDate)}. Cancel or switch anytime in Manage Plan.`}
             </div>
 
-            {PayForm && (
+            {PayForm ? (
               <div data-testid="change-payment" style={{ marginBottom: 20 }}>
-                <span style={{ ...labelStyle, marginBottom: 10 }}>Payment</span>
+                <span style={{ ...labelStyle, marginBottom: 10 }}>Card and billing address</span>
                 <PayForm onChange={onPayment} disabled={busy} amount={cp.amountDueNow} currency={plan.currency} purpose="planChange" />
               </div>
+            ) : (
+              <Notice tone="error" testId="change-no-payment">Payments aren&apos;t available right now. Your plan has not changed.</Notice>
             )}
+
+            <label className="co-check" data-testid="change-consent" style={{ marginBottom: 20 }}>
+              <input type="checkbox" data-testid="change-consent-box" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+              <span>
+                <ConsentText text={cp.consent?.text ?? "Loading the renewal terms…"} onOpen={setLegal} /> <span style={{ color: "#ef4444" }}>*</span>
+              </span>
+            </label>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <button type="button" className="co-cta" data-testid="change-confirm" onClick={() => void handleChangeConfirm()} disabled={!canConfirm}>
@@ -408,6 +423,7 @@ export function CheckoutPage() {
             </div>
           </div>
         </div>
+        {legal && <LegalModal type={legal} onClose={() => setLegal(null)} />}
       </div>
     );
   }
