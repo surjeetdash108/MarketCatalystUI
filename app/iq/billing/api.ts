@@ -129,7 +129,7 @@ export type ChangeResult =
   | { kind: string; status: "applied"; amountCharged: number; creditToBalance?: number }
   | { kind: string; status: "scheduled"; effectiveAt: string }
   | { kind: string; status: "requires_action"; actionId: string; amountDue: number; clientSecret?: string | null };
-export const applyChange = (body: { planId: string; interval: BillingInterval; expectedAmountDue?: number; expectedCredit?: number; prorationDate?: number }) => apiPost<ChangeResult>("/api/billing/change", body);
+export const applyChange = (body: { planId: string; interval: BillingInterval; expectedAmountDue?: number; expectedCredit?: number; prorationDate?: number; paymentMethodId?: string }) => apiPost<ChangeResult>("/api/billing/change", body);
 export const keepCurrentPlan = () => apiPost<{ kept: boolean }>("/api/billing/change/keep");
 export const cancelPlan = () => apiPost<{ endsAt: string }>("/api/billing/cancel");
 export const resumePlan = () => apiPost<{ renewsAt: string }>("/api/billing/resume");
