@@ -74,7 +74,7 @@ export const emptyInvestorProfile: InvestorProfile = {
  * never sent, even when the in-memory profile carries them from a GET.
  */
 export const PROFILE_PATCH_FIELDS = [
-  "profile_image", "name", "mobileNumber", "age", "incomeRange", "investmentExperience",
+  "profile_image", "name", "age", "incomeRange", "investmentExperience",
   "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue", "preferredAssetClasses",
 ] as const satisfies readonly (keyof InvestorProfile)[];
 
@@ -88,7 +88,7 @@ type ProfileFieldsProps = {
   profile: InvestorProfile;
   onChange: (field: keyof InvestorProfile, value: string | string[]) => void;
   emailReadOnly?: boolean;
-  /** Hide mobile number and age (e.g. on the signup form, which only asks name + email). */
+  /** Hide age (e.g. on the signup form, which only asks name + email). No mobile number is ever asked. */
   hideContactDetails?: boolean;
 };
 
@@ -229,7 +229,6 @@ export function ProfileFields({
       <TextField id="profile-email" label="Email" type="email" value={profile.email} readOnly={emailReadOnly} onChange={v => onChange("email", v)} />
       {!hideContactDetails && (
         <>
-          <TextField id="profile-mobile" label="Mobile number" type="tel" value={profile.mobileNumber} onChange={v => onChange("mobileNumber", v)} />
           <TextField id="profile-age" label="Age" type="number" value={profile.age} onChange={v => onChange("age", v)} />
         </>
       )}
