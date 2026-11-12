@@ -28,7 +28,6 @@ export function addressComplete(a: BillingAddress | null): boolean {
 
 export interface CompleteGate {
   consent: boolean;
-  phoneE164?: string | null;
   address: BillingAddress | null;
   paymentReady: boolean;
   busy: boolean;

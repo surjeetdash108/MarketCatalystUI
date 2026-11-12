@@ -257,10 +257,9 @@ function AuditLog() {
   );
 }
 
-/** Phone (masked except the last 4; reveal is audited), renewal consent, billing region and the refund action. */
+/** Renewal consent, billing region and the refund action. */
 function SubscriberContact({ detail, onRefunded }: { detail: Record<string, unknown>; onRefunded: () => void }) {
   const uid = String(detail.uid);
-  const [phone, setPhone] = useState<string | null>(null);
   const [refund, setRefund] = useState<{ eligible: boolean; amount?: number; currency?: string; reason?: string } | null | "off">(null);
   const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => {
@@ -272,13 +271,6 @@ function SubscriberContact({ detail, onRefunded }: { detail: Record<string, unkn
   const region = detail.billingRegion as Record<string, unknown> | null;
   return (
     <div data-testid="sub-contact" style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: ".78rem" }}>
-      <div>
-        <b>Mobile</b>{" "}
-        <span data-testid="sub-phone">{phone ?? (detail.phoneMasked as string | null) ?? "—"}</span>{" "}
-        {detail.phoneMasked && !phone ? (
-          <button type="button" className="btn" data-testid="sub-phone-reveal" onClick={() => void apiPost<{ phone: string | null }>(`/api/admin/billing/subscribers/${uid}/phone/reveal`).then((r) => setPhone(r.phone))}>Reveal (audited)</button>
-        ) : null}
-      </div>
       {region && <div><b>Billing region</b> {[region.postalCode, region.state, region.country].filter(Boolean).join(", ")}</div>}
       <div data-testid="sub-consent">
         <b>Renewal consent</b>{" "}

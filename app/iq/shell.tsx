@@ -2,6 +2,7 @@
 
 // iq.css is imported globally via app/layout.tsx
 import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -67,6 +68,7 @@ import { ModuleSwitcher } from "./module-switcher";
 import { useEntitlements } from "./hooks/useEntitlements";
 import { ChoosePlanScreen } from "./billing/choose-plan-screen";
 import { clearOnboardingSession } from "./billing/plan-intent";
+import { WelcomeFeedbackModals } from "./welcome-feedback-modals";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -1109,10 +1111,19 @@ function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["da
     return (
       <div data-testid="banner-intro" style={{ background: "rgba(59, 130, 246, 0.12)", borderBottom: "1px solid rgba(59, 130, 246, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#93c5fd", zIndex: 10 }}>
         <span>
-          ✨ You&apos;re exploring Market Catalyst — {daysLeft} {daysLeft === 1 ? "day" : "days"} left. Stock Intelligence, Money Flow and Strategy Lab come with a plan
-          {(ent.trialDays ?? 0) > 0 ? `, and every plan starts with a ${ent.trialDays}-day free trial` : ""}.
+          ⏱️ <b>{daysLeft} {daysLeft === 1 ? "day" : "days"} left in trial</b> (<span style={{ color: "#4ade80", fontWeight: 700 }}>Market Catalyst</span>, <span style={{ color: "#7fa8d0", fontWeight: 700 }}>Stock Intelligence</span> & <span style={{ color: "#e0bb5e", fontWeight: 700 }}>Money Flow</span>). Strategy Lab unlocks on Elite.
         </span>
-        <Link href="/choose-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>See the plans →</Link>
+        <Link href="/choose-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>See our plans →</Link>
+      </div>
+    );
+  }
+
+  const isExpiredTrial = ent.status === "EXPIRED" && !ent.cancelAtPeriodEnd && !isTrial && ent.subscriptionsEnabled;
+  if (isExpiredTrial) {
+    return (
+      <div data-testid="banner-expired-intro" style={{ background: "rgba(239, 68, 68, 0.12)", borderBottom: "1px solid rgba(239, 68, 68, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#fca5a5", zIndex: 10 }}>
+        <span>⚠️ Your trial period has ended. See our plans to subscribe.</span>
+        <Link href="/choose-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>See our plans →</Link>
       </div>
     );
   }
@@ -1625,8 +1636,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   {profileImage && <img src={profileImage} alt={displayName} />}
                 </div>
 
-                {profileDropdownOpen && (
-                  <div className="profile-dropdown">
+                {profileDropdownOpen && typeof document !== "undefined" && createPortal(
+                  <div className="profile-dropdown" style={{ zIndex: 1000000 }}>
                     {/* User info */}
                     <div className="pd-user">
                       <div className="pd-avatar">
@@ -1663,7 +1674,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <button className="pd-item danger" onClick={() => { handleSignOut(); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">↩</span> Logout
                     </button>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
             </div>
@@ -1834,6 +1846,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
             {/* Main content */}
             <main className="main">
               <ContextualBanner ent={ent} />
+              <WelcomeFeedbackModals />
               {/* <SessionNotice phase={tapeFrame?.marketPhase ?? "unknown"} pathname={pathname} /> */}
               {children}
               <footer className="disclaimer-bar">

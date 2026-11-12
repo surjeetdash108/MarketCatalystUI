@@ -24,9 +24,19 @@ export default function VerifyEmailPage() {
     <div className="iq-root" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16, background: "var(--bg)" }}>
       <div className="card" style={{ width: "min(440px, 100%)", padding: 24 }}>
         {ready && <EmailCodeStep onVerified={() => window.location.replace(next)} />}
-        <p style={{ margin: "18px 0 0", fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
-          <Link href={next} style={{ color: "var(--brand-2)" }}>Do this later</Link> — verify before completing checkout.
-        </p>
+        <div style={{ marginTop: 20, paddingTop: 14, borderTop: "1px solid var(--border-soft)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
+          <span>Entered the wrong email?</span>
+          <button
+            type="button"
+            onClick={async () => {
+              await firebaseAuth.signOut();
+              window.location.href = "/auth/signup";
+            }}
+            style={{ background: "none", border: "none", color: "var(--brand-2)", cursor: "pointer", fontWeight: 600, padding: 0 }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </div>
   );

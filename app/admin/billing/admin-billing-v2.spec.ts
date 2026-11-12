@@ -17,9 +17,7 @@ describe("admin billing v2", () => {
     assert.match(src, /sel\("staff", \["true", "false"\]\)/);
     assert.match(src, /paying \(staff and test excluded\)/);
   });
-  it("detail: phone masked, click-to-reveal is a POST (audited); consent and refund action", () => {
-    assert.match(src, /detail\.phoneMasked/);
-    assert.match(src, /apiPost<\{ phone: string \| null \}>\(`\/api\/admin\/billing\/subscribers\/\$\{uid\}\/phone\/reveal`\)/);
+  it("detail: consent and refund action", () => {
     assert.match(src, /data-testid="sub-consent"/);
     assert.match(src, /apiPost<\{ amount: number \}>\(`\/api\/admin\/billing\/subscribers\/\$\{uid\}\/refund`\)/);
     assert.match(src, /errorBody\(e\)\.status === 404 \? "off"/); // REFUND_WINDOW_DAYS = 0 → no refund action

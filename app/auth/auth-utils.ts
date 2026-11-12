@@ -63,6 +63,9 @@ export async function completeGoogleLogin(userCredential: UserCredential) {
       ...emptyInvestorProfile,
       name: userCredential.user.displayName ?? "",
     }));
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("mc_show_welcome", "1");
+    }
     // New Google account (already verified): plan from the website tile →
     // /checkout (the intent survived the redirect in sessionStorage); no plan →
     // Free → dashboard.
@@ -70,5 +73,8 @@ export async function completeGoogleLogin(userCredential: UserCredential) {
     return;
   }
 
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem("mc_show_feedback", "1");
+  }
   window.location.href = await routeAfterLogin(postLoginPath(userCredential.user.email));
 }

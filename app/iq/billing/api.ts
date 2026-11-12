@@ -34,7 +34,6 @@ export interface CheckoutBody {
   interval: BillingInterval;
   promoCode?: string;
   consent: { accepted: boolean; version: string };
-  phone?: string;
   marketingOptIn: boolean;
   billing: { name: string; address: { line1: string; line2: string | null; city: string; state: string | null; postalCode: string | null; country: string } };
 }
@@ -103,6 +102,9 @@ export interface ChangeBreakdown {
   usedOnCurrent: number;
   newPlanCharge: number;
   alreadyPaid: number;
+  discount: number;
+  tax: number;
+  creditUsed: number;
   net: number;
   chargedNow: number;
   creditToBalance: number;

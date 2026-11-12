@@ -10,7 +10,6 @@ import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
 import { isLifetimeElite } from "../billing/lifetime-elite";
 import { useEntitlements } from "../hooks/useEntitlements";
-import { ContactCard } from "./manage-plan-extras";
 
 const FONTS: { key: FontKey; rank: number; label: string; desc: string; stack: string }[] = [
   { key: "geist", rank: 6,         label: "Geist",         desc: "Clean & neutral · Minimal sans",      stack: "var(--font-geist-sans,'Geist Sans',sans-serif)" },

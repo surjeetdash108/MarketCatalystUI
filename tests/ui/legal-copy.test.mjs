@@ -50,9 +50,8 @@ describe("checkout v2 copy (draft, flagged for legal review)", () => {
     assert.match(terms, /Renewals are charged at the full price of your plan/);
     assert.match(terms, /ticking the renewal consent box; we keep a record of when you agreed, the wording you saw, the plan, billing period and price, and your IP address/);
   });
-  it("Privacy: phone for account and billing contact; no marketing texts without opt-in; only country/state/ZIP of the address", () => {
-    assert.match(privacy, /mobile number you give at checkout\. We use it for account and billing contact/);
-    assert.match(privacy, /We do not send marketing text messages unless you opt in/);
+  it("Privacy: no phone number collected; only country/state/ZIP of the address", () => {
+    assert.doesNotMatch(privacy, /Phone number/);
     assert.match(privacy, /We keep only your country, state and ZIP\/postal code/);
     assert.match(privacy, /We do not collect government ID numbers or your date of birth/);
   });

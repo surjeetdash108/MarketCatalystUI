@@ -84,9 +84,9 @@ test("the intent routes to Step 2 (/choose-plan) after signup", () => {
   };
   const path = "/choose-plan?plan=pro&interval=annual&promo=WELCOME20";
 
-  // For password signup: goes directly to /choose-plan with intent
+  // For password signup: validates email first, with intent preserved in next param
   const nextPw = nextAfterSignup(intentWithPromo, "password");
-  assert.equal(nextPw, `${path}&onboarding=1`); // step 2 of the new-account flow
+  assert.equal(nextPw, `/verify-email?next=${encodeURIComponent(`${path}&onboarding=1`)}`);
 
   // For Google signup: goes directly to /choose-plan with intent
   const nextGoogle = nextAfterSignup(intentWithPromo, "google");

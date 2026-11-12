@@ -22,6 +22,25 @@ const TIER_ORDER: Record<string, number> = {
   elite: 3,
 };
 
+function highlightModules(text: string) {
+  const parts = text.split(/(Market Catalyst|Market Desk|Stock Intelligence|Money Flow|Strategy Lab)/g);
+  return parts.map((part, idx) => {
+    if (part === "Market Catalyst" || part === "Market Desk") {
+      return <span key={idx} style={{ color: "#4ADE80", fontWeight: 700 }}>{part}</span>;
+    }
+    if (part === "Stock Intelligence") {
+      return <span key={idx} style={{ color: "#7FA8D0", fontWeight: 700 }}>{part}</span>;
+    }
+    if (part === "Money Flow") {
+      return <span key={idx} style={{ color: "#E0BB5E", fontWeight: 700 }}>{part}</span>;
+    }
+    if (part === "Strategy Lab") {
+      return <span key={idx} style={{ color: "#C9A24A", fontWeight: 700 }}>{part}</span>;
+    }
+    return part;
+  });
+}
+
 export interface ChoosePlanScreenProps {
   initialPlan?: string;
   initialInterval?: BillingInterval;
@@ -386,7 +405,7 @@ export function ChoosePlanScreen({
                     >
                       ✓
                     </span>
-                    <span>{b}</span>
+                    <span>{highlightModules(b)}</span>
                   </div>
                 ))}
               </div>

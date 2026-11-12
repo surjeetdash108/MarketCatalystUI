@@ -32,7 +32,7 @@ import { checkoutPath, parsePlanParams } from "../billing/plan-intent";
 import { Button, Modal, Notice, PREVIEW_BANNER, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
 import { REFUND_POLICY } from "../billing/refund-policy.generated";
-import { ContactCard, StaffPlan } from "./manage-plan-extras";
+import { StaffPlan } from "./manage-plan-extras";
 import { handleStripeAction } from "../billing/checkout/stripe-payment-form";
 
 /**
@@ -318,7 +318,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
         {error && <Notice tone="error" testId="billing-error">{error}</Notice>}
 
         {subscribed && (
-          <div className="card col-12" style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%)", border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+          <div className="card col-12" style={{ background: "linear-gradient(135deg, rgba(74, 222, 128, 0.08) 0%, rgba(34, 197, 94, 0.03) 100%)", border: "1px solid var(--brand-line, rgba(74, 222, 128, 0.3))" }}>
             <div className="card-b" style={{ padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -334,12 +334,13 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
                 style={{
                   padding: "9px 20px",
                   borderRadius: 8,
-                  background: "#10b981",
-                  color: "#05210f",
+                  background: "var(--brand, #4ADE80)",
+                  color: "var(--on-brand, #07080A)",
                   fontWeight: 800,
                   fontSize: ".84rem",
                   textDecoration: "none",
                   whiteSpace: "nowrap",
+                  boxShadow: "0 2px 8px rgba(74, 222, 128, 0.25)",
                 }}
               >
                 Get Referral Link →
@@ -476,11 +477,25 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
             <div data-testid="preview-scheduled">
               Takes effect on <b>{longDate(dialog.preview.effectiveAt)}</b>. You keep {current?.name ?? "your plan"} until then, then move to {dialog.plan.name} at {formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)}.
             </div>
+          ) : dialog.preview.trialEndsAt ? (
+            <div data-testid="preview-trial" style={{ fontSize: ".86rem" }}>
+              You&apos;re in your free trial, so nothing is charged now. {dialog.plan.name} starts right away, and your first charge of{" "}
+              <b>{formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)}</b> is on <b>{longDate(dialog.preview.trialEndsAt)}</b> unless you cancel before then.
+            </div>
           ) : dialog.preview.breakdown ? (
             <div data-testid="preview-breakdown" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: ".86rem" }}>
               <div>{dialog.preview.breakdown.fromPlanName}: {longDate(dialog.preview.breakdown.periodStart)} to today: {formatMoney(dialog.preview.breakdown.usedOnCurrent, dialog.preview.currency)}</div>
-              <div>{dialog.preview.breakdown.toPlanName}: today to {longDate(dialog.preview.breakdown.periodEnd)}: {formatMoney(dialog.preview.breakdown.newPlanCharge, dialog.preview.currency)}</div>
+              <div>{dialog.preview.breakdown.toPlanName}: today to {longDate(dialog.preview.nextRenewalDate || dialog.preview.breakdown.periodEnd)}: {formatMoney(dialog.preview.breakdown.newPlanCharge, dialog.preview.currency)}</div>
               <div>Already paid for {dialog.preview.breakdown.fromPlanName}: −{formatMoney(dialog.preview.breakdown.alreadyPaid, dialog.preview.currency)}</div>
+              {dialog.preview.breakdown.discount > 0 && (
+                <div data-testid="preview-discount">Discount: −{formatMoney(dialog.preview.breakdown.discount, dialog.preview.currency)}</div>
+              )}
+              {dialog.preview.breakdown.tax > 0 && (
+                <div data-testid="preview-tax">Tax: {formatMoney(dialog.preview.breakdown.tax, dialog.preview.currency)}</div>
+              )}
+              {dialog.preview.breakdown.creditUsed > 0 && (
+                <div data-testid="preview-credit-used">Account credit used: −{formatMoney(dialog.preview.breakdown.creditUsed, dialog.preview.currency)}</div>
+              )}
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, fontWeight: 700 }}>
                 {dialog.preview.kind === "upgrade" ? (
                   <span data-testid="preview-amount">

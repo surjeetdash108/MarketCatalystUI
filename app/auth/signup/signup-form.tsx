@@ -96,8 +96,8 @@ export function SignupForm() {
     setError(""); setIsSubmitting(true);
     try {
       if (!acceptedTerms) {
-        const msg = "Please agree to our Terms and conditions and Privacy policy to create an account.";
-        setError(msg); showError(msg); return;
+        setError("Please agree to our Terms and conditions and Privacy policy.");
+        return;
       }
       if (password !== confirmPassword) {
         const msg = "Passwords do not match. Please re-enter your password.";
@@ -106,6 +106,9 @@ export function SignupForm() {
       const cred = await createUserWithEmailAndPassword(firebaseAuth, profile.email, password);
       await updateProfile(cred.user, { displayName: profile.name });
       await apiPatch("/api/profile", toProfilePatch(profile));
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("mc_show_welcome", "1");
+      }
       window.location.href = await routeAfterSignup("password");
     } catch (err) {
       const msg = getAuthErrorMessage(err);
@@ -115,8 +118,8 @@ export function SignupForm() {
 
   async function handleGoogle() {
     if (!acceptedTerms) {
-      const msg = "Please agree to our Terms and conditions and Privacy policy to continue.";
-      setError(msg); showError(msg); return;
+      setError("Please agree to our Terms and conditions and Privacy policy.");
+      return;
     }
     setError(""); setIsSubmitting(true);
 
@@ -249,7 +252,12 @@ export function SignupForm() {
             id="terms-checkbox"
             type="checkbox"
             checked={acceptedTerms}
-            onChange={e => setAcceptedTerms(e.target.checked)}
+            onChange={e => {
+              setAcceptedTerms(e.target.checked);
+              if (e.target.checked) {
+                setError(prev => (prev.includes("Please agree") ? "" : prev));
+              }
+            }}
             style={{
               width: 16,
               height: 16,

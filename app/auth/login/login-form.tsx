@@ -94,6 +94,9 @@ export function LoginForm({ initialError = "" }: Readonly<{ initialError?: strin
       }
       // Arrived from a website plan tile → /checkout; otherwise the admin account
       // lands on the admin console, everyone else on the app.
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("mc_show_feedback", "1");
+      }
       window.location.href = await routeAfterLogin(postLoginPath(email));
     } catch (err) {
       const msg = getAuthErrorMessage(err);
