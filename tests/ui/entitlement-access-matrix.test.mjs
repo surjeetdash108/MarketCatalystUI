@@ -93,9 +93,9 @@ describe("Entitlements Access Matrix & Contract Test", () => {
       }
     });
 
-    it("Starter plan: Market Desk & Stock Intelligence allowed; Money Flow & Strategy Lab locked", () => {
+    it("Starter plan: Market Catalyst & Stock Intelligence allowed; Money Flow & Strategy Lab locked", () => {
       const ent = makeEntitlements({ planId: "starter", subscriptionsEnabled: true });
-      // Market Desk screens:
+      // Market Catalyst screens:
       assert.equal(gateDecisionFor(ent, SCREEN_FEATURES["dashboard"]).kind, "allow");
       assert.equal(gateDecisionFor(ent, SCREEN_FEATURES["movers"]).kind, "allow");
       assert.equal(gateDecisionFor(ent, SCREEN_FEATURES["earnings"]).kind, "allow");

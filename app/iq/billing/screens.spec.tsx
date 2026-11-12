@@ -65,12 +65,17 @@ describe("retention offer screen (rendered)", () => {
 });
 
 describe("locked feature (rendered)", () => {
-  it("renders lock emoji and Explore Plans button linking to /choose-plan", () => {
+  it("every lock: 🔒, which plan has it, and one 'See the plans' button to the plans page (no hard-coded prices)", () => {
     const html = renderToStaticMarkup(<LockedFeature entitlement="moneyFlow" requiredPlan="pro" />);
     assert.match(html, /data-testid="locked-feature"/);
     assert.match(html, /🔒/);
-    assert.match(html, /Explore Plans/);
-    assert.match(html, /href="\/choose-plan"/);
+    assert.match(html, /data-testid="locked-title"[^>]*>Money Flow</);
+    assert.match(html, />Available on Pro and up</);
+    assert.match(html, /href="\/choose-plan\?plan=pro">See the plans</);
+    assert.doesNotMatch(html, /\$\d/);
+    const elite = renderToStaticMarkup(<LockedFeature entitlement="strategyLab" requiredPlan="elite" />);
+    assert.match(elite, />Available on Elite</);
+    assert.match(elite, /Strategy Lab/);
   });
 });
 

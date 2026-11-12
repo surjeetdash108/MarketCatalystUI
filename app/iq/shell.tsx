@@ -1079,7 +1079,6 @@ function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["da
   if (!ent || ent.staff) return null;
   const isTrial = ent.status === "TRIALING" || ent.status === "trialing";
   const isCanceling = ent.cancelAtPeriodEnd && !!ent.currentPeriodEnd;
-  const isFree = ent.planId === "none";
 
   if (isCanceling) {
     const endStr = ent.currentPeriodEnd
@@ -1099,17 +1098,21 @@ function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["da
       : "";
     return (
       <div style={{ background: "rgba(34, 197, 94, 0.12)", borderBottom: "1px solid rgba(34, 197, 94, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#86efac", zIndex: 10 }}>
-        <span>🎁 Starter free trial active{endStr ? ` until ${endStr}` : ""}. You will not be charged until your trial ends.</span>
+        <span data-testid="banner-trial">🎁 {ent.planName} free trial active{endStr ? ` until ${endStr}` : ""}. Nothing is charged until it ends; cancel before then and you pay nothing.</span>
         <Link href="/manage-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Manage plan</Link>
       </div>
     );
   }
 
-  if (isFree && ent.subscriptionsEnabled) {
+  if (ent.status === "INTRO" && ent.introEndsAt && ent.subscriptionsEnabled) {
+    const daysLeft = Math.max(0, Math.ceil((Date.parse(ent.introEndsAt) - Date.now()) / 86_400_000));
     return (
-      <div style={{ background: "rgba(59, 130, 246, 0.12)", borderBottom: "1px solid rgba(59, 130, 246, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#93c5fd", zIndex: 10 }}>
-        <span>✨ You are exploring MarketCatalyst with limited access. Unlock every workspace with Starter.</span>
-        <Link href="/choose-plan?plan=starter&interval=annual" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Start 7-day free trial →</Link>
+      <div data-testid="banner-intro" style={{ background: "rgba(59, 130, 246, 0.12)", borderBottom: "1px solid rgba(59, 130, 246, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#93c5fd", zIndex: 10 }}>
+        <span>
+          ✨ You&apos;re exploring Market Catalyst — {daysLeft} {daysLeft === 1 ? "day" : "days"} left. Stock Intelligence, Money Flow and Strategy Lab come with a plan
+          {(ent.trialDays ?? 0) > 0 ? `, and every plan starts with a ${ent.trialDays}-day free trial` : ""}.
+        </span>
+        <Link href="/choose-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>See the plans →</Link>
       </div>
     );
   }
@@ -1138,9 +1141,10 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   // Shared live data for the shell-level drawers (stock/sector/earnings/index
   // quick-preview popups reachable from every screen via useIQActions()).
-  const { data: shellCompanies, loading: shellCompaniesLoading } = useApiList<CompanyDoc>("/market-data/companies");
-  const { data: shellSectors, loading: shellSectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
-  const { data: shellEarnings, loading: shellEarningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
+  // No plan → the full-page "Choose a plan" renders and no market data is requested.
+  const { data: shellCompanies, loading: shellCompaniesLoading } = useApiList<CompanyDoc>(planRequired ? null : "/market-data/companies");
+  const { data: shellSectors, loading: shellSectorsLoading } = useApiList<SectorApiDoc>(planRequired ? null : "/market-data/sectors");
+  const { data: shellEarnings, loading: shellEarningsLoading } = useApiList<LiveEarningsDoc>(planRequired ? null : "/market-data/earnings");
 
   const [theme, setThemeState] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark";

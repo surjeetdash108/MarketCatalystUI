@@ -86,9 +86,9 @@ test("the intent routes to Step 2 (/choose-plan) after signup", () => {
 
   // For password signup: goes directly to /choose-plan with intent
   const nextPw = nextAfterSignup(intentWithPromo, "password");
-  assert.equal(nextPw, path);
+  assert.equal(nextPw, `${path}&onboarding=1`); // step 2 of the new-account flow
 
   // For Google signup: goes directly to /choose-plan with intent
   const nextGoogle = nextAfterSignup(intentWithPromo, "google");
-  assert.equal(nextGoogle, path);
+  assert.equal(nextGoogle, `${path}&onboarding=1`);
 });

@@ -30,8 +30,8 @@ describe("checkout bug fixes (2026-11-12)", () => {
     const p = page();
     assert.doesNotMatch(p, /"v1"/);
     assert.match(p, /paymentReady: payment\.ready && !!preview\?\.consent\?\.version/);
-    // A preview (and its consent text) for another plan/interval is replaced, never reused.
-    assert.match(p, /curr && curr\.planId === plan\.id && curr\.interval === interval \? curr :/);
+    // A preview (and its consent text) for another plan/interval is never shown or agreed to.
+    assert.match(p, /serverPreview\.planId === plan\.id && serverPreview\.interval === interval\s*\? serverPreview\s*: null/);
     assert.match(p, /p\.planId === plan\.id && p\.interval === interval && setPreview\(p\)/);
   });
 
@@ -70,5 +70,19 @@ describe("checkout bug fixes (2026-11-12)", () => {
       { mode: "setup", currency: "usd", paymentMethodTypes: ["card"], paymentMethodCreation: "manual", appearance: undefined },
     );
     assert.equal(stripeElementsOptions("purchase", 3900, "USD").mode, "subscription");
+  });
+
+  it("no placeholder contact details: no fake phone at checkout, no fake email/name sent to Stripe", () => {
+    assert.doesNotMatch(page(), /\+15555550100/);
+    const stripe = src("app/iq/billing/checkout/stripe-payment-form.tsx");
+    assert.doesNotMatch(stripe, /subscriber@marketcatalyst\.ai|"Subscriber"/);
+    assert.match(stripe, /if \(email\) billing_details\.email = email;/);
+  });
+
+  it("during the free trial a plan change charges nothing, needs no card, and says when the first charge is", () => {
+    const p = page();
+    assert.match(p, /const needsCard = cp\.kind === "upgrade" && cp\.amountDueNow > 0 && !!adapter\?\.createPaymentMethod;/);
+    assert.match(p, /data-testid="change-in-trial"/);
+    assert.match(p, /: `Upgrade to \$\{plan\.name\}`/);
   });
 });

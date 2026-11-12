@@ -163,14 +163,14 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
     live.email ||
     sessionEmail ||
     ""
-  ).trim() || "subscriber@marketcatalyst.ai";
-  const name = (live.address?.name || firebaseAuth.currentUser?.displayName || "").trim() || "Subscriber";
+  ).trim();
+  const name = (live.address?.name || firebaseAuth.currentUser?.displayName || "").trim();
   const phone = live.phone || undefined;
 
-  const billing_details: Record<string, unknown> = {
-    email,
-    name,
-  };
+  // Only real values: no placeholder email or name is ever sent to Stripe.
+  const billing_details: Record<string, unknown> = {};
+  if (email) billing_details.email = email;
+  if (name) billing_details.name = name;
   if (phone) billing_details.phone = phone;
   if (live.address) {
     const addr: Record<string, string> = {
