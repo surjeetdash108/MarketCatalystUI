@@ -318,7 +318,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
         {error && <Notice tone="error" testId="billing-error">{error}</Notice>}
 
         {subscribed && (
-          <div className="card col-12" style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%)", border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+          <div className="card col-12" style={{ background: "linear-gradient(135deg, rgba(74, 222, 128, 0.08) 0%, rgba(34, 197, 94, 0.03) 100%)", border: "1px solid var(--brand-line, rgba(74, 222, 128, 0.3))" }}>
             <div className="card-b" style={{ padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -334,12 +334,13 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
                 style={{
                   padding: "9px 20px",
                   borderRadius: 8,
-                  background: "#10b981",
-                  color: "#05210f",
+                  background: "var(--brand, #4ADE80)",
+                  color: "var(--on-brand, #07080A)",
                   fontWeight: 800,
                   fontSize: ".84rem",
                   textDecoration: "none",
                   whiteSpace: "nowrap",
+                  boxShadow: "0 2px 8px rgba(74, 222, 128, 0.25)",
                 }}
               >
                 Get Referral Link →
