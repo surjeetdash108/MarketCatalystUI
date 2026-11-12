@@ -4,7 +4,8 @@ import { firebaseAuth } from "../firebase";
 import { apiGet, apiPatch } from "../iq/backend";
 import { emptyInvestorProfile, toProfilePatch } from "../profile/profile-fields";
 import { routeAfterLogin, routeAfterSignup } from "../iq/billing/auth-routing";
-import { postLoginPath } from "../admin/admin-email";
+import { isAdminEmail, postLoginPath } from "../admin/admin-email";
+import { clearOnboardingSession } from "../iq/billing/plan-intent";
 
 export function getAuthErrorMessage(error: unknown): string {
   if (error instanceof FirebaseError) {
@@ -49,6 +50,12 @@ export function shouldUseGoogleRedirect(): boolean {
 }
 
 export async function completeGoogleLogin(userCredential: UserCredential) {
+  if (isAdminEmail(userCredential.user.email)) {
+    clearOnboardingSession();
+    window.location.href = "/admin";
+    return;
+  }
+
   const existing = await apiGet<Record<string, unknown> | null>("/api/profile");
 
   if (!existing) {

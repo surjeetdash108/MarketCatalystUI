@@ -40,7 +40,7 @@ describe("widget lock card", () => {
     assert.match(html, /data-testid="locked-feature"/);
     assert.match(html, /data-variant="widget"/);
     assert.match(html, />Available on Starter</);
-    assert.match(html, /href="\/manage-plan\?plan=starter&amp;interval=annual"[^>]*>Upgrade to Starter</);
+    assert.match(html, /href="\/checkout\?plan=starter&amp;interval=annual"[^>]*>Upgrade to Starter</);
   });
 });
 

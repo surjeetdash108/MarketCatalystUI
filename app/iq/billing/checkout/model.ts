@@ -28,7 +28,7 @@ export function addressComplete(a: BillingAddress | null): boolean {
 
 export interface CompleteGate {
   consent: boolean;
-  phoneE164: string | null;
+  phoneE164?: string | null;
   address: BillingAddress | null;
   paymentReady: boolean;
   busy: boolean;
@@ -36,7 +36,7 @@ export interface CompleteGate {
 
 /** "Complete purchase" is enabled only when the box is ticked and the form is valid. */
 export function canComplete(g: CompleteGate): boolean {
-  return g.consent && !!g.phoneE164 && addressComplete(g.address) && g.paymentReady && !g.busy;
+  return g.consent && addressComplete(g.address) && g.paymentReady && !g.busy;
 }
 
 /** Copy for the "Next payment" box. */
@@ -47,6 +47,18 @@ export function renewalLine(renewsAtIso: string, amount: string): string {
 
 export function cadence(interval: BillingInterval): { word: string; unit: string } {
   return interval === "annual" ? { word: "annually", unit: "year" } : { word: "monthly", unit: "month" };
+}
+
+export function formatDuration(startIso?: string | null, endIso?: string | null): string {
+  if (!startIso) return "0 Year 0 Month 1 Day";
+  const start = new Date(startIso);
+  const end = endIso ? new Date(endIso) : new Date();
+  const diffMs = Math.max(0, end.getTime() - start.getTime());
+  const diffDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  const years = Math.floor(diffDays / 365);
+  const months = Math.floor((diffDays % 365) / 30);
+  const days = (diffDays % 365) % 30;
+  return `${years} Year ${months} Month ${days} Day${days === 1 ? "" : "s"}`;
 }
 
 /** Where X goes: the page the buyer came from (same site only), else the dashboard. */

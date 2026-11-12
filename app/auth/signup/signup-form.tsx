@@ -26,6 +26,10 @@ import {
 import { LegalModal } from "../legal/legal-modal";
 import { routeAfterSignup, useCaptureIntent, withSearch } from "../../iq/billing/auth-routing";
 import { parseSignupParams, saveIntent } from "../../iq/billing/plan-intent";
+import { OnboardingStepper } from "../../iq/billing/onboarding-stepper";
+
+// Switch: Set to true if you want "Join MarketCatalyst" heading and description visible again
+export const SHOW_JOIN_HEADING = false;
 
 const divider: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 12,
@@ -50,6 +54,7 @@ export function SignupForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState("");
+  const [hasPlanIntent, setHasPlanIntent] = useState(false);
   useCaptureIntent();
 
   useEffect(() => {
@@ -57,6 +62,7 @@ export function SignupForm() {
     const intent = parseSignupParams(window.location.search, ["starter", "pro", "elite"]);
     if (intent) {
       saveIntent(intent);
+      setHasPlanIntent(true);
     }
   }, []);
 
@@ -163,19 +169,24 @@ export function SignupForm() {
 
   return (
     <div>
+      {hasPlanIntent && <OnboardingStepper currentStep={1} />}
       {/* Header */}
       <div style={{
         fontSize: ".64rem", fontWeight: 600, letterSpacing: ".14em",
         textTransform: "uppercase", color: "var(--brand-2)",
-        fontFamily: "var(--f-display)", marginBottom: 8,
+        fontFamily: "var(--f-display)", marginBottom: SHOW_JOIN_HEADING ? 8 : 14,
       }}>Create account</div>
-      <h1 style={{
-        fontFamily: "var(--f-display)", fontSize: "1.55rem",
-        fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
-      }}>Join MarketCatalyst</h1>
-      <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
-        Set up your market intelligence workspace in seconds.
-      </p>
+      {SHOW_JOIN_HEADING && (
+        <>
+          <h1 style={{
+            fontFamily: "var(--f-display)", fontSize: "1.55rem",
+            fontWeight: 700, color: "var(--text-hi)", letterSpacing: "-.02em", marginBottom: 6,
+          }}>Join MarketCatalyst</h1>
+          <p style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", marginBottom: 22 }}>
+            Set up your market intelligence workspace in seconds.
+          </p>
+        </>
+      )}
 
       {/* Google */}
       <button

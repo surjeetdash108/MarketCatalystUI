@@ -329,7 +329,6 @@ export function SettingsScreen() {
               <span className="fin-lbl">Email</span>
               <span className="fin-val mono" style={{ fontSize: "0.7812rem" }}>{user?.email || "—"}</span>
             </div>
-            <ProfileRow label="Mobile number" value={profile?.mobileNumber} />
             <ProfileRow label="Age" value={profile?.age} />
             {/* <ProfileRow label="Income range" value={profile?.incomeRange} />
             <ProfileRow label="Investment experience" value={profile?.investmentExperience} />
@@ -487,8 +486,6 @@ export function SettingsScreen() {
             </button>
           </div>
         </div>
-
-        <ContactCard />
 
         {/* Schedule & share recap */}
         <div className="card col-12">

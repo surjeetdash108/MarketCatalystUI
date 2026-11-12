@@ -66,11 +66,31 @@ export function loadIntent(knownPlanIds: string[], store: Store | null = safeSes
 
 export function clearIntent(store: Store | null = safeSession()): void {
   saveIntent(null, store);
+  clearOnboardingSession();
+}
+
+/** Clear all onboarding and checkout storage so a logout or session reset is clean. */
+export function clearOnboardingSession(): void {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      window.sessionStorage.removeItem(INTENT_KEY);
+      window.sessionStorage.removeItem("mc:checkout-email");
+      window.sessionStorage.removeItem("mc:checkout-from");
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 /** The one purchase page: /checkout with the chosen plan, interval and optional promo. */
 export function checkoutPath(intent: Pick<PlanIntent, "planId" | "interval"> & { promoCode?: string }): string {
   const p = `/checkout?plan=${encodeURIComponent(intent.planId)}&interval=${intent.interval}`;
+  return intent.promoCode ? `${p}&promo=${encodeURIComponent(intent.promoCode)}` : p;
+}
+
+/** The choose-plan path with the chosen plan, interval and optional promo. */
+export function choosePlanPath(intent: Pick<PlanIntent, "planId" | "interval"> & { promoCode?: string }): string {
+  const p = `/choose-plan?plan=${encodeURIComponent(intent.planId)}&interval=${intent.interval}`;
   return intent.promoCode ? `${p}&promo=${encodeURIComponent(intent.promoCode)}` : p;
 }
 
@@ -85,17 +105,18 @@ export type AuthMethod = "password" | "google";
 /**
  * Where a just-created account goes:
  *  - no plan intent → dashboard
- *  - selected a plan → /manage-plan with that plan pre-selected and option to proceed to payment
+ *  - selected a plan → Step 2: /choose-plan
  */
 export function nextAfterSignup(intent: PlanIntent | null, method: AuthMethod, paidPlansAvailable?: boolean): string {
   if (!intent) return "/dashboard";
-  return managePlanPath(intent);
+  return choosePlanPath(intent);
 }
 
 /** Where an existing account that just signed in goes. */
 export function nextAfterLogin(intent: PlanIntent | null, fallback: string, paidPlansAvailable?: boolean): string {
+  if (fallback === "/admin") return "/admin";
   if (!intent) return fallback;
-  return managePlanPath(intent);
+  return choosePlanPath(intent);
 }
 
 /** The intent from the URL (?plan=&interval=) or the session, validated against the catalog. */

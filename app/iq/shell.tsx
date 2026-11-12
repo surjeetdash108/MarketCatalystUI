@@ -66,6 +66,7 @@ import { SISweepOverlay } from "./si/si-switcher";
 import { ModuleSwitcher } from "./module-switcher";
 import { useEntitlements } from "./hooks/useEntitlements";
 import { ChoosePlanScreen } from "./billing/choose-plan-screen";
+import { clearOnboardingSession } from "./billing/plan-intent";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -153,7 +154,7 @@ export function ExpandBtn({ title, node }: { title: string; node: ReactNode }) {
  * any size, theme-aware (the gradient's bright stop tracks var(--brand)
  * per theme).
  */
-function BrandLogo({ height = 28 }: { height?: number }) {
+export function BrandLogo({ height = 28 }: { height?: number }) {
   const width = Math.round(height * (66 / 60));
   return (
     <span className="brand-logo" style={{ gap: Math.round(height * 0.3), lineHeight: 1, display: "inline-flex", alignItems: "center" }}>
@@ -1074,6 +1075,48 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
 // a stale darkMode from the backend would flip the theme on every switch.
 let pendingThemeWrite: Promise<unknown> | null = null;
 
+function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["data"] }) {
+  if (!ent || ent.staff) return null;
+  const isTrial = ent.status === "TRIALING" || ent.status === "trialing";
+  const isCanceling = ent.cancelAtPeriodEnd && !!ent.currentPeriodEnd;
+  const isFree = ent.planId === "none";
+
+  if (isCanceling) {
+    const endStr = ent.currentPeriodEnd
+      ? new Date(ent.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "the end of your period";
+    return (
+      <div style={{ background: "rgba(234, 179, 8, 0.12)", borderBottom: "1px solid rgba(234, 179, 8, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#fef08a", zIndex: 10 }}>
+        <span>ℹ️ Your {ent.planName} plan ends on {endStr}. You have full access until then and will not be charged again.</span>
+        <Link href="/manage-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Resume plan</Link>
+      </div>
+    );
+  }
+
+  if (isTrial) {
+    const endStr = ent.currentPeriodEnd
+      ? new Date(ent.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "";
+    return (
+      <div style={{ background: "rgba(34, 197, 94, 0.12)", borderBottom: "1px solid rgba(34, 197, 94, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#86efac", zIndex: 10 }}>
+        <span>🎁 Starter free trial active{endStr ? ` until ${endStr}` : ""}. You will not be charged until your trial ends.</span>
+        <Link href="/manage-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Manage plan</Link>
+      </div>
+    );
+  }
+
+  if (isFree && ent.subscriptionsEnabled) {
+    return (
+      <div style={{ background: "rgba(59, 130, 246, 0.12)", borderBottom: "1px solid rgba(59, 130, 246, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#93c5fd", zIndex: 10 }}>
+        <span>✨ You are exploring MarketCatalyst with limited access. Unlock every workspace with Starter.</span>
+        <Link href="/choose-plan?plan=starter&interval=annual" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Start 7-day free trial →</Link>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ---- Main IQ Shell ----
 export function IQShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -1081,7 +1124,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const { user } = useAppSelector(state => state.auth);
   const { data: profile } = useAppSelector(state => state.profile);
   const { data: ent } = useEntitlements();
-  const planRequired = ent?.subscriptionsEnabled === true && !ent?.staff && ent?.planId === "none";
+  const isBillingRoute = pathname?.startsWith("/billing") || pathname?.startsWith("/manage-plan") || pathname?.startsWith("/refer-a-friend");
+  const planRequired = !isBillingRoute && ent?.subscriptionsEnabled === true && !ent?.staff && ent?.planId === "none";
 
   // Same live merge Dashboard's Market Pulse widget uses — keeps the top
   // ticker strip and the index drawer it opens in sync with each other.
@@ -1094,9 +1138,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
   // Shared live data for the shell-level drawers (stock/sector/earnings/index
   // quick-preview popups reachable from every screen via useIQActions()).
-  const { data: shellCompanies, loading: shellCompaniesLoading } = useApiList<CompanyDoc>(planRequired ? null : "/market-data/companies");
-  const { data: shellSectors, loading: shellSectorsLoading } = useApiList<SectorApiDoc>(planRequired ? null : "/market-data/sectors");
-  const { data: shellEarnings, loading: shellEarningsLoading } = useApiList<LiveEarningsDoc>(planRequired ? null : "/market-data/earnings");
+  const { data: shellCompanies, loading: shellCompaniesLoading } = useApiList<CompanyDoc>("/market-data/companies");
+  const { data: shellSectors, loading: shellSectorsLoading } = useApiList<SectorApiDoc>("/market-data/sectors");
+  const { data: shellEarnings, loading: shellEarningsLoading } = useApiList<LiveEarningsDoc>("/market-data/earnings");
 
   const [theme, setThemeState] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") return "dark";
@@ -1425,9 +1469,12 @@ export function IQShell({ children }: { children: React.ReactNode }) {
       .some(f => String(profile[f] ?? "").trim() === "") ||
     (profile.preferredAssetClasses?.length ?? 0) === 0;
 
+  const hasActivePlan = !!ent && ent.planId !== "none" && ent.planId !== "free" && (ent.status === "active" || ent.status === "trialing" || !!ent.staff);
+
   async function handleSignOut() {
+    clearOnboardingSession();
     await signOut(firebaseAuth);
-    window.location.href = "/";
+    window.location.href = "/auth/login";
   }
 
   const isSiPage = pathname?.startsWith("/si");
@@ -1600,6 +1647,11 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <button className="pd-item" onClick={() => { router.push("/manage-plan"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">◈</span> Manage Account
                     </button>
+                    {hasActivePlan && (
+                      <button className="pd-item" onClick={() => { router.push("/refer-a-friend"); setProfileDropdownOpen(false); }}>
+                        <span className="pd-icon">🎁</span> Refer a Friend
+                      </button>
+                    )}
                     <button className="pd-item" onClick={() => { router.push("/requests"); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">💡</span> Feature Requests
                     </button>
@@ -1777,8 +1829,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
 
             {/* Main content */}
             <main className="main">
+              <ContextualBanner ent={ent} />
               {/* <SessionNotice phase={tapeFrame?.marketPhase ?? "unknown"} pathname={pathname} /> */}
-              {planRequired ? <ChoosePlanScreen /> : children}
+              {children}
               <footer className="disclaimer-bar">
                 <span className="disclaimer-text">
                   MarketCatalyst LLC is not a registered investment advisor and does not manage client assets. Information and tools on this platform are for informational and educational purposes only and do not constitute investment advice. MarketCatalyst is a data provider, not a stock-picks or alert service. Trading stocks and options carries risk — consult your own financial advisor.

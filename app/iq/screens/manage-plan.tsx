@@ -42,8 +42,28 @@ import { handleStripeAction } from "../billing/checkout/stripe-payment-form";
  * retention offer), resume, invoices, history and card updates.
  */
 export function ManagePlanScreen() {
-  const { data: ent } = useEntitlements();
-  if (!ent) return null;
+  const { data: ent, loading: entLoading } = useEntitlements();
+  if (!ent) {
+    if (entLoading) {
+      return (
+        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-dim-solid)" }}>
+          <div
+            style={{
+              display: "inline-block",
+              width: 24,
+              height: 24,
+              border: "2px solid rgba(255,255,255,0.15)",
+              borderTopColor: "var(--brand, #22c55e)",
+              borderRadius: "50%",
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+          <p style={{ marginTop: 12, fontSize: ".85rem" }}>Loading subscription status…</p>
+        </div>
+      );
+    }
+    return <BillingScreen preview={false} />;
+  }
   if (ent.staff && !ent.checkoutPreview) return <StaffPlan />;
   return <BillingScreen preview={ent.checkoutPreview === true} />;
 }
@@ -69,29 +89,77 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [refund, setRefund] = useState<RefundEligibility | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
-    const [{ plans: p }, s, inv, hist] = await Promise.all([fetchPlans(), billingSummary(), listInvoices(), listHistory()]);
-    // The refund button exists only while REFUND_WINDOW_DAYS > 0 (the endpoint is 404 otherwise).
-    if (REFUND_POLICY.enabled) setRefund(await refundEligibility().catch(() => null));
-    setPlans(p);
-    setSummary(s);
-    setInvoices(inv);
-    setHistory(hist);
-    return { p, s };
+    try {
+      setLoading(true);
+      setError(null);
+      const [{ plans: p }, s, inv, hist] = await Promise.all([
+        fetchPlans(),
+        billingSummary().catch((e) => {
+          console.warn("billingSummary failed:", e);
+          return null;
+        }),
+        listInvoices().catch(() => []),
+        listHistory().catch(() => []),
+      ]);
+      // The refund button exists only while REFUND_WINDOW_DAYS > 0 (the endpoint is 404 otherwise).
+      if (REFUND_POLICY.enabled) setRefund(await refundEligibility().catch(() => null));
+      setPlans(p);
+      setSummary(s);
+      setInvoices(inv);
+      setHistory(hist);
+      return { p, s };
+    } catch (err) {
+      console.error("reload failed:", err);
+      setError("Unable to load billing data. Please try again.");
+      return null;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    void reload().then(({ p, s }) => {
+    void reload().then((res) => {
+      if (!res) return;
+      const { p, s } = res;
       const intent = typeof window !== "undefined" ? parsePlanParams(window.location.search, p.map((x) => x.id)) : null;
       if (intent) {
         setSelected(intent.planId);
         setInterval(intent.interval);
-      } else if (s.interval) setInterval(s.interval);
+      } else if (s?.interval) setInterval(s.interval);
     });
   }, [reload]);
 
-  if (!summary) return null;
+  if (loading && !summary) {
+    return (
+      <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text-dim-solid)" }}>
+        <div
+          style={{
+            display: "inline-block",
+            width: 24,
+            height: 24,
+            border: "2px solid rgba(255,255,255,0.15)",
+            borderTopColor: "var(--brand, #22c55e)",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <p style={{ marginTop: 12, fontSize: ".85rem" }}>Loading plans and subscription…</p>
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div style={{ maxWidth: 640, margin: "40px auto", textAlign: "center" }}>
+        {error && <Notice tone="error">{error}</Notice>}
+        <p style={{ color: "var(--text-dim-solid)", marginTop: 16 }}>Unable to load your subscription summary.</p>
+        <Button onClick={() => void reload()} style={{ marginTop: 12 }}>Retry</Button>
+      </div>
+    );
+  }
   const subscribed = !!summary.interval && summary.source !== "launch_trial" && summary.source !== "lifetime" && LIVE.includes(summary.status);
   const current = plans.find((p) => p.id === summary.planId);
 
@@ -121,6 +189,8 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       window.location.href = checkoutPath({ planId: plan.id, interval });
       return;
     }
+    // Subscribers upgrade on the checkout page with transparent prorated breakdown:
+    window.location.href = checkoutPath({ planId: plan.id, interval });
     const preview = await run(() => previewChange({ planId: plan.id, interval }));
     if (preview) setDialog({ kind: "preview", preview, plan });
   }
@@ -203,10 +273,15 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
           <div className="card-h"><h3>Current plan</h3></div>
           <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div data-testid="current-plan" style={{ fontSize: "1.05rem", color: "var(--text-hi)" }}>
-              <b>{summary.planName}</b>
-              {summary.source === "lifetime" ? " · Lifetime" : summary.interval ? (summary.interval === "annual" ? " · Annual" : " · Monthly") : ""}
+              <b>{subscribed ? summary.planName : "Free Tier"}</b>
+              {summary.source === "lifetime" ? " · Lifetime" : subscribed && summary.interval ? (summary.interval === "annual" ? " · Annual" : " · Monthly") : ""}
               {summary.source === "launch_trial" ? " · launch trial" : summary.source === "lifetime" ? " · complimentary" : ""}
             </div>
+            {!subscribed && summary.source !== "lifetime" && (
+              <p style={{ margin: 0, fontSize: ".86rem", color: "var(--text-dim-solid)" }}>
+                You do not have an active paid subscription. Select a plan below to get full access.
+              </p>
+            )}
             {summary.source === "lifetime" && (
               <Notice testId="lifetime-plan">
                 You have complimentary Lifetime Elite access with full access to every feature.
@@ -234,18 +309,50 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
               {REFUND_POLICY.enabled && refund?.eligible && (
                 <Button kind="secondary" testId="request-refund" disabled={busy} onClick={() => refund.eligible && setDialog({ kind: "confirm-refund", amount: refund.amount, currency: refund.currency })}>Request refund</Button>
               )}
-              {summary.hasBillingAccount && <Button kind="secondary" testId="update-card" onClick={() => void run(() => openPortal()).then((r) => r && (window.location.href = r.url))}>Update card</Button>}
+              {subscribed && summary.hasBillingAccount && <Button kind="secondary" testId="update-card" onClick={() => void run(() => openPortal()).then((r) => r && (window.location.href = r.url))}>Update card</Button>}
             </div>
           </div>
         </div>
 
         {error && <Notice tone="error" testId="billing-error">{error}</Notice>}
 
-        <ContactCard />
+        {subscribed && (
+          <div className="card col-12" style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%)", border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+            <div className="card-b" style={{ padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: "1.2rem" }}>🎁</span>
+                  <h4 style={{ margin: 0, color: "#fff", fontSize: "1rem", fontWeight: 700 }}>Refer a Friend &amp; Earn Referral Credits</h4>
+                </div>
+                <p style={{ margin: 0, fontSize: ".84rem", color: "rgba(255, 255, 255, 0.7)" }}>
+                  Give your friends credits off their subscription and get credits automatically deducted from your next monthly renewal.
+                </p>
+              </div>
+              <a
+                href="/refer-a-friend"
+                style={{
+                  padding: "9px 20px",
+                  borderRadius: 8,
+                  background: "#10b981",
+                  color: "#05210f",
+                  fontWeight: 800,
+                  fontSize: ".84rem",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Get Referral Link →
+              </a>
+            </div>
+          </div>
+        )}
 
         <div className="card col-12">
           <div className="card-h">
-            <h3>Plans</h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <h3 style={{ margin: 0 }}>Plans</h3>
+              <span style={{ fontSize: ".84rem", color: "var(--text-dim-solid)", fontWeight: 500 }}>(Cancel anytime, no questions asked)</span>
+            </div>
             <div role="group" aria-label="Billing period" style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
               {INTERVALS.map((i) => (
                 <button key={i} type="button" aria-pressed={interval === i} style={pill(interval === i)} onClick={() => setInterval(i)}>{i === "monthly" ? "Monthly" : "Annual"}</button>
@@ -320,10 +427,14 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
         <div className="card col-12">
           <div className="card-h"><h3>Plan history</h3></div>
           <div className="card-b" data-testid="history" style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: ".8rem" }}>
-            {history.length === 0 && <div style={{ color: "var(--text-dim-solid)" }}>No changes yet.</div>}
-            {history.map((h, idx) => (
-              <div key={idx}>{longDate(h.at)} — {h.type.replace(/_/g, " ")}{describe(h.to)}</div>
-            ))}
+            {history.filter((h) => !(h.type === "subscribed" && (h.to as Record<string, unknown> | undefined)?.status === "NONE")).length === 0 && (
+              <div style={{ color: "var(--text-dim-solid)" }}>No changes yet.</div>
+            )}
+            {history
+              .filter((h) => !(h.type === "subscribed" && (h.to as Record<string, unknown> | undefined)?.status === "NONE"))
+              .map((h, idx) => (
+                <div key={idx}>{longDate(h.at)} — {h.type.replace(/_/g, " ")}{describe(h.to)}</div>
+              ))}
           </div>
         </div>
       </div>
@@ -407,11 +518,27 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       )}
       {dialog?.kind === "confirm-cancel" && (
         <Modal title="Cancel your plan?" onClose={() => setDialog(null)} testId="cancel-dialog">
-          <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your plan ends. No further charges.</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button kind="danger" testId="cancel-confirm" onClick={() => void doCancel()} disabled={busy}>Cancel my plan</Button>
-            <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
-          </div>
+          {refund?.eligible ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                If you cancel today, your subscription will only deduct for your elapsed usage, and the remaining balance (<b>{formatMoney(refund.amount, refund.currency)}</b>) will be refunded immediately back to your original payment method.
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <Button kind="danger" testId="cancel-refund-confirm" onClick={() => void confirmRefund()} disabled={busy}>
+                  Cancel and refund {formatMoney(refund.amount, refund.currency)}
+                </Button>
+                <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your plan ends. No further charges.</div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <Button kind="danger" testId="cancel-confirm" onClick={() => void doCancel()} disabled={busy}>Cancel my plan</Button>
+                <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
       {dialog?.kind === "done" && (

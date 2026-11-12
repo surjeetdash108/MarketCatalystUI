@@ -47,7 +47,7 @@ export const PLANS = [
   {
     "id": "starter",
     "name": "Starter",
-    "description": "Market Desk and Stock Intelligence.",
+    "description": "Market Catalyst and Stock Intelligence.",
     "groups": [
       "marketDesk",
       "stockIntelligence"

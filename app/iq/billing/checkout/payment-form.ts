@@ -21,6 +21,11 @@ export interface PaymentFormProps {
   /** Amount due today (minor units) and currency, for wallets / the Payment Element. */
   amount: number;
   currency: string;
+  /**
+   * "planChange": the payment step of an upgrade from Manage Plan — the card is
+   * collected here and charged by the backend for that change only.
+   */
+  purpose?: "purchase" | "planChange";
 }
 
 export type PaymentResult =
@@ -37,6 +42,11 @@ export interface PaymentAdapter {
   confirm(sessionId: string, clientSecret: string | null): Promise<PaymentResult>;
   /** 3-D Secure / bank challenge (Stripe handles it inside confirm). */
   completeAction?(actionId: string, approve: boolean): Promise<PaymentResult>;
+  /**
+   * Plan change: turns the entered card into a provider payment-method id for
+   * POST /api/billing/change (Stripe: pm_…). Card data never reaches our servers.
+   */
+  createPaymentMethod?(): Promise<{ ok: true; id: string } | { ok: false; message: string }>;
 }
 
 export const DECLINE_MESSAGES: Record<string, string> = {

@@ -24,14 +24,25 @@ export function BillingStart() {
   return null;
 }
 
+import { OnboardingStepper } from "./onboarding-stepper";
+import { ConfettiCanvas } from "./confetti";
+
 /** /billing/success — polls until the event handler has activated the plan. */
 export function BillingSuccess() {
   const { data: ent } = useEntitlements();
+  const isPlanChange = ["upgraded", "upgrade"].includes(qs("session") ?? "");
   const [view, setView] = useState<{ phase: "waiting" | "active" | "slow" | "error"; planId?: string }>({ phase: "waiting" });
   useEffect(() => {
     const session = qs("session");
     if (!session) {
       setView({ phase: "error" });
+      return;
+    }
+    if (session === "upgraded" || session === "upgrade") {
+      const plan = qs("plan") || ent?.planId;
+      void refreshEntitlements().then(() => {
+        setView({ phase: "active", planId: plan || undefined });
+      });
       return;
     }
     let tries = 0;
@@ -58,19 +69,69 @@ export function BillingSuccess() {
     };
   }, []);
   return (
-    <div className="card col-12" data-testid="billing-success" style={{ maxWidth: 520, margin: "32px auto" }}>
-      <div className="card-b" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-        {ent?.checkoutPreview && <Notice tone="warn" testId="success-preview-banner">{PREVIEW_BANNER}</Notice>}
-        {view.phase === "waiting" && <div data-testid="success-waiting">Payment received. Activating your plan…</div>}
-        {view.phase === "active" && (
-          <>
-            <h2 style={{ margin: 0, color: "var(--text-hi)" }} data-testid="success-active">You're on {view.planId ? view.planId.charAt(0).toUpperCase() + view.planId.slice(1) : "your new plan"}</h2>
-            <div>Your new features are ready.</div>
-            <Link href="/dashboard">Go to your dashboard</Link>
-          </>
-        )}
-        {view.phase === "slow" && <Notice tone="warn">Payment received; activation is taking longer than usual. We'll email you when it's ready — refresh this page in a minute.</Notice>}
-        {view.phase === "error" && <Notice tone="error">This page needs a checkout session. <Link href="/manage-plan">Back to Manage Plan</Link></Notice>}
+    <div className="iq-root" data-theme="dark" style={{ minHeight: "100vh", padding: "40px 16px", background: "var(--bg, #08090a)" }}>
+      {view.phase === "active" && <ConfettiCanvas />}
+      <div style={{ maxWidth: 620, margin: "0 auto" }}>
+        {/* First purchase only (a plan change is a single payment step, not onboarding);
+            all three steps show as done once the plan is active. */}
+        {!isPlanChange && <OnboardingStepper currentStep={view.phase === "active" ? 4 : 3} />}
+
+        <div className="card col-12" data-testid="billing-success" style={{ margin: "0 auto" }}>
+          <div className="card-b" style={{ padding: 36, display: "flex", flexDirection: "column", gap: 18, textAlign: "center", alignItems: "center" }}>
+            {ent?.checkoutPreview && <Notice tone="warn" testId="success-preview-banner">{PREVIEW_BANNER}</Notice>}
+            
+            {view.phase === "waiting" && (
+              <div data-testid="success-waiting" style={{ color: "var(--text-dim-solid)", fontSize: "1rem", padding: "20px 0" }}>
+                <div style={{ fontSize: "2rem", marginBottom: 12 }}>⚡</div>
+                Payment received. Activating your plan…
+              </div>
+            )}
+
+            {view.phase === "active" && (
+              <>
+                <div style={{ fontSize: "2.8rem", lineHeight: 1 }}>🎉</div>
+                <h1 style={{ margin: 0, color: "var(--text-hi)", fontSize: "1.6rem", fontWeight: 800 }} data-testid="success-active">
+                  Congratulations!
+                </h1>
+                <p style={{ margin: 0, color: "var(--brand-2, #10b981)", fontSize: "1.1rem", fontWeight: 700 }}>
+                  You&apos;re now on {view.planId ? view.planId.charAt(0).toUpperCase() + view.planId.slice(1) : "your plan"}
+                </p>
+                <p style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".9rem", maxWidth: 420, lineHeight: 1.5 }}>
+                  Your institutional market intelligence suite is now fully activated. Explore institutional flows, algorithmic playbooks, and real-time feeds.
+                </p>
+                <Link
+                  href="/dashboard"
+                  style={{
+                    marginTop: 10,
+                    padding: "13px 36px",
+                    borderRadius: 99,
+                    background: "var(--brand, #10b981)",
+                    color: "#05210f",
+                    fontWeight: 800,
+                    fontSize: "1rem",
+                    textDecoration: "none",
+                    boxShadow: "0 0 20px rgba(16, 185, 129, 0.4)",
+                    transition: "transform 0.2s ease",
+                  }}
+                >
+                  Explore the platform →
+                </Link>
+              </>
+            )}
+
+            {view.phase === "slow" && (
+              <Notice tone="warn">
+                Payment received; activation is taking slightly longer than usual. We&apos;ll email you when it&apos;s ready — refresh this page in a minute.
+              </Notice>
+            )}
+
+            {view.phase === "error" && (
+              <Notice tone="error">
+                This page needs a valid checkout session. <Link href="/manage-plan" style={{ color: "inherit", textDecoration: "underline" }}>Back to Manage Plan</Link>
+              </Notice>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

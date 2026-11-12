@@ -3,9 +3,10 @@
 import { AddressElement, Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
 import { useEffect, useMemo, useRef } from "react";
+import { firebaseAuth } from "../../../firebase";
 import { Notice } from "../ui";
 import { labelStyle } from "./address-fields";
-import type { BillingAddress } from "./model";
+import { addressComplete, type BillingAddress } from "./model";
 import type { PaymentAdapter, PaymentFormProps, PaymentResult } from "./payment-form";
 
 /**
@@ -22,7 +23,7 @@ import type { PaymentAdapter, PaymentFormProps, PaymentResult } from "./payment-
  * backend's STRIPE_PAYMENT_METHOD_TYPES. Never crypto or UPI.
  */
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
-const ALLOWED = new Set(["card", "link", "paypal", "us_bank_account", "cashapp", "amazon_pay"]);
+const ALLOWED = new Set(["card", "link", "paypal", "cashapp", "amazon_pay"]);
 
 export function stripePaymentMethodTypes(raw: string | undefined): string[] {
   const types = String(raw ?? "card,link")
@@ -50,7 +51,19 @@ let stripePromise: Promise<Stripe | null> | null = null;
 const getStripe = () => (stripePromise ??= loadStripe(PUBLISHABLE_KEY));
 
 /** Handles live between the mounted Elements and the adapter's prepare/confirm. */
-const live: { stripe: Stripe | null; elements: StripeElements | null } = { stripe: null, elements: null };
+const live: {
+  stripe: Stripe | null;
+  elements: StripeElements | null;
+  address: BillingAddress | null;
+  email: string | null;
+  phone: string | null;
+} = { stripe: null, elements: null, address: null, email: null, phone: null };
+
+export function setStripeCheckoutContext(ctx: { address?: BillingAddress | null; email?: string | null; phone?: string | null }) {
+  if (ctx.address !== undefined) live.address = ctx.address;
+  if (ctx.email) live.email = ctx.email;
+  if (ctx.phone !== undefined) live.phone = ctx.phone;
+}
 
 /** Maps the Address Element value to our address shape. */
 export function addressFromStripe(v: { name?: string; address?: { line1?: string | null; line2?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null } }): BillingAddress {
@@ -74,12 +87,22 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
     live.stripe = stripe;
     live.elements = elements;
   }, [stripe, elements]);
-  const emit = () => onChange({ ready: state.current.ready && state.current.addressDone, address: state.current.address });
+  const emit = () => {
+    live.address = state.current.address;
+    onChange({ ready: state.current.ready && (state.current.addressDone || addressComplete(state.current.address)), address: state.current.address });
+  };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div data-testid="payment-element">
         <PaymentElement
-          options={{ layout: "tabs", wallets: { applePay: "auto", googlePay: "auto" } }}
+          options={{
+            layout: "tabs",
+            wallets: { applePay: "auto", googlePay: "auto" },
+            fields: { billingDetails: { name: "never", email: "never", phone: "never", address: "never" } },
+            // Our own renewal consent (checkbox + text in the summary) is the authorisation;
+            // hide Stripe's duplicate "By subscribing, you authorize … to charge you" line.
+            terms: { card: "never" },
+          }}
           onChange={(e) => {
             state.current.ready = e.complete;
             emit();
@@ -87,7 +110,7 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
         />
       </div>
       <div data-testid="address-element">
-        <span style={{ ...labelStyle, marginBottom: 10 }}>Billing address</span>
+        <span style={{ ...labelStyle, marginBottom: 10 }}>Billing address <span style={{ color: "#ef4444" }}>*</span></span>
         <AddressElement
           options={{ mode: "billing", defaultValues: { address: { country: "US" } } }}
           onChange={(e) => {
@@ -101,22 +124,25 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
   );
 }
 
-function StripeForm({ onChange, amount, currency }: PaymentFormProps) {
+export function stripeElementsOptions(purpose: PaymentFormProps["purpose"], amount: number, currency: string) {
+  const appearance = { theme: "night" as const, variables: { colorPrimary: "#4ade80", borderRadius: "8px" } };
+  // A plan change collects the card only; the backend charges it for the
+  // change (prorated invoice), so Elements just creates the payment method.
+  if (purpose === "planChange")
+    return { mode: "setup" as const, currency: currency.toLowerCase(), paymentMethodTypes: ["card"], paymentMethodCreation: "manual" as const, appearance };
+  return { mode: "subscription" as const, amount: Math.max(0, amount), currency: currency.toLowerCase(), paymentMethodTypes: ["card"], appearance };
+}
+
+function StripeForm({ onChange, amount, currency, purpose }: PaymentFormProps) {
   const options = useMemo(
-    () => ({
-      mode: "subscription" as const,
-      amount: Math.max(0, amount),
-      currency: currency.toLowerCase(),
-      paymentMethodTypes: METHOD_TYPES,
-      appearance: { theme: "night" as const, variables: { colorPrimary: "#22c55e", borderRadius: "8px" } },
-    }),
+    () => stripeElementsOptions(purpose, amount, currency),
     // Elements is created once; amount changes are pushed with elements.update() below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currency],
   );
   useEffect(() => {
-    live.elements?.update({ amount: Math.max(0, amount) });
-  }, [amount]);
+    if (purpose !== "planChange") live.elements?.update({ amount: Math.max(0, amount) });
+  }, [amount, purpose]);
   if (!stripeConfigured()) {
     return <Notice tone="warn" testId="stripe-not-ready">Card payments are being set up. Please try again soon.</Notice>;
   }
@@ -130,10 +156,61 @@ function StripeForm({ onChange, amount, currency }: PaymentFormProps) {
 export async function confirmWithStripe(sessionId: string, clientSecret: string | null): Promise<PaymentResult> {
   const { stripe, elements } = live;
   if (!stripe || !elements || !clientSecret) return { status: "failed", message: "The payment form isn't ready. Refresh and try again." };
+
+  const sessionEmail = typeof window !== "undefined" ? window.sessionStorage.getItem("mc:checkout-email") : null;
+  const email = (
+    firebaseAuth.currentUser?.email ||
+    live.email ||
+    sessionEmail ||
+    ""
+  ).trim() || "subscriber@marketcatalyst.ai";
+  const name = (live.address?.name || firebaseAuth.currentUser?.displayName || "").trim() || "Subscriber";
+  const phone = live.phone || undefined;
+
+  const billing_details: Record<string, unknown> = {
+    email,
+    name,
+  };
+  if (phone) billing_details.phone = phone;
+  if (live.address) {
+    const addr: Record<string, string> = {
+      line1: live.address.line1,
+      city: live.address.city,
+      country: live.address.country,
+    };
+    if (live.address.line2?.trim()) addr.line2 = live.address.line2.trim();
+    if (live.address.state?.trim()) addr.state = live.address.state.trim();
+    if (live.address.postalCode?.trim()) addr.postal_code = live.address.postalCode.trim();
+    billing_details.address = addr;
+  }
+
+  const isSetup = clientSecret.startsWith("seti_");
+  if (isSetup) {
+    const { error, setupIntent } = await stripe.confirmSetup({
+      elements,
+      clientSecret,
+      confirmParams: {
+        return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}`,
+        payment_method_data: {
+          billing_details,
+        },
+      },
+      redirect: "if_required",
+    });
+    if (error) return { status: "failed", message: error.message ?? "The card setup didn't go through. Try another payment method." };
+    if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "processing")) return { status: "succeeded" };
+    return { status: "failed", message: "Card setup could not be completed. Try again." };
+  }
+
   const { error, paymentIntent } = await stripe.confirmPayment({
     elements,
     clientSecret,
-    confirmParams: { return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}` },
+    confirmParams: {
+      return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}`,
+      payment_method_data: {
+        billing_details,
+      },
+    },
     redirect: "if_required",
   });
   if (error) return { status: "failed", message: error.message ?? "The payment didn't go through. Try another payment method." };
@@ -150,6 +227,29 @@ export async function handleStripeAction(clientSecret: string): Promise<boolean>
   return !error;
 }
 
+/** Plan change: validate the entered card + address, then create its payment method (pm_…). */
+export async function createPaymentMethodWithStripe(): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  const { stripe, elements } = live;
+  if (!stripe || !elements) return { ok: false, message: "The payment form isn't ready. Refresh and try again." };
+  const submitted = await elements.submit();
+  if (submitted.error) return { ok: false, message: submitted.error.message ?? "Check your payment details." };
+  const a = live.address;
+  const { error, paymentMethod } = await stripe.createPaymentMethod({
+    elements,
+    params: {
+      billing_details: {
+        name: a?.name || undefined,
+        email: firebaseAuth.currentUser?.email || undefined,
+        ...(a
+          ? { address: { line1: a.line1, line2: a.line2 || undefined, city: a.city, state: a.state || undefined, postal_code: a.postalCode || undefined, country: a.country } }
+          : {}),
+      },
+    },
+  });
+  if (error || !paymentMethod) return { ok: false, message: error?.message ?? "Your card couldn't be used. Try another card." };
+  return { ok: true, id: paymentMethod.id };
+}
+
 export const stripePaymentAdapter: PaymentAdapter = {
   provider: "stripe",
   Form: StripeForm,
@@ -159,4 +259,5 @@ export const stripePaymentAdapter: PaymentAdapter = {
     return error ? { ok: false, message: error.message ?? "Check your payment details." } : { ok: true };
   },
   confirm: (sessionId, clientSecret) => confirmWithStripe(sessionId, clientSecret),
+  createPaymentMethod: () => createPaymentMethodWithStripe(),
 };

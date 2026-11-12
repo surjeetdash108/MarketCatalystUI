@@ -12,7 +12,7 @@
  * itself — the backend's EntitlementGuard does — and it is a no-op while
  * SUBSCRIPTIONS_ENABLED is off. A slug absent here is on every plan.
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ENTITLEMENTS } from "../admin/entitlement-catalog";
 import {
@@ -22,7 +22,6 @@ import {
   FEATURE_GROUP_OF,
 } from "./feature-map.generated";
 import { featureDecision, useEntitlements } from "./hooks/useEntitlements";
-import { ChoosePlanScreen } from "./billing/choose-plan-screen";
 
 const KNOWN_KEYS = new Set(ENTITLEMENTS.map((e) => e.key));
 
@@ -63,12 +62,14 @@ export function LockedFeature({
   requiredPlan: string | null;
   variant?: "screen" | "widget";
 }) {
+  const [gateInterval, setGateInterval] = useState<"monthly" | "annual">("annual");
   const def = ENTITLEMENTS.find((e) => e.key === entitlement);
   const planKey =
     requiredPlan ??
     (LOWEST_PLAN as Record<string, string>)[entitlement] ??
     null;
-  const plan = planKey ? PLAN_NAMES[planKey] ?? planKey : null;
+  const isMF = entitlement === "moneyFlow";
+  const plan = isMF ? "Pro or Elite" : planKey ? PLAN_NAMES[planKey] ?? planKey : null;
   const groupName = groupForEntitlement(entitlement);
   const widget = variant === "widget";
   const badge = (
@@ -86,26 +87,137 @@ export function LockedFeature({
       {plan ? `Available on ${plan}` : "Not on your plan"}
     </span>
   );
-  const upgrade = (
-    <Link
-      href={
-        planKey
-          ? `/manage-plan?plan=${planKey}&interval=annual`
-          : "/manage-plan"
-      }
-      style={{
-        marginTop: widget ? 2 : 6,
-        padding: widget ? "7px 18px" : "9px 22px",
-        borderRadius: 99,
-        background: "var(--brand)",
-        color: "#fff",
-        fontWeight: 700,
-        fontSize: widget ? ".78rem" : ".84rem",
-        textDecoration: "none",
-      }}
-    >
-      Upgrade{plan ? ` to ${plan}` : ""}
-    </Link>
+  const featureTitle = def?.label ?? groupName ?? "this feature";
+  const targetPlanName = isMF ? "Pro" : planKey ? PLAN_NAMES[planKey] ?? planKey : "Pro";
+  const upgradeHeading = `Upgrade to ${targetPlanName} for ${featureTitle}`;
+
+  const intervalToggle = !widget && (
+    <div style={{ display: "inline-flex", background: "rgba(255,255,255,0.06)", borderRadius: 99, padding: 3, border: "1px solid rgba(255,255,255,0.12)", marginBottom: 12 }}>
+      <button
+        type="button"
+        onClick={() => setGateInterval("monthly")}
+        style={{
+          padding: "4px 12px",
+          borderRadius: 99,
+          border: "none",
+          fontSize: ".75rem",
+          fontWeight: 700,
+          cursor: "pointer",
+          background: gateInterval === "monthly" ? "var(--brand, #22c55e)" : "transparent",
+          color: gateInterval === "monthly" ? "#000" : "var(--text-dim-solid, #8a96a3)",
+        }}
+      >
+        Monthly
+      </button>
+      <button
+        type="button"
+        onClick={() => setGateInterval("annual")}
+        style={{
+          padding: "4px 12px",
+          borderRadius: 99,
+          border: "none",
+          fontSize: ".75rem",
+          fontWeight: 700,
+          cursor: "pointer",
+          background: gateInterval === "annual" ? "var(--brand, #22c55e)" : "transparent",
+          color: gateInterval === "annual" ? "#000" : "var(--text-dim-solid, #8a96a3)",
+        }}
+      >
+        Annual <span style={{ opacity: 0.8, fontSize: ".68rem" }}>· Save 20%</span>
+      </button>
+    </div>
+  );
+
+  const upgrade = isMF && !widget ? (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14, alignItems: "center" }}>
+      {intervalToggle}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+        <Link
+          href={`/checkout?plan=pro&interval=${gateInterval}`}
+          style={{
+            padding: "10px 24px",
+            borderRadius: 99,
+            background: "var(--brand)",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: ".88rem",
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          Upgrade to Pro ({gateInterval === "annual" ? "$566.40/yr" : "$59/mo"})
+        </Link>
+        <Link
+          href={`/checkout?plan=elite&interval=${gateInterval}`}
+          style={{
+            padding: "10px 24px",
+            borderRadius: 99,
+            background: "var(--surface-2)",
+            color: "var(--text-hi)",
+            fontWeight: 700,
+            fontSize: ".88rem",
+            textDecoration: "none",
+            border: "1px solid var(--border)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          Upgrade to Elite ({gateInterval === "annual" ? "$1,791/yr" : "$199/mo"})
+        </Link>
+      </div>
+      <Link
+        href="/dashboard"
+        style={{
+          marginTop: 6,
+          fontSize: ".82rem",
+          color: "var(--text-dim-solid)",
+          textDecoration: "none",
+        }}
+      >
+        Maybe later
+      </Link>
+    </div>
+  ) : (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: widget ? 4 : 14, alignItems: "center" }}>
+      {intervalToggle}
+      <Link
+        href={
+          planKey
+            ? `/checkout?plan=${planKey}&interval=${gateInterval}`
+            : "/manage-plan"
+        }
+        style={{
+          padding: widget ? "7px 18px" : "10px 24px",
+          borderRadius: 99,
+          background: "var(--brand)",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: widget ? ".78rem" : ".88rem",
+          textDecoration: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        Upgrade{planKey ? ` to ${PLAN_NAMES[planKey] ?? planKey}` : ""}
+      </Link>
+      {!widget && (
+        <Link
+          href="/dashboard"
+          style={{
+            marginTop: 6,
+            fontSize: ".82rem",
+            color: "var(--text-dim-solid)",
+            textDecoration: "none",
+          }}
+        >
+          Maybe later
+        </Link>
+      )}
+    </div>
   );
   if (widget) {
     return (
@@ -139,38 +251,43 @@ export function LockedFeature({
   }
   return (
     <div
-      className="card"
       data-testid="locked-feature"
       data-variant="screen"
       data-entitlement={entitlement}
-      style={{ maxWidth: 560, margin: "48px auto", textAlign: "center" }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "80px 20px",
+        gap: 16,
+        textAlign: "center",
+        margin: "0 auto",
+      }}
     >
-      <div
-        className="card-b"
-        style={{
-          padding: 28,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          alignItems: "center",
-        }}
-      >
-        {badge}
-        <h2 style={{ margin: 0, color: "var(--text-hi)", fontSize: "1.2rem" }}>
-          {def?.label ?? groupName ?? "This feature"}
-        </h2>
-        <p
-          style={{
-            margin: 0,
-            color: "var(--text-dim-solid)",
-            fontSize: ".86rem",
-            lineHeight: 1.5,
-          }}
-        >
-          {def?.description ?? (groupName ? `Part of ${groupName}.` : "")}
-        </p>
-        {upgrade}
+      <div style={{ fontSize: "2.8rem", lineHeight: 1 }} aria-hidden="true">
+        🔒
       </div>
+      <Link
+        href="/choose-plan"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "11px 26px",
+          borderRadius: 99,
+          background: "var(--brand, #4ADE80)",
+          color: "var(--on-brand, #07080A)",
+          fontWeight: 700,
+          fontSize: ".92rem",
+          textDecoration: "none",
+          transition: "all .16s ease",
+          boxShadow: "0 2px 16px rgba(74, 222, 128, 0.25)",
+        }}
+        data-testid="explore-plans-btn"
+      >
+        Explore Plans
+      </Link>
     </div>
   );
 }
@@ -192,18 +309,6 @@ export function EntitlementGate({
 }) {
   const key = entitlement ?? (slug ? entitlementForSlug(slug) : null);
   const state = useEntitlements();
-  if (state.data?.subscriptionsEnabled && !state.data?.staff && state.data?.planId === "none") {
-    if (variant === "widget") {
-      return (
-        <LockedFeature
-          entitlement={key as string}
-          requiredPlan="starter"
-          variant="widget"
-        />
-      );
-    }
-    return <ChoosePlanScreen />;
-  }
   const d = featureDecision(state, key);
   if (d.kind === "allow") return <>{children}</>;
   if (d.kind === "loading") return null;
