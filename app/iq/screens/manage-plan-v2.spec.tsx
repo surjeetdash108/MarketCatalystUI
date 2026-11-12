@@ -22,12 +22,15 @@ describe("Manage Plan v2", () => {
     assert.match(mp, /data-testid="done-email"[^>]*>We&apos;ve emailed you a confirmation/);
     assert.doesNotMatch(mp, /Free Tier/);
   });
-  it("Request refund exists only while REFUND_WINDOW_DAYS > 0 and the backend says the payment is eligible", () => {
-    assert.match(mp, /if \(REFUND_POLICY\.enabled\) setRefund\(await refundEligibility\(\)/);
-    assert.match(mp, /\{REFUND_POLICY\.enabled && refund\?\.eligible && \(/);
-    assert.match(mp, /<div>\{REFUND_POLICY\.managePlanLine\}<\/div>/);
-    assert.equal(REFUND_POLICY.enabled, true);
-    assert.equal(REFUND_POLICY.windowDays, 14);
+  it("no refunds: no refund button or call; cancelling says the plan stays active to the end of the paid period", () => {
+    assert.doesNotMatch(mp, /refundEligibility|requestRefund|request-refund|refund-confirm|Cancel and refund/);
+    assert.match(mp, /data-testid="no-refunds"[^>]*>\{REFUND_POLICY\.managePlanLine\}/);
+    assert.equal(REFUND_POLICY.enabled, false);
+    assert.match(REFUND_POLICY.managePlanLine, /^No refunds\./);
+  });
+  it("Manage Plan never charges or changes a plan itself: every change goes to the checkout page", () => {
+    assert.doesNotMatch(mp, /applyChange|previewChange|confirmChange|handleStripeAction/);
+    assert.match(mp, /window\.location\.href = checkoutPath\(\{ planId: plan\.id, interval \}\)/);
   });
   it("staff see 'Staff access' — no plans, checkout, upgrade prompts or retention", () => {
     assert.match(mp, /if \(ent\.staff && !ent\.checkoutPreview\) return <StaffPlan \/>;/);

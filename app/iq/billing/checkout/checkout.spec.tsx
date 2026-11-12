@@ -143,8 +143,8 @@ describe("Stripe adapter (Payment Element + Address Element, deferred intent)", 
     assert.match(stripeSrc, /redirect: "if_required"/);
     assert.match(stripeSrc, /await live\.elements\.submit\(\)/);
   });
-  it("Manage Plan: an upgrade needing 3-D Secure is handled by Stripe", () => {
-    assert.match(src("app/iq/screens/manage-plan.tsx"), /if \(r\.status === "requires_action" && r\.clientSecret\) \{[\s\S]*?handleStripeAction\(r\.clientSecret\)/);
+  it("checkout: a plan change needing 3-D Secure is handled by Stripe", () => {
+    assert.match(src("app/iq/billing/checkout/checkout-page.tsx"), /if \(res\.status === "requires_action" && res\.clientSecret\) \{[\s\S]*?handleStripeAction\(res\.clientSecret\)/);
   });
 });
 

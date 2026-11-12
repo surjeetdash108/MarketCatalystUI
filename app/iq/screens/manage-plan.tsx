@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { apiDownload, apiPost } from "../backend";
+import { apiDownload } from "../backend";
 import { refreshEntitlements, useEntitlements } from "../hooks/useEntitlements";
 import {
   acceptRetention,
-  applyChange,
   billingSummary,
   cancelPlan,
   errorBody,
@@ -14,15 +13,10 @@ import {
   listTimeline,
   listInvoices,
   openPortal,
-  previewChange,
   resumePlan,
-  refundEligibility,
-  requestRefund,
   retentionOffer,
   syncClaims,
-  type RefundEligibility,
   type BillingSummary,
-  type ChangePreview,
   type TimelineEntry,
   type InvoiceRow,
   type RetentionOffer,
@@ -33,7 +27,6 @@ import { Button, Modal, Notice, PREVIEW_BANNER, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
 import { REFUND_POLICY } from "../billing/refund-policy.generated";
 import { StaffPlan } from "./manage-plan-extras";
-import { handleStripeAction } from "../billing/checkout/stripe-payment-form";
 
 /**
  * Manage Plan. While paid plans are unavailable it is the honest
@@ -69,11 +62,8 @@ export function ManagePlanScreen() {
 }
 
 type Dialog =
-  | { kind: "preview"; preview: ChangePreview; plan: CatalogPlan }
-  | { kind: "action"; actionId: string; amountDue: number }
   | { kind: "retention"; offer: RetentionOffer }
   | { kind: "confirm-cancel" }
-  | { kind: "confirm-refund"; amount: number; currency: string }
   | { kind: "done"; title: string; text: string };
 
 const LIVE = ["ACTIVE", "TRIALING", "PAST_DUE"];
@@ -88,7 +78,6 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [refund, setRefund] = useState<RefundEligibility | null>(null);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
@@ -104,8 +93,6 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
         listInvoices().catch(() => []),
         listTimeline().catch(() => []),
       ]);
-      // The refund button exists only while REFUND_WINDOW_DAYS > 0 (the endpoint is 404 otherwise).
-      if (REFUND_POLICY.enabled) setRefund(await refundEligibility().catch(() => null));
       setPlans(p);
       setSummary(s);
       setInvoices(inv);
@@ -193,49 +180,6 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
     window.location.href = checkoutPath({ planId: plan.id, interval });
   }
 
-  async function confirmChange(preview: ChangePreview, plan: CatalogPlan) {
-    const payload = {
-      planId: plan.id,
-      interval: preview.interval,
-      prorationDate: preview.prorationDate,
-      ...(preview.kind === "upgrade" ? { expectedAmountDue: preview.amountDueNow } : {}),
-      ...(preview.kind === "downgrade" ? { expectedCredit: preview.creditToBalance } : {}),
-    };
-    try {
-      const r = await run(() => applyChange(payload));
-      if (!r) return;
-      if (r.status === "requires_action" && r.clientSecret) {
-        // Stripe: the bank's 3-D Secure challenge for the prorated invoice; the plan changes once paid.
-        const ok = await handleStripeAction(r.clientSecret);
-        if (ok) return afterChange(`You're on ${plan.name}`, "Payment confirmed. The new features are available now.");
-        setError("Authentication failed. Your plan has not changed.");
-        return;
-      }
-      if (r.status === "requires_action") return setDialog({ kind: "action", actionId: r.actionId, amountDue: r.amountDue });
-      if (r.status === "scheduled") return afterChange("Change scheduled", `You keep ${current?.name ?? "your plan"} until ${longDate(r.effectiveAt)}, then move to ${plan.name}.`);
-      if (preview.kind === "downgrade") {
-        return afterChange(`You're on ${plan.name}`, `Credit of ${formatMoney(r.creditToBalance ?? preview.creditToBalance)} added to your account.`);
-      }
-      return afterChange(`You're on ${plan.name}`, `Charged ${formatMoney(r.amountCharged)} today (prorated). The new features are available now.`);
-    } catch (err) {
-      const b = errorBody(err);
-      if (b.code === "preview_stale") {
-        const fresh = await run(() => previewChange({ planId: plan.id, interval: preview.interval }));
-        if (fresh) setDialog({ kind: "preview", preview: fresh, plan });
-        setError("The price changed since your preview. Review it again.");
-        return;
-      }
-      setError(b.message ?? "Something went wrong.");
-    }
-  }
-
-  async function confirmAction(actionId: string, approve: boolean) {
-    const r = await run(() => apiPost<{ status: string }>(`/api/billing/fake/actions/${actionId}`, { approve }));
-    if (r?.status === "complete") return afterChange("Payment confirmed", "Your plan has changed.");
-    setDialog(null);
-    setError("Authentication failed. Your plan has not changed.");
-  }
-
   async function startCancel() {
     const r = await run(() => retentionOffer());
     if (!r) return;
@@ -250,11 +194,6 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   async function keepWithDiscount() {
     const r = await run(() => acceptRetention());
     if (r) await afterChange("Discount applied", `${r.description}. Your subscription stays active.`);
-  }
-
-  async function confirmRefund() {
-    const r = await run(() => requestRefund());
-    if (r) await afterChange("Refund on its way", `We've refunded ${formatMoney(r.amount, r.currency)}. Your plan has ended.`);
   }
 
   return (
@@ -287,7 +226,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
             )}
             {summary.creditBalance > 0 && (
               <div data-testid="credit-balance" style={{ fontSize: ".88rem", color: "var(--brand-2)", fontWeight: 600 }}>
-                Account credit: {formatMoney(summary.creditBalance, summary.nextCharge?.currency ?? "USD")} (used automatically on your next invoice, not refunded to card)
+                Account credit: {formatMoney(summary.creditBalance, summary.nextCharge?.currency ?? "USD")} (used automatically on your next invoice)
               </div>
             )}
             {subscribed && summary.status === "TRIALING" && summary.currentPeriodEnd && !summary.endsAt && (
@@ -307,9 +246,6 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {subscribed && !summary.cancelAtPeriodEnd && <Button kind="danger" testId="cancel" onClick={() => void startCancel()} disabled={busy}>Cancel subscription</Button>}
               {subscribed && summary.cancelAtPeriodEnd && <Button testId="resume" onClick={() => void run(() => resumePlan()).then((r) => r && afterChange("Plan resumed", `Your plan renews on ${longDate(r.renewsAt)}.`))}>Resume subscription</Button>}
-              {REFUND_POLICY.enabled && refund?.eligible && (
-                <Button kind="secondary" testId="request-refund" disabled={busy} onClick={() => refund.eligible && setDialog({ kind: "confirm-refund", amount: refund.amount, currency: refund.currency })}>Request refund</Button>
-              )}
               {subscribed && summary.hasBillingAccount && <Button kind="secondary" testId="update-card" onClick={() => void run(() => openPortal()).then((r) => r && (window.location.href = r.url))}>Update card</Button>}
             </div>
           </div>
@@ -461,120 +397,17 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
         </div>
       </div>
 
-      {dialog?.kind === "preview" && (
-        <Modal
-          title={
-            dialog.preview.kind === "upgrade"
-              ? `Upgrade to ${dialog.plan.name}`
-              : dialog.preview.kind === "downgrade"
-              ? `Downgrade to ${dialog.plan.name}`
-              : `Change to ${dialog.plan.name}`
-          }
-          onClose={() => setDialog(null)}
-          testId="preview-dialog"
-        >
-          {dialog.preview.kind === "scheduled" ? (
-            <div data-testid="preview-scheduled">
-              Takes effect on <b>{longDate(dialog.preview.effectiveAt)}</b>. You keep {current?.name ?? "your plan"} until then, then move to {dialog.plan.name} at {formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)}.
-            </div>
-          ) : dialog.preview.trialEndsAt ? (
-            <div data-testid="preview-trial" style={{ fontSize: ".86rem" }}>
-              You&apos;re in your free trial, so nothing is charged now. {dialog.plan.name} starts right away, and your first charge of{" "}
-              <b>{formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)}</b> is on <b>{longDate(dialog.preview.trialEndsAt)}</b> unless you cancel before then.
-            </div>
-          ) : dialog.preview.breakdown ? (
-            <div data-testid="preview-breakdown" style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: ".86rem" }}>
-              <div>{dialog.preview.breakdown.fromPlanName}: {longDate(dialog.preview.breakdown.periodStart)} to today: {formatMoney(dialog.preview.breakdown.usedOnCurrent, dialog.preview.currency)}</div>
-              <div>{dialog.preview.breakdown.toPlanName}: today to {longDate(dialog.preview.nextRenewalDate || dialog.preview.breakdown.periodEnd)}: {formatMoney(dialog.preview.breakdown.newPlanCharge, dialog.preview.currency)}</div>
-              <div>Already paid for {dialog.preview.breakdown.fromPlanName}: −{formatMoney(dialog.preview.breakdown.alreadyPaid, dialog.preview.currency)}</div>
-              {dialog.preview.breakdown.discount > 0 && (
-                <div data-testid="preview-discount">Discount: −{formatMoney(dialog.preview.breakdown.discount, dialog.preview.currency)}</div>
-              )}
-              {dialog.preview.breakdown.tax > 0 && (
-                <div data-testid="preview-tax">Tax: {formatMoney(dialog.preview.breakdown.tax, dialog.preview.currency)}</div>
-              )}
-              {dialog.preview.breakdown.creditUsed > 0 && (
-                <div data-testid="preview-credit-used">Account credit used: −{formatMoney(dialog.preview.breakdown.creditUsed, dialog.preview.currency)}</div>
-              )}
-              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, fontWeight: 700 }}>
-                {dialog.preview.kind === "upgrade" ? (
-                  <span data-testid="preview-amount">
-                    Charged now: {formatMoney(dialog.preview.amountDueNow, dialog.preview.currency)}
-                  </span>
-                ) : (
-                  <span data-testid="preview-credit">
-                    Credit to your account: {formatMoney(dialog.preview.creditToBalance, dialog.preview.currency)} (used automatically on your next invoice(s), not refunded to the card)
-                  </span>
-                )}
-              </div>
-              <div style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>
-                Next renewal: {formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)} on {longDate(dialog.preview.nextRenewalDate)}
-                {dialog.preview.nextInvoiceAfterCredit !== dialog.preview.nextRenewalAmount && (
-                  <span> (after credit: {formatMoney(dialog.preview.nextInvoiceAfterCredit, dialog.preview.currency)})</span>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div data-testid="preview-amount">
-              {dialog.preview.kind === "upgrade"
-                ? `You'll be charged ${formatMoney(dialog.preview.amountDueNow, dialog.preview.currency)} today (prorated). Then ${formatMoney(dialog.preview.nextRenewalAmount, dialog.preview.currency)} on ${longDate(dialog.preview.nextRenewalDate)}.`
-                : `Credit to your account: ${formatMoney(dialog.preview.creditToBalance, dialog.preview.currency)}.`}
-            </div>
-          )}
-          {dialog.preview.cancelsPendingDowngrade && <Notice>This replaces your scheduled downgrade.</Notice>}
-          {dialog.preview.resumesCancelledPlan && <Notice>This also resumes your cancelled plan.</Notice>}
-          {dialog.preview.keepsCancelDate && <Notice>Your plan still ends on {longDate(summary.endsAt)}.</Notice>}
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <Button testId="confirm-change" onClick={() => void confirmChange(dialog.preview, dialog.plan)} disabled={busy}>Confirm</Button>
-            <Button kind="secondary" onClick={() => setDialog(null)}>Back</Button>
-          </div>
-        </Modal>
-      )}
-      {dialog?.kind === "action" && (
-        <Modal title="Confirm your payment" testId="action-dialog">
-          <div>Your bank needs you to confirm {formatMoney(dialog.amountDue)}.</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button testId="action-approve" onClick={() => void confirmAction(dialog.actionId, true)}>Complete authentication</Button>
-            <Button kind="danger" onClick={() => void confirmAction(dialog.actionId, false)}>Fail authentication</Button>
-          </div>
-        </Modal>
-      )}
       {dialog?.kind === "retention" && (
         <RetentionChoice offer={dialog.offer} busy={busy} onKeep={() => void keepWithDiscount()} onCancel={() => void doCancel()} onClose={() => setDialog(null)} />
       )}
-      {dialog?.kind === "confirm-refund" && (
-        <Modal title="Request a refund?" onClose={() => setDialog(null)} testId="refund-dialog">
-          <div>{REFUND_POLICY.managePlanLine}</div>
-          <div>You&apos;ll get {formatMoney(dialog.amount, dialog.currency)} back and your plan ends right away.</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button kind="danger" testId="refund-confirm" onClick={() => void confirmRefund()} disabled={busy}>Refund and end my plan</Button>
-            <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
-          </div>
-        </Modal>
-      )}
       {dialog?.kind === "confirm-cancel" && (
         <Modal title="Cancel your plan?" onClose={() => setDialog(null)} testId="cancel-dialog">
-          {refund?.eligible ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                If you cancel today, your subscription will only deduct for your elapsed usage, and the remaining balance (<b>{formatMoney(refund.amount, refund.currency)}</b>) will be refunded immediately back to your original payment method.
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <Button kind="danger" testId="cancel-refund-confirm" onClick={() => void confirmRefund()} disabled={busy}>
-                  Cancel and refund {formatMoney(refund.amount, refund.currency)}
-                </Button>
-                <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your plan ends. No further charges.</div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <Button kind="danger" testId="cancel-confirm" onClick={() => void doCancel()} disabled={busy}>Cancel my plan</Button>
-                <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
-              </div>
-            </>
-          )}
+          <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your plan ends. No further charges.</div>
+          <div data-testid="no-refunds" style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>{REFUND_POLICY.managePlanLine}</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <Button kind="danger" testId="cancel-confirm" onClick={() => void doCancel()} disabled={busy}>Cancel my plan</Button>
+            <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
+          </div>
         </Modal>
       )}
       {dialog?.kind === "done" && (

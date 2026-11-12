@@ -124,7 +124,7 @@ function Subscribers() {
               Account credit balance: {formatMoney(Number(detail.creditBalance))}
             </div>
           )}
-          <SubscriberContact detail={detail} onRefunded={() => void apiGet<Record<string, unknown>>(`/api/admin/billing/subscribers/${String(detail.uid)}`).then(setDetail).then(load)} />
+          <SubscriberContact detail={detail} />
           <b>Invoices</b>
           {(detail.invoices as Array<Record<string, unknown>>).map((i) => (
             <div key={String(i.paymentId)} style={{ fontSize: ".78rem", borderBottom: "1px solid var(--border-soft)", paddingBottom: 4 }}>
@@ -257,16 +257,8 @@ function AuditLog() {
   );
 }
 
-/** Renewal consent, billing region and the refund action. */
-function SubscriberContact({ detail, onRefunded }: { detail: Record<string, unknown>; onRefunded: () => void }) {
-  const uid = String(detail.uid);
-  const [refund, setRefund] = useState<{ eligible: boolean; amount?: number; currency?: string; reason?: string } | null | "off">(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  useEffect(() => {
-    apiGet<{ eligible: boolean; amount?: number; currency?: string; reason?: string }>(`/api/admin/billing/subscribers/${uid}/refund`)
-      .then(setRefund)
-      .catch((e) => setRefund(errorBody(e).status === 404 ? "off" : null));
-  }, [uid]);
+/** Renewal consent and billing region. (No refunds: there is no refund action.) */
+function SubscriberContact({ detail }: { detail: Record<string, unknown> }) {
   const consent = detail.consent as Record<string, unknown> | null;
   const region = detail.billingRegion as Record<string, unknown> | null;
   return (
@@ -276,14 +268,6 @@ function SubscriberContact({ detail, onRefunded }: { detail: Record<string, unkn
         <b>Renewal consent</b>{" "}
         {consent ? `${longDate(String(consent.acceptedAt))} · v${String(consent.version)} · ${String(consent.planId)} ${String(consent.interval)} at ${formatMoney(Number(consent.price), String(consent.currency ?? "USD"))} · IP ${String(consent.ip ?? "—")}` : "—"}
       </div>
-      {refund !== "off" && refund?.eligible && (
-        <div>
-          <Button kind="danger" testId="sub-refund" onClick={() => void apiPost<{ amount: number }>(`/api/admin/billing/subscribers/${uid}/refund`).then((r) => { setMsg(`Refunded ${formatMoney(r.amount)}; the plan has ended.`); onRefunded(); }).catch((e) => setMsg(errorBody(e).message ?? "Refund failed."))}>
-            Refund {formatMoney(Number(refund.amount ?? 0), refund.currency ?? "USD")} and end the plan
-          </Button>
-        </div>
-      )}
-      {msg && <Notice testId="sub-refund-msg">{msg}</Notice>}
     </div>
   );
 }
