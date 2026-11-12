@@ -108,9 +108,11 @@ export type AuthMethod = "password" | "google";
  *  - selected a plan → Step 2: /choose-plan
  */
 export function nextAfterSignup(intent: PlanIntent | null, method: AuthMethod, paidPlansAvailable?: boolean): string {
-  if (!intent) return "/dashboard";
-  // Step 2 of the new-account flow (create account → select plan → payment).
-  return `${choosePlanPath(intent)}&onboarding=1`;
+  const target = !intent ? "/dashboard" : `${choosePlanPath(intent)}&onboarding=1`;
+  if (method === "password") {
+    return `/verify-email?next=${encodeURIComponent(target)}`;
+  }
+  return target;
 }
 
 /** True on pages reached through the new-account flow (shows the 3-step indicator). */

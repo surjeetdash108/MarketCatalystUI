@@ -139,7 +139,7 @@ export function CheckoutPage() {
           const b = errorBody(e);
           if (b.code === "promo_invalid") {
             setPromoCode(null);
-            setPromoError(b.message ?? "That code isn't valid.");
+            setPromoError(b.message ?? "This coupon is invalid");
             return;
           }
           setError(b.message ?? "Couldn't load your order summary. Refresh to try again.");
@@ -160,7 +160,7 @@ export function CheckoutPage() {
       await previewPromo({ code: promoInput.trim(), planId: plan.id, interval });
       setPromoCode(promoInput.trim());
     } catch (e) {
-      setPromoError(errorBody(e).message ?? "That code isn't valid.");
+      setPromoError(errorBody(e).message ?? "This coupon is invalid");
     }
   }
 

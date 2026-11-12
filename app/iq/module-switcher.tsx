@@ -240,15 +240,21 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
               </button>
             </div>
 
-            <h2 style={{ margin: "0 0 10px", fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }} data-testid="module-upgrade-title">
-              {upgradeModal === "MF" ? "Money Flow is available on Pro and up" : "Strategy Lab is available on Elite"}
+            <h2 style={{ margin: "0 0 10px", fontSize: "1.25rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }} data-testid="module-upgrade-title">
+              {upgradeModal === "MF" ? (
+                <>What&apos;s inside <span style={{ color: "#e0bb5e" }}>Money Flow</span></>
+              ) : (
+                <>What&apos;s inside <span style={{ color: "#c9a24a" }}>Strategy Lab</span></>
+              )}
             </h2>
-            <p style={{ margin: "0 0 18px", fontSize: ".86rem", color: "#9aa3a8", lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 12px", fontSize: ".88rem", color: "#9aa3a8", lineHeight: 1.55 }}>
               {upgradeModal === "MF"
                 ? "See where institutional money is moving, by sector, with the biggest institutional gainers and losers."
                 : "Build or pick a strategy, backtest it, and get entry, stop and target levels."}
-              {(entitlements?.trialDays ?? 0) > 0 ? ` Every plan starts with a ${entitlements?.trialDays}-day free trial.` : ""}
             </p>
+            <div style={{ margin: "0 0 18px", fontSize: ".82rem", color: "var(--brand, #4ade80)", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+              <span>✓</span> Cancel anytime (no questions asked)
+            </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <Link
@@ -259,22 +265,6 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
               >
                 See the plans
               </Link>
-              <button
-                type="button"
-                onClick={() => setUpgradeModal(null)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#6b7785",
-                  padding: "8px",
-                  fontSize: ".82rem",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  marginTop: 2,
-                }}
-              >
-                Maybe later
-              </button>
             </div>
           </div>
         </div>,

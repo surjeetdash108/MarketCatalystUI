@@ -13,8 +13,8 @@ describe("website tile → /choose-plan routing (all 6 plan/interval combination
   for (const t of TILES) {
     const mp = `/choose-plan?plan=${t.planId}&interval=${t.interval}`;
     it(`${t.planId} ${t.interval}`, () => {
-      // Signed out → sign up with email: straight to /choose-plan with intent
-      assert.equal(nextAfterSignup(t, "password"), `${mp}&onboarding=1`);
+      // Signed out → sign up with email: validates email first
+      assert.equal(nextAfterSignup(t, "password"), `/verify-email?next=${encodeURIComponent(`${mp}&onboarding=1`)}`);
       // Signed out → sign up with Google (already verified): straight to /choose-plan with intent
       assert.equal(nextAfterSignup(t, "google"), `${mp}&onboarding=1`);
       // Existing account signs in (email or Google): straight to /choose-plan with intent
@@ -28,8 +28,8 @@ describe("website tile → /choose-plan routing (all 6 plan/interval combination
     });
   }
 
-  it("plain signup (no intent) → dashboard; plain login → its usual home", () => {
-    assert.equal(nextAfterSignup(null, "password"), "/dashboard");
+  it("plain signup (no intent) → dashboard (email verifies first); plain login → its usual home", () => {
+    assert.equal(nextAfterSignup(null, "password"), `/verify-email?next=${encodeURIComponent("/dashboard")}`);
     assert.equal(nextAfterSignup(null, "google"), "/dashboard");
     assert.equal(nextAfterLogin(null, "/admin"), "/admin");
   });

@@ -65,7 +65,7 @@ export function PlanPicker({
       setPromoResult(res);
     } catch {
       setPromoResult(null);
-      setPromoError("Invalid promo code");
+      setPromoError("This coupon is invalid");
     } finally {
       setCheckingPromo(false);
     }

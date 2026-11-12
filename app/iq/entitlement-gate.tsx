@@ -110,7 +110,6 @@ export function LockedFeature({
         {trialDays > 0 ? ` Every plan starts with a ${trialDays}-day free trial.` : ""}
       </p>
       {cta}
-      <Link href="/dashboard" style={{ fontSize: ".82rem", color: "var(--text-dim-solid)", textDecoration: "none" }}>Maybe later</Link>
     </div>
   );
 }
