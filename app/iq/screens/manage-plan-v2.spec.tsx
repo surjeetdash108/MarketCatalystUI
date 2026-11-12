@@ -10,10 +10,17 @@ const src = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
 describe("Manage Plan v2", () => {
   const mp = src("app/iq/screens/manage-plan.tsx");
-  it("is the only place a signed-in user chooses a plan: a new paid plan opens /checkout; subscribers keep preview/confirm", () => {
+  it("choosing a plan opens /checkout — the payment step for a new plan, the breakdown + payment step for a change", () => {
     assert.match(mp, /if \(!subscribed\) \{\s*\/\/[^\n]*\n\s*window\.location\.href = checkoutPath\(\{ planId: plan\.id, interval \}\);/);
-    assert.match(mp, /const preview = await run\(\(\) => previewChange\(/);
+    assert.match(mp, /\/\/ Subscribers change plan on the checkout page[^\n]*\n\s*window\.location\.href = checkoutPath\(\{ planId: plan\.id, interval \}\);/);
     assert.doesNotMatch(mp, /mp-promo|startCheckout/);
+  });
+  it("plan history is a timeline table (date & time, what happened, details, amount) and every confirmation mentions the email", () => {
+    assert.match(mp, /listTimeline\(\)/);
+    assert.match(mp, /<th style=\{\{ textAlign: "left" \}\}>Date &amp; time<\/th>/);
+    assert.match(mp, /id="history"/);
+    assert.match(mp, /data-testid="done-email"[^>]*>We&apos;ve emailed you a confirmation/);
+    assert.doesNotMatch(mp, /Free Tier/);
   });
   it("Request refund exists only while REFUND_WINDOW_DAYS > 0 and the backend says the payment is eligible", () => {
     assert.match(mp, /if \(REFUND_POLICY\.enabled\) setRefund\(await refundEligibility\(\)/);
@@ -32,6 +39,12 @@ describe("Manage Plan v2", () => {
   it("account settings and plan manage layout", () => {
     assert.doesNotMatch(mp, /<ContactCard \/>/);
     assert.doesNotMatch(src("app/iq/screens/settings.tsx"), /<ContactCard \/>/);
-    assert.match(src("app/iq/screens/settings.tsx"), /isStaff \? "Staff"/);
+    // Settings → Plan comes from the server's entitlements (plan, status, dates), not profile fields.
+    const settings = src("app/iq/screens/settings.tsx");
+    assert.match(settings, /<PlanSettingsCard isStaff=\{isStaff\} isLifetime=\{isLifetime\} \/>/);
+    assert.match(settings, /badge = "Staff"/);
+    assert.match(settings, /Free trial until \$\{shortDate\(ent\?\.currentPeriodEnd\)\}/);
+    assert.match(settings, /data-testid="settings-manage-plan"/);
+    assert.doesNotMatch(settings, /"Free"|◈ Premium/);
   });
 });

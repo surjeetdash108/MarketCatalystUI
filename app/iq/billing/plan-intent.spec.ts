@@ -14,9 +14,9 @@ describe("website tile → /choose-plan routing (all 6 plan/interval combination
     const mp = `/choose-plan?plan=${t.planId}&interval=${t.interval}`;
     it(`${t.planId} ${t.interval}`, () => {
       // Signed out → sign up with email: straight to /choose-plan with intent
-      assert.equal(nextAfterSignup(t, "password"), mp);
+      assert.equal(nextAfterSignup(t, "password"), `${mp}&onboarding=1`);
       // Signed out → sign up with Google (already verified): straight to /choose-plan with intent
-      assert.equal(nextAfterSignup(t, "google"), mp);
+      assert.equal(nextAfterSignup(t, "google"), `${mp}&onboarding=1`);
       // Existing account signs in (email or Google): straight to /choose-plan with intent
       assert.equal(nextAfterLogin(t, "/dashboard"), mp);
       // The tile link carries the intent; it survives the Google redirect via sessionStorage.

@@ -109,7 +109,13 @@ export type AuthMethod = "password" | "google";
  */
 export function nextAfterSignup(intent: PlanIntent | null, method: AuthMethod, paidPlansAvailable?: boolean): string {
   if (!intent) return "/dashboard";
-  return choosePlanPath(intent);
+  // Step 2 of the new-account flow (create account → select plan → payment).
+  return `${choosePlanPath(intent)}&onboarding=1`;
+}
+
+/** True on pages reached through the new-account flow (shows the 3-step indicator). */
+export function isOnboarding(search: string): boolean {
+  return new URLSearchParams(search).get("onboarding") === "1";
 }
 
 /** Where an existing account that just signed in goes. */

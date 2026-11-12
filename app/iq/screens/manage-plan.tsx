@@ -11,7 +11,7 @@ import {
   errorBody,
   fetchPlans,
   keepCurrentPlan,
-  listHistory,
+  listTimeline,
   listInvoices,
   openPortal,
   previewChange,
@@ -23,7 +23,7 @@ import {
   type RefundEligibility,
   type BillingSummary,
   type ChangePreview,
-  type HistoryRow,
+  type TimelineEntry,
   type InvoiceRow,
   type RetentionOffer,
 } from "../billing/api";
@@ -82,7 +82,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   const [plans, setPlans] = useState<CatalogPlan[]>([]);
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
-  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const [selected, setSelected] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -102,14 +102,14 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
           return null;
         }),
         listInvoices().catch(() => []),
-        listHistory().catch(() => []),
+        listTimeline().catch(() => []),
       ]);
       // The refund button exists only while REFUND_WINDOW_DAYS > 0 (the endpoint is 404 otherwise).
       if (REFUND_POLICY.enabled) setRefund(await refundEligibility().catch(() => null));
       setPlans(p);
       setSummary(s);
       setInvoices(inv);
-      setHistory(hist);
+      setTimeline(hist);
       return { p, s };
     } catch (err) {
       console.error("reload failed:", err);
@@ -189,10 +189,8 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       window.location.href = checkoutPath({ planId: plan.id, interval });
       return;
     }
-    // Subscribers upgrade on the checkout page with transparent prorated breakdown:
+    // Subscribers change plan on the checkout page: one payment step with the breakdown.
     window.location.href = checkoutPath({ planId: plan.id, interval });
-    const preview = await run(() => previewChange({ planId: plan.id, interval }));
-    if (preview) setDialog({ kind: "preview", preview, plan });
   }
 
   async function confirmChange(preview: ChangePreview, plan: CatalogPlan) {
@@ -273,7 +271,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
           <div className="card-h"><h3>Current plan</h3></div>
           <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div data-testid="current-plan" style={{ fontSize: "1.05rem", color: "var(--text-hi)" }}>
-              <b>{subscribed ? summary.planName : "Free Tier"}</b>
+              <b>{subscribed ? summary.planName : "No plan"}</b>
               {summary.source === "lifetime" ? " · Lifetime" : subscribed && summary.interval ? (summary.interval === "annual" ? " · Annual" : " · Monthly") : ""}
               {summary.source === "launch_trial" ? " · launch trial" : summary.source === "lifetime" ? " · complimentary" : ""}
             </div>
@@ -291,6 +289,9 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
               <div data-testid="credit-balance" style={{ fontSize: ".88rem", color: "var(--brand-2)", fontWeight: 600 }}>
                 Account credit: {formatMoney(summary.creditBalance, summary.nextCharge?.currency ?? "USD")} (used automatically on your next invoice, not refunded to card)
               </div>
+            )}
+            {subscribed && summary.status === "TRIALING" && summary.currentPeriodEnd && !summary.endsAt && (
+              <Notice testId="trial-active">Free trial until {longDate(summary.currentPeriodEnd)}. Your first charge is on that date; cancel before then and you pay nothing.</Notice>
             )}
             {summary.renewsAt && <div data-testid="renews">Renews on {longDate(summary.renewsAt)}{summary.nextCharge ? ` for ${formatMoney(summary.nextCharge.amount, summary.nextCharge.currency)}` : ""}.</div>}
             {summary.endsAt && <Notice tone="warn" testId="ends">Your plan ends on {longDate(summary.endsAt)}. You keep full access until then.</Notice>}
@@ -424,17 +425,37 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
           </div>
         </div>
 
-        <div className="card col-12">
+        <div className="card col-12" id="history">
           <div className="card-h"><h3>Plan history</h3></div>
-          <div className="card-b" data-testid="history" style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: ".8rem" }}>
-            {history.filter((h) => !(h.type === "subscribed" && (h.to as Record<string, unknown> | undefined)?.status === "NONE")).length === 0 && (
-              <div style={{ color: "var(--text-dim-solid)" }}>No changes yet.</div>
+          <div className="card-b" data-testid="history">
+            {timeline.length === 0 ? (
+              <div style={{ color: "var(--text-dim-solid)", fontSize: ".84rem" }}>No changes yet.</div>
+            ) : (
+              <div className="tbl-wrap">
+                <table className="tbl" data-testid="history-table">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left" }}>Date &amp; time</th>
+                      <th style={{ textAlign: "left" }}>What happened</th>
+                      <th style={{ textAlign: "left" }}>Details</th>
+                      <th style={{ textAlign: "right" }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {timeline.map((e, idx) => (
+                      <tr key={`${e.at}-${idx}`} data-testid={`history-row-${e.kind}`}>
+                        <td style={{ whiteSpace: "nowrap" }}>{dateTime(e.at)}</td>
+                        <td style={{ color: "var(--text-hi)", fontWeight: 600 }}>{e.title}</td>
+                        <td style={{ color: "var(--text-dim-solid)" }}>{e.detail ?? ""}</td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap", color: e.amount != null && e.amount < 0 ? "var(--up)" : "var(--text)" }}>
+                          {e.amount == null ? "" : e.amount < 0 ? `−${formatMoney(-e.amount, e.currency ?? "USD")}` : formatMoney(e.amount, e.currency ?? "USD")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-            {history
-              .filter((h) => !(h.type === "subscribed" && (h.to as Record<string, unknown> | undefined)?.status === "NONE"))
-              .map((h, idx) => (
-                <div key={idx}>{longDate(h.at)} — {h.type.replace(/_/g, " ")}{describe(h.to)}</div>
-              ))}
           </div>
         </div>
       </div>
@@ -544,21 +565,12 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       {dialog?.kind === "done" && (
         <Modal title={dialog.title} onClose={() => setDialog(null)} testId="done-dialog">
           <div data-testid="done-text">{dialog.text}</div>
+          <div data-testid="done-email" style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>We&apos;ve emailed you a confirmation. It&apos;s also in your plan history below.</div>
           <Button onClick={() => setDialog(null)}>OK</Button>
         </Modal>
       )}
     </>
   );
-}
-
-function describe(to: unknown): string {
-  if (!to || typeof to !== "object") return "";
-  const t = to as Record<string, unknown>;
-  if (t.planId) return `: ${String(t.planId)}${t.interval ? ` (${String(t.interval)})` : ""}`;
-  if (t.endsAt) return `: ends ${longDate(String(t.endsAt))}`;
-  if (t.renewsAt) return `: renews ${longDate(String(t.renewsAt))}`;
-  if (t.source) return `: ${String(t.source)}`;
-  return "";
 }
 
 /**
@@ -577,4 +589,12 @@ export function RetentionChoice({ offer, busy, onKeep, onCancel, onClose }: { of
       </div>
     </Modal>
   );
+}
+
+/** "Nov 12, 2026, 3:04 PM" in the viewer's time zone. */
+export function dateTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }

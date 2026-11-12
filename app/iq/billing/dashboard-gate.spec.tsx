@@ -35,12 +35,13 @@ describe("featureDecision (fetch only when allowed)", () => {
 });
 
 describe("widget lock card", () => {
-  it("says 'Available on Starter' and links Upgrade to the Starter plan", () => {
+  it("says 'Available on Starter and up' and links 'See the plans' to the plans page with Starter highlighted (no prices, no checkout)", () => {
     const html = renderToStaticMarkup(<LockedFeature entitlement="ownership" requiredPlan="starter" variant="widget" />);
     assert.match(html, /data-testid="locked-feature"/);
     assert.match(html, /data-variant="widget"/);
-    assert.match(html, />Available on Starter</);
-    assert.match(html, /href="\/checkout\?plan=starter&amp;interval=annual"[^>]*>Upgrade to Starter</);
+    assert.match(html, />Available on Starter and up</);
+    assert.match(html, /href="\/choose-plan\?plan=starter">See the plans</);
+    assert.doesNotMatch(html, /\$\d|\/checkout/);
   });
 });
 

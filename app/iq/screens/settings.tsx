@@ -8,7 +8,6 @@ import { useAppSelector } from "../../store/hooks";
 import type { StoredProfile } from "../../store/profile-slice";
 import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
-import { hasConfirmedPaidPlan } from "../plan-status";
 import { isLifetimeElite } from "../billing/lifetime-elite";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { ContactCard } from "./manage-plan-extras";
@@ -217,7 +216,6 @@ export function SettingsScreen() {
   }
 
   const isLifetime = isLifetimeElite(user?.email);
-  const isPremium = hasConfirmedPaidPlan(profile, Date.now(), user?.email);
   const isStaff = useEntitlements().data?.staff === true;
 
   // Fields the user must fill in themselves (name arrives from Google, email from
@@ -457,35 +455,7 @@ export function SettingsScreen() {
         </div>
 
         {/* Plan */}
-        <div className="card col-12">
-          <div className="card-h">
-            <h3>Plan</h3>
-            <span style={{
-              marginLeft: 10, padding: "2px 10px", borderRadius: 99,
-              fontSize: "0.6875rem", fontWeight: 700,
-              background: isPremium ? "var(--brand-dim)" : "var(--surface-3)",
-              color: isPremium ? "var(--brand-2)" : "var(--text-dim-solid)",
-              border: `1px solid ${isPremium ? "var(--brand)" : "var(--border)"}`,
-            }}>
-              {isStaff ? "Staff" : isLifetime ? "◈ Elite (Lifetime)" : isPremium ? "◈ Premium" : "Free"}
-            </span>
-          </div>
-          <div className="card-b">
-            <div style={{ fontSize: "0.8125rem", color: "var(--text)", marginBottom: 12 }}>
-              {isStaff
-                ? "Staff access: every feature, never billed."
-                : isLifetime
-                ? "Your complimentary Lifetime Elite plan is active with full access to every feature."
-                : isPremium
-                ? "Your paid plan is active."
-                : "Paid plans are launching soon. You won't be charged anything until then."}
-            </div>
-            <button className="planbtn" style={{ maxWidth: 180 }} onClick={() => window.location.href = "/manage-plan"}>
-              <span style={{ fontSize: "0.8125rem" }}>◈</span>
-              Manage Plan
-            </button>
-          </div>
-        </div>
+        <PlanSettingsCard isStaff={isStaff} isLifetime={isLifetime} />
 
         {/* Schedule & share recap */}
         <div className="card col-12">
@@ -547,5 +517,70 @@ export function SettingsScreen() {
 
       </div>
     </>
+  );
+}
+
+/** "Nov 19, 2026" */
+function shortDate(iso: string | null | undefined): string {
+  return iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
+}
+
+/**
+ * Settings → Plan: the current plan and what happens next, from the server's
+ * entitlements, with one place to manage it.
+ */
+export function PlanSettingsCard({ isStaff, isLifetime }: { isStaff: boolean; isLifetime: boolean }) {
+  const { data: ent } = useEntitlements();
+  const status = ent?.status ?? "";
+  const subscribed = !!ent?.subscriptionPlanId;
+  const cadence = ent?.interval === "annual" ? "Annual" : ent?.interval === "monthly" ? "Monthly" : "";
+  let badge = "No plan";
+  let line = "Choose a plan to unlock Market Catalyst, Stock Intelligence, Money Flow and Strategy Lab.";
+  if (isStaff) {
+    badge = "Staff";
+    line = "Staff access: every feature, never billed.";
+  } else if (isLifetime) {
+    badge = "Elite (Lifetime)";
+    line = "Your complimentary Lifetime Elite plan is active with full access to every feature.";
+  } else if (ent && !ent.subscriptionsEnabled) {
+    badge = "Full access";
+    line = "Paid plans are launching soon. You won't be charged anything until then.";
+  } else if (status === "INTRO") {
+    badge = "Market Catalyst intro";
+    line = `Your Market Catalyst intro ends on ${shortDate(ent?.introEndsAt)}. Choose a plan to keep going${(ent?.trialDays ?? 0) > 0 ? ` — every plan starts with a ${ent?.trialDays}-day free trial` : ""}.`;
+  } else if (subscribed) {
+    badge = `${ent?.planName ?? ""}${cadence ? ` · ${cadence}` : ""}`;
+    line =
+      status === "TRIALING"
+        ? `Free trial until ${shortDate(ent?.currentPeriodEnd)}. ${ent?.cancelAtPeriodEnd ? "Cancelled — you won't be charged." : "Your first charge is on that date."}`
+        : ent?.cancelAtPeriodEnd
+          ? `Cancelled. You keep access until ${shortDate(ent?.currentPeriodEnd)}.`
+          : status === "PAST_DUE"
+            ? "Your last payment failed. Update your card in Manage Plan to keep access."
+            : `Renews on ${shortDate(ent?.currentPeriodEnd)}.`;
+  }
+  const btn = { maxWidth: 200 } as const;
+  return (
+    <div className="card col-12" data-testid="settings-plan">
+      <div className="card-h">
+        <h3>Plan</h3>
+        <span data-testid="settings-plan-badge" style={{ marginLeft: 10, padding: "2px 10px", borderRadius: 99, fontSize: "0.6875rem", fontWeight: 700, background: subscribed || isStaff || isLifetime ? "var(--brand-dim)" : "var(--surface-3)", color: subscribed || isStaff || isLifetime ? "var(--brand-2)" : "var(--text-dim-solid)", border: `1px solid ${subscribed || isStaff || isLifetime ? "var(--brand)" : "var(--border)"}` }}>
+          {badge}
+        </span>
+      </div>
+      <div className="card-b">
+        <div data-testid="settings-plan-line" style={{ fontSize: "0.8125rem", color: "var(--text)", marginBottom: 12 }}>{line}</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {subscribed || isStaff || isLifetime ? (
+            <>
+              <button className="planbtn" style={btn} data-testid="settings-manage-plan" onClick={() => (window.location.href = "/manage-plan")}>Manage plan</button>
+              <button className="planbtn" style={btn} data-testid="settings-plan-history" onClick={() => (window.location.href = "/manage-plan#history")}>Plan history</button>
+            </>
+          ) : (
+            <button className="planbtn" style={btn} data-testid="settings-see-plans" onClick={() => (window.location.href = "/choose-plan")}>See the plans</button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

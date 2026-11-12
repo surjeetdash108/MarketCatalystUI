@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../backend";
 import { refreshEntitlements, useEntitlements } from "../hooks/useEntitlements";
-import { checkoutStatus, errorBody, fetchPlans } from "./api";
-import { formatMoney } from "./catalog";
+import { billingSummary, checkoutStatus, errorBody, fetchPlans } from "./api";
+import { formatMoney, longDate } from "./catalog";
+import { planChangeLines, takePlanChange, type PlanChangeSummary } from "./plan-change-summary";
 import { checkoutPath, currentIntent } from "./plan-intent";
 import { Button, Notice, PREVIEW_BANNER, TEST_MODE_BANNER, pill } from "./ui";
 
@@ -31,6 +32,7 @@ import { ConfettiCanvas } from "./confetti";
 export function BillingSuccess() {
   const { data: ent } = useEntitlements();
   const isPlanChange = ["upgraded", "upgrade"].includes(qs("session") ?? "");
+  const [change, setChange] = useState<PlanChangeSummary | null>(null);
   const [view, setView] = useState<{ phase: "waiting" | "active" | "slow" | "error"; planId?: string }>({ phase: "waiting" });
   useEffect(() => {
     const session = qs("session");
@@ -39,11 +41,37 @@ export function BillingSuccess() {
       return;
     }
     if (session === "upgraded" || session === "upgrade") {
-      const plan = qs("plan") || ent?.planId;
-      void refreshEntitlements().then(() => {
-        setView({ phase: "active", planId: plan || undefined });
-      });
-      return;
+      // A plan change: confirm it with the server (the plan, or the scheduled
+      // switch, is really there) before saying so.
+      const plan = qs("plan") || undefined;
+      const summary = takePlanChange();
+      setChange(summary);
+      let tries = 0;
+      let stopped = false;
+      const check = async () => {
+        if (stopped) return;
+        tries++;
+        try {
+          const s = await billingSummary();
+          const done =
+            summary?.kind === "scheduled"
+              ? s.scheduledChange?.planId === plan
+              : s.planId === plan;
+          if (done) {
+            await refreshEntitlements();
+            setView({ phase: "active", planId: plan });
+            return;
+          }
+        } catch {
+          /* keep checking */
+        }
+        if (tries >= 20) setView({ phase: "slow" });
+        else setTimeout(() => void check(), 1500);
+      };
+      void check();
+      return () => {
+        stopped = true;
+      };
     }
     let tries = 0;
     let stop = false;
@@ -94,10 +122,23 @@ export function BillingSuccess() {
                   Congratulations!
                 </h1>
                 <p style={{ margin: 0, color: "var(--brand-2, #10b981)", fontSize: "1.1rem", fontWeight: 700 }}>
-                  You&apos;re now on {view.planId ? view.planId.charAt(0).toUpperCase() + view.planId.slice(1) : "your plan"}
+                  {isPlanChange && change?.kind === "scheduled"
+                    ? `Your switch to ${change.toPlanName} is scheduled`
+                    : `You're now on ${change?.toPlanName ?? (view.planId ? view.planId.charAt(0).toUpperCase() + view.planId.slice(1) : "your plan")}`}
                 </p>
-                <p style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".9rem", maxWidth: 420, lineHeight: 1.5 }}>
-                  Your institutional market intelligence suite is now fully activated. Explore institutional flows, algorithmic playbooks, and real-time feeds.
+                {isPlanChange && change ? (
+                  <div data-testid="change-confirmation" style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 460, fontSize: ".9rem", color: "var(--text)", lineHeight: 1.5 }}>
+                    {planChangeLines(change, (n) => formatMoney(n, change.currency), longDate).map((l) => (
+                      <p key={l} style={{ margin: 0 }}>{l}</p>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".9rem", maxWidth: 420, lineHeight: 1.5 }}>
+                    Your plan is active. Everything it includes is ready to use.
+                  </p>
+                )}
+                <p data-testid="success-email" style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".8rem" }}>
+                  We&apos;ve emailed you a confirmation. You can see every change in Settings → Plan → Plan history.
                 </p>
                 <Link
                   href="/dashboard"

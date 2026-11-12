@@ -5,7 +5,7 @@
 export const FEATURE_GROUPS = [
   {
     "id": "marketDesk",
-    "name": "Market Desk",
+    "name": "Market Catalyst",
     "summary": "Every workspace: dashboard, live feed, movers, heatmap, calendar, IPOs, screener, recaps, earnings, analyst actions, 13F & insider, ETFs, AI companies, portfolio and watchlist."
   },
   {
@@ -53,7 +53,7 @@ export const PLANS = [
       "stockIntelligence"
     ],
     "bullets": [
-      "Market Desk: all workspaces",
+      "Market Catalyst: all workspaces",
       "Stock Intelligence and AI research",
       "Trade Builder and Trade Tracker"
     ]
@@ -93,11 +93,15 @@ export const PLANS = [
 ] as const;
 
 export const EVERY_PLAN_INCLUDES = [
-  "Market Desk — every workspace: dashboard, live feed, movers, heatmap, calendar, IPOs, screener, recaps, Earnings Hub, analyst actions, 13F & insider, ETF Corner and AI Companies",
+  "Market Catalyst — every workspace: dashboard, live feed, movers, heatmap, calendar, IPOs, screener, recaps, Earnings Hub, analyst actions, 13F & insider, ETF Corner and AI Companies",
   "Stock Intelligence — any stock's financials, ratings, peers, dividends, earnings detail and transcripts, AI research, and intraday and five-year charts with indicators",
   "Portfolio — track holdings with live prices and profit/loss",
   "Watchlist — unlimited tickers"
 ] as const;
+
+export const TRIAL_DAYS = 7 as const;
+
+export const INTRO_DAYS = 7 as const;
 
 export const SCREEN_FEATURES = {
   "dashboard": "marketCatalyst",
