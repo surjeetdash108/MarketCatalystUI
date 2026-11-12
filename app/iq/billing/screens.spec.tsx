@@ -50,16 +50,16 @@ describe("Premium badge / Manage Plan (rendered)", () => {
 });
 
 describe("retention offer screen (rendered)", () => {
-  const offer = { mode: "percent_next_invoices", percentOff: 50, months: 2, interval: "monthly" as const, creditAmount: null, currency: "USD", appliesFrom: "2026-12-10T12:00:00.000Z", headline: "Before you go: 50% off for the next 2 months. Still want to cancel?", description: "50% off your next 2 monthly invoices" };
-  it("is one screen with the headline and two equally prominent buttons", () => {
+  const offer = { mode: "percent_next_invoices", percentOff: 50, months: 2, interval: "monthly" as const, creditAmount: null, currency: "USD", appliesFrom: "2026-12-10T12:00:00.000Z", headline: "Keep your plan for 50% off for the next 2 months", description: "50% off your next 2 monthly invoices" };
+  it("is one screen: the headline, 'Keep my plan at 50%' and 'Cancel my plan' in different colours", () => {
     const html = renderToStaticMarkup(<RetentionChoice offer={offer} busy={false} onKeep={() => {}} onCancel={() => {}} onClose={() => {}} />);
-    assert.match(html, /Before you go: 50% off for the next 2 months\. Still want to cancel\?/);
+    assert.match(html, new RegExp(offer.headline.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     const keep = html.match(/<button[^>]*data-testid="retention-keep"[^>]*>/)![0];
     const cancel = html.match(/<button[^>]*data-testid="retention-cancel"[^>]*>/)![0];
-    assert.match(html, />Keep my plan at 50% off</);
+    assert.match(html, />Keep my plan at 50%</);
     assert.match(html, />Cancel my plan</);
-    const style = (b: string) => b.match(/style="([^"]*)"/)![1];
-    assert.equal(style(keep), style(cancel), "both choices must look the same");
+    const look = (b: string) => (b.match(/class="([^"]*)"/)?.[1] ?? "") + (b.match(/style="([^"]*)"/)?.[1] ?? "");
+    assert.notEqual(look(keep), look(cancel), "the two choices must not be the same colour");
     assert.equal((html.match(/<button/g) ?? []).length, 3, "the two choices plus the close button — nothing else");
   });
 });

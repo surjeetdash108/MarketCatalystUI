@@ -25,7 +25,6 @@ import { displayPrice, formatMoney, INTERVALS, isPaid, longDate, type BillingInt
 import { checkoutPath, parsePlanParams } from "../billing/plan-intent";
 import { Button, Modal, Notice, PREVIEW_BANNER, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
-import { REFUND_POLICY } from "../billing/refund-policy.generated";
 import { StaffPlan } from "./manage-plan-extras";
 
 /**
@@ -193,7 +192,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
 
   async function keepWithDiscount() {
     const r = await run(() => acceptRetention());
-    if (r) await afterChange("Discount applied", `${r.description}. Your subscription stays active.`);
+    if (r) await afterChange("Thank you for trusting us", "Enjoy 50% off for the next 2 months.");
   }
 
   return (
@@ -220,9 +219,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
               </p>
             )}
             {summary.creditBalance > 0 && (
-              <div data-testid="credit-balance" style={{ fontSize: ".88rem", color: "var(--brand-2)", fontWeight: 600 }}>
-                Account credit: {formatMoney(summary.creditBalance, summary.nextCharge?.currency ?? "USD")} (used automatically on your next invoice)
-              </div>
+              <div data-testid="credit-balance" style={{ fontSize: ".88rem", color: "var(--text)" }}>Credits available: {formatMoney(summary.creditBalance, summary.nextCharge?.currency ?? "USD")}</div>
             )}
             {subscribed && summary.status === "TRIALING" && summary.currentPeriodEnd && !summary.endsAt && (
               <Notice testId="trial-active">Free trial until {longDate(summary.currentPeriodEnd)}. Your first charge is on that date; cancel before then and you pay nothing.</Notice>
@@ -241,7 +238,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {subscribed && !summary.cancelAtPeriodEnd && <Button kind="danger" testId="cancel" onClick={() => void startCancel()} disabled={busy}>Cancel subscription</Button>}
               {subscribed && summary.cancelAtPeriodEnd && <Button testId="resume" onClick={() => void run(() => resumePlan()).then((r) => r && afterChange("Plan resumed", `Your plan renews on ${longDate(r.renewsAt)}.`))}>Resume subscription</Button>}
-              {subscribed && summary.hasBillingAccount && <Button kind="secondary" testId="update-card" onClick={() => void run(() => openPortal()).then((r) => r && (window.location.href = r.url))}>Update card</Button>}
+              {subscribed && summary.hasBillingAccount && <Button kind="secondary" testId="update-card" onClick={() => void run(() => openPortal()).then((r) => r && (window.location.href = r.url))}>Update payment method</Button>}
             </div>
           </div>
         </div>
@@ -300,7 +297,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
               let label = `Choose ${p.name}`;
               if (subscribed) {
                 if (p.id === summary.planId) label = interval === "annual" ? "Switch to annual" : "Switch to monthly";
-                else label = p.sortOrder > rankCur ? `Upgrade to ${p.name}` : `Downgrade to ${p.name}`;
+                else label = `Switch to ${p.name}`;
               }
               return (
                 <div key={p.id} data-testid={`card-${p.id}`} aria-current={isCurrent} className="card" style={{ border: `2px solid ${selected === p.id ? "var(--brand)" : "var(--border)"}`, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -356,7 +353,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
         </div>
 
         <div className="card col-12" id="history">
-          <div className="card-h"><h3>Plan history</h3></div>
+          <div className="card-h"><h3>Purchase history</h3></div>
           <div className="card-b" data-testid="history">
             {timeline.length === 0 ? (
               <div style={{ color: "var(--text-dim-solid)", fontSize: ".84rem" }}>No changes yet.</div>
@@ -396,10 +393,9 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       {dialog?.kind === "confirm-cancel" && (
         <Modal title="Cancel your plan?" onClose={() => setDialog(null)} testId="cancel-dialog">
           <div>You keep full access until {longDate(summary.currentPeriodEnd)}, then your plan ends. No further charges.</div>
-          <div data-testid="no-refunds" style={{ fontSize: ".8rem", color: "var(--text-dim-solid)" }}>{REFUND_POLICY.managePlanLine}</div>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <Button testId="cancel-keep" onClick={() => setDialog(null)}>Keep my plan</Button>
             <Button kind="danger" testId="cancel-confirm" onClick={() => void doCancel()} disabled={busy}>Cancel my plan</Button>
-            <Button kind="secondary" onClick={() => setDialog(null)}>Keep my plan</Button>
           </div>
         </Modal>
       )}
@@ -425,8 +421,8 @@ export function RetentionChoice({ offer, busy, onKeep, onCancel, onClose }: { of
       <div data-testid="retention-headline" style={{ fontSize: "1rem", color: "var(--text-hi)", fontWeight: 600 }}>{offer.headline}</div>
       <div data-testid="retention-description">{offer.description}.</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Button testId="retention-keep" onClick={onKeep} disabled={busy} style={equal}>Keep my plan at 50% off</Button>
-        <Button testId="retention-cancel" onClick={onCancel} disabled={busy} style={equal}>Cancel my plan</Button>
+        <Button testId="retention-keep" onClick={onKeep} disabled={busy} style={equal}>Keep my plan at 50%</Button>
+        <Button kind="danger" testId="retention-cancel" onClick={onCancel} disabled={busy} style={equal}>Cancel my plan</Button>
       </div>
     </Modal>
   );
