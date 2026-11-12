@@ -1335,6 +1335,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   >(null);
 
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+  // The menu is portaled to document.body, outside profileDropdownRef.
+  const profileMenuPortalRef = useRef<HTMLDivElement>(null);
 
   // Overlay scrollbars. The thumb is transparent at rest (see iq.css) and CSS
   // :hover covers the common case, but a trackpad or keyboard scroll can happen
@@ -1381,9 +1383,11 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // Close profile dropdown when clicking outside
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
-      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target as Node)) {
-        setProfileDropdownOpen(false);
-      }
+      const target = e.target as Node;
+      const inside =
+        profileDropdownRef.current?.contains(target) ||
+        profileMenuPortalRef.current?.contains(target);
+      if (!inside) setProfileDropdownOpen(false);
     }
     if (profileDropdownOpen) document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
@@ -1637,7 +1641,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 </div>
 
                 {profileDropdownOpen && typeof document !== "undefined" && createPortal(
-                  <div className="profile-dropdown" style={{ zIndex: 1000000 }}>
+                  <div className="profile-dropdown" ref={profileMenuPortalRef} style={{ zIndex: 1000000 }}>
                     {/* User info */}
                     <div className="pd-user">
                       <div className="pd-avatar">
