@@ -10,7 +10,7 @@ import { fmt, sign, cls, arr, Spark, SemiGauge, StockLogo, heatCol, DataState, N
 import { fmtDate, etTodayIso } from "../calendar-range";
 import { useApiList } from "../hooks/useApiList";
 import { featureDecision, useEntitlements } from "../hooks/useEntitlements";
-import { EntitlementGate } from "../entitlement-gate";
+import { EntitlementGate, LockedFeature } from "../entitlement-gate";
 import { LaunchingSoonBanner } from "../billing/launching-soon-banner";
 import { sortNewsDesc, dedupeNews, etTimeLabel, catLabel, storyKind } from "../news-feed";
 import { useApiResource } from "../hooks/useApiResource";
@@ -755,6 +755,16 @@ export function DashboardScreen() {
   const screenerIds = (scrTab === "leaders" ? leaders : laggards).map(s => s.ticker);
   const watchIds    = watchMini.map(w => w.ticker);
   const insiderIds  = INSIDER_MINI.map(x => x.s);
+
+  const ent = entitlementState.data;
+  const isUnsubscribed = ent?.subscriptionsEnabled === true && !ent?.staff && (ent?.planId === "none" || ent?.planId === "free");
+  if (isUnsubscribed) {
+    return (
+      <div className="dash-pg" style={{ padding: "40px 20px" }}>
+        <LockedFeature entitlement="marketDesk" requiredPlan="starter" />
+      </div>
+    );
+  }
 
   return (
     <div className="dash-pg">

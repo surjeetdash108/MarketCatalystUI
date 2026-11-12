@@ -29,9 +29,9 @@ describe("Manage Plan v2", () => {
     assert.match(html, /never billed/);
     assert.doesNotMatch(html, /Upgrade|Choose|checkout|Cancel subscription|refund/i);
   });
-  it("the mobile number can be viewed and edited in Manage Plan and in account settings", () => {
-    assert.match(mp, /<ContactCard \/>/);
-    assert.match(src("app/iq/screens/settings.tsx"), /<ContactCard \/>/);
+  it("account settings and plan manage layout", () => {
+    assert.doesNotMatch(mp, /<ContactCard \/>/);
+    assert.doesNotMatch(src("app/iq/screens/settings.tsx"), /<ContactCard \/>/);
     assert.match(src("app/iq/screens/settings.tsx"), /isStaff \? "Staff"/);
   });
 });

@@ -76,19 +76,19 @@ test("email signup, Google signup and both sign-ins route through the plan inten
   assert.match(read("app/auth/login/login-form.tsx"), /routeAfterLogin\(postLoginPath\(email\)\)/);
 });
 
-test("the intent routes to /manage-plan after signup", () => {
+test("the intent routes to Step 2 (/choose-plan) after signup", () => {
   const intentWithPromo = {
     planId: "pro",
     interval: "annual",
     promoCode: "WELCOME20",
   };
-  const path = "/manage-plan?plan=pro&interval=annual&promo=WELCOME20";
+  const path = "/choose-plan?plan=pro&interval=annual&promo=WELCOME20";
 
-  // For password signup: goes directly to /manage-plan with intent
+  // For password signup: goes directly to /choose-plan with intent
   const nextPw = nextAfterSignup(intentWithPromo, "password");
   assert.equal(nextPw, path);
 
-  // For Google signup: goes directly to /manage-plan with intent
+  // For Google signup: goes directly to /choose-plan with intent
   const nextGoogle = nextAfterSignup(intentWithPromo, "google");
   assert.equal(nextGoogle, path);
 });

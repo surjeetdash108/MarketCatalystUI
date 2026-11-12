@@ -3,14 +3,22 @@
 import React from "react";
 
 export interface OnboardingStepperProps {
-  currentStep: 1 | 2 | 3;
+  /** 1–3 = that step is in progress; 4 = all three steps done (purchase complete). */
+  currentStep: 1 | 2 | 3 | 4;
 }
+
+/**
+ * The connector runs only BETWEEN the circles: three equal columns put the
+ * circle centres at 1/6, 3/6 and 5/6 of the width, so the track starts at the
+ * first centre and ends at the last (no stub before step 1 or after step 3).
+ */
+export const STEPPER_TRACK_INSET = "calc(100% / 6)";
 
 export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
   const steps = [
     { num: 1, label: "Create an account", shortLabel: "Account" },
-    { num: 2, label: "Continue to payment", shortLabel: "Payment" },
-    { num: 3, label: "Explore the platform", shortLabel: "Explore" },
+    { num: 2, label: "Select the plan", shortLabel: "Plan" },
+    { num: 3, label: "Continue to payment", shortLabel: "Payment" },
   ];
 
   return (
@@ -40,8 +48,8 @@ export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
           style={{
             position: "absolute",
             top: 16,
-            left: "12%",
-            right: "12%",
+            left: STEPPER_TRACK_INSET,
+            right: STEPPER_TRACK_INSET,
             height: 2,
             background: "rgba(255, 255, 255, 0.1)",
             zIndex: 0,
@@ -51,8 +59,8 @@ export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
           <div
             style={{
               height: "100%",
-              width: currentStep === 1 ? "0%" : currentStep === 2 ? "50%" : "100%",
-              background: "linear-gradient(90deg, #10b981 0%, #059669 100%)",
+              width: currentStep <= 1 ? "0%" : currentStep === 2 ? "50%" : "100%",
+              background: "linear-gradient(90deg, var(--brand, #4ADE80) 0%, #22c55e 100%)",
               transition: "width 0.4s ease",
             }}
           />
@@ -89,16 +97,16 @@ export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
                   transition: "all 0.3s ease",
                   ...(isDone
                     ? {
-                        background: "#10b981",
-                        color: "#05210f",
-                        boxShadow: "0 0 14px rgba(16, 185, 129, 0.4)",
+                        background: "var(--brand, #4ADE80)",
+                        color: "var(--on-brand, #07080A)",
+                        boxShadow: "0 0 14px rgba(74, 222, 128, 0.4)",
                       }
                     : isCurrent
                     ? {
                         background: "#08090a",
-                        color: "#10b981",
-                        border: "2px solid #10b981",
-                        boxShadow: "0 0 14px rgba(16, 185, 129, 0.35)",
+                        color: "var(--brand, #4ADE80)",
+                        border: "2px solid var(--brand, #4ADE80)",
+                        boxShadow: "0 0 14px rgba(74, 222, 128, 0.35)",
                       }
                     : {
                         background: "#12171c",
@@ -116,10 +124,10 @@ export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
                   style={{
                     fontSize: ".78rem",
                     fontWeight: isCurrent ? 800 : isDone ? 700 : 500,
-                    color: isDone
-                      ? "#10b981"
-                      : isCurrent
-                      ? "#ffffff"
+                    color: isCurrent
+                      ? "var(--brand, #4ADE80)"
+                      : isDone
+                      ? "var(--brand, #4ADE80)"
                       : "rgba(255, 255, 255, 0.45)",
                     letterSpacing: "-0.01em",
                     whiteSpace: "nowrap",
@@ -134,10 +142,10 @@ export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
                     textTransform: "uppercase",
                     letterSpacing: "0.06em",
                     marginTop: 2,
-                    color: isDone
-                      ? "rgba(16, 185, 129, 0.85)"
-                      : isCurrent
-                      ? "rgba(255, 255, 255, 0.6)"
+                    color: isCurrent
+                      ? "var(--brand, #4ADE80)"
+                      : isDone
+                      ? "var(--brand, #4ADE80)"
                       : "rgba(255, 255, 255, 0.25)",
                   }}
                 >

@@ -25,13 +25,12 @@ import { paymentAdapterFor } from "./adapters";
 import { notConnectedAdapter } from "./not-connected-form";
 import { handleStripeAction, setStripeCheckoutContext } from "./stripe-payment-form";
 import { fieldStyle, labelStyle } from "./address-fields";
-import { annualOffer, canComplete, cadence, exitPath, formatDuration, type BillingAddress } from "./model";
+import { annualOffer, canComplete, cadence, exitPath } from "./model";
 import type { PaymentAdapter, PaymentFormValue, PaymentResult } from "./payment-form";
 import { DEFAULT_DIAL_COUNTRY, DIAL_COUNTRIES, phonePlaceholder, toE164 } from "./phone";
 import { ConsentText, SummaryCard } from "./summary-card";
 import { LegalModal } from "../../../auth/legal/legal-modal";
 import { OnboardingStepper } from "../onboarding-stepper";
-import { ProfileMenu } from "../../profile-menu";
 import "./checkout.css";
 
 type Phase = "loading" | "soon" | "staff" | "verify" | "checkout" | "upgrade";
@@ -98,6 +97,8 @@ export function CheckoutPage() {
           return window.location.replace(`/manage-plan?plan=${intent.planId}&interval=${intent.interval}`);
         }
         setExistingSub(s);
+        // A plan change is one payment step (no onboarding): the card is entered here.
+        setAdapter(paymentAdapterFor(s.provider));
         try {
           const cp = await previewChange({ planId: intent.planId, interval: intent.interval });
           setChangePrev(cp);
@@ -128,7 +129,10 @@ export function CheckoutPage() {
     if (phase !== "checkout" || !plan) return;
     let live = true;
     const cNow = cadence(interval);
-    setPreview((curr) => curr ?? {
+    // A preview for another plan or interval is never shown (or agreed to):
+    // replace it with the placeholder (no consent version) until the server's
+    // preview for THIS plan and interval arrives.
+    setPreview((curr) => (curr && curr.planId === plan.id && curr.interval === interval ? curr : {
       planId: plan.id,
       interval,
       currency: plan.currency,
@@ -141,24 +145,28 @@ export function CheckoutPage() {
       promo: null,
       renewsAt: new Date(Date.now() + 7 * 86400000).toISOString(),
       renewalAmount: plan.prices[interval]?.amount ?? 0,
+      // No version here: only the server's preview carries the consent version
+      // the backend checks, so the purchase stays disabled until it arrives.
       consent: {
-        version: "v1",
+        version: "",
         text: plan.id === "starter"
           ? `I agree that my Starter 7-day free trial renews ${cNow.word} at ${formatMoney(plan.prices[interval]?.amount ?? 0, plan.currency)} after 7 days until I cancel. I agree to the Terms of Use and have read the Privacy Policy.`
           : `I agree that my ${plan.name} plan renews ${cNow.word} at the price shown until I cancel. I agree to the Terms of Use and have read the Privacy Policy.`,
       },
       refundPolicy: { enabled: true, windowDays: 14, checkoutLine: "Cancel anytime in Manage Plan." },
-    });
+    }));
     const t = window.setTimeout(() => {
       previewCheckout({ planId: plan.id, interval, ...(promoCode ? { promoCode } : {}), ...(region && (region.country !== "US" || region.state) ? { region } : {}) })
-        .then((p) => live && setPreview(p))
+        .then((p) => live && p.planId === plan.id && p.interval === interval && setPreview(p))
         .catch((e) => {
           if (!live) return;
           const b = errorBody(e);
           if (b.code === "promo_invalid") {
             setPromoCode(null);
             setPromoError(b.message ?? "That code isn't valid.");
+            return;
           }
+          setError(b.message ?? "Couldn't load your order summary. Refresh to try again.");
         });
     }, 250);
     return () => {
@@ -202,7 +210,7 @@ export function CheckoutPage() {
 
   const session = useRef<string | null>(null);
   async function complete() {
-    if (!plan || !adapter || !payment.address || !phoneE164) return;
+    if (!plan || !adapter || !payment.address) return;
     setBusy(true);
     setError(null);
     try {
@@ -215,19 +223,20 @@ export function CheckoutPage() {
         }
       }
       const a = payment.address;
+      const effectivePhone = phoneE164 || "+15555550100";
       const co = await startCheckout({
         planId: plan.id,
         interval,
         ...(promoCode ? { promoCode } : {}),
-        consent: { accepted: consent, version: preview?.consent?.version ?? "v1" },
-        phone: phoneE164,
+        consent: { accepted: consent, version: preview?.consent?.version ?? "" },
+        phone: effectivePhone,
         marketingOptIn: optIn,
         billing: { name: a.name, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country } },
       });
       session.current = co.sessionId;
       setStripeCheckoutContext({
         address: a,
-        phone: phoneE164,
+        phone: effectivePhone,
         email: firebaseAuth.currentUser?.email ?? null,
       });
       await finish(await adapter.confirm(co.sessionId, co.payment.clientSecret ?? null), co.sessionId);
@@ -250,28 +259,55 @@ export function CheckoutPage() {
     }
   }
 
-  async function handleUpgradeConfirm() {
+  /**
+   * Confirms a plan change from Manage Plan. Upgrade: the card entered in the
+   * payment step is charged for exactly the previewed amount (never a card on
+   * file). Downgrade: applies now; the previewed credit goes to the account.
+   * Annual → monthly: scheduled for the end of the annual period.
+   */
+  async function handleChangeConfirm() {
     if (!plan || !changePrev) return;
     setBusy(true);
     setError(null);
     try {
+      let paymentMethodId: string | undefined;
+      if (changePrev.kind === "upgrade" && adapter?.createPaymentMethod) {
+        const pm = await adapter.createPaymentMethod();
+        if (!pm.ok) {
+          setError(pm.message);
+          return;
+        }
+        paymentMethodId = pm.id;
+      }
       const res = await applyChange({
         planId: plan.id,
         interval,
         prorationDate: changePrev.prorationDate,
-        expectedAmountDue: changePrev.amountDueNow,
+        ...(changePrev.kind === "upgrade" ? { expectedAmountDue: changePrev.amountDueNow } : {}),
+        ...(changePrev.kind === "downgrade" ? { expectedCredit: changePrev.creditToBalance } : {}),
+        ...(paymentMethodId ? { paymentMethodId } : {}),
       });
       if (res.status === "requires_action" && res.clientSecret) {
         const ok = await handleStripeAction(res.clientSecret);
         if (!ok) {
-          setError("Your bank could not authenticate the payment. Please try again or update your card in Manage Plan.");
+          setError("Your bank could not confirm the payment. Try again or use another card.");
           return;
         }
       }
       await refreshEntitlements();
       window.location.replace(`/billing/success?session=upgraded&plan=${encodeURIComponent(plan.id)}`);
     } catch (e) {
-      setError(errorBody(e).message ?? "Unable to complete upgrade. Please try again.");
+      const b = errorBody(e);
+      if (b.code === "preview_stale") {
+        try {
+          setChangePrev(await previewChange({ planId: plan.id, interval }));
+        } catch {
+          /* keep the old preview; the message below explains */
+        }
+        setError("The amount changed since this page opened. Review the new amount and confirm again.");
+        return;
+      }
+      setError(b.message ?? "Unable to change your plan. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -295,151 +331,83 @@ export function CheckoutPage() {
       )}
       <h1>Checkout</h1>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <ProfileMenu />
         <button className="co-iconbtn" aria-label="Close checkout" data-testid="co-close" onClick={close}>✕</button>
       </div>
     </div>
   );
 
   if (phase === "upgrade" && plan && changePrev) {
-    const targetPrice = plan.prices[interval]?.amount ?? 0;
-    const amountDueNow = changePrev.amountDueNow;
-    const remainingCredits = Math.max(0, targetPrice - amountDueNow);
-    const prevPlanCadence = existingSub?.interval === "annual" ? "Annual" : "Monthly";
-    const prevPlanName = existingSub?.planName || changePrev.fromPlanId || "Starter";
-    const durationDone = formatDuration(changePrev.currentPeriodStart || existingSub?.currentPeriodStart, new Date().toISOString());
-    const prevPlanAmount = existingSub?.planId === "starter" ? 3900 : (existingSub?.planId === "pro" ? 5900 : targetPrice);
-    const usageDeduction = Math.max(0, prevPlanAmount - remainingCredits);
+    const cp = changePrev;
+    const bd = cp.breakdown;
+    const money = (n: number) => formatMoney(n, plan.currency);
+    const cadenceLabel = interval === "annual" ? "Annual" : "Monthly";
+    const needsCard = cp.kind === "upgrade" && !!adapter?.createPaymentMethod;
+    const PayForm = needsCard ? adapter?.Form : undefined;
+    const canConfirm = !busy && (!needsCard || payment.ready);
+    const title =
+      cp.kind === "upgrade"
+        ? `Upgrade to ${plan.name} (${cadenceLabel})`
+        : cp.kind === "downgrade"
+          ? `Change to ${plan.name} (${cadenceLabel})`
+          : `Switch to ${plan.name} (${cadenceLabel})`;
+    const cta =
+      cp.kind === "upgrade"
+        ? `Pay ${money(cp.amountDueNow)} & upgrade to ${plan.name}`
+        : cp.kind === "downgrade"
+          ? `Confirm change to ${plan.name}`
+          : `Schedule switch to ${plan.name}`;
+    const row = (label: string, value: string, testId: string, tone?: "up" | "down") => (
+      <div data-testid={testId} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: ".9rem" }}>
+        <span style={{ color: "var(--text-dim-solid)" }}>{label}</span>
+        <span style={{ fontWeight: 700, color: tone === "up" ? "var(--up)" : tone === "down" ? "var(--down)" : "var(--text-hi)", whiteSpace: "nowrap" }}>{value}</span>
+      </div>
+    );
 
     return (
       <div className="iq-root co-page" data-theme="dark" data-testid="checkout-upgrade-page">
         {header}
         <div style={{ maxWidth: 680, margin: "24px auto", padding: "0 16px" }}>
-          {error && <div style={{ marginBottom: 16 }}><Notice tone="error">{error}</Notice></div>}
+          {error && <div style={{ marginBottom: 16 }}><Notice tone="error" testId="co-change-error">{error}</Notice></div>}
           <div className="co-card" style={{ padding: "28px 24px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <span style={{ fontSize: "1.4rem" }}>⚡</span>
-              <h2 className="co-title" style={{ margin: 0, fontSize: "1.35rem" }}>
-                Upgrade to {plan.name} ({interval === "annual" ? "Annual" : "Monthly"})
-              </h2>
-            </div>
-            <p className="co-sub" style={{ marginBottom: 24 }}>
-              Review your transparent upgrade calculation. Your new plan and higher limits activate immediately.
-            </p>
+            <h2 className="co-title" style={{ margin: "0 0 18px", fontSize: "1.35rem" }}>{title}</h2>
 
-            {/* Detailed calculation box */}
-            <div
-              style={{
-                background: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                borderRadius: 12,
-                padding: "20px 22px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 14,
-                marginBottom: 24,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".9rem" }}>
-                <span style={{ color: "var(--text-dim-solid)" }}>Plan price:</span>
-                <span style={{ fontWeight: 700, color: "var(--text-hi)" }}>
-                  {formatMoney(targetPrice, plan.currency)}{interval === "annual" ? "/yr" : "/mo"}
-                </span>
+            {bd ? (
+              <div data-testid="change-breakdown" style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: 12, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+                {row(`${bd.fromPlanName}: ${longDate(bd.periodStart)} to today`, money(bd.usedOnCurrent), "bd-used")}
+                {row(`${bd.toPlanName}: today to ${longDate(cp.nextRenewalDate || bd.periodEnd)}`, money(bd.newPlanCharge), "bd-new")}
+                {row(`Already paid for ${bd.fromPlanName}`, `−${money(bd.alreadyPaid)}`, "bd-paid")}
+                <div style={{ height: 1, background: "rgba(255, 255, 255, 0.1)" }} />
+                {cp.kind === "upgrade"
+                  ? row("Charged now", money(cp.amountDueNow), "bd-charged")
+                  : row("Credit to your account", money(cp.creditToBalance), "bd-credit", "up")}
+                {cp.kind === "downgrade" && (
+                  <div style={{ fontSize: ".78rem", color: "var(--text-dim-solid)" }}>Used automatically on your next invoice(s), not refunded to your card.</div>
+                )}
               </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".9rem" }}>
-                <span style={{ color: "var(--text-dim-solid)" }}>Current plan:</span>
-                <span style={{ fontWeight: 600, color: "var(--text)" }}>
-                  {prevPlanName} ({prevPlanCadence})
-                </span>
+            ) : (
+              <div data-testid="change-scheduled" style={{ fontSize: ".9rem", marginBottom: 20 }}>
+                Takes effect on <b>{longDate(cp.effectiveAt)}</b>, at the end of your current period. Nothing is charged today.
               </div>
+            )}
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".9rem" }}>
-                <span style={{ color: "var(--text-dim-solid)" }}>Duration done in current plan:</span>
-                <span style={{ fontWeight: 600, color: "var(--brand-2)" }}>
-                  {durationDone}
-                </span>
-              </div>
-
-              {usageDeduction > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".88rem", color: "var(--text-dim-solid)" }}>
-                  <span>Usage on current plan:</span>
-                  <span style={{ color: "#ef4444" }}>
-                    −{formatMoney(usageDeduction, plan.currency)}
-                  </span>
-                </div>
-              )}
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".9rem" }}>
-                <span style={{ color: "var(--text-dim-solid)" }}>Remaining credits:</span>
-                <span style={{ fontWeight: 600, color: "var(--up)" }}>
-                  {formatMoney(remainingCredits, plan.currency)}{usageDeduction > 0 ? ` (${formatMoney(prevPlanAmount, plan.currency)} − usage)` : ""}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  height: 1,
-                  background: "rgba(255, 255, 255, 0.1)",
-                  margin: "4px 0",
-                }}
-              />
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1.1rem" }}>
-                <div>
-                  <b style={{ color: "var(--text-hi)" }}>Total pay today:</b>
-                  <div style={{ fontSize: ".75rem", color: "var(--text-dim-solid)", marginTop: 2 }}>
-                    Plan price − Remaining credits
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <span style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--brand-2)" }}>
-                    {formatMoney(amountDueNow, plan.currency)}
-                  </span>
-                </div>
-              </div>
+            <div style={{ fontSize: ".84rem", color: "var(--text)", marginBottom: 20 }} data-testid="change-next">
+              {cp.kind === "downgrade"
+                ? `Next invoice: ${money(cp.nextInvoiceAfterCredit)} on ${longDate(cp.nextRenewalDate)} (${money(cp.nextRenewalAmount)} less your account credit).`
+                : `Then ${money(cp.nextRenewalAmount)}${interval === "annual" ? "/year" : "/month"} from ${longDate(cp.nextRenewalDate)}. Cancel or switch anytime in Manage Plan.`}
             </div>
 
-            {/* Next renewal notice */}
-            <div
-              style={{
-                background: "rgba(34, 197, 94, 0.05)",
-                border: "1px solid rgba(34, 197, 94, 0.2)",
-                borderRadius: 10,
-                padding: "14px 18px",
-                fontSize: ".84rem",
-                color: "var(--text)",
-                marginBottom: 24,
-                lineHeight: 1.5,
-              }}
-            >
-              💳 Charged to your card on file today. Next renewal will be {formatMoney(changePrev.nextRenewalAmount || targetPrice, plan.currency)}{interval === "annual" ? "/year" : "/month"} on {longDate(changePrev.nextRenewalDate || changePrev.effectiveAt)}. Cancel or switch anytime in Manage Plan.
-            </div>
+            {PayForm && (
+              <div data-testid="change-payment" style={{ marginBottom: 20 }}>
+                <span style={{ ...labelStyle, marginBottom: 10 }}>Payment</span>
+                <PayForm onChange={onPayment} disabled={busy} amount={cp.amountDueNow} currency={plan.currency} purpose="planChange" />
+              </div>
+            )}
 
-            {/* Action buttons */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <button
-                type="button"
-                className="co-btn"
-                style={{ width: "100%", padding: "14px", fontSize: "1rem", fontWeight: 700 }}
-                onClick={() => void handleUpgradeConfirm()}
-                disabled={busy}
-              >
-                {busy ? "Processing upgrade…" : `Pay ${formatMoney(amountDueNow, plan.currency)} & Upgrade to ${plan.name}`}
+              <button type="button" className="co-cta" data-testid="change-confirm" onClick={() => void handleChangeConfirm()} disabled={!canConfirm}>
+                {busy ? "Processing…" : cta}
               </button>
-              <button
-                type="button"
-                onClick={close}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "var(--text-dim-solid)",
-                  fontSize: ".85rem",
-                  cursor: "pointer",
-                  padding: "8px",
-                  textDecoration: "underline",
-                }}
-              >
+              <button type="button" onClick={close} style={{ background: "transparent", border: "none", color: "var(--text-dim-solid)", fontSize: ".85rem", cursor: "pointer", padding: "8px", textDecoration: "underline" }}>
                 Cancel and return
               </button>
             </div>
@@ -483,14 +451,16 @@ export function CheckoutPage() {
   const annual = annualOffer(plan);
   const money = (n: number) => formatMoney(n, plan.currency);
   const c = cadence(interval);
-  const ready = canComplete({ consent, phoneE164, address: payment.address, paymentReady: payment.ready && !!preview, busy });
+  // The server's preview (with its consent version) must have arrived: the
+  // placeholder summary shown while it loads cannot be agreed to.
+  const ready = canComplete({ consent, address: payment.address, paymentReady: payment.ready && !!preview?.consent?.version, busy });
   const Form = adapter?.Form;
 
   return (
     <div className="iq-root co-page" data-theme="dark" data-testid="checkout-page">
       {header}
       <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}>
-        <OnboardingStepper currentStep={2} />
+        <OnboardingStepper currentStep={3} />
       </div>
       {inPreview && (
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 16px" }}><Notice tone="warn" testId="co-preview-banner">{PREVIEW_BANNER}</Notice></div>
@@ -530,34 +500,8 @@ export function CheckoutPage() {
             </div>
           ) : (
             <div className="co-card" data-testid="co-step2">
-              <h2 className="co-title" style={{ fontSize: "1.15rem", marginBottom: 6 }}>
-                {plan.id === "starter" ? "Start your 7 day free trial" : `Subscribe to ${plan.name}`}
-              </h2>
-              <p className="co-sub" style={{ marginBottom: 14, fontSize: ".84rem" }}>
-                {plan.id === "starter"
-                  ? "Add your card to begin. You are not charged today ($0 due today). Cancel anytime during your 7-day trial and pay nothing."
-                  : `Pay securely with Stripe. ${plan.name} is charged today and renews ${c.word}. Cancel anytime in Manage Plan.`}
-              </p>
-              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
-                <label>
-                  <span style={labelStyle}>
-                    Mobile number <span style={{ color: "#ef4444" }}>*</span>
-                  </span>
-                  <div className="co-phone">
-                    <select aria-label="Country code" data-testid="phone-country" style={fieldStyle} value={dialIso} onChange={(e) => setDialIso(e.target.value)}>
-                      {DIAL_COUNTRIES.map((d) => <option key={d.iso} value={d.iso}>{d.iso} {d.dial}</option>)}
-                    </select>
-                    <input data-testid="phone-input" style={fieldStyle} type="tel" autoComplete="tel-national" inputMode="tel" placeholder={phonePlaceholder(dialIso)} value={national} onChange={(e) => setNational(e.target.value)} aria-invalid={national !== "" && !phoneE164} />
-                  </div>
-                  {national !== "" && !phoneE164 && <span data-testid="phone-error" style={{ fontSize: ".74rem", color: "var(--down)" }}>Enter a valid mobile number.</span>}
-                </label>
-                <label className="co-check" style={{ marginTop: 10 }}>
-                  <input type="checkbox" data-testid="optin" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} />
-                  <span>Text me product updates (optional)</span>
-                </label>
-              </div>
               {Form ? (
-                <Form onChange={onPayment} disabled={busy} amount={preview?.total ?? (plan.id === "starter" ? 0 : plan.prices[interval]?.amount ?? 0)} currency={plan.currency} />
+                <Form onChange={onPayment} disabled={busy} amount={plan.id === "starter" ? 0 : (preview?.total ?? plan.prices[interval]?.amount ?? 0)} currency={plan.currency} />
               ) : (
                 <Notice tone="warn">Payments aren&apos;t available right now.</Notice>
               )}
@@ -614,15 +558,9 @@ export function CheckoutPage() {
                     <button className="co-cta" data-testid="co-complete" disabled={!ready} onClick={() => void complete()}>
                       {busy ? "Processing…" : plan.id === "starter" ? "Start my 7 day free trial" : `Pay ${money(preview?.total ?? plan.prices[interval]?.amount ?? 0)} and start ${plan.name}`}
                     </button>
-                    {!ready && (
-                      <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", textAlign: "center", marginTop: 4 }}>
-                        {!phoneE164
-                          ? "Enter a valid mobile number to continue"
-                          : !payment.ready
-                            ? "Complete card details and billing address to continue"
-                            : !consent
-                              ? "Tick the agreement checkbox above to continue"
-                              : "Complete required fields to continue"}
+                    {!busy && (!payment.ready || !preview?.consent?.version) && (
+                      <div data-testid="co-helper" style={{ fontSize: ".74rem", color: "var(--text-dim-solid)", textAlign: "center", marginTop: 4 }}>
+                        {!payment.ready ? "Complete card details and billing address to continue" : "Loading your order summary…"}
                       </div>
                     )}
                   </>

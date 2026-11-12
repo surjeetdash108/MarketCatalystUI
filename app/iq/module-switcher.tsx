@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useSI, type AppModule } from "./si/si-context";
 import { useEntitlements, effectivePlanId } from "./hooks/useEntitlements";
@@ -67,6 +68,8 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
   const [hover, setHover] = useState<AppModule | null>(null);
   const [upgradeModal, setUpgradeModal] = useState<"MF" | "SL" | null>(null);
   const [modalInterval, setModalInterval] = useState<"monthly" | "annual">("annual");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const refs = useRef<Record<AppModule, HTMLSpanElement | null>>({ MC: null, SI: null, SL: null, MF: null });
   const [box, setBox] = useState<{ left: number; width: number } | null>(null);
 
@@ -182,8 +185,8 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
         </div>
       </div>
 
-      {upgradeModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {mounted && upgradeModal && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div
             onClick={() => setUpgradeModal(null)}
             style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }}
@@ -379,7 +382,8 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

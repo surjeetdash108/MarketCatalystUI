@@ -70,6 +70,8 @@ import { computeTtmFcf, computeQuarterFcf, computeOperatingIncomeSeries, gaapQua
 import { useIQActions } from "../shell";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import type { Stock13FResponse } from "../stock-13f-view";
+import { useEntitlements } from "../hooks/useEntitlements";
+import { LockedFeature } from "../entitlement-gate";
 
 const toneColor = (tone?: "up" | "dn") =>
   tone === "up" ? "var(--up, #16a34a)" : tone === "dn" ? "var(--down, #dc2626)" : "var(--si-text-hi, #e8eef4)";
@@ -521,6 +523,8 @@ function trendRead(price: number | null, sma50: number | null, sma200: number | 
 const CAT_PAGE_SIZE = 100;
 
 export function StockIntelligenceScreen() {
+  const { data: ent } = useEntitlements();
+  const isUnsubscribed = ent?.subscriptionsEnabled === true && !ent?.staff && (ent?.planId === "none" || ent?.planId === "free");
   const showVendor = useShowVendorTags();
   const { theme, setTheme } = useIQActions();
   const isLight = theme === "light";
@@ -1952,6 +1956,26 @@ export function StockIntelligenceScreen() {
       widthPct: `${val}%`,
     };
   });
+
+  if (isUnsubscribed) {
+    return (
+      <div
+        className="si-screen"
+        data-theme={theme}
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--si-bg, #080b10)",
+          color: "var(--si-text-hi, #e8eef4)",
+          padding: "80px 20px",
+        }}
+      >
+        <LockedFeature entitlement="stockIntelligence" requiredPlan="starter" />
+      </div>
+    );
+  }
 
   return (
     <div

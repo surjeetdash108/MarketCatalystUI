@@ -99,6 +99,9 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
             layout: "tabs",
             wallets: { applePay: "auto", googlePay: "auto" },
             fields: { billingDetails: { name: "never", email: "never", phone: "never", address: "never" } },
+            // Our own renewal consent (checkbox + text in the summary) is the authorisation;
+            // hide Stripe's duplicate "By subscribing, you authorize … to charge you" line.
+            terms: { card: "never" },
           }}
           onChange={(e) => {
             state.current.ready = e.complete;
@@ -121,22 +124,25 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
   );
 }
 
-function StripeForm({ onChange, amount, currency }: PaymentFormProps) {
+export function stripeElementsOptions(purpose: PaymentFormProps["purpose"], amount: number, currency: string) {
+  const appearance = { theme: "night" as const, variables: { colorPrimary: "#4ade80", borderRadius: "8px" } };
+  // A plan change collects the card only; the backend charges it for the
+  // change (prorated invoice), so Elements just creates the payment method.
+  if (purpose === "planChange")
+    return { mode: "setup" as const, currency: currency.toLowerCase(), paymentMethodTypes: ["card"], paymentMethodCreation: "manual" as const, appearance };
+  return { mode: "subscription" as const, amount: Math.max(0, amount), currency: currency.toLowerCase(), paymentMethodTypes: ["card"], appearance };
+}
+
+function StripeForm({ onChange, amount, currency, purpose }: PaymentFormProps) {
   const options = useMemo(
-    () => ({
-      mode: "subscription" as const,
-      amount: Math.max(0, amount),
-      currency: currency.toLowerCase(),
-      paymentMethodTypes: ["card"],
-      appearance: { theme: "night" as const, variables: { colorPrimary: "#22c55e", borderRadius: "8px" } },
-    }),
+    () => stripeElementsOptions(purpose, amount, currency),
     // Elements is created once; amount changes are pushed with elements.update() below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currency],
   );
   useEffect(() => {
-    live.elements?.update({ amount: Math.max(0, amount) });
-  }, [amount]);
+    if (purpose !== "planChange") live.elements?.update({ amount: Math.max(0, amount) });
+  }, [amount, purpose]);
   if (!stripeConfigured()) {
     return <Notice tone="warn" testId="stripe-not-ready">Card payments are being set up. Please try again soon.</Notice>;
   }
@@ -167,14 +173,33 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
   };
   if (phone) billing_details.phone = phone;
   if (live.address) {
-    billing_details.address = {
+    const addr: Record<string, string> = {
       line1: live.address.line1,
-      line2: live.address.line2 || undefined,
       city: live.address.city,
-      state: live.address.state || undefined,
-      postal_code: live.address.postalCode || undefined,
       country: live.address.country,
     };
+    if (live.address.line2?.trim()) addr.line2 = live.address.line2.trim();
+    if (live.address.state?.trim()) addr.state = live.address.state.trim();
+    if (live.address.postalCode?.trim()) addr.postal_code = live.address.postalCode.trim();
+    billing_details.address = addr;
+  }
+
+  const isSetup = clientSecret.startsWith("seti_");
+  if (isSetup) {
+    const { error, setupIntent } = await stripe.confirmSetup({
+      elements,
+      clientSecret,
+      confirmParams: {
+        return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}`,
+        payment_method_data: {
+          billing_details,
+        },
+      },
+      redirect: "if_required",
+    });
+    if (error) return { status: "failed", message: error.message ?? "The card setup didn't go through. Try another payment method." };
+    if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "processing")) return { status: "succeeded" };
+    return { status: "failed", message: "Card setup could not be completed. Try again." };
   }
 
   const { error, paymentIntent } = await stripe.confirmPayment({
@@ -183,10 +208,7 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
     confirmParams: {
       return_url: `${window.location.origin}/billing/success?session=${encodeURIComponent(sessionId)}`,
       payment_method_data: {
-        billing_details: {
-          ...billing_details,
-          email,
-        },
+        billing_details,
       },
     },
     redirect: "if_required",
@@ -205,6 +227,29 @@ export async function handleStripeAction(clientSecret: string): Promise<boolean>
   return !error;
 }
 
+/** Plan change: validate the entered card + address, then create its payment method (pm_…). */
+export async function createPaymentMethodWithStripe(): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  const { stripe, elements } = live;
+  if (!stripe || !elements) return { ok: false, message: "The payment form isn't ready. Refresh and try again." };
+  const submitted = await elements.submit();
+  if (submitted.error) return { ok: false, message: submitted.error.message ?? "Check your payment details." };
+  const a = live.address;
+  const { error, paymentMethod } = await stripe.createPaymentMethod({
+    elements,
+    params: {
+      billing_details: {
+        name: a?.name || undefined,
+        email: firebaseAuth.currentUser?.email || undefined,
+        ...(a
+          ? { address: { line1: a.line1, line2: a.line2 || undefined, city: a.city, state: a.state || undefined, postal_code: a.postalCode || undefined, country: a.country } }
+          : {}),
+      },
+    },
+  });
+  if (error || !paymentMethod) return { ok: false, message: error?.message ?? "Your card couldn't be used. Try another card." };
+  return { ok: true, id: paymentMethod.id };
+}
+
 export const stripePaymentAdapter: PaymentAdapter = {
   provider: "stripe",
   Form: StripeForm,
@@ -214,4 +259,5 @@ export const stripePaymentAdapter: PaymentAdapter = {
     return error ? { ok: false, message: error.message ?? "Check your payment details." } : { ok: true };
   },
   confirm: (sessionId, clientSecret) => confirmWithStripe(sessionId, clientSecret),
+  createPaymentMethod: () => createPaymentMethodWithStripe(),
 };

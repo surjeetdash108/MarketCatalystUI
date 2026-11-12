@@ -9,15 +9,15 @@ const mem = () => {
 };
 const TILES: PlanIntent[] = ["starter", "pro", "elite"].flatMap((planId) => (["monthly", "annual"] as const).map((interval) => ({ planId, interval })));
 
-describe("website tile → /manage-plan routing (all 6 plan/interval combinations)", () => {
+describe("website tile → /choose-plan routing (all 6 plan/interval combinations)", () => {
   for (const t of TILES) {
-    const mp = `/manage-plan?plan=${t.planId}&interval=${t.interval}`;
+    const mp = `/choose-plan?plan=${t.planId}&interval=${t.interval}`;
     it(`${t.planId} ${t.interval}`, () => {
-      // Signed out → sign up with email: straight to /manage-plan with intent
+      // Signed out → sign up with email: straight to /choose-plan with intent
       assert.equal(nextAfterSignup(t, "password"), mp);
-      // Signed out → sign up with Google (already verified): straight to /manage-plan with intent
+      // Signed out → sign up with Google (already verified): straight to /choose-plan with intent
       assert.equal(nextAfterSignup(t, "google"), mp);
-      // Existing account signs in (email or Google): straight to /manage-plan with intent
+      // Existing account signs in (email or Google): straight to /choose-plan with intent
       assert.equal(nextAfterLogin(t, "/dashboard"), mp);
       // The tile link carries the intent; it survives the Google redirect via sessionStorage.
       const s = mem();

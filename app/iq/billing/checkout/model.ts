@@ -28,7 +28,7 @@ export function addressComplete(a: BillingAddress | null): boolean {
 
 export interface CompleteGate {
   consent: boolean;
-  phoneE164: string | null;
+  phoneE164?: string | null;
   address: BillingAddress | null;
   paymentReady: boolean;
   busy: boolean;
@@ -36,7 +36,7 @@ export interface CompleteGate {
 
 /** "Complete purchase" is enabled only when the box is ticked and the form is valid. */
 export function canComplete(g: CompleteGate): boolean {
-  return g.consent && !!g.phoneE164 && addressComplete(g.address) && g.paymentReady && !g.busy;
+  return g.consent && addressComplete(g.address) && g.paymentReady && !g.busy;
 }
 
 /** Copy for the "Next payment" box. */

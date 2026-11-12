@@ -65,12 +65,12 @@ describe("retention offer screen (rendered)", () => {
 });
 
 describe("locked feature (rendered)", () => {
-  it("says which plan has it and links to Upgrade with that plan selected", () => {
+  it("renders lock emoji and Explore Plans button linking to /choose-plan", () => {
     const html = renderToStaticMarkup(<LockedFeature entitlement="moneyFlow" requiredPlan="pro" />);
-    assert.match(html, /Available on Pro/);
-    assert.match(html, />Money Flow</);
-    assert.match(html, /href="\/checkout\?plan=pro&amp;interval=annual"/);
-    assert.match(html, /Upgrade to Pro/);
+    assert.match(html, /data-testid="locked-feature"/);
+    assert.match(html, /🔒/);
+    assert.match(html, /Explore Plans/);
+    assert.match(html, /href="\/choose-plan"/);
   });
 });
 
