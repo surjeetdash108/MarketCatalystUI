@@ -55,6 +55,12 @@ export interface CheckoutPreview {
   renewalAmount: number;
   consent: { version: string; text: string };
   refundPolicy: { enabled: boolean; windowDays: number; checkoutLine: string };
+  /** Free trial for this buyer, or null (already used / has paid before). */
+  trial?: { days: number; endsAt: string } | null;
+  /** Charged today: 0 during a trial, else total. */
+  dueToday?: number;
+  /** The first real charge (incl. tax) and when — the trial end, or today. */
+  firstCharge?: { amount: number; at: string };
 }
 export const previewCheckout = (body: { planId: string; interval: BillingInterval; promoCode?: string; region?: { country: string; state?: string | null; postalCode?: string | null } }) =>
   apiPost<CheckoutPreview>("/api/billing/checkout/preview", body);
@@ -191,6 +197,19 @@ export interface InvoiceRow {
 }
 export const listInvoices = () => apiGet<{ invoices: InvoiceRow[] }>("/api/billing/invoices").then((r) => r.invoices);
 export interface HistoryRow { type: string; from: unknown; to: unknown; at: string }
+/** One line of the plan history timeline (server-formatted, exact timestamp). */
+export interface TimelineEntry {
+  at: string;
+  kind: "plan" | "payment" | "credit" | "refund" | "trial" | "cancel" | "discount" | "status";
+  type: string;
+  title: string;
+  detail: string | null;
+  amount: number | null;
+  currency: string | null;
+  planId: string | null;
+  invoiceId: string | null;
+}
+export const listTimeline = () => apiGet<{ entries: TimelineEntry[] }>("/api/billing/timeline").then((r) => r.entries);
 export const listHistory = () => apiGet<{ history: HistoryRow[] }>("/api/billing/history").then((r) => r.history);
 export const openPortal = () => apiPost<{ url: string }>("/api/billing/portal");
 

@@ -10,6 +10,10 @@ export interface Entitlements {
   /** Staff full access (verified email on the backend allowlist): every feature, never billed. */
   staff?: boolean;
   paidPlansAvailable: boolean;
+  /** Free-trial days this person would get on a new plan (0 = none left). */
+  trialDays?: number;
+  /** New-account intro (status "INTRO"): when it ends. */
+  introEndsAt?: string | null;
   /** Staff checkout preview (CHECKOUT_PREVIEW on): this staff account may buy in Stripe test mode. */
   checkoutPreview?: boolean;
   /** Staff only: a billing provider is configured on the backend. */

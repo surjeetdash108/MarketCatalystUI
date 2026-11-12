@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useSI, type AppModule } from "./si/si-context";
 import { useEntitlements, effectivePlanId } from "./hooks/useEntitlements";
+import { plansHref } from "./entitlement-gate";
 
 /** Pill colours per module (active segment background / label). */
 const ACTIVE: Record<AppModule, { bg: string; fg: string; glow: string; hover: string }> = {
@@ -67,7 +68,6 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
   const plan = effectivePlanId(entitlements);
   const [hover, setHover] = useState<AppModule | null>(null);
   const [upgradeModal, setUpgradeModal] = useState<"MF" | "SL" | null>(null);
-  const [modalInterval, setModalInterval] = useState<"monthly" | "annual">("annual");
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const refs = useRef<Record<AppModule, HTMLSpanElement | null>>({ MC: null, SI: null, SL: null, MF: null });
@@ -240,130 +240,25 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
               </button>
             </div>
 
-            <h2 style={{ margin: "0 0 14px", fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }}>
-              {upgradeModal === "MF"
-                ? "Upgrade to Pro or Elite for Money Flow"
-                : "Upgrade to Elite for Strategy Lab"}
+            <h2 style={{ margin: "0 0 10px", fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.35 }} data-testid="module-upgrade-title">
+              {upgradeModal === "MF" ? "Money Flow is available on Pro and up" : "Strategy Lab is available on Elite"}
             </h2>
-
-            {/* Monthly / Annual Toggle */}
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-              <div
-                style={{
-                  display: "inline-flex",
-                  background: "rgba(255,255,255,0.06)",
-                  borderRadius: 99,
-                  padding: 3,
-                  border: "1px solid rgba(255,255,255,0.12)",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setModalInterval("monthly")}
-                  style={{
-                    padding: "5px 14px",
-                    borderRadius: 99,
-                    border: "none",
-                    fontSize: ".75rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    background: modalInterval === "monthly" ? "var(--brand, #22c55e)" : "transparent",
-                    color: modalInterval === "monthly" ? "#000" : "var(--text-dim-solid, #8a96a3)",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  Monthly
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalInterval("annual")}
-                  style={{
-                    padding: "5px 14px",
-                    borderRadius: 99,
-                    border: "none",
-                    fontSize: ".75rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    background: modalInterval === "annual" ? "var(--brand, #22c55e)" : "transparent",
-                    color: modalInterval === "annual" ? "#000" : "var(--text-dim-solid, #8a96a3)",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  Annual <span style={{ opacity: 0.8, fontSize: ".68rem" }}>· Save 20%</span>
-                </button>
-              </div>
-            </div>
+            <p style={{ margin: "0 0 18px", fontSize: ".86rem", color: "#9aa3a8", lineHeight: 1.5 }}>
+              {upgradeModal === "MF"
+                ? "See where institutional money is moving, by sector, with the biggest institutional gainers and losers."
+                : "Build or pick a strategy, backtest it, and get entry, stop and target levels."}
+              {(entitlements?.trialDays ?? 0) > 0 ? ` Every plan starts with a ${entitlements?.trialDays}-day free trial.` : ""}
+            </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {upgradeModal === "MF" ? (
-                <>
-                  <Link
-                    href={`/checkout?plan=pro&interval=${modalInterval}`}
-                    onClick={() => setUpgradeModal(null)}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      textDecoration: "none",
-                      padding: "12px 18px",
-                      borderRadius: 10,
-                      background: "#22c55e",
-                      color: "#05210f",
-                      fontWeight: 800,
-                      fontSize: ".9rem",
-                    }}
-                  >
-                    <span>Upgrade to Pro</span>
-                    <span style={{ fontSize: ".82rem", fontWeight: 700, opacity: 0.9 }}>
-                      {modalInterval === "annual" ? "$566.40/yr ($47.20/mo)" : "$59/mo"}
-                    </span>
-                  </Link>
-                  <Link
-                    href={`/checkout?plan=elite&interval=${modalInterval}`}
-                    onClick={() => setUpgradeModal(null)}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      textDecoration: "none",
-                      padding: "12px 18px",
-                      borderRadius: 10,
-                      background: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(255,255,255,0.16)",
-                      color: "#ffffff",
-                      fontWeight: 800,
-                      fontSize: ".9rem",
-                    }}
-                  >
-                    <span>Upgrade to Elite</span>
-                    <span style={{ fontSize: ".82rem", fontWeight: 600, color: "#9aa3a8" }}>
-                      {modalInterval === "annual" ? "$1,791/yr ($149.25/mo)" : "$199/mo"}
-                    </span>
-                  </Link>
-                </>
-              ) : (
-                <Link
-                  href={`/checkout?plan=elite&interval=${modalInterval}`}
-                  onClick={() => setUpgradeModal(null)}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    textDecoration: "none",
-                    padding: "12px 18px",
-                    borderRadius: 10,
-                    background: "#c9a24a",
-                    color: "#08090a",
-                    fontWeight: 800,
-                    fontSize: ".9rem",
-                  }}
-                >
-                  <span>Upgrade to Elite</span>
-                  <span style={{ fontSize: ".82rem", fontWeight: 700, opacity: 0.9 }}>
-                    {modalInterval === "annual" ? "$1,791/yr ($149.25/mo)" : "$199/mo"}
-                  </span>
-                </Link>
-              )}
+              <Link
+                href={plansHref(upgradeModal === "MF" ? "pro" : "elite")}
+                onClick={() => setUpgradeModal(null)}
+                data-testid="module-see-plans"
+                style={{ display: "flex", justifyContent: "center", alignItems: "center", textDecoration: "none", padding: "12px 18px", borderRadius: 10, background: "#22c55e", color: "#05210f", fontWeight: 800, fontSize: ".9rem" }}
+              >
+                See the plans
+              </Link>
               <button
                 type="button"
                 onClick={() => setUpgradeModal(null)}
