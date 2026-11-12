@@ -22,11 +22,19 @@ describe("Manage Plan v2", () => {
     assert.match(mp, /data-testid="done-email"[^>]*>We&apos;ve emailed you a confirmation/);
     assert.doesNotMatch(mp, /Free Tier/);
   });
-  it("no refunds: no refund button or call; cancelling says the plan stays active to the end of the paid period", () => {
-    assert.doesNotMatch(mp, /refundEligibility|requestRefund|request-refund|refund-confirm|Cancel and refund/);
-    assert.match(mp, /data-testid="no-refunds"[^>]*>\{REFUND_POLICY\.managePlanLine\}/);
+  it("no refunds: no refund button or call; the cancel popup puts 'Keep my plan' first and has no refunds line", () => {
+    assert.doesNotMatch(mp, /refundEligibility|requestRefund|request-refund|refund-confirm|Cancel and refund|data-testid="no-refunds"/);
+    const dlg = mp.slice(mp.indexOf('testId="cancel-dialog"'), mp.indexOf('testId="cancel-dialog"') + 900);
+    assert.ok(dlg.indexOf('testId="cancel-keep"') < dlg.indexOf('testId="cancel-confirm"'), "Keep my plan comes first");
     assert.equal(REFUND_POLICY.enabled, false);
-    assert.match(REFUND_POLICY.managePlanLine, /^No refunds\./);
+  });
+  it("renames: Credits available, Update payment method, Purchase history, Switch to <plan>, thank-you after the offer", () => {
+    assert.match(mp, />Credits available: \{formatMoney\(summary\.creditBalance/);
+    assert.doesNotMatch(mp, /used automatically on your next invoice\)|Update card<|Plan history<|Upgrade to \$\{|Downgrade to \$\{|"Discount applied"/);
+    assert.match(mp, />Update payment method</);
+    assert.match(mp, /<h3>Purchase history<\/h3>/);
+    assert.match(mp, /label = `Switch to \$\{p\.name\}`;/);
+    assert.match(mp, /afterChange\("Thank you for trusting us", "Enjoy 50% off for the next 2 months\."\)/);
   });
   it("Manage Plan never charges or changes a plan itself: every change goes to the checkout page", () => {
     assert.doesNotMatch(mp, /applyChange|previewChange|confirmChange|handleStripeAction/);

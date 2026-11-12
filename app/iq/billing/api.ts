@@ -70,9 +70,9 @@ export type FakeCompletion = { status: "complete"; subscriptionId: string; redir
 export const fakeCompleteCheckout = (sessionId: string, card: string) => apiPost<FakeCompletion>(`/api/billing/fake/checkout/${encodeURIComponent(sessionId)}/complete`, { card });
 export const fakeConfirmAction = (actionId: string, approve: boolean) => apiPost<FakeCompletion>(`/api/billing/fake/actions/${encodeURIComponent(actionId)}`, { approve });
 
-export interface Contact { phone: string | null; marketingOptIn: { optedIn: boolean; at: string | null } }
+export interface Contact { marketingOptIn: { optedIn: boolean; at: string | null } }
 export const getContact = () => apiGet<Contact>("/api/billing/contact");
-export const updateContact = (body: { phone?: string; marketingOptIn?: boolean }) => apiPost<Contact>("/api/billing/contact", body);
+export const updateContact = (body: { marketingOptIn?: boolean }) => apiPost<Contact>("/api/billing/contact", body);
 
 export const checkoutStatus = (id: string) => apiGet<{ status: string; planId: string; active: boolean; currentPlan: string }>(`/api/billing/checkout/${encodeURIComponent(id)}`);
 

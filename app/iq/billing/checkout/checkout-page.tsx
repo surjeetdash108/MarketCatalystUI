@@ -335,14 +335,9 @@ export function CheckoutPage() {
     const scheduled = cp.kind === "scheduled";
     const inTrial = !!cp.trialEndsAt;
     const startsAt = cp.startsAt ?? (scheduled ? cp.effectiveAt : new Date(cp.prorationDate).toISOString());
-    const title =
-      cp.kind === "upgrade"
-        ? `Upgrade to ${plan.name} (${cadenceLabel})`
-        : cp.kind === "downgrade"
-          ? `Change to ${plan.name} (${cadenceLabel})`
-          : `Switch to ${plan.name} (${cadenceLabel})`;
+    const title = `Switch to ${plan.name} (${cadenceLabel})`;
     const cta = scheduled
-      ? `Schedule ${plan.name} from ${longDate(startsAt)}`
+      ? `Switch to ${plan.name} from ${longDate(startsAt)}`
       : cp.amountDueNow > 0
         ? `Pay ${money(cp.amountDueNow)} & start ${plan.name} now`
         : `Start ${plan.name} now`;

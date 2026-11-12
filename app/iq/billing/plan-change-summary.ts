@@ -45,7 +45,7 @@ export function planChangeLines(c: PlanChangeSummary, money: (n: number) => stri
   const per = c.interval === "annual" ? "year" : "month";
   if (c.kind === "scheduled")
     return [
-      `Your switch to ${c.toPlanName} (${cadence}) is scheduled for ${c.effectiveAt ? date(c.effectiveAt) : "the end of your current period"}.`,
+      `Your ${c.toPlanName} (${cadence}) plan starts on ${c.effectiveAt ? date(c.effectiveAt) : "the end of your current period"}.`,
       `You keep ${c.fromPlanName ?? "your current plan"} until then. Nothing is charged today.`,
       `Then ${money(c.nextRenewalAmount)} every ${per}.`,
     ];

@@ -18,15 +18,15 @@ import type { PaymentAdapter, PaymentFormProps, PaymentResult } from "./payment-
  * declines; the buyer stays on the page).
  *
  * Payment methods come from the Stripe account, limited to
- * NEXT_PUBLIC_STRIPE_PAYMENT_METHOD_TYPES (default "card,link"; Apple Pay /
+ * NEXT_PUBLIC_STRIPE_PAYMENT_METHOD_TYPES (default "card"; never Link; Apple Pay /
  * Google Pay appear under card once the domain is verified). Must match the
  * backend's STRIPE_PAYMENT_METHOD_TYPES. Never crypto or UPI.
  */
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
-const ALLOWED = new Set(["card", "link", "paypal", "cashapp", "amazon_pay"]);
+const ALLOWED = new Set(["card", "paypal", "cashapp", "amazon_pay"]); // never Link (asks for a phone)
 
 export function stripePaymentMethodTypes(raw: string | undefined): string[] {
-  const types = String(raw ?? "card,link")
+  const types = String(raw ?? "card")
     .split(",")
     .map((s) => s.trim())
     .filter((s) => ALLOWED.has(s));
@@ -95,7 +95,9 @@ function Inner({ onChange }: Pick<PaymentFormProps, "onChange">) {
         <PaymentElement
           options={{
             layout: "tabs",
-            wallets: { applePay: "auto", googlePay: "auto" },
+            // No Stripe Link: no "Save my information for faster checkout" box
+            // (it also asks for a mobile number). Card only.
+            wallets: { applePay: "auto", googlePay: "auto", link: "never" },
             fields: { billingDetails: { name: "never", email: "never", phone: "never", address: "never" } },
             // Our own renewal consent (checkbox + text in the summary) is the authorisation;
             // hide Stripe's duplicate "By subscribing, you authorize … to charge you" line.

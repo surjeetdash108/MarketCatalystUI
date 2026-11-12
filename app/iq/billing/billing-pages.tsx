@@ -123,8 +123,8 @@ export function BillingSuccess() {
                 </h1>
                 <p style={{ margin: 0, color: "var(--brand-2, #10b981)", fontSize: "1.1rem", fontWeight: 700 }}>
                   {isPlanChange && change?.kind === "scheduled"
-                    ? `Your switch to ${change.toPlanName} is scheduled`
-                    : `You're now on ${change?.toPlanName ?? (view.planId ? view.planId.charAt(0).toUpperCase() + view.planId.slice(1) : "your plan")}`}
+                    ? `Your ${change.toPlanName} plan starts on ${change.effectiveAt ? longDate(change.effectiveAt) : "the end of your current period"}`
+                    : `Your ${change?.toPlanName ?? (view.planId ? view.planId.charAt(0).toUpperCase() + view.planId.slice(1) : "new")} Plan is Activated`}
                 </p>
                 {isPlanChange && change ? (
                   <div data-testid="change-confirmation" style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 460, fontSize: ".9rem", color: "var(--text)", lineHeight: 1.5 }}>
@@ -138,7 +138,7 @@ export function BillingSuccess() {
                   </p>
                 )}
                 <p data-testid="success-email" style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".8rem" }}>
-                  We&apos;ve emailed you a confirmation. You can see every change in Settings → Plan → Plan history.
+                  We&apos;ve emailed you a confirmation. You can see every change in Settings → Plan → Purchase history.
                 </p>
                 <Link
                   href="/dashboard"

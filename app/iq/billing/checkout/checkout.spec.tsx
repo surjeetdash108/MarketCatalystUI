@@ -102,10 +102,12 @@ describe("checkout page wiring", () => {
 });
 
 describe("Stripe adapter (Payment Element + Address Element, deferred intent)", () => {
-  it("payment method types come from config; crypto and UPI are filtered out", async () => {
+  it("payment method types come from config (card by default); Link, crypto and UPI are filtered out", async () => {
     const { stripePaymentMethodTypes } = await import("./stripe-payment-form");
-    assert.deepEqual(stripePaymentMethodTypes(undefined), ["card", "link"]);
-    assert.deepEqual(stripePaymentMethodTypes("card,link,paypal,crypto,upi"), ["card", "link", "paypal"]);
+    assert.deepEqual(stripePaymentMethodTypes(undefined), ["card"]);
+    // Never Link: its "Save my information for faster checkout" box asks for a mobile number.
+    assert.deepEqual(stripePaymentMethodTypes("card,link,paypal,crypto,upi"), ["card", "paypal"]);
+    assert.match(src("app/iq/billing/checkout/stripe-payment-form.tsx"), /wallets: \{ applePay: "auto", googlePay: "auto", link: "never" \}/);
     assert.deepEqual(stripePaymentMethodTypes("crypto"), ["card"]);
   });
   it("needs a real publishable key; without one it says payments are being set up (never a broken form)", async () => {

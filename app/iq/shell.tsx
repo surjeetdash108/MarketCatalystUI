@@ -1483,7 +1483,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // incomplete (drives the "Pending" pill on My Profile) until every field is filled.
   const profileIncomplete =
     !profile ||
-    (["name", "mobileNumber", "age", "incomeRange", "investmentExperience",
+    (["name", "age", "incomeRange", "investmentExperience",
       "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue"] as const)
       .some(f => String(profile[f] ?? "").trim() === "") ||
     (profile.preferredAssetClasses?.length ?? 0) === 0;
@@ -1528,6 +1528,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 }}
                 className="si-main-scroll"
               >
+                {ent?.status === "INTRO" && <ContextualBanner ent={ent} />}
                 <style>{`
                   .si-main-scroll::-webkit-scrollbar {
                     width: 8px !important;
@@ -1556,6 +1557,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                 }}
                 className="mf-main-scroll"
               >
+                {ent?.status === "INTRO" && <ContextualBanner ent={ent} />}
                 <style>{`
                   .mf-main-scroll::-webkit-scrollbar {
                     width: 8px !important;
@@ -1664,7 +1666,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                       <span className="pd-icon">📝</span> Chart Notes
                     </button>
                     <button className="pd-item" onClick={() => { router.push("/manage-plan"); setProfileDropdownOpen(false); }}>
-                      <span className="pd-icon">◈</span> Manage Account
+                      <span className="pd-icon">◈</span> Manage Plan
                     </button>
                     {hasActivePlan && (
                       <button className="pd-item" onClick={() => { router.push("/refer-a-friend"); setProfileDropdownOpen(false); }}>

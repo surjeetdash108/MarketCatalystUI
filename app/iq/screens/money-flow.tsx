@@ -336,7 +336,20 @@ export function MoneyFlowScreen() {
 
   return (
     <div className="mf-page-wrap">
+      {!board && !boardError && (
+        // The board takes a few seconds to build: a progress bar instead of a blank page.
+        <div data-testid="mf-loading" role="progressbar" aria-label="Loading Money Flow" className="mf-loading">
+          <div className="mf-loading-track"><div className="mf-loading-bar" /></div>
+          <div className="mf-loading-text">Loading Money Flow…</div>
+        </div>
+      )}
       <style>{`
+        .mf-loading { position: sticky; top: 0; z-index: 50; padding: 10px 20px 8px; background: var(--th-08090a); }
+        .mf-loading-track { height: 4px; border-radius: 2px; background: rgba(224, 187, 94, 0.15); overflow: hidden; }
+        .mf-loading-bar { height: 100%; width: 35%; border-radius: 2px; background: var(--th-c9a24a); animation: mf-loading-slide 1.2s ease-in-out infinite; }
+        .mf-loading-text { margin-top: 6px; font-size: .8rem; color: var(--th-c9a24a); }
+        @keyframes mf-loading-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+        @media (prefers-reduced-motion: reduce) { .mf-loading-bar { animation: none; width: 100%; opacity: .6; } }
         /* ── Base Money Flow Styles ── */
         .mf-pop-layer:hover { border-color: var(--th-c9a24a) !important; }
         .mf-page-wrap {
