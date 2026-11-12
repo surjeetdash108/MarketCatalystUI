@@ -25,7 +25,7 @@ export interface PaymentFormProps {
    * "planChange": the payment step of an upgrade from Manage Plan — the card is
    * collected here and charged by the backend for that change only.
    */
-  purpose?: "purchase" | "planChange";
+  purpose?: "purchase" | "trial" | "planChange";
 }
 
 export type PaymentResult =

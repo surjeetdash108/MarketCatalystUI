@@ -469,7 +469,15 @@ export function CheckoutPage() {
                 <Link href={`/choose-plan?plan=${plan.id}&interval=${interval}${onboarding ? "&onboarding=1" : ""}`} className="co-link" data-testid="co-change-plan">Change plan</Link>
               </p>
               {Form ? (
-                <Form onChange={onPayment} disabled={busy} amount={preview?.trial ? 0 : (preview?.total ?? plan.prices[interval]?.amount ?? 0)} currency={plan.currency} />
+                <Form
+                  // Trial (card saved, $0 now) and paid purchases use different Stripe modes: remount on change.
+                  key={preview?.trial ? "trial" : "purchase"}
+                  purpose={preview?.trial ? "trial" : "purchase"}
+                  onChange={onPayment}
+                  disabled={busy}
+                  amount={preview?.trial ? 0 : (preview?.total ?? plan.prices[interval]?.amount ?? 0)}
+                  currency={plan.currency}
+                />
               ) : (
                 <Notice tone="warn">Payments aren&apos;t available right now.</Notice>
               )}

@@ -85,4 +85,12 @@ describe("checkout bug fixes (2026-11-12)", () => {
     assert.match(p, /data-testid="change-in-trial"/);
     assert.match(p, /: `Upgrade to \$\{plan\.name\}`/);
   });
+
+  it("free trial: the card is saved first (Stripe setup mode, $0) and charged when the trial ends", async () => {
+    const { stripeElementsOptions } = await import("./stripe-payment-form");
+    assert.equal(stripeElementsOptions("trial", 0, "USD").mode, "setup");
+    assert.equal("paymentMethodCreation" in stripeElementsOptions("trial", 0, "USD"), false);
+    assert.match(page(), /purpose=\{preview\?\.trial \? "trial" : "purchase"\}/);
+    assert.match(src("app/iq/billing/checkout/stripe-payment-form.tsx"), /const isSetup = clientSecret\.startsWith\("seti_"\);[\s\S]{0,80}stripe\.confirmSetup/);
+  });
 });
