@@ -71,4 +71,11 @@ describe("checkout bug fixes (2026-11-12)", () => {
     );
     assert.equal(stripeElementsOptions("purchase", 3900, "USD").mode, "subscription");
   });
+
+  it("no placeholder contact details: no fake phone at checkout, no fake email/name sent to Stripe", () => {
+    assert.doesNotMatch(page(), /\+15555550100/);
+    const stripe = src("app/iq/billing/checkout/stripe-payment-form.tsx");
+    assert.doesNotMatch(stripe, /subscriber@marketcatalyst\.ai|"Subscriber"/);
+    assert.match(stripe, /if \(email\) billing_details\.email = email;/);
+  });
 });
