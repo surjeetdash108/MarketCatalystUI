@@ -130,6 +130,9 @@ export function stripeElementsOptions(purpose: PaymentFormProps["purpose"], amou
   // change (prorated invoice), so Elements just creates the payment method.
   if (purpose === "planChange")
     return { mode: "setup" as const, currency: currency.toLowerCase(), paymentMethodTypes: ["card"], paymentMethodCreation: "manual" as const, appearance };
+  // Free trial: the card is saved (SetupIntent, $0) and charged when the trial ends.
+  if (purpose === "trial")
+    return { mode: "setup" as const, currency: currency.toLowerCase(), paymentMethodTypes: ["card"], appearance };
   return { mode: "subscription" as const, amount: Math.max(0, amount), currency: currency.toLowerCase(), paymentMethodTypes: ["card"], appearance };
 }
 
@@ -141,7 +144,7 @@ function StripeForm({ onChange, amount, currency, purpose }: PaymentFormProps) {
     [currency],
   );
   useEffect(() => {
-    if (purpose !== "planChange") live.elements?.update({ amount: Math.max(0, amount) });
+    if (purpose !== "planChange" && purpose !== "trial") live.elements?.update({ amount: Math.max(0, amount) });
   }, [amount, purpose]);
   if (!stripeConfigured()) {
     return <Notice tone="warn" testId="stripe-not-ready">Card payments are being set up. Please try again soon.</Notice>;
