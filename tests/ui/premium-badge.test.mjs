@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 describe("Premium badge source", () => {
-  for (const f of ["app/iq/screens/manage-plan-soon.tsx", "app/iq/screens/settings.tsx"]) {
+  // settings.tsx no longer shows a Premium badge: its plan card reads the server's entitlements.
+  for (const f of ["app/iq/screens/manage-plan-soon.tsx"]) {
     it(`${f} derives isPremium from hasConfirmedPaidPlan`, () => {
       const s = read(f);
       assert.doesNotMatch(s, /tier\s*!==\s*"free"/);
