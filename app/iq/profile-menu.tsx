@@ -176,7 +176,7 @@ export function ProfileMenu() {
               onClick={() => navigate("/manage-plan")}
               style={itemStyle}
             >
-              <span style={iconStyle}>◈</span> Manage Account
+              <span style={iconStyle}>◈</span> Manage Plan
             </button>
             {hasActivePlan && (
               <button

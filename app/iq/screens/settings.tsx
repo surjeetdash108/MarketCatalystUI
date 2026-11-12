@@ -218,7 +218,7 @@ export function SettingsScreen() {
   // Fields the user must fill in themselves (name arrives from Google, email from
   // auth). If any is blank the profile is flagged incomplete so the user knows to update it.
   const requiredProfileFields: (keyof StoredProfile)[] = [
-    "name", "mobileNumber", "age", "incomeRange", "investmentExperience",
+    "name", "age", "incomeRange", "investmentExperience",
     "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue",
   ];
   const profileIncomplete =
@@ -291,7 +291,8 @@ export function SettingsScreen() {
         </div>
       </div>
 
-      <div className="dash" style={{ gridTemplateColumns: "1fr", maxWidth: 700 }}>
+      {/* Sections (Account, Preferences, …) take ¾ of the screen, centred (full width on a phone). */}
+      <div className="dash" data-testid="settings-sections" style={{ gridTemplateColumns: "1fr", width: "max(75%, min(100%, 640px))", maxWidth: "100%", margin: "0 auto" }}>
 
         {/* Account */}
         <div className="card col-12">
@@ -567,8 +568,8 @@ export function PlanSettingsCard({ isStaff }: { isStaff: boolean }) {
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {subscribed || isStaff ? (
             <>
-              <button className="planbtn" style={btn} data-testid="settings-manage-plan" onClick={() => (window.location.href = "/manage-plan")}>Manage plan</button>
-              <button className="planbtn" style={btn} data-testid="settings-plan-history" onClick={() => (window.location.href = "/manage-plan#history")}>Plan history</button>
+              <button className="planbtn" style={btn} data-testid="settings-manage-plan" onClick={() => (window.location.href = "/manage-plan")}>Manage Plan</button>
+              <button className="planbtn" style={btn} data-testid="settings-plan-history" onClick={() => (window.location.href = "/manage-plan#history")}>Purchase history</button>
             </>
           ) : (
             <button className="planbtn" style={btn} data-testid="settings-see-plans" onClick={() => (window.location.href = "/choose-plan")}>See the plans</button>

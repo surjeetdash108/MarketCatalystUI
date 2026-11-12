@@ -131,7 +131,13 @@ export function EntitlementGate({
 }) {
   const key = entitlement ?? (slug ? entitlementForSlug(slug) : null);
   const state = useEntitlements();
-  const d = featureDecision(state, key);
+  // Strategy Lab runs its backtests in the browser, so the backend can't stop
+  // it once the screen is open: if the plan couldn't be loaded it stays
+  // locked (fail closed) instead of opening (every other screen fails open).
+  const failClosed = key === "strategyLab" && !state.data && state.error;
+  const d = failClosed
+    ? ({ kind: "locked", requiredPlan: "elite" } as const)
+    : featureDecision(state, key);
   if (d.kind === "allow") return <>{children}</>;
   if (d.kind === "loading") return null;
   if (d.kind === "hidden") return null;
