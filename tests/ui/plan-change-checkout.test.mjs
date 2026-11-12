@@ -36,3 +36,16 @@ test("the page clearly says when the new plan starts (today, or the date a sched
   assert.match(view, /Nothing is charged today\. On \$\{longDate\(startsAt\)\} the card below is charged/);
   assert.match(view, /You're in your free trial, so nothing is charged today\. The card below is charged/);
 });
+
+test("titles say 'Switch to <plan>'; a scheduled change's button says 'Switch to <plan> from <date>'", () => {
+  assert.match(view, /const title = `Switch to \$\{plan\.name\} \(\$\{cadenceLabel\}\)`;/);
+  assert.match(view, /\? `Switch to \$\{plan\.name\} from \$\{longDate\(startsAt\)\}`/);
+  assert.doesNotMatch(view, /`Upgrade to \$\{plan\.name\}|`Change to \$\{plan\.name\}|`Schedule /);
+});
+
+test("confirmation: 'Your <plan> Plan is Activated', or 'Your <plan> plan starts on <date>' for a scheduled switch", () => {
+  const pages = fs.readFileSync(new URL("../../app/iq/billing/billing-pages.tsx", import.meta.url), "utf8");
+  assert.match(pages, /`Your \$\{change\.toPlanName\} plan starts on \$\{change\.effectiveAt \? longDate\(change\.effectiveAt\)/);
+  assert.match(pages, /Plan is Activated`/);
+  assert.doesNotMatch(pages, /is scheduled`/);
+});

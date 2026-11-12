@@ -39,7 +39,7 @@ describe("plan change confirmation", () => {
   it("annual → monthly: scheduled date, keep the current plan until then, nothing charged", () => {
     const l = planChangeLines({ ...base, kind: "scheduled", fromPlanName: "Pro", effectiveAt: "2027-11-10T12:00:00.000Z" }, money, date);
     assert.deepEqual(l.slice(0, 2), [
-      "Your switch to Pro (Monthly) is scheduled for 2027-11-10.",
+      "Your Pro (Monthly) plan starts on 2027-11-10.",
       "You keep Pro until then. Nothing is charged today.",
     ]);
   });
