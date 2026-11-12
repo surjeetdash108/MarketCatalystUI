@@ -2,6 +2,7 @@
 
 // iq.css is imported globally via app/layout.tsx
 import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -1117,7 +1118,7 @@ function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["da
     );
   }
 
-  const isExpiredTrial = (ent.status === "NONE" || ent.status === "EXPIRED") && !ent.cancelAtPeriodEnd && !isTrial && ent.subscriptionsEnabled;
+  const isExpiredTrial = ent.status === "EXPIRED" && !ent.cancelAtPeriodEnd && !isTrial && ent.subscriptionsEnabled;
   if (isExpiredTrial) {
     return (
       <div data-testid="banner-expired-intro" style={{ background: "rgba(239, 68, 68, 0.12)", borderBottom: "1px solid rgba(239, 68, 68, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#fca5a5", zIndex: 10 }}>
@@ -1635,8 +1636,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                   {profileImage && <img src={profileImage} alt={displayName} />}
                 </div>
 
-                {profileDropdownOpen && (
-                  <div className="profile-dropdown">
+                {profileDropdownOpen && typeof document !== "undefined" && createPortal(
+                  <div className="profile-dropdown" style={{ zIndex: 1000000 }}>
                     {/* User info */}
                     <div className="pd-user">
                       <div className="pd-avatar">
@@ -1673,7 +1674,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
                     <button className="pd-item danger" onClick={() => { handleSignOut(); setProfileDropdownOpen(false); }}>
                       <span className="pd-icon">↩</span> Logout
                     </button>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
             </div>

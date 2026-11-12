@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEntitlements } from "./hooks/useEntitlements";
 
 export function WelcomeFeedbackModals() {
+  const { data: ent } = useEntitlements();
   const [showWelcome, setShowWelcome] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
@@ -16,11 +18,11 @@ export function WelcomeFeedbackModals() {
       setShowWelcome(true);
       return;
     }
-    // 2. Check if returning user logged in
-    if (window.sessionStorage.getItem("mc_show_feedback") === "1") {
+    // 2. Check if returning user logged in - ONLY for users in the 7-day free window (status === "INTRO")
+    if (window.sessionStorage.getItem("mc_show_feedback") === "1" && ent?.status === "INTRO") {
       setShowFeedback(true);
     }
-  }, []);
+  }, [ent?.status]);
 
   const closeWelcome = () => {
     setShowWelcome(false);
@@ -269,7 +271,7 @@ export function WelcomeFeedbackModals() {
                 lineHeight: 1.5,
               }}
             >
-              Take a moment to share your thoughts or suggestions with our team.
+              Take a moment to share your thoughts or suggestions.
             </p>
 
             {feedbackSent ? (

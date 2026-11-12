@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect } from "react";
 import { useAppSelector } from "../store/hooks";
+import { firebaseAuth } from "../firebase";
 
 export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
   const { user, status } = useAppSelector((state) => state.auth);
@@ -10,6 +11,22 @@ export function AuthGuard({ children }: Readonly<{ children: ReactNode }>) {
     if (status === "ready" && !user) {
       const search = typeof window !== "undefined" ? window.location.search : "";
       window.location.href = search ? `/auth/signup${search}` : "/auth/login";
+      return;
+    }
+    // Unverified email/password accounts MUST verify their email before accessing the product.
+    // Google sign-in accounts arrive with emailVerified: true automatically.
+    const fbUser = firebaseAuth.currentUser;
+    if (
+      status === "ready" &&
+      fbUser &&
+      !fbUser.emailVerified &&
+      fbUser.providerData?.some((p) => p.providerId === "password")
+    ) {
+      const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+      if (currentPath !== "/verify-email" && !currentPath.startsWith("/auth/")) {
+        const next = currentPath && currentPath !== "/" ? `?next=${encodeURIComponent(currentPath)}` : "";
+        window.location.href = `/verify-email${next}`;
+      }
     }
   }, [status, user]);
 

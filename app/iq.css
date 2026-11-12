@@ -4814,7 +4814,7 @@ table.tbl tr:hover td {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: 0 12px 36px rgba(0, 0, 0, .6);
-  z-index: 99999;
+  z-index: 1000000;
   overflow: hidden;
   animation: iq-dropdownIn .15s ease both;
   transform-origin: top right;
