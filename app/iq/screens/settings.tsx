@@ -8,7 +8,6 @@ import { useAppSelector } from "../../store/hooks";
 import type { StoredProfile } from "../../store/profile-slice";
 import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
-import { isLifetimeElite } from "../billing/lifetime-elite";
 import { useEntitlements } from "../hooks/useEntitlements";
 
 const FONTS: { key: FontKey; rank: number; label: string; desc: string; stack: string }[] = [
@@ -214,7 +213,6 @@ export function SettingsScreen() {
     setTimeout(() => setSchMsg(""), 4000);
   }
 
-  const isLifetime = isLifetimeElite(user?.email);
   const isStaff = useEntitlements().data?.staff === true;
 
   // Fields the user must fill in themselves (name arrives from Google, email from
@@ -454,7 +452,7 @@ export function SettingsScreen() {
         </div>
 
         {/* Plan */}
-        <PlanSettingsCard isStaff={isStaff} isLifetime={isLifetime} />
+        <PlanSettingsCard isStaff={isStaff} />
 
         {/* Schedule & share recap */}
         <div className="card col-12">
@@ -528,7 +526,7 @@ function shortDate(iso: string | null | undefined): string {
  * Settings → Plan: the current plan and what happens next, from the server's
  * entitlements, with one place to manage it.
  */
-export function PlanSettingsCard({ isStaff, isLifetime }: { isStaff: boolean; isLifetime: boolean }) {
+export function PlanSettingsCard({ isStaff }: { isStaff: boolean }) {
   const { data: ent } = useEntitlements();
   const status = ent?.status ?? "";
   const subscribed = !!ent?.subscriptionPlanId;
@@ -538,9 +536,6 @@ export function PlanSettingsCard({ isStaff, isLifetime }: { isStaff: boolean; is
   if (isStaff) {
     badge = "Staff";
     line = "Staff access: every feature, never billed.";
-  } else if (isLifetime) {
-    badge = "Elite (Lifetime)";
-    line = "Your complimentary Lifetime Elite plan is active with full access to every feature.";
   } else if (ent && !ent.subscriptionsEnabled) {
     badge = "Full access";
     line = "Paid plans are launching soon. You won't be charged anything until then.";
@@ -563,14 +558,14 @@ export function PlanSettingsCard({ isStaff, isLifetime }: { isStaff: boolean; is
     <div className="card col-12" data-testid="settings-plan">
       <div className="card-h">
         <h3>Plan</h3>
-        <span data-testid="settings-plan-badge" style={{ marginLeft: 10, padding: "2px 10px", borderRadius: 99, fontSize: "0.6875rem", fontWeight: 700, background: subscribed || isStaff || isLifetime ? "var(--brand-dim)" : "var(--surface-3)", color: subscribed || isStaff || isLifetime ? "var(--brand-2)" : "var(--text-dim-solid)", border: `1px solid ${subscribed || isStaff || isLifetime ? "var(--brand)" : "var(--border)"}` }}>
+        <span data-testid="settings-plan-badge" style={{ marginLeft: 10, padding: "2px 10px", borderRadius: 99, fontSize: "0.6875rem", fontWeight: 700, background: subscribed || isStaff ? "var(--brand-dim)" : "var(--surface-3)", color: subscribed || isStaff ? "var(--brand-2)" : "var(--text-dim-solid)", border: `1px solid ${subscribed || isStaff ? "var(--brand)" : "var(--border)"}` }}>
           {badge}
         </span>
       </div>
       <div className="card-b">
         <div data-testid="settings-plan-line" style={{ fontSize: "0.8125rem", color: "var(--text)", marginBottom: 12 }}>{line}</div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {subscribed || isStaff || isLifetime ? (
+          {subscribed || isStaff ? (
             <>
               <button className="planbtn" style={btn} data-testid="settings-manage-plan" onClick={() => (window.location.href = "/manage-plan")}>Manage plan</button>
               <button className="planbtn" style={btn} data-testid="settings-plan-history" onClick={() => (window.location.href = "/manage-plan#history")}>Plan history</button>

@@ -1,4 +1,3 @@
-import { isLifetimeElite } from "./billing/lifetime-elite";
 
 /**
  * Whether a user is CONFIRMED to be on a paid plan, from the profile fields the
@@ -34,8 +33,7 @@ function expiryMs(iso: string): number {
 }
 
 export function hasConfirmedPaidPlan(profile: PlanFields | null | undefined, now: number = Date.now(), email?: string | null): boolean {
-  if (email && isLifetimeElite(email)) return true;
-  if (profile?.email && isLifetimeElite(profile.email)) return true;
+  void email;
   if (!profile) return false;
   const plan = profile.currentPlan;
   if (!plan || plan === FREE_PLAN_ID) return false;
