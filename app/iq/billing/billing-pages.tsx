@@ -30,6 +30,7 @@ import { ConfettiCanvas } from "./confetti";
 /** /billing/success — polls until the event handler has activated the plan. */
 export function BillingSuccess() {
   const { data: ent } = useEntitlements();
+  const isPlanChange = ["upgraded", "upgrade"].includes(qs("session") ?? "");
   const [view, setView] = useState<{ phase: "waiting" | "active" | "slow" | "error"; planId?: string }>({ phase: "waiting" });
   useEffect(() => {
     const session = qs("session");
@@ -71,7 +72,9 @@ export function BillingSuccess() {
     <div className="iq-root" data-theme="dark" style={{ minHeight: "100vh", padding: "40px 16px", background: "var(--bg, #08090a)" }}>
       {view.phase === "active" && <ConfettiCanvas />}
       <div style={{ maxWidth: 620, margin: "0 auto" }}>
-        <OnboardingStepper currentStep={3} />
+        {/* First purchase only (a plan change is a single payment step, not onboarding);
+            all three steps show as done once the plan is active. */}
+        {!isPlanChange && <OnboardingStepper currentStep={view.phase === "active" ? 4 : 3} />}
 
         <div className="card col-12" data-testid="billing-success" style={{ margin: "0 auto" }}>
           <div className="card-b" style={{ padding: 36, display: "flex", flexDirection: "column", gap: 18, textAlign: "center", alignItems: "center" }}>

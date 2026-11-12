@@ -3,8 +3,16 @@
 import React from "react";
 
 export interface OnboardingStepperProps {
-  currentStep: 1 | 2 | 3;
+  /** 1–3 = that step is in progress; 4 = all three steps done (purchase complete). */
+  currentStep: 1 | 2 | 3 | 4;
 }
+
+/**
+ * The connector runs only BETWEEN the circles: three equal columns put the
+ * circle centres at 1/6, 3/6 and 5/6 of the width, so the track starts at the
+ * first centre and ends at the last (no stub before step 1 or after step 3).
+ */
+export const STEPPER_TRACK_INSET = "calc(100% / 6)";
 
 export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
   const steps = [
@@ -40,8 +48,8 @@ export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
           style={{
             position: "absolute",
             top: 16,
-            left: "12%",
-            right: "12%",
+            left: STEPPER_TRACK_INSET,
+            right: STEPPER_TRACK_INSET,
             height: 2,
             background: "rgba(255, 255, 255, 0.1)",
             zIndex: 0,
@@ -51,7 +59,7 @@ export function OnboardingStepper({ currentStep }: OnboardingStepperProps) {
           <div
             style={{
               height: "100%",
-              width: currentStep === 1 ? "0%" : currentStep === 2 ? "50%" : "100%",
+              width: currentStep <= 1 ? "0%" : currentStep === 2 ? "50%" : "100%",
               background: "linear-gradient(90deg, var(--brand, #4ADE80) 0%, #22c55e 100%)",
               transition: "width 0.4s ease",
             }}
