@@ -5,31 +5,36 @@ import { useEffect, useState } from "react";
 import { BrandLogo } from "../iq/shell";
 import { ProfileMenu } from "../iq/profile-menu";
 import { firebaseAuth } from "../firebase";
-import { useEntitlements } from "../iq/hooks/useEntitlements";
+import { apiGet } from "../iq/backend";
 
 export default function ReferAFriendPage() {
-  const { data: ent } = useEntitlements();
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [userUid, setUserUid] = useState<string>("");
+  // The code comes from the server, only for members with an active plan
+  // (GET /api/billing/referral). It is random — never derived from the uid.
+  const [ref, setRef] = useState<{ state: "loading" } | { state: "ready"; code: string } | { state: "none" }>({ state: "loading" });
 
   useEffect(() => {
-    void firebaseAuth.authStateReady().then(() => {
-      const u = firebaseAuth.currentUser;
-      if (u) {
-        setUserUid(u.uid);
+    let live = true;
+    void firebaseAuth.authStateReady().then(async () => {
+      if (!firebaseAuth.currentUser) return live && setRef({ state: "none" });
+      try {
+        const r = await apiGet<{ eligible: boolean; code?: string }>("/api/billing/referral");
+        if (live) setRef(r.eligible && r.code ? { state: "ready", code: r.code } : { state: "none" });
+      } catch {
+        if (live) setRef({ state: "none" });
       }
     });
+    return () => {
+      live = false;
+    };
   }, []);
 
-  // Deterministic unique referral code based on UID
-  const referralCode = userUid
-    ? `MC-${userUid.slice(0, 6).toUpperCase()}25`
-    : "MC-INVITE25";
-
-  const referralLink = typeof window !== "undefined"
-    ? `${window.location.origin}/checkout?plan=starter&interval=monthly&promo=${referralCode}`
-    : `https://app.marketcatalyst.ai/checkout?plan=starter&interval=monthly&promo=${referralCode}`;
+  const referralCode = ref.state === "ready" ? ref.code : "";
+  const referralLink =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/checkout?plan=starter&interval=monthly&promo=${referralCode}`
+      : `https://app.marketcatalyst.ai/checkout?plan=starter&interval=monthly&promo=${referralCode}`;
 
   const copyToClipboard = async (text: string, isCode: boolean) => {
     try {
@@ -46,7 +51,6 @@ export default function ReferAFriendPage() {
     }
   };
 
-  const isPaidUser = ent && (ent.planId === "starter" || ent.planId === "pro" || ent.planId === "elite" || ent.subscriptionPlanId);
 
   return (
     <div
@@ -116,21 +120,6 @@ export default function ReferAFriendPage() {
       </header>
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "40px 16px 80px" }}>
-        {!isPaidUser && (
-          <div
-            style={{
-              padding: "14px 20px",
-              borderRadius: 12,
-              background: "rgba(234, 179, 8, 0.1)",
-              border: "1px solid rgba(234, 179, 8, 0.3)",
-              color: "#fde047",
-              fontSize: ".88rem",
-              marginBottom: 24,
-            }}
-          >
-            ⭐ Referral rewards are active for subscribed members. Once you activate a plan, any friend who signs up will grant you both $25 credit!
-          </div>
-        )}
 
         {/* Hero Card */}
         <div
@@ -184,112 +173,122 @@ export default function ReferAFriendPage() {
               lineHeight: 1.6,
             }}
           >
-            Share your unique referral link with fellow traders or investment partners. When they subscribe to any plan, they get $25 off and you receive a $25 credit automatically deducted from your next month renewal.
+            Share your referral link with fellow traders. When a friend buys any plan with it, they get $25 off their first payment. Once their first payment goes through, you get $25 account credit, used automatically on your next invoice.
           </p>
 
-          {/* Referral Link & Code Box */}
-          <div
-            style={{
-              maxWidth: 620,
-              margin: "0 auto 28px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 14,
-            }}
-          >
-            {/* Share Link */}
+          {ref.state === "ready" ? (
             <div
               style={{
+                maxWidth: 620,
+                margin: "0 auto 28px",
                 display: "flex",
-                gap: 8,
-                background: "rgba(0, 0, 0, 0.45)",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                borderRadius: 12,
-                padding: "6px 8px 6px 16px",
-                alignItems: "center",
+                flexDirection: "column",
+                gap: 14,
               }}
             >
-              <span
+              {/* Share Link */}
+              <div
                 style={{
-                  fontSize: ".82rem",
-                  color: "rgba(255, 255, 255, 0.7)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  flex: 1,
-                  textAlign: "left",
-                  fontFamily: "monospace",
+                  display: "flex",
+                  gap: 8,
+                  background: "rgba(0, 0, 0, 0.45)",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  borderRadius: 12,
+                  padding: "6px 8px 6px 16px",
+                  alignItems: "center",
                 }}
               >
-                {referralLink}
-              </span>
-              <button
-                type="button"
-                onClick={() => void copyToClipboard(referralLink, false)}
+                <span
+                  style={{
+                    fontSize: ".82rem",
+                    color: "rgba(255, 255, 255, 0.7)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flex: 1,
+                    textAlign: "left",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {referralLink}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void copyToClipboard(referralLink, false)}
+                  style={{
+                    padding: "9px 20px",
+                    borderRadius: 8,
+                    background: copiedLink ? "var(--brand, #4ADE80)" : "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    color: copiedLink ? "var(--on-brand, #07080A)" : "#ffffff",
+                    fontSize: ".82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {copiedLink ? "✓ Copied!" : "Copy Link"}
+                </button>
+              </div>
+  
+              {/* Promo Code Badge */}
+              <div
                 style={{
-                  padding: "9px 20px",
-                  borderRadius: 8,
-                  background: copiedLink ? "var(--brand, #4ADE80)" : "rgba(255, 255, 255, 0.1)",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                  color: copiedLink ? "var(--on-brand, #07080A)" : "#ffffff",
-                  fontSize: ".82rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  whiteSpace: "nowrap",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 12,
+                  margin: "0 auto",
+                  padding: "8px 18px",
+                  borderRadius: 10,
+                  background: "rgba(255, 255, 255, 0.04)",
+                  border: "1px dashed rgba(255, 255, 255, 0.2)",
                 }}
               >
-                {copiedLink ? "✓ Copied!" : "Copy Link"}
-              </button>
+                <span style={{ fontSize: ".82rem", color: "rgba(255, 255, 255, 0.6)" }}>
+                  Promo code:
+                </span>
+                <span
+                  style={{
+                    fontSize: ".98rem",
+                    fontWeight: 800,
+                    color: "var(--brand, #4ADE80)",
+                    fontFamily: "monospace",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {referralCode}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void copyToClipboard(referralCode, true)}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    background: "transparent",
+                    border: "none",
+                    color: copiedCode ? "var(--brand, #4ADE80)" : "rgba(255, 255, 255, 0.7)",
+                    fontSize: ".78rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  {copiedCode ? "Copied!" : "Copy Code"}
+                </button>
+              </div>
             </div>
-
-            {/* Promo Code Badge */}
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 12,
-                margin: "0 auto",
-                padding: "8px 18px",
-                borderRadius: 10,
-                background: "rgba(255, 255, 255, 0.04)",
-                border: "1px dashed rgba(255, 255, 255, 0.2)",
-              }}
-            >
-              <span style={{ fontSize: ".82rem", color: "rgba(255, 255, 255, 0.6)" }}>
-                Promo code:
-              </span>
-              <span
-                style={{
-                  fontSize: ".98rem",
-                  fontWeight: 800,
-                  color: "var(--brand, #4ADE80)",
-                  fontFamily: "monospace",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                {referralCode}
-              </span>
-              <button
-                type="button"
-                onClick={() => void copyToClipboard(referralCode, true)}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  background: "transparent",
-                  border: "none",
-                  color: copiedCode ? "var(--brand, #4ADE80)" : "rgba(255, 255, 255, 0.7)",
-                  fontSize: ".78rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                }}
-              >
-                {copiedCode ? "Copied!" : "Copy Code"}
-              </button>
+          ) : (
+            <div data-testid="referral-not-eligible" style={{ maxWidth: 620, margin: "0 auto 28px", padding: "16px 20px", borderRadius: 12, background: "rgba(234, 179, 8, 0.1)", border: "1px solid rgba(234, 179, 8, 0.3)", color: "#fde047", fontSize: ".9rem" }}>
+              {ref.state === "loading" ? "Loading your referral link…" : (
+                <>
+                  Referral links are for members with an active plan.{" "}
+                  <Link href="/manage-plan" style={{ color: "#fde047", textDecoration: "underline" }}>Choose a plan</Link> to get your link.
+                </>
+              )}
             </div>
-          </div>
+          )}
         </div>
 
         {/* 3 Step Breakdown */}
@@ -331,7 +330,7 @@ export default function ReferAFriendPage() {
               2. They get $25 off
             </h3>
             <p style={{ margin: 0, fontSize: ".84rem", color: "rgba(255, 255, 255, 0.55)", lineHeight: 1.5 }}>
-              Your friend gets an instant $25 credit on their checkout across Starter, Pro, or Elite plans.
+              Your friend gets $25 off their first payment on Starter, Pro or Elite (first-time customers only).
             </p>
           </div>
 
@@ -348,7 +347,7 @@ export default function ReferAFriendPage() {
               3. You pay $25 less
             </h3>
             <p style={{ margin: 0, fontSize: ".84rem", color: "rgba(255, 255, 255, 0.55)", lineHeight: 1.5 }}>
-              A $25 credit is placed directly on your Stripe customer balance. If your renewal is $39/mo, you will only pay $14 next month!
+              Once your friend&apos;s first payment goes through (not during a free trial), $25 credit goes on your account and comes off your next invoice. If your renewal is $39/mo, you pay $14 that month.
             </p>
           </div>
         </div>
