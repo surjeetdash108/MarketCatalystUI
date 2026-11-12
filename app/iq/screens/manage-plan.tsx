@@ -147,7 +147,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       </div>
     );
   }
-  const subscribed = !!summary.interval && summary.source !== "launch_trial" && summary.source !== "lifetime" && LIVE.includes(summary.status);
+  const subscribed = !!summary.interval && summary.source !== "launch_trial" && LIVE.includes(summary.status);
   const current = plans.find((p) => p.id === summary.planId);
 
   async function run<T>(fn: () => Promise<T>): Promise<T | null> {
@@ -211,18 +211,13 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
           <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div data-testid="current-plan" style={{ fontSize: "1.05rem", color: "var(--text-hi)" }}>
               <b>{subscribed ? summary.planName : "No plan"}</b>
-              {summary.source === "lifetime" ? " · Lifetime" : subscribed && summary.interval ? (summary.interval === "annual" ? " · Annual" : " · Monthly") : ""}
-              {summary.source === "launch_trial" ? " · launch trial" : summary.source === "lifetime" ? " · complimentary" : ""}
+              {subscribed && summary.interval ? (summary.interval === "annual" ? " · Annual" : " · Monthly") : ""}
+              {summary.source === "launch_trial" ? " · launch trial" : ""}
             </div>
-            {!subscribed && summary.source !== "lifetime" && (
+            {!subscribed && (
               <p style={{ margin: 0, fontSize: ".86rem", color: "var(--text-dim-solid)" }}>
                 You do not have an active paid subscription. Select a plan below to get full access.
               </p>
-            )}
-            {summary.source === "lifetime" && (
-              <Notice testId="lifetime-plan">
-                You have complimentary Lifetime Elite access with full access to every feature.
-              </Notice>
             )}
             {summary.creditBalance > 0 && (
               <div data-testid="credit-balance" style={{ fontSize: ".88rem", color: "var(--brand-2)", fontWeight: 600 }}>
@@ -300,12 +295,10 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
           <div className="card-b" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 }}>
             {plans.filter(isPaid).map((p) => {
               const price = displayPrice(p, interval);
-              const isCurrent = summary.planId === p.id && ((summary.interval === interval && subscribed) || summary.source === "lifetime");
+              const isCurrent = summary.planId === p.id && summary.interval === interval && subscribed;
               const rankCur = current?.sortOrder ?? 0;
               let label = `Choose ${p.name}`;
-              if (summary.source === "lifetime" && p.id === summary.planId) {
-                label = "Current plan";
-              } else if (subscribed) {
+              if (subscribed) {
                 if (p.id === summary.planId) label = interval === "annual" ? "Switch to annual" : "Switch to monthly";
                 else label = p.sortOrder > rankCur ? `Upgrade to ${p.name}` : `Downgrade to ${p.name}`;
               }

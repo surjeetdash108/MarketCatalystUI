@@ -44,7 +44,7 @@ describe("Manage Plan v2", () => {
     assert.doesNotMatch(src("app/iq/screens/settings.tsx"), /<ContactCard \/>/);
     // Settings → Plan comes from the server's entitlements (plan, status, dates), not profile fields.
     const settings = src("app/iq/screens/settings.tsx");
-    assert.match(settings, /<PlanSettingsCard isStaff=\{isStaff\} isLifetime=\{isLifetime\} \/>/);
+    assert.match(settings, /<PlanSettingsCard isStaff=\{isStaff\} \/>/);
     assert.match(settings, /badge = "Staff"/);
     assert.match(settings, /Free trial until \$\{shortDate\(ent\?\.currentPeriodEnd\)\}/);
     assert.match(settings, /data-testid="settings-manage-plan"/);
