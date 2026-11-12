@@ -4,8 +4,9 @@ import { isLifetimeElite, LIFETIME_ELITE_EMAILS } from "./lifetime-elite";
 import { hasConfirmedPaidPlan } from "../plan-status";
 
 describe("lifetime-elite allowlist", () => {
-  it("recognises all 13 configured emails case-insensitively and trimmed", () => {
-    assert.equal(LIFETIME_ELITE_EMAILS.length, 13);
+  it("recognises all 14 configured emails case-insensitively and trimmed", () => {
+    assert.equal(LIFETIME_ELITE_EMAILS.length, 14);
+    assert.equal(isLifetimeElite("Andy.MicroInfo@gmail.com"), true);
     for (const email of LIFETIME_ELITE_EMAILS) {
       assert.equal(isLifetimeElite(email), true);
       assert.equal(isLifetimeElite(email.toUpperCase()), true);
