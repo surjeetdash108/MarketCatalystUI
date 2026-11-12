@@ -20,6 +20,7 @@ import {
 import { formatMoney, longDate, type BillingInterval, type CatalogPlan } from "../catalog";
 import { EmailCodeStep } from "../email-code-step";
 import { currentIntent, isOnboarding, saveIntent } from "../plan-intent";
+import { rememberPlanChange } from "../plan-change-summary";
 import { Notice, PREVIEW_BANNER, TEST_MODE_BANNER } from "../ui";
 import { paymentAdapterFor } from "./adapters";
 import { notConnectedAdapter } from "./not-connected-form";
@@ -266,6 +267,19 @@ export function CheckoutPage() {
         }
       }
       await refreshEntitlements();
+      rememberPlanChange({
+        kind: changePrev.kind,
+        planId: plan.id,
+        fromPlanName: changePrev.breakdown?.fromPlanName ?? null,
+        toPlanName: plan.name,
+        interval,
+        chargedNow: res.status === "applied" ? res.amountCharged : changePrev.amountDueNow,
+        credit: changePrev.kind === "downgrade" ? changePrev.creditToBalance : 0,
+        effectiveAt: changePrev.kind === "scheduled" ? changePrev.effectiveAt : null,
+        nextRenewalAmount: changePrev.nextRenewalAmount,
+        nextRenewalDate: changePrev.nextRenewalDate,
+        currency: plan.currency,
+      });
       window.location.replace(`/billing/success?session=upgraded&plan=${encodeURIComponent(plan.id)}`);
     } catch (e) {
       const b = errorBody(e);
