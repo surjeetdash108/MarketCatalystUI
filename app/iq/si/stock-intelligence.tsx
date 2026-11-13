@@ -6016,8 +6016,6 @@ export function StockIntelligenceScreen() {
                     </div>
                     {[
                       ["Now", `Status → ${monStatus}. ${monCause}`],
-                      ["Today 13:40", `${monRun.drv[0]?.name}: evidence holding above threshold.`],
-                      ["Today 10:15", `Market regime check: constructive liquidity environment.`],
                       [formatSavedAt(savedThesis.savedAt).split(" · ")[0] || savedThesis.savedDate, `Trade saved${monEntry != null ? ` at ${usd(monEntry)}` : ""} · confidence ${savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
                     ].map(([tt, m], i) => (
                       <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
