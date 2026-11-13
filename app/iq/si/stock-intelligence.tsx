@@ -1180,7 +1180,6 @@ export function StockIntelligenceScreen() {
   // Expandable sections state
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
   const [showSigHow, setShowSigHow] = useState(false);
-  const [showAssessEv, setShowAssessEv] = useState(false);
   const [showAttHow, setShowAttHow] = useState(false);
   const [showFwdHow, setShowFwdHow] = useState(false);
   const [expandedFwd, setExpandedFwd] = useState<Record<string, boolean>>({});
@@ -1963,13 +1962,46 @@ export function StockIntelligenceScreen() {
   // 6-month bullish forward run as the "Why it could move" tab, so the two
   // never disagree (the old fallback showed fixed 88/87/80/… for every stock).
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
-  const overviewConf = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
-  const overviewCf = overviewRun.cats.filter((c) => Math.round(c.score) >= 60).length;
+  // Technical Read card: shown on Overview and on the Technicals tab.
+  const technicalReadCard = (
+    <div
+      style={{
+        position: "relative",
+        border: "1px solid var(--si-border, #1c2733)",
+        background: "var(--si-card, #0c1118)",
+        boxShadow: "var(--si-shadow, none)",
+        padding: "20px 22px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
+      {/* Corner brackets */}
+      <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+      <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+      <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
+      <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
 
-  // Confluence dots
-  const confluenceDots = [0, 1, 2, 3, 4, 5, 6].map((i) => ({
-    c: i < overviewCf ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border, #1c2733)",
-  }));
+      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
+        ✦ TECHNICAL READ
+      </span>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+        {stockDetail.read.map((rd, i) => (
+          <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: 10 }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-accent, #5980a6)" }}>
+              {rd.k}
+            </div>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: rd.col, marginTop: 4 }}>
+              {rd.v}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
+        {trendRead(siFacts.price, siFacts.sma50, siFacts.sma200)}
+      </div>
+    </div>
+  );
 
   type SignalScoreItem = { name: string; val: number; color: string; widthPct: string };
   const signalScores: SignalScoreItem[] = overviewRun.cats.map((cat) => {
@@ -2786,98 +2818,8 @@ export function StockIntelligenceScreen() {
 
             {/* Two-Column Grid: MarketCatalyst Intelligence & Signal Scores */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
-              {/* Card 1: MarketCatalyst Intelligence */}
-              <div
-                style={{
-                  position: "relative",
-                  border: "1px solid var(--si-border, #1c2733)",
-                  background: "var(--si-card, #0c1118)",
-                  padding: "22px 24px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 16,
-                  boxShadow: "var(--si-shadow, none)",
-                }}
-              >
-                <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                  ✦ MARKETCATALYST INTELLIGENCE
-                </div>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
-                  {stockDetail.assessSegs
-                    ? stockDetail.assessSegs.map((seg, i) =>
-                        seg.tone ? (
-                          <span key={i} style={{ color: seg.tone === "up" ? "var(--up, #16a34a)" : "var(--down, #dc2626)", fontWeight: 700 }}>
-                            {seg.t}
-                          </span>
-                        ) : (
-                          seg.t
-                        ),
-                      )
-                    : stockDetail.assess}
-                </div>
-
-                <div style={{ display: "flex", gap: 28, flexWrap: "wrap", borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 16 }}>
-                  <div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                      CONFIDENCE
-                    </div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: overviewConf != null ? 52 : 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
-                      {overviewConf != null ? overviewConf : "Unavailable"}
-                      {overviewConf != null && (
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}> / 100</span>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                      CONFLUENCE
-                    </div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                        {overviewCf}
-                      </span>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>/ 7</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                      {confluenceDots.map((cd, i) => (
-                        <span key={i} style={{ width: 22, height: 6, background: cd.c }} />
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ marginLeft: "auto", alignSelf: "flex-end" }}>
-                    <button
-                      onClick={() => setShowAssessEv(!showAssessEv)}
-                      style={{
-                        height: 32,
-                        padding: "0 12px",
-                        border: "1px solid #5980a6",
-                        background: "transparent",
-                        color: "var(--si-accent-light, #a9c6e3)",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {showAssessEv ? "Hide evidence" : "Evidence ▸"}
-                    </button>
-                  </div>
-                </div>
-
-                {showAssessEv && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
-                    {(stockDetail.assessEv || []).map((ae, i) => (
-                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8 }}>
-                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                        <span>{ae}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* Card 1: Technical Read (same card as the Technicals tab) */}
+              {technicalReadCard}
 
               {/* Card 2: Signal Scores */}
               <div
@@ -3966,44 +3908,7 @@ export function StockIntelligenceScreen() {
 
             {/* Technical Read & Key Levels */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
-              {/* Technical Read */}
-              <div
-                style={{
-                  position: "relative",
-                  border: "1px solid var(--si-border, #1c2733)",
-                  background: "var(--si-card, #0c1118)",
-                  boxShadow: "var(--si-shadow, none)",
-                  padding: "20px 22px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 14,
-                }}
-              >
-                {/* Corner brackets */}
-                <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                  ✦ TECHNICAL READ
-                </span>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
-                  {stockDetail.read.map((rd, i) => (
-                    <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: 10 }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-accent, #5980a6)" }}>
-                        {rd.k}
-                      </div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: rd.col, marginTop: 4 }}>
-                        {rd.v}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-                  {trendRead(siFacts.price, siFacts.sma50, siFacts.sma200)}
-                </div>
-              </div>
+              {technicalReadCard}
 
               {/* Key Levels */}
               <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
