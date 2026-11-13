@@ -1,41 +1,43 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { canAccessModule } from "./module-switcher";
+import type { Entitlements } from "./hooks/useEntitlements";
 
-describe("ModuleSwitcher access by plan", () => {
-  it("Starter has access to MC and SI only", () => {
-    assert.equal(canAccessModule("MC", "starter"), true);
-    assert.equal(canAccessModule("SI", "starter"), true);
-    assert.equal(canAccessModule("MF", "starter"), false);
-    assert.equal(canAccessModule("SL", "starter"), false);
-  });
-
-  it("Pro has access to MC, SI, and MF, but not SL", () => {
-    assert.equal(canAccessModule("MC", "pro"), true);
-    assert.equal(canAccessModule("SI", "pro"), true);
-    assert.equal(canAccessModule("MF", "pro"), true);
-    assert.equal(canAccessModule("SL", "pro"), false);
-  });
-
-  it("Elite has access to MC, SI, MF, and SL", () => {
-    assert.equal(canAccessModule("MC", "elite"), true);
-    assert.equal(canAccessModule("SI", "elite"), true);
-    assert.equal(canAccessModule("MF", "elite"), true);
-    assert.equal(canAccessModule("SL", "elite"), true);
-  });
-
-  it("Staff has access to all modules", () => {
-    assert.equal(canAccessModule("MC", "staff"), true);
-    assert.equal(canAccessModule("SI", "staff"), true);
-    assert.equal(canAccessModule("MF", "staff"), true);
-    assert.equal(canAccessModule("SL", "staff"), true);
-  });
-
-  it("Free / none has access to MC and SI only", () => {
-    assert.equal(canAccessModule("MC", "none"), true);
-    assert.equal(canAccessModule("SI", "none"), true);
-    assert.equal(canAccessModule("MF", "none"), false);
-    assert.equal(canAccessModule("SL", "none"), false);
-  });
+const ent = (planId: string, status: string, open: Record<string, boolean>): Entitlements => ({
+  subscriptionsEnabled: true, paidPlansAvailable: true, provider: "stripe",
+  planId, planName: planId, status, interval: null, cancelAtPeriodEnd: false,
+  currentPeriodEnd: null, inGrace: false, graceEndsAt: null,
+  entitlements: open, requiredPlan: { moneyFlow: "pro", strategyLab: "elite" }, hidden: [],
+  limits: { watchlistTickers: null },
 });
 
+describe("ModuleSwitcher access follows entitlements, not the plan name", () => {
+  it("new-account intro opens Money Flow but not Strategy Lab", () => {
+    const e = ent("intro", "INTRO", { marketDesk: true, stockIntelligence: true, moneyFlow: true, strategyLab: false });
+    assert.equal(canAccessModule("MC", e), true);
+    assert.equal(canAccessModule("SI", e), true);
+    assert.equal(canAccessModule("MF", e), true);
+    assert.equal(canAccessModule("SL", e), false);
+  });
+  it("Starter: Market Catalyst and Stock Intelligence only", () => {
+    const e = ent("starter", "ACTIVE", { moneyFlow: false, strategyLab: false });
+    assert.equal(canAccessModule("MF", e), false);
+    assert.equal(canAccessModule("SL", e), false);
+  });
+  it("Pro opens Money Flow; Elite opens both", () => {
+    assert.equal(canAccessModule("MF", ent("pro", "ACTIVE", { moneyFlow: true, strategyLab: false })), true);
+    assert.equal(canAccessModule("SL", ent("pro", "ACTIVE", { moneyFlow: true, strategyLab: false })), false);
+    assert.equal(canAccessModule("SL", ent("elite", "TRIALING", { moneyFlow: true, strategyLab: true })), true);
+  });
+  it("subscriptions switched off: everything open", () => {
+    const e = { ...ent("none", "NONE", {}), subscriptionsEnabled: false };
+    assert.equal(canAccessModule("MF", e), true);
+    assert.equal(canAccessModule("SL", e), true);
+  });
+  it("entitlements still loading: paid modules locked, free modules open", () => {
+    assert.equal(canAccessModule("MC", null), true);
+    assert.equal(canAccessModule("SI", null), true);
+    assert.equal(canAccessModule("MF", null), false);
+    assert.equal(canAccessModule("SL", null), false);
+  });
+});

@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useSI, type AppModule } from "./si/si-context";
-import { useEntitlements, effectivePlanId } from "./hooks/useEntitlements";
+import { useEntitlements, gateDecisionFor, type Entitlements } from "./hooks/useEntitlements";
 import { plansHref } from "./entitlement-gate";
 
 /** Pill colours per module (active segment background / label). */
@@ -28,11 +28,20 @@ const SEGMENTS: Array<[AppModule, string]> = [
   ["SL", "Strategy Lab"],
 ];
 
-export function canAccessModule(module: AppModule, plan: string): boolean {
-  if (module === "MC" || module === "SI") return true;
-  if (plan === "staff" || plan === "elite") return true;
-  if (plan === "pro") return module === "MF";
-  return false;
+/** Entitlement key behind each paid module (Market Catalyst and Stock Intelligence are always open). */
+const MODULE_KEY: Partial<Record<AppModule, string>> = { MF: "moneyFlow", SL: "strategyLab" };
+
+/**
+ * Whether the signed-in user may open a module. Decided by the backend's
+ * entitlements (the same answer every gate uses), never by the plan name —
+ * so the new-account intro, paid trials and staff all follow the server.
+ * Unknown entitlements (still loading) count as locked for paid modules.
+ */
+export function canAccessModule(module: AppModule, ent: Entitlements | null | undefined): boolean {
+  const key = MODULE_KEY[module];
+  if (!key) return true;
+  if (!ent) return false;
+  return gateDecisionFor(ent, key).kind === "allow";
 }
 
 /** Toggle width (530px for MC + SI + MF + SL). */
@@ -65,7 +74,6 @@ const PIN_CSS = `
 export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
   const { activeModule, enterSI, exitToMC, enterSL, enterMF } = useSI();
   const { data: entitlements } = useEntitlements();
-  const plan = effectivePlanId(entitlements);
   const [hover, setHover] = useState<AppModule | null>(null);
   const [upgradeModal, setUpgradeModal] = useState<"MF" | "SL" | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -89,7 +97,7 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
   }, [activeModule]);
 
   const go = (m: AppModule) => {
-    if (!canAccessModule(m, plan)) {
+    if (!canAccessModule(m, entitlements)) {
       setUpgradeModal(m === "MF" ? "MF" : "SL");
       return;
     }
@@ -142,7 +150,7 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
           )}
           {SEGMENTS.map(([m, label], i) => {
             const on = m === activeModule;
-            const locked = !canAccessModule(m, plan);
+            const locked = !canAccessModule(m, entitlements);
             return (
               <span
                 key={m}
