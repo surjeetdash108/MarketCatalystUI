@@ -2,7 +2,7 @@ import { fmtMarketDate } from "../calendar-range";
 import { surprisePct } from "../types";
 import { StockItem, DetailStock, SITab, UpcomingEvent, MajorSixMonthEvent, AssessSeg, EventMetric, EventContext } from "./types";
 import { FILLER_RE, isHoldingsNote, isSolicitation, mentionedDayOffset, pickMoveHeadline, pickRecentMove } from "./move-headline";
-import { scoreNews, articleTime, type SignificanceTier } from "./news-significance";
+import { scoreNews, articleTime, classifyDirection, type SignificanceTier } from "./news-significance";
 export type { MajorSixMonthEvent };
 
 export const UP = "#4ade80";
@@ -1146,8 +1146,11 @@ export function getSixMonthMajorEvents(
     const prevDay = prevBar ? Date.parse(`${new Date(prevBar.t).toISOString().slice(0, 10)}T00:00:00Z`) : null;
     // When no headline says the stock moved that way, a high-impact story many
     // outlets are telling still explains a big move (the CEO-exit coverage on
-    // NVDA's −5.2% day) — if the stock reacted the same way, and it is not a
-    // stake filing, a law-firm ad or a recap of an earlier day.
+    // NVDA's −5.2% day) — if the stock reacted the same way, the story itself
+    // reads that way (vendor tag or wording, without counting the price move as
+    // its own evidence: NVDA's Sep 14 −3.4% got the well-covered "record $26
+    // billion returned to shareholders" dividend story), and it is not a stake
+    // filing, a law-firm ad or a recap of an earlier day.
     const n =
       pickMoveHeadline(news, { moveDay, ret: m.ret, prevDay }, (x) => (sig.get(x)?.score ?? 0) * STORY_COVERAGE_WEIGHT) ??
       explainers(moveDay).find(({ x, sg }) => {
@@ -1157,6 +1160,7 @@ export function getSixMonthMajorEvents(
           sg!.tier === "HIGH" &&
           sg!.reactionPct != null &&
           Math.sign(sg!.reactionPct) === Math.sign(m.ret) &&
+          classifyDirection(x, undefined) === (m.ret < 0 ? "Risk" : "Positive") &&
           !isHoldingsNote(h) &&
           !isSolicitation(h) &&
           !(named != null && named < 0 && named >= -7)

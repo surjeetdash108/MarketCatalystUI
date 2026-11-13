@@ -423,3 +423,54 @@ describe("pickMoveHeadline: the optional story bonus", () => {
     assert.equal(pickMoveHeadline([fluff], move, () => 100), null);
   });
 });
+
+describe("the high-impact-story fallback", () => {
+  const D = 86_400_000;
+  const start = Date.parse("2026-08-03T00:00:00Z");
+  const iso = (i: number) => new Date(start + i * D).toISOString().slice(0, 10);
+  const stock = { t: "NVDA", name: "NVIDIA Corporation" } as never;
+  const barsWith = (session: number, move: number) => {
+    const bars: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }> = [];
+    let c = 100;
+    for (let i = 0; i < 60; i++) {
+      if (i > 0) c *= 1 + (i === session ? move : i % 2 ? 0.003 : -0.003);
+      bars.push({ t: start + i * D, o: c, h: c, l: c, c, v: 1 });
+    }
+    return bars;
+  };
+  const story = (session: number, items: Array<[string, string]>) =>
+    items.map(([headline, summary], k) => ({ publishedAt: `${iso(session)}T${String(11 + k).padStart(2, "0")}:00:00Z`, headline, summary }));
+  const moveCard = (bars: ReturnType<typeof barsWith>, news: unknown[], pick: (mv: number) => boolean) =>
+    getSixMonthMajorEvents("NVDA", stock, bars, [], news as never[], []).find((e) => pick(e.mv));
+
+  it("NVDA Sep 14 −3.4%: four outlets on a good-news dividend story do not explain a falling day", () => {
+    const news = story(40, [
+      ["Nvidia Returned a Record $26 Billion to Shareholders. Here's Why That Matters.", "Nvidia returned a record $26 billion to shareholders in fiscal Q2, including a 25-fold increase in its quarterly dividend to $0.25 per share."],
+      ["Nvidia's quarterly dividend jumps 25-fold as shareholders get record $26 billion", "The dividend increase and record buybacks returned $26 billion to shareholders."],
+      ["Why Nvidia's record shareholder returns and 25-fold dividend increase matter", "Nvidia's dividend increase to $0.25 per share and $26 billion returned to shareholders."],
+      ["Nvidia dividend growth stock: $26 billion returned to shareholders", "Nvidia plans to return at least half of free cash flow as dividend and buybacks to shareholders."],
+    ]);
+    const card = moveCard(barsWith(40, -0.0336), news, (mv) => mv < -3);
+    assert.equal(card?.label, "−3.36% session move");
+  });
+
+  it("a well-covered story that reads as bad news does explain a falling day when no headline says so", () => {
+    const news = story(40, [
+      ["Can Nvidia Survive Without Jensen Huang?", "Jensen Huang is stepping down as Nvidia's CEO. Analysts break down what his exit means."],
+      ["Nvidia: the board's investigation of CEO Jensen Huang widens", "The investigation into Jensen Huang's conduct has widened, the board said."],
+      ["What Jensen Huang's exit means for the Nvidia board", "Nvidia's board faces questions after Jensen Huang's resignation."],
+    ]);
+    const card = moveCard(barsWith(40, -0.052), news, (mv) => mv < -5);
+    assert.match(String(card?.label), /Huang/);
+  });
+
+  it("the same bad-news story does not explain a day the stock rose", () => {
+    const news = story(40, [
+      ["Can Nvidia Survive Without Jensen Huang?", "Jensen Huang is stepping down as Nvidia's CEO. Analysts break down what his exit means."],
+      ["Nvidia: the board's investigation of CEO Jensen Huang widens", "The investigation into Jensen Huang's conduct has widened, the board said."],
+      ["What Jensen Huang's exit means for the Nvidia board", "Nvidia's board faces questions after Jensen Huang's resignation."],
+    ]);
+    const card = moveCard(barsWith(40, 0.052), news, (mv) => mv > 5);
+    assert.equal(card?.label, "+5.20% session move");
+  });
+});
