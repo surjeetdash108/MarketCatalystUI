@@ -1,6 +1,8 @@
 import { fmtMarketDate } from "../calendar-range";
 import { surprisePct } from "../types";
 import { StockItem, DetailStock, SITab, UpcomingEvent, MajorSixMonthEvent, AssessSeg, EventMetric, EventContext } from "./types";
+import { FILLER_RE, isHoldingsNote, isSolicitation, mentionedDayOffset, pickMoveHeadline, pickRecentMove } from "./move-headline";
+import { scoreNews, articleTime, classifyDirection, type SignificanceTier } from "./news-significance";
 export type { MajorSixMonthEvent };
 
 export const UP = "#4ade80";
@@ -176,8 +178,14 @@ export interface SiFacts {
   insiderNet90: number | null; // $ open-market buys minus sells, last 90 days
   // Catalysts
   daysToEarnings: number | null;
-  newsPos: number | null; // last 7 days
+  newsPos: number | null; // last 7 days: articles about the stock, no filler
   newsNeg: number | null;
+  /** Of those, the high-impact ones. */
+  newsHighPos?: number | null;
+  newsHighNeg?: number | null;
+  /** Impact-weighted counts the News sentiment score is built from (falls back to newsPos / newsNeg). */
+  newsWPos?: number | null;
+  newsWNeg?: number | null;
 }
 
 export const EMPTY_FACTS: SiFacts = {
@@ -190,6 +198,15 @@ export const EMPTY_FACTS: SiFacts = {
   instOwnershipPct: null, instHoldersChange: null, instSharesChange: null, instPutCallRatio: null, insiderNet90: null,
   daysToEarnings: null, newsPos: null, newsNeg: null,
 };
+
+/** "4 high-impact (3 negative, 1 positive) · 20 positive / 14 negative other headlines (7 days)". */
+export function newsSentimentText(f: Pick<SiFacts, "newsPos" | "newsNeg" | "newsHighPos" | "newsHighNeg">): string {
+  const pos = f.newsPos ?? 0, neg = f.newsNeg ?? 0;
+  const hp = f.newsHighPos ?? 0, hn = f.newsHighNeg ?? 0;
+  if (hp + hn === 0) return `${pos} positive / ${neg} negative headlines (7 days)`;
+  const parts = [hn ? `${hn} negative` : null, hp ? `${hp} positive` : null].filter(Boolean).join(", ");
+  return `${hp + hn} high-impact (${parts}) · ${pos - hp} positive / ${neg - hn} negative other headlines (7 days)`;
+}
 
 const clamp = (v: number, lo = 5, hi = 95) => Math.max(lo, Math.min(hi, v));
 const has = (v: number | null | undefined): v is number => v != null && Number.isFinite(v);
@@ -268,8 +285,12 @@ export function buildDrivers(f: SiFacts): Driver[] {
   if (has(f.daysToEarnings)) {
     d.push(["CAT", "Next earnings", f.daysToEarnings === 0 ? "today" : `in ${f.daysToEarnings} days`, f.daysToEarnings <= 30 ? 65 : 50, "", 0]);
   }
-  if (has(f.newsPos) && has(f.newsNeg) && f.newsPos + f.newsNeg > 0) {
-    d.push(["CAT", "News sentiment", `${f.newsPos} positive / ${f.newsNeg} negative headlines (7 days)`, clamp(50 + (f.newsPos - f.newsNeg) * 8), "", 1]);
+  const wPos = f.newsWPos ?? f.newsPos;
+  const wNeg = f.newsWNeg ?? f.newsNeg;
+  if (has(f.newsPos) && has(f.newsNeg) && has(wPos) && has(wNeg) && wPos + wNeg > 0) {
+    // Share of the weighted lean, shrunk toward neutral so a handful of headlines can't swing it to the ends.
+    const net = (wPos - wNeg) / (wPos + wNeg + 4);
+    d.push(["CAT", "News sentiment", newsSentimentText(f), clamp(50 + net * 50), "", 1]);
   }
   // VALUATION
   const fpe = forwardPe(f);
@@ -575,6 +596,65 @@ export function fundSeries(_t: string): number[][] {
   return [];
 }
 
+/**
+ * One sentence on price vs its 50 and 200 DMA, from the real values.
+ *
+ * The 50 DMA lags, so after a fall it stays above the 200 DMA for weeks. Calling
+ * that "an uptrend structure" next to "price below both" read as a contradiction
+ * (NVDA, 14 Nov). When price and the two averages disagree, the sentence now says
+ * the averages still show the old trend and price has already left it.
+ */
+export function trendRead(price: number | null, sma50: number | null, sma200: number | null): string {
+  if (price == null || sma50 == null || sma200 == null) return "Moving-average data is not available for this stock yet.";
+  const $ = (v: number) => `$${v.toFixed(2)}`;
+  const rel = (ma: number) => (Math.abs(price / ma - 1) < 0.01 ? "at" : price > ma ? "above" : "below");
+  const r50 = rel(sma50), r200 = rel(sma200);
+  const where = r50 === r200
+    ? `Price (${$(price)}) trades ${r50} both its 50 DMA (${$(sma50)}) and 200 DMA (${$(sma200)})`
+    : `Price (${$(price)}) trades ${r50} its 50 DMA (${$(sma50)}) and ${r200} its 200 DMA (${$(sma200)})`;
+  const upStack = sma50 > sma200;
+  let structure: string;
+  if (upStack && r50 === "below" && r200 === "below") {
+    structure = "the 50 DMA is still above the 200 DMA, which is left over from the earlier uptrend, but price has already fallen below both";
+  } else if (!upStack && r50 === "above" && r200 === "above") {
+    structure = "the 50 DMA is still below the 200 DMA, which is left over from the earlier downtrend, but price has already moved above both";
+  } else {
+    structure = upStack
+      ? "the 50 DMA sits above the 200 DMA (an uptrend structure)"
+      : "the 50 DMA sits below the 200 DMA (a downtrend structure)";
+  }
+  return `${where}; ${structure}.`;
+}
+
+/**
+ * "What would break this setup", split by whether it has already happened.
+ *
+ * A level the price is already through is not a risk still to come, so it goes
+ * in `broken` (where price stands against the level, and what would repair it);
+ * a level still ahead stays in `pending` as the "daily close below X" trigger.
+ * The card used to list "Price loses the 50 DMA" for a stock trading $40 under
+ * it. With no price we cannot tell which side it is on, so every level stays
+ * pending.
+ */
+export function invalidationLevels(f: SiFacts): { pending: [string, string][]; broken: [string, string][] } {
+  const pending: [string, string][] = [];
+  const broken: [string, string][] = [];
+  const levels: Array<{ at: number | null | undefined; label: string; ahead: [string, string]; through: string; repair: string }> = [
+    { at: f.sma50, label: "50 DMA", ahead: ["Price loses the 50 DMA", "Daily close below"], through: "Already below the 50 DMA", repair: "repairs the trend" },
+    { at: f.pivotS1, label: "S1", ahead: ["Breaks first support", "Daily close below S1"], through: "First support already broken", repair: "restores support" },
+    { at: f.sma200, label: "200 DMA", ahead: ["Price loses the 200 DMA", "Daily close below"], through: "Already below the 200 DMA", repair: "repairs the long-term trend" },
+  ];
+  for (const l of levels) {
+    if (!has(l.at)) continue;
+    if (has(f.price) && f.price < l.at) {
+      broken.push([l.through, `Price ${usd(f.price)} is below ${l.label} ${usd(l.at)}. A daily close back above it ${l.repair}.`]);
+    } else {
+      pending.push([l.ahead[0], `${l.ahead[1]} ${usd(l.at)}`]);
+    }
+  }
+  return { pending, broken };
+}
+
 export function detail(t: string, live?: any): DetailStock {
   const sym = t.toUpperCase().trim();
   const facts: SiFacts = live?.facts ?? EMPTY_FACTS;
@@ -659,9 +739,7 @@ export function detail(t: string, live?: any): DetailStock {
     })),
   };
 
-  const invalid: [string, string][] = [];
-  if (has(facts.sma50)) invalid.push(["Price loses the 50 DMA", `Daily close below ${usd(facts.sma50)}`]);
-  if (has(facts.pivotS1)) invalid.push(["Breaks first support", `Daily close below S1 ${usd(facts.pivotS1)}`]);
+  const { pending: invalid, broken } = invalidationLevels(facts);
   invalid.push(["Forward EPS cuts", "Next-FY consensus EPS revised down more than 10%"]);
 
   const fundBits = [
@@ -727,7 +805,7 @@ export function detail(t: string, live?: any): DetailStock {
   put("Sector", [
     has(facts.sectorRank) && has(facts.sectorRankTotal) ? `${s.sector} ranks #${facts.sectorRank} of ${facts.sectorRankTotal} sectors today` : null,
   ]);
-  put("News", [has(facts.newsPos) && has(facts.newsNeg) ? `${facts.newsPos} positive / ${facts.newsNeg} negative headlines in the last 7 days` : null]);
+  put("News", [has(facts.newsPos) && has(facts.newsNeg) ? newsSentimentText(facts) : null]);
   put("Options", [
     "Contract-level options data is not available on the current plan",
     has(facts.instPutCallRatio) ? `13F put/call ratio ${facts.instPutCallRatio.toFixed(2)} (quarterly holdings)` : null,
@@ -758,6 +836,7 @@ export function detail(t: string, live?: any): DetailStock {
     movedEv,
     upcoming: [],
     invalid,
+    broken,
     fundTxt,
     fundEv,
     read,
@@ -780,7 +859,13 @@ const NOTABLE_KINDS: Array<{ kind: string; re: RegExp }> = [
   },
   { kind: "M&A", re: /\b(acqui\w+|merger|merges?|merged|buyout|takeover|take-private|spin-?off|divest\w*)\b/i },
   { kind: "Legal / Regulatory", re: /\b(lawsuit|sues?|sued|probe|investigation|antitrust|subpoena|settle\w*|fined?|recall|fda|doj|ftc)\b/i },
-  { kind: "Guidance", re: /\b(guidance|outlook|forecast)\b/i },
+  {
+    // Company guidance, not any mention of an "outlook": a price-target piece
+    // ("…Change Nvidia Stock's Outlook for 2027") and AMD's earnings story
+    // ("…Strong 2027 Outlook") both said "outlook" and were labelled Guidance on NVDA.
+    kind: "Guidance",
+    re: /\b(raises?|raised|cuts?|lowers?|lowered|lifts?|boosts?|slash\w*|trims?|issues?|gives?|reaffirms?|reiterates?|withdraws?|updates?|offers?|warns?)\b[^.:]{0,40}\b(guidance|outlook|forecast)\b|\b(guidance|outlook|forecast)\b[^.:]{0,20}\b(raised|cut|lowered|lifted|boosted|slashed|trimmed|disappoint\w*|misses|beats?|above|below|weak|soft|light)\b/i,
+  },
   { kind: "Capital", re: /\b(buyback|repurchase|dividend|stock split|share offering|secondary offering|debt offering)\b/i },
   { kind: "Product", re: /\b(launch\w*|unveil\w*|debut\w*)\b/i },
 ];
@@ -792,6 +877,18 @@ const articleMs = (x: any): number => {
 
 const toneOf = (x: any): "up" | "dn" | undefined =>
   x?.sentiment === "positive" ? "up" : x?.sentiment === "negative" ? "dn" : undefined;
+
+/**
+ * An article's summary when it says something. Some vendor summaries are only
+ * a quote stamp ("NASDAQ · As of 4:00 PM ET 11/05/26"), which as a card's
+ * description tells the reader nothing.
+ */
+export function usableSummary(s: unknown): string | null {
+  const t = String(s ?? "").trim();
+  if (t.length < 40) return null;
+  if (/^(nasdaq|nyse|amex|otc)\b[^.]{0,40}\bas of\b/i.test(t)) return null;
+  return t;
+}
 
 /** First full sentence of a summary, so the line gives the point without being cut mid-word. */
 const firstSentence = (s: unknown): string => {
@@ -817,8 +914,12 @@ function notableContext(news: any[] | null | undefined, moveDay: number, skipTit
     if (!Number.isFinite(ms) || ms < from || ms >= to) continue;
     const headline = String(x.headline ?? x.title ?? "").trim();
     if (!headline || seen.has(headline)) continue;
-    const text = `${headline} ${x.summary ?? ""}`;
-    const rank = NOTABLE_KINDS.findIndex((k) => k.re.test(text));
+    // Stake filings and evergreen pieces are not events around the move.
+    if (isHoldingsNote(headline) || isSolicitation(headline) || FILLER_RE.test(headline)) continue;
+    // Classify on the headline alone: a summary mentioning "acquire" or "settle"
+    // in passing (a Marvell deal under a Nvidia headline, "may settle" in a
+    // Cramer piece) labelled unrelated stories M&A and Legal.
+    const rank = NOTABLE_KINDS.findIndex((k) => k.re.test(headline));
     if (rank < 0) continue;
     seen.add(headline);
     const lead = firstSentence(x.summary);
@@ -931,11 +1032,17 @@ export function aboutTicker(article: { headline?: unknown; title?: unknown }, ti
   return first.length >= 4 && !GENERIC_NAME_WORDS.has(first.toLowerCase()) && new RegExp(`\\b${first.replace(/[^A-Za-z0-9]/g, "")}`, "i").test(headline);
 }
 
+/** How much a story's coverage (news-significance score, 0-100) counts when ranking headlines that all explain a move. */
+const STORY_COVERAGE_WEIGHT = 0.2;
+
 /**
- * The five largest daily moves of the last six months (one per sixth of the
- * window), each labelled from real data: an FMP earnings report within 4 days
- * (with its actual beat/miss), else a headline within 3 days, else just the
- * move itself. Nothing is invented — no bars means no events.
+ * The major daily moves of the last six months: up to five picked by move size
+ * plus how much the day's best story matters, spread across the window, with the
+ * latest session always included when it moved materially, and one extra card
+ * for the latest few sessions if none of those picks covers them. Each is
+ * labelled from real data: an FMP earnings report within 3 days (with its
+ * actual beat/miss), else a headline that explains the move (pickMoveHeadline),
+ * else just the move itself. Nothing is invented — no bars means no events.
  */
 export function getSixMonthMajorEvents(
   sym: string,
@@ -950,24 +1057,67 @@ export function getSixMonthMajorEvents(
   const stockName = s.name || sym;
   // Only the stock's own news can explain its move (aboutTicker).
   news = (news || []).filter((x: any) => aboutTicker(x, sym, s.name));
-  type MoveSession = { idx: number; t: number; ret: number; absRet: number };
+  type MoveSession = { idx: number; t: number; ret: number; absRet: number; score: number; tier: SignificanceTier | null };
+  const sig = scoreNews(news, { ticker: sym, name: s.name, bars });
+  /** The article that best explains a session: published from the day before through the session itself (ET). */
+  const explainers = (moveDay: number) => {
+    const from = moveDay - DAY_MS;
+    const to = moveDay + DAY_MS + 4 * 3_600_000;
+    return (news || [])
+      .map((x: any) => ({ x, ms: articleTime(x), sg: sig.get(x) }))
+      .filter(({ ms, sg }) => Number.isFinite(ms) && ms >= from && ms < to && sg && !sg.filler)
+      .sort((a, b) => b.sg!.score - a.sg!.score || Math.abs(a.ms - moveDay) - Math.abs(b.ms - moveDay));
+  };
   const moves: MoveSession[] = [];
   for (let i = 1; i < bars.length; i++) {
     const prev = bars[i - 1].c;
     if (prev > 0) {
       const ret = ((bars[i].c - prev) / prev) * 100;
-      moves.push({ idx: i, t: bars[i].t, ret, absRet: Math.abs(ret) });
+      const absRet = Math.abs(ret);
+      const top = explainers(Date.parse(`${new Date(bars[i].t).toISOString().slice(0, 10)}T00:00:00Z`))[0]?.sg;
+      // Size of the move (up to 40) plus how much the day's best story matters (up to 60).
+      const score = Math.min(absRet / 8, 1) * 40 + (top?.score ?? 0) * 0.6;
+      moves.push({ idx: i, t: bars[i].t, ret, absRet, score, tier: top?.tier ?? null });
     }
   }
+  // Five catalysts: the highest-scoring days, kept at least MIN_GAP sessions
+  // apart and nudged to spread across the window. A big day with no story is
+  // outranked by a smaller one a real story explains; the latest session always
+  // qualifies when it moved materially or has a high-impact story.
   const zoneCount = 5;
-  const zoneSize = Math.floor(bars.length / zoneCount);
-  const selected: MoveSession[] = [];
-  for (let z = 0; z < zoneCount; z++) {
-    const zoneStart = z * zoneSize;
-    const zoneEnd = z === zoneCount - 1 ? bars.length - 1 : (z + 1) * zoneSize - 1;
-    const best = moves.filter((m) => m.idx >= zoneStart && m.idx <= zoneEnd).sort((a, b) => b.absRet - a.absRet)[0];
-    if (best) selected.push(best);
+  const zoneSize = Math.max(1, Math.floor(bars.length / zoneCount));
+  const MIN_GAP = 3;
+  const zoneOf = (idx: number) => Math.min(zoneCount - 1, Math.floor(idx / zoneSize));
+  let picked: MoveSession[] = [];
+  const perZone = new Array<number>(zoneCount).fill(0);
+  while (picked.length < zoneCount) {
+    const next = moves
+      .filter((m) => !picked.includes(m) && picked.every((p) => Math.abs(p.idx - m.idx) >= MIN_GAP))
+      .map((m) => ({ m, adj: m.score - 8 * perZone[zoneOf(m.idx)] }))
+      .sort((a, b) => b.adj - a.adj || b.m.absRet - a.m.absRet || b.m.idx - a.m.idx)[0];
+    if (!next) break;
+    picked.push(next.m);
+    perZone[zoneOf(next.m.idx)]++;
   }
+  const latest = moves[moves.length - 1];
+  if (latest && !picked.includes(latest) && (latest.absRet >= 3 || latest.tier === "HIGH")) {
+    // Drop picks too close to it; if none were, drop the weakest to stay at five.
+    let keep = picked.filter((p) => Math.abs(p.idx - latest.idx) >= MIN_GAP);
+    if (keep.length === picked.length) keep = [...keep].sort((a, b) => b.score - a.score).slice(0, zoneCount - 1);
+    picked = [...keep, latest];
+  }
+  const selected = picked.sort((a, b) => a.idx - b.idx);
+  // Safety net for what the rules above can still miss: a quiet last session
+  // (so the "latest session" rule does not apply) right after a big move that
+  // no pick covers (NVDA's 10 Nov −5.5% CEO-scandal day behind a quiet 11 Nov).
+  // If no pick is in the latest few sessions, the biggest unusual move there
+  // gets an extra card.
+  const recent = pickRecentMove(moves, selected, bars.length);
+  if (recent) {
+    selected.push(recent);
+    selected.sort((a, b) => a.idx - b.idx);
+  }
+
 
   return selected.map((m, i) => {
     const dateStr = fmtMarketDate(m.t, { month: "short", day: "2-digit" });
@@ -1016,20 +1166,36 @@ export function getSixMonthMajorEvents(
       };
     }
 
-    // A headline can only explain a move if it came out before the session
-    // closed: from the day before the move through the move day itself (ET).
-    // Allowing articles up to 3 days AFTER pinned NEE's Jul 24-25 "after its
-    // latest earnings report" piece onto its Jul 22 move. Closest one wins.
-    const sessionEnd = moveDay + 86_400_000 + 4 * 3_600_000; // midnight ET the next day
-    const sessionStartPrev = moveDay - 86_400_000;
-    const n = (news || [])
-      .map((x: any) => {
-        const pub = x.publishedAt || x.date;
-        const ms = !pub ? NaN : typeof pub === "number" ? pub : new Date(pub).getTime();
-        return { x, ms };
-      })
-      .filter(({ ms }) => Number.isFinite(ms) && ms >= sessionStartPrev && ms < sessionEnd)
-      .sort((a, b) => Math.abs(a.ms - moveDay) - Math.abs(b.ms - moveDay))[0]?.x;
+    // A headline explains a move only if it says the stock moved that way (or
+    // names a material event beside that) and came out between the previous
+    // close and the evening after the session — see move-headline.ts. Allowing
+    // articles up to 3 days AFTER pinned NEE's Jul 24-25 "after its latest
+    // earnings report" piece onto its Jul 22 move. Among headlines that do
+    // explain it, the one from the best-covered story wins (news-significance).
+    const prevBar = bars[m.idx - 1];
+    const prevDay = prevBar ? Date.parse(`${new Date(prevBar.t).toISOString().slice(0, 10)}T00:00:00Z`) : null;
+    // When no headline says the stock moved that way, a high-impact story many
+    // outlets are telling still explains a big move (the CEO-exit coverage on
+    // NVDA's −5.2% day) — if the stock reacted the same way, the story itself
+    // reads that way (vendor tag or wording, without counting the price move as
+    // its own evidence: NVDA's Sep 14 −3.4% got the well-covered "record $26
+    // billion returned to shareholders" dividend story), and it is not a stake
+    // filing, a law-firm ad or a recap of an earlier day.
+    const n =
+      pickMoveHeadline(news, { moveDay, ret: m.ret, prevDay }, (x) => (sig.get(x)?.score ?? 0) * STORY_COVERAGE_WEIGHT) ??
+      explainers(moveDay).find(({ x, sg }) => {
+        const h = String(x.headline ?? x.title ?? "");
+        const named = mentionedDayOffset(h, moveDay);
+        return (
+          sg!.tier === "HIGH" &&
+          sg!.reactionPct != null &&
+          Math.sign(sg!.reactionPct) === Math.sign(m.ret) &&
+          classifyDirection(x, undefined) === (m.ret < 0 ? "Risk" : "Positive") &&
+          !isHoldingsNote(h) &&
+          !isSolicitation(h) &&
+          !(named != null && named < 0 && named >= -7)
+        );
+      })?.x;
     const title = n ? String(n.headline ?? n.title ?? "") : "";
     if (title) {
       const lower = title.toLowerCase();
@@ -1045,7 +1211,7 @@ export function getSixMonthMajorEvents(
         label: title,
         category: cat,
         mv: +m.ret.toFixed(2),
-        details: String(n.summary || n.text || `Stock moved ${retFmt} that session.`),
+        details: usableSummary(n.summary || n.text) ?? `Stock moved ${retFmt} that session.`,
         fr,
         context: notableContext(news, moveDay, title),
       };
@@ -1057,7 +1223,7 @@ export function getSixMonthMajorEvents(
       label: `${retFmt} session move`,
       category: "Macro" as const,
       mv: +m.ret.toFixed(2),
-      details: "Largest move in this stretch; no earnings report or same-day headline found for it.",
+      details: "Largest move in this stretch; no earnings report or headline explaining it was found.",
       fr,
       context: notableContext(news, moveDay),
     };
