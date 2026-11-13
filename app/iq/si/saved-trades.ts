@@ -49,6 +49,15 @@ const savedMs = (t: { savedAt?: string }): number => {
 };
 const newestFirst = (a: SavedTrade, b: SavedTrade): number => savedMs(b) - savedMs(a);
 
+/**
+ * Id for a stored trade that has none (saved by an older build, which also had no
+ * save time). It was `t-<time>`, which is `t-0` for all of them: three old trades
+ * in AAPL, MSFT and NVDA gave the Trade Tracker three rows with one key, so React
+ * warned and selecting or deleting one touched all three. Scoped to the stock and
+ * the record's position, and stable between reads.
+ */
+const fallbackId = (sym: string, t: { savedAt?: string }, slot: number | string): string => `t-${sym}-${savedMs(t)}-${slot}`;
+
 function isTrade(x: unknown): x is Omit<SavedTrade, "id"> & { id?: string } {
   const t = x as Partial<SavedTrade> | null;
   return !!t && typeof t.ticker === "string" && (t.dir === "Bull" || t.dir === "Bear") && typeof t.hz === "string" && typeof t.target === "number" && typeof t.stop === "number";
@@ -64,13 +73,13 @@ export function readTrades(store: TradeStore, ticker: string): SavedTrade[] {
   const sym = ticker.toUpperCase();
   const stored = parse(store.getItem(tradesKey(sym)));
   const list: SavedTrade[] = [];
-  for (const t of Array.isArray(stored) ? stored : []) {
-    if (isTrade(t)) list.push({ ...t, id: t.id || `t-${savedMs(t)}` });
-  }
+  (Array.isArray(stored) ? stored : []).forEach((t, i) => {
+    if (isTrade(t)) list.push({ ...t, id: t.id || fallbackId(sym, t, i) });
+  });
 
   const old = parse(store.getItem(legacyKey(sym)));
   if (isTrade(old)) {
-    const id = old.id || `t-${savedMs(old)}`;
+    const id = old.id || fallbackId(sym, old, "old");
     if (!list.some((t) => t.id === id)) list.push({ ...old, id });
   }
   list.sort(newestFirst);

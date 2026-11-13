@@ -114,3 +114,47 @@ describe("saved date", () => {
     assert.equal(formatSavedAt("garbage"), "");
   });
 });
+
+describe("trades saved by an older build (no id, no save time)", () => {
+  // The old single-trade record per stock: no `id`, no `savedAt`.
+  const oldRecord = (ticker: string, over: Record<string, unknown> = {}) => ({ ticker, dir: "Bull", hz: "6M", title: `LONG ${ticker}`, target: 200, stop: 150, confAtSave: 70, savedDate: "Just now · Active", ...over });
+  const withOld = (...tickers: string[]) => {
+    const store = new FakeStore();
+    for (const t of tickers) store.setItem(`si_thesis_${t}`, JSON.stringify(oldRecord(t)));
+    return store;
+  };
+
+  it("old trades in different stocks get different ids (they used to share t-0, so the tracker list had three rows with one key)", () => {
+    const all = listAllTrades(withOld("AAPL", "MSFT", "NVDA"));
+    assert.equal(all.length, 3);
+    assert.equal(new Set(all.map((t) => t.id)).size, 3, `ids: ${all.map((t) => t.id).join(", ")}`);
+    assert.ok(all.every((t) => !/^t-0$/.test(t.id)));
+  });
+
+  it("two id-less trades in one stock's list get different ids", () => {
+    const store = new FakeStore();
+    store.setItem(tradesKey("NVDA"), JSON.stringify([oldRecord("NVDA"), oldRecord("NVDA", { dir: "Bear", title: "SHORT NVDA", target: 130, stop: 180 })]));
+    const list = readTrades(store, "NVDA");
+    assert.equal(list.length, 2);
+    assert.notEqual(list[0].id, list[1].id);
+  });
+
+  it("ids stay the same on every read, so a selected or half-deleted row keeps its identity", () => {
+    const store = new FakeStore();
+    store.setItem(tradesKey("NVDA"), JSON.stringify([oldRecord("NVDA"), oldRecord("NVDA", { dir: "Bear", target: 130, stop: 180 })]));
+    assert.deepEqual(readTrades(store, "NVDA").map((t) => t.id), readTrades(store, "NVDA").map((t) => t.id));
+  });
+
+  it("removing one old trade removes only that one", () => {
+    const all = listAllTrades(withOld("AAPL", "MSFT", "NVDA"));
+    const msft = all.find((t) => t.ticker === "MSFT")!;
+    const left = removeTrade(all, msft.id);
+    assert.deepEqual(left.map((t) => t.ticker), ["AAPL", "NVDA"]);
+  });
+
+  it("a trade that already has an id keeps it", () => {
+    const store = new FakeStore();
+    store.setItem(tradesKey("NVDA"), JSON.stringify([{ ...oldRecord("NVDA"), id: "abc-1234", savedAt: "2026-11-14T02:00:00.000Z" }]));
+    assert.equal(readTrades(store, "NVDA")[0].id, "abc-1234");
+  });
+});
