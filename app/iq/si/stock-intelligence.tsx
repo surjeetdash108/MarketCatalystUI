@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSI } from "./si-context";
 import { TrackedTradesList, type TrackedTrade } from "./tracked-trades-list";
+import { addTrade, formatSavedAt, listAllTrades, readTrades, removeTrade, writeTrades, type SavedTrade } from "./saved-trades";
 import { SITab, StockItem, DetailStock, UpcomingEvent } from "./types";
 import {
   POPULAR,
@@ -35,7 +36,9 @@ import {
   smaOf,
   MajorSixMonthEvent,
   getSixMonthMajorEvents,
+  aboutTicker,
 } from "./data";
+import { scoreNews, reactionAfter, summarizeNewsSentiment, classifyDirection } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
@@ -689,6 +692,13 @@ export function StockIntelligenceScreen() {
     );
     const insiderNet = insider90.reduce((a, x) => a + (x.transactionCode === "P" ? 1 : -1) * x.shares * (x.pricePerShare ?? 0), 0);
     const news7 = (Array.isArray(tickerNews) ? tickerNews : []).filter((n) => n.publishedAt && Date.parse(n.publishedAt) >= todayMs - 7 * 86_400_000);
+    // Impact-weighted mood of the stock's own news (not a raw count of vendor tags).
+    const newsSent = summarizeNewsSentiment(news7, {
+      ticker: currentTicker,
+      name: liveCompany?.name,
+      bars: sixMonthBars,
+      isAbout: (x) => aboutTicker(x, currentTicker, liveCompany?.name),
+    });
     // Next report on or after today: the stored date when it is still ahead,
     // else the earnings calendar (a stored date can be a report already made).
     const todayIso = etTodayIso();
@@ -747,10 +757,14 @@ export function StockIntelligenceScreen() {
       instPutCallRatio: num(liveCompany?.instPutCallRatio),
       insiderNet90: insider90.length ? insiderNet : null,
       daysToEarnings: erDays != null && erDays >= 0 ? erDays : null,
-      newsPos: news7.length ? news7.filter((n) => n.sentiment === "positive").length : null,
-      newsNeg: news7.length ? news7.filter((n) => n.sentiment === "negative").length : null,
+      newsPos: newsSent.total ? newsSent.pos : null,
+      newsNeg: newsSent.total ? newsSent.neg : null,
+      newsHighPos: newsSent.total ? newsSent.highPos : null,
+      newsHighNeg: newsSent.total ? newsSent.highNeg : null,
+      newsWPos: newsSent.total ? newsSent.wPos : null,
+      newsWNeg: newsSent.total ? newsSent.wNeg : null,
     };
-  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews, liveEarningsList, yearBars]);
+  }, [currentTicker, currentPrice, currentChange, liveCompany, financialsDoc, liveConsensusList, liveInsiderList, tickerNews, liveEarningsList, yearBars, sixMonthBars]);
 
   const stock: StockItem | null = useMemo(() => {
     if (!currentTicker) return null;
@@ -975,6 +989,15 @@ export function StockIntelligenceScreen() {
     );
   }, [stock, sixMonthBars, financialsDoc?.quarters, tickerNews, financialsDoc?.epsHistory]);
 
+  // The Catalysts tab shows 90 days of news; score just those once (not on every render).
+  const catalystNews = useMemo(() => {
+    const todayMs = Date.parse(`${etTodayIso()}T00:00:00Z`);
+    const list = (Array.isArray(tickerNews) ? tickerNews : []).filter(
+      (a) => a.publishedAt && Date.parse(a.publishedAt) >= todayMs - 90 * 86_400_000,
+    );
+    return { list, sig: scoreNews(list, { ticker: stock?.t ?? "", name: stock?.name, bars: sixMonthBars }) };
+  }, [tickerNews, stock?.t, stock?.name, sixMonthBars]);
+
   // Real peers from Polygon/FMP (liveCompany.peers) and MC company universe (matches stock function)
   const isBumble = stock?.t?.toUpperCase() === "BMBL" || stock?.name?.toLowerCase().includes("bumble") || currentTicker?.toUpperCase() === "BMBL";
 
@@ -1162,6 +1185,9 @@ export function StockIntelligenceScreen() {
   const [expandedFwd, setExpandedFwd] = useState<Record<string, boolean>>({});
   const [showFundEv, setShowFundEv] = useState(false);
   const [selectedCatFilter, setSelectedCatFilter] = useState("All");
+  // Catalysts tab: "High impact" / "Risk" / "Positive" quick filter, and which grouped stories are expanded.
+  const [selectedSigFilter, setSelectedSigFilter] = useState<"All" | "High impact" | "Risk" | "Positive">("All");
+  const [openStories, setOpenStories] = useState<Record<string, boolean>>({});
   // Catalysts page, keyed to the stock + section it belongs to, so switching
   // either starts back at page 1 without an effect.
   const [catPageState, setCatPageState] = useState<{ key: string; page: number }>({ key: "", page: 0 });
@@ -1181,21 +1207,13 @@ export function StockIntelligenceScreen() {
   // Thesis Monitor state
   const [monScenario, setMonScenario] = useState<"live" | "cut" | "break" | "surge">("live");
   const [confirmDeleteThesis, setConfirmDeleteThesis] = useState(false);
-  const [savedThesis, setSavedThesis] = useState<{
-    ticker: string;
-    dir: "Bull" | "Bear";
-    hz: string;
-    title: string;
-    target: number;
-    stop: number;
-    confAtSave: number | null;
-    savedDate: string;
-    /** Price when the trade was saved. Trades saved before this field existed have none. */
-    entryPx?: number | null;
-    /** ISO time the trade was saved. */
-    savedAt?: string;
-    wO?: Record<string, number> | null;
-  } | null>(null);
+  // Every trade saved for the open stock (newest first) and the one shown on the right.
+  // A stock can hold several: a bullish and a bearish set-up, or different horizons.
+  const [savedTrades, setSavedTrades] = useState<SavedTrade[]>([]);
+  const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
+  // Only this stock's trades: right after switching stocks the list still holds the previous stock's until it reloads.
+  const stockTrades = savedTrades.filter((t) => t.ticker === currentTicker);
+  const savedThesis: SavedTrade | null = stockTrades.find((t) => t.id === selectedTradeId) ?? stockTrades[0] ?? null;
 
   // Watchlist state
 
@@ -1207,40 +1225,31 @@ export function StockIntelligenceScreen() {
   // Fundamentals tab: the bar picked in each metric card, keyed `${ticker}:${cardIndex}`.
   const [fundSel, setFundSel] = useState<Record<string, number>>({});
 
-  // Sync saved thesis from localStorage on mount
+  // Load the open stock's saved trades from localStorage (see saved-trades.ts).
   useEffect(() => {
     if (!currentTicker) return;
     try {
-      const stored = localStorage.getItem(`si_thesis_${currentTicker}`);
-      const parsed = stored ? JSON.parse(stored) : null;
-      // Keep the SAME object when the saved trade has not changed. `stock` is
-      // rebuilt whenever any data input re-renders, and storing a fresh object
-      // here every time re-rendered again — a loop (React's "Maximum update
-      // depth exceeded") that starved the router, so nothing else could be clicked.
-      setSavedThesis(prev => (prev && parsed && JSON.stringify(prev) === JSON.stringify(parsed) ? prev : parsed));
+      const found = readTrades(localStorage, currentTicker);
+      // Keep the SAME array when nothing changed. `stock` is rebuilt whenever any
+      // data input re-renders, and storing a fresh array here every time re-rendered
+      // again — a loop (React's "Maximum update depth exceeded") that starved the
+      // router, so nothing else could be clicked.
+      setSavedTrades(prev => (JSON.stringify(prev) === JSON.stringify(found) ? prev : found));
     } catch { }
   }, [currentTicker, stock]);
 
-  // Every trade saved in this browser (one `si_thesis_<TICKER>` per stock), for
-  // the Trade Tracker's list. Re-read when the tab opens, the open stock changes,
-  // or the open stock's trade is saved or removed (both go through savedThesis).
+  // Every trade saved in this browser, for the Trade Tracker's list. Re-read when
+  // the tab opens, the open stock changes, or a trade is saved or removed.
   const [trackedTrades, setTrackedTrades] = useState<TrackedTrade[]>([]);
   useEffect(() => {
     try {
-      const found: TrackedTrade[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key || !key.startsWith("si_thesis_")) continue;
-        const t = JSON.parse(localStorage.getItem(key) || "null");
-        if (t && typeof t.ticker === "string" && typeof t.target === "number" && typeof t.stop === "number") {
-          found.push({ ticker: t.ticker, dir: t.dir, hz: t.hz, target: t.target, stop: t.stop });
-        }
-      }
-      found.sort((a, b) => a.ticker.localeCompare(b.ticker));
+      const found: TrackedTrade[] = listAllTrades(localStorage).map((t) => ({
+        id: t.id, ticker: t.ticker, dir: t.dir, hz: t.hz, target: t.target, stop: t.stop, savedAt: t.savedAt,
+      }));
       // Same array when nothing changed, so this can never feed a render loop.
       setTrackedTrades(prev => (JSON.stringify(prev) === JSON.stringify(found) ? prev : found));
     } catch { }
-  }, [activeTab, currentTicker, savedThesis]);
+  }, [activeTab, currentTicker, savedTrades]);
 
   // Handle stock selection
   const handleSelectStock = (ticker: string) => {
@@ -1257,11 +1266,24 @@ export function StockIntelligenceScreen() {
   // Trade Tracker list: open that stock's trade. The simulation and the
   // "Remove this trade?" prompt belong to the trade that was open, so they reset
   // rather than carry over to the next one.
-  const selectTrackedTrade = (ticker: string) => {
-    if (ticker === currentTicker) return;
+  const selectTrackedTrade = (trade: TrackedTrade) => {
     setMonScenario("live");
     setConfirmDeleteThesis(false);
-    handleSelectStock(ticker);
+    setSelectedTradeId(trade.id);
+    if (trade.ticker !== currentTicker) handleSelectStock(trade.ticker);
+  };
+
+  /** Delete one saved trade (any stock's, from the list or the open trade's Remove button). */
+  const removeSavedTrade = (trade: { id: string; ticker: string }) => {
+    try {
+      const next = removeTrade(readTrades(localStorage, trade.ticker), trade.id);
+      writeTrades(localStorage, trade.ticker, next);
+      if (trade.ticker === currentTicker) setSavedTrades(next);
+      else setTrackedTrades(prev => prev.filter(t => t.id !== trade.id));
+    } catch { }
+    if (selectedTradeId === trade.id) setSelectedTradeId(null);
+    setConfirmDeleteThesis(false);
+    setMonScenario("live");
   };
 
   // Format assistant replies: render bold markdown cleanly and strip stray **
@@ -2427,7 +2449,7 @@ export function StockIntelligenceScreen() {
                 border: "1px solid var(--si-border, #1c2733)",
                 background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                 display: "grid",
-                gridTemplateColumns: "auto repeat(5, minmax(0, 1fr))",
+                gridTemplateColumns: "auto repeat(4, minmax(0, 1fr)) minmax(0, 1.5fr)",
               }}
             >
               {/* Corner brackets */}
@@ -2437,25 +2459,28 @@ export function StockIntelligenceScreen() {
               <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
 
               {/* Identity Box with Logo */}
-              <div className="si-hero-id" style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <StockLogo sym={stock.t} size={40} />
-                  <div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                      {stock.t}
-                    </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
-                      {stock.name}
+              <div className="si-hero-id" style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260, display: "flex", alignItems: "center" }}>
+                {/* One line: logo, ticker and name, then the price and day change beside them (wraps only on a narrow phone). */}
+                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 22, rowGap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <StockLogo sym={stock.t} size={40} />
+                    <div style={{ maxWidth: 190 }}>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
+                        {stock.t}
+                      </div>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
+                        {stock.name}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 8 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 24, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                    {usd(stock.p)}
-                  </span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color }}>
-                    {pct(stock.c)}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, whiteSpace: "nowrap" }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 24, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                      {usd(stock.p)}
+                    </span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color }}>
+                      {pct(stock.c)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2497,6 +2522,8 @@ export function StockIntelligenceScreen() {
                       whiteSpace: "normal",
                       overflowWrap: "anywhere",
                       lineHeight: 1.4,
+                      // The 52-week range stays on one line: "$148.80 / $243.37".
+                      ...(st.k === "52W LOW / HIGH" ? { whiteSpace: "nowrap", overflowWrap: "normal", fontSize: 18 } : {}),
                     }}
                   >
                     {st.v}
@@ -3997,9 +4024,13 @@ export function StockIntelligenceScreen() {
             ev: string;
             note: string;
             imp: "HIGH" | "MED" | "LOW";
-            dir: "Positive" | "Risk" | "Binary" | "Neutral";
+            dir: "Positive" | "Risk" | "Binary" | "Neutral" | "Mixed";
             dd: number;
             sourceBadge?: string;
+            /** News only: impact score, and the story the article belongs to when several tell it. */
+            score?: number;
+            story?: string;
+            storySize?: number;
           }> = [];
 
           const usNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
@@ -4105,12 +4136,15 @@ export function StockIntelligenceScreen() {
             // A reiteration is neutral news whatever the standing rating.
             const moved = !/maintain|reiterate/i.test(meta.shownAction);
             const dir = moved && meta.dir > 0 ? "Positive" : moved && meta.dir < 0 ? "Risk" : "Neutral";
+            // A reiteration is low impact; a rating change is medium, and high when the stock moved ≥3% around it.
+            const reaction = reactionAfter(sixMonthBars, Date.parse(String(g.date)));
+            const gradeImp: "HIGH" | "MED" | "LOW" = !moved ? "LOW" : reaction != null && Math.abs(reaction) >= 3 ? "HIGH" : "MED";
             liveCatalystItems.push({
               date: fmtDateShort(g.date),
               cat: "Analyst actions",
               ev: `${g.firm || "Analyst"}: ${meta.shownAction} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
               note: `${g.previousGrade ? `Prior: ${g.previousGrade}. ` : ""}${g.previousPriceTarget ? `Prior target: $${g.previousPriceTarget}. ` : ""}Consensus: ${tickerConsensus?.consensus || "Hold"} (${(tickerConsensus?.buy ?? 0) + (tickerConsensus?.strongBuy ?? 0)} Buys).`,
-              imp: "MED",
+              imp: gradeImp,
               dir,
               dd,
               sourceBadge: "FMP",
@@ -4176,7 +4210,9 @@ export function StockIntelligenceScreen() {
           }
 
           // 5. NEWS, PRODUCT LAUNCHES, REGULATORY, INDUSTRY EVENTS, MACRO (Polygon / Finnhub / FMP)
-          (Array.isArray(tickerNews) ? tickerNews : []).forEach((art) => {
+          const newsList = catalystNews.list;
+          const newsSig = catalystNews.sig;
+          newsList.forEach((art) => {
             const dd = calcDd(art.publishedAt);
             if (!inWindow(dd)) return;
             let cat = "News";
@@ -4198,13 +4234,19 @@ export function StockIntelligenceScreen() {
               cat = "Analyst actions";
             }
 
-            const dir = art.sentiment === "positive" ? "Positive" : art.sentiment === "negative" ? "Risk" : "Neutral";
+            // Impact comes from the story itself (coverage, price reaction, filler), not a flat "MED".
+            const sg = newsSig.get(art);
+            // Direction is a vote of the vendor tag, the headline wording and (on a story that matters) the stock's move.
+            const dir = classifyDirection(art, sg);
             liveCatalystItems.push({
+              score: sg?.score,
+              story: sg && sg.storySize >= 3 ? `${stock.t}:${sg.story}` : undefined,
+              storySize: sg?.storySize,
               date: fmtDateShort(art.publishedAt),
               cat,
               ev: art.headline,
               note: `${vendorText(art.source, showVendor) || "Newswire"} · ${art.summary || "Live news dispatch."}`,
-              imp: "MED",
+              imp: sg?.tier ?? "MED",
               dir,
               dd,
               sourceBadge: (art.vendor || "NEWS").toUpperCase(),
@@ -4231,7 +4273,9 @@ export function StockIntelligenceScreen() {
 
           const combined = [...liveCatalystItems, ...marketScheduleEvents].filter((c) => inWindow(c.dd));
 
-          combined.sort((a, b) => b.dd - a.dd);
+          // Newest day first; within a day the higher-impact rows lead, then the higher-scoring story.
+          const impRank = (i: "HIGH" | "MED" | "LOW") => (i === "HIGH" ? 2 : i === "MED" ? 1 : 0);
+          combined.sort((a, b) => b.dd - a.dd || impRank(b.imp) - impRank(a.imp) || (b.score ?? 0) - (a.score ?? 0));
 
           // Category count breakdown
           const countMap: Record<string, number> = { All: combined.length };
@@ -4241,11 +4285,36 @@ export function StockIntelligenceScreen() {
             }
           });
 
-          const filtered = combined.filter((c) => selectedCatFilter === "All" || c.cat === selectedCatFilter);
+          const byCat = combined.filter((c) => selectedCatFilter === "All" || c.cat === selectedCatFilter);
+          const sigCount = {
+            "High impact": byCat.filter((c) => c.imp === "HIGH").length,
+            Risk: byCat.filter((c) => c.dir === "Risk").length,
+            Positive: byCat.filter((c) => c.dir === "Positive").length,
+          };
+          const bySig = byCat.filter(
+            (c) =>
+              selectedSigFilter === "All" ||
+              (selectedSigFilter === "High impact" ? c.imp === "HIGH" : c.dir === selectedSigFilter),
+          );
+
+          // Articles telling one story (three or more) collapse into their strongest article;
+          // "+N more" expands the rest.
+          const storyMembers = new Map<string, typeof bySig>();
+          for (const c of bySig) if (c.story) storyMembers.set(c.story, [...(storyMembers.get(c.story) ?? []), c]);
+          type CatRow = (typeof bySig)[number] & { more?: number; child?: boolean };
+          const filtered: CatRow[] = [];
+          for (const c of bySig) {
+            const members = c.story ? storyMembers.get(c.story) : undefined;
+            if (!c.story || !members || members.length < 3) { filtered.push(c); continue; }
+            const lead = members.reduce((a, b) => ((b.score ?? 0) > (a.score ?? 0) ? b : a));
+            if (c !== lead) continue;
+            filtered.push({ ...c, more: members.length - 1 });
+            if (openStories[c.story]) for (const m of members) if (m !== lead) filtered.push({ ...m, child: true });
+          }
 
           // 100 per page — a stock can carry thousands of grade / Form 4 / 13F
           // rows, and rendering them all at once froze the tab.
-          const pageKey = `${stock.t}|${selectedCatFilter}`;
+          const pageKey = `${stock.t}|${selectedCatFilter}|${selectedSigFilter}`;
           const pageCount = Math.max(1, Math.ceil(filtered.length / CAT_PAGE_SIZE));
           const catPage = Math.min(catPageState.key === pageKey ? catPageState.page : 0, pageCount - 1);
           const setCatPage = (page: number) => setCatPageState({ key: pageKey, page });
@@ -4258,7 +4327,7 @@ export function StockIntelligenceScreen() {
             when: cItem.dd < 0 ? `${-cItem.dd}D AGO` : cItem.dd === 0 ? "TODAY" : `IN ${cItem.dd}D`,
             whenCol: cItem.dd < 0 ? "#5d6b79" : cItem.dd === 0 ? "#4ade80" : "#a9c6e3",
             impCol: cItem.imp === "HIGH" ? "#f5b031" : cItem.imp === "MED" ? STEEL : "#93a1af",
-            dirCol: cItem.dir === "Positive" ? UP : cItem.dir === "Risk" ? DN : "#93a1af",
+            dirCol: cItem.dir === "Positive" ? UP : cItem.dir === "Risk" ? DN : cItem.dir === "Mixed" ? "#f5b031" : "#93a1af",
             dot: cItem.dd < 0 ? "#2a3a4a" : cItem.imp === "HIGH" ? "#f5b031" : STEEL,
             bd: cItem.dd >= 0 && cItem.imp === "HIGH" ? "rgba(245,176,49,0.4)" : "#1c2733",
           }));
@@ -4301,6 +4370,36 @@ export function StockIntelligenceScreen() {
                 })}
               </div>
 
+              {/* Quick filters by how much a row matters and which way it leans */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {(["All", "High impact", "Risk", "Positive"] as const).map((f) => {
+                  const on = selectedSigFilter === f;
+                  const tone = f === "Risk" ? DN : f === "Positive" ? UP : f === "High impact" ? "#f5b031" : STEEL;
+                  const n = f === "All" ? null : sigCount[f];
+                  return (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setSelectedSigFilter(f)}
+                      style={{
+                        height: 28,
+                        padding: "0 12px",
+                        border: `1px solid ${on ? tone : "#2a3a4a"}`,
+                        background: on ? "rgba(255,255,255,0.06)" : "transparent",
+                        color: on ? tone : "var(--si-text-mid, #93a1af)",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11,
+                        letterSpacing: "0.06em",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {f === "All" ? "ALL IMPACT" : f.toUpperCase()}{n != null ? ` (${n})` : ""}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Timeline cards, one page at a time */}
               {filtered.length > CAT_PAGE_SIZE && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
@@ -4333,8 +4432,12 @@ export function StockIntelligenceScreen() {
                     className="si-cat-row"
                     style={{
                       border: `1px solid ${cItem.bd}`,
+                      // A coloured edge shows which way the row leans; low-impact neutral rows are muted.
+                      borderLeft: cItem.dir === "Risk" || cItem.dir === "Positive" || cItem.dir === "Mixed" ? `3px solid ${cItem.dirCol}` : `1px solid ${cItem.bd}`,
                       background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                       padding: "16px 20px",
+                      marginLeft: cItem.child ? 28 : 0,
+                      opacity: cItem.imp === "LOW" && cItem.dir === "Neutral" ? 0.7 : 1,
                       display: "grid",
                       gridTemplateColumns: "140px 1fr auto",
                       gap: 18,
@@ -4385,13 +4488,42 @@ export function StockIntelligenceScreen() {
                       <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
                         {cItem.note}
                       </div>
+                      {cItem.more != null && cItem.story && (
+                        <button
+                          type="button"
+                          onClick={() => setOpenStories((o) => ({ ...o, [cItem.story as string]: !o[cItem.story as string] }))}
+                          style={{
+                            marginTop: 8,
+                            padding: "2px 10px",
+                            border: "1px solid #2a3a4a",
+                            background: "transparent",
+                            color: "var(--si-accent-light, #a9c6e3)",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 11,
+                            letterSpacing: "0.06em",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {openStories[cItem.story] ? "▴ HIDE ARTICLES" : `▾ +${cItem.more} MORE ARTICLES ON THIS STORY`}
+                        </button>
+                      )}
                     </div>
                     <div className="si-cat-imp" style={{ textAlign: "right" }}>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: cItem.impCol }}>
-                        {cItem.imp} IMPACT
-                      </div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: cItem.dirCol }}>
-                        {cItem.dir}
+                      {/* One badge: how much it matters, then which way it leans. */}
+                      <div
+                        style={{
+                          display: "inline-block",
+                          fontFamily: "'Barlow Condensed', sans-serif",
+                          fontSize: cItem.imp === "HIGH" ? 19 : 16,
+                          fontWeight: 700,
+                          letterSpacing: "0.06em",
+                          color: cItem.dir === "Neutral" || cItem.dir === "Binary" ? cItem.impCol : cItem.dirCol,
+                          border: cItem.imp === "HIGH" ? `1px solid ${cItem.dir === "Neutral" || cItem.dir === "Binary" ? cItem.impCol : cItem.dirCol}` : "1px solid transparent",
+                          background: cItem.imp === "HIGH" ? "rgba(255,255,255,0.04)" : "transparent",
+                          padding: "2px 10px",
+                        }}
+                      >
+                        {cItem.imp} · {cItem.dir.toUpperCase()}
                       </div>
                     </div>
                   </div>
@@ -4600,7 +4732,7 @@ export function StockIntelligenceScreen() {
           const thBand: [string, string] = thConf == null
             ? ["UNAVAILABLE", "#93a1af"]
             : thAtRisk
-              ? ["THESIS AT RISK", DN]
+              ? ["TRADE AT RISK", DN]
               : thConf >= 75
                 ? ["HIGH CONVICTION", UP]
                 : thConf >= 60
@@ -4911,7 +5043,7 @@ export function StockIntelligenceScreen() {
                       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
                         <div>
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                            THESIS CONFIDENCE
+                            TRADE CONFIDENCE
                           </div>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                             <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: thConf != null ? 56 : 32, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
@@ -4940,7 +5072,7 @@ export function StockIntelligenceScreen() {
 
                       {thAtRisk && (
                         <div style={{ border: "1px solid rgba(240,86,86,0.5)", background: "rgba(240,86,86,0.08)", padding: "10px 12px", fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffd2d2", lineHeight: 1.45 }}>
-                          ◆ Critical driver failing: {thRun.critFail.map((d: any) => d.name).join(", ")}. The thesis is flagged AT RISK even though the aggregate score is {thConf}.
+                          ◆ Critical driver failing: {thRun.critFail.map((d: any) => d.name).join(", ")}. The trade is flagged AT RISK even though the aggregate score is {thConf}.
                         </div>
                       )}
 
@@ -5175,7 +5307,7 @@ export function StockIntelligenceScreen() {
                       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
                         <div>
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                            THESIS CONFIDENCE
+                            TRADE CONFIDENCE
                           </div>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                             <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 64, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
@@ -5434,7 +5566,7 @@ export function StockIntelligenceScreen() {
                     ["UPSIDE", pct1(thUp), UP],
                     ["DOWNSIDE", pct1(thDn), DN],
                     ["REWARD / RISK", thRR.toFixed(1) + "×", thRR >= 2 ? UP : thRR >= 1.2 ? "#f5b031" : DN],
-                    ["THESIS CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
+                    ["TRADE CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
                     ["CORE DRIVERS INTACT", `${thRun.coreOk} of ${thRun.core.length}`, thRun.coreOk === thRun.core.length ? UP : "#f5b031"],
                   ].map(([k, v, c], idx) => (
                     <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
@@ -5457,23 +5589,32 @@ export function StockIntelligenceScreen() {
 
                 <button
                   onClick={() => {
-                    const newT = {
-                      ticker: stock.t,
-                      dir: labDir,
-                      hz: labHz,
-                      title: `${thBull ? "LONG" : "SHORT"} ${stock.t} → ${usd(tgtV)} · ${labHz}`,
-                      target: tgtV,
-                      stop: stopV,
-                      confAtSave: thConf,
-                      savedDate: "Just now · Active",
-                      entryPx: Number.isFinite(stock.p) ? stock.p : null,
-                      savedAt: new Date().toISOString(),
-                      wO: labWeightsState,
-                    };
-                    setSavedThesis(newT);
+                    // Added to this stock's saved trades; nothing already saved is replaced.
+                    const nowMs = Date.now();
+                    let saved: SavedTrade | null = null;
                     try {
-                      localStorage.setItem(`si_thesis_${stock.t}`, JSON.stringify(newT));
+                      const { trades, trade } = addTrade(
+                        readTrades(localStorage, stock.t),
+                        {
+                          ticker: stock.t,
+                          dir: labDir,
+                          hz: labHz,
+                          title: `${thBull ? "LONG" : "SHORT"} ${stock.t} → ${usd(tgtV)} · ${labHz}`,
+                          target: tgtV,
+                          stop: stopV,
+                          confAtSave: thConf,
+                          savedDate: "Just now · Active",
+                          entryPx: Number.isFinite(stock.p) ? stock.p : null,
+                          savedAt: new Date(nowMs).toISOString(),
+                          wO: labWeightsState,
+                        },
+                        nowMs,
+                      );
+                      writeTrades(localStorage, stock.t, trades);
+                      setSavedTrades(trades);
+                      saved = trade;
                     } catch { }
+                    if (saved) setSelectedTradeId(saved.id);
                     setActiveTab("mon");
                   }}
                   style={{
@@ -5505,7 +5646,7 @@ export function StockIntelligenceScreen() {
           const monLayout = (body: React.ReactNode) =>
             trackedTrades.length > 1 ? (
               <div className="si-trk">
-                <TrackedTradesList trades={trackedTrades} activeTicker={currentTicker} onSelect={selectTrackedTrade} />
+                <TrackedTradesList trades={trackedTrades} activeId={savedThesis?.id ?? null} onSelect={selectTrackedTrade} onRemove={removeSavedTrade} />
                 <div className="si-trk-detail">{body}</div>
               </div>
             ) : body;
@@ -5635,7 +5776,7 @@ export function StockIntelligenceScreen() {
             monStatus = "AT RISK";
             monCol = "#f2763a";
             monBy = monRun.critFail.length ? monRun.critFail[0].name : "Aggregate confidence";
-            monCause = monRun.critFail.length ? `Critical core driver failing: ${monRun.critFail[0].name}` : "Thesis confidence fell below 45.";
+            monCause = monRun.critFail.length ? `Critical core driver failing: ${monRun.critFail[0].name}` : "Trade confidence fell below 45.";
           } else if (monDelta >= 3) {
             monStatus = "STRENGTHENING";
             monCol = UP;
@@ -5669,6 +5810,11 @@ export function StockIntelligenceScreen() {
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>
                       {savedThesis.title}
                     </div>
+                    {formatSavedAt(savedThesis.savedAt) && (
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
+                        SAVED {formatSavedAt(savedThesis.savedAt).toUpperCase()}
+                      </div>
+                    )}
 
                     <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
                       <button
@@ -5691,13 +5837,7 @@ export function StockIntelligenceScreen() {
                             Remove this trade?
                           </span>
                           <button
-                            onClick={() => {
-                              setSavedThesis(null);
-                              try {
-                                localStorage.removeItem(`si_thesis_${stock.t}`);
-                              } catch { }
-                              setConfirmDeleteThesis(false);
-                            }}
+                            onClick={() => removeSavedTrade(savedThesis)}
                             style={{ height: 30, padding: "0 12px", border: "none", background: "#f05656", color: "#fff", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
                           >
                             Remove
@@ -5961,7 +6101,7 @@ export function StockIntelligenceScreen() {
                       ["Now", `Status → ${monStatus}. ${monCause}`],
                       ["Today 13:40", `${monRun.drv[0]?.name}: evidence holding above threshold.`],
                       ["Today 10:15", `Market regime check: constructive liquidity environment.`],
-                      [savedThesis.savedDate, `Thesis saved${monEntry != null ? ` at ${usd(monEntry)}` : ""} · confidence ${savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
+                      [formatSavedAt(savedThesis.savedAt).split(" · ")[0] || savedThesis.savedDate, `Trade saved${monEntry != null ? ` at ${usd(monEntry)}` : ""} · confidence ${savedThesis.confAtSave != null ? savedThesis.confAtSave : "Unavailable"} · target ${usd(savedThesis.target)} · invalidation ${usd(savedThesis.stop)}.`],
                     ].map(([tt, m], i) => (
                       <div key={i} style={{ display: "flex", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", width: 88, flex: "none" }}>

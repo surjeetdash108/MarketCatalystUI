@@ -979,7 +979,7 @@ export function AnalystScreen() {
               onMouseLeave={() => setActiveTip(null)}
               style={{ position: "relative", border: `1px solid ${BORDER_DARK}`, borderRadius: 12, background: BG_SURFACE, padding: "14px 16px", cursor: "default" }}
             >
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED, marginBottom: 8 }}>SENTIMENT</div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", color: TEXT_MUTED, marginBottom: 8 }}>MARKET SENTIMENT</div>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ fontSize: 18, fontWeight: 800, color: G }}>{summaryMetrics.bullPct}% Bullish</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: R }}>{summaryMetrics.bearPct}% Bearish</span>
