@@ -259,7 +259,7 @@ function SixMonthAreaChart({
       {/* Header bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-          6-MONTH TRAJECTORY & 5 MAJOR CATALYSTS
+          6-MONTH TRAJECTORY & {events.length || 5} MAJOR CATALYSTS
         </span>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
           Last 6 Months · Area Chart
