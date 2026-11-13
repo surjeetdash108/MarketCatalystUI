@@ -13,3 +13,14 @@ describe("profile completeness follows the Edit Profile form", () => {
     assert.equal(isProfileIncomplete(null), true);
   });
 });
+
+describe("one completeness rule everywhere", () => {
+  it("Settings and the My Profile 'Pending' pill both use isProfileIncomplete", async () => {
+    const fs = await import("node:fs");
+    for (const f of ["app/iq/screens/settings.tsx", "app/iq/shell.tsx"]) {
+      const src = fs.readFileSync(f, "utf8");
+      assert.match(src, /isProfileIncomplete\(profile\)/, f);
+      assert.doesNotMatch(src, /"incomeRange",\s*"investmentExperience"/, f);
+    }
+  });
+});

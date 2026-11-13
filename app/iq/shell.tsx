@@ -70,6 +70,7 @@ import { ChoosePlanScreen } from "./billing/choose-plan-screen";
 import { clearOnboardingSession } from "./billing/plan-intent";
 import { WelcomeFeedbackModals } from "./welcome-feedback-modals";
 import { bannerKind } from "./contextual-banner";
+import { isProfileIncomplete } from "../profile/profile-fields";
 import { trialCountdown } from "./trial-countdown";
 
 // ---- Route helpers ----
@@ -1476,14 +1477,8 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
   const profileImage = profile?.profile_image || user?.photoURL || null;
 
-  // First-time Google sign-ins arrive with only name/email — flag the profile as
-  // incomplete (drives the "Pending" pill on My Profile) until every field is filled.
-  const profileIncomplete =
-    !profile ||
-    (["name", "age", "incomeRange", "investmentExperience",
-      "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue"] as const)
-      .some(f => String(profile[f] ?? "").trim() === "") ||
-    (profile.preferredAssetClasses?.length ?? 0) === 0;
+  // Drives the "Pending" pill on My Profile — same rule as Settings (REQUIRED_PROFILE_FIELDS).
+  const profileIncomplete = isProfileIncomplete(profile);
 
   const hasActivePlan = !!ent && ent.planId !== "none" && ent.planId !== "free" && (ent.status === "active" || ent.status === "trialing" || !!ent.staff);
 
