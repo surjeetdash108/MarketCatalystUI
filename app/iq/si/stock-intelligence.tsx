@@ -38,6 +38,7 @@ import {
   MajorSixMonthEvent,
   getSixMonthMajorEvents,
   aboutTicker,
+  trendRead,
 } from "./data";
 import { scoreNews, reactionAfter, summarizeNewsSentiment, classifyDirection } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
@@ -507,21 +508,6 @@ const rangesDef: Record<string, [number, number, number]> = {
   "5Y": [350, 0.024, 0.80],
 };
 
-
-/** One sentence on price vs its 50 and 200 DMA, from the real values. */
-function trendRead(price: number | null, sma50: number | null, sma200: number | null): string {
-  if (price == null || sma50 == null || sma200 == null) return "Moving-average data is not available for this stock yet.";
-  const $ = (v: number) => `$${v.toFixed(2)}`;
-  const rel = (ma: number) => (Math.abs(price / ma - 1) < 0.01 ? "at" : price > ma ? "above" : "below");
-  const r50 = rel(sma50), r200 = rel(sma200);
-  const where = r50 === r200
-    ? `Price (${$(price)}) trades ${r50} both its 50 DMA (${$(sma50)}) and 200 DMA (${$(sma200)})`
-    : `Price (${$(price)}) trades ${r50} its 50 DMA (${$(sma50)}) and ${r200} its 200 DMA (${$(sma200)})`;
-  const structure = sma50 > sma200
-    ? "the 50 DMA sits above the 200 DMA (an uptrend structure)"
-    : "the 50 DMA sits below the 200 DMA (a downtrend structure)";
-  return `${where}; ${structure}.`;
-}
 
 /** Catalyst cards shown per page in each section. */
 const CAT_PAGE_SIZE = 100;

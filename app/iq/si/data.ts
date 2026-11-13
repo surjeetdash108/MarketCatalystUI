@@ -597,6 +597,36 @@ export function fundSeries(_t: string): number[][] {
 }
 
 /**
+ * One sentence on price vs its 50 and 200 DMA, from the real values.
+ *
+ * The 50 DMA lags, so after a fall it stays above the 200 DMA for weeks. Calling
+ * that "an uptrend structure" next to "price below both" read as a contradiction
+ * (NVDA, 14 Nov). When price and the two averages disagree, the sentence now says
+ * the averages still show the old trend and price has already left it.
+ */
+export function trendRead(price: number | null, sma50: number | null, sma200: number | null): string {
+  if (price == null || sma50 == null || sma200 == null) return "Moving-average data is not available for this stock yet.";
+  const $ = (v: number) => `$${v.toFixed(2)}`;
+  const rel = (ma: number) => (Math.abs(price / ma - 1) < 0.01 ? "at" : price > ma ? "above" : "below");
+  const r50 = rel(sma50), r200 = rel(sma200);
+  const where = r50 === r200
+    ? `Price (${$(price)}) trades ${r50} both its 50 DMA (${$(sma50)}) and 200 DMA (${$(sma200)})`
+    : `Price (${$(price)}) trades ${r50} its 50 DMA (${$(sma50)}) and ${r200} its 200 DMA (${$(sma200)})`;
+  const upStack = sma50 > sma200;
+  let structure: string;
+  if (upStack && r50 === "below" && r200 === "below") {
+    structure = "the 50 DMA is still above the 200 DMA, which is left over from the earlier uptrend, but price has already fallen below both";
+  } else if (!upStack && r50 === "above" && r200 === "above") {
+    structure = "the 50 DMA is still below the 200 DMA, which is left over from the earlier downtrend, but price has already moved above both";
+  } else {
+    structure = upStack
+      ? "the 50 DMA sits above the 200 DMA (an uptrend structure)"
+      : "the 50 DMA sits below the 200 DMA (a downtrend structure)";
+  }
+  return `${where}; ${structure}.`;
+}
+
+/**
  * "What would break this setup", split by whether it has already happened.
  *
  * A level the price is already through is not a risk still to come, so it goes

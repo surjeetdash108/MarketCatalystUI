@@ -3,7 +3,7 @@
 // through was shown as a risk still to come. Levels now split on where the price is.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { EMPTY_FACTS, detail, invalidationLevels, type SiFacts } from "./data";
+import { EMPTY_FACTS, detail, invalidationLevels, trendRead, type SiFacts } from "./data";
 import { localCopilotAnswer, type CopilotLocalInput } from "./copilot-local";
 
 const facts = (o: Partial<SiFacts>): SiFacts => ({ ...EMPTY_FACTS, ...o });
@@ -93,5 +93,30 @@ describe("chat answers", () => {
   it("the bear case says what already confirms it instead of what 'would'", () => {
     const t = text("what is the bear case?", input());
     assert.match(t, /Already confirming the bear case/);
+  });
+});
+
+describe("trendRead", () => {
+  it("does not call the 50/200 order an uptrend when price is already below both (NVDA, 14 Nov)", () => {
+    const t = trendRead(162.85, 214.65, 204.19);
+    assert.ok(t.includes("trades below both its 50 DMA ($214.65) and 200 DMA ($204.19)"), t);
+    assert.match(t, /left over from the earlier uptrend, but price has already fallen below both/);
+    assert.doesNotMatch(t, /an uptrend structure/);
+  });
+  it("says the same the other way round when price has recovered above both", () => {
+    const t = trendRead(120, 100, 110);
+    assert.match(t, /left over from the earlier downtrend, but price has already moved above both/);
+    assert.doesNotMatch(t, /a downtrend structure/);
+  });
+  it("keeps the plain wording when price and the averages agree", () => {
+    assert.equal(trendRead(250, 220, 200), "Price ($250.00) trades above both its 50 DMA ($220.00) and 200 DMA ($200.00); the 50 DMA sits above the 200 DMA (an uptrend structure).");
+    assert.equal(trendRead(80, 100, 110), "Price ($80.00) trades below both its 50 DMA ($100.00) and 200 DMA ($110.00); the 50 DMA sits below the 200 DMA (a downtrend structure).");
+  });
+  it("keeps the plain wording when price sits between the averages", () => {
+    assert.equal(trendRead(205, 215, 200), "Price ($205.00) trades below its 50 DMA ($215.00) and above its 200 DMA ($200.00); the 50 DMA sits above the 200 DMA (an uptrend structure).");
+  });
+  it("says so when an average is missing", () => {
+    assert.equal(trendRead(100, null, 90), "Moving-average data is not available for this stock yet.");
+    assert.equal(trendRead(null, 100, 90), "Moving-average data is not available for this stock yet.");
   });
 });
