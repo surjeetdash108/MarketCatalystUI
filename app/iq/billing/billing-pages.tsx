@@ -119,13 +119,15 @@ export function BillingSuccess() {
               <>
                 <div style={{ fontSize: "2.8rem", lineHeight: 1 }}>🎉</div>
                 <h1 style={{ margin: 0, color: "var(--text-hi)", fontSize: "1.6rem", fontWeight: 800 }} data-testid="success-active">
-                  Congratulations!
-                </h1>
-                <p style={{ margin: 0, color: "var(--brand-2, #10b981)", fontSize: "1.1rem", fontWeight: 700 }}>
                   {isPlanChange && change?.kind === "scheduled"
-                    ? `Your ${change.toPlanName} plan starts on ${change.effectiveAt ? longDate(change.effectiveAt) : "the end of your current period"}`
-                    : `Your ${change?.toPlanName ?? (view.planId ? view.planId.charAt(0).toUpperCase() + view.planId.slice(1) : "new")} Plan is Activated`}
-                </p>
+                    ? "Congratulations!"
+                    : `Congratulations! Your ${change?.toPlanName ?? (view.planId ? view.planId.charAt(0).toUpperCase() + view.planId.slice(1) : "new")} plan is activated`}
+                </h1>
+                {isPlanChange && change?.kind === "scheduled" && (
+                  <p style={{ margin: 0, color: "var(--brand-2, #10b981)", fontSize: "1.1rem", fontWeight: 700 }}>
+                    {`Your ${change.toPlanName} plan starts on ${change.effectiveAt ? longDate(change.effectiveAt) : "the end of your current period"}`}
+                  </p>
+                )}
                 {isPlanChange && change ? (
                   <div data-testid="change-confirmation" style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 460, fontSize: ".9rem", color: "var(--text)", lineHeight: 1.5 }}>
                     {planChangeLines(change, (n) => formatMoney(n, change.currency), longDate).map((l) => (

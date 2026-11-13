@@ -28,7 +28,7 @@ import { handleStripeAction, setStripeCheckoutContext } from "./stripe-payment-f
 import { fieldStyle, labelStyle } from "./address-fields";
 import { canComplete, cadence, exitPath } from "./model";
 import type { PaymentAdapter, PaymentFormValue, PaymentResult } from "./payment-form";
-import { ConsentText, SummaryCard } from "./summary-card";
+import { ConsentText, SummaryCard, TrialBox } from "./summary-card";
 import { LegalModal } from "../../../auth/legal/legal-modal";
 import { OnboardingStepper } from "../onboarding-stepper";
 import "./checkout.css";
@@ -493,6 +493,7 @@ export function CheckoutPage() {
                 <b style={{ color: "var(--text-hi)" }}>{plan.name}</b> · {interval === "annual" ? "Annual" : "Monthly"} ·{" "}
                 <Link href={`/choose-plan?plan=${plan.id}&interval=${interval}${onboarding ? "&onboarding=1" : ""}`} className="co-link" data-testid="co-change-plan">Change plan</Link>
               </p>
+              <TrialBox trial={preview?.trial} />
               {Form ? (
                 <Form
                   // Trial (card saved, $0 now) and paid purchases use different Stripe modes: remount on change.
@@ -555,7 +556,7 @@ export function CheckoutPage() {
                       {busy
                         ? "Processing…"
                         : preview?.trial
-                          ? `Start your ${preview.trial.days} day free trial`
+                          ? "Subscribe"
                           : `Pay ${money(preview?.dueToday ?? preview?.total ?? plan.prices[interval]?.amount ?? 0)} and start ${plan.name}`}
                     </button>
                     {!busy && (!payment.ready || !preview?.consent?.version) && (

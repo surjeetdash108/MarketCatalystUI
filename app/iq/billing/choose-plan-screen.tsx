@@ -193,7 +193,7 @@ export function ChoosePlanScreen({
           const isDowngrade = currentRank > 0 && targetRank < currentRank;
 
           const highlighted = initialPlan === p.id;
-          let ctaText = trialDays > 0 ? `Start your ${trialDays} day free trial` : `Subscribe to ${p.name}`;
+          let ctaText = "Subscribe";
           if (isCurrent) ctaText = "Current plan";
           else if (isUpgrade) ctaText = `Upgrade to ${p.name}`;
           else if (isDowngrade) ctaText = `Change to ${p.name}`;

@@ -539,7 +539,7 @@ export function PlanSettingsCard({ isStaff }: { isStaff: boolean }) {
     badge = `${ent?.planName ?? ""}${cadence ? ` · ${cadence}` : ""}`;
     line =
       status === "TRIALING"
-        ? `Free trial until ${shortDate(ent?.currentPeriodEnd)}. ${ent?.cancelAtPeriodEnd ? "Cancelled — you won't be charged." : "Your first charge is on that date."}`
+        ? `Free trial until ${shortDate(ent?.currentPeriodEnd)}. ${ent?.cancelAtPeriodEnd ? "Cancelled — you won't be charged." : "Cancel for free in your trial period."}`
         : ent?.cancelAtPeriodEnd
           ? `Cancelled. You keep access until ${shortDate(ent?.currentPeriodEnd)}.`
           : status === "PAST_DUE"

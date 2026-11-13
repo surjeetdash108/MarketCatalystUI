@@ -222,7 +222,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
               <div data-testid="credit-balance" style={{ fontSize: ".88rem", color: "var(--text)" }}>Credits available: {formatMoney(summary.creditBalance, summary.nextCharge?.currency ?? "USD")}</div>
             )}
             {subscribed && summary.status === "TRIALING" && summary.currentPeriodEnd && !summary.endsAt && (
-              <Notice testId="trial-active">Free trial until {longDate(summary.currentPeriodEnd)}. Your first charge is on that date; cancel before then and you pay nothing.</Notice>
+              <Notice testId="trial-active">Free trial until {longDate(summary.currentPeriodEnd)}. Cancel for free in your trial period.</Notice>
             )}
             {summary.renewsAt && <div data-testid="renews">Renews on {longDate(summary.renewsAt)}{summary.nextCharge ? ` for ${formatMoney(summary.nextCharge.amount, summary.nextCharge.currency)}` : ""}.</div>}
             {summary.endsAt && <Notice tone="warn" testId="ends">Your plan ends on {longDate(summary.endsAt)}. You keep full access until then.</Notice>}

@@ -29,6 +29,26 @@ function day(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
+/** "November 20, 2026 at 3:00 PM" in the buyer's own time zone (trials end to the hour). */
+export function trialEnd(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${date} at ${time}`;
+}
+
+/** The free-trial box, shown above the card number field. */
+export function TrialBox({ trial }: { trial: { days: number; endsAt: string } | null | undefined }) {
+  if (!trial) return null;
+  return (
+    <div className="co-box" data-testid="trial-box" style={{ background: "rgba(34, 197, 94, 0.08)", borderColor: "rgba(34, 197, 94, 0.25)", marginBottom: 14 }}>
+      <h4 style={{ color: "var(--brand-2)" }}>🎁 {trial.days} {trial.days === 1 ? "day" : "days"} free</h4>
+      Cancel for free before <b>{trialEnd(trial.endsAt)}</b>.
+    </div>
+  );
+}
+
 /**
  * The order summary on the payment page. Everything comes from the server's
  * preview: the price, discount and tax of the first charge; whether there is a
@@ -81,12 +101,6 @@ export function SummaryCard(props: {
       </div>
       {step === 2 && (
         <>
-          {trial ? (
-            <div className="co-box" data-testid="trial-box" style={{ background: "rgba(34, 197, 94, 0.08)", borderColor: "rgba(34, 197, 94, 0.25)" }}>
-              <h4 style={{ color: "var(--brand-2)" }}>🎁 {trial.days} days free</h4>
-              Your free trial ends on <b>{day(trial.endsAt)}</b>. Cancel before then and you pay nothing.
-            </div>
-          ) : null}
           <div className="co-box" data-testid="next-payment">
             <h4>{trial ? "First charge" : "Charged today"}</h4>
             {trial
@@ -99,7 +113,7 @@ export function SummaryCard(props: {
               {trial ? (
                 <>
                   <li>{trial.days} days free — nothing is charged today.</li>
-                  <li>Cancel in Manage Plan before {day(trial.endsAt)} and you are not charged.</li>
+                  <li>Cancel for free before {trialEnd(trial.endsAt)}.</li>
                   <li>Then it renews at the full price every {c.unit} until you cancel.</li>
                 </>
               ) : (
