@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { signOut, deleteUser } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { firebaseAuth } from "../../firebase";
 import { useAppSelector } from "../../store/hooks";
 import { isProfileIncomplete } from "../../profile/profile-fields";
 import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
+import { DeleteAccountDialog } from "./delete-account-dialog";
 import { useEntitlements } from "../hooks/useEntitlements";
 
 const FONTS: { key: FontKey; rank: number; label: string; desc: string; stack: string }[] = [
@@ -174,38 +175,8 @@ export function SettingsScreen() {
     }
   }
   const [schMsg, setSchMsg] = useState("");
-  const [deleting, setDeleting] = useState(false);
 
-  async function handleDeleteAccount() {
-    const current = firebaseAuth.currentUser;
-    if (!current) {
-      window.alert("You must be signed in to delete your account.");
-      return;
-    }
-    // Destructive + irreversible — require an explicit typed confirmation.
-    const confirmText = window.prompt(
-      'This permanently deletes your account and all data. This cannot be undone.\n\nType "DELETE" to confirm:',
-    );
-    if (confirmText !== "DELETE") return;
-
-    setDeleting(true);
-    try {
-      await deleteUser(current);
-      window.location.href = "/";
-    } catch (err) {
-      const code = (err as { code?: string })?.code;
-      if (code === "auth/requires-recent-login") {
-        window.alert(
-          "For security, please sign out and sign back in, then delete your account again.",
-        );
-      } else {
-        window.alert(
-          err instanceof Error ? err.message : "Unable to delete account. Please try again.",
-        );
-      }
-      setDeleting(false);
-    }
-  }
+  const [showDelete, setShowDelete] = useState(false);
 
   function scheduleRecap(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -485,6 +456,7 @@ export function SettingsScreen() {
           </div>
         </div>
 
+        {showDelete && <DeleteAccountDialog onClose={() => setShowDelete(false)} />}
         {/* Danger zone */}
         <div className="card col-12" style={{ borderColor: "color-mix(in srgb, var(--down) 40%, transparent)" }}>
           <div className="card-h">
@@ -498,8 +470,8 @@ export function SettingsScreen() {
                   Permanently remove your account and all data. This cannot be undone.
                 </div>
               </div>
-              <button className="iq-btn-danger" style={{ flexShrink: 0 }} disabled={deleting} onClick={handleDeleteAccount}>
-                {deleting ? "Deleting…" : "Delete"}
+              <button className="iq-btn-danger" style={{ flexShrink: 0 }} onClick={() => setShowDelete(true)}>
+                Delete
               </button>
             </div>
           </div>

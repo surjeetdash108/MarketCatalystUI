@@ -238,8 +238,13 @@ export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-export function apiDelete<T>(path: string): Promise<T> {
-  return request<T>(path, { method: "DELETE" });
+export function apiDelete<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(
+    path,
+    body !== undefined
+      ? { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+      : { method: "DELETE" },
+  );
 }
 
 /** How much of a request body has reached the server so far. */
