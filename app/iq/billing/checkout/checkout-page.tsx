@@ -18,7 +18,7 @@ import {
   type CheckoutPreview,
 } from "../api";
 import { formatMoney, longDate, type BillingInterval, type CatalogPlan } from "../catalog";
-import { EmailCodeStep } from "../email-code-step";
+import { EmailLinkStep } from "../email-link-step";
 import { currentIntent, isOnboarding, saveIntent } from "../plan-intent";
 import { rememberPlanChange } from "../plan-change-summary";
 import { Notice, PREVIEW_BANNER, TEST_MODE_BANNER } from "../ui";
@@ -458,7 +458,7 @@ export function CheckoutPage() {
           )}
           {phase === "verify" && (
             <div className="co-card">
-              <EmailCodeStep title="Verify your email to continue" onVerified={() => setPhase("checkout")} />
+              <EmailLinkStep title="Verify your email to continue" next={typeof window === "undefined" ? "/dashboard" : window.location.pathname + window.location.search} onVerified={() => setPhase("checkout")} />
             </div>
           )}
         </div>
