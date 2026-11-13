@@ -11,12 +11,17 @@
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 
-/** Headline says the stock went down. */
+/**
+ * Headline says the stock went down: a move word ("plunges") or an event that is bad
+ * news by nature (a CEO stepping down, a downgrade, a probe, cut guidance).
+ * "Jensen Huang steps down" was rejected as the reason for NVDA's −5.2% on 12 Nov
+ * because it has no "falls" in it.
+ */
 const DOWN_RE =
-  /\b(fall|falls|fell|falling|drops?|dropped|dropping|plung\w*|sinks?|sank|sinking|tumbl\w*|slides?|slid|sliding|slump\w*|sell-?offs?|crash\w*|plummet\w*|tank(s|ed|ing)?|declin\w*|retreat\w*|skid\w*|dives?|dived|diving|punish\w*|hammer\w*|wipes? out|wiped out|sheds?|shedding|losses|loses|lost|52-week low|(stock|shares?) (is |are |was |were )?(sharply )?down|down \d)/i;
-/** Headline says the stock went up. */
+  /\b(fall|falls|fell|falling|drops?|dropped|dropping|plung\w*|sinks?|sank|sinking|tumbl\w*|slides?|slid|sliding|slump\w*|sell-?offs?|crash\w*|plummet\w*|tank(s|ed|ing)?|declin\w*|retreat\w*|skid\w*|dives?|dived|diving|punish\w*|hammer\w*|wipes? out|wiped out|sheds?|shedding|losses|loses|lost|52-week low|(stock|shares?) (is |are |was |were )?(sharply )?down|down \d|resign\w*|steps? down|stepping down|oust\w*|downgrad\w*|probes?|investigat\w*|lawsuit|sued|subpoena\w*|recall\w*|bankrupt\w*|halts?|halted|layoffs?|scandal|(cuts?|lowers?|slash\w*) (its |third-quarter |full-year |q\d )?(guidance|outlook|forecast))/i;
+/** Headline says the stock went up: a move word or an event that is good news by nature (upgrade, buyback, raised guidance). */
 const UP_RE =
-  /\b(rise|rises|rose|rising|jump\w*|soar\w*|surg(e|es|ed|ing)|rall(y|ies|ied|ying)|gain(s|ed|ing)?|climb\w*|spik(e|es|ed|ing)|pops?|popped|rebound\w*|higher|leap\w*|rocket\w*|record high|all-time high|52-week high|(stock|shares?) (is |are |was |were )?(sharply )?up|up \d)/i;
+  /\b(rise|rises|rose|rising|jump\w*|soar\w*|surg(e|es|ed|ing)|rall(y|ies|ied|ying)|gain(s|ed|ing)?|climb\w*|spik(e|es|ed|ing)|pops?|popped|rebound\w*|higher|leap\w*|rocket\w*|record high|all-time high|52-week high|(stock|shares?) (is |are |was |were )?(sharply )?up|up \d|upgrad\w*|buybacks?|record (revenue|profit|earnings|quarter)|(beats?|tops?) (estimates|expectations|forecasts)|(raises?|lifts?|boosts?) (its |third-quarter |full-year |q\d )?(guidance|outlook|forecast))/i;
 /** A material event: on its own it is not enough, beside a matching move it is the "why". */
 const EVENT_RE =
   /\b(resign\w*|steps? down|stepping down|oust\w*|fired|ceo|succession|downgrad\w*|upgrad\w*|guidance|outlook|forecast|earnings|results|probe|investigat\w*|lawsuit|sued|subpoena|antitrust|recall|fda|acqui\w+|merger|buyout|takeover|offering|buyback|tariffs?|export (bans?|controls?|curbs?)|sanction\w*|scandal|layoffs?|bankrupt\w*|halt\w*)\b/i;
@@ -159,6 +164,12 @@ export function explainScore(headline: string, ret: number): number {
 export function pickMoveHeadline<T extends ArticleLike>(
   news: readonly T[] | null | undefined,
   move: { moveDay: number; ret: number; prevDay?: number | null },
+  /**
+   * Optional extra points for ranking headlines that already explain the move
+   * (e.g. how many articles tell the same story). It never lets a headline in:
+   * the explaining threshold is checked on the explain score alone.
+   */
+  bonus?: (article: T) => number,
 ): T | null {
   const from = (move.prevDay != null && Number.isFinite(move.prevDay) ? move.prevDay : move.moveDay - DAY_MS) + 20 * HOUR_MS;
   const to = move.moveDay + DAY_MS + 4 * HOUR_MS; // ~midnight ET after the session
@@ -174,8 +185,9 @@ export function pickMoveHeadline<T extends ArticleLike>(
     // as the reason for Monday's +13%. A headline naming an earlier day is about that day.
     const named = mentionedDayOffset(h, move.moveDay);
     if (named != null && named < 0 && named >= -7) continue;
-    const score = explainScore(h, move.ret) + (named === 0 ? 10 : 0);
-    if (score < MIN_EXPLAIN_SCORE) continue;
+    const explains = explainScore(h, move.ret) + (named === 0 ? 10 : 0);
+    if (explains < MIN_EXPLAIN_SCORE) continue;
+    const score = explains + (bonus ? bonus(x) : 0);
     if (!best || score > best.score || (score === best.score && Math.abs(ms - close) < Math.abs(best.ms - close))) {
       best = { x, score, ms };
     }

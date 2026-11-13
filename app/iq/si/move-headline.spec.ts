@@ -184,57 +184,67 @@ describe("isHoldingsNote", () => {
 });
 
 describe("the Why It Moved chart as a whole", () => {
+  const stock = { t: "NVDA", name: "NVIDIA Corporation" } as never;
+  const D = 86_400_000;
   const start = day("2026-08-03");
-  const iso = (i: number) => new Date(start + i * 86_400_000).toISOString().slice(0, 10);
-  // 60 sessions of ±1%, a −9% on session 50 (last sixth) and a −5% on session 58 (latest five).
-  const series = (() => {
+  const iso = (i: number) => new Date(start + i * D).toISOString().slice(0, 10);
+  /** n sessions of ±1%, with `moves` = { session index: fractional move } overriding. */
+  const series = (n: number, moves: Record<number, number>) => {
     const bars: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }> = [];
     let c = 100;
-    for (let i = 0; i < 60; i++) {
-      if (i > 0) c *= 1 + (i === 50 ? -0.09 : i === 58 ? -0.05 : i % 2 ? 0.01 : -0.01);
-      bars.push({ t: start + i * 86_400_000, o: c, h: c, l: c, c, v: 1 });
+    for (let i = 0; i < n; i++) {
+      if (i > 0) c *= 1 + (moves[i] ?? (i % 2 ? 0.01 : -0.01));
+      bars.push({ t: start + i * D, o: c, h: c, l: c, c, v: 1 });
     }
     return bars;
-  })();
-  const stock = { t: "NVDA", name: "NVIDIA Corporation" } as never;
-  const news = [
-    art(`${iso(50)}T13:00:00Z`, "Nvidia Plunges 9% as AI Selloff Wipes Out $2.3 Trillion"),
-    // The three that used to appear as the move's "notable events":
-    { publishedAt: `${iso(50)}T14:00:00Z`, headline: "NVIDIA Corporation $NVDA Shares Acquired by First County Bank CT", summary: "First County Bank CT acquired a new stake in NVIDIA." },
-    { publishedAt: `${iso(50)}T15:00:00Z`, headline: "Breakfast News: Did Nvidia Just Favor Marvell?", summary: "Marvell agreed to acquire Lumentum in a $15 billion deal." },
-    { publishedAt: `${iso(49)}T16:00:00Z`, headline: "Nvidia Stock Just Crashed 22%. Jim Cramer Says It's the Cheapest in a Decade", summary: "The stock could settle near its lows." },
-    // One that is real:
-    art(`${iso(50)}T12:00:00Z`, "Nvidia CEO Jensen Huang resigns amid probe"),
-    art(`${iso(57)}T23:00:00Z`, "Nvidia stock falls 5% after report board is preparing to oust CEO"),
-  ];
-  const events = getSixMonthMajorEvents("NVDA", stock, series, [], news, []);
+  };
 
-  it("shows the latest unusual move as an extra card, in date order", () => {
-    assert.equal(events.length, 6);
-    assert.deepEqual(events.map((e) => e.num), [1, 2, 3, 4, 5, 6]);
-    assert.ok(events[5].mv < -4.9 && events[5].mv > -5.1, `last card is the −5% move, got ${events[5].mv}`);
-    assert.equal(events[4].mv, -9);
-    assert.match(events[5].label, /falls 5% after report board is preparing to oust/);
-  });
-
-  it("the −9% card's notable events keep the real one and drop the stake filing, the Marvell deal and the Cramer piece", () => {
-    const ctx = events[4].context ?? [];
-    const text = ctx.map((c) => `${c.kind}: ${c.text}`).join("\n");
-    assert.match(text, /Leadership: Nvidia CEO Jensen Huang resigns amid probe/);
+  it("the junk that used to fill a card's notable events is gone; the real events stay", () => {
+    const bars = series(60, { 50: -0.09 });
+    const at = (h: number, headline: string, summary = "", d = 50) => ({ publishedAt: `${iso(d)}T${String(h).padStart(2, "0")}:00:00Z`, headline, summary });
+    const news = [
+      at(13, "Nvidia plunges 9% as CEO Jensen Huang resigns"),
+      // The three that used to appear as the move's "notable events":
+      at(14, "NVIDIA Corporation $NVDA Shares Acquired by First County Bank CT", "First County Bank CT acquired a new stake in NVIDIA."),
+      at(15, "Breakfast News: Did Nvidia Just Favor Marvell?", "Marvell agreed to acquire Lumentum in a $15 billion deal."),
+      at(16, "Nvidia Stock Just Crashed 22%. Jim Cramer Says It's the Cheapest in a Decade", "The stock could settle near its lows.", 49),
+      // Real ones:
+      at(12, "Commerce Dept opens probe into Nvidia chip diversion"),
+      at(11, "Nvidia raises third-quarter guidance on data center demand"),
+    ];
+    const card = getSixMonthMajorEvents("NVDA", stock, bars, [], news, []).find((e) => e.mv < -8.9);
+    assert.ok(card, "the −9% day has a card");
+    assert.equal(card.label, "Nvidia plunges 9% as CEO Jensen Huang resigns");
+    const text = (card.context ?? []).map((c) => `${c.kind}: ${c.text}`).join("\n");
+    assert.match(text, /Legal \/ Regulatory: Commerce Dept opens probe/);
+    assert.match(text, /Guidance: Nvidia raises third-quarter guidance/);
     assert.doesNotMatch(text, /First County/);
     assert.doesNotMatch(text, /Marvell/);
     assert.doesNotMatch(text, /Cramer/);
-    assert.deepEqual(ctx.map((c) => c.kind), ["Leadership"]);
+  });
+
+  it("safety net: a recent unusual move no pick covers gets an extra card, in date order", () => {
+    // Five old −8% days take every pick; the latest session is quiet, so the
+    // "latest session" rule does not apply, but session 56 (−4%) is the news.
+    const old = { 5: -0.08, 15: -0.08, 25: -0.08, 35: -0.08, 45: -0.08 };
+    const bars = series(60, { ...old, 56: -0.04 });
+    const events = getSixMonthMajorEvents("NVDA", stock, bars, [], [], []);
+    assert.equal(events.length, 6);
+    assert.deepEqual(events.map((e) => e.num), [1, 2, 3, 4, 5, 6]);
+    assert.ok(events[5].mv < -3.9 && events[5].mv > -4.1, `last card is the −4% move, got ${events[5].mv}`);
+    assert.ok(events.slice(0, 5).every((e) => e.mv < -7.9), "the five old −8% days are all still there");
   });
 
   it("no extra card when the latest sessions were ordinary", () => {
-    const calm = series.map((b, i) => (i >= 56 ? { ...b } : b));
-    let c = 100;
-    const flat = calm.map((b, i) => {
-      if (i > 0) c *= 1 + (i === 50 ? -0.09 : i % 2 ? 0.01 : -0.01);
-      return { ...b, o: c, h: c, l: c, c };
-    });
-    assert.equal(getSixMonthMajorEvents("NVDA", stock, flat, [], news, []).length, 5);
+    const old = { 5: -0.08, 15: -0.08, 25: -0.08, 35: -0.08, 45: -0.08 };
+    assert.equal(getSixMonthMajorEvents("NVDA", stock, series(60, old), [], [], []).length, 5);
+  });
+
+  it("when the latest session itself is the big one, the existing rule covers it and nothing is added", () => {
+    const old = { 5: -0.08, 15: -0.08, 25: -0.08, 35: -0.08, 45: -0.08 };
+    const events = getSixMonthMajorEvents("NVDA", stock, series(60, { ...old, 59: -0.05 }), [], [], []);
+    assert.equal(events.length, 5);
+    assert.ok(events[events.length - 1].mv < -4.9, "the latest session is the last card");
   });
 });
 
@@ -364,5 +374,52 @@ describe("usableSummary", () => {
     const ev = getSixMonthMajorEvents("NVDA", { t: "NVDA", name: "NVIDIA Corporation" } as never, bars, [], news, []).find((e) => e.mv < -8.9);
     assert.equal(ev?.label, "Nvidia Slides on AI Chip Selloff as Election Uncertainty Weighs");
     assert.match(String(ev?.details), /^Stock moved −9\.00% that session\.$/);
+  });
+});
+
+describe("events that carry a direction", () => {
+  it("a CEO stepping down, a downgrade, a probe or cut guidance can explain a drop, and never a rise", () => {
+    for (const h of [
+      "Jensen Huang steps down: the hands-on kingmaker behind the AI boom",
+      "Bernstein downgrades Nvidia to Market Perform",
+      "Commerce Dept opens probe into Nvidia chip diversion",
+      "Nvidia cuts third-quarter guidance on China curbs",
+      "Nvidia CEO resigns after board investigation",
+    ]) {
+      assert.ok(explainScore(h, -5) >= 30, `explains a drop: ${h}`);
+      assert.ok(explainScore(h, 5) < 30, `does not explain a rise: ${h}`);
+    }
+  });
+
+  it("an upgrade, a buyback or raised guidance can explain a rise, and never a drop", () => {
+    for (const h of [
+      "Oppenheimer upgrades AMD to Outperform with a $600 target",
+      "Nvidia announces a $60 billion buyback",
+      "Nvidia raises third-quarter guidance on data center demand",
+      "AMD posts record revenue and beats estimates",
+    ]) {
+      assert.ok(explainScore(h, 5) >= 30, `explains a rise: ${h}`);
+      assert.ok(explainScore(h, -5) < 30, `does not explain a drop: ${h}`);
+    }
+  });
+
+  it("an event word alone, with no direction, still explains nothing", () => {
+    assert.ok(explainScore("NVDA Earnings: What Active ETFs Can Do", -3) < 30);
+    assert.ok(explainScore("Nvidia CEO to speak at the Nov. 17 earnings call", -3) < 30);
+    assert.ok(explainScore("Nvidia outlook for 2027: what analysts expect", 3) < 30);
+  });
+});
+
+describe("pickMoveHeadline: the optional story bonus", () => {
+  const move = { moveDay: day("2026-11-05"), ret: -9.26, prevDay: day("2026-11-04") };
+  const a = art("2026-11-05T17:00:00Z", "Nvidia stock falls 8% as AI selloff deepens");
+  const b = art("2026-11-05T18:00:00Z", "Nvidia shares plunge 9% on AI chip selloff");
+  it("ranks two headlines that both explain the move by the bonus, then by closeness to the close", () => {
+    assert.equal(pickMoveHeadline([a, b], move, (x) => (x === a ? 15 : 0))?.headline, a.headline);
+    assert.equal(pickMoveHeadline([a, b], move, (x) => (x === b ? 15 : 0))?.headline, b.headline);
+  });
+  it("never lets a headline in: a big bonus does not rescue one that does not explain the move", () => {
+    const fluff = art("2026-11-05T16:00:00Z", "Here's What $10,000 Invested in SpaceX and Nvidia Could Be Worth by 2030");
+    assert.equal(pickMoveHeadline([fluff], move, () => 100), null);
   });
 });
