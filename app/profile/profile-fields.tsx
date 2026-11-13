@@ -73,6 +73,18 @@ export const emptyInvestorProfile: InvestorProfile = {
  * are server-owned — email comes from the Firebase Auth account — so they are
  * never sent, even when the in-memory profile carries them from a GET.
  */
+/**
+ * The fields the profile form currently asks for. "Incomplete" is judged on
+ * these only — never on inputs that are hidden from the form, which a user
+ * could never fill in. Re-add a field here when its input comes back.
+ */
+export const REQUIRED_PROFILE_FIELDS = ["name", "age"] as const;
+
+export function isProfileIncomplete(profile: { name?: unknown; age?: unknown } | null | undefined): boolean {
+  if (!profile) return true;
+  return REQUIRED_PROFILE_FIELDS.some((f) => String(profile[f] ?? "").trim() === "");
+}
+
 export const PROFILE_PATCH_FIELDS = [
   "profile_image", "name", "age", "incomeRange", "investmentExperience",
   "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue", "preferredAssetClasses",

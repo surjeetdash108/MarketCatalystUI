@@ -5,7 +5,7 @@ import { signOut, deleteUser } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { firebaseAuth } from "../../firebase";
 import { useAppSelector } from "../../store/hooks";
-import type { StoredProfile } from "../../store/profile-slice";
+import { isProfileIncomplete } from "../../profile/profile-fields";
 import { useIQActions, type FontKey } from "../shell";
 import { apiPatch } from "../backend";
 import { useEntitlements } from "../hooks/useEntitlements";
@@ -215,16 +215,8 @@ export function SettingsScreen() {
 
   const isStaff = useEntitlements().data?.staff === true;
 
-  // Fields the user must fill in themselves (name arrives from Google, email from
-  // auth). If any is blank the profile is flagged incomplete so the user knows to update it.
-  const requiredProfileFields: (keyof StoredProfile)[] = [
-    "name", "age", "incomeRange", "investmentExperience",
-    "investmentGoals", "riskTolerance", "investmentHorizon", "currentPortfolioValue",
-  ];
-  const profileIncomplete =
-    !profile ||
-    requiredProfileFields.some(f => String(profile[f] ?? "").trim() === "") ||
-    (profile.preferredAssetClasses?.length ?? 0) === 0;
+  // Only the fields the Edit Profile form asks for (see REQUIRED_PROFILE_FIELDS).
+  const profileIncomplete = isProfileIncomplete(profile);
 
   async function applyFont(key: FontKey) {
     if (key === font) return;
