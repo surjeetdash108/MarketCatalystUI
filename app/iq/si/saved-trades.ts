@@ -58,6 +58,15 @@ const newestFirst = (a: SavedTrade, b: SavedTrade): number => savedMs(b) - saved
  */
 const fallbackId = (sym: string, t: { savedAt?: string }, slot: number | string): string => `t-${sym}-${savedMs(t)}-${slot}`;
 
+/**
+ * The old fallback, `t-<time>`, was written into storage when an old record was
+ * migrated, so browsers that already ran it hold trades whose id is `t-0`. Real ids
+ * come from addTrade (`<time in base 36>-<random>`) and never look like this, so a
+ * stored id of this shape is treated as missing and replaced on read.
+ */
+const isOldPlaceholderId = (id: string | undefined): boolean => !!id && /^t-\d+$/.test(id);
+const idOr = (id: string | undefined, make: () => string): string => (id && !isOldPlaceholderId(id) ? id : make());
+
 function isTrade(x: unknown): x is Omit<SavedTrade, "id"> & { id?: string } {
   const t = x as Partial<SavedTrade> | null;
   return !!t && typeof t.ticker === "string" && (t.dir === "Bull" || t.dir === "Bear") && typeof t.hz === "string" && typeof t.target === "number" && typeof t.stop === "number";
@@ -74,12 +83,12 @@ export function readTrades(store: TradeStore, ticker: string): SavedTrade[] {
   const stored = parse(store.getItem(tradesKey(sym)));
   const list: SavedTrade[] = [];
   (Array.isArray(stored) ? stored : []).forEach((t, i) => {
-    if (isTrade(t)) list.push({ ...t, id: t.id || fallbackId(sym, t, i) });
+    if (isTrade(t)) list.push({ ...t, id: idOr(t.id, () => fallbackId(sym, t, i)) });
   });
 
   const old = parse(store.getItem(legacyKey(sym)));
   if (isTrade(old)) {
-    const id = old.id || fallbackId(sym, old, "old");
+    const id = idOr(old.id, () => fallbackId(sym, old, "old"));
     if (!list.some((t) => t.id === id)) list.push({ ...old, id });
   }
   list.sort(newestFirst);

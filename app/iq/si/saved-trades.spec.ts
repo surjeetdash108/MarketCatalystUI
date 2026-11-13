@@ -158,3 +158,36 @@ describe("trades saved by an older build (no id, no save time)", () => {
     assert.equal(readTrades(store, "NVDA")[0].id, "abc-1234");
   });
 });
+
+describe("trades already migrated by the earlier build (id `t-0` stored)", () => {
+  const stored = (ticker: string, id: string) => ({ id, ticker, dir: "Bull", hz: "6M", title: `LONG ${ticker}`, target: 200, stop: 150, confAtSave: 70, savedDate: "Just now · Active" });
+  const storeWith = (...rows: Array<[string, string]>) => {
+    const store = new FakeStore();
+    for (const [ticker, id] of rows) store.setItem(tradesKey(ticker), JSON.stringify([stored(ticker, id)]));
+    return store;
+  };
+
+  it("a browser that already saved three trades as `t-0` reads them back with three different ids", () => {
+    const all = listAllTrades(storeWith(["AAPL", "t-0"], ["MSFT", "t-0"], ["NVDA", "t-0"]));
+    assert.equal(all.length, 3);
+    assert.equal(new Set(all.map((t) => t.id)).size, 3, `ids: ${all.map((t) => t.id).join(", ")}`);
+  });
+
+  it("the old `t-<time>` shape is replaced whatever the number", () => {
+    const all = listAllTrades(storeWith(["AAPL", "t-1731550000000"], ["MSFT", "t-1731550000000"]));
+    assert.equal(new Set(all.map((t) => t.id)).size, 2);
+  });
+
+  it("real ids, as addTrade makes them, are never replaced", () => {
+    const { trade } = addTrade([], { ticker: "NVDA", dir: "Bull", hz: "6M", title: "LONG NVDA", target: 200, stop: 150, confAtSave: 60, savedDate: "Just now", savedAt: "2026-11-14T02:00:00.000Z" }, Date.parse("2026-11-14T02:00:00Z"), "ab12");
+    const store = new FakeStore();
+    writeTrades(store, "NVDA", [trade]);
+    assert.equal(readTrades(store, "NVDA")[0].id, trade.id);
+    assert.ok(!/^t-\d+$/.test(trade.id));
+  });
+
+  it("the replacement is the same on every read", () => {
+    const store = storeWith(["AAPL", "t-0"], ["NVDA", "t-0"]);
+    assert.deepEqual(listAllTrades(store).map((t) => t.id), listAllTrades(store).map((t) => t.id));
+  });
+});
