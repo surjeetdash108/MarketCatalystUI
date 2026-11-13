@@ -37,6 +37,8 @@ type Phase = "loading" | "soon" | "staff" | "verify" | "checkout" | "upgrade";
 const LIVE = ["ACTIVE", "TRIALING", "PAST_DUE"];
 const FROM_KEY = "mc:checkout-from";
 
+
+const TAX_ERROR = "Couldn't calculate tax. Please try again.";
 export function CheckoutPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [inPreview, setInPreview] = useState(false);
@@ -133,10 +135,20 @@ export function CheckoutPage() {
     let live = true;
     const t = window.setTimeout(() => {
       previewCheckout({ planId: plan.id, interval, ...(promoCode ? { promoCode } : {}), ...(region && (region.country !== "US" || region.state) ? { region } : {}) })
-        .then((p) => live && p.planId === plan.id && p.interval === interval && setPreview(p))
+        .then((p) => {
+          if (!live || p.planId !== plan.id || p.interval !== interval) return;
+          setPreview(p);
+          setError((cur) => (cur === TAX_ERROR ? null : cur));
+        })
         .catch((e) => {
           if (!live) return;
           const b = errorBody(e);
+          if (b.code === "tax_unavailable") {
+            // Fail closed: no total (and no Pay button) without the tax.
+            setPreview(null);
+            setError(TAX_ERROR);
+            return;
+          }
           if (b.code === "promo_invalid") {
             setPromoCode(null);
             setPromoError(b.message ?? "This coupon is invalid");
