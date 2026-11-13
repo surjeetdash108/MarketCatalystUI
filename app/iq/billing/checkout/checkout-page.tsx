@@ -275,9 +275,9 @@ export function CheckoutPage() {
         consent: { accepted: consent, version: changePrev.consent?.version ?? "" },
       });
       if (res.status === "requires_action" && res.clientSecret) {
-        const ok = await handleStripeAction(res.clientSecret);
-        if (!ok) {
-          setError("Your bank could not confirm the payment. Try again or use another card.");
+        const action = await handleStripeAction(res.clientSecret);
+        if (!action.ok) {
+          setError(action.message);
           return;
         }
       }
