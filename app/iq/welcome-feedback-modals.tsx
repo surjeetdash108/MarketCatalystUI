@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useEntitlements } from "./hooks/useEntitlements";
+import { welcomeDecision } from "./welcome/welcome-rule";
 
 export function WelcomeFeedbackModals() {
   const { data: ent } = useEntitlements();
@@ -13,11 +14,14 @@ export function WelcomeFeedbackModals() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // 1. Check if user just signed up
-    if (window.localStorage.getItem("mc_show_welcome") === "1") {
+    // 1. Just signed up: show unless they already subscribed (paid or trial).
+    const decision = welcomeDecision(window.localStorage.getItem("mc_show_welcome") === "1", ent?.status);
+    if (decision === "wait") return;
+    if (decision === "show") {
       setShowWelcome(true);
       return;
     }
+    window.localStorage.removeItem("mc_show_welcome");
     // 2. Check if returning user logged in - ONLY for users in the 7-day free window (status === "INTRO")
     if (window.sessionStorage.getItem("mc_show_feedback") === "1" && ent?.status === "INTRO") {
       setShowFeedback(true);
@@ -145,10 +149,10 @@ export function WelcomeFeedbackModals() {
                 lineHeight: 1.6,
               }}
             >
-              We value our customers, so we are providing <b>7 days free</b> access to{" "}
-              <span style={{ color: "#4ade80", fontWeight: 700 }}>Market Catalyst</span>,{" "}
+              As a thank-you for being a valued customer, enjoy <b>7 days of complimentary, unlimited access</b> to{" "}
+              <span style={{ color: "#4ade80", fontWeight: 700 }}>MarketCatalyst</span>,{" "}
               <span style={{ color: "#7fa8d0", fontWeight: 700 }}>Stock Intelligence</span>, and{" "}
-              <span style={{ color: "#e0bb5e", fontWeight: 700 }}>Money Flow</span> for you to explore all features.
+              <span style={{ color: "#e0bb5e", fontWeight: 700 }}>Money Flow</span>.
             </p>
 
             <button
