@@ -25,6 +25,7 @@ import { displayPrice, formatMoney, INTERVALS, isPaid, longDate, type BillingInt
 import { checkoutPath, parsePlanParams } from "../billing/plan-intent";
 import { Button, Modal, Notice, PREVIEW_BANNER, pill } from "../billing/ui";
 import { ManagePlanSoon } from "./manage-plan-soon";
+import { PlanSwitchDialog } from "../billing/plan-switch-dialog";
 import { StaffPlan } from "./manage-plan-extras";
 
 /**
@@ -75,6 +76,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const [selected, setSelected] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [switchTo, setSwitchTo] = useState<CatalogPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -175,8 +177,8 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
       window.location.href = checkoutPath({ planId: plan.id, interval });
       return;
     }
-    // Subscribers change plan on the checkout page: one payment step with the breakdown.
-    window.location.href = checkoutPath({ planId: plan.id, interval });
+    // Subscribers switch in a pop-up: when it starts, what's charged, "Are you sure?".
+    setSwitchTo(plan);
   }
 
   async function startCancel() {
@@ -387,6 +389,16 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
         </div>
       </div>
 
+      {switchTo && (
+        <PlanSwitchDialog
+          planId={switchTo.id}
+          planName={switchTo.name}
+          fromPlanName={summary?.planName ?? null}
+          interval={interval}
+          currency={switchTo.currency}
+          onClose={() => setSwitchTo(null)}
+        />
+      )}
       {dialog?.kind === "retention" && (
         <RetentionChoice offer={dialog.offer} busy={busy} onKeep={() => void keepWithDiscount()} onCancel={() => void doCancel()} onClose={() => setDialog(null)} />
       )}

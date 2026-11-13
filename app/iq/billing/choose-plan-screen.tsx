@@ -11,6 +11,7 @@ import {
   type BillingInterval,
   type CatalogPlan,
 } from "./catalog";
+import { PlanSwitchDialog } from "./plan-switch-dialog";
 import { OnboardingStepper } from "./onboarding-stepper";
 import { useEntitlements } from "../hooks/useEntitlements";
 
@@ -57,6 +58,7 @@ export function ChoosePlanScreen({
 }: ChoosePlanScreenProps = {}) {
   const [interval, setInterval] = useState<BillingInterval>(initialInterval);
   const [catalogPlans, setCatalogPlans] = useState<CatalogPlan[]>([]);
+  const [switchTo, setSwitchTo] = useState<CatalogPlan | null>(null);
   const { data: ent } = useEntitlements();
   const signedIn = !!firebaseAuth.currentUser;
   // A paying (or trialing) subscriber; the intro / no plan are not subscriptions.
@@ -435,6 +437,13 @@ export function ChoosePlanScreen({
               ) : (
                 <Link
                   href={ctaHref}
+                  onClick={(e) => {
+                    // Already subscribed: switch in a pop-up, not on the checkout page.
+                    if (signedIn && userHasActivePlan && livePlan) {
+                      e.preventDefault();
+                      setSwitchTo(livePlan);
+                    }
+                  }}
                   data-testid={`choose-plan-subscribe-${p.id}`}
                   style={{
                     display: "block",
@@ -461,6 +470,16 @@ export function ChoosePlanScreen({
         <p data-testid="choose-plan-trial-note" style={{ margin: 0, fontSize: ".86rem", color: "var(--text-dim-solid)", textAlign: "center" }}>
           Every plan starts with a {trialDays}-day free trial: $0 today, cancel before it ends and you pay nothing.
         </p>
+      )}
+      {switchTo && (
+        <PlanSwitchDialog
+          planId={switchTo.id}
+          planName={switchTo.name}
+          fromPlanName={ent?.planName ?? null}
+          interval={interval}
+          currency={switchTo.currency}
+          onClose={() => setSwitchTo(null)}
+        />
       )}
     </div>
   );
