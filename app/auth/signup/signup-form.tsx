@@ -19,6 +19,7 @@ import {
 } from "../../profile/profile-fields";
 import {
   completeGoogleLogin,
+  errorAfterEmailEdit,
   getAuthErrorMessage,
   shouldUseGoogleRedirect,
   showError,
@@ -89,6 +90,7 @@ export function SignupForm() {
 
   function handleProfileChange(field: keyof InvestorProfile, value: string | string[]) {
     setProfile(cur => ({ ...cur, [field]: value }));
+    if (field === "email") setError(errorAfterEmailEdit);
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {

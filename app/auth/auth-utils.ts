@@ -6,6 +6,8 @@ import { emptyInvestorProfile, toProfilePatch } from "../profile/profile-fields"
 import { routeAfterLogin, routeAfterSignup } from "../iq/billing/auth-routing";
 import { isAdminEmail, postLoginPath } from "../admin/admin-email";
 import { clearOnboardingSession } from "../iq/billing/plan-intent";
+import { EMAIL_IN_USE_MESSAGE } from "./email-error";
+export { errorAfterEmailEdit } from "./email-error";
 
 export function getAuthErrorMessage(error: unknown): string {
   if (error instanceof FirebaseError) {
@@ -17,7 +19,7 @@ export function getAuthErrorMessage(error: unknown): string {
       case "auth/invalid-credential":
         return "Email or password is incorrect.";
       case "auth/email-already-in-use":
-        return "An account already exists with this email.";
+        return EMAIL_IN_USE_MESSAGE;
       case "auth/configuration-not-found":
         return "Firebase Authentication is not configured for this project.";
       case "auth/weak-password":
