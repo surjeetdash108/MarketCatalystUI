@@ -18,7 +18,8 @@ test("without an active plan there is no code or link, only 'Choose a plan'", ()
   assert.match(src, /Referral links are for members with an active plan\./);
 });
 
-test("the member's $25 credit is promised only after the friend's first payment", () => {
-  assert.match(src, /Once their first payment goes through, you get \$25 account credit/);
-  assert.match(src, /not during a free trial/);
+test("both $25 credits are promised only after the friend's first payment", () => {
+  assert.match(src, /When a friend signs up with it and their first payment goes through, you each get \$25 account credit/);
+  const steps = fs.readFileSync(new URL("../../app/refer-a-friend/referral-steps.tsx", import.meta.url), "utf8");
+  assert.match(steps, /after any free trial/);
 });

@@ -43,9 +43,10 @@ test("titles say 'Switch to <plan>'; a scheduled change's button says 'Switch to
   assert.doesNotMatch(view, /`Upgrade to \$\{plan\.name\}|`Change to \$\{plan\.name\}|`Schedule /);
 });
 
-test("confirmation: 'Your <plan> Plan is Activated', or 'Your <plan> plan starts on <date>' for a scheduled switch", () => {
+test("confirmation: 'Congratulations! Your <plan> plan is activated', or 'Your <plan> plan starts on <date>' for a scheduled switch", () => {
   const pages = fs.readFileSync(new URL("../../app/iq/billing/billing-pages.tsx", import.meta.url), "utf8");
   assert.match(pages, /`Your \$\{change\.toPlanName\} plan starts on \$\{change\.effectiveAt \? longDate\(change\.effectiveAt\)/);
-  assert.match(pages, /Plan is Activated`/);
+  assert.match(pages, /plan is activated`/);
+  assert.match(pages, /`Congratulations! Your \$\{/);
   assert.doesNotMatch(pages, /is scheduled`/);
 });

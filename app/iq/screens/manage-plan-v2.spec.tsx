@@ -10,9 +10,9 @@ const src = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
 describe("Manage Plan v2", () => {
   const mp = src("app/iq/screens/manage-plan.tsx");
-  it("choosing a plan opens /checkout — the payment step for a new plan, the breakdown + payment step for a change", () => {
+  it("choosing a plan opens /checkout for a new plan; subscribers switch in a pop-up", () => {
     assert.match(mp, /if \(!subscribed\) \{\s*\/\/[^\n]*\n\s*window\.location\.href = checkoutPath\(\{ planId: plan\.id, interval \}\);/);
-    assert.match(mp, /\/\/ Subscribers change plan on the checkout page[^\n]*\n\s*window\.location\.href = checkoutPath\(\{ planId: plan\.id, interval \}\);/);
+    assert.match(mp, /\/\/ Subscribers switch in a pop-up[^\n]*\n\s*setSwitchTo\(plan\);/);
     assert.doesNotMatch(mp, /mp-promo|startCheckout/);
   });
   it("plan history is a timeline table (date & time, what happened, details, amount) and every confirmation mentions the email", () => {
