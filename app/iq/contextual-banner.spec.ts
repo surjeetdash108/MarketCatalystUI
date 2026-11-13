@@ -18,8 +18,8 @@ describe("top banner is for trials only", () => {
   it("an active paid plan shows no banner", () => {
     assert.equal(bannerKind(ent({})), null);
   });
-  it("a trial shows the trial banner; a cancelled trial shows when it ends", () => {
-    assert.equal(bannerKind(ent({ status: "TRIALING" })), "trial");
+  it("an activated trial shows no 'free trial active' banner; a cancelled trial shows when it ends", () => {
+    assert.equal(bannerKind(ent({ status: "TRIALING" })), null);
     assert.equal(bannerKind(ent({ status: "TRIALING", cancelAtPeriodEnd: true })), "trial-canceling");
   });
   it("intro and ended-intro banners are unchanged; staff see none", () => {
