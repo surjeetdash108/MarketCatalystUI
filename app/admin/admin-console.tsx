@@ -99,6 +99,24 @@ export function AdminConsole() {
         await ops(d);
         return;
       }
+      if (d.type === "admin:userDelete") {
+        // Destructive: only from the console iframe itself.
+        if (e.source !== iframeRef.current?.contentWindow || e.origin !== window.location.origin) return;
+        const uid = String(d.uid ?? "");
+        const reply = (m: Record<string, unknown>) =>
+          iframeRef.current?.contentWindow?.postMessage({ type: "admin:userDeleteResult", uid, ...m }, window.location.origin);
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid)) {
+          reply({ ok: false, error: "Invalid user id." });
+          return;
+        }
+        try {
+          const r = await apiDelete<{ subscriptionsCancelled: number }>(`/api/admin/users/${encodeURIComponent(uid)}`);
+          reply({ ok: true, subscriptionsCancelled: r?.subscriptionsCancelled ?? 0 });
+        } catch (err) {
+          reply({ ok: false, error: (err as Error).message });
+        }
+        return;
+      }
       if (d.type === "admin:logout") {
         delete (window as unknown as { __ADMIN_DATA__?: unknown }).__ADMIN_DATA__;
         sessionStorage.removeItem(ADMIN_DATA_KEY);

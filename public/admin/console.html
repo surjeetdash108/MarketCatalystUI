@@ -1909,10 +1909,28 @@ function openUser(id){
       <button class="btn">Message</button>
       <button class="btn">${u.plan==='Free'?'Comp Pro':'Manage plan'}</button>
       <button class="btn danger">${u.status==='canceled'?'Reactivate':'Suspend'}</button>
+      <button class="btn danger" data-testid="admin-delete-user" onclick="admDeleteUser('${u.id}')">Delete user</button>
     </div>`;
   d.classList.add('on');document.getElementById('scrim').classList.add('on');
 }
 function ubar(label,v,max){const p=Math.min(100,v/max*100);return `<div class="ub"><div class="t">${label}<b>${v.toLocaleString()}</b></div><div class="bar"><i style="width:${p.toFixed(0)}%"></i></div></div>`;}
+/* Delete a user everywhere (sign-in, data, live subscription cancelled now).
+   The parent holds the admin token and calls DELETE /api/admin/users/:uid. */
+function admDeleteUser(id){
+  const u=USERS.find(x=>x.id===id); if(!u) return;
+  const typed=prompt('Delete '+u.email+'?\n\nThis cancels any plan or trial right away (no refund), deletes their profile, watchlists, portfolio, notes, referral code and sign-in. Payment history is kept. This cannot be undone.\n\nType the email to confirm:');
+  if(typed===null) return;
+  if(typed.trim().toLowerCase()!==String(u.email).toLowerCase()){ alert('The email did not match. Nothing was deleted.'); return; }
+  parent.postMessage({ type:'admin:userDelete', uid:id }, location.origin);
+}
+window.addEventListener('message', function(e){
+  if (e.source !== parent || e.origin !== location.origin) return;
+  const d=e.data||{}; if(d.type!=='admin:userDeleteResult') return;
+  if(!d.ok){ alert('Could not delete the user: '+(d.error||'error')); return; }
+  const i=USERS.findIndex(x=>x.id===d.uid); if(i>=0) USERS.splice(i,1);
+  closeUser(); try{ renderUsers(); }catch(_){}
+  toast('User deleted'+(d.subscriptionsCancelled?' · '+d.subscriptionsCancelled+' subscription cancelled':''));
+});
 function closeUser(){document.getElementById('drawer').classList.remove('on');document.getElementById('scrim').classList.remove('on');}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeUser();});
 
