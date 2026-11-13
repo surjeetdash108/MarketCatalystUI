@@ -1,6 +1,7 @@
 import { fmtMarketDate } from "../calendar-range";
 import { surprisePct } from "../types";
 import { StockItem, DetailStock, SITab, UpcomingEvent, MajorSixMonthEvent, AssessSeg, EventMetric, EventContext } from "./types";
+import { FILLER_RE, isHoldingsNote, isSolicitation, pickMoveHeadline, pickRecentMove } from "./move-headline";
 export type { MajorSixMonthEvent };
 
 export const UP = "#4ade80";
@@ -808,7 +809,13 @@ const NOTABLE_KINDS: Array<{ kind: string; re: RegExp }> = [
   },
   { kind: "M&A", re: /\b(acqui\w+|merger|merges?|merged|buyout|takeover|take-private|spin-?off|divest\w*)\b/i },
   { kind: "Legal / Regulatory", re: /\b(lawsuit|sues?|sued|probe|investigation|antitrust|subpoena|settle\w*|fined?|recall|fda|doj|ftc)\b/i },
-  { kind: "Guidance", re: /\b(guidance|outlook|forecast)\b/i },
+  {
+    // Company guidance, not any mention of an "outlook": a price-target piece
+    // ("…Change Nvidia Stock's Outlook for 2027") and AMD's earnings story
+    // ("…Strong 2027 Outlook") both said "outlook" and were labelled Guidance on NVDA.
+    kind: "Guidance",
+    re: /\b(raises?|raised|cuts?|lowers?|lowered|lifts?|boosts?|slash\w*|trims?|issues?|gives?|reaffirms?|reiterates?|withdraws?|updates?|offers?|warns?)\b[^.:]{0,40}\b(guidance|outlook|forecast)\b|\b(guidance|outlook|forecast)\b[^.:]{0,20}\b(raised|cut|lowered|lifted|boosted|slashed|trimmed|disappoint\w*|misses|beats?|above|below|weak|soft|light)\b/i,
+  },
   { kind: "Capital", re: /\b(buyback|repurchase|dividend|stock split|share offering|secondary offering|debt offering)\b/i },
   { kind: "Product", re: /\b(launch\w*|unveil\w*|debut\w*)\b/i },
 ];
@@ -820,6 +827,18 @@ const articleMs = (x: any): number => {
 
 const toneOf = (x: any): "up" | "dn" | undefined =>
   x?.sentiment === "positive" ? "up" : x?.sentiment === "negative" ? "dn" : undefined;
+
+/**
+ * An article's summary when it says something. Some vendor summaries are only
+ * a quote stamp ("NASDAQ · As of 4:00 PM ET 11/05/26"), which as a card's
+ * description tells the reader nothing.
+ */
+export function usableSummary(s: unknown): string | null {
+  const t = String(s ?? "").trim();
+  if (t.length < 40) return null;
+  if (/^(nasdaq|nyse|amex|otc)\b[^.]{0,40}\bas of\b/i.test(t)) return null;
+  return t;
+}
 
 /** First full sentence of a summary, so the line gives the point without being cut mid-word. */
 const firstSentence = (s: unknown): string => {
@@ -845,8 +864,12 @@ function notableContext(news: any[] | null | undefined, moveDay: number, skipTit
     if (!Number.isFinite(ms) || ms < from || ms >= to) continue;
     const headline = String(x.headline ?? x.title ?? "").trim();
     if (!headline || seen.has(headline)) continue;
-    const text = `${headline} ${x.summary ?? ""}`;
-    const rank = NOTABLE_KINDS.findIndex((k) => k.re.test(text));
+    // Stake filings and evergreen pieces are not events around the move.
+    if (isHoldingsNote(headline) || isSolicitation(headline) || FILLER_RE.test(headline)) continue;
+    // Classify on the headline alone: a summary mentioning "acquire" or "settle"
+    // in passing (a Marvell deal under a Nvidia headline, "may settle" in a
+    // Cramer piece) labelled unrelated stories M&A and Legal.
+    const rank = NOTABLE_KINDS.findIndex((k) => k.re.test(headline));
     if (rank < 0) continue;
     seen.add(headline);
     const lead = firstSentence(x.summary);
@@ -962,8 +985,9 @@ export function aboutTicker(article: { headline?: unknown; title?: unknown }, ti
 /**
  * The five largest daily moves of the last six months (one per sixth of the
  * window), each labelled from real data: an FMP earnings report within 4 days
- * (with its actual beat/miss), else a headline within 3 days, else just the
- * move itself. Nothing is invented — no bars means no events.
+ * (with its actual beat/miss), else a headline that explains the move
+ * (pickMoveHeadline), else just the move itself. Nothing is invented — no bars
+ * means no events.
  */
 export function getSixMonthMajorEvents(
   sym: string,
@@ -996,6 +1020,12 @@ export function getSixMonthMajorEvents(
     const best = moves.filter((m) => m.idx >= zoneStart && m.idx <= zoneEnd).sort((a, b) => b.absRet - a.absRet)[0];
     if (best) selected.push(best);
   }
+  // One pick per sixth of the window can leave the latest sessions without a
+  // card (a big old move wins the last sixth): add the biggest unusual move of
+  // the latest few sessions, so the chart does not stop at the last "major" day.
+  const recent = pickRecentMove(moves, selected, bars.length);
+  if (recent) selected.push(recent);
+  selected.sort((a, b) => a.idx - b.idx);
 
   return selected.map((m, i) => {
     const dateStr = fmtMarketDate(m.t, { month: "short", day: "2-digit" });
@@ -1044,20 +1074,14 @@ export function getSixMonthMajorEvents(
       };
     }
 
-    // A headline can only explain a move if it came out before the session
-    // closed: from the day before the move through the move day itself (ET).
-    // Allowing articles up to 3 days AFTER pinned NEE's Jul 24-25 "after its
-    // latest earnings report" piece onto its Jul 22 move. Closest one wins.
-    const sessionEnd = moveDay + 86_400_000 + 4 * 3_600_000; // midnight ET the next day
-    const sessionStartPrev = moveDay - 86_400_000;
-    const n = (news || [])
-      .map((x: any) => {
-        const pub = x.publishedAt || x.date;
-        const ms = !pub ? NaN : typeof pub === "number" ? pub : new Date(pub).getTime();
-        return { x, ms };
-      })
-      .filter(({ ms }) => Number.isFinite(ms) && ms >= sessionStartPrev && ms < sessionEnd)
-      .sort((a, b) => Math.abs(a.ms - moveDay) - Math.abs(b.ms - moveDay))[0]?.x;
+    // A headline explains a move only if it says the stock moved that way (or
+    // names a material event beside that) and came out between the previous
+    // close and the evening after the session — see move-headline.ts. Allowing
+    // articles up to 3 days AFTER pinned NEE's Jul 24-25 "after its latest
+    // earnings report" piece onto its Jul 22 move.
+    const prevBar = bars[m.idx - 1];
+    const prevDay = prevBar ? Date.parse(`${new Date(prevBar.t).toISOString().slice(0, 10)}T00:00:00Z`) : null;
+    const n: any = pickMoveHeadline(news, { moveDay, ret: m.ret, prevDay });
     const title = n ? String(n.headline ?? n.title ?? "") : "";
     if (title) {
       const lower = title.toLowerCase();
@@ -1073,7 +1097,7 @@ export function getSixMonthMajorEvents(
         label: title,
         category: cat,
         mv: +m.ret.toFixed(2),
-        details: String(n.summary || n.text || `Stock moved ${retFmt} that session.`),
+        details: usableSummary(n.summary || n.text) ?? `Stock moved ${retFmt} that session.`,
         fr,
         context: notableContext(news, moveDay, title),
       };
@@ -1085,7 +1109,7 @@ export function getSixMonthMajorEvents(
       label: `${retFmt} session move`,
       category: "Macro" as const,
       mv: +m.ret.toFixed(2),
-      details: "Largest move in this stretch; no earnings report or same-day headline found for it.",
+      details: "Largest move in this stretch; no earnings report or headline explaining it was found.",
       fr,
       context: notableContext(news, moveDay),
     };
