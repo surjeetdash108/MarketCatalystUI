@@ -84,7 +84,10 @@ export interface DetailStock {
   sixMonthEvents?: MajorSixMonthEvent[];
   upcoming: UpcomingEvent[];
   fwd?: any;
+  /** Levels still ahead of the price: what would break the setup. */
   invalid: [string, string][];
+  /** Levels the price is already through (below the 50/200 DMA, below S1). */
+  broken: [string, string][];
   fundTxt: string;
   fundEv: string[];
   read: Array<{ k: string; v: string; col: string }>;
