@@ -69,6 +69,7 @@ import { useEntitlements } from "./hooks/useEntitlements";
 import { ChoosePlanScreen } from "./billing/choose-plan-screen";
 import { clearOnboardingSession } from "./billing/plan-intent";
 import { WelcomeFeedbackModals } from "./welcome-feedback-modals";
+import { trialCountdown } from "./trial-countdown";
 
 // ---- Route helpers ----
 function slugToHref(slug: string): string {
@@ -1095,9 +1096,8 @@ function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["da
   }
 
   if (isTrial) {
-    const endStr = ent.currentPeriodEnd
-      ? new Date(ent.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-      : "";
+    const tc = trialCountdown(ent.currentPeriodEnd);
+    const endStr = tc.endsAt ? `${tc.endsAt} (${tc.left.toLowerCase()})` : "";
     return (
       <div style={{ background: "rgba(34, 197, 94, 0.12)", borderBottom: "1px solid rgba(34, 197, 94, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#86efac", zIndex: 10 }}>
         <span data-testid="banner-trial">🎁 {ent.planName} free trial active{endStr ? ` until ${endStr}` : ""}. Nothing is charged until it ends; cancel before then and you pay nothing.</span>
@@ -1107,11 +1107,11 @@ function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["da
   }
 
   if (ent.status === "INTRO" && ent.introEndsAt && ent.subscriptionsEnabled) {
-    const daysLeft = Math.max(0, Math.ceil((Date.parse(ent.introEndsAt) - Date.now()) / 86_400_000));
+    const cd = trialCountdown(ent.introEndsAt);
     return (
       <div data-testid="banner-intro" style={{ background: "rgba(59, 130, 246, 0.12)", borderBottom: "1px solid rgba(59, 130, 246, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#93c5fd", zIndex: 10 }}>
         <span>
-          ⏱️ <b>{daysLeft} {daysLeft === 1 ? "day" : "days"} left in trial</b> (<span style={{ color: "#4ade80", fontWeight: 700 }}>Market Catalyst</span>, <span style={{ color: "#7fa8d0", fontWeight: 700 }}>Stock Intelligence</span> & <span style={{ color: "#e0bb5e", fontWeight: 700 }}>Money Flow</span>). Strategy Lab unlocks on Elite.
+          ⏱️ <b>Trial ends {cd.endsAt} · {cd.left}</b> (<span style={{ color: "#4ade80", fontWeight: 700 }}>Market Catalyst</span>, <span style={{ color: "#7fa8d0", fontWeight: 700 }}>Stock Intelligence</span> & <span style={{ color: "#e0bb5e", fontWeight: 700 }}>Money Flow</span>). Strategy Lab unlocks on Elite.
         </span>
         <Link href="/choose-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>See our plans →</Link>
       </div>

@@ -57,3 +57,15 @@ export const DECLINE_MESSAGES: Record<string, string> = {
   session_expired: "This checkout expired. Start again.",
 };
 export const declineMessage = (code: string) => DECLINE_MESSAGES[code] ?? "The payment didn't go through. Try another payment method.";
+
+/** Stripe.js error (confirm / handleNextAction) → what we tell the customer. */
+export function stripeErrorMessage(err: { type?: string; code?: string; decline_code?: string; message?: string } | null | undefined): string {
+  if (!err) return declineMessage("authentication_failed");
+  if (err.code === "payment_intent_authentication_failure") return declineMessage("authentication_failed");
+  for (const c of [err.decline_code, err.code]) if (c && c !== "card_declined" && DECLINE_MESSAGES[c]) return DECLINE_MESSAGES[c];
+  if (err.type === "card_error" || err.code === "card_declined" || err.decline_code) {
+    // Stripe's own reason (e.g. "Your card has expired.") is written for customers.
+    return err.message ? `Card declined: ${err.message}` : DECLINE_MESSAGES.card_declined;
+  }
+  return err.message ?? declineMessage("");
+}

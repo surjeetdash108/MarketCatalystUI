@@ -32,7 +32,7 @@ describe("checkout bug fixes (2026-11-12)", () => {
     assert.match(p, /paymentReady: payment\.ready && !!preview\?\.consent\?\.version/);
     // A preview (and its consent text) for another plan/interval is never shown or agreed to.
     assert.match(p, /serverPreview\.planId === plan\.id && serverPreview\.interval === interval\s*\? serverPreview\s*: null/);
-    assert.match(p, /p\.planId === plan\.id && p\.interval === interval && setPreview\(p\)/);
+    assert.match(p, /p\.planId !== plan\.id \|\| p\.interval !== interval\) return;\s*setPreview\(p\)/);
   });
 
   it("5. no 'Tick the agreement checkbox' helper", () => {

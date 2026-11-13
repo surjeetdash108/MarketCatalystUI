@@ -7,7 +7,7 @@ import { firebaseAuth } from "../../../firebase";
 import { Notice } from "../ui";
 import { labelStyle } from "./address-fields";
 import { addressComplete, type BillingAddress } from "./model";
-import type { PaymentAdapter, PaymentFormProps, PaymentResult } from "./payment-form";
+import { stripeErrorMessage, type PaymentAdapter, type PaymentFormProps, type PaymentResult } from "./payment-form";
 
 /**
  * Stripe adapter — Payment Element + Address Element in "deferred intent" mode:
@@ -198,7 +198,7 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
       },
       redirect: "if_required",
     });
-    if (error) return { status: "failed", message: error.message ?? "The card setup didn't go through. Try another payment method." };
+    if (error) return { status: "failed", message: stripeErrorMessage(error) };
     if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "processing")) return { status: "succeeded" };
     return { status: "failed", message: "Card setup could not be completed. Try again." };
   }
@@ -214,18 +214,19 @@ export async function confirmWithStripe(sessionId: string, clientSecret: string 
     },
     redirect: "if_required",
   });
-  if (error) return { status: "failed", message: error.message ?? "The payment didn't go through. Try another payment method." };
+  if (error) return { status: "failed", message: stripeErrorMessage(error) };
   if (paymentIntent && (paymentIntent.status === "succeeded" || paymentIntent.status === "processing")) return { status: "succeeded" };
   return { status: "failed", message: "The payment wasn't completed. Try again." };
 }
 
 /** Manage Plan upgrade that needs 3-D Secure: Stripe shows the challenge for the invoice's payment. */
-export async function handleStripeAction(clientSecret: string): Promise<boolean> {
-  if (!stripeConfigured()) return false;
+export async function handleStripeAction(clientSecret: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  const fail = { ok: false as const, message: stripeErrorMessage(null) };
+  if (!stripeConfigured()) return fail;
   const stripe = await getStripe();
-  if (!stripe) return false;
+  if (!stripe) return fail;
   const { error } = await stripe.handleNextAction({ clientSecret });
-  return !error;
+  return error ? { ok: false, message: stripeErrorMessage(error) } : { ok: true };
 }
 
 /** Plan change: validate the entered card + address, then create its payment method (pm_…). */

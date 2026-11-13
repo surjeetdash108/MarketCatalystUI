@@ -18,7 +18,7 @@ import {
   type CheckoutPreview,
 } from "../api";
 import { formatMoney, longDate, type BillingInterval, type CatalogPlan } from "../catalog";
-import { EmailCodeStep } from "../email-code-step";
+import { EmailLinkStep } from "../email-link-step";
 import { currentIntent, isOnboarding, saveIntent } from "../plan-intent";
 import { rememberPlanChange } from "../plan-change-summary";
 import { Notice, PREVIEW_BANNER, TEST_MODE_BANNER } from "../ui";
@@ -37,6 +37,8 @@ type Phase = "loading" | "soon" | "staff" | "verify" | "checkout" | "upgrade";
 const LIVE = ["ACTIVE", "TRIALING", "PAST_DUE"];
 const FROM_KEY = "mc:checkout-from";
 
+
+const TAX_ERROR = "Couldn't calculate tax. Please try again.";
 export function CheckoutPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [inPreview, setInPreview] = useState(false);
@@ -133,10 +135,20 @@ export function CheckoutPage() {
     let live = true;
     const t = window.setTimeout(() => {
       previewCheckout({ planId: plan.id, interval, ...(promoCode ? { promoCode } : {}), ...(region && (region.country !== "US" || region.state) ? { region } : {}) })
-        .then((p) => live && p.planId === plan.id && p.interval === interval && setPreview(p))
+        .then((p) => {
+          if (!live || p.planId !== plan.id || p.interval !== interval) return;
+          setPreview(p);
+          setError((cur) => (cur === TAX_ERROR ? null : cur));
+        })
         .catch((e) => {
           if (!live) return;
           const b = errorBody(e);
+          if (b.code === "tax_unavailable") {
+            // Fail closed: no total (and no Pay button) without the tax.
+            setPreview(null);
+            setError(TAX_ERROR);
+            return;
+          }
           if (b.code === "promo_invalid") {
             setPromoCode(null);
             setPromoError(b.message ?? "This coupon is invalid");
@@ -263,9 +275,9 @@ export function CheckoutPage() {
         consent: { accepted: consent, version: changePrev.consent?.version ?? "" },
       });
       if (res.status === "requires_action" && res.clientSecret) {
-        const ok = await handleStripeAction(res.clientSecret);
-        if (!ok) {
-          setError("Your bank could not confirm the payment. Try again or use another card.");
+        const action = await handleStripeAction(res.clientSecret);
+        if (!action.ok) {
+          setError(action.message);
           return;
         }
       }
@@ -446,7 +458,7 @@ export function CheckoutPage() {
           )}
           {phase === "verify" && (
             <div className="co-card">
-              <EmailCodeStep title="Verify your email to continue" onVerified={() => setPhase("checkout")} />
+              <EmailLinkStep title="Verify your email to continue" next={typeof window === "undefined" ? "/dashboard" : window.location.pathname + window.location.search} onVerified={() => setPhase("checkout")} />
             </div>
           )}
         </div>

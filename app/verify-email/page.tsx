@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { firebaseAuth } from "../firebase";
-import { EmailCodeStep } from "../iq/billing/email-code-step";
+import { EmailLinkStep } from "../iq/billing/email-link-step";
 import { safeNext } from "../iq/billing/email-code";
 
-/** Right after email signup: verify with the 6-digit code, then continue (e.g. to /checkout). */
+/** Right after email signup (and where the email's link returns): verify by link, then continue (e.g. to /checkout). */
 export default function VerifyEmailPage() {
   const [ready, setReady] = useState(false);
   const [next] = useState(() =>
@@ -23,7 +23,7 @@ export default function VerifyEmailPage() {
   return (
     <div className="iq-root" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 16, background: "var(--bg)" }}>
       <div className="card" style={{ width: "min(440px, 100%)", padding: 24 }}>
-        {ready && <EmailCodeStep onVerified={() => window.location.replace(next)} />}
+        {ready && <EmailLinkStep next={next} onVerified={() => window.location.replace(next)} />}
         <div style={{ marginTop: 20, paddingTop: 14, borderTop: "1px solid var(--border-soft)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".78rem", color: "var(--text-dim-solid)" }}>
           <span>Entered the wrong email?</span>
           <button
