@@ -10,7 +10,8 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { firebaseAuth, googleAuthProvider } from "../../firebase";
-import { apiPatch } from "../../iq/backend";
+import { apiPatch, apiPost } from "../../iq/backend";
+import { claimStoredReferral, referralCodeFromSearch, rememberReferral } from "../../iq/billing/referral";
 import {
   InvestorProfile,
   ProfileFields,
@@ -60,6 +61,9 @@ export function SignupForm() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // A referral link (/referral?code= → /auth/signup?ref=): keep the code for after signup.
+    const refCode = referralCodeFromSearch(window.location.search);
+    if (refCode) rememberReferral(refCode);
     const intent = parseSignupParams(window.location.search, ["starter", "pro", "elite"]);
     if (intent) {
       saveIntent(intent);
@@ -108,6 +112,7 @@ export function SignupForm() {
       const cred = await createUserWithEmailAndPassword(firebaseAuth, profile.email, password);
       await updateProfile(cred.user, { displayName: profile.name });
       await apiPatch("/api/profile", toProfilePatch(profile));
+      await claimStoredReferral(apiPost);
       if (typeof window !== "undefined") {
         window.localStorage.setItem("mc_show_welcome", "1");
       }

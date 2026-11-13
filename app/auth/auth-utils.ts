@@ -1,7 +1,8 @@
 import { FirebaseError } from "firebase/app";
 import { UserCredential } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
-import { apiGet, apiPatch } from "../iq/backend";
+import { apiGet, apiPatch, apiPost } from "../iq/backend";
+import { claimStoredReferral } from "../iq/billing/referral";
 import { emptyInvestorProfile, toProfilePatch } from "../profile/profile-fields";
 import { routeAfterLogin, routeAfterSignup } from "../iq/billing/auth-routing";
 import { isAdminEmail, postLoginPath } from "../admin/admin-email";
@@ -65,6 +66,7 @@ export async function completeGoogleLogin(userCredential: UserCredential) {
       ...emptyInvestorProfile,
       name: userCredential.user.displayName ?? "",
     }));
+    await claimStoredReferral(apiPost);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("mc_show_welcome", "1");
     }

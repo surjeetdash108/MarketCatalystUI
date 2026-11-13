@@ -1,20 +1,29 @@
 "use client";
 
 import { useEffect } from "react";
+import { firebaseAuth } from "../firebase";
+import { apiPost } from "../iq/backend";
+import { claimStoredReferral, referralCodeFromSearch, rememberReferral } from "../iq/billing/referral";
 
+/**
+ * A referral link: keep the code and send the friend to create an account
+ * (never straight to checkout). The code is claimed once the account exists;
+ * both get $25 credit after the friend's first payment.
+ */
 export default function ReferralRedirectPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code") || params.get("promo") || params.get("ref");
-    const plan = params.get("plan") || "starter";
-    const interval = params.get("interval") || "monthly";
-
-    const target = code
-      ? `/checkout?plan=${encodeURIComponent(plan)}&interval=${encodeURIComponent(interval)}&promo=${encodeURIComponent(code)}`
-      : `/checkout?plan=${encodeURIComponent(plan)}&interval=${encodeURIComponent(interval)}`;
-
-    window.location.replace(target);
+    const code = referralCodeFromSearch(window.location.search);
+    if (code) rememberReferral(code);
+    void firebaseAuth.authStateReady().then(async () => {
+      if (firebaseAuth.currentUser) {
+        // Already signed in (a brand-new account): claim now; the server refuses existing customers.
+        await claimStoredReferral(apiPost);
+        window.location.replace("/dashboard");
+        return;
+      }
+      window.location.replace(code ? `/auth/signup?ref=${encodeURIComponent(code)}` : "/auth/signup");
+    });
   }, []);
 
   return (
@@ -31,9 +40,8 @@ export default function ReferralRedirectPage() {
     >
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: "2rem", marginBottom: 12 }}>⚡</div>
-        <p style={{ color: "#8a96a3", fontSize: ".9rem" }}>Applying your referral discount and loading checkout…</p>
+        <p style={{ color: "#8a96a3", fontSize: ".9rem" }}>Taking you to sign up…</p>
       </div>
     </div>
   );
 }
-

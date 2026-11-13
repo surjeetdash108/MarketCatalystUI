@@ -6,6 +6,8 @@ import { BrandLogo } from "../iq/shell";
 import { ProfileMenu } from "../iq/profile-menu";
 import { firebaseAuth } from "../firebase";
 import { apiGet } from "../iq/backend";
+import { referralLinkFor } from "../iq/billing/referral";
+import { ReferralSteps } from "./referral-steps";
 
 export default function ReferAFriendPage() {
   const [copiedLink, setCopiedLink] = useState(false);
@@ -31,10 +33,10 @@ export default function ReferAFriendPage() {
   }, []);
 
   const referralCode = ref.state === "ready" ? ref.code : "";
-  const referralLink =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/checkout?plan=starter&interval=monthly&promo=${referralCode}`
-      : `https://app.marketcatalyst.ai/checkout?plan=starter&interval=monthly&promo=${referralCode}`;
+  const referralLink = referralLinkFor(
+    typeof window !== "undefined" ? window.location.origin : "https://app.marketcatalyst.ai",
+    referralCode,
+  );
 
   const copyToClipboard = async (text: string, isCode: boolean) => {
     try {
@@ -173,7 +175,7 @@ export default function ReferAFriendPage() {
               lineHeight: 1.6,
             }}
           >
-            Share your referral link with fellow traders. When a friend buys any plan with it, they get $25 off their first payment. Once their first payment goes through, you get $25 account credit, used automatically on your next invoice.
+            Share your referral link with fellow traders. When a friend signs up with it and their first payment goes through, you each get $25 account credit, used automatically on your next bill.
           </p>
 
           {ref.state === "ready" ? (
@@ -247,7 +249,7 @@ export default function ReferAFriendPage() {
                 }}
               >
                 <span style={{ fontSize: ".82rem", color: "rgba(255, 255, 255, 0.6)" }}>
-                  Promo code:
+                  Referral code:
                 </span>
                 <span
                   style={{
@@ -291,66 +293,7 @@ export default function ReferAFriendPage() {
           )}
         </div>
 
-        {/* 3 Step Breakdown */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: 16,
-            marginTop: 28,
-          }}
-        >
-          <div
-            style={{
-              padding: 24,
-              borderRadius: 14,
-              background: "rgba(255, 255, 255, 0.02)",
-              border: "1px solid rgba(255, 255, 255, 0.06)",
-            }}
-          >
-            <div style={{ fontSize: "1.6rem", marginBottom: 12 }}>🔗</div>
-            <h3 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 700, color: "#fff" }}>
-              1. Share your link
-            </h3>
-            <p style={{ margin: 0, fontSize: ".84rem", color: "rgba(255, 255, 255, 0.55)", lineHeight: 1.5 }}>
-              Send your referral link to friends or investment groups. When they click, they land on checkout with your code auto-applied.
-            </p>
-          </div>
-
-          <div
-            style={{
-              padding: 24,
-              borderRadius: 14,
-              background: "rgba(255, 255, 255, 0.02)",
-              border: "1px solid rgba(255, 255, 255, 0.06)",
-            }}
-          >
-            <div style={{ fontSize: "1.6rem", marginBottom: 12 }}>⚡</div>
-            <h3 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 700, color: "#fff" }}>
-              2. They get $25 off
-            </h3>
-            <p style={{ margin: 0, fontSize: ".84rem", color: "rgba(255, 255, 255, 0.55)", lineHeight: 1.5 }}>
-              Your friend gets $25 off their first payment on Starter, Pro or Elite (first-time customers only).
-            </p>
-          </div>
-
-          <div
-            style={{
-              padding: 24,
-              borderRadius: 14,
-              background: "rgba(255, 255, 255, 0.02)",
-              border: "1px solid rgba(255, 255, 255, 0.06)",
-            }}
-          >
-            <div style={{ fontSize: "1.6rem", marginBottom: 12 }}>💳</div>
-            <h3 style={{ margin: "0 0 6px", fontSize: "1rem", fontWeight: 700, color: "#fff" }}>
-              3. You pay $25 less
-            </h3>
-            <p style={{ margin: 0, fontSize: ".84rem", color: "rgba(255, 255, 255, 0.55)", lineHeight: 1.5 }}>
-              Once your friend&apos;s first payment goes through (not during a free trial), $25 credit goes on your account and comes off your next invoice. If your renewal is $39/mo, you pay $14 that month.
-            </p>
-          </div>
-        </div>
+        <ReferralSteps />
       </main>
 
       <style jsx global>{`
