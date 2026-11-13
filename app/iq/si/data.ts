@@ -575,6 +575,35 @@ export function fundSeries(_t: string): number[][] {
   return [];
 }
 
+/**
+ * "What would break this setup", split by whether it has already happened.
+ *
+ * A level the price is already through is not a risk still to come, so it goes
+ * in `broken` (where price stands against the level, and what would repair it);
+ * a level still ahead stays in `pending` as the "daily close below X" trigger.
+ * The card used to list "Price loses the 50 DMA" for a stock trading $40 under
+ * it. With no price we cannot tell which side it is on, so every level stays
+ * pending.
+ */
+export function invalidationLevels(f: SiFacts): { pending: [string, string][]; broken: [string, string][] } {
+  const pending: [string, string][] = [];
+  const broken: [string, string][] = [];
+  const levels: Array<{ at: number | null | undefined; label: string; ahead: [string, string]; through: string; repair: string }> = [
+    { at: f.sma50, label: "50 DMA", ahead: ["Price loses the 50 DMA", "Daily close below"], through: "Already below the 50 DMA", repair: "repairs the trend" },
+    { at: f.pivotS1, label: "S1", ahead: ["Breaks first support", "Daily close below S1"], through: "First support already broken", repair: "restores support" },
+    { at: f.sma200, label: "200 DMA", ahead: ["Price loses the 200 DMA", "Daily close below"], through: "Already below the 200 DMA", repair: "repairs the long-term trend" },
+  ];
+  for (const l of levels) {
+    if (!has(l.at)) continue;
+    if (has(f.price) && f.price < l.at) {
+      broken.push([l.through, `Price ${usd(f.price)} is below ${l.label} ${usd(l.at)}. A daily close back above it ${l.repair}.`]);
+    } else {
+      pending.push([l.ahead[0], `${l.ahead[1]} ${usd(l.at)}`]);
+    }
+  }
+  return { pending, broken };
+}
+
 export function detail(t: string, live?: any): DetailStock {
   const sym = t.toUpperCase().trim();
   const facts: SiFacts = live?.facts ?? EMPTY_FACTS;
@@ -659,9 +688,7 @@ export function detail(t: string, live?: any): DetailStock {
     })),
   };
 
-  const invalid: [string, string][] = [];
-  if (has(facts.sma50)) invalid.push(["Price loses the 50 DMA", `Daily close below ${usd(facts.sma50)}`]);
-  if (has(facts.pivotS1)) invalid.push(["Breaks first support", `Daily close below S1 ${usd(facts.pivotS1)}`]);
+  const { pending: invalid, broken } = invalidationLevels(facts);
   invalid.push(["Forward EPS cuts", "Next-FY consensus EPS revised down more than 10%"]);
 
   const fundBits = [
@@ -758,6 +785,7 @@ export function detail(t: string, live?: any): DetailStock {
     movedEv,
     upcoming: [],
     invalid,
+    broken,
     fundTxt,
     fundEv,
     read,

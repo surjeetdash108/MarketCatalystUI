@@ -22,8 +22,10 @@ export interface CopilotLocalInput {
   facts: SiFacts;
   /** Headline signals, e.g. "RS rating 44/99". */
   signals: string[];
-  /** "What would break this setup": [title, condition]. */
+  /** "What would break this setup": [title, condition], for levels still ahead of the price. */
   invalid: Array<[string, string]>;
+  /** Levels the price is already through: [title, where price stands]. */
+  broken?: Array<[string, string]>;
   catalysts: Array<{ date: string; days: string; n: string; txt: string }>;
   peers: Array<{ t: string; pe: number | null; changePct: number | null }>;
   /** Today's move in words. */
@@ -118,6 +120,14 @@ function levelsLine(f: SiFacts): string | null {
 /** "Price loses the 50 DMA: Daily close below $221.50", with the title in bold. */
 const invalidLines = (i: CopilotLocalInput): string[] => i.invalid.map(([title, cond]) => `**${title}:** ${cond}`);
 
+/**
+ * Breaks that have already happened. On its own each reads "Already below the 50
+ * DMA: Price $164 is below 50 DMA $217.12. ..."; under a `label` the condition
+ * alone follows it, since the label already says "already".
+ */
+const brokenLines = (i: CopilotLocalInput, label = ""): string[] =>
+  (i.broken ?? []).map(([title, cond]) => (label ? `**${label}:** ${cond}` : `**${title}:** ${cond}`));
+
 function nextCatalyst(i: CopilotLocalInput, label = "Next catalyst"): string | null {
   const c = i.catalysts[0];
   return c ? `**${label}:** ${c.n}, ${c.date} (${c.days}). ${c.txt}` : null;
@@ -148,6 +158,7 @@ function decision(i: CopilotLocalInput, q: string): string[] {
       s.down.length ? `**Pointing down:** ${s.down.join("; ")}.` : null,
       s.up.length ? `**Pointing up:** ${s.up.join("; ")}.` : null,
       levelsLine(i.facts),
+      ...brokenLines(i, "Already broken").slice(0, 2),
       ...i.invalid.slice(0, 2).map(([title, cond]) => `**Would break the setup:** ${title}: ${lowerFirst(cond)}.`),
       nextCatalyst(i),
     ]),
@@ -194,8 +205,10 @@ function levels(i: CopilotLocalInput): string[] {
     has(f.sma200) ? `200 DMA ${usd(f.sma200)}` : null,
   ].filter(Boolean);
   return [
-    `**What would break the ${i.sym} setup** (price now ${usd(i.price)})`,
-    ...bullets([...invalidLines(i), levelsLine(f), dmas.length ? `**Moving averages:** ${dmas.join(" · ")}` : null]),
+    i.broken?.length
+      ? `**What has already broken for ${i.sym}, and what still could** (price now ${usd(i.price)})`
+      : `**What would break the ${i.sym} setup** (price now ${usd(i.price)})`,
+    ...bullets([...brokenLines(i), ...invalidLines(i), levelsLine(f), dmas.length ? `**Moving averages:** ${dmas.join(" · ")}` : null]),
   ];
 }
 
@@ -237,6 +250,7 @@ function bear(i: CopilotLocalInput): string[] {
       nextCatalyst(i, "Event risk"),
       has(f.downgrades90) && f.downgrades90 > 0 ? `**Analysts:** ${plural(f.downgrades90, "downgrade")} in the last 90 days.` : null,
       has(f.insiderNet90) && f.insiderNet90 < 0 ? "**Insiders:** net sellers over the last 90 days." : null,
+      ...brokenLines(i, "Already confirming the bear case").slice(0, 2),
       ...i.invalid.slice(0, 2).map(([title, cond]) => `**Would confirm the bear case:** ${title}: ${lowerFirst(cond)}.`),
     ]),
   ];

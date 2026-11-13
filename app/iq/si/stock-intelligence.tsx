@@ -1383,6 +1383,7 @@ export function StockIntelligenceScreen() {
       }),
       signals: stock.sig,
       invalidation: stockDetail.invalid.map(([title, cond]) => `${title}: ${cond}`),
+      alreadyBroken: stockDetail.broken.map(([title, cond]) => `${title}: ${cond}`),
       upcoming: upcomingCatalysts.filter((c) => !c.past).slice(0, 4).map((c) => `${c.date} (${c.days}): ${c.n}. ${c.txt}`),
       today: stockDetail.movedTxt,
       peers: peersAll.slice(0, 5).map((p) => `${p.t}: P/E ${p.peRatio != null ? p.peRatio.toFixed(1) : "n/a"}, ${p.c != null ? pct(p.c) : "n/a"} today`),
@@ -1411,6 +1412,7 @@ export function StockIntelligenceScreen() {
             facts: siFacts,
             signals: stock.sig,
             invalid: stockDetail.invalid,
+            broken: stockDetail.broken,
             catalysts: upcomingCatalysts.filter((c) => !c.past).map((c) => ({ date: c.date, days: c.days, n: c.n, txt: c.txt })),
             peers: peersAll.map((p) => ({ t: p.t, pe: p.peRatio, changePct: p.c })),
             movedTxt: stockDetail.movedTxt,
@@ -3371,9 +3373,16 @@ export function StockIntelligenceScreen() {
               {/* Invalidation Conditions */}
               <div style={{ border: "1px solid rgba(127,168,208,0.45)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
                 <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent-soft, #7fa8d0)" }}>
-                  WHAT WOULD BREAK THIS SETUP?
+                  {stockDetail.broken.length ? "WHAT HAS ALREADY BROKEN, AND WHAT STILL COULD" : "WHAT WOULD BREAK THIS SETUP?"}
                 </span>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+                  {stockDetail.broken.map((iv, i) => (
+                    <div key={`broken-${i}`} style={{ border: "1px solid var(--down, #dc2626)", background: "rgba(220,38,38,0.08)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.14em", color: "var(--down, #dc2626)" }}>ALREADY BROKEN</span>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[0]}</span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[1]}</span>
+                    </div>
+                  ))}
                   {stockDetail.invalid.map((iv, i) => (
                     <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
                       <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[0]}</span>
