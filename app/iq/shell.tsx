@@ -69,6 +69,7 @@ import { useEntitlements } from "./hooks/useEntitlements";
 import { ChoosePlanScreen } from "./billing/choose-plan-screen";
 import { clearOnboardingSession } from "./billing/plan-intent";
 import { WelcomeFeedbackModals } from "./welcome-feedback-modals";
+import { bannerKind } from "./contextual-banner";
 import { trialCountdown } from "./trial-countdown";
 
 // ---- Route helpers ----
@@ -1079,23 +1080,20 @@ function CopilotPanel({ onClose }: { onClose: () => void }) {
 let pendingThemeWrite: Promise<unknown> | null = null;
 
 function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["data"] }) {
-  if (!ent || ent.staff) return null;
-  const isTrial = ent.status === "TRIALING" || ent.status === "trialing";
-  const isCanceling = ent.cancelAtPeriodEnd && !!ent.currentPeriodEnd;
+  const kind = bannerKind(ent);
+  if (!ent || !kind) return null;
 
-  if (isCanceling) {
-    const endStr = ent.currentPeriodEnd
-      ? new Date(ent.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : "the end of your period";
+  if (kind === "trial-canceling") {
+    const tc = trialCountdown(ent.currentPeriodEnd);
     return (
       <div style={{ background: "rgba(234, 179, 8, 0.12)", borderBottom: "1px solid rgba(234, 179, 8, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#fef08a", zIndex: 10 }}>
-        <span>ℹ️ Your {ent.planName} plan ends on {endStr}. You have full access until then and will not be charged again.</span>
+        <span data-testid="banner-trial-canceling">ℹ️ Your {ent.planName} free trial ends on {tc.endsAt || "the end of your trial"}. You have full access until then and will not be charged.</span>
         <Link href="/manage-plan" style={{ color: "#ffffff", fontWeight: 700, textDecoration: "underline", marginLeft: 12 }}>Resume plan</Link>
       </div>
     );
   }
 
-  if (isTrial) {
+  if (kind === "trial") {
     const tc = trialCountdown(ent.currentPeriodEnd);
     const endStr = tc.endsAt ? `${tc.endsAt} (${tc.left.toLowerCase()})` : "";
     return (
@@ -1106,7 +1104,7 @@ function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["da
     );
   }
 
-  if (ent.status === "INTRO" && ent.introEndsAt && ent.subscriptionsEnabled) {
+  if (kind === "intro" && ent.introEndsAt) {
     const cd = trialCountdown(ent.introEndsAt);
     return (
       <div data-testid="banner-intro" style={{ background: "rgba(59, 130, 246, 0.12)", borderBottom: "1px solid rgba(59, 130, 246, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#93c5fd", zIndex: 10 }}>
@@ -1118,8 +1116,7 @@ function ContextualBanner({ ent }: { ent: ReturnType<typeof useEntitlements>["da
     );
   }
 
-  const isExpiredTrial = ent.status === "EXPIRED" && !ent.cancelAtPeriodEnd && !isTrial && ent.subscriptionsEnabled;
-  if (isExpiredTrial) {
+  if (kind === "expired-intro") {
     return (
       <div data-testid="banner-expired-intro" style={{ background: "rgba(239, 68, 68, 0.12)", borderBottom: "1px solid rgba(239, 68, 68, 0.28)", padding: "9px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: ".82rem", color: "#fca5a5", zIndex: 10 }}>
         <span>⚠️ Your trial period has ended. See our plans to subscribe.</span>
