@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSI } from "./si-context";
+import { barsForHorizon } from "./horizon-bars";
 import { TrackedTradesList, type TrackedTrade } from "./tracked-trades-list";
 import { SITab, StockItem, DetailStock, UpcomingEvent } from "./types";
 import {
@@ -4618,9 +4619,11 @@ export function StockIntelligenceScreen() {
           const thPos = (v: number) => (((v - thLo) / (thHi - thLo || 1)) * 100).toFixed(2) + "%";
 
           // Historical price series based on real market bars (replaces PRNG synthetic series)
-          const realBars = (sixMonthBars && sixMonthBars.length >= 10) ? sixMonthBars : (overviewBars && overviewBars.length >= 10) ? overviewBars : null;
-          const hs = realBars && realBars.length >= 5
-            ? realBars.map((b) => b.c)
+          // Sliced to the selected horizon (1M/3M/6M/12M) so Return, High, Low,
+          // Max Drawdown and Volatility change with the buttons.
+          const histBars = barsForHorizon(labHz, yearBars, sixMonthBars);
+          const hs = histBars && histBars.length >= 5
+            ? histBars.map((b) => b.c)
             : [stock.p * 0.95, stock.p * 0.98, stock.p];
           const hExt = hs.concat([tgtV, stopV]);
           const hsLo = Math.min(...hExt) * 0.97;
