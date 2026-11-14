@@ -65,6 +65,63 @@ export const UNUSUAL_MOVE_TIMES = 2.5;
 /** …and never smaller than this many percent. */
 export const UNUSUAL_MOVE_MIN_PCT = 2;
 
+/** The smallest move (in percent) that counts as unusual for this stock. */
+export function unusualMoveBar(moves: readonly { absRet: number }[]): number {
+  const sorted = moves.map((m) => m.absRet).sort((a, b) => a - b);
+  const median = sorted[sorted.length >> 1] ?? 0;
+  return Math.max(UNUSUAL_MOVE_MIN_PCT, UNUSUAL_MOVE_TIMES * median);
+}
+
+/** Most pins the chart will carry; past this it is a wall of numbers, not a list of incidents. */
+export const MAX_CHART_MARKERS = 10;
+/** Cards shown under the chart: the most extreme of the pins. */
+export const CARD_COUNT = 5;
+
+/**
+ * Extra chart pins beyond the ones already `picked`: every unusual move (see
+ * unusualMoveBar), biggest first, kept at least `minGap` sessions from any other
+ * pin so neighbouring days of one story are not all marked, until the chart
+ * carries MAX_CHART_MARKERS. The picked set is never changed.
+ */
+export function pickExtraMoves<M extends { idx: number; absRet: number }>(
+  moves: readonly M[],
+  picked: readonly M[],
+  minGap: number,
+  max: number = MAX_CHART_MARKERS,
+): M[] {
+  const bar = unusualMoveBar(moves);
+  const taken: M[] = [...picked];
+  const extra: M[] = [];
+  const ranked = moves
+    .filter((m) => m.absRet >= bar && !picked.includes(m))
+    .sort((a, b) => b.absRet - a.absRet || b.idx - a.idx);
+  for (const m of ranked) {
+    if (taken.length >= max) break;
+    if (taken.some((p) => Math.abs(p.idx - m.idx) < minGap)) continue;
+    taken.push(m);
+    extra.push(m);
+  }
+  return extra;
+}
+
+/** The `count` biggest moves among `pins` (the later one on a tie): the ones that get a card. */
+export function pickExtremes<M extends { idx: number; absRet: number }>(pins: readonly M[], count: number = CARD_COUNT): M[] {
+  return [...pins].sort((a, b) => b.absRet - a.absRet || b.idx - a.idx).slice(0, count);
+}
+
+/**
+ * "Stock Market Today, Nov. 10: Nvidia Stock Plunges 5.5% as…" → "Nvidia Stock Plunges 5.5% as…".
+ * Wire services stamp a daily-roundup label (and the date) in front of the real
+ * headline; on a card it only pushes the news out of the two lines we have. Only a
+ * label followed by a colon or dash is removed, and never when nothing meaningful is left.
+ */
+const ROUNDUP_PREFIX_RE =
+  /^\s*(?:(?:u\.?s\.?\s+)?(?:stock|stocks|stock market|market|markets|wall street)(?:\s+(?:today|update|news|wrap|recap|live|close|open|report))?|(?:live|breaking)(?:\s+updates?)?)\s*(?:[,:–—-]\s*)?(?:(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s*)?(?:(?:jan|feb|mar|apr|may|june?|july?|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?)?\s*[:–—-]\s+/i;
+export function cleanHeadline(headline: string): string {
+  const rest = headline.replace(ROUNDUP_PREFIX_RE, "").trim();
+  return rest.length >= 12 && rest !== headline.trim() ? rest : headline.trim();
+}
+
 /**
  * The chart picks the biggest move of each sixth of the window, so a stretch
  * with one large old move hides everything after it: NVDA's 5 Nov (−9.26%)
@@ -82,9 +139,7 @@ export function pickRecentMove<M extends { idx: number; absRet: number }>(
   if (!moves.length) return null;
   const firstRecent = barCount - RECENT_SESSIONS;
   if (picked.some((p) => p.idx >= firstRecent)) return null;
-  const sorted = moves.map((m) => m.absRet).sort((a, b) => a - b);
-  const median = sorted[sorted.length >> 1];
-  const bar = Math.max(UNUSUAL_MOVE_MIN_PCT, UNUSUAL_MOVE_TIMES * median);
+  const bar = unusualMoveBar(moves);
   let best: M | null = null;
   for (const m of moves) {
     if (m.idx < firstRecent || m.absRet < bar) continue;

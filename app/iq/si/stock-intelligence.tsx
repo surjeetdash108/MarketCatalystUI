@@ -39,6 +39,8 @@ import {
   getSixMonthMajorEvents,
   aboutTicker,
   trendRead,
+  trendRows,
+  type TrendRow,
 } from "./data";
 import { scoreNews, reactionAfter, summarizeNewsSentiment, classifyDirection } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
@@ -134,6 +136,8 @@ const CATALYST_WINDOW_DAYS = 45;
 const CATALYST_LOOKBACK_DAYS = 14;
 /** At most this many past events are shown, the most recent ones, so they never crowd out what is ahead. */
 const CATALYST_MAX_PAST = 3;
+/** The stock's own major moves (big price days with their cause) stay on the timeline this long. */
+const CATALYST_MAJOR_LOOKBACK_DAYS = 30;
 
 /** Colours explicitly signed percentages in a sentence: +N% green, -N% red. Unsigned figures (margins, ratios) stay as they are. */
 const SIGNED_PCT = /((?<![\w.])[+\-−]\d[\d,]*(?:\.\d+)?%)/g;
@@ -404,7 +408,7 @@ function SixMonthAreaChart({
             <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.35, marginTop: 6 }}>
               {activeHover.details}
             </div>
-            {(activeHover.commentary || (activeHover.context && activeHover.context.length > 0)) && (
+            {activeHover.card !== false && (activeHover.commentary || (activeHover.context && activeHover.context.length > 0)) && (
               <div style={{ marginTop: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-sub, #5d6b79)" }}>
                 {[activeHover.commentary ? "Commentary" : null, activeHover.context?.length ? "notable events" : null].filter(Boolean).join(" and ").replace(/^n/, "N")} in card #{activeHover.num} below
               </div>
@@ -413,9 +417,9 @@ function SixMonthAreaChart({
         )}
       </div>
 
-      {/* 5 Major Event Cards Below — all one size (SI_EVENT_CARD_H); the full text opens in a pop-up on hover or click */}
+      {/* Cards for the most extreme of the chart's pins (up to 5) — all one size (SI_EVENT_CARD_H); the full text opens in a pop-up on hover or click */}
       <div className="si-event-cards" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10, marginTop: 18, alignItems: "stretch" }}>
-        {mappedEvents.map((ev) => {
+        {mappedEvents.filter((ev) => ev.card !== false).map((ev) => {
           const isHover = hoveredEventId === ev.num;
           const isOpen = openCard?.num === ev.num;
           return (
@@ -720,6 +724,10 @@ export function StockIntelligenceScreen() {
       targetMean: num(cons?.priceTargetConsensus),
       upgrades90: cons ? grades90.filter((g) => /upgrade/i.test(g.action ?? "")).length : null,
       downgrades90: cons ? grades90.filter((g) => /downgrade/i.test(g.action ?? "")).length : null,
+      // Same label the Analyst Actions tab shows: target cut, rating unchanged.
+      ptCuts90: cons
+        ? grades90.filter((g) => resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget, g.priceTargetChange).shownAction === "PT Cut").length
+        : null,
       // The backend stores only the 50/200; the short-term pair comes from the
       // same daily closes the chart draws.
       sma9: smaOf(dailyCloses, 9),
@@ -790,6 +798,19 @@ export function StockIntelligenceScreen() {
       facts: siFacts,
     });
   }, [currentTicker, currentPrice, currentChange, liveCompany, siFacts]);
+
+  // Declared ahead of the catalysts timeline below, which also lists the recent ones.
+  const majorEvents = useMemo(() => {
+    if (!stock) return [];
+    return getSixMonthMajorEvents(
+      stock.t,
+      stock,
+      sixMonthBars,
+      financialsDoc?.quarters,
+      tickerNews,
+      financialsDoc?.epsHistory,
+    );
+  }, [stock, sixMonthBars, financialsDoc?.quarters, tickerNews, financialsDoc?.epsHistory]);
 
   // Real upcoming catalysts derived from actual exchange earnings calendar & corporate events (replaces hardcoded dates)
   const upcomingCatalysts = useMemo<UpcomingEvent[]>(() => {
@@ -889,6 +910,7 @@ export function StockIntelligenceScreen() {
     calendarEvents.sort((a, b) => a.date.localeCompare(b.date));
 
     calendarEvents.forEach((ev) => {
+      if (ev.date < lookbackIso) return; // calendar dates keep the short look-back
       const evMs = new Date(ev.date + "T09:30:00-04:00").getTime();
       const diffDays = Math.round((evMs - todayMs) / (1000 * 60 * 60 * 24));
       const daysStr = diffDays === 0 ? "today" : diffDays === 1 ? "in 1 day" : diffDays === -1 ? "yesterday" : diffDays < 0 ? `${-diffDays} days ago` : `in ${diffDays} days`;
@@ -907,6 +929,37 @@ export function StockIntelligenceScreen() {
         past: ev.date < todayStr,
       });
     });
+
+    // 3. The stock's own recent major events: the big price days from "Why it
+    // moved", each with its real cause (earnings, a headline, an analyst call).
+    // Those pins carry display dates only, so the day is found from the chart bars.
+    const majorLookback = new Date(`${todayStr}T12:00:00Z`);
+    majorLookback.setUTCDate(majorLookback.getUTCDate() - CATALYST_MAJOR_LOOKBACK_DAYS);
+    const majorLookbackIso = majorLookback.toISOString().slice(0, 10);
+    const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
+    const barDay = new Map<string, string>(); // "Nov 12" -> latest bar day with that label
+    for (const b of sixMonthBars ?? []) {
+      barDay.set(fmtMarketDate(b.t, { month: "short", day: "2-digit" }), new Date(b.t).toISOString().slice(0, 10));
+    }
+    for (const ev of majorEvents) {
+      const iso = barDay.get(ev.date);
+      if (!iso || iso >= todayStr || iso < majorLookbackIso) continue;
+      if (ev.category === "Earnings" && lastReport) continue; // already shown as the report itself
+      const ago = Math.max(1, Math.round((todayMs - new Date(iso + "T09:30:00-04:00").getTime()) / 86_400_000));
+      const ret = `${ev.mv >= 0 ? "+" : "−"}${Math.abs(ev.mv).toFixed(1)}%`;
+      const high = Boolean(ev.card);
+      items.push({
+        date: fmtMarketDate(iso),
+        iso,
+        days: ago === 1 ? "yesterday" : `${ago} days ago`,
+        n: clip(ev.label, 60),
+        txt: `${stock.t} ${ret} that session. ${clip(ev.details.replace(/\s*Stock moved [^.]*\.$/, ""), 100)}`.trim(),
+        imp: high ? "HIGH" : "MED",
+        col: high ? "#f5b031" : STEEL,
+        cat: ev.category === "Macro" ? "Price move" : ev.category,
+        past: true,
+      });
+    }
 
     if (!realErDate || realErDate < todayStr) {
       items.unshift({
@@ -929,13 +982,18 @@ export function StockIntelligenceScreen() {
     // The look-back adds the last CATALYST_MAX_PAST events that already
     // happened (oldest first) ahead of the usual six upcoming ones. "TBD" has no
     // date and sorts at today's edge: after what happened, before what is next.
-    const inWindow = items.filter((it) => !it.iso || (it.iso >= lookbackIso && it.iso <= cutoffIso));
+    const inWindow = items.filter((it) => !it.iso || (it.iso >= majorLookbackIso && it.iso <= cutoffIso));
     const ordered = [...inWindow].sort((a, b) => (a.iso ?? todayStr).localeCompare(b.iso ?? todayStr));
-    return [
-      ...ordered.filter((it) => it.past).slice(-CATALYST_MAX_PAST),
-      ...ordered.filter((it) => !it.past).slice(0, 6),
-    ];
-  }, [stock, liveCompany?.nextEarningsDate, liveEarningsList]);
+    // Of everything that already happened, keep the biggest few (then the most recent),
+    // and show them oldest to newest like the rest of the timeline.
+    const impRank = (i: string) => (i === "HIGH" ? 2 : i === "MED" ? 1 : 0);
+    const recent = ordered
+      .filter((it) => it.past)
+      .sort((a, b) => impRank(b.imp) - impRank(a.imp) || (b.iso ?? "").localeCompare(a.iso ?? ""))
+      .slice(0, CATALYST_MAX_PAST)
+      .sort((a, b) => (a.iso ?? "").localeCompare(b.iso ?? ""));
+    return [...recent, ...ordered.filter((it) => !it.past).slice(0, 6)];
+  }, [stock, liveCompany?.nextEarningsDate, liveEarningsList, majorEvents, sixMonthBars]);
 
   // 5 Major Catalysts derived dynamically from FMP data (bars, quarters, news, and stock metrics)
   // "+ Watch" is the Market Catalyst watchlist (the shell's shared watchlist state).
@@ -963,18 +1021,6 @@ export function StockIntelligenceScreen() {
       setWatchBusy(false);
     }
   };
-
-  const majorEvents = useMemo(() => {
-    if (!stock) return [];
-    return getSixMonthMajorEvents(
-      stock.t,
-      stock,
-      sixMonthBars,
-      financialsDoc?.quarters,
-      tickerNews,
-      financialsDoc?.epsHistory,
-    );
-  }, [stock, sixMonthBars, financialsDoc?.quarters, tickerNews, financialsDoc?.epsHistory]);
 
   // The Catalysts tab shows 90 days of news; score just those once (not on every render).
   const catalystNews = useMemo(() => {
@@ -1144,18 +1190,19 @@ export function StockIntelligenceScreen() {
   // Fetched for every peer on screen (universe peers included — the enrichment
   // request above only covers peers missing from the universe).
   const peerTickersKey = peersAll.map((p) => p.t).join(",");
-  const [peerYtdBase, setPeerYtdBase] = useState<Map<string, number | null>>(new Map());
+  // `since` is set only for a stock listed this year (no prior-year close): the base is then its first close.
+  const [peerYtdBase, setPeerYtdBase] = useState<Map<string, { base: number | null; since: string | null }>>(new Map());
   useEffect(() => {
     if (!peerTickersKey) return;
     let active = true;
-    apiGet<Array<{ ticker: string; ytdBaseClose?: number | null }>>(
+    apiGet<Array<{ ticker: string; ytdBaseClose?: number | null; ytdSince?: string | null }>>(
       `/live/peers-summary?tickers=${encodeURIComponent(peerTickersKey)}`,
     )
       .then((rows) => {
         if (!active || !Array.isArray(rows)) return;
         setPeerYtdBase((prev) => {
           const next = new Map(prev);
-          for (const r of rows) next.set(r.ticker, r.ytdBaseClose ?? null);
+          for (const r of rows) next.set(r.ticker, { base: r.ytdBaseClose ?? null, since: r.ytdSince ?? null });
           return next;
         });
       })
@@ -1983,9 +2030,32 @@ export function StockIntelligenceScreen() {
           </div>
         ))}
       </div>
-      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-        {trendRead(siFacts.price, siFacts.sma50, siFacts.sma200)}
-      </div>
+      {(() => {
+        const rows = trendRows(siFacts.price, siFacts.sma50, siFacts.sma200, siFacts.rsi14);
+        // No moving-average data at all: keep the plain sentence ("not available yet").
+        if (rows.length === 0) {
+          return (
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
+              {trendRead(siFacts.price, siFacts.sma50, siFacts.sma200)}
+            </div>
+          );
+        }
+        const col = (t: TrendRow["tone"]) => (t === "good" ? "var(--up, #16a34a)" : t === "bad" ? "var(--down, #dc2626)" : t === "warn" ? "#f5b031" : "var(--si-text-mid, #93a1af)");
+        return (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {rows.map((r) => (
+              <div key={r.title} style={{ display: "grid", gridTemplateColumns: "22px 1fr auto", columnGap: 10, alignItems: "baseline", padding: "9px 0", borderTop: "1px solid var(--si-border, #1c2733)" }}>
+                <span aria-hidden style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: col(r.tone), textAlign: "center" }}>{r.mark}</span>
+                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.title}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13.5, fontWeight: 700, color: col(r.tone), whiteSpace: "pre" }}>{r.value}</span>
+                {r.note && (
+                  <span style={{ gridColumn: "2 / 4", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 
@@ -3527,6 +3597,78 @@ export function StockIntelligenceScreen() {
             ? (ttmFcf / mcapNum) * 100
             : null;
 
+          // ── Financial health (latest quarter) and earnings quality (trailing 12 months) ──
+          // From the quarterly statements already synced; a figure whose inputs are
+          // missing is left out, never filled with zero. Banks are skipped: debt,
+          // current ratio and free cash flow do not mean the same for them.
+          type HealthRow = { k: string; v: string; note: string; tone: "good" | "warn" | "bad" | "neutral" };
+          const ttm4 = !isBank && fmpQ && fmpQ.length >= 4 ? fmpQ.slice(-4) : null;
+          const sum4 = (pick: (q: QuarterFinancials) => number | null | undefined): number | null => {
+            if (!ttm4) return null;
+            let s = 0;
+            for (const q of ttm4) {
+              const v = pick(q);
+              if (v == null || !Number.isFinite(v)) return null;
+              s += v;
+            }
+            return s;
+          };
+          const healthRows: HealthRow[] = [];
+          if (!isBank && latestQ) {
+            const equity = latestQ.equity;
+            if (latestCash != null) healthRows.push({ k: "Cash", v: usdRaw(latestCash), note: "Cash and equivalents", tone: "neutral" });
+            if (latestDebt != null) healthRows.push({ k: hasTotalDebt ? "Total debt" : "LT debt", v: usdRaw(latestDebt), note: hasTotalDebt ? "Short and long term, incl. leases" : "Long-term debt only", tone: "neutral" });
+            if (latestCash != null && latestDebt != null) {
+              const net = latestCash - latestDebt;
+              const heavy = net < 0 && ttmEbitda != null && ttmEbitda > 0 && -net / ttmEbitda > 3;
+              healthRows.push({
+                k: net >= 0 ? "Net cash" : "Net debt",
+                v: usdRaw(Math.abs(net)),
+                note: net >= 0 ? "Cash is more than all its debt" : heavy ? "More than 3 years of EBITDA" : "Debt is more than its cash",
+                tone: net >= 0 ? "good" : heavy ? "bad" : "warn",
+              });
+            }
+            const cr = latestQ.currentRatio ?? (latestQ.currentAssets != null && latestQ.currentLiabilities ? latestQ.currentAssets / latestQ.currentLiabilities : null);
+            if (cr != null && Number.isFinite(cr)) {
+              healthRows.push({ k: "Current ratio", v: `${cr.toFixed(2)}×`, note: cr >= 1.5 ? "Covers short-term bills comfortably" : cr >= 1 ? "Covers short-term bills" : "Short-term bills exceed liquid assets", tone: cr >= 1.5 ? "good" : cr >= 1 ? "neutral" : "warn" });
+            }
+            if (latestDebt != null && equity != null) {
+              healthRows.push(equity > 0
+                ? { k: "Debt / equity", v: `${(latestDebt / equity).toFixed(2)}×`, note: latestDebt / equity < 0.5 ? "Lightly borrowed" : latestDebt / equity < 1.5 ? "Moderately borrowed" : "Heavily borrowed", tone: latestDebt / equity < 0.5 ? "good" : latestDebt / equity < 1.5 ? "neutral" : "warn" }
+                : { k: "Debt / equity", v: "n/m", note: "Shareholder equity is negative", tone: "warn" });
+            }
+            if (latestDebt != null && ttmEbitda != null && ttmEbitda > 0) {
+              const x = latestDebt / ttmEbitda;
+              healthRows.push({ k: "Debt / EBITDA", v: `${x.toFixed(1)}×`, note: x < 1 ? "Repaid in under a year of earnings" : x < 3 ? "Manageable" : "Slow to repay", tone: x < 1 ? "good" : x < 3 ? "neutral" : "bad" });
+            }
+          }
+
+          const qualityRows: HealthRow[] = [];
+          const ttmRev = sum4((q) => q.revenue);
+          const ttmNi = sum4((q) => q.netIncome);
+          const ttmFcf4 = sum4((q) => computeQuarterFcf(q));
+          const ttmCapex = sum4((q) => (q.capitalExpenditures != null ? Math.abs(q.capitalExpenditures) : null));
+          if (ttmRev != null && ttmRev > 0) {
+            if (ttmFcf4 != null) {
+              const m = (ttmFcf4 / ttmRev) * 100;
+              qualityRows.push({ k: "FCF margin", v: `${m.toFixed(1)}%`, note: "Free cash flow per $ of sales", tone: m >= 15 ? "good" : m >= 0 ? "neutral" : "bad" });
+            }
+            if (ttmNi != null) {
+              const m = (ttmNi / ttmRev) * 100;
+              qualityRows.push({ k: "Net margin", v: `${m.toFixed(1)}%`, note: "Profit per $ of sales", tone: m >= 15 ? "good" : m >= 0 ? "neutral" : "bad" });
+            }
+            if (ttmCapex != null) {
+              qualityRows.push({ k: "Capex / sales", v: `${((ttmCapex / ttmRev) * 100).toFixed(1)}%`, note: "Spent on equipment and buildings", tone: "neutral" });
+            }
+          }
+          if (ttmFcf4 != null && ttmNi != null) {
+            qualityRows.push(ttmNi > 0
+              ? { k: "Cash conversion", v: `${(ttmFcf4 / ttmNi).toFixed(2)}×`, note: `$${(ttmFcf4 / ttmNi).toFixed(2)} of free cash per $1 of profit`, tone: ttmFcf4 / ttmNi >= 1 ? "good" : ttmFcf4 / ttmNi >= 0.7 ? "neutral" : "warn" }
+              : { k: "Cash conversion", v: "n/m", note: "No profit over the last 12 months", tone: "warn" });
+          }
+          const healthSub = latestQ ? `${latestQ.fiscalPeriod || "Latest quarter"} '${(latestQ.fiscalYear || "").slice(-2)}` : "";
+          const toneCol = (t: HealthRow["tone"]) => (t === "good" ? UP : t === "bad" ? DN : t === "warn" ? "#f5b031" : "#93a1af");
+
           // PEG = trailing P/E ÷ expected EPS growth (next fiscal year's estimate
           // vs the year in progress) — not one quarter's volatile y/y change.
           const expGrowth = siFacts.fwdEps != null && siFacts.nextFyEps != null && siFacts.fwdEps > 0
@@ -3563,10 +3705,62 @@ export function StockIntelligenceScreen() {
             };
           });
 
+          // ── Margin trend: gross, operating and net margin over the quarters shown ──
+          const marginPct = (stated: number | null | undefined, part: number | null | undefined, rev: number | null | undefined) =>
+            stated != null && Number.isFinite(stated) ? stated : part != null && rev ? (part / rev) * 100 : null;
+          const noGrossLine = isBank || (fmpQ ?? []).every((q) => q.grossProfit != null && q.operatingIncome != null && q.grossProfit === q.operatingIncome);
+          const marginLines = isBank || !fmpQ || fmpQ.length < 3 ? [] : ([
+            { k: "Gross", col: STEEL, on: !noGrossLine, vals: fmpQ.map((q) => marginPct(q.grossMarginPct, q.grossProfit, q.revenue)) },
+            { k: "Operating", col: UP, on: true, vals: fmpQ.map((q) => marginPct(q.operatingMarginPct, q.operatingIncome, q.revenue)) },
+            { k: "Net", col: "#f5b031", on: true, vals: fmpQ.map((q) => marginPct(q.netMarginPct, q.netIncome, q.revenue)) },
+          ] as Array<{ k: string; col: string; on: boolean; vals: Array<number | null> }>).filter((l) => l.on && l.vals.filter((v) => v != null).length >= 3);
+          const marginAll = marginLines.flatMap((l) => l.vals.filter((v): v is number => v != null));
+          const mMax = Math.max(0, ...marginAll), mMin = Math.min(0, ...marginAll);
+          const mSpan = mMax - mMin || 1;
+          const MW = 440, MH = 150, MPAD = 10;
+          const mx = (i: number) => MPAD + (i / Math.max(1, (fmpQ?.length ?? 1) - 1)) * (MW - 2 * MPAD);
+          const my = (v: number) => MPAD + ((mMax - v) / mSpan) * (MH - 2 * MPAD);
+
+          // ── Scorecard: four plain grades, each from one visible number ──
+          type Grade = { k: string; grade: string; tone: HealthRow["tone"]; note: string };
+          const growthV = siFacts.revGrowthYoY;
+          const opM = siFacts.opMargin, opM0 = siFacts.opMarginYearAgo;
+          const pe = livePe != null && livePe > 0 ? livePe : null;
+          const fpe = stock.fpe != null && stock.fpe > 0 ? stock.fpe : null;
+          const vRatios = [pe != null ? pe / basePe : null, fpe != null ? fpe / baseFpe : null].filter((v): v is number => v != null);
+          const vRatio = vRatios.length ? vRatios.reduce((a, b) => a + b, 0) / vRatios.length : null;
+          const hasBad = healthRows.some((r) => r.tone === "bad"), hasWarn = healthRows.some((r) => r.tone === "warn");
+          const netRow = healthRows.find((r) => r.k === "Net cash" || r.k === "Net debt");
+          const scoreCards: Grade[] = [
+            growthV != null && Number.isFinite(growthV)
+              ? { k: "GROWTH", grade: growthV >= 20 ? "Strong" : growthV >= 8 ? "Solid" : growthV >= 0 ? "Slow" : "Shrinking", tone: growthV >= 20 ? "good" : growthV >= 8 ? "neutral" : growthV >= 0 ? "warn" : "bad", note: `Revenue ${pct1(growthV)} y/y` }
+              : { k: "GROWTH", grade: "—", tone: "neutral", note: "No revenue history yet" },
+            !isBank && opM != null && Number.isFinite(opM)
+              ? { k: "PROFITABILITY", grade: opM >= 25 ? "Strong" : opM >= 12 ? "Solid" : opM >= 0 ? "Thin" : "Losing money", tone: opM >= 25 ? "good" : opM >= 12 ? "neutral" : opM >= 0 ? "warn" : "bad", note: `Operating margin ${opM.toFixed(1)}%${opM0 != null ? ` (${opM - opM0 >= 0 ? "+" : "−"}${Math.abs(opM - opM0).toFixed(1)} pts y/y)` : ""}` }
+              : { k: "PROFITABILITY", grade: "—", tone: "neutral", note: isBank ? "Not graded for banks" : "No margin data yet" },
+            healthRows.length
+              ? { k: "FINANCIAL HEALTH", grade: hasBad ? "Stretched" : hasWarn ? "Mixed" : healthRows.filter((r) => r.tone === "good").length >= 2 ? "Strong" : "Solid", tone: hasBad ? "bad" : hasWarn ? "warn" : healthRows.filter((r) => r.tone === "good").length >= 2 ? "good" : "neutral", note: netRow ? `${netRow.k} ${netRow.v}` : healthRows[0].note }
+              : { k: "FINANCIAL HEALTH", grade: "—", tone: "neutral", note: isBank ? "Not graded for banks" : "No balance-sheet data yet" },
+            vRatio != null
+              ? { k: "VALUATION", grade: vRatio < 0.8 ? "Attractive" : vRatio < 1.2 ? "Fair" : vRatio < 1.8 ? "Rich" : "Expensive", tone: vRatio < 0.8 ? "good" : vRatio < 1.2 ? "neutral" : vRatio < 1.8 ? "warn" : "bad", note: `${pe != null ? `P/E ${pe.toFixed(1)}×` : `Fwd P/E ${fpe!.toFixed(1)}×`} vs ${pe != null ? basePe : baseFpe}× sector reference` }
+              : { k: "VALUATION", grade: "—", tone: "neutral", note: "No earnings multiple (no profit)" },
+          ];
+
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              {/* Scorecard: one grade per question, each from the number shown under it */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>
+                {scoreCards.map((s) => (
+                  <div key={s.k} style={{ border: `1px solid ${s.grade === "—" ? "var(--si-border, #1c2733)" : toneCol(s.tone)}`, borderLeftWidth: 3, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-mid, #93a1af)" }}>{s.k}</span>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, letterSpacing: "0.04em", lineHeight: 1.1, color: s.grade === "—" ? "var(--si-text-sub, #5d6b79)" : toneCol(s.tone) }}>{s.grade}</span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-mid, #93a1af)" }}>{s.note}</span>
+                  </div>
+                ))}
+              </div>
+
               {/* 6 Financial Metric Cards with 8-Quarter Mini-Bars */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
                 {fundMetrics.map((fm, idx) => {
                   const selKey = `${stock.t}:${idx}`;
                   const selIdx = fundSel[selKey];
@@ -3574,12 +3768,12 @@ export function StockIntelligenceScreen() {
                   // Revenue, EPS, margins and cash flow are better when higher; debt when lower.
                   const chgCol = (v: number) => ((idx === 5 ? -v : v) >= 0 ? UP : DN);
                   return (
-                  <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent-light, #a9c6e3)" }}>
+                  <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 14px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", columnGap: 6 }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
                         {fm.k}
                       </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: fm.col }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: fm.col, whiteSpace: "nowrap" }}>
                         {fm.yoy}
                       </span>
                     </div>
@@ -3653,6 +3847,70 @@ export function StockIntelligenceScreen() {
                 })}
               </div>
 
+              {/* Financial health (balance sheet) and earnings quality (cash vs profit) */}
+              {(healthRows.length > 0 || qualityRows.length > 0 || marginLines.length > 0) && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 400px), 1fr))", gap: 18, alignItems: "start" }}>
+                  {([
+                    { title: "FINANCIAL HEALTH", sub: healthSub ? `${healthSub} balance sheet` : "Latest balance sheet", rows: healthRows },
+                    { title: "EARNINGS QUALITY", sub: "Last 12 months", rows: qualityRows },
+                  ]).filter((p) => p.rows.length > 0).map((p) => (
+                    <div key={p.title} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                          {p.title}
+                        </span>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>{p.sub}</span>
+                      </div>
+                      {p.rows.map((r) => (
+                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px 120px 84px 1fr", alignItems: "center", columnGap: 10, minHeight: 32, borderTop: "1px solid var(--si-border, #1c2733)" }}>
+                          <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: toneCol(r.tone) }} />
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.k}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, textAlign: "right", color: r.tone === "neutral" ? "var(--si-text-hi, #e8eef4)" : toneCol(r.tone) }}>{r.v}</span>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-mid, #93a1af)" }}>{r.note}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {marginLines.length > 0 && fmpQ && (
+                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARGIN TREND</span>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>{QL[0]} to {QL[1]}</span>
+                      </div>
+                      <svg viewBox={`0 0 ${MW} ${MH}`} width="100%" role="img" aria-label={`${stock.t} gross, operating and net margin by quarter`} style={{ display: "block" }}>
+                        <line x1={MPAD} x2={MW - MPAD} y1={my(0)} y2={my(0)} stroke="#2a3a4a" strokeWidth={1} strokeDasharray="3 3" />
+                        {marginLines.map((l) => {
+                          const pts = l.vals.map((v, i) => (v == null ? null : [mx(i), my(v)] as const));
+                          const last = [...pts].reverse().find((p) => p != null);
+                          return (
+                            <g key={l.k}>
+                              <polyline fill="none" stroke={l.col} strokeWidth={2} strokeLinejoin="round" points={pts.filter((p) => p != null).map((p) => `${p![0]},${p![1]}`).join(" ")} />
+                              {last && <circle cx={last[0]} cy={last[1]} r={3.5} fill={l.col} />}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px" }}>
+                        {marginLines.map((l) => {
+                          const lastIdx = l.vals.length - 1;
+                          const now = l.vals[lastIdx];
+                          const then = l.vals[lastIdx - 4] ?? null;
+                          return (
+                            <span key={l.k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-hi, #e8eef4)" }}>
+                              <i style={{ display: "inline-block", width: 10, height: 3, background: l.col, marginRight: 6, verticalAlign: "middle" }} />
+                              {l.k} {now != null ? `${now.toFixed(1)}%` : "—"}
+                              {now != null && then != null && (
+                                <span style={{ color: now - then >= 0 ? UP : DN }}> {now - then >= 0 ? "+" : "−"}{Math.abs(now - then).toFixed(1)} pts y/y</span>
+                              )}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Valuation & Peer Comparison Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: 18, alignItems: "start" }}>
                 {/* Valuation Multiples vs Reference Benchmark */}
@@ -3701,7 +3959,7 @@ export function StockIntelligenceScreen() {
                     <span>COMPANY</span>
                     <span style={{ textAlign: "right" }}>PRICE</span>
                     <span style={{ textAlign: "right" }}>CHANGE</span>
-                    <span style={{ textAlign: "right" }} title="Year to date: price vs the last close of the prior year">YTD</span>
+                    <span style={{ textAlign: "right" }} title="Year to date: price vs the last close of the prior year. A * means it was listed this year, so it is measured from its first close.">YTD</span>
                     <span style={{ textAlign: "right" }}>MKT CAP</span>
                     <span style={{ textAlign: "right" }}>P/E</span>
                     <span style={{ textAlign: "right" }}>RS RANK</span>
@@ -3720,12 +3978,16 @@ export function StockIntelligenceScreen() {
                     peersAll.map((peer) => {
                       const chgCol = (peer.c ?? 0) >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
                       const chgStr = peer.c != null ? `${peer.c >= 0 ? "+" : ""}${peer.c.toFixed(2)}%` : "—";
-                      const ytdBase = peerYtdBase.get(peer.t) ?? null;
+                      const ytdInfo = peerYtdBase.get(peer.t);
+                      const ytdBase = ytdInfo?.base ?? null;
                       const ytd = peer.price != null && peer.price > 0 && ytdBase != null && ytdBase > 0
                         ? (peer.price / ytdBase - 1) * 100
                         : null;
                       const ytdCol = (ytd ?? 0) >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)";
-                      const ytdStr = ytd != null ? `${ytd >= 0 ? "+" : ""}${ytd.toFixed(2)}%` : "—";
+                      // Listed this year: measured from its first close, marked with * and explained on hover.
+                      const ytdSince = ytd != null ? ytdInfo?.since ?? null : null;
+                      const ytdStr = ytd != null ? `${ytd >= 0 ? "+" : ""}${ytd.toFixed(2)}%${ytdSince ? "*" : ""}` : "—";
+                      const ytdTitle = ytdSince ? `Since it began trading (first close ${fmtMarketDate(ytdSince, { month: "short", day: "numeric", year: "numeric" })}): it was listed this year` : undefined;
                       const pStr = peer.price != null ? `$${peer.price >= 10 ? peer.price.toFixed(2) : peer.price.toFixed(3)}` : "—";
                       const mcapStr = peer.marketCap != null ? `$${peer.marketCap >= 1000 ? (peer.marketCap / 1000).toFixed(2) + "T" : peer.marketCap.toFixed(1) + "B"}` : "—";
                       const peStr = peer.peRatio != null && Number.isFinite(peer.peRatio) && peer.peRatio > 0 ? `${peer.peRatio.toFixed(1)}×` : "—";
@@ -3772,7 +4034,7 @@ export function StockIntelligenceScreen() {
                           </span>
                           <span style={{ textAlign: "right" }}>{pStr}</span>
                           <span style={{ textAlign: "right", color: chgCol, fontWeight: 600 }}>{chgStr}</span>
-                          <span style={{ textAlign: "right", color: ytd == null ? "var(--si-text-mid, #93a1af)" : ytdCol, fontWeight: 600 }}>{ytdStr}</span>
+                          <span title={ytdTitle} style={{ textAlign: "right", color: ytd == null ? "var(--si-text-mid, #93a1af)" : ytdCol, fontWeight: 600, cursor: ytdTitle ? "help" : undefined }}>{ytdStr}</span>
                           <span style={{ textAlign: "right" }}>{mcapStr}</span>
                           <span style={{ textAlign: "right" }}>{peStr}</span>
                           <span style={{ textAlign: "right", color: "var(--si-text-mid, #93a1af)" }}>{rsStr}</span>
@@ -4174,9 +4436,18 @@ export function StockIntelligenceScreen() {
 
           const combined = [...liveCatalystItems, ...marketScheduleEvents].filter((c) => inWindow(c.dd));
 
-          // Newest day first; within a day the higher-impact rows lead, then the higher-scoring story.
+          // Two sections, so a date ahead is never mixed up with one behind: UPCOMING first
+          // (soonest on top), then LATEST (newest on top). Within a day the higher-impact
+          // rows lead, then the higher-scoring story.
           const impRank = (i: "HIGH" | "MED" | "LOW") => (i === "HIGH" ? 2 : i === "MED" ? 1 : 0);
-          combined.sort((a, b) => b.dd - a.dd || impRank(b.imp) - impRank(a.imp) || (b.score ?? 0) - (a.score ?? 0));
+          const isUpcoming = (c: { dd: number }) => c.dd >= 0;
+          combined.sort(
+            (a, b) =>
+              Number(isUpcoming(b)) - Number(isUpcoming(a)) ||
+              (isUpcoming(a) ? a.dd - b.dd : b.dd - a.dd) ||
+              impRank(b.imp) - impRank(a.imp) ||
+              (b.score ?? 0) - (a.score ?? 0),
+          );
 
           // Category count breakdown
           const countMap: Record<string, number> = { All: combined.length };
@@ -4221,6 +4492,8 @@ export function StockIntelligenceScreen() {
           const setCatPage = (page: number) => setCatPageState({ key: pageKey, page });
           const pageStart = catPage * CAT_PAGE_SIZE;
           const pageEnd = Math.min(pageStart + CAT_PAGE_SIZE, filtered.length);
+          const upcomingCount = filtered.filter((c) => !c.child && isUpcoming(c)).length;
+          const latestCount = filtered.filter((c) => !c.child && !isUpcoming(c)).length;
 
           const cats = filtered.slice(pageStart, pageEnd).map((cItem) => ({
             ...cItem,
@@ -4235,8 +4508,8 @@ export function StockIntelligenceScreen() {
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {/* Filter Chips with live item counts */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {/* Filter Chips with live item counts: one row, scrolls sideways on a narrow screen */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", alignItems: "center", overflowX: "auto", paddingBottom: 2 }}>
                 {CAT_KINDS.map((cat) => {
                   const isSelected = selectedCatFilter === cat;
                   const cnt = countMap[cat] ?? 0;
@@ -4246,17 +4519,19 @@ export function StockIntelligenceScreen() {
                       onClick={() => setSelectedCatFilter(cat)}
                       style={{
                         height: 32,
-                        padding: "0 14px",
+                        padding: "0 10px",
+                        flexShrink: 0,
+                        whiteSpace: "nowrap",
                         border: `1px solid ${isSelected ? STEEL : "#2a3a4a"}`,
                         background: isSelected ? "rgba(89,128,166,0.22)" : "transparent",
                         color: "var(--si-text-hi, #e8eef4)",
                         fontFamily: "'Manrope', sans-serif",
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: 600,
                         cursor: "pointer",
                         display: "inline-flex",
                         alignItems: "center",
-                        gap: 6,
+                        gap: 5,
                         transition: "all 160ms ease",
                       }}
                     >
@@ -4328,8 +4603,31 @@ export function StockIntelligenceScreen() {
               )}
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {cats.map((cItem, i) => (
+                  <React.Fragment key={pageStart + i}>
+                  {/* Section header at the top of each page and wherever the list switches from ahead to behind */}
+                  {(i === 0 || isUpcoming(cItem) !== isUpcoming(cats[i - 1])) && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: 10,
+                        marginTop: i === 0 ? 0 : 14,
+                        paddingBottom: 6,
+                        borderBottom: "1px solid #1c2733",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 12,
+                        letterSpacing: "0.1em",
+                        fontWeight: 700,
+                        color: isUpcoming(cItem) ? "#a9c6e3" : "#93a1af",
+                      }}
+                    >
+                      <span>{isUpcoming(cItem) ? "UPCOMING" : "LATEST"} ({isUpcoming(cItem) ? upcomingCount : latestCount})</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.04em", color: "#5d6b79" }}>
+                        {isUpcoming(cItem) ? "dates still ahead · soonest first" : "already happened · newest first"}
+                      </span>
+                    </div>
+                  )}
                   <div
-                    key={pageStart + i}
                     className="si-cat-row"
                     style={{
                       border: `1px solid ${cItem.bd}`,
@@ -4428,6 +4726,7 @@ export function StockIntelligenceScreen() {
                       </div>
                     </div>
                   </div>
+                  </React.Fragment>
                 ))}
                 {cats.length === 0 && (
                   <div style={{ padding: "40px 20px", textAlign: "center", border: "1px dashed #2a3a4a", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 14 }}>

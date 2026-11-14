@@ -52,6 +52,30 @@ function pctCell(v: number | null): string {
  *  per-quarter data, e.g. a revenue estimate, onto the right row. */
 export type EpsSalesPt = { label: string; eps: number | null; sales: number | null; end?: string };
 
+/**
+ * How to show a company's sales. They are held in $ millions; once any figure on
+ * screen reaches $1B (1,000 here) the company is "big" and all of its sales show
+ * in billions, otherwise in millions. One unit per table/chart, so a column never
+ * mixes the two. `cell` is for tables, `bar` for a chart label.
+ */
+export function salesDisplay(valuesM: Array<number | null | undefined>) {
+  const biggest = Math.max(0, ...valuesM.map((v) => (v == null ? 0 : Math.abs(v))));
+  const inB = biggest >= 1000;
+  return {
+    inB,
+    /** Column heading unit, e.g. "$B". */
+    heading: inB ? "$B" : "$M",
+    /** Chart card title. */
+    title: inB ? "Sales ($B)" : "Sales ($Mil)",
+    cell: (v: number | null | undefined) => (v == null ? "—" : inB ? (v / 1000).toFixed(2) : v.toFixed(1)),
+    bar: (v: number) => (inB ? (v / 1000).toFixed(2) : String(Math.round(v))),
+    /** Chart axis tick / tooltip: no needless decimals ("50" not "50.00"). */
+    axis: (v: number) => (inB ? String(+(v / 1000).toFixed(2)) : Math.round(v).toLocaleString()),
+    /** Compact label printed on a bar: one decimal once it is $10B or more, to stay narrow. */
+    short: (v: number) => (inB ? (Math.abs(v) >= 10000 ? (v / 1000).toFixed(1) : (v / 1000).toFixed(2)) : String(Math.round(v))),
+  };
+}
+
 export type AnnualRow = {
   year: string;
   eps: number | null;

@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 const src = fs.readFileSync(new URL("../../app/iq/si/stock-intelligence.tsx", import.meta.url), "utf8");
-const cards = src.slice(src.indexOf("{/* 5 Major Event Cards Below"), src.indexOf("const rangesDef"));
+const cards = src.slice(src.indexOf("{/* Cards for the most extreme of the chart's pins"), src.indexOf("const rangesDef"));
 
 describe("Why it moved cards", () => {
   it("every card has the same fixed height and hides overflow", () => {
