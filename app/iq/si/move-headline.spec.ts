@@ -3,7 +3,7 @@
 // headlines below are the real ones from NVDA's feed around each move.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { explainScore, isHoldingsNote, isSolicitation, mentionedDayOffset, pickMoveHeadline, pickRecentMove } from "./move-headline";
+import { cleanHeadline, explainScore, isHoldingsNote, isSolicitation, mentionedDayOffset, pickExtraMoves, pickExtremes, pickMoveHeadline, pickRecentMove } from "./move-headline";
 import { getSixMonthMajorEvents, usableSummary } from "./data";
 
 const day = (d: string) => Date.parse(`${d}T00:00:00Z`);
@@ -168,6 +168,73 @@ describe("pickRecentMove", () => {
   });
 });
 
+describe("cleanHeadline", () => {
+  it("drops the 'Stock Market Today, Nov. 10:' roundup stamp from NVDA's real headlines", () => {
+    assert.equal(
+      cleanHeadline("Stock Market Today, Nov. 10: Nvidia Stock Plunges 5.5% as CEO Scandal Overshadows Its Upcoming Earnings Report"),
+      "Nvidia Stock Plunges 5.5% as CEO Scandal Overshadows Its Upcoming Earnings Report",
+    );
+    assert.equal(
+      cleanHeadline("Stock Market Today, Nov. 13: Nvidia Slides After HSBC Downgrades Stock to 'Hold' Amid CEO Leadership Uncertainty"),
+      "Nvidia Slides After HSBC Downgrades Stock to 'Hold' Amid CEO Leadership Uncertainty",
+    );
+  });
+  it("handles other roundup stamps", () => {
+    assert.equal(cleanHeadline("Stock Market Today: Nvidia falls 4% as chip stocks slide"), "Nvidia falls 4% as chip stocks slide");
+    assert.equal(cleanHeadline("Stocks Today, Friday, November 7: Nvidia sinks on export curbs"), "Nvidia sinks on export curbs");
+    assert.equal(cleanHeadline("Stock Market Today - Nov 6 – Nvidia drops 3% after CEO news"), "Nvidia drops 3% after CEO news");
+    assert.equal(cleanHeadline("LIVE: Nvidia shares tumble as probe widens"), "Nvidia shares tumble as probe widens");
+  });
+  it("leaves real headlines alone, including ones that merely contain the words", () => {
+    for (const h of [
+      "Why Nvidia Stock Fell Today",
+      "Nvidia Plunges 9% as AI Selloff Wipes Out $2.3 Trillion | Closing Bell",
+      "Wall Street slides as Nvidia leads chip stocks lower",
+      "Nvidia in the stock market today: what to know",
+      "Stock Market Today, Nov. 10",
+    ]) assert.equal(cleanHeadline(h), h);
+  });
+  it("never leaves an empty or stub title", () => {
+    assert.equal(cleanHeadline("Stock Market Today: Dow"), "Stock Market Today: Dow");
+  });
+});
+
+describe("pickExtraMoves / pickExtremes", () => {
+  const mv = (idx: number, ret: number) => ({ idx, ret, absRet: Math.abs(ret) });
+  const calm = Array.from({ length: 100 }, (_, i) => mv(i + 1, i % 2 ? 1 : -1)); // median 1% → bar 2.5%
+  const withBig = (big: Record<number, number>) => calm.map((m) => (big[m.idx] != null ? mv(m.idx, big[m.idx]) : m));
+
+  it("adds every unusual move that is not already picked, biggest first", () => {
+    const moves = withBig({ 10: -9, 30: 6, 50: -4, 70: 3 });
+    const picked = [moves[9]];
+    assert.deepEqual(pickExtraMoves(moves, picked, 3).map((m) => m.idx), [30, 50, 70]);
+  });
+  it("ordinary days are never added", () => {
+    assert.deepEqual(pickExtraMoves(calm, [], 3), []);
+  });
+  it("neighbouring days of one story are not all pinned (min gap)", () => {
+    const moves = withBig({ 40: -9, 41: -6, 42: -5 });
+    assert.deepEqual(pickExtraMoves(moves, [], 3).map((m) => m.idx), [40]);
+  });
+  it("a pinned neighbour blocks the extra", () => {
+    const moves = withBig({ 40: -9, 41: -6 });
+    assert.deepEqual(pickExtraMoves(moves, [moves[39]], 3), []);
+  });
+  it("stops at the cap, counting what is already picked", () => {
+    const big: Record<number, number> = {};
+    for (let i = 1; i <= 20; i++) big[i * 5] = -3 - i / 10;
+    const moves = withBig(big);
+    const picked = [moves[4], moves[9]];
+    assert.equal(pickExtraMoves(moves, picked, 3, 6).length, 4);
+    assert.equal(pickExtraMoves(moves, picked, 3).length, 8);
+  });
+  it("the cards are the biggest moves; the later day wins a tie", () => {
+    const pins = [mv(5, -4), mv(9, 8.74), mv(20, -9.26), mv(30, 5), mv(40, -5), mv(50, -2.1), mv(60, 6)];
+    assert.deepEqual(pickExtremes(pins).map((m) => m.idx), [20, 9, 60, 40, 30]);
+    assert.equal(pickExtremes(pins.slice(0, 3)).length, 3);
+  });
+});
+
 describe("isHoldingsNote", () => {
   it("stake filings are holdings notes", () => {
     assert.ok(isHoldingsNote("NVIDIA Corporation $NVDA Shares Acquired by First County Bank CT"));
@@ -240,11 +307,29 @@ describe("the Why It Moved chart as a whole", () => {
     assert.equal(getSixMonthMajorEvents("NVDA", stock, series(60, old), [], [], []).length, 5);
   });
 
-  it("when the latest session itself is the big one, the existing rule covers it and nothing is added", () => {
+  it("a 'Stock Market Today, Nov. N:' headline shows as the news itself on the card, the pop-up and the notable events", () => {
+    const bars = series(60, { 50: -0.055 });
+    const at = (h: number, headline: string) => ({ publishedAt: `${iso(50)}T${String(h).padStart(2, "0")}:00:00Z`, headline });
+    const news = [
+      at(14, "Stock Market Today, Nov. 10: Nvidia Stock Plunges 5.5% as CEO Scandal Overshadows Its Upcoming Earnings Report"),
+      at(15, "Stock Market Today, Nov. 10: Nvidia CEO Jensen Huang resigns amid probe"),
+    ];
+    const card = getSixMonthMajorEvents("NVDA", stock, bars, [], news, []).find((e) => e.mv < -5);
+    assert.ok(card);
+    assert.doesNotMatch(card.label, /Stock Market Today/);
+    assert.match(card.label, /^Nvidia /);
+    for (const c of card.context ?? []) assert.doesNotMatch(c.text, /Stock Market Today/);
+  });
+
+  it("the chart pins every unusual move (all five −8% days and the latest −5%); the cards are the five most extreme", () => {
     const old = { 5: -0.08, 15: -0.08, 25: -0.08, 35: -0.08, 45: -0.08 };
     const events = getSixMonthMajorEvents("NVDA", stock, series(60, { ...old, 59: -0.05 }), [], [], []);
-    assert.equal(events.length, 5);
-    assert.ok(events[events.length - 1].mv < -4.9, "the latest session is the last card");
+    assert.equal(events.length, 6, "the old rule dropped an −8% day to make room; the chart keeps it now");
+    assert.ok(events[events.length - 1].mv < -4.9, "the latest session is the last pin");
+    const cards = events.filter((e) => e.card);
+    assert.equal(cards.length, 5);
+    assert.ok(cards.every((e) => e.mv < -7.9), "the −5% day is a pin but not an extreme");
+    assert.equal(events.find((e) => !e.card)?.num, 6, "pins keep their chart number, so card numbers can skip");
   });
 });
 

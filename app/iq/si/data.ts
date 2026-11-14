@@ -1,7 +1,7 @@
 import { fmtMarketDate } from "../calendar-range";
 import { surprisePct } from "../types";
 import { StockItem, DetailStock, SITab, UpcomingEvent, MajorSixMonthEvent, AssessSeg, EventMetric, EventContext } from "./types";
-import { FILLER_RE, isHoldingsNote, isSolicitation, mentionedDayOffset, pickMoveHeadline, pickRecentMove } from "./move-headline";
+import { FILLER_RE, cleanHeadline, isHoldingsNote, isSolicitation, mentionedDayOffset, pickExtraMoves, pickExtremes, pickMoveHeadline, pickRecentMove } from "./move-headline";
 import { scoreNews, articleTime, classifyDirection, type SignificanceTier } from "./news-significance";
 export type { MajorSixMonthEvent };
 
@@ -153,6 +153,7 @@ export interface SiFacts {
   targetMean: number | null;
   upgrades90: number | null;
   downgrades90: number | null;
+  ptCuts90: number | null; // price-target cuts with the rating unchanged
   // Technicals
   sma9: number | null; // simple averages of the last 9 / 21 daily closes
   sma21: number | null;
@@ -192,7 +193,7 @@ export const EMPTY_FACTS: SiFacts = {
   price: null, changePct: null, sector: null,
   revGrowthYoY: null, grossMargin: null, opMargin: null, opMarginYearAgo: null, epsBeats: null, epsReports: null,
   fwdEps: null, nextFyEps: null, trailingPe: null,
-  consensus: null, buyCount: null, holdCount: null, sellCount: null, targetMean: null, upgrades90: null, downgrades90: null,
+  consensus: null, buyCount: null, holdCount: null, sellCount: null, targetMean: null, upgrades90: null, downgrades90: null, ptCuts90: null,
   sma9: null, sma21: null, sma50: null, sma200: null, rsi14: null, rvol: null, rsRating: null, pctFromHigh52: null, beta: null, realizedVol30: null,
   pivotR1: null, pivotR2: null, pivotS1: null, pivotS2: null, sectorRank: null, sectorRankTotal: null,
   instOwnershipPct: null, instHoldersChange: null, instSharesChange: null, instPutCallRatio: null, insiderNet90: null,
@@ -261,9 +262,10 @@ export function buildDrivers(f: SiFacts): Driver[] {
     const g = (f.nextFyEps / f.fwdEps - 1) * 100;
     d.push(["EARN", "Forward EPS growth", `${pct1(g)} next FY vs this FY (consensus)`, clamp(50 + g * 1.2), "CK", 3]);
   }
-  if (has(f.upgrades90) && has(f.downgrades90) && f.upgrades90 + f.downgrades90 > 0) {
+  if (has(f.upgrades90) && has(f.downgrades90) && f.upgrades90 + f.downgrades90 + (f.ptCuts90 ?? 0) > 0) {
     const net = f.upgrades90 - f.downgrades90;
-    d.push(["EARN", "Analyst rating changes", `${f.upgrades90} upgrades / ${f.downgrades90} downgrades (90 days)`, clamp(50 + net * 10), "", 1]);
+    const ptCuts = has(f.ptCuts90) && f.ptCuts90 > 0 ? ` / ${f.ptCuts90} PT cut${f.ptCuts90 === 1 ? "" : "s"}` : "";
+    d.push(["EARN", "Analyst rating changes", `${f.upgrades90} upgrades / ${f.downgrades90} downgrades${ptCuts} (90 days)`, clamp(50 + net * 10), "", 1]);
   }
   // TECHNICALS
   if (has(f.price) && has(f.sma50) && has(f.sma200)) {
@@ -596,6 +598,63 @@ export function fundSeries(_t: string): number[][] {
   return [];
 }
 
+export type TrendRow = { tone: "bad" | "good" | "warn" | "neutral"; mark: string; title: string; value: string; note?: string };
+
+/**
+ * The Technical Read as a few checkable rows instead of one sentence: where price
+ * stands against the 50 and 200 DMA (with the distance), what the two averages'
+ * order really means, and the RSI. Same inputs as `trendRead`; a row whose input
+ * is missing is simply left out.
+ */
+export function trendRows(price: number | null, sma50: number | null, sma200: number | null, rsi: number | null): TrendRow[] {
+  const rows: TrendRow[] = [];
+  const $ = (v: number) => `$${v.toFixed(2)}`;
+  const pct = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
+  const vs = (name: string, ma: number | null) => {
+    if (price == null || ma == null || !(ma > 0)) return;
+    const d = (price / ma - 1) * 100;
+    const at = Math.abs(d) < 1;
+    rows.push({ tone: at ? "warn" : d > 0 ? "good" : "bad", mark: at ? "≈" : d > 0 ? "✓" : "✕", title: `Price ${at ? "at" : d > 0 ? "above" : "below"} ${name}`, value: `${$(ma)}  ${pct(d)}` });
+  };
+  vs("50 DMA", sma50);
+  vs("200 DMA", sma200);
+
+  if (sma50 != null && sma200 != null && sma200 > 0) {
+    const gap = (sma50 / sma200 - 1) * 100;
+    const up = gap > 0;
+    const px = price != null ? { above: price > sma50 && price > sma200, below: price < sma50 && price < sma200 } : null;
+    // The averages lag: when price has already left both, their order is old news.
+    const stale = px != null && ((up && px.below) || (!up && px.above));
+    rows.push({
+      tone: stale ? "warn" : up ? "good" : "bad",
+      mark: stale ? "!" : up ? "✓" : "✕",
+      title: `50 DMA ${up ? "above" : "below"} 200 DMA`,
+      value: `${pct(gap)} gap`,
+      note: stale
+        ? up
+          ? "Left over from the old uptrend. Averages lag; if price stays down here the 50 DMA will cross below the 200 DMA (a death cross)."
+          : "Left over from the old downtrend. Averages lag; if price holds up here the 50 DMA will cross above the 200 DMA (a golden cross)."
+        : up ? "Averages are in an uptrend order." : "Averages are in a downtrend order.",
+    });
+  }
+
+  if (rsi != null && Number.isFinite(rsi)) {
+    const over = rsi >= 70, under = rsi <= 30;
+    rows.push({
+      tone: over ? "warn" : under ? "warn" : "neutral",
+      mark: "●",
+      title: `RSI ${rsi.toFixed(1)}`,
+      value: over ? "overbought" : under ? "oversold" : "neutral",
+      note: under
+        ? "Bounces are common here, but oversold alone is not a reversal signal."
+        : over
+          ? "Pullbacks are common here, but overbought alone is not a top signal."
+          : undefined,
+    });
+  }
+  return rows;
+}
+
 /**
  * One sentence on price vs its 50 and 200 DMA, from the real values.
  *
@@ -923,7 +982,8 @@ function notableContext(news: any[] | null | undefined, moveDay: number, skipTit
     if (rank < 0) continue;
     seen.add(headline);
     const lead = firstSentence(x.summary);
-    hits.push({ rank, item: { kind: NOTABLE_KINDS[rank].kind, text: lead && lead !== headline ? `${headline} — ${lead}` : headline, tone: toneOf(x) } });
+    const shown = cleanHeadline(headline);
+    hits.push({ rank, item: { kind: NOTABLE_KINDS[rank].kind, text: lead && lead !== headline ? `${shown} — ${lead}` : shown, tone: toneOf(x) } });
   }
   return hits.sort((a, b) => a.rank - b.rank).slice(0, 3).map((h) => h.item);
 }
@@ -1039,7 +1099,10 @@ const STORY_COVERAGE_WEIGHT = 0.2;
  * The major daily moves of the last six months: up to five picked by move size
  * plus how much the day's best story matters, spread across the window, with the
  * latest session always included when it moved materially, and one extra card
- * for the latest few sessions if none of those picks covers them. Each is
+ * for the latest few sessions if none of those picks covers them. Every other
+ * unusual move is then pinned too (up to MAX_CHART_MARKERS in all), and the
+ * five biggest of the pins are flagged `card`: the chart marks all the major
+ * incidents, the cards under it show the extreme ones. Each is
  * labelled from real data: an FMP earnings report within 3 days (with its
  * actual beat/miss), else a headline that explains the move (pickMoveHeadline),
  * else just the move itself. Nothing is invented — no bars means no events.
@@ -1117,7 +1180,14 @@ export function getSixMonthMajorEvents(
     selected.push(recent);
     selected.sort((a, b) => a.idx - b.idx);
   }
-
+  // The chart marks every major incident, not just five: add the other unusual
+  // moves (kept apart, capped). The cards under it are only the most extreme.
+  const extra = pickExtraMoves(moves, selected, MIN_GAP);
+  if (extra.length) {
+    selected.push(...extra);
+    selected.sort((a, b) => a.idx - b.idx);
+  }
+  const cardNums = new Set(pickExtremes(selected).map((m) => m.idx));
 
   return selected.map((m, i) => {
     const dateStr = fmtMarketDate(m.t, { month: "short", day: "2-digit" });
@@ -1163,6 +1233,7 @@ export function getSixMonthMajorEvents(
         metrics: earningsMetrics(q, eps, est, quarters, reports),
         commentary: earningsCommentary(news, reportDay, moveDay),
         context: notableContext(news, moveDay),
+        card: cardNums.has(m.idx),
       };
     }
 
@@ -1196,7 +1267,9 @@ export function getSixMonthMajorEvents(
           !(named != null && named < 0 && named >= -7)
         );
       })?.x;
-    const title = n ? String(n.headline ?? n.title ?? "") : "";
+    const rawTitle = n ? String(n.headline ?? n.title ?? "") : "";
+    // Show the news itself, not the "Stock Market Today, Nov. 10:" roundup stamp in front of it.
+    const title = cleanHeadline(rawTitle);
     if (title) {
       const lower = title.toLowerCase();
       // "Earnings" only when a report actually fell on this move (handled
@@ -1213,7 +1286,8 @@ export function getSixMonthMajorEvents(
         mv: +m.ret.toFixed(2),
         details: usableSummary(n.summary || n.text) ?? `Stock moved ${retFmt} that session.`,
         fr,
-        context: notableContext(news, moveDay, title),
+        context: notableContext(news, moveDay, rawTitle),
+        card: cardNums.has(m.idx),
       };
     }
 
@@ -1226,6 +1300,7 @@ export function getSixMonthMajorEvents(
       details: "Largest move in this stretch; no earnings report or headline explaining it was found.",
       fr,
       context: notableContext(news, moveDay),
+      card: cardNums.has(m.idx),
     };
   });
 }

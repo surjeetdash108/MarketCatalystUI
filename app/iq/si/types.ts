@@ -62,6 +62,8 @@ export interface MajorSixMonthEvent {
   commentary?: string;
   /** Notable non-earnings headlines in the window (CEO exits, deals, probes, ...). */
   context?: EventContext[];
+  /** One of the most extreme moves: gets a card under the chart (every event gets a pin on it). */
+  card?: boolean;
 }
 
 /** A run of the assessment sentence; `tone` tints it green ("up") or red ("dn"). */
