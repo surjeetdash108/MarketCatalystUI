@@ -4,7 +4,7 @@ import { useState } from "react";
 import { NotAvailable, VendorTag, useShowVendorTags } from "./utils";
 import type { FinancialsDoc, AnnualFinancials, QuarterFinancials, EpsHistoryRow } from "./types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, estimatedAnnualEps, ADJUSTED_SURPRISE_LABEL } from "./types";
-import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type AnnualRow } from "./eps-sales-data";
+import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, salesDisplay, type AnnualRow } from "./eps-sales-data";
 
 
 
@@ -165,6 +165,15 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
     };
   });
 
+  // Millions for a smaller company, billions once its sales reach $1B. One unit for
+  // every chart and table here, and it does not change when Quarter/Annual is toggled.
+  const sd = salesDisplay([
+    ...series.map(d => d.sales),
+    ...annualRows.map(r => r.sales),
+    ...forwardRows.map(r => r.sales),
+    ...quarterlyRows.map(r => r.sales),
+  ]);
+
   // Some companies have filing periods but every EPS and revenue value is null —
   // foreign filers (20-F/6-K, e.g. WALD — QA row 201), new listings, SPACs. The
   // message names those reasons instead of assuming a SPAC — detect that so we show a clear message rather
@@ -213,12 +222,11 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
         </div>
         <div className="card">
           <div className="card-h">
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><h3>Sales ($Mil)</h3><VendorTag v={["fmp", "polygon"]} /></span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><h3>{sd.title}</h3><VendorTag v={["fmp", "polygon"]} /></span>
             {seg}
           </div>
           <div className="card-b" style={{ paddingTop: 8 }}>
-            <MetricBars title="Sales ($Mil)" data={series.map(d => ({ label: d.label, v: d.sales }))} fmt={v => Math.round(v).toLocaleString()}
-              valueFmt={v => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}B` : `${Math.round(v)}M`)} />
+            <MetricBars title={sd.title} data={series.map(d => ({ label: d.label, v: d.sales }))} fmt={sd.axis} valueFmt={sd.short} />
           </div>
         </div>
       </div>
@@ -234,7 +242,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
             <div style={{ overflowX: "auto" }}>
               <table className="tbl">
                 <thead>
-                  <tr><th>Fiscal year</th><th className="num">EPS</th><th className="num">Est.</th><th className="num">%chg</th><th className="num">%surp</th><th className="num">Sales (M)</th><th className="num">%chg</th></tr>
+                  <tr><th>Fiscal year</th><th className="num">EPS</th><th className="num">Est.</th><th className="num">%chg</th><th className="num">%surp</th><th className="num">Sales ({sd.inB ? "B" : "M"})</th><th className="num">%chg</th></tr>
                 </thead>
                 <tbody>
                   {/* Newest first: forward `*YYYY` estimates (future) on top — dimmed,
@@ -246,7 +254,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
                       <td className="num">{r.epsEst != null ? `$${r.epsEst.toFixed(2)}` : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.epsChg)}`}>{r.epsChg}</td>
                       <td className={`num${chgCls(r.epsSurp)}`}>{r.epsSurp}</td>
-                      <td className="num">{r.sales != null ? r.sales.toFixed(1) : <NotAvailable />}</td>
+                      <td className="num">{r.sales != null ? sd.cell(r.sales) : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.salesChg)}`}>{r.salesChg}</td>
                     </tr>
                   ))}
@@ -257,7 +265,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
                       <td className="num" style={{ color: "var(--text-dim-solid)" }}>{r.epsEst != null ? `$${r.epsEst.toFixed(2)}` : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.epsChg)}`}>{r.epsChg}</td>
                       <td className={`num${chgCls(r.epsSurp)}`}>{r.epsSurp}</td>
-                      <td className="num">{r.sales != null ? r.sales.toFixed(1) : <NotAvailable />}</td>
+                      <td className="num">{r.sales != null ? sd.cell(r.sales) : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.salesChg)}`}>{r.salesChg}</td>
                     </tr>
                   ))}
@@ -279,7 +287,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
             <div style={{ overflowX: "auto" }}>
               <table className="tbl">
                 <thead>
-                  <tr><th>Quarter</th><th className="num" title="GAAP diluted EPS">EPS (GAAP)</th><th className="num">%chg</th><th className="num" title={showVendor ? "FMP adjusted EPS — the basis of the estimate" : "Adjusted EPS — the basis of the estimate"}>Adj. EPS</th><th className="num">Est. (adj.)</th><th className="num" title={ADJUSTED_SURPRISE_LABEL}>Adj. vs est.</th><th className="num">Sales (M)</th><th className="num">%chg</th><th className="num">%surp</th></tr>
+                  <tr><th>Quarter</th><th className="num" title="GAAP diluted EPS">EPS (GAAP)</th><th className="num">%chg</th><th className="num" title={showVendor ? "FMP adjusted EPS — the basis of the estimate" : "Adjusted EPS — the basis of the estimate"}>Adj. EPS</th><th className="num">Est. (adj.)</th><th className="num" title={ADJUSTED_SURPRISE_LABEL}>Adj. vs est.</th><th className="num">Sales ({sd.inB ? "B" : "M"})</th><th className="num">%chg</th><th className="num">%surp</th></tr>
                 </thead>
                 <tbody>
                   {/* Newest quarter first. */}
@@ -291,7 +299,7 @@ export function EpsSalesWidget({ financialsDoc }: { financialsDoc: FinancialsDoc
                       <td className="num">{r.epsAdj != null ? `$${r.epsAdj.toFixed(2)}` : <NotAvailable />}</td>
                       <td className="num">{r.epsEst != null ? `$${r.epsEst.toFixed(2)}` : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.epsSurp)}`}>{r.epsSurp}</td>
-                      <td className="num">{r.sales != null ? r.sales.toFixed(1) : <NotAvailable />}</td>
+                      <td className="num">{r.sales != null ? sd.cell(r.sales) : <NotAvailable />}</td>
                       <td className={`num${chgCls(r.salesChg)}`}>{r.salesChg}</td>
                       <td className="num">{r.salesSurp}</td>
                     </tr>

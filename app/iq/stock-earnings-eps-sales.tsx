@@ -5,7 +5,7 @@ import { DataState } from "./utils";
 import { useApiResource } from "./hooks/useApiResource";
 import { fmtDate } from "./calendar-range";
 import type { FinancialsDoc } from "./types";
-import { annualEpsSalesRows, epsSalesSeries, forwardAnnualEstimates, pctChangeStr, quarterlyEpsSalesRows } from "./eps-sales-data";
+import { annualEpsSalesRows, epsSalesSeries, forwardAnnualEstimates, pctChangeStr, quarterlyEpsSalesRows, salesDisplay } from "./eps-sales-data";
 
 /** GET /live/estimates — FMP quarterly analyst consensus (oldest first). */
 interface QuarterlyEstimate {
@@ -68,7 +68,6 @@ const MUTED = "#8a96ad";
 
 const monthLabel = (iso: string) => fmtDate(iso, { month: "short", year: "2-digit" }).replace(" ", "-");
 const epsTxt = (v: number | null) => (v == null ? "—" : v.toFixed(2));
-const salesTxt = (v: number | null) => (v == null ? "—" : v.toFixed(1));
 const chgClass = (s: string) => (s.startsWith("-") ? "down" : s.startsWith("+") ? "up" : "dim");
 
 /** One panel of bars (EPS or Sales), value on top, label angled below. The card heading names it. */
@@ -214,13 +213,21 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
         ...fwdARows.map((r) => ({ label: r.year, eps: r.eps, sales: r.sales, est: true })),
       ];
 
+  // Millions for a smaller company, billions once its sales reach $1B; one unit across charts and tables.
+  const sd = salesDisplay([
+    ...reportedQ.map((r) => r.sales),
+    ...fwdQRows.map((r) => r.sales),
+    ...reportedA.map((r) => r.sales),
+    ...fwdARows.map((r) => r.sales),
+  ]);
+
   const flash = (msg: string) => { setNote(msg); setTimeout(() => setNote(null), 2200); };
 
   const copyData = async () => {
     const lines = [
-      `${sym} — ${period === "Q" ? "Quarterly" : "Annual"} EPS & Sales ($M)`,
-      ["Period", "EPS", "Sales ($M)", "Type"].join("\t"),
-      ...bars.map((b) => [b.label, epsTxt(b.eps), salesTxt(b.sales), b.est ? "Estimate" : "Reported"].join("\t")),
+      `${sym} — ${period === "Q" ? "Quarterly" : "Annual"} EPS & Sales (${sd.heading})`,
+      ["Period", "EPS", `Sales (${sd.heading})`, "Type"].join("\t"),
+      ...bars.map((b) => [b.label, epsTxt(b.eps), sd.cell(b.sales), b.est ? "Estimate" : "Reported"].join("\t")),
     ];
     try { await navigator.clipboard.writeText(lines.join("\n")); flash("Copied"); }
     catch { flash("Copy failed"); }
@@ -326,10 +333,10 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
         <div className="card">
           <div className="card-b" style={{ paddingBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>Sales ($Mil)</h3>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--text-hi)" }}>{sd.title}</h3>
             </div>
             <svg viewBox="0 0 500 240" width="100%" role="img" aria-label={`${sym} Sales`} style={{ display: "block" }}>
-              <Panel x={10} w={480} bars={bars} value={(b) => b.sales} fmt={(v) => String(Math.round(v))} />
+              <Panel x={10} w={480} bars={bars} value={(b) => b.sales} fmt={sd.bar} />
             </svg>
             <div style={{ display: "flex", gap: 16, fontSize: ".74rem", color: "var(--text-dim-solid)", padding: "4px 4px 2px" }}>
               <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ACTUAL, marginRight: 6 }} />Reported</span>
@@ -350,7 +357,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                   <th style={{ ...th, textAlign: "left" }}>Fiscal Year</th>
                   <th style={th}>EPS</th>
                   <th style={th}>% Chg</th>
-                  <th style={th}>Sales ($M)</th>
+                  <th style={th}>Sales ({sd.heading})</th>
                   <th style={th}>% Chg</th>
                 </tr>
               </thead>
@@ -360,7 +367,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                     <td style={firstCol}>{r.year}</td>
                     <td style={td}>{epsTxt(r.eps)}</td>
                     <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
-                    <td style={td}>{salesTxt(r.sales)}</td>
+                    <td style={td}>{sd.cell(r.sales)}</td>
                     <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
                   </tr>
                 ))}
@@ -369,7 +376,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                     <td style={firstCol}>*{r.year}</td>
                     <td style={td}>{epsTxt(r.eps)}</td>
                     <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
-                    <td style={td}>{salesTxt(r.sales)}</td>
+                    <td style={td}>{sd.cell(r.sales)}</td>
                     <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
                   </tr>
                 ))}
@@ -388,7 +395,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                   <th style={th}>EPS</th>
                   <th style={th}>% Chg</th>
                   <th style={th}>Surprise</th>
-                  <th style={th}>Sales ($M)</th>
+                  <th style={th}>Sales ({sd.heading})</th>
                   <th style={th}>% Chg</th>
                   <th style={th}>Surprise</th>
                 </tr>
@@ -400,7 +407,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                     <td style={td}>{epsTxt(r.eps)}</td>
                     <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
                     <td style={valStyle(r.epsSurp)}>{r.epsSurp}</td>
-                    <td style={td}>{salesTxt(r.sales)}</td>
+                    <td style={td}>{sd.cell(r.sales)}</td>
                     <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
                     <td style={valStyle(r.salesSurp)}>{r.salesSurp}</td>
                   </tr>
@@ -411,7 +418,7 @@ export function StockEarningsEpsSales({ sym, financialsDoc, loading }: {
                     <td style={td}>{epsTxt(r.eps)}</td>
                     <td style={valStyle(r.epsChg)}>{r.epsChg}</td>
                     <td style={td} className="dim">—</td>
-                    <td style={td}>{salesTxt(r.sales)}</td>
+                    <td style={td}>{sd.cell(r.sales)}</td>
                     <td style={valStyle(r.salesChg)}>{r.salesChg}</td>
                     <td style={td} className="dim">—</td>
                   </tr>

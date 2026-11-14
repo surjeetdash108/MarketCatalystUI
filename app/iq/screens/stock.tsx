@@ -41,7 +41,7 @@ import type {
   DividendHistoryDoc, SplitsDoc, FinancialsDoc, QuarterFinancials, AnnualFinancials, EpsHistoryRow, NewsArticleDoc, LiveEarningsDoc, SectorApiDoc, AiAnalysisDoc,
 } from "../types";
 import { reportedQuarterEps, quarterEpsSurprisePct, reportedAnnualEps, TX_CODE_LABEL, gaapQuarterEps, quarterLabel, ADJUSTED_SURPRISE_LABEL } from "../types";
-import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, type EpsSalesPt } from "../eps-sales-data";
+import { pctChangeStr, epsSalesSeries, annualEpsSalesRows, quarterlyEpsSalesRows, forwardAnnualEstimates, salesDisplay, type EpsSalesPt } from "../eps-sales-data";
 import { surprisePct, formatEpsSurprise } from "../types";
 import { computeTechnicalRating, labelOf, scoreOf, tally, type RatingRow, type Tally, type Vote } from "../technical-rating";
 import { range52, fiftyTwoWeekBars } from "../range52";
@@ -431,6 +431,8 @@ function EpsSalesBars({ data }: { data: EpsSalesPt[] }) {
   // EPS and Sales in SEPARATE bordered boxes so each is identified on its own
   // (matches the Earnings Hub's split EPS / Sales cards).
   const box = { border: "1px solid var(--border-soft)", borderRadius: 10, background: "var(--surface-2)", padding: "10px 12px" };
+  // Millions for a smaller company, billions once its sales reach $1B.
+  const sd = salesDisplay(data.map(d => d.sales));
   return (
     <div className="eps-sales-grid">
       <div style={box}>
@@ -438,8 +440,8 @@ function EpsSalesBars({ data }: { data: EpsSalesPt[] }) {
           fmt={v => v.toFixed(2)} />
       </div>
       <div style={box}>
-        <MetricBars title="Sales ($Mil)" data={data.map(d => ({ label: d.label, v: d.sales }))}
-          fmt={v => Math.round(v).toLocaleString()} />
+        <MetricBars title={sd.title} data={data.map(d => ({ label: d.label, v: d.sales }))}
+          fmt={sd.bar} />
       </div>
     </div>
   );
@@ -3941,6 +3943,8 @@ export function StockScreen({
             });
             const annualRows = [...reportedAnnualRows, ...forwardRows];
             const quarterlyRows = quarterlyEpsSalesRows(financialsDoc?.quarters ?? [], financialsDoc?.epsHistory ?? []);
+            // Millions for a smaller company, billions once its sales reach $1B; one unit for both tables.
+            const sd = salesDisplay([...annualRows.map(r => r.sales), ...quarterlyRows.map(r => r.sales)]);
             return (
               <div className="side-drawer" style={{ zIndex: 52 }}>
                 <div className="drawer-h">
@@ -3995,7 +3999,7 @@ export function StockScreen({
                                 <th>Fiscal year</th>
                                 <th className="num">EPS</th>
                                 <th className="num">%chg</th>
-                                <th className="num">Sales (mil)</th>
+                                <th className="num">Sales ({sd.inB ? "bil" : "mil"})</th>
                                 <th className="num">%chg</th>
                               </tr>
                             </thead>
@@ -4005,7 +4009,7 @@ export function StockScreen({
                                   <td style={{ fontWeight: 700, color: "var(--text-hi)" }}>{r.year}</td>
                                   <td className="num">{r.eps != null ? `$${r.eps.toFixed(2)}` : <NotAvailable />}</td>
                                   <td className={`num${r.epsChg.startsWith("+") ? " up" : r.epsChg.startsWith("-") ? " down" : ""}`}>{r.epsChg}</td>
-                                  <td className="num">{r.sales != null ? r.sales.toFixed(1) : <NotAvailable />}</td>
+                                  <td className="num">{r.sales != null ? sd.cell(r.sales) : <NotAvailable />}</td>
                                   <td className={`num${r.salesChg.startsWith("+") ? " up" : r.salesChg.startsWith("-") ? " down" : ""}`}>{r.salesChg}</td>
                                 </tr>
                               ))}
@@ -4037,7 +4041,7 @@ export function StockScreen({
                                 <th className="num">EPS</th>
                                 <th className="num">%chg</th>
                                 <th className="num">%surp</th>
-                                <th className="num">Sales (mil)</th>
+                                <th className="num">Sales ({sd.inB ? "bil" : "mil"})</th>
                                 <th className="num">%chg</th>
                                 <th className="num">%surp</th>
                               </tr>
@@ -4049,7 +4053,7 @@ export function StockScreen({
                                   <td className="num">{r.eps != null ? `$${r.eps.toFixed(2)}` : <NotAvailable />}</td>
                                   <td className={`num${r.epsChg.startsWith("+") ? " up" : r.epsChg.startsWith("-") ? " down" : ""}`}>{r.epsChg}</td>
                                   <td className={`num${r.epsSurp.startsWith("+") ? " up" : r.epsSurp.startsWith("-") ? " down" : ""}`}>{r.epsSurp}</td>
-                                  <td className="num">{r.sales != null ? r.sales.toFixed(1) : <NotAvailable />}</td>
+                                  <td className="num">{r.sales != null ? sd.cell(r.sales) : <NotAvailable />}</td>
                                   <td className={`num${r.salesChg.startsWith("+") ? " up" : r.salesChg.startsWith("-") ? " down" : ""}`}>{r.salesChg}</td>
                                   <td className="num">{r.salesSurp}</td>
                                 </tr>
