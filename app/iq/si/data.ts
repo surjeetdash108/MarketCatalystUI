@@ -1192,6 +1192,9 @@ export function getSixMonthMajorEvents(
   return selected.map((m, i) => {
     const dateStr = fmtMarketDate(m.t, { month: "short", day: "2-digit" });
     const fr = +(m.idx / (bars.length - 1)).toFixed(2);
+    // The session's day and the previous session's, as YYYY-MM-DD: what the AI card lookup is keyed on.
+    const iso = new Date(m.t).toISOString().slice(0, 10);
+    const prevIso = bars[m.idx - 1] ? new Date(bars[m.idx - 1].t).toISOString().slice(0, 10) : undefined;
     const retFmt = `${m.ret >= 0 ? "+" : "−"}${Math.abs(m.ret).toFixed(2)}%`;
 
     // An earnings move is the report day itself (before-open report) or the
@@ -1225,6 +1228,8 @@ export function getSixMonthMajorEvents(
       return {
         num: i + 1,
         date: dateStr,
+        iso,
+        prevIso,
         label: `${stockName} ${period} earnings${verdict ? ` · ${verdict}` : ""}`,
         category: "Earnings" as const,
         mv: +m.ret.toFixed(2),
@@ -1281,6 +1286,8 @@ export function getSixMonthMajorEvents(
       return {
         num: i + 1,
         date: dateStr,
+        iso,
+        prevIso,
         label: title,
         category: cat,
         mv: +m.ret.toFixed(2),
@@ -1294,6 +1301,8 @@ export function getSixMonthMajorEvents(
     return {
       num: i + 1,
       date: dateStr,
+      iso,
+      prevIso,
       label: `${retFmt} session move`,
       category: "Macro" as const,
       mv: +m.ret.toFixed(2),

@@ -42,6 +42,7 @@ import {
   trendRows,
   type TrendRow,
 } from "./data";
+import { applyAiCards, moveCardPath, type AiMoveCard } from "./move-card-ai";
 import { scoreNews, reactionAfter, summarizeNewsSentiment, classifyDirection } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
 import { useTickerSearch } from "../hooks/useTickerSearch";
@@ -153,13 +154,46 @@ function SixMonthAreaChart({
   ticker,
   stock,
   bars,
-  events,
+  events: baseEvents,
 }: {
   ticker: string;
   stock: StockItem;
   bars?: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }>;
   events: MajorSixMonthEvent[];
 }) {
+  // AI-written heading and summary per card (GET /live/move-explanation). The rule-based text shows first and is
+  // swapped for this when it arrives; no answer (none for the day, model busy, route missing) leaves the old text.
+  const [aiCards, setAiCards] = useState<{ ticker: string; byIso: Record<string, AiMoveCard> }>({ ticker: "", byIso: {} });
+  const aiRequests = useMemo(
+    () =>
+      baseEvents
+        .map((ev) => ({ iso: ev.iso, path: moveCardPath(ticker, stock.name, ev) }))
+        .filter((r): r is { iso: string; path: string } => !!r.iso && !!r.path),
+    [baseEvents, ticker, stock.name],
+  );
+  const aiRequestKey = aiRequests.map((r) => r.path).join("|");
+  useEffect(() => {
+    if (!aiRequests.length) return;
+    const ctl = new AbortController();
+    (async () => {
+      // One at a time: each is a model call, and the model has a per-minute token limit.
+      for (const r of aiRequests) {
+        if (ctl.signal.aborted) return;
+        try {
+          const doc = await apiGet<AiMoveCard>(r.path, { signal: ctl.signal });
+          if (ctl.signal.aborted) return;
+          setAiCards((cur) => ({ ticker, byIso: { ...(cur.ticker === ticker ? cur.byIso : {}), [r.iso]: doc } }));
+        } catch {
+          // keep the rule-based text for this card
+        }
+      }
+    })();
+    return () => ctl.abort();
+    // aiRequestKey stands for aiRequests: same requests, same effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiRequestKey, ticker]);
+  const events = useMemo(() => applyAiCards(baseEvents, aiCards.ticker === ticker ? aiCards.byIso : {}), [baseEvents, aiCards, ticker]);
+
   const [hoveredEventId, setHoveredEventId] = useState<number | null>(null);
   // The card whose full text is open in its pop-up: on hover, or pinned by a click / tap.
   const [openCard, setOpenCard] = useState<{ num: number; pinned: boolean } | null>(null);
@@ -338,33 +372,11 @@ function SixMonthAreaChart({
               <g key={ev.num}>
                 {/* Vertical guide line */}
                 <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={isHover ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border-sec, rgba(127,168,208,0.22))"} strokeDasharray="3 3" strokeWidth={isHover ? 1.5 : 1} />
-                {/* Glow ring */}
-                <circle cx={ev.x} cy={ev.y} r={isHover ? 16 : 11} fill={isHover ? "var(--si-accent-bg, rgba(127,168,208,0.3))" : "rgba(34,197,94,0.18)"} stroke={isHover ? "var(--si-accent, #a9c6e3)" : "var(--up, #22c55e)"} strokeWidth="1" />
-                {/* Center pin circle */}
-                <circle
-                  cx={ev.x}
-                  cy={ev.y}
-                  r="9"
-                  fill={isHover ? "var(--si-accent, #5980a6)" : "var(--si-card-solid, #080b10)"}
-                  stroke={isHover ? "var(--si-accent, #5980a6)" : "var(--si-accent-soft, #7fa8d0)"}
-                  strokeWidth="2"
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={() => setHoveredEventId(ev.num)}
-                  onMouseLeave={() => setHoveredEventId(null)}
-                />
-                {/* Number inside pin */}
-                <text
-                  x={ev.x}
-                  y={ev.y + 3.5}
-                  textAnchor="middle"
-                  fill={isHover ? "#ffffff" : "var(--si-accent-soft, #a9c6e3)"}
-                  fontSize="10"
-                  fontWeight="800"
-                  fontFamily="'JetBrains Mono', monospace"
-                  style={{ pointerEvents: "none" }}
-                >
-                  {ev.num}
-                </text>
+                {/* Hover halo (only while the pin or its card is hovered) */}
+                {isHover && <circle cx={ev.x} cy={ev.y} r={13} fill="var(--si-accent-bg, rgba(127,168,208,0.3))" stroke="var(--si-accent, #a9c6e3)" strokeWidth="1" style={{ pointerEvents: "none" }} />}
+                {/* The pin: a plain black dot (thin light edge so it stays visible on a dark chart). Larger invisible circle = easier hover target. */}
+                <circle cx={ev.x} cy={ev.y} r="12" fill="transparent" style={{ cursor: "pointer" }} onMouseEnter={() => setHoveredEventId(ev.num)} onMouseLeave={() => setHoveredEventId(null)} />
+                <circle cx={ev.x} cy={ev.y} r={isHover ? 7.5 : 6} fill="#000000" stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
               </g>
             );
           })}
@@ -395,7 +407,7 @@ function SixMonthAreaChart({
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "var(--si-accent-soft, #7fa8d0)" }}>
-                #{activeHover.num} · {activeHover.date}
+                {activeHover.date}
               </span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: activeHover.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
                 {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
@@ -410,7 +422,7 @@ function SixMonthAreaChart({
             </div>
             {activeHover.card !== false && (activeHover.commentary || (activeHover.context && activeHover.context.length > 0)) && (
               <div style={{ marginTop: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-sub, #5d6b79)" }}>
-                {[activeHover.commentary ? "Commentary" : null, activeHover.context?.length ? "notable events" : null].filter(Boolean).join(" and ").replace(/^n/, "N")} in card #{activeHover.num} below
+                {[activeHover.commentary ? "Commentary" : null, activeHover.context?.length ? "notable events" : null].filter(Boolean).join(" and ").replace(/^n/, "N")} in the card below
               </div>
             )}
           </div>
@@ -449,7 +461,7 @@ function SixMonthAreaChart({
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: isHover ? "var(--si-accent, #5980a6)" : "var(--si-accent-soft, #a9c6e3)" }}>
-                  #{ev.num} · {ev.date}
+                  {ev.date}
                 </span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: ev.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
                   {ev.mv >= 0 ? "+" : ""}{ev.mv.toFixed(2)}%
@@ -472,7 +484,7 @@ function SixMonthAreaChart({
               <div
                 className="si-event-pop"
                 role="dialog"
-                aria-label={`Catalyst #${ev.num}`}
+                aria-label={`Catalyst on ${ev.date}`}
                 onMouseEnter={() => setOpenCard((o) => (o ? o : { num: ev.num, pinned: false }))}
                 onMouseLeave={() => setOpenCard((o) => (o?.pinned ? o : null))}
                 style={{
@@ -483,7 +495,7 @@ function SixMonthAreaChart({
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-accent-soft, #a9c6e3)" }}>#{ev.num} · {ev.date}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-accent-soft, #a9c6e3)" }}>{ev.date}</span>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: ev.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>{ev.mv >= 0 ? "+" : ""}{ev.mv.toFixed(2)}%</span>
                   {openCard?.pinned && (
                     <button type="button" aria-label="Close" onClick={() => setOpenCard(null)} style={{ marginLeft: 6, background: "none", border: "1px solid var(--si-border-sec, #2a3a4a)", color: "var(--si-text-hi, #e8eef4)", width: 24, height: 24, cursor: "pointer" }}>✕</button>
