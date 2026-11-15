@@ -143,7 +143,7 @@ export function TrackedTradesList({
             {/* Date saved, and delete. Outside the row button so it is not a button inside a button. */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 14px 9px 12px", minHeight: 24 }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em", color: "var(--si-text-mid, #93a1af)" }}>
-                {saved ? `SAVED ${saved.toUpperCase()}` : "SAVED EARLIER"}
+                {saved ? `Saved on ${saved}` : "Saved earlier"}
               </span>
               {confirming ? (
                 <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.06em" }}>

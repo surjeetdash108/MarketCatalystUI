@@ -139,6 +139,15 @@ const CATALYST_LOOKBACK_DAYS = 14;
 const CATALYST_MAX_PAST = 3;
 /** The stock's own major moves (big price days with their cause) stay on the timeline this long. */
 const CATALYST_MAJOR_LOOKBACK_DAYS = 30;
+/**
+ * Hand edits to the stock's own recent events on the catalyst timeline, keyed "TICKER|YYYY-MM-DD".
+ * The wording comes from news headlines, so a long or vague one can be hidden or given a short title here.
+ * Only the timeline is affected; the "Why it moved" chart pins keep their own text.
+ */
+const CATALYST_EVENT_EDITS: Record<string, { hide?: boolean; title?: string }> = {
+  "NVDA|2026-11-05": { hide: true }, // "Why Nvidia Stock Is Getting Punished Today"
+  "NVDA|2026-11-10": { title: "CEO Scandal" }, // "Nvidia Stock Plunges 5.5% as CEO Scandal Overshadows Its Up…"
+};
 
 /** Colours explicitly signed percentages in a sentence: +N% green, -N% red. Unsigned figures (margins, ratios) stay as they are. */
 const SIGNED_PCT = /((?<![\w.])[+\-−]\d[\d,]*(?:\.\d+)?%)/g;
@@ -957,6 +966,8 @@ export function StockIntelligenceScreen() {
       const iso = barDay.get(ev.date);
       if (!iso || iso >= todayStr || iso < majorLookbackIso) continue;
       if (ev.category === "Earnings" && lastReport) continue; // already shown as the report itself
+      const edit = CATALYST_EVENT_EDITS[`${stock.t.toUpperCase()}|${iso}`];
+      if (edit?.hide) continue;
       const ago = Math.max(1, Math.round((todayMs - new Date(iso + "T09:30:00-04:00").getTime()) / 86_400_000));
       const ret = `${ev.mv >= 0 ? "+" : "−"}${Math.abs(ev.mv).toFixed(1)}%`;
       const high = Boolean(ev.card);
@@ -964,7 +975,7 @@ export function StockIntelligenceScreen() {
         date: fmtMarketDate(iso),
         iso,
         days: ago === 1 ? "yesterday" : `${ago} days ago`,
-        n: clip(ev.label, 60),
+        n: edit?.title ?? clip(ev.label, 60),
         txt: `${stock.t} ${ret} that session. ${clip(ev.details.replace(/\s*Stock moved [^.]*\.$/, ""), 100)}`.trim(),
         imp: high ? "HIGH" : "MED",
         col: high ? "#f5b031" : STEEL,
@@ -2056,12 +2067,11 @@ export function StockIntelligenceScreen() {
         return (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {rows.map((r) => (
-              <div key={r.title} style={{ display: "grid", gridTemplateColumns: "22px 1fr auto", columnGap: 10, alignItems: "baseline", padding: "9px 0", borderTop: "1px solid var(--si-border, #1c2733)" }}>
-                <span aria-hidden style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: col(r.tone), textAlign: "center" }}>{r.mark}</span>
+              <div key={r.title} style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 10, alignItems: "baseline", padding: "9px 0", borderTop: "1px solid var(--si-border, #1c2733)" }}>
                 <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.title}</span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13.5, fontWeight: 700, color: col(r.tone), whiteSpace: "pre" }}>{r.value}</span>
                 {r.note && (
-                  <span style={{ gridColumn: "2 / 4", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
+                  <span style={{ gridColumn: "1 / 3", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
                 )}
               </div>
             ))}
@@ -3175,13 +3185,32 @@ export function StockIntelligenceScreen() {
                   CATALYSTS · RECENT &amp; UPCOMING
                 </div>
                 <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
-                  <div style={{ position: "absolute", left: 0, right: 0, top: 12, height: 2, background: "linear-gradient(90deg, #5980a6, rgba(89,128,166,0.2))", zIndex: 0 }} />
                   {upcomingCatalysts.map((up, i) => (
-                    <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, zIndex: 1, opacity: up.past ? 0.72 : 1 }}>
-                      {/* An event that already happened: a filled, muted marker instead of the open ring. */}
-                      <span style={up.past
-                        ? { width: 26, height: 26, borderRadius: 99, background: "#2a3a4a", border: "2px solid #5d6b79", boxShadow: "0 0 0 6px rgba(93,107,121,0.12)" }
-                        : { width: 26, height: 26, borderRadius: 99, background: "var(--si-bg, #080b10)", border: "2px solid #7fa8d0", boxShadow: "0 0 0 6px rgba(127,168,208,0.12)" }} />
+                    <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8 }}>
+                      {/* The timeline line is drawn per event, from this marker across the gap to the next one,
+                          so every row of the grid (not just the first) is joined up. */}
+                      {i < upcomingCatalysts.length - 1 && (
+                        <span aria-hidden style={{ position: "absolute", left: 13, right: -18, top: 12, height: 2, background: "rgba(89,128,166,0.55)", zIndex: 0 }} />
+                      )}
+                      {/* Passed events get a green dot in the ring; events still ahead keep the empty ring. */}
+                      <span
+                        style={{
+                          position: "relative",
+                          zIndex: 1,
+                          width: 26,
+                          height: 26,
+                          borderRadius: 99,
+                          background: "var(--si-bg, #080b10)",
+                          border: `2px solid ${up.past ? "var(--up, #4ade80)" : "#7fa8d0"}`,
+                          boxShadow: up.past ? "0 0 0 6px rgba(74,222,128,0.12)" : "0 0 0 6px rgba(127,168,208,0.12)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {up.past && <span style={{ width: 10, height: 10, borderRadius: 99, background: "var(--up, #4ade80)" }} />}
+                      </span>
+                      {/* Passed events read a little greyer than the ones still ahead. */}
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: up.past ? "var(--si-text-mid, #93a1af)" : "var(--si-accent-light, #a9c6e3)", marginTop: 4 }}>
                         {up.date} · {up.days}
                       </span>
@@ -3190,13 +3219,13 @@ export function StockIntelligenceScreen() {
                           {up.cat.toUpperCase()}
                         </span>
                       )}
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, opacity: up.past ? 0.78 : 1 }}>
                         {up.n}
                       </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45, opacity: up.past ? 0.78 : 1 }}>
                         {up.txt}
                       </span>
-                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "2px 8px", marginTop: 4 }}>
+                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "2px 8px", marginTop: 4, opacity: up.past ? 0.78 : 1 }}>
                         {up.imp} IMPACT
                       </span>
                     </div>
@@ -4453,6 +4482,9 @@ export function StockIntelligenceScreen() {
           // rows lead, then the higher-scoring story.
           const impRank = (i: "HIGH" | "MED" | "LOW") => (i === "HIGH" ? 2 : i === "MED" ? 1 : 0);
           const isUpcoming = (c: { dd: number }) => c.dd >= 0;
+          // Cyan marks what is still ahead. It is not used for impact or direction (green / red / amber / steel), so it never reads as a verdict.
+          const catAheadCol = theme === "light" ? "#0e7490" : "#22d3ee";
+          const catAheadTint = theme === "light" ? "rgba(14,116,144,0.07)" : "rgba(34,211,238,0.07)";
           combined.sort(
             (a, b) =>
               Number(isUpcoming(b)) - Number(isUpcoming(a)) ||
@@ -4625,15 +4657,23 @@ export function StockIntelligenceScreen() {
                         gap: 10,
                         marginTop: i === 0 ? 0 : 14,
                         paddingBottom: 6,
-                        borderBottom: "1px solid #1c2733",
+                        borderBottom: isUpcoming(cItem) ? `1px solid ${catAheadCol}` : "1px solid #1c2733",
                         fontFamily: "'JetBrains Mono', monospace",
                         fontSize: 12,
                         letterSpacing: "0.1em",
                         fontWeight: 700,
-                        color: isUpcoming(cItem) ? "#a9c6e3" : "#93a1af",
+                        color: isUpcoming(cItem) ? catAheadCol : "#93a1af",
                       }}
                     >
-                      <span>{isUpcoming(cItem) ? "UPCOMING" : "LATEST"} ({isUpcoming(cItem) ? upcomingCount : latestCount})</span>
+                      <span
+                        style={{
+                          padding: "2px 9px",
+                          border: `1px solid ${isUpcoming(cItem) ? catAheadCol : "var(--si-border-sec, #2a3a4a)"}`,
+                          background: isUpcoming(cItem) ? catAheadTint : "transparent",
+                        }}
+                      >
+                        {isUpcoming(cItem) ? "▶ UPCOMING" : "LATEST"} ({isUpcoming(cItem) ? upcomingCount : latestCount})
+                      </span>
                       <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.04em", color: "#5d6b79" }}>
                         {isUpcoming(cItem) ? "dates still ahead · soonest first" : "already happened · newest first"}
                       </span>
@@ -4646,6 +4686,8 @@ export function StockIntelligenceScreen() {
                       // A coloured edge shows which way the row leans; low-impact neutral rows are muted.
                       borderLeft: cItem.dir === "Risk" || cItem.dir === "Positive" || cItem.dir === "Mixed" ? `3px solid ${cItem.dirCol}` : `1px solid ${cItem.bd}`,
                       background: "var(--si-card, rgba(12, 17, 24, 0.9))",
+                      // Rows still ahead get a cool tint; rows already behind keep the plain card.
+                      ...(isUpcoming(cItem) ? { backgroundImage: `linear-gradient(${catAheadTint}, ${catAheadTint})` } : {}),
                       padding: "16px 20px",
                       marginLeft: cItem.child ? 28 : 0,
                       opacity: cItem.imp === "LOW" && cItem.dir === "Neutral" ? 0.7 : 1,
@@ -4656,10 +4698,10 @@ export function StockIntelligenceScreen() {
                     }}
                   >
                     <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: isUpcoming(cItem) ? catAheadCol : "var(--si-text-hi, #e8eef4)" }}>
                         {cItem.date}
                       </div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: cItem.whenCol, marginTop: 2 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: isUpcoming(cItem) ? 700 : 400, color: isUpcoming(cItem) ? catAheadCol : cItem.whenCol, marginTop: 2 }}>
                         {cItem.when}
                       </div>
                     </div>
@@ -5435,7 +5477,7 @@ export function StockIntelligenceScreen() {
                   <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
                     <div style={{ height: 50, display: "flex", alignItems: "center", gap: 14, padding: "0 18px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                        THESIS ENGINE · DRIVER EVIDENCE
+                        TRADE ENGINE · DRIVER EVIDENCE
                       </span>
                       <span style={{ marginLeft: "auto", display: "flex", gap: 12, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-dim, #7d8b99)" }}>
                         <span style={{ border: "1px solid #5980a6", color: "var(--si-accent-light, #a9c6e3)", padding: "2px 6px" }}>CORE</span>
@@ -5766,7 +5808,7 @@ export function StockIntelligenceScreen() {
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
                   <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                    THESIS CARD
+                    TRADE CARD
                   </span>
                   <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
                     {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} THESIS
@@ -6026,7 +6068,7 @@ export function StockIntelligenceScreen() {
                     </div>
                     {formatSavedAt(savedThesis.savedAt) && (
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
-                        SAVED {formatSavedAt(savedThesis.savedAt).toUpperCase()}
+                        Saved on {formatSavedAt(savedThesis.savedAt)}
                       </div>
                     )}
 
