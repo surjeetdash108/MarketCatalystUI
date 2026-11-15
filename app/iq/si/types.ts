@@ -56,6 +56,9 @@ export interface MajorSixMonthEvent {
   mv: number;
   details: string;
   fr: number;
+  /** The session's day (YYYY-MM-DD) and the previous session's: the key for the AI card text. */
+  iso?: string;
+  prevIso?: string;
   /** Earnings only: EPS/sales growth, surprise and margins for the reported quarter. */
   metrics?: EventMetric[];
   /** Earnings only: what the press said about the print (guidance, drivers, tone). */
