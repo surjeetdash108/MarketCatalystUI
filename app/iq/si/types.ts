@@ -111,7 +111,6 @@ export type SITab =
   | "could"
   | "fund"
   | "tech"
-  | "cat"
   | "ai"
   | "lab"
   | "mon";

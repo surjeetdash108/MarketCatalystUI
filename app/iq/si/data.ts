@@ -15,7 +15,6 @@ export const TABS: [SITab, string][] = [
   ["could", "WHY IT COULD MOVE"],
   ["fund", "FUNDAMENTALS"],
   ["tech", "TECHNICALS"],
-  ["cat", "CATALYSTS"],
   ["ai", "AI RESEARCH"],
   ["lab", "TRADE BUILDER"],
   ["mon", "TRADE TRACKER"],
