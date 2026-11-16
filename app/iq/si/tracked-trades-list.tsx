@@ -13,8 +13,45 @@ export interface TrackedTrade {
   hz: string;
   target: number;
   stop: number;
+  /** Price when the trade was saved; absent on trades saved by an old build. */
+  entryPx?: number | null;
   /** ISO time the trade was saved; absent on trades saved by an old build. */
   savedAt?: string;
+}
+
+export type TradeSort = "newest" | "oldest" | "most" | "least";
+
+/** Each row is about this tall, and the list scrolls after this many rows. */
+const ROW_HEIGHT = 160;
+const VISIBLE_ROWS = 5;
+
+/** Profit on the trade so far, in % of the entry price and in the direction of the trade. Null without an entry or a live price. */
+export function tradeProfitPct(trade: Pick<TrackedTrade, "entryPx" | "dir">, price: number | null | undefined): number | null {
+  if (trade.entryPx == null || !(trade.entryPx > 0) || price == null) return null;
+  return ((price - trade.entryPx) / trade.entryPx) * 100 * (trade.dir === "Bull" ? 1 : -1);
+}
+
+/**
+ * Orders the trades for the list. Newest and oldest go by the time saved (trades
+ * from an old build have none and count as the oldest); "most" and "least"
+ * profitable go by the profit so far, and a trade with no profit figure always
+ * sorts below the ones that have one.
+ */
+export function sortTrades(trades: TrackedTrade[], mode: TradeSort, priceOf: (ticker: string) => number | null | undefined): TrackedTrade[] {
+  const savedMs = (t: TrackedTrade) => {
+    const ms = t.savedAt ? Date.parse(t.savedAt) : NaN;
+    return Number.isNaN(ms) ? 0 : ms;
+  };
+  return [...trades].sort((a, b) => {
+    if (mode === "newest") return savedMs(b) - savedMs(a);
+    if (mode === "oldest") return savedMs(a) - savedMs(b);
+    const pa = tradeProfitPct(a, priceOf(a.ticker));
+    const pb = tradeProfitPct(b, priceOf(b.ticker));
+    if (pa == null && pb == null) return 0;
+    if (pa == null) return 1;
+    if (pb == null) return -1;
+    return mode === "most" ? pb - pa : pa - pb;
+  });
 }
 
 /**
@@ -22,8 +59,9 @@ export interface TrackedTrade {
  * with several can switch between them. A stock can appear more than once (a
  * long and a short, or different horizons), each with the date it was saved.
  * Picking a row opens that trade — and its stock if it is another one — and the
- * row of the open trade is highlighted. The ✕ on a row deletes that trade after
- * an inline "Delete?" confirmation.
+ * row of the open trade is highlighted. With more than one trade a SORT menu
+ * orders them by date or by how well they are doing. "× DELETE" on a row asks
+ * "SURE?" before it removes that trade.
  *
  * Prices come from the app-wide live quote poll, the same Map the rest of the
  * screen reads, so a row and the open trade's header never disagree.
@@ -41,6 +79,8 @@ export function TrackedTradesList({
 }) {
   const quotes = useLiveQuotes(Array.from(new Set(trades.map(t => t.ticker))));
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [sort, setSort] = useState<TradeSort>("newest");
+  const ordered = sortTrades(trades, sort, (ticker) => quotes.get(ticker)?.price);
 
   return (
     // .si-trk-list (iq.css) sizes it, keeps it under the sticky header while the
@@ -58,126 +98,132 @@ export function TrackedTradesList({
           padding: "12px 14px",
           borderBottom: "1px solid var(--si-border, #1c2733)",
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 11,
+          fontSize: 13,
+          fontWeight: 700,
           letterSpacing: "0.16em",
-          color: "var(--si-accent, #5980a6)",
+          color: "var(--si-accent-light, #a9c6e3)",
+          textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)",
         }}
       >
         TRACKED TRADES · {trades.length}
       </div>
 
-      {trades.map(t => {
-        const active = t.id === activeId;
-        const q = quotes.get(t.ticker);
-        const bull = t.dir === "Bull";
-        const dirCol = bull ? UP : DN;
-        const saved = formatSavedAt(t.savedAt).split(" · ")[0];
-        const confirming = confirmId === t.id;
-        return (
-          <div
-            key={t.id}
-            style={{
-              borderBottom: "1px solid var(--si-border, #1c2733)",
-              borderLeft: `2px solid ${active ? STEEL : "transparent"}`,
-              background: active ? "rgba(89, 128, 166, 0.16)" : undefined,
-            }}
+      {trades.length > 1 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+          <label htmlFor="si-trk-sort" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "var(--si-text-mid, #93a1af)" }}>
+            SORT
+          </label>
+          <select
+            id="si-trk-sort"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as TradeSort)}
+            style={{ flex: 1, minWidth: 0, padding: "5px 8px", background: "transparent", color: "var(--si-text-hi, #e8eef4)", border: "1px solid var(--si-border-sec, #2a3a4a)", fontFamily: "'Manrope', sans-serif", fontSize: 12 }}
           >
-            <button
-              type="button"
+            <option value="newest">Date · newest first</option>
+            <option value="oldest">Date · oldest first</option>
+            <option value="most">Most profitable</option>
+            <option value="least">Least profitable</option>
+          </select>
+        </div>
+      )}
+
+      <div style={{ maxHeight: ROW_HEIGHT * VISIBLE_ROWS, overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "#2a3a4a transparent" }}>
+        {ordered.map(t => {
+          const active = t.id === activeId;
+          const q = quotes.get(t.ticker);
+          const bull = t.dir === "Bull";
+          const dirCol = bull ? UP : DN;
+          const savedAt = formatSavedAt(t.savedAt).replace(" · ", ", ");
+          const confirming = confirmId === t.id;
+          return (
+            <div
+              key={t.id}
+              role="button"
+              tabIndex={0}
               className="si-trade-row"
               aria-current={active ? "true" : undefined}
               onClick={() => onSelect(t)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(t);
+                }
+              }}
               style={{
+                boxSizing: "border-box",
+                minHeight: ROW_HEIGHT,
                 display: "grid",
                 gridTemplateColumns: "1fr auto",
                 rowGap: 4,
                 columnGap: 10,
-                alignItems: "baseline",
                 width: "100%",
-                padding: "11px 14px 4px 12px",
+                padding: "11px 14px 11px 12px",
                 border: "none",
-                background: "transparent",
+                borderBottom: "1px solid var(--si-border, #1c2733)",
+                borderLeft: `2px solid ${active ? STEEL : "transparent"}`,
+                background: active ? "rgba(89, 128, 166, 0.16)" : undefined,
                 textAlign: "left",
                 cursor: "pointer",
                 color: "var(--si-text-hi, #e8eef4)",
               }}
             >
               <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 21, fontWeight: 700, letterSpacing: "0.04em" }}>
-                  {t.ticker}
-                </span>
-                <span
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.1em",
-                    padding: "2px 6px",
-                    color: dirCol,
-                    background: `${dirCol}1f`,
-                  }}
-                >
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 21, fontWeight: 700, letterSpacing: "0.04em" }}>{t.ticker}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", padding: "2px 7px", color: dirCol, background: `${dirCol}1f` }}>
                   {bull ? "LONG" : "SHORT"}
                 </span>
               </span>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, textAlign: "right" }}>
+              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, textAlign: "right", color: q?.pctChange == null ? undefined : q.pctChange >= 0 ? UP : DN }}>
                 {q?.price != null ? usd(q.price) : "—"}
               </span>
 
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.06em", color: "var(--si-text-mid, #93a1af)" }}>
-                {t.hz} · TARGET {usd(t.target)}
+                <b style={{ color: "#4fb3ff", fontWeight: 700 }}>{t.hz}</b> · TARGET <b style={{ color: UP, fontWeight: 700 }}>{usd(t.target)}</b>
               </span>
-              <span
-                style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  textAlign: "right",
-                  color: q?.pctChange == null ? "var(--si-text-mid, #93a1af)" : q.pctChange >= 0 ? UP : DN,
-                }}
-              >
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, textAlign: "right", color: q?.pctChange == null ? "var(--si-text-mid, #93a1af)" : q.pctChange >= 0 ? UP : DN }}>
                 {q?.pctChange != null ? pct(q.pctChange) : ""}
               </span>
-            </button>
 
-            {/* Date saved, and delete. Outside the row button so it is not a button inside a button. */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 14px 9px 12px", minHeight: 24 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em", color: "var(--si-text-mid, #93a1af)" }}>
-                {saved ? `Saved on ${saved}` : "Saved earlier"}
+              <span style={{ gridColumn: "1 / -1", fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: "0.06em", color: "var(--si-text-mid, #93a1af)" }}>
+                INVALIDATION <b style={{ color: DN, fontWeight: 700 }}>{usd(t.stop)}</b>
               </span>
-              {confirming ? (
-                <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.06em" }}>
-                  <span style={{ color: "#ffd2d2" }}>DELETE?</span>
-                  <button
-                    type="button"
-                    onClick={() => { setConfirmId(null); onRemove(t); }}
-                    style={{ padding: "1px 8px", border: "none", background: "#f05656", color: "#fff", fontFamily: "inherit", fontSize: 10, fontWeight: 700, cursor: "pointer" }}
-                  >
-                    YES
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmId(null)}
-                    style={{ padding: "1px 8px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-mid, #93a1af)", fontFamily: "inherit", fontSize: 10, cursor: "pointer" }}
-                  >
-                    NO
-                  </button>
-                </span>
-              ) : (
+
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.04em", color: "var(--si-text-mid, #93a1af)" }}>
+                {savedAt ? `Saved on ${savedAt}` : "Saved earlier"}
+              </span>
+              <span style={{ textAlign: "right" }}>
                 <button
                   type="button"
                   aria-label={`Delete ${t.ticker} ${bull ? "long" : "short"} trade`}
-                  title="Delete this trade"
-                  onClick={() => setConfirmId(t.id)}
-                  style={{ padding: "1px 8px", border: "1px solid rgba(240,86,86,0.4)", background: "transparent", color: "#f08a8a", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.06em", cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirming) {
+                      setConfirmId(null);
+                      onRemove(t);
+                    } else {
+                      setConfirmId(t.id);
+                    }
+                  }}
+                  onBlur={() => setConfirmId((id) => (id === t.id ? null : id))}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 10px",
+                    border: `1px solid ${DN}`,
+                    background: confirming ? DN : "transparent",
+                    color: confirming ? "#ffffff" : DN,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                  }}
                 >
-                  ✕ DELETE
+                  {confirming ? "SURE?" : "× DELETE"}
                 </button>
-              )}
+              </span>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </nav>
   );
 }

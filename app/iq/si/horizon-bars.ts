@@ -2,7 +2,7 @@
 // drawdown / Volatility must describe the horizon the user picked (1M, 3M, 6M,
 // 12M), not a fixed window with a changing label.
 
-const HORIZON_MONTHS: Record<string, number> = { "1M": 1, "3M": 3, "6M": 6, "12M": 12, "1Y": 12 };
+const HORIZON_MONTHS: Record<string, number> = { "1M": 1, "3M": 3, "6M": 6, "9M": 9, "12M": 12, "1Y": 12 };
 
 /** Calendar months covered by a Trade Builder horizon button. Unknown → 6. */
 export function horizonMonths(hz: string): number {

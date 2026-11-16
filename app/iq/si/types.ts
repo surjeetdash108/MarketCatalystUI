@@ -89,6 +89,8 @@ export interface DetailStock {
   sixMonthEvents?: MajorSixMonthEvent[];
   upcoming: UpcomingEvent[];
   fwd?: any;
+  /** What would validate the setup: the bullish checks. */
+  valid: [string, string][];
   /** Levels still ahead of the price: what would break the setup. */
   invalid: [string, string][];
   /** Levels the price is already through (below the 50/200 DMA, below S1). */
@@ -111,7 +113,6 @@ export type SITab =
   | "could"
   | "fund"
   | "tech"
-  | "cat"
   | "ai"
   | "lab"
   | "mon";

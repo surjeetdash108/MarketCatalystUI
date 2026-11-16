@@ -31,7 +31,6 @@ import {
   CATS_T,
   SHORT,
   KEYS,
-  CAT_KINDS,
   getTP,
   normW,
   smaOf,
@@ -43,8 +42,13 @@ import {
   type TrendRow,
 } from "./data";
 import { applyAiCards, moveCardPath, type AiMoveCard } from "./move-card-ai";
-import { scoreNews, reactionAfter, summarizeNewsSentiment, classifyDirection } from "./news-significance";
+import { summarizeNewsSentiment } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
+import { BullBearChecks } from "./could-checks";
+import { ReadCard, InfoTip, highlightNumbers, highlightSignedPercents } from "./read-cards";
+import { weekMove } from "./week-move";
+import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
+import { fundamentalReadText, technicalReadText } from "./read-text";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
 import { StockChart } from "../stock-panel";
@@ -54,7 +58,7 @@ import { useIntervalBars, useBackendBars } from "../hooks/useBackendBars";
 import { useLiveQuotes } from "../live-quotes-context";
 import { useLiveTick } from "../hooks/useLiveTick";
 import { etTodayIso, fmtMarketDate, next13fDeadline, nextFomcDecision, nextMonthlyOpex, previous13fDeadline, previousFomcDecision, previousMonthlyOpex, upcomingPoliticalEvents } from "../calendar-range";
-import { StockLogo, VendorTag, useShowVendorTags, vendorText, withoutVendorNames } from "../utils";
+import { StockLogo } from "../utils";
 import { resolveActionMeta } from "../analyst-actions-engine";
 import { useHeadlineQuote } from "../quote-headline";
 import { range52 } from "../range52";
@@ -130,8 +134,6 @@ function EventContextBlocks({ ev, compact, metricsOnly }: { ev: MajorSixMonthEve
   );
 }
 
-/** Height of every "Why it moved" catalyst card, so the row is even; the full text is in its pop-up. */
-const SI_EVENT_CARD_H = 196;
 /** Upcoming Catalysts timeline: how many days ahead an event may be and still show. */
 const CATALYST_WINDOW_DAYS = 45;
 /** ...and how many days back an event that already happened stays on the timeline. */
@@ -150,14 +152,6 @@ const CATALYST_EVENT_EDITS: Record<string, { hide?: boolean; title?: string }> =
   "NVDA|2026-11-10": { title: "CEO Scandal" }, // "Nvidia Stock Plunges 5.5% as CEO Scandal Overshadows Its Up…"
 };
 
-/** Colours explicitly signed percentages in a sentence: +N% green, -N% red. Unsigned figures (margins, ratios) stay as they are. */
-const SIGNED_PCT = /((?<![\w.])[+\-−]\d[\d,]*(?:\.\d+)?%)/g;
-const colorSigned = (text: string | null | undefined): React.ReactNode =>
-  (text ?? "").split(SIGNED_PCT).map((part, i) =>
-    i % 2 === 1
-      ? <span key={i} style={{ color: part.startsWith("+") ? "var(--up, #16a34a)" : "var(--down, #dc2626)", fontWeight: 700 }}>{part}</span>
-      : part,
-  );
 const clampLines = (n: number): React.CSSProperties => ({ display: "-webkit-box", WebkitLineClamp: n, WebkitBoxOrient: "vertical", overflow: "hidden" });
 
 function SixMonthAreaChart({
@@ -204,9 +198,41 @@ function SixMonthAreaChart({
   }, [aiRequestKey, ticker]);
   const events = useMemo(() => applyAiCards(baseEvents, aiCards.ticker === ticker ? aiCards.byIso : {}), [baseEvents, aiCards, ticker]);
 
-  const [hoveredEventId, setHoveredEventId] = useState<number | null>(null);
-  // The card whose full text is open in its pop-up: on hover, or pinned by a click / tap.
-  const [openCard, setOpenCard] = useState<{ num: number; pinned: boolean } | null>(null);
+  // A pin opens its dialog on hover (a short grace period lets the pointer reach the dialog) and stays open,
+  // larger, once clicked; Escape or a click on the chart closes it. The chart fills whatever height its
+  // card is given (it sits beside the taller read), so its drawing area is measured.
+  const [hover, setHover] = useState<number | null>(null);
+  const [pinned, setPinned] = useState<number | null>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPinned(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    };
+  }, []);
+  const enterPin = (num: number) => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    setHover(num);
+  };
+  const leavePin = () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    leaveTimer.current = setTimeout(() => setHover(null), 220);
+  };
 
   // Real 6-month daily bars
   const chartBars = useMemo(() => {
@@ -238,7 +264,8 @@ function SixMonthAreaChart({
   const plotLeft = 14;
   const plotRight = 920;
   const plotTop = 24;
-  const plotBottom = 296;
+  const H = Math.max(340, size.h || 340);
+  const plotBottom = H - 44;
   const plotW = plotRight - plotLeft;
   const plotH = plotBottom - plotTop;
 
@@ -287,34 +314,58 @@ function SixMonthAreaChart({
   // Map 5 Major Events to coordinates on the chart
   const mappedEvents = useMemo(() => {
     if (chartBars.length === 0) return [];
-    return events.map((ev) => {
+    // The five most extreme moves get a numbered pin.
+    return events.filter((ev) => ev.card !== false).map((ev, idx) => {
       const targetIdx = Math.min(n - 1, Math.max(0, Math.round(ev.fr * (n - 1))));
       const bar = chartBars[targetIdx];
       const x = xOf(targetIdx);
       const y = yOf(bar.c);
       return {
         ...ev,
+        num: idx + 1,
         targetIdx,
         x,
         y,
         priceAtEvent: bar.c,
       };
     });
-  }, [events, chartBars, n]);
+  }, [events, chartBars, n, H]);
 
-  const activeHover = mappedEvents.find((e) => e.num === hoveredEventId);
+  const active = hover ?? pinned;
+  const activeHover = mappedEvents.find((e) => e.num === active);
 
 
+
+  // The dialog sits beside its pin, on the side and height where it covers the fewest other pins;
+  // when there is no clear spot it drops below the chart.
+  const dialogPos = (() => {
+    if (!activeHover) return null;
+    const dw = 260;
+    const dh = 148;
+    const W = size.w || 840;
+    const px = (e: { x: number }) => (e.x / 1000) * W;
+    const others = mappedEvents.filter((e) => e.num !== activeHover.num);
+    const hits = (left: number, top: number) => others.filter((o) => px(o) > left - 14 && px(o) < left + dw + 14 && o.y > top - 14 && o.y < top + dh + 14).length;
+    const options: Array<{ left: number; top: number; hits: number; score: number }> = [];
+    for (const side of ["right", "left"] as const) {
+      const left = side === "right" ? px(activeHover) + 18 : px(activeHover) - 18 - dw;
+      if (left < 4 || left + dw > W - 4) continue;
+      for (let top = 6; top <= H - dh - 6; top += 6) {
+        const h = hits(left, top);
+        options.push({ left, top, hits: h, score: h * 1000 + Math.abs(top + dh / 2 - activeHover.y) + (side === "left" ? 40 : 0) });
+      }
+    }
+    const best = options.sort((a, b) => a.score - b.score)[0];
+    const below = { left: Math.max(4, Math.min(W - dw - 4, px(activeHover) - dw / 2)), top: H + 4 };
+    return best && best.hits === 0 ? { left: best.left, top: best.top } : below;
+  })();
 
   return (
-    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px" }}>
+    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", boxSizing: "border-box", height: "100%" }}>
       {/* Header bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-          6-MONTH TRAJECTORY & {events.length || 5} MAJOR CATALYSTS
-        </span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-          Last 6 Months · Area Chart
+          LAST 6-MONTH TRAJECTORY &amp; MAJOR CATALYSTS
         </span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
@@ -326,9 +377,13 @@ function SixMonthAreaChart({
         </div>
       </div>
 
-      {/* Area Chart Container */}
-      <div style={{ position: "relative", width: "100%", height: 340, background: "var(--si-card-sec, #06080c)", border: "1px solid var(--si-border, #1c2733)", borderRadius: 4, overflow: "visible" }}>
-        <svg width="100%" height="100%" viewBox="0 0 1000 340" preserveAspectRatio="none" style={{ display: "block" }}>
+      {/* Area chart: fills the card's height */}
+      <div
+        ref={wrapRef}
+        onClick={() => setPinned(null)}
+        style={{ position: "relative", width: "100%", flex: 1, minHeight: 340, background: "var(--si-card-sec, #06080c)", border: "1px solid var(--si-border, #1c2733)", borderRadius: 4, overflow: "visible" }}
+      >
+        <svg width="100%" height="100%" viewBox={`0 0 1000 ${H}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0, display: "block" }}>
           <defs>
             <linearGradient id="siSixMonthAreaGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--up, #22c55e)" stopOpacity="0.25" />
@@ -336,9 +391,17 @@ function SixMonthAreaChart({
               <stop offset="90%" stopColor="var(--up, #22c55e)" stopOpacity="0.02" />
               <stop offset="100%" stopColor="var(--up, #22c55e)" stopOpacity="0.0" />
             </linearGradient>
+            <filter id="siPinGlow" x="-200%" y="-200%" width="500%" height="500%">
+              <feGaussianBlur stdDeviation="6" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
 
-          {/* Horizontal Gridlines & Price Readouts on Right Y-Axis */}
+          {/* Horizontal gridlines & price readouts on the right axis */}
           {gridTicks.map((pVal, idx) => {
             const y = yOf(pVal);
             return (
@@ -351,16 +414,12 @@ function SixMonthAreaChart({
             );
           })}
 
-          {/* Area under the curve */}
+          {/* Area under the curve, price line */}
           <path d={areaD} fill="url(#siSixMonthAreaGrad)" />
-
-          {/* Price Line */}
           <path d={pathD} fill="none" stroke="var(--up, #22c55e)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
 
-          {/* Horizontal Purple Dashed Reference Line for Current Price */}
+          {/* Current price: dashed line and the tag on the right axis */}
           <line x1={plotLeft} y1={curY} x2={plotRight} y2={curY} stroke="#818cf8" strokeDasharray="4 4" strokeWidth="1.5" opacity="0.85" />
-
-          {/* Purple Pill Tag on Right Axis matching user image */}
           <g>
             <rect x={plotRight + 4} y={curY - 10} width={68} height={20} rx={4} fill="#6366f1" />
             <text x={plotRight + 38} y={curY + 4} textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
@@ -368,157 +427,115 @@ function SixMonthAreaChart({
             </text>
           </g>
 
-          {/* Bottom X-Axis Date Ticks */}
+          {/* Bottom axis dates */}
           {dateTicks.map((dt, idx) => (
-            <text key={idx} x={dt.x} y={328} textAnchor="middle" fill="var(--si-text-dim, #64748b)" fontSize="10.5" fontFamily="'JetBrains Mono', monospace">
+            <text key={idx} x={dt.x} y={H - 12} textAnchor="middle" fill="var(--si-text-dim, #64748b)" fontSize="10.5" fontFamily="'JetBrains Mono', monospace">
               {dt.label}
             </text>
           ))}
 
-          {/* 5 Major Event Drop Lines & Markers */}
+          {/* Numbered pins on the five biggest moves */}
           {mappedEvents.map((ev) => {
-            const isHover = hoveredEventId === ev.num;
+            const on = active === ev.num;
             return (
-              <g key={ev.num}>
-                {/* Vertical guide line */}
-                <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={isHover ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border-sec, rgba(127,168,208,0.22))"} strokeDasharray="3 3" strokeWidth={isHover ? 1.5 : 1} />
-                {/* Hover halo (only while the pin or its card is hovered) */}
-                {isHover && <circle cx={ev.x} cy={ev.y} r={13} fill="var(--si-accent-bg, rgba(127,168,208,0.3))" stroke="var(--si-accent, #a9c6e3)" strokeWidth="1" style={{ pointerEvents: "none" }} />}
-                {/* The pin: a plain black dot (thin light edge so it stays visible on a dark chart). Larger invisible circle = easier hover target. */}
-                <circle cx={ev.x} cy={ev.y} r="12" fill="transparent" style={{ cursor: "pointer" }} onMouseEnter={() => setHoveredEventId(ev.num)} onMouseLeave={() => setHoveredEventId(null)} />
-                <circle cx={ev.x} cy={ev.y} r={isHover ? 7.5 : 6} fill="#000000" stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
+              <g
+                key={ev.num}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => enterPin(ev.num)}
+                onMouseLeave={leavePin}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinned((cur) => (cur === ev.num ? null : ev.num));
+                }}
+              >
+                <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={on ? "#ffffff" : "var(--si-border-sec, rgba(127,168,208,0.22))"} strokeDasharray="3 3" strokeWidth={on ? 1.5 : 1} />
+                <circle cx={ev.x} cy={ev.y} r={on ? 17 : 11} fill={on ? "rgba(169,198,227,0.55)" : "rgba(34,197,94,0.18)"} stroke={on ? "#ffffff" : "var(--up, #22c55e)"} strokeWidth="1" filter={on ? "url(#siPinGlow)" : undefined} />
+                <circle cx={ev.x} cy={ev.y} r="9" fill={on ? "var(--si-accent, #5980a6)" : "var(--si-card-solid, #080b10)"} stroke={on ? "#ffffff" : "var(--si-accent-soft, #7fa8d0)"} strokeWidth="2" filter={on ? "url(#siPinGlow)" : undefined} />
+                <text x={ev.x} y={ev.y + 3.5} textAnchor="middle" fill={on ? "#ffffff" : "var(--si-accent-soft, #a9c6e3)"} fontSize="10" fontWeight="800" fontFamily="'JetBrains Mono', monospace" style={{ pointerEvents: "none" }}>
+                  {ev.num}
+                </text>
               </g>
             );
           })}
         </svg>
 
-        {/* Floating Tooltip when Event Point is Hovered */}
-        {activeHover && (
+        {/* The pin's dialog: a short read on hover, the full one (with the earnings detail) once pinned */}
+        {activeHover && dialogPos && (
           <div
+            role="dialog"
+            aria-label={`Catalyst #${activeHover.num}`}
+            onMouseEnter={() => enterPin(activeHover.num)}
+            onMouseLeave={leavePin}
+            onClick={(e) => e.stopPropagation()}
             style={{
               position: "absolute",
-              left: `${Math.min(84, Math.max(16, (activeHover.x / 1000) * 100))}%`,
-              // A pin high on the chart opens the tooltip downward: this one is tall
-              // (title, metrics, article text) and used to run off the top of the page.
-              top: activeHover.y < 170 ? `${(activeHover.y / 340) * 100 + 5}%` : `${Math.max(12, (activeHover.y / 340) * 100 - 24)}%`,
-              transform: activeHover.y < 170 ? "translate(-50%, 0)" : "translate(-50%, -100%)",
-              background: "var(--si-card-solid, #0c1118)",
-              border: "1px solid var(--si-border-sec, #7fa8d0)",
-              boxShadow: "var(--si-shadow, 0 8px 24px rgba(0,0,0,0.4))",
-              padding: "10px 14px",
-              borderRadius: 4,
-              pointerEvents: "none",
-              zIndex: 30,
-              minWidth: 220,
-              maxWidth: 380,
-              maxHeight: 330,
-              overflow: "hidden",
+              top: dialogPos.top,
+              left: dialogPos.left,
+              width: 260,
+              height: pinned === activeHover.num ? 290 : 148,
+              transition: "height 180ms ease",
+              maxWidth: "calc(100% - 24px)",
+              boxSizing: "border-box",
+              zIndex: 20,
+              overflowY: "auto",
+              borderStyle: "solid",
+              borderTopWidth: 2,
+              borderRightWidth: 1,
+              borderBottomWidth: 1,
+              borderLeftWidth: 1,
+              borderTopColor: "var(--si-accent-soft, #7fa8d0)",
+              borderRightColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
+              borderBottomColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
+              borderLeftColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
+              background: "var(--si-card, #0c1118)",
+              boxShadow: "0 18px 44px rgba(0,0,0,0.6), 0 0 18px rgba(169,198,227,0.18)",
+              padding: "10px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 5,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "var(--si-accent-soft, #7fa8d0)" }}>
-                {activeHover.date}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "#ffffff", whiteSpace: "nowrap" }}>
+                  #{activeHover.num} · {activeHover.date}
+                </span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 5px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "#ffffff", borderRadius: 2 }}>
+                  {activeHover.category.toUpperCase()}
+                </span>
               </span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: activeHover.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
-                {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: activeHover.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
+                  {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
+                </span>
+                {pinned === activeHover.num && (
+                  <button type="button" aria-label="Close" onClick={() => setPinned(null)} style={{ width: 22, height: 22, border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "#ffffff", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 0 }}>
+                    ×
+                  </button>
+                )}
               </span>
             </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginBottom: 4 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 700, color: "#ffffff", lineHeight: 1.3, ...(pinned === activeHover.num ? {} : clampLines(1)) }}>
               {activeHover.label}
             </div>
-            <EventContextBlocks ev={activeHover} compact metricsOnly />
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.35, marginTop: 6 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffffff", lineHeight: 1.35, ...(pinned === activeHover.num ? {} : clampLines(2)) }}>
               {activeHover.details}
             </div>
-            {activeHover.card !== false && (activeHover.commentary || (activeHover.context && activeHover.context.length > 0)) && (
-              <div style={{ marginTop: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-sub, #5d6b79)" }}>
-                {[activeHover.commentary ? "Commentary" : null, activeHover.context?.length ? "notable events" : null].filter(Boolean).join(" and ").replace(/^n/, "N")} in the card below
-              </div>
+            {pinned === activeHover.num && <EventContextBlocks ev={activeHover} compact />}
+            {pinned !== activeHover.num && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinned(activeHover.num);
+                }}
+                style={{ marginTop: "auto", alignSelf: "flex-start", border: "1px solid var(--si-accent, #5980a6)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", padding: "4px 10px", cursor: "pointer" }}
+              >
+                READ MORE ▸
+              </button>
             )}
           </div>
         )}
-      </div>
-
-      {/* Cards for the most extreme of the chart's pins (up to 5) — all one size (SI_EVENT_CARD_H); the full text opens in a pop-up on hover or click */}
-      <div className="si-event-cards" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10, marginTop: 18, alignItems: "stretch" }}>
-        {mappedEvents.filter((ev) => ev.card !== false).map((ev) => {
-          const isHover = hoveredEventId === ev.num;
-          const isOpen = openCard?.num === ev.num;
-          return (
-            <div key={ev.num} style={{ position: "relative" }}>
-            <div
-              role="button"
-              tabIndex={0}
-              aria-expanded={isOpen}
-              onMouseEnter={() => { setHoveredEventId(ev.num); setOpenCard((o) => (o?.pinned ? o : { num: ev.num, pinned: false })); }}
-              onMouseLeave={() => { setHoveredEventId(null); setOpenCard((o) => (o?.pinned ? o : null)); }}
-              onClick={() => setOpenCard((o) => (o?.num === ev.num && o.pinned ? null : { num: ev.num, pinned: true }))}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenCard((o) => (o?.num === ev.num && o.pinned ? null : { num: ev.num, pinned: true })); } if (e.key === "Escape") setOpenCard(null); }}
-              style={{
-                height: SI_EVENT_CARD_H,
-                overflow: "hidden",
-                boxSizing: "border-box",
-                border: isHover ? "1px solid var(--si-accent-soft, #7fa8d0)" : "1px solid var(--si-border, #1c2733)",
-                borderTop: `2px solid ${isHover ? "var(--si-accent, #5980a6)" : "var(--si-accent-soft, #7fa8d0)"}`,
-                background: isHover ? "var(--si-accent-bg, rgba(89,128,166,0.12))" : "var(--si-card-sec, rgba(12,17,24,0.6))",
-                padding: "12px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-                cursor: "pointer",
-                transition: "border 180ms, background 180ms",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: isHover ? "var(--si-accent, #5980a6)" : "var(--si-accent-soft, #a9c6e3)" }}>
-                  {ev.date}
-                </span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: ev.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
-                  {ev.mv >= 0 ? "+" : ""}{ev.mv.toFixed(2)}%
-                </span>
-              </div>
-              <div style={{ display: "inline-block", alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 6px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "var(--si-accent-light, #93a1af)", borderRadius: 2 }}>
-                {ev.category.toUpperCase()}
-              </div>
-              <div style={{ ...clampLines(2), fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.35 }}>
-                {ev.label}
-              </div>
-              <div style={{ ...clampLines(3), fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-hi, #e8eef4)", opacity: 0.85, lineHeight: 1.35, marginTop: 2 }}>
-                {ev.details}
-              </div>
-              <span style={{ marginTop: "auto", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-accent-soft, #7fa8d0)" }}>
-                {isOpen ? "▲ DETAILS" : "▼ HOVER OR TAP FOR DETAILS"}
-              </span>
-            </div>
-            {isOpen && (
-              <div
-                className="si-event-pop"
-                role="dialog"
-                aria-label={`Catalyst on ${ev.date}`}
-                onMouseEnter={() => setOpenCard((o) => (o ? o : { num: ev.num, pinned: false }))}
-                onMouseLeave={() => setOpenCard((o) => (o?.pinned ? o : null))}
-                style={{
-                  position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 40,
-                  width: "max(100%, min(420px, 92vw))", maxHeight: 420, overflowY: "auto", boxSizing: "border-box",
-                  background: "var(--si-card-solid, #0c1118)", border: "1px solid var(--si-accent-soft, #7fa8d0)",
-                  boxShadow: "var(--si-shadow, 0 8px 24px rgba(0,0,0,0.4))", padding: "12px 14px", borderRadius: 4,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: "var(--si-accent-soft, #a9c6e3)" }}>{ev.date}</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: ev.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>{ev.mv >= 0 ? "+" : ""}{ev.mv.toFixed(2)}%</span>
-                  {openCard?.pinned && (
-                    <button type="button" aria-label="Close" onClick={() => setOpenCard(null)} style={{ marginLeft: 6, background: "none", border: "1px solid var(--si-border-sec, #2a3a4a)", color: "var(--si-text-hi, #e8eef4)", width: 24, height: 24, cursor: "pointer" }}>✕</button>
-                  )}
-                </div>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.4, marginTop: 6 }}>{ev.label}</div>
-                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.5, marginTop: 6 }}>{ev.details}</div>
-                <EventContextBlocks ev={ev} />
-              </div>
-            )}
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -535,19 +552,95 @@ const rangesDef: Record<string, [number, number, number]> = {
 };
 
 
-/** Catalyst cards shown per page in each section. */
-const CAT_PAGE_SIZE = 100;
+/** How the estimated factor attribution on Why It Moved is split (shown by its "i" button). */
+const FACTOR_INFO: [string, string][] = [
+  ["What it is:", "A model of how the move splits across four drivers, not a measured cause."],
+  ["Sector Momentum:", "Scales with the stock's beta (beta × 28%), kept between 20% and 55%."],
+  ["Company News:", "What the sector share leaves of 65%, kept between 20% and 45%."],
+  ["Market Regime:", "The remainder after sector and news, less 12%, with a floor of 12%."],
+  ["Technical Factors:", "Whatever is left, with a floor of 5%. The four always add up to 100%."],
+];
+
+/** How each Fundamentals scorecard grade is worked out (shown by its "i" button). */
+const SCORECARD_INFO: Record<string, [string, string][]> = {
+  GROWTH: [
+    ["Measure:", "Latest quarter's revenue against the same quarter a year earlier."],
+    ["Strong:", "20% or more."],
+    ["Solid:", "8% to 20%."],
+    ["Slow:", "0% to 8%."],
+    ["Shrinking:", "below 0%."],
+  ],
+  PROFITABILITY: [
+    ["Measure:", "Latest quarter's operating margin (operating income / revenue). The y/y change is shown beside it."],
+    ["Strong:", "25% or more."],
+    ["Solid:", "12% to 25%."],
+    ["Thin:", "0% to 12%."],
+    ["Losing money:", "below 0%."],
+  ],
+  "FINANCIAL HEALTH": [
+    ["Measure:", "The balance-sheet checks in the Financial Health card below: cash against debt, current ratio, debt / equity, debt / EBITDA."],
+    ["Strong:", "at least two checks are healthy and none is flagged."],
+    ["Mixed:", "a check carries a caution."],
+    ["Stretched:", "a check is flagged as a problem."],
+  ],
+  VALUATION: [
+    ["Measure:", "P/E (forward P/E when there is no trailing one) against a sector reference."],
+    ["Attractive:", "under 0.8× the reference."],
+    ["Fair:", "0.8× to 1.2×."],
+    ["Rich:", "1.2× to 1.8×."],
+    ["Expensive:", "above 1.8×."],
+  ],
+};
+
+/** Colours the numbers in a scorecard note: signed changes green/red, the sector reference amber, the other figures in the grade's colour. */
+function highlightScoreNote(text: string, gradeCol: string): React.ReactNode[] {
+  const re = /([+−-]\d[\d.,]*(?:%| pts)?)|(\d[\d.,]*×(?= sector))|(\$?\d[\d.,]*(?:%|×|[BMKT])?)/g;
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let k = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const col = m[1] ? (m[1].startsWith("+") ? "var(--up, #4ade80)" : "var(--down, #f87171)") : m[2] ? "#f5b031" : gradeCol;
+    out.push(
+      <span key={k++} style={{ color: col, fontWeight: 700 }}>
+        {m[0]}
+      </span>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** How the Technical Read card on Overview is worked out (shown by its "i" button). */
+const TECHNICAL_READ_INFO: [string, string][] = [
+  ["TREND", "compares the price to the 50 DMA and the 200 DMA."],
+  ["Bullish (green):", "price is above both."],
+  ["Bearish (red):", "price is below both."],
+  ["Mixed (steel blue):", "price is between them."],
+  ["MOMENTUM", "uses 14-day RSI."],
+  ["Overbought (amber):", "RSI 70 or above."],
+  ["Strong (green):", "RSI 55 to under 70."],
+  ["Neutral (amber):", "RSI above 45 and under 55."],
+  ["Weak (red):", "RSI above 30 and up to 45."],
+  ["Oversold (red):", "RSI 30 or below."],
+  ["52W HIGH", "is how far price sits below its 52-week high. Within 3% reads as at / near the high."],
+  ["RISK", "uses 30-day realized volatility, which is annualized price volatility and not beta or drawdown."],
+  ["High (red):", "50% or more."],
+  ["Elevated (amber):", "30% to under 50%."],
+  ["Moderate (green):", "under 30%."],
+];
 
 export function StockIntelligenceScreen() {
   const { data: ent } = useEntitlements();
   const isUnsubscribed = ent?.subscriptionsEnabled === true && !ent?.staff && (ent?.planId === "none" || ent?.planId === "free");
-  const showVendor = useShowVendorTags();
   const { theme, setTheme } = useIQActions();
   const isLight = theme === "light";
   // The shell's setTheme persists to localStorage + backend, keeping MC in sync.
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
   const router = useRouter();
-  const { setSiTicker, activeTab, setActiveTab, goToSearch } = useSI();
+  const { siTicker, setSiTicker, activeTab, setActiveTab, goToSearch } = useSI();
 
   // Search input state
   const [searchQuery, setSearchQuery] = useState("");
@@ -1046,15 +1139,6 @@ export function StockIntelligenceScreen() {
     }
   };
 
-  // The Catalysts tab shows 90 days of news; score just those once (not on every render).
-  const catalystNews = useMemo(() => {
-    const todayMs = Date.parse(`${etTodayIso()}T00:00:00Z`);
-    const list = (Array.isArray(tickerNews) ? tickerNews : []).filter(
-      (a) => a.publishedAt && Date.parse(a.publishedAt) >= todayMs - 90 * 86_400_000,
-    );
-    return { list, sig: scoreNews(list, { ticker: stock?.t ?? "", name: stock?.name, bars: sixMonthBars }) };
-  }, [tickerNews, stock?.t, stock?.name, sixMonthBars]);
-
   // Real peers from Polygon/FMP (liveCompany.peers) and MC company universe (matches stock function)
   const isBumble = stock?.t?.toUpperCase() === "BMBL" || stock?.name?.toLowerCase().includes("bumble") || currentTicker?.toUpperCase() === "BMBL";
 
@@ -1237,17 +1321,8 @@ export function StockIntelligenceScreen() {
   // Expandable sections state
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
   const [showSigHow, setShowSigHow] = useState(false);
+  const [showAssessEv, setShowAssessEv] = useState(false);
   const [showAttHow, setShowAttHow] = useState(false);
-  const [showFwdHow, setShowFwdHow] = useState(false);
-  const [expandedFwd, setExpandedFwd] = useState<Record<string, boolean>>({});
-  const [showFundEv, setShowFundEv] = useState(false);
-  const [selectedCatFilter, setSelectedCatFilter] = useState("All");
-  // Catalysts tab: "High impact" / "Risk" / "Positive" quick filter, and which grouped stories are expanded.
-  const [selectedSigFilter, setSelectedSigFilter] = useState<"All" | "High impact" | "Risk" | "Positive">("All");
-  const [openStories, setOpenStories] = useState<Record<string, boolean>>({});
-  // Catalysts page, keyed to the stock + section it belongs to, so switching
-  // either starts back at page 1 without an effect.
-  const [catPageState, setCatPageState] = useState<{ key: string; page: number }>({ key: "", page: 0 });
   const [showReadme, setShowReadme] = useState(false);
 
   // Thesis Lab interactive state
@@ -1260,6 +1335,55 @@ export function StockIntelligenceScreen() {
   const [showGuide, setShowGuide] = useState(false);
   const [expandedLabDrivers, setExpandedLabDrivers] = useState<Record<string, boolean>>({});
   const [labEditTargets, setLabEditTargets] = useState(false);
+  // Trade Builder: three set-up steps first (direction, horizon, mode), then Run shows the trade.
+  const [labStarted, setLabStarted] = useState(false);
+  const [pickDir, setPickDir] = useState<"Bull" | "Bear" | null>(null);
+  const [pickHz, setPickHz] = useState<string | null>(null);
+  const [pickMode, setPickMode] = useState<"NORMAL" | "ADVANCED" | null>(null);
+  const [labSaveOpen, setLabSaveOpen] = useState(false);
+  const [labSavedNote, setLabSavedNote] = useState<string | null>(null);
+  const [labExplainerOpen, setLabExplainerOpen] = useState(false);
+  const [labWeightsDialog, setLabWeightsDialog] = useState(false);
+  const [labBreakdownOpen, setLabBreakdownOpen] = useState<Record<string, boolean>>({});
+  // A new stock starts from an empty set-up.
+  useEffect(() => {
+    queueMicrotask(() => {
+      setLabStarted(false);
+      setPickDir(null);
+      setPickHz(null);
+      setPickMode(null);
+      setLabSavedNote(null);
+    });
+  }, [siTicker]);
+  // The set-up page opens at the top, whatever the last tab's scroll position was.
+  useEffect(() => {
+    if (activeTab !== "lab" || labStarted || typeof window === "undefined") return;
+    const toTop = () => {
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+      document.querySelectorAll("main.main, .main").forEach((el) => {
+        if (el.scrollTop > 0) el.scrollTop = 0;
+      });
+    };
+    toTop();
+    const raf = requestAnimationFrame(toTop);
+    const timer = setTimeout(toTop, 150);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [activeTab, labStarted]);
+  /** Back to the empty three-step set-up (after a save). */
+  const resetBuilder = () => {
+    setLabStarted(false);
+    setPickDir(null);
+    setPickHz(null);
+    setPickMode(null);
+    setLabWeightsState(null);
+    setTargetOverride(null);
+    setStopOverride(null);
+    setLabEditTargets(false);
+    setLabBreakdownOpen({});
+  };
 
   // Thesis Monitor state
   const [monScenario, setMonScenario] = useState<"live" | "cut" | "break" | "surge">("live");
@@ -1301,7 +1425,7 @@ export function StockIntelligenceScreen() {
   useEffect(() => {
     try {
       const found: TrackedTrade[] = listAllTrades(localStorage).map((t) => ({
-        id: t.id, ticker: t.ticker, dir: t.dir, hz: t.hz, target: t.target, stop: t.stop, savedAt: t.savedAt,
+        id: t.id, ticker: t.ticker, dir: t.dir, hz: t.hz, target: t.target, stop: t.stop, entryPx: t.entryPx, savedAt: t.savedAt,
       }));
       // Same array when nothing changed, so this can never feed a render loop.
       setTrackedTrades(prev => (JSON.stringify(prev) === JSON.stringify(found) ? prev : found));
@@ -1571,9 +1695,6 @@ export function StockIntelligenceScreen() {
         style={{
           minHeight: "100vh",
           background: "var(--si-bg, #080b10)",
-          backgroundImage:
-            "linear-gradient(var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px), linear-gradient(90deg, var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
           color: "var(--si-text-hi, #e8eef4)",
           display: "flex",
           flexDirection: "column",
@@ -1588,7 +1709,6 @@ export function StockIntelligenceScreen() {
         <style>{`
         .si-screen {
           --si-bg: #080b10;
-          --si-bg-grid: rgba(127,168,208,0.045);
           --si-topbar: rgba(8,11,16,0.96);
           --si-card: rgba(12, 17, 24, 0.9);
           --si-card-solid: #0c1118;
@@ -1612,7 +1732,6 @@ export function StockIntelligenceScreen() {
         }
         .si-screen {
           --si-bg: #080b10;
-          --si-bg-grid: rgba(127,168,208,0.045);
           --si-topbar: rgba(8,11,16,0.96);
           --si-card: rgba(12, 17, 24, 0.9);
           --si-card-solid: #0c1118;
@@ -1640,7 +1759,6 @@ export function StockIntelligenceScreen() {
         .si-screen[data-theme="light"],
         .iq-root[data-theme="light"] .si-screen {
           --si-bg: #f4f6fa;
-          --si-bg-grid: rgba(15,23,42,0.035);
           --si-topbar: rgba(255,255,255,0.96);
           --si-card: #ffffff;
           --si-card-solid: #ffffff;
@@ -2008,18 +2126,68 @@ export function StockIntelligenceScreen() {
   );
   const hi52 = r52.high;
   const lo52 = r52.low;
-  const statsRow = [
-    { k: "MARKET CAP", v: realMcap || "—", sub: liveCompany?.sector || stock.sector || "Equity" },
-    { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },
-    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? (showVendor ? "y/y, FMP reported" : "y/y, reported") : "y/y, latest qtr" },
-    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, GAAP diluted" : "y/y, latest qtr" },
-    { k: "52W LOW / HIGH", v: `${lo52 != null ? usd(lo52) : "—"} / ${hi52 != null ? usd(hi52) : "—"}`, sub: "Range" },
-  ];
+  const MCAP_BLUE = "#4fb3ff";
+  const growthColor = (v: number | null | undefined) => (v == null ? undefined : v >= 0 ? UP : DN);
 
   // Overview signal scores, confidence and confluence come from the same
   // 6-month bullish forward run as the "Why it could move" tab, so the two
   // never disagree (the old fallback showed fixed 88/87/80/… for every stock).
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
+  const movedWeek = weekMove(stock.t, sixMonthBars, tickerNews as unknown as Parameters<typeof weekMove>[2]);
+  const mcConfidence = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
+  const mcConfidenceColor = overviewRun.conf == null ? STEEL : sc(Math.round(overviewRun.conf));
+  /** How many of the 7 signal categories score 75 or more. */
+  const confluenceCount = overviewRun.cats.filter((c) => Math.round(c.score) >= 75).length;
+  const confluenceColor = confluenceCount >= 5 ? UP : confluenceCount >= 3 ? STEEL : confluenceCount === 2 ? "#f5b031" : DN;
+
+  type HeroStat = { k: string; v: string; col?: string; node?: React.ReactNode; link?: boolean };
+  const statsRow: HeroStat[] = [
+    { k: "MARKET CAP", v: realMcap || "—", col: MCAP_BLUE },
+    { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", col: MCAP_BLUE },
+    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), col: growthColor(realFundGrowth?.revYoy ?? stock.rev) },
+    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), col: growthColor(realFundGrowth?.epsYoy ?? stock.eps) },
+    {
+      k: "52W LOW / HIGH",
+      v: `${lo52 != null ? usd(lo52) : "—"} / ${hi52 != null ? usd(hi52) : "—"}`,
+      node: (
+        <>
+          <span style={{ color: DN }}>{lo52 != null ? usd(lo52) : "—"}</span>
+          {" / "}
+          <span style={{ color: UP }}>{hi52 != null ? usd(hi52) : "—"}</span>
+        </>
+      ),
+    },
+    {
+      k: "MC CONFIDENCE",
+      v: mcConfidence != null ? `${mcConfidence} / 100` : "—",
+      col: mcConfidenceColor,
+      link: true,
+      node:
+        mcConfidence != null ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 84,
+                height: 84,
+                borderRadius: "50%",
+                border: `4px solid ${mcConfidenceColor}`,
+                fontSize: 38,
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
+            >
+              {mcConfidence}
+            </span>
+            <span style={{ fontSize: 20, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>/ 100</span>
+          </span>
+        ) : undefined,
+    },
+  ];
+  const scrollToSignals = () => document.getElementById("si-signals")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
   // Technical Read card: shown on Overview and on the Technicals tab.
   const technicalReadCard = (
     <div
@@ -2034,22 +2202,18 @@ export function StockIntelligenceScreen() {
         gap: 14,
       }}
     >
-      {/* Corner brackets */}
-      <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-      <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-      <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-      <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
 
       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
         ✦ TECHNICAL READ
+        <InfoTip lines={TECHNICAL_READ_INFO} />
       </span>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
         {stockDetail.read.map((rd, i) => (
-          <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: 10 }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-accent, #5980a6)" }}>
+          <div key={i} style={{ border: `1px solid ${rd.col}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 }}>
               {rd.k}
             </div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: rd.col, marginTop: 4 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: rd.col }}>
               {rd.v}
             </div>
           </div>
@@ -2070,10 +2234,10 @@ export function StockIntelligenceScreen() {
           <div style={{ display: "flex", flexDirection: "column" }}>
             {rows.map((r) => (
               <div key={r.title} style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 10, alignItems: "baseline", padding: "9px 0", borderTop: "1px solid var(--si-border, #1c2733)" }}>
-                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.title}</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13.5, fontWeight: 700, color: col(r.tone), whiteSpace: "pre" }}>{r.value}</span>
+                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.title}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: col(r.tone), whiteSpace: "pre" }}>{r.value}</span>
                 {r.note && (
-                  <span style={{ gridColumn: "1 / 3", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
+                  <span style={{ gridColumn: "1 / 3", fontFamily: "'Manrope', sans-serif", fontSize: 14, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
                 )}
               </div>
             ))}
@@ -2121,9 +2285,6 @@ export function StockIntelligenceScreen() {
       style={{
         minHeight: "100vh",
         background: "var(--si-bg, #080b10)",
-        backgroundImage:
-          "linear-gradient(var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px), linear-gradient(90deg, var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px)",
-        backgroundSize: "48px 48px",
         color: "var(--si-text-hi, #e8eef4)",
         paddingBottom: 120, // Issue 8 fix: generous padding at bottom
       }}
@@ -2132,7 +2293,6 @@ export function StockIntelligenceScreen() {
       <style>{`
         .si-screen {
           --si-bg: #080b10;
-          --si-bg-grid: rgba(127,168,208,0.045);
           --si-topbar: rgba(8,11,16,0.96);
           --si-card: rgba(12, 17, 24, 0.9);
           --si-card-solid: #0c1118;
@@ -2156,7 +2316,6 @@ export function StockIntelligenceScreen() {
         }
         .si-screen {
           --si-bg: #080b10;
-          --si-bg-grid: rgba(127,168,208,0.045);
           --si-topbar: rgba(8,11,16,0.96);
           --si-card: rgba(12, 17, 24, 0.9);
           --si-card-solid: #0c1118;
@@ -2184,7 +2343,6 @@ export function StockIntelligenceScreen() {
         .si-screen[data-theme="light"],
         .iq-root[data-theme="light"] .si-screen {
           --si-bg: #f4f6fa;
-          --si-bg-grid: rgba(15,23,42,0.035);
           --si-topbar: rgba(255,255,255,0.96);
           --si-card: #ffffff;
           --si-card-solid: #ffffff;
@@ -2218,6 +2376,7 @@ export function StockIntelligenceScreen() {
           color: #94a3b8 !important;
         }
         /* ── Phone (≤760px): the stat columns stack under the name instead of crushing to one character a line ── */
+        @media (max-width: 1300px) { .si-hero-stat > div:last-child { white-space: normal !important; overflow-wrap: anywhere; } }
         @media (max-width: 760px) {
           .si-main { padding: 14px 12px 100px !important; }
           .si-hero { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
@@ -2226,8 +2385,6 @@ export function StockIntelligenceScreen() {
           .si-hero-stat:last-child { grid-column: 1 / -1; border-bottom: none; }
           .si-ph-head { height: auto !important; flex-wrap: wrap; padding: 10px 12px !important; row-gap: 8px; }
           .si-ph-head > div { margin-left: 0 !important; flex-wrap: wrap; }
-          .si-cat-row { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important; padding: 12px 14px !important; }
-          .si-cat-imp { text-align: left !important; display: flex; gap: 10px; align-items: baseline; }
         }
       `}</style>
 
@@ -2533,14 +2690,15 @@ export function StockIntelligenceScreen() {
                   padding: "0 16px",
                   border: "none",
                   background: "transparent",
-                  color: isActive ? "var(--up, #16a34a)" : "var(--si-text-hi, #e8eef4)",
+                  color: isActive ? "#6db3ff" : "var(--si-text-hi, #e8eef4)",
+                  textShadow: isActive ? "0 0 10px rgba(79,163,255,0.75), 0 0 22px rgba(79,163,255,0.35)" : "none",
                   fontFamily: "'Barlow Condensed', sans-serif",
                   fontSize: 15,
                   fontWeight: 600,
                   letterSpacing: "0.12em",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
-                  boxShadow: isActive ? "inset 0 -2px 0 var(--up, #16a34a)" : "none",
+                  boxShadow: isActive ? "inset 0 -2px 0 #4fa3ff, 0 6px 14px -6px rgba(79,163,255,0.6)" : "none",
                 }}
               >
                 {label}
@@ -2557,7 +2715,7 @@ export function StockIntelligenceScreen() {
             ==================================================== */}
         {activeTab === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Header Identity & Key Stats Grid */}
+            {/* Header identity and key stats */}
             <div
               className="si-hero"
               style={{
@@ -2565,26 +2723,22 @@ export function StockIntelligenceScreen() {
                 border: "1px solid var(--si-border, #1c2733)",
                 background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                 display: "grid",
-                gridTemplateColumns: "auto repeat(4, minmax(0, 1fr)) minmax(0, 1.5fr)",
+                gridTemplateColumns: "auto repeat(2, minmax(0, 1fr)) minmax(max-content, 1.3fr) minmax(max-content, 1.5fr)",
               }}
             >
-              {/* Corner brackets */}
-              <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid #7fa8d0", borderTop: "1px solid #7fa8d0" }} />
-              <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderTop: "1px solid #7fa8d0" }} />
-              <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
-              <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
-
-              {/* Identity Box with Logo */}
-              <div className="si-hero-id" style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260, display: "flex", alignItems: "center" }}>
-                {/* One line: logo, ticker and name, then the price and day change beside them (wraps only on a narrow phone). */}
-                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 22, rowGap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <StockLogo sym={stock.t} size={40} />
-                    <div style={{ maxWidth: 190 }}>
+              {/* Identity: logo, ticker, name and price, with market cap and P/E underneath */}
+              <div
+                className="si-hero-id"
+                style={{ padding: "14px 20px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260, display: "flex", flexDirection: "column", justifyContent: "center", gap: 12 }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <StockLogo sym={stock.t} size={52} />
+                    <div>
                       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
                         {stock.t}
                       </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4, whiteSpace: "nowrap" }}>
                         {stock.name}
                       </div>
                     </div>
@@ -2598,56 +2752,60 @@ export function StockIntelligenceScreen() {
                     </span>
                   </div>
                 </div>
+                <div style={{ display: "flex", justifyContent: "center", gap: 28, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 10 }}>
+                  {statsRow.slice(0, 2).map((st) => (
+                    <div key={st.k} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
+                        {st.k}
+                      </span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: st.col ?? "var(--si-text-hi, #e8eef4)", whiteSpace: "nowrap" }}>
+                        {st.node ?? st.v}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Stats Items */}
-              {statsRow.map((st, i) => (
+              {/* Stats: revenue growth, EPS growth, 52-week range, MC confidence */}
+              {statsRow.slice(2).map((st, i, arr) => (
                 <div
                   key={st.k}
                   className="si-hero-stat"
+                  role={st.link ? "button" : undefined}
+                  tabIndex={st.link ? 0 : undefined}
+                  onClick={st.link ? scrollToSignals : undefined}
+                  onKeyDown={st.link ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); scrollToSignals(); } } : undefined}
                   style={{
-                    padding: "16px 18px",
-                    borderRight:
-                      i !== statsRow.length - 1
-                        ? "1px solid var(--si-border, #1c2733)"
-                        : "none",
+                    cursor: st.link ? "pointer" : undefined,
+                    padding: "14px 20px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    textAlign: "center",
+                    borderRight: i !== arr.length - 1 ? "1px solid var(--si-border, #1c2733)" : "none",
                     minWidth: 0,
                     boxSizing: "border-box",
                   }}
                 >
-                  <div
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: "0.14em",
-                      color: "var(--si-accent, #5980a6)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
                     {st.k}
                   </div>
-
-                  <div
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 20,
-                      fontWeight: 600,
-                      color: "var(--si-text-hi, #e8eef4)",
-                      marginTop: 8,
-                      whiteSpace: "normal",
-                      overflowWrap: "anywhere",
-                      lineHeight: 1.4,
-                      // The 52-week range stays on one line: "$148.80 / $243.37".
-                      ...(st.k === "52W LOW / HIGH" ? { whiteSpace: "nowrap", overflowWrap: "normal", fontSize: 18 } : {}),
-                    }}
-                  >
-                    {st.v}
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: st.col ?? "var(--si-text-hi, #e8eef4)", marginTop: 8, whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                    {st.node ?? st.v}
                   </div>
+                  {st.link && (
+                    <div style={{ marginTop: 6, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
+                      Click here to know more ↓
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
+            <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
+            <div className="si-ov">
+              <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
             {/* Price History Chart Card with Interactive Crosshair & Detailed X-Axis */}
             <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
               <div className="si-ph-head" style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
@@ -2897,14 +3055,11 @@ export function StockIntelligenceScreen() {
               </div>
             </div>
 
-            {/* Two-Column Grid: MarketCatalyst Intelligence & Signal Scores */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
-              {/* Card 1: Technical Read (same card as the Technicals tab) */}
-              {technicalReadCard}
-
-              {/* Card 2: Signal Scores */}
+              {/* Signal scores */}
               <div
+                id="si-signals"
                 style={{
+                  scrollMarginTop: 90,
                   border: "1px solid var(--si-border, #1c2733)",
                   background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                   padding: "18px 20px",
@@ -2946,8 +3101,8 @@ export function StockIntelligenceScreen() {
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                       HOW EACH SCORE IS CALCULATED
                     </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, margin: "4px 0" }}>
-                      Every signal score runs 0–100, where 50 is neutral. Scores above 60 indicate positive alignment with the forward thesis.
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, margin: "4px 0" }}>
+                      Every signal score runs 0–100, where 50 is neutral. Scores of 75 or more (green) indicate strong alignment with the forward trade and count toward Confluence; 60–74 (blue) is moderate, 45–59 (amber) is middling, and under 45 (red) is weak. The overall MC Confidence uses the same scale: 75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak.
                     </div>
                     {[
                       ["Business", "Revenue growth in key segments, gross and operating margin trend, and forward guidance."],
@@ -2958,16 +3113,17 @@ export function StockIntelligenceScreen() {
                       ["Flows", "Call/put skew, short interest, days to cover, plus institutional ownership change from latest 13F filings."],
                       ["Macro", "Market trend, VIX level, interest rate volatility, and sector sensitivity to broader liquidity."],
                     ].map(([sName, sDesc], idx) => (
-                      <div key={idx} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</span>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-body, #c9d4de)" }}>{sDesc}</span>
+                      <div key={idx} style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</span>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #c9d4de)" }}>{sDesc}</span>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* 7 Interactive Score Buttons */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8 }}>
+                {/* 7 interactive score buttons, then the Confluence box */}
+                <style>{`.si-sig{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.si-sig-cb{grid-column:span 5;display:grid;grid-template-columns:minmax(180px,260px) auto;gap:8px}@media (max-width:760px){.si-sig{grid-template-columns:repeat(3,minmax(0,1fr))}.si-sig-cb{grid-column:span 2;grid-template-columns:1fr}.si-sig-cb>button{grid-column:1/-1;height:32px}}`}</style>
+                <div className="si-sig">
                   {signalScores.map((scItem: SignalScoreItem) => {
                     const isSelected = selectedSignal === scItem.name;
                     return (
@@ -2998,7 +3154,38 @@ export function StockIntelligenceScreen() {
                       </button>
                     );
                   })}
+                  <div className="si-sig-cb">
+                    <div style={{ border: "1px solid var(--si-accent, #5980a6)", background: "var(--si-accent-bg, rgba(89,128,166,0.12))", padding: 12, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 6, minWidth: 0 }}>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", color: "var(--si-text-mid, #93a1af)" }}>CONFLUENCE</span>
+                      <span style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6, lineHeight: 1 }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 40, fontWeight: 700, color: confluenceColor }}>{confluenceCount}</span>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>/ 7</span>
+                      </span>
+                      <span style={{ display: "flex", gap: 3, alignSelf: "stretch" }}>
+                        {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                          <span key={n} style={{ flex: 1, height: 3, background: n < confluenceCount ? confluenceColor : "var(--si-card-tert, #1c2733)" }} />
+                        ))}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowAssessEv(!showAssessEv)}
+                      style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card-sec, transparent)", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "0 14px" }}
+                    >
+                      {showAssessEv ? "Hide evidence" : "Evidence ▸"}
+                    </button>
+                  </div>
                 </div>
+
+                {showAssessEv && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
+                    {(stockDetail.assessEv || []).map((ev, i) => (
+                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8 }}>
+                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
+                        <span>{ev}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Expanded Signal Evidence Card */}
                 {selectedSignal && (
@@ -3067,6 +3254,28 @@ export function StockIntelligenceScreen() {
                   </div>
                 )}
               </div>
+              </div>
+              {/* Right column: the take, then the two reads */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+                <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, #0c1118)", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "var(--si-shadow, none)" }}>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+                    MARKETCATALYST TAKE
+                  </div>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
+                    {stockDetail.assessSegs
+                      ? stockDetail.assessSegs.map((seg, i) =>
+                          seg.tone ? (
+                            <span key={i} style={{ color: seg.tone === "up" ? "var(--up, #16a34a)" : "var(--down, #dc2626)", fontWeight: 700 }}>{seg.t}</span>
+                          ) : (
+                            seg.t
+                          ),
+                        )
+                      : stockDetail.assess}
+                  </div>
+                </div>
+                <ReadCard title="FUNDAMENTAL READ" text={fundamentalReadText(stock.t, siFacts, stock.fpe)} onOpen={() => setActiveTab("fund")} />
+                <ReadCard title="TECHNICAL READ" text={technicalReadText(siFacts)} info={TECHNICAL_READ_INFO} onOpen={() => setActiveTab("tech")} />
+              </div>
             </div>
           </div>
         )}
@@ -3076,96 +3285,93 @@ export function StockIntelligenceScreen() {
             ==================================================== */}
         {activeTab === "moved" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* 6-Month Area Chart from stock function with 5 Major Events Markers & Cards */}
-            <SixMonthAreaChart
-              ticker={stock.t}
-              stock={stock}
-              bars={sixMonthBars}
-              events={majorEvents}
-            />
-
-            {/* Attribution Breakdown & AI Explanation */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
-              {/* Attribution */}
-              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    ESTIMATED FACTOR ATTRIBUTION
-                  </span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                    of <b style={{ color }}>{pct(stock.c)}</b> today
-                  </span>
-                  <button
-                    onClick={() => setShowAttHow(!showAttHow)}
-                    style={{ marginLeft: "auto", height: 24, padding: "0 9px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, cursor: "pointer" }}
-                  >
-                    HOW IT WORKS
-                  </button>
-                </div>
-                {showAttHow && (
-                  <div style={{ padding: "10px 12px", background: "var(--si-evidence-bg, rgba(89,128,166,0.08))", border: "1px solid var(--si-border-sec, #2a3a4a)", borderRadius: 4, fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.45 }}>
-                    Estimated Factor Attribution: Percentages are modeled estimates derived from sector beta and market regime heuristics, not empirically measured or causal contributions.
-                  </div>
-                )}
-                {/* Stacked Bar */}
-                <div style={{ display: "flex", height: 16, width: "100%", borderRadius: 2, overflow: "hidden" }}>
-                  {[
-                    { k: "Sector", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
-                    { k: "News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
-                    { k: "Market", p: stockDetail.att[2], c: "#8b5cf6" },
-                    { k: "Technical", p: stockDetail.att[3], c: "#f59e0b" },
-                  ].map((at, idx) => (
-                    <span key={idx} style={{ height: 16, width: `${at.p}%`, background: at.c, borderRight: "2px solid var(--si-card-solid, #080b10)" }} />
-                  ))}
-                </div>
-                {/* Factor rows */}
-                {[
-                  { k: "Sector Momentum", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
-                  { k: "Company News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
-                  { k: "Market Regime", p: stockDetail.att[2], c: "#8b5cf6" },
-                  { k: "Technical Factors", p: stockDetail.att[3], c: "#f59e0b" },
-                ].map((at, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ width: 10, height: 10, background: at.c }} />
-                    <span style={{ width: 120, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{at.k}</span>
-                    <div style={{ flex: 1, height: 6, background: "var(--si-card-tert, #1c2733)" }}>
-                      <div style={{ height: 6, width: `${at.p}%`, background: at.c }} />
-                    </div>
-                    <span style={{ width: 44, textAlign: "right", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{at.p}%</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* AI Explanation Card */}
+            {/* Chart beside the MarketCatalyst read (last week when the daily bars are there, else today) */}
+            <style>{`.si-ov-m{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:stretch}@media (max-width:1050px){.si-ov-m{grid-template-columns:minmax(0,1fr)}}`}</style>
+            <div className="si-ov-m">
+              <SixMonthAreaChart ticker={stock.t} stock={stock} bars={sixMonthBars} events={majorEvents} />
               <div
                 style={{
                   position: "relative",
                   border: "1px solid var(--si-border-sec, #5980a6)",
                   background: "var(--si-card, rgba(12,17,24,0.92))",
-                  padding: "20px 22px",
+                  padding: "24px 26px",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 14,
+                  gap: 16,
+                  minWidth: 0,
+                  boxSizing: "border-box",
                 }}
               >
-                <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                  ✦ AI EXPLANATION
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+                  MARKETCATALYST READ
                 </span>
                 <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
-                  {stockDetail.movedTxt}
+                  {highlightSignedPercents(movedWeek ? movedWeek.text : stockDetail.movedTxt)}
                 </div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 14 }}>
                   SUPPORTING EVIDENCE
                 </div>
-                {stockDetail.movedEv.map((me, i) => (
-                  <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #d5dfe9)", display: "flex", gap: 8, lineHeight: 1.45 }}>
-                    <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                    <span>{me}</span>
-                  </div>
-                ))}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {(movedWeek ? [...movedWeek.ev, stockDetail.movedEv[0]] : stockDetail.movedEv).map((me: React.ReactNode, i: number) => (
+                    <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 10, lineHeight: 1.5 }}>
+                      <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
+                      <span>{typeof me === "string" ? highlightNumbers(me) : me}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+            </div>
+
+            {/* Estimated factor attribution: stacked bar plus one tile per factor */}
+            <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)" }}>
+                  ESTIMATED FACTOR ATTRIBUTION
+                  <InfoTip lines={FACTOR_INFO} />
+                </span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
+                  of <b style={{ color: movedWeek ? (movedWeek.pct >= 0 ? "var(--up, #4ade80)" : "var(--down, #f87171)") : color }}>{movedWeek ? pct(movedWeek.pct) : pct(stock.c)}</b> {movedWeek ? "last week" : "today"}
+                </span>
+                <button
+                  onClick={() => setShowAttHow(!showAttHow)}
+                  style={{ marginLeft: "auto", height: 26, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", cursor: "pointer" }}
+                >
+                  HOW IT WORKS
+                </button>
+              </div>
+              {showAttHow && (
+                <div style={{ padding: "10px 12px", background: "var(--si-evidence-bg, rgba(89,128,166,0.08))", border: "1px solid var(--si-border-sec, #2a3a4a)", borderRadius: 4, fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.5 }}>
+                  Estimated Factor Attribution: Percentages are modeled estimates derived from sector beta and market regime heuristics, not empirically measured or causal contributions.
+                </div>
+              )}
+              {(() => {
+                const factors = [
+                  { k: "Sector Momentum", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
+                  { k: "Company News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
+                  { k: "Market Regime", p: stockDetail.att[2], c: "#8b5cf6" },
+                  { k: "Technical Factors", p: stockDetail.att[3], c: "#f59e0b" },
+                ];
+                return (
+                  <>
+                    <div style={{ display: "flex", height: 16, width: "100%", borderRadius: 2, overflow: "hidden" }}>
+                      {factors.map((at, idx) => (
+                        <span key={idx} style={{ height: 16, width: `${at.p}%`, background: at.c, borderRight: "2px solid var(--si-card-solid, #080b10)" }} />
+                      ))}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+                      {factors.map((at, idx) => (
+                        <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", borderLeft: `3px solid ${at.c}`, background: "var(--si-card-sec, rgba(12,17,24,0.6))", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{at.k}</span>
+                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{at.p}%</span>
+                          <div style={{ height: 6, background: "var(--si-card-tert, #1c2733)" }}>
+                            <div style={{ height: 6, width: `${at.p}%`, background: at.c }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -3173,297 +3379,59 @@ export function StockIntelligenceScreen() {
         {/* ====================================================
             TAB 3: WHY IT COULD MOVE (Complete Implementation)
             ==================================================== */}
-        {activeTab === "could" && (() => {
-          const fRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
-          const fAl = fRun.cats.filter((c: any) => Math.round(c.score) >= 60).length;
-          const C = 2 * Math.PI * 70; // 439.82
-          const ringDash = `${(C * fAl) / 7} ${C}`;
-          const fConf = fRun.conf != null ? Math.round(fRun.conf) : null;
+        {activeTab === "could" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <BullBearChecks bullish={stockDetail.valid} bearish={stockDetail.invalid} broken={stockDetail.broken} />
 
-          return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {/* Upcoming Catalysts Timeline */}
-              <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px" }}>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 22 }}>
-                  CATALYSTS · RECENT &amp; UPCOMING
-                </div>
-                <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
-                  {upcomingCatalysts.map((up, i) => (
-                    <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8 }}>
-                      {/* The timeline line is drawn per event, from this marker across the gap to the next one,
-                          so every row of the grid (not just the first) is joined up. */}
-                      {i < upcomingCatalysts.length - 1 && (
-                        <span aria-hidden style={{ position: "absolute", left: 13, right: -18, top: 12, height: 2, background: "rgba(89,128,166,0.55)", zIndex: 0 }} />
-                      )}
-                      {/* Passed events get a green dot in the ring; events still ahead keep the empty ring. */}
-                      <span
-                        style={{
-                          position: "relative",
-                          zIndex: 1,
-                          width: 26,
-                          height: 26,
-                          borderRadius: 99,
-                          background: "var(--si-bg, #080b10)",
-                          border: `2px solid ${up.past ? "var(--up, #4ade80)" : "#7fa8d0"}`,
-                          boxShadow: up.past ? "0 0 0 6px rgba(74,222,128,0.12)" : "0 0 0 6px rgba(127,168,208,0.12)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {up.past && <span style={{ width: 10, height: 10, borderRadius: 99, background: "var(--up, #4ade80)" }} />}
-                      </span>
-                      {/* Passed events read a little greyer than the ones still ahead. */}
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: up.past ? "var(--si-text-mid, #93a1af)" : "var(--si-accent-light, #a9c6e3)", marginTop: 4 }}>
-                        {up.date} · {up.days}
-                      </span>
-                      {up.cat && (
-                        <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: up.cat === "Political" ? up.col : "var(--si-text-sub, #5d6b79)" }}>
-                          {up.cat.toUpperCase()}
-                        </span>
-                      )}
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, opacity: up.past ? 0.78 : 1 }}>
-                        {up.n}
-                      </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45, opacity: up.past ? 0.78 : 1 }}>
-                        {up.txt}
-                      </span>
-                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "2px 8px", marginTop: 4, opacity: up.past ? 0.78 : 1 }}>
-                        {up.imp} IMPACT
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            {/* Catalysts timeline */}
+            <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px" }}>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 22 }}>
+                CATALYSTS · RECENT &amp; UPCOMING
               </div>
-
-              {/* Forward Signals & Confluence Grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 540px), 1fr))", gap: 18, alignItems: "start" }}>
-                {/* Left: 7 Forward Signals */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                      FORWARD SIGNALS
+              <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
+                {upcomingCatalysts.map((up, i) => (
+                  <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, opacity: up.past ? 0.6 : 1 }}>
+                    {/* The timeline line is drawn per event, from this marker across the gap to the next one,
+                        so every row of the grid (not just the first) is joined up. */}
+                    {i < upcomingCatalysts.length - 1 && (
+                      <span aria-hidden style={{ position: "absolute", left: 13, right: -18, top: 12, height: 2, background: "rgba(89,128,166,0.55)", zIndex: 0 }} />
+                    )}
+                    {/* Events that have passed are a filled grey dot and fade back; events still ahead keep the open ring. */}
+                    <span
+                      style={{
+                        position: "relative",
+                        zIndex: 1,
+                        width: 26,
+                        height: 26,
+                        borderRadius: 99,
+                        background: up.past ? "#2a3a4a" : "var(--si-bg, #080b10)",
+                        border: `2px solid ${up.past ? "#5d6b79" : "#7fa8d0"}`,
+                        boxShadow: up.past ? "0 0 0 6px rgba(93,107,121,0.12)" : "0 0 0 6px rgba(127,168,208,0.12)",
+                      }}
+                    />
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "#ffffff", marginTop: 4 }}>
+                      {up.date} · {up.days}
                     </span>
-                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                        Click a signal to see what it’s made of
+                    {up.cat && (
+                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", color: "#ffffff" }}>
+                        {up.cat.toUpperCase()}
                       </span>
-                      <button
-                        onClick={() => setShowFwdHow(!showFwdHow)}
-                        style={{
-                          height: 24,
-                          padding: "0 9px",
-                          border: "1px solid var(--si-border-sec, #2a3a4a)",
-                          background: "transparent",
-                          color: "var(--si-accent-light, #a9c6e3)",
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 10,
-                          letterSpacing: "0.12em",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {showFwdHow ? "HIDE HOW" : "HOW IT WORKS"}
-                      </button>
+                    )}
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "#ffffff", lineHeight: 1 }}>
+                      {up.n}
+                    </span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "#ffffff", lineHeight: 1.5 }}>
+                      {up.txt}
+                    </span>
+                    <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "3px 9px", marginTop: 4 }}>
+                      {up.imp} IMPACT
                     </span>
                   </div>
-
-                  {/* How It Works Explanatory Dropdown */}
-                  {showFwdHow && (
-                    <div style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", background: "#0b1016", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                        HOW EACH FORWARD SIGNAL IS CALCULATED
-                      </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.55, margin: "6px 0 4px" }}>
-                        Each signal runs 0–100, where 50 is neutral. It is built from the stock’s own drivers: each driver gets an evidence score from current data, and the signal is their weighted average. Scored for a 6-month bullish view. Above 70 points to upside, below 40 to downside.
-                      </div>
-                      {[
-                        ["Business", "FUNDAMENTALS", "Revenue growth in key segments, gross and operating margin trend, and forward guidance."],
-                        ["Earnings", "ESTIMATES", "EPS and revenue estimate revisions over 30 and 90 days, beat rate over the last 8 quarters, and surprise magnitude."],
-                        ["Technical", "PRICE ACTION", "Trend vs. 50- and 200-day moving averages, relative strength vs. S&P 500, and distance to key support/resistance."],
-                        ["Catalysts", "CALENDAR", "Upcoming dated events (earnings, product launches, conferences) weighted by historical volatility impact."],
-                        ["Valuation", "MULTIPLES", "Forward P/E and EV/EBITDA vs. 5-year history and peers, adjusted for growth (PEG ratio)."],
-                        ["Positioning", "FLOWS", "Call/put skew, short interest, days to cover, plus institutional ownership change from latest 13F filings."],
-                        ["Macro", "REGIME", "Market trend, VIX level, interest rate volatility, and sector sensitivity to broader liquidity."],
-                      ].map(([sName, sSrc, sDesc], idx) => (
-                        <div key={idx} style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                          <div>
-                            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</div>
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em", color: "var(--si-text-sub, #5d6b79)", marginTop: 3 }}>{sSrc}</div>
-                          </div>
-                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #c9d4de)", lineHeight: 1.5 }}>{sDesc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 7 Signal Rows */}
-                  {fRun.cats.map((c: any) => {
-                    const shortName = SHORT[c.k] || c.label;
-                    const score = Math.round(c.score);
-                    const col = sc(score);
-                    const isOpen = expandedFwd[c.k];
-
-                    return (
-                      <div key={c.k}>
-                        <div
-                          onClick={() => setExpandedFwd((prev) => ({ ...prev, [c.k]: !prev[c.k] }))}
-                          style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", padding: "4px 0" }}
-                        >
-                          <span style={{ width: 100, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                            {shortName}
-                          </span>
-                          <div style={{ flex: 1, display: "flex", gap: 3 }}>
-                            {Array.from({ length: 10 }, (_, i) => (
-                              <span
-                                key={i}
-                                style={{
-                                  flex: 1,
-                                  height: 18,
-                                  background: i < Math.round(score / 10) ? col : "#1c2733",
-                                  transition: "background 200ms ease",
-                                }}
-                              />
-                            ))}
-                          </div>
-                          <span style={{ width: 36, textAlign: "right", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: col }}>
-                            {score}
-                          </span>
-                          <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "var(--si-accent, #5980a6)", fontSize: 12, flex: "none" }}>
-                            ▼
-                          </span>
-                        </div>
-
-                        {/* Expandable Driver Evidence List */}
-                        {isOpen && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 0, margin: "6px 0 4px 0", borderLeft: "1px solid var(--si-border-sec, #2a3a4a)", paddingLeft: 12 }}>
-                            {c.ds.map((xd: any, xidx: number) => {
-                              const evCol = sc(xd.ev);
-                              return (
-                                <div key={xidx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid #141d27" }}>
-                                  <span style={{ width: 58, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, color: xd.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
-                                    {xd.core ? "CORE" : "CONFIRM"}
-                                  </span>
-                                  <div style={{ flex: 1, minWidth: 120 }}>
-                                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                                      <span>{xd.name}</span>
-                                      {xd.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: "#f5b031" }}>◆ CRITICAL</span>}
-                                    </div>
-                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 1 }}>
-                                      {xd.val}
-                                      {xd.shared && <span style={{ color: "var(--si-accent, #5980a6)" }}> · ↔ counted once</span>}
-                                    </div>
-                                  </div>
-                                  <div style={{ width: "clamp(36px,18%,90px)", flex: "none", height: 4, background: "#1c2733" }}>
-                                    <div style={{ height: 4, width: `${xd.ev}%`, background: evCol }} />
-                                  </div>
-                                  <span style={{ width: 28, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: evCol }}>
-                                    {Math.round(xd.ev)}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Right: Confluence & Confidence Ring */}
-                <div
-                  style={{
-                    position: "relative",
-                    border: "1px solid var(--si-border, #1c2733)",
-                    background: "var(--si-card, #0c1118)",
-                    padding: "24px 26px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 32,
-                    flexWrap: "wrap",
-                    boxShadow: "var(--si-shadow, none)",
-                  }}
-                >
-                  <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                  <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-
-                  {/* SVG Circular Ring */}
-                  <div style={{ position: "relative", width: 170, height: 170, flex: "none" }}>
-                    <svg width="170" height="170" viewBox="0 0 170 170" style={{ position: "absolute", left: 0, top: 0 }}>
-                      <circle cx="85" cy="85" r="70" fill="none" stroke="var(--si-border, #1c2733)" strokeWidth="14" />
-                      <circle
-                        cx="85"
-                        cy="85"
-                        r="70"
-                        fill="none"
-                        stroke="#7fa8d0"
-                        strokeWidth="14"
-                        strokeDasharray={ringDash}
-                        transform="rotate(-90 85 85)"
-                        style={{ transition: "stroke-dasharray 600ms ease" }}
-                      />
-                    </svg>
-                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 46, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                        {fAl}/7
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "2px", color: "var(--si-text-mid, #93a1af)" }}>
-                        ALIGNED
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Ring Details */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                        CONFLUENCE
-                      </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
-                        {fAl} of 7 signals aligned
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                        CONFIDENCE
-                      </div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: fConf != null ? 52 : 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
-                        {fConf != null ? fConf : "Unavailable"}
-                        {fConf != null && (
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                            {" "}/ 100
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Invalidation Conditions */}
-              <div style={{ border: "1px solid rgba(127,168,208,0.45)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent-soft, #7fa8d0)" }}>
-                  {stockDetail.broken.length ? "WHAT HAS ALREADY BROKEN, AND WHAT STILL COULD" : "WHAT WOULD BREAK THIS SETUP?"}
-                </span>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
-                  {stockDetail.broken.map((iv, i) => (
-                    <div key={`broken-${i}`} style={{ border: "1px solid var(--down, #dc2626)", background: "rgba(220,38,38,0.08)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.14em", color: "var(--down, #dc2626)" }}>ALREADY BROKEN</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[0]}</span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[1]}</span>
-                    </div>
-                  ))}
-                  {stockDetail.invalid.map((iv, i) => (
-                    <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[0]}</span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[1]}</span>
-                    </div>
-                  ))}
-                </div>
+                ))}
               </div>
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* ====================================================
             TAB 4: FUNDAMENTALS (Complete Implementation)
@@ -3793,18 +3761,24 @@ export function StockIntelligenceScreen() {
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Scorecard: one grade per question, each from the number shown under it */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>
-                {scoreCards.map((s) => (
-                  <div key={s.k} style={{ border: `1px solid ${s.grade === "—" ? "var(--si-border, #1c2733)" : toneCol(s.tone)}`, borderLeftWidth: 3, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-mid, #93a1af)" }}>{s.k}</span>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, letterSpacing: "0.04em", lineHeight: 1.1, color: s.grade === "—" ? "var(--si-text-sub, #5d6b79)" : toneCol(s.tone) }}>{s.grade}</span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-mid, #93a1af)" }}>{s.note}</span>
-                  </div>
-                ))}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+                {scoreCards.map((s) => {
+                  const gradeCol = s.grade === "—" ? "var(--si-text-sub, #5d6b79)" : toneCol(s.tone);
+                  return (
+                    <div key={s.k} style={{ border: `1px solid ${s.grade === "—" ? "var(--si-border, #1c2733)" : gradeCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+                      <span style={{ display: "flex", alignItems: "center" }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 }}>{s.k}</span>
+                        <InfoTip lines={SCORECARD_INFO[s.k] ?? []} />
+                      </span>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: gradeCol }}>{s.grade}</span>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.5 }}>{highlightScoreNote(s.note, gradeCol)}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* 6 Financial Metric Cards with 8-Quarter Mini-Bars */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14 }}>
                 {fundMetrics.map((fm, idx) => {
                   const selKey = `${stock.t}:${idx}`;
                   const selIdx = fundSel[selKey];
@@ -3812,12 +3786,12 @@ export function StockIntelligenceScreen() {
                   // Revenue, EPS, margins and cash flow are better when higher; debt when lower.
                   const chgCol = (v: number) => ((idx === 5 ? -v : v) >= 0 ? UP : DN);
                   return (
-                  <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 14px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", columnGap: 6 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
+                  <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 18px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", columnGap: 8 }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
                         {fm.k}
                       </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: fm.col, whiteSpace: "nowrap" }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: fm.col, whiteSpace: "nowrap" }}>
                         {fm.yoy}
                       </span>
                     </div>
@@ -3866,22 +3840,22 @@ export function StockIntelligenceScreen() {
                     </div>
                     {selBar && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 3, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
                           <span style={{ fontWeight: 700, color: "var(--si-accent-light, #a9c6e3)" }}>{selBar.label}</span>
                           {selBar.end && <span style={{ color: "var(--si-text-sub, #5d6b79)" }}>ended {selBar.end}</span>}
                         </div>
-                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{selBar.value}</div>
-                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600 }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{selBar.value}</div>
+                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600 }}>
                           {selBar.qoq != null && <span style={{ color: chgCol(selBar.qoq) }}>{pct1(selBar.qoq)} q/q</span>}
                           {selBar.yoy != null && <span style={{ color: chgCol(selBar.yoy) }}>{pct1(selBar.yoy)} y/y</span>}
                           {selBar.qoq == null && selBar.yoy == null && <span style={{ color: "var(--si-text-sub, #5d6b79)" }}>earliest quarter shown</span>}
                         </div>
                         {selBar.note && (
-                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.4 }}>{selBar.note}</div>
+                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.4 }}>{selBar.note}</div>
                         )}
                       </div>
                     )}
-                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-sub, #5d6b79)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-sub, #5d6b79)" }}>
                       <span>{fm.q0}</span>
                       {fm.bars.length > 0 && !selBar && <span style={{ opacity: 0.7 }}>click a bar</span>}
                       <span>{fm.q1}</span>
@@ -3893,33 +3867,33 @@ export function StockIntelligenceScreen() {
 
               {/* Financial health (balance sheet) and earnings quality (cash vs profit) */}
               {(healthRows.length > 0 || qualityRows.length > 0 || marginLines.length > 0) && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 400px), 1fr))", gap: 18, alignItems: "start" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 18, alignItems: "stretch" }}>
                   {([
                     { title: "FINANCIAL HEALTH", sub: healthSub ? `${healthSub} balance sheet` : "Latest balance sheet", rows: healthRows },
                     { title: "EARNINGS QUALITY", sub: "Last 12 months", rows: qualityRows },
                   ]).filter((p) => p.rows.length > 0).map((p) => (
-                    <div key={p.title} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    <div key={p.title} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                           {p.title}
                         </span>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>{p.sub}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{p.sub}</span>
                       </div>
                       {p.rows.map((r) => (
-                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px 120px 84px 1fr", alignItems: "center", columnGap: 10, minHeight: 32, borderTop: "1px solid var(--si-border, #1c2733)" }}>
+                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px 128px 92px 1fr", alignItems: "center", columnGap: 12, minHeight: 50, borderTop: "1px solid var(--si-border, #1c2733)" }}>
                           <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: toneCol(r.tone) }} />
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.k}</span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, textAlign: "right", color: r.tone === "neutral" ? "var(--si-text-hi, #e8eef4)" : toneCol(r.tone) }}>{r.v}</span>
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-mid, #93a1af)" }}>{r.note}</span>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 400, color: "var(--si-text-hi, #e8eef4)" }}>{r.k}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, textAlign: "right", color: r.tone === "neutral" ? "var(--si-text-hi, #e8eef4)" : toneCol(r.tone) }}>{r.v}</span>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>{r.note}</span>
                         </div>
                       ))}
                     </div>
                   ))}
                   {marginLines.length > 0 && fmpQ && (
-                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARGIN TREND</span>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>{QL[0]} to {QL[1]}</span>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARGIN TREND</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{QL[0]} to {QL[1]}</span>
                       </div>
                       <svg viewBox={`0 0 ${MW} ${MH}`} width="100%" role="img" aria-label={`${stock.t} gross, operating and net margin by quarter`} style={{ display: "block" }}>
                         <line x1={MPAD} x2={MW - MPAD} y1={my(0)} y2={my(0)} stroke="#2a3a4a" strokeWidth={1} strokeDasharray="3 3" />
@@ -3940,7 +3914,7 @@ export function StockIntelligenceScreen() {
                           const now = l.vals[lastIdx];
                           const then = l.vals[lastIdx - 4] ?? null;
                           return (
-                            <span key={l.k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-hi, #e8eef4)" }}>
+                            <span key={l.k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "var(--si-text-hi, #e8eef4)" }}>
                               <i style={{ display: "inline-block", width: 10, height: 3, background: l.col, marginRight: 6, verticalAlign: "middle" }} />
                               {l.k} {now != null ? `${now.toFixed(1)}%` : "—"}
                               {now != null && then != null && (
@@ -3958,31 +3932,31 @@ export function StockIntelligenceScreen() {
               {/* Valuation & Peer Comparison Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: 18, alignItems: "start" }}>
                 {/* Valuation Multiples vs Reference Benchmark */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       VALUATION MULTIPLES
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>
                       ▮ {stock.t} &nbsp; ┃ Reference Benchmark
                     </span>
                   </div>
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.4 }}>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.4 }}>
                     Reference benchmarks (indicated by ┃ and right column) are static sector reference values, not live peer-company medians.
                   </div>
                   {valRows.map((vl, idx) => (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 34 }}>
-                      <span style={{ width: 100, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 42 }}>
+                      <span style={{ width: 110, fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                         {vl.k}
                       </span>
                       <div style={{ position: "relative", flex: 1, height: 10, background: "#1c2733" }}>
                         <div style={{ height: 10, width: vl.w, background: "#5980a6" }} />
                         <div style={{ position: "absolute", top: -4, left: vl.m, width: 2, height: 18, background: "#e8eef4", boxShadow: "0 0 6px rgba(255,255,255,0.4)" }} />
                       </div>
-                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                         {vl.v}
                       </span>
-                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
+                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: "var(--si-text-mid, #93a1af)" }}>
                         {vl.med}
                       </span>
                     </div>
@@ -3990,16 +3964,16 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 {/* Peer Comparison Table */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
+                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       PEER COMPARISON
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-mid, #93a1af)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>
                       Click any peer to open in SI
                     </span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <span>COMPANY</span>
                     <span style={{ textAlign: "right" }}>PRICE</span>
                     <span style={{ textAlign: "right" }}>CHANGE</span>
@@ -4054,9 +4028,9 @@ export function StockIntelligenceScreen() {
                             display: "grid",
                             gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))",
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 13,
+                            fontSize: 15,
                             color: "var(--si-text-hi, #e8eef4)",
-                            padding: "9px 8px",
+                            padding: "11px 8px",
                             borderBottom: "1px solid var(--si-border, #1c2733)",
                             cursor: "pointer",
                             borderRadius: 4,
@@ -4088,62 +4062,6 @@ export function StockIntelligenceScreen() {
                   )}
                 </div>
               </div>
-
-              {/* AI Fundamental Read with Evidence Toggle */}
-              <div
-                style={{
-                  position: "relative",
-                  border: "1px solid var(--si-border, #1c2733)",
-                  background: "var(--si-card, #0c1118)",
-                  boxShadow: "var(--si-shadow, none)",
-                  padding: "20px 22px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                {/* Corner brackets */}
-                <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                    ✦ AI FUNDAMENTALS READ
-                  </span>
-                  <div style={{ flex: 1, minWidth: 260, fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
-                    {colorSigned(stockDetail.fundTxt)}
-                  </div>
-                  <button
-                    onClick={() => setShowFundEv(!showFundEv)}
-                    style={{
-                      height: 32,
-                      padding: "0 12px",
-                      border: "1px solid var(--si-border-sec, #2a3a4a)",
-                      background: "transparent",
-                      color: "var(--si-accent-light, #a9c6e3)",
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {showFundEv ? "Hide evidence" : "Evidence ▸"}
-                  </button>
-                </div>
-
-                {showFundEv && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
-                    {(stockDetail.fundEv || []).map((fe, i) => (
-                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8, lineHeight: 1.45 }}>
-                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                        <span>{colorSigned(fe)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           );
         })()}
@@ -4152,41 +4070,32 @@ export function StockIntelligenceScreen() {
             TAB 5: TECHNICALS (Issue 2: Full Live Technical Chart)
             ==================================================== */}
         {activeTab === "tech" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Live Technical CandleChart Card with full MC Stock Function feature parity */}
-            <div
-              style={{
-                position: "relative",
-                border: "1px solid var(--si-border, #1c2733)",
-                background: "var(--si-card, rgba(12, 17, 24, 0.9))",
-                padding: "16px 18px 10px",
-              }}
-            >
-              {/* Corner brackets matching SI UI aesthetic */}
-              <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-              <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-              <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-              <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    {stock.t}
-                  </span>
-                  <span style={{ fontSize: 12, color: "var(--si-text-mid, #8b9bb0)", letterSpacing: "0.06em" }}>
-                    {stock.name || liveCompany?.name}
-                  </span>
+          <div className="si-ov" style={{ alignItems: "stretch" }}>
+            <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
+            {/* Live technical chart with the full MC stock-function toolbar */}
+            <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--si-border, #1c2733)", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <StockLogo sym={stock.t} size={34} />
+                  <div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{stock.t}</div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#ffffff", opacity: 0.7, marginTop: 3 }}>{stock.name || liveCompany?.name}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, whiteSpace: "nowrap" }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{usd(stock.p)}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: stock.c >= 0 ? UP : DN }}>{pct(stock.c)}</span>
                 </div>
               </div>
-
-              <div style={{ minHeight: 480, width: "100%" }}>
+              <div className="si-tech-chart" style={{ minHeight: 540, width: "100%" }}>
+                <style>{`.si-tech-chart .cc-tvbtn.icon{display:none}.si-tech-chart .cc-tvbtn{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:12.96px;font-weight:500;line-height:1.2;padding:6px 8px;background:none;border:0;color:var(--si-text-hi,#e8eef4);cursor:pointer;white-space:nowrap}.si-tech-chart .cc-tvbtn svg{opacity:.75}.si-tech-chart .cc-tvbtn b{font-weight:600}.si-tech-chart .cc-tvbtn b{font-size:inherit}${isLight ? "" : ".si-tech-chart .rng.indbtn{padding:4px 9px;border-radius:6px;font-weight:600;color:#6c747c;background:transparent}.si-tech-chart .rng.indbtn.on{background:#14181b;color:#f4f6f5}.si-tech-chart .cc-ma.on .cc-ma-all,.si-tech-chart .cc-ma.on .cc-ma-all *{color:#f4f6f5}.si-tech-chart .cc-ma:not(.on) .cc-ma-all,.si-tech-chart .cc-ma:not(.on) .cc-ma-all *{color:#6c747c}"}`}</style>
                 <StockChart
                   sym={stock.t}
                   name={stock.name || liveCompany?.name}
                   interval={barInterval}
                   onIntervalChange={setBarInterval}
                   expandable
-                  height={480}
+                  height={540}
                   data={{
                     live,
                     bars: { bars: realBars, loading: barsLoading },
@@ -4198,627 +4107,24 @@ export function StockIntelligenceScreen() {
               </div>
             </div>
 
-            {/* Technical Read & Key Levels */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
               {technicalReadCard}
 
-              {/* Key Levels */}
-              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
+              {/* Key levels */}
+              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
                   KEY SUPPORT & RESISTANCE LEVELS
                 </span>
                 {stockDetail.levels.map((lv, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>{lv.k}</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: lv.col }}>{lv.v}</span>
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "#ffffff" }}>{lv.k}</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: lv.col }}>{lv.v}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
         )}
-
-        {/* ====================================================
-            TAB 6: CATALYSTS (Live Multi-Source Event Pipeline)
-            ==================================================== */}
-        {activeTab === "cat" && (() => {
-          const semi = stock.sector === "Semiconductor" || stock.sector === "Semiconductors";
-
-          // Build live catalysts from FMP, Polygon, SEC, and MC feeds
-          const liveCatalystItems: Array<{
-            date: string;
-            cat: string;
-            ev: string;
-            note: string;
-            imp: "HIGH" | "MED" | "LOW";
-            dir: "Positive" | "Risk" | "Binary" | "Neutral" | "Mixed";
-            dd: number;
-            sourceBadge?: string;
-            /** News only: impact score, and the story the article belongs to when several tell it. */
-            score?: number;
-            story?: string;
-            storySize?: number;
-          }> = [];
-
-          const usNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-          const usYear = usNow.getFullYear();
-          const usMonth = usNow.getMonth();
-          const usDay = usNow.getDate();
-          const usTodayStart = new Date(usYear, usMonth, usDay).getTime();
-
-          const calcDd = (dateInput: string | number | Date): number => {
-            if (!dateInput) return 0;
-            if (typeof dateInput === "string") {
-              const trimmed = dateInput.trim();
-              const parts = trimmed.split(/\s+/);
-              if (parts.length === 2 && isNaN(new Date(trimmed).getTime())) {
-                const mStr = parts[0].toLowerCase().slice(0, 3);
-                const dNum = parseInt(parts[1], 10);
-                const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-                const mIdx = months.indexOf(mStr);
-                if (mIdx >= 0 && !isNaN(dNum)) {
-                  const targetDate = new Date(usYear, mIdx, dNum);
-                  return Math.round((targetDate.getTime() - usTodayStart) / (1000 * 60 * 60 * 24));
-                }
-              }
-              const ymd = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-              if (ymd) {
-                // A calendar day, not an instant: never shift it through a time zone.
-                const targetDate = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
-                return Math.round((targetDate.getTime() - usTodayStart) / (1000 * 60 * 60 * 24));
-              }
-            }
-            const d = new Date(dateInput);
-            if (isNaN(d.getTime())) return 0;
-            const targetUS = new Date(d.toLocaleString("en-US", { timeZone: "America/New_York" }));
-            const targetStart = new Date(targetUS.getFullYear(), targetUS.getMonth(), targetUS.getDate()).getTime();
-            return Math.round((targetStart - usTodayStart) / (1000 * 60 * 60 * 24));
-          };
-
-          const fmtDateShort = (dateInput: string | number | Date): string => {
-            if (!dateInput) return "";
-            if (typeof dateInput === "string") {
-              const trimmed = dateInput.trim();
-              const parts = trimmed.split(/\s+/);
-              if (parts.length === 2 && isNaN(new Date(trimmed).getTime())) {
-                return trimmed;
-              }
-            }
-            return fmtMarketDate(dateInput);
-          };
-
-          // Only the last 90 days of history plus everything still ahead: older
-          // analyst, insider, 13F and news rows no longer bear on the setup, and
-          // building thousands of them on every render is what made this tab heavy.
-          const LOOKBACK_DAYS = 90;
-          const MAX_AHEAD_DAYS = 3650;
-          const inWindow = (dd: number) => dd >= -LOOKBACK_DAYS && dd <= MAX_AHEAD_DAYS;
-
-          // 1. EARNINGS (FMP Live Earnings Feed & Financials)
-          // One upcoming card per report, dated like every other screen (next-earnings.ts).
-          const tickerEarningsAll = (Array.isArray(liveEarningsList) ? liveEarningsList : []).filter(
-            (e) => e?.ticker && e.ticker.toUpperCase() === stock.t
-          );
-          const tickerEarnings = withOneUpcomingReport(
-            tickerEarningsAll,
-            nextEarningsDate(liveCompany?.nextEarningsDate, tickerEarningsAll, etTodayIso()),
-            etTodayIso(),
-          );
-          tickerEarnings.forEach((e) => {
-            const dd = calcDd(e.date);
-            if (!inWindow(dd)) return;
-            const isPast = dd < 0;
-            const hasActual = e.epsActual != null;
-            const actualVal = e.epsActual;
-            const dir = hasActual && actualVal != null && e.epsEstimate != null
-              ? (actualVal >= e.epsEstimate ? "Positive" : "Risk")
-              : "Binary";
-            liveCatalystItems.push({
-              date: fmtDateShort(e.date),
-              cat: "Earnings",
-              ev: isPast && hasActual && actualVal != null
-                ? `Reported EPS $${actualVal.toFixed(2)}${e.epsEstimate != null ? ` vs $${e.epsEstimate.toFixed(2)} est` : ""}`
-                : `Upcoming Q earnings · consensus EPS ${e.epsEstimate != null ? '$' + e.epsEstimate.toFixed(2) : 'TBD'}`,
-              note: `${e.session ? e.session + " · " : ""}${e.revenueEstimate ? `Rev Est $${(e.revenueEstimate / 1e9).toFixed(2)}B · ` : ""}${isPast ? (showVendor ? "FMP reported quarterly print." : "Reported quarterly print.") : (showVendor ? "FMP consensus earnings calendar" : "Consensus earnings calendar")}`,
-              imp: "HIGH",
-              dir,
-              dd,
-              sourceBadge: "FMP",
-            });
-          });
-
-          // 2. ANALYST ACTIONS (FMP & Polygon Analyst Consensus)
-          const tickerConsensus = (Array.isArray(liveConsensusList) ? liveConsensusList : []).find(
-            (c) => c?.ticker && c.ticker.toUpperCase() === stock.t
-          );
-          const allGrades = (Array.isArray(liveAnalystHistory) && liveAnalystHistory.length > 0)
-            ? liveAnalystHistory
-            : (tickerConsensus?.recentGrades && Array.isArray(tickerConsensus.recentGrades) ? tickerConsensus.recentGrades : []);
-
-          allGrades.forEach((g) => {
-            const dd = calcDd(g.date);
-            if (!inWindow(dd)) return;
-            // Same label and direction as the Analyst Actions table.
-            const meta = resolveActionMeta(g.action, g.previousGrade, g.newGrade, g.priceTarget, g.previousPriceTarget, g.priceTargetChange);
-            // A reiteration is neutral news whatever the standing rating.
-            const moved = !/maintain|reiterate/i.test(meta.shownAction);
-            const dir = moved && meta.dir > 0 ? "Positive" : moved && meta.dir < 0 ? "Risk" : "Neutral";
-            // A reiteration is low impact; a rating change is medium, and high when the stock moved ≥3% around it.
-            const reaction = reactionAfter(sixMonthBars, Date.parse(String(g.date)));
-            const gradeImp: "HIGH" | "MED" | "LOW" = !moved ? "LOW" : reaction != null && Math.abs(reaction) >= 3 ? "HIGH" : "MED";
-            liveCatalystItems.push({
-              date: fmtDateShort(g.date),
-              cat: "Analyst actions",
-              ev: `${g.firm || "Analyst"}: ${meta.shownAction} ${stock.t} ${g.newGrade || ""}${g.priceTarget ? ` · Target $${g.priceTarget}` : ""}`,
-              note: `${g.previousGrade ? `Prior: ${g.previousGrade}. ` : ""}${g.previousPriceTarget ? `Prior target: $${g.previousPriceTarget}. ` : ""}Consensus: ${tickerConsensus?.consensus || "Hold"} (${(tickerConsensus?.buy ?? 0) + (tickerConsensus?.strongBuy ?? 0)} Buys).`,
-              imp: gradeImp,
-              dir,
-              dd,
-              sourceBadge: "FMP",
-            });
-          });
-
-          // 3. INSIDER ACTIVITY (FMP SEC Form 4 Filings)
-          const tickerInsiders = (Array.isArray(liveInsiderList) ? liveInsiderList : []).filter(
-            (i) => i?.ticker && i.ticker.toUpperCase() === stock.t
-          );
-          tickerInsiders.forEach((ins) => {
-            const dd = calcDd(ins.transactionDate);
-            if (!inWindow(dd)) return;
-            const isBuy = ins.acquiredOrDisposed === "A";
-            const totalVal = ins.pricePerShare ? (ins.shares * ins.pricePerShare) / 1e6 : null;
-            liveCatalystItems.push({
-              date: fmtDateShort(ins.transactionDate),
-              cat: "Insider activity",
-              ev: `${ins.ownerName || "Officer"} (${ins.officerTitle || "Insider"}) ${isBuy ? "acquired" : "disposed"} ${ins.shares.toLocaleString()} shs`,
-              note: `SEC Form 4 · ${ins.pricePerShare ? `$${ins.pricePerShare.toFixed(2)}/sh ($${totalVal ? totalVal.toFixed(2) + 'M' : ''})` : `Code: ${ins.transactionCode}`}`,
-              imp: totalVal && totalVal > 1 ? "HIGH" : "LOW",
-              dir: isBuy ? "Positive" : "Risk",
-              dd,
-              sourceBadge: "SEC FORM 4",
-            });
-          });
-
-          // 4. 13F FILINGS (FMP SEC Form 13F Institutional Ownership)
-          if (Array.isArray(inst13FData?.holders) && inst13FData.holders.length > 0) {
-            const topDate = inst13FData.holders[0]?.filingDate || inst13FData.holders[0]?.reportDate || "2024-11-14";
-            const sum = inst13FData.summary || {
-              totalHolders: inst13FData.holders.length,
-              increasedPositions: 0,
-              reducedPositions: 0,
-              newPositions: 0,
-              totalMarketValue: 0,
-            };
-            liveCatalystItems.push({
-              date: fmtDateShort(topDate),
-              cat: "13F filings",
-              ev: `${inst13FData.selectedQuarter || "Quarterly"} 13F Institutional Filing Sweep: ${sum.totalHolders ?? inst13FData.holders.length} Filers`,
-              note: `${sum.increasedPositions ?? 0} increased, ${sum.reducedPositions ?? 0} reduced, ${sum.newPositions ?? 0} opened new positions (${sum.totalMarketValue ? '$' + (sum.totalMarketValue / 1e9).toFixed(1) + 'B total institutional value' : 'institutional position flow'}).`,
-              imp: "HIGH",
-              dir: (sum.increasedPositions ?? 0) >= (sum.reducedPositions ?? 0) ? "Positive" : "Neutral",
-              dd: calcDd(topDate),
-              sourceBadge: "13F FMP",
-            });
-            inst13FData.holders.forEach((h) => {
-              const hDate = h.filingDate || h.reportDate || topDate;
-              const hDd = calcDd(hDate);
-              if (!inWindow(hDd)) return;
-              liveCatalystItems.push({
-                date: fmtDateShort(hDate),
-                cat: "13F filings",
-                ev: `${h.investorName || "Institutional Investor"} ${h.activityStatus || "Position"} ${Math.abs(h.changeInShares || 0).toLocaleString()} shares`,
-                note: `Holds ${(h.sharesNumber || 0).toLocaleString()} shares (${h.marketValue ? '$' + (h.marketValue / 1e6).toFixed(1) + 'M' : '—'}) · ${h.ownershipPct ? h.ownershipPct.toFixed(2) + '% of company' : 'Institutional position'}`,
-                imp: "MED",
-                dir: h.activityStatus === "Increased" || h.activityStatus === "New" ? "Positive" : h.activityStatus === "Reduced" ? "Risk" : "Neutral",
-                dd: hDd,
-                sourceBadge: "13F SEC",
-              });
-            });
-          }
-
-          // 5. NEWS, PRODUCT LAUNCHES, REGULATORY, INDUSTRY EVENTS, MACRO (Polygon / Finnhub / FMP)
-          const newsList = catalystNews.list;
-          const newsSig = catalystNews.sig;
-          newsList.forEach((art) => {
-            const dd = calcDd(art.publishedAt);
-            if (!inWindow(dd)) return;
-            let cat = "News";
-            const headline = art?.headline || "";
-            const hLower = headline.toLowerCase();
-            if (/\b(election|elections|midterms?|congress|senate|white house|executive order|government shutdown|trade war|campaign trail|ballot)\b/.test(hLower)) {
-              cat = "Political";
-            } else if (art.tag === "product" || hLower.includes("launch") || hLower.includes("unveil") || hLower.includes("release") || hLower.includes("debut") || hLower.includes("unveils") || hLower.includes("launches") || hLower.includes("product") || hLower.includes("chip") || hLower.includes("device") || hLower.includes("platform") || hLower.includes("model")) {
-              cat = "Product launches";
-            } else if (art.tag === "legal" || hLower.includes("fda") || hLower.includes("sec") || hLower.includes("antitrust") || hLower.includes("regulat") || hLower.includes("investigat") || hLower.includes("lawsuit") || hLower.includes("court") || hLower.includes("patent") || hLower.includes("probe") || hLower.includes("doj") || hLower.includes("ftc") || hLower.includes("tariff") || hLower.includes("sanction")) {
-              cat = "Regulatory";
-            } else if (hLower.includes("conference") || hLower.includes("summit") || hLower.includes("expo") || hLower.includes("symposium") || hLower.includes("keynote") || hLower.includes("forum") || hLower.includes("showcase") || hLower.includes("presentation") || hLower.includes("investor day") || hLower.includes("ai day")) {
-              cat = "Industry events";
-            } else if (hLower.includes("macro") || hLower.includes("fed") || hLower.includes("fomc") || hLower.includes("inflation") || hLower.includes("cpi") || hLower.includes("rate cut") || hLower.includes("rate hike") || hLower.includes("interest rate") || hLower.includes("treasury") || hLower.includes("gdp") || hLower.includes("jobs report") || hLower.includes("payroll") || hLower.includes("unemployment") || hLower.includes("recession")) {
-              cat = "Macro";
-            } else if (art.tag === "earnings") {
-              cat = "Earnings";
-            } else if (art.tag === "analyst") {
-              cat = "Analyst actions";
-            }
-
-            // Impact comes from the story itself (coverage, price reaction, filler), not a flat "MED".
-            const sg = newsSig.get(art);
-            // Direction is a vote of the vendor tag, the headline wording and (on a story that matters) the stock's move.
-            const dir = classifyDirection(art, sg);
-            liveCatalystItems.push({
-              score: sg?.score,
-              story: sg && sg.storySize >= 3 ? `${stock.t}:${sg.story}` : undefined,
-              storySize: sg?.storySize,
-              date: fmtDateShort(art.publishedAt),
-              cat,
-              ev: art.headline,
-              note: `${vendorText(art.source, showVendor) || "Newswire"} · ${art.summary || "Live news dispatch."}`,
-              imp: sg?.tier ?? "MED",
-              dir,
-              dd,
-              sourceBadge: (art.vendor || "NEWS").toUpperCase(),
-            });
-          });
-
-          // 6. MARKET-WIDE CALENDAR SCHEDULE (Options expiration, FOMC rate decisions)
-          const opexIso = nextMonthlyOpex();
-          const fomcIso = nextFomcDecision();
-          const marketScheduleEvents: typeof liveCatalystItems = [
-            { date: fmtMarketDate(opexIso), cat: "Macro", ev: "Monthly options expiration (OpEx)", note: "Exchange-wide monthly options contract settlement session.", imp: "LOW", dir: "Neutral", dd: calcDd(opexIso), sourceBadge: "CALENDAR" },
-            ...(fomcIso ? [{ date: fmtMarketDate(fomcIso), cat: "Macro", ev: "FOMC interest rate decision & press conference", note: "Federal Open Market Committee policy announcement and press conference.", imp: "HIGH" as const, dir: "Risk" as const, dd: calcDd(fomcIso), sourceBadge: "FED" }] : []),
-            ...upcomingPoliticalEvents(etTodayIso(), 90).map((p) => ({
-              date: fmtMarketDate(p.date, { month: "short", day: "numeric", year: "numeric" }),
-              cat: "Political",
-              ev: p.name,
-              note: p.desc,
-              imp: p.imp,
-              dir: "Neutral" as const,
-              dd: calcDd(p.date),
-              sourceBadge: "CALENDAR",
-            })),
-          ];
-
-          const combined = [...liveCatalystItems, ...marketScheduleEvents].filter((c) => inWindow(c.dd));
-
-          // Two sections, so a date ahead is never mixed up with one behind: UPCOMING first
-          // (soonest on top), then LATEST (newest on top). Within a day the higher-impact
-          // rows lead, then the higher-scoring story.
-          const impRank = (i: "HIGH" | "MED" | "LOW") => (i === "HIGH" ? 2 : i === "MED" ? 1 : 0);
-          const isUpcoming = (c: { dd: number }) => c.dd >= 0;
-          // Cyan marks what is still ahead. It is not used for impact or direction (green / red / amber / steel), so it never reads as a verdict.
-          const catAheadCol = theme === "light" ? "#0e7490" : "#22d3ee";
-          const catAheadTint = theme === "light" ? "rgba(14,116,144,0.07)" : "rgba(34,211,238,0.07)";
-          combined.sort(
-            (a, b) =>
-              Number(isUpcoming(b)) - Number(isUpcoming(a)) ||
-              (isUpcoming(a) ? a.dd - b.dd : b.dd - a.dd) ||
-              impRank(b.imp) - impRank(a.imp) ||
-              (b.score ?? 0) - (a.score ?? 0),
-          );
-
-          // Category count breakdown
-          const countMap: Record<string, number> = { All: combined.length };
-          CAT_KINDS.forEach((k) => {
-            if (k !== "All") {
-              countMap[k] = combined.filter((c) => c.cat === k).length;
-            }
-          });
-
-          const byCat = combined.filter((c) => selectedCatFilter === "All" || c.cat === selectedCatFilter);
-          const sigCount = {
-            "High impact": byCat.filter((c) => c.imp === "HIGH").length,
-            Risk: byCat.filter((c) => c.dir === "Risk").length,
-            Positive: byCat.filter((c) => c.dir === "Positive").length,
-          };
-          const bySig = byCat.filter(
-            (c) =>
-              selectedSigFilter === "All" ||
-              (selectedSigFilter === "High impact" ? c.imp === "HIGH" : c.dir === selectedSigFilter),
-          );
-
-          // Articles telling one story (three or more) collapse into their strongest article;
-          // "+N more" expands the rest.
-          const storyMembers = new Map<string, typeof bySig>();
-          for (const c of bySig) if (c.story) storyMembers.set(c.story, [...(storyMembers.get(c.story) ?? []), c]);
-          type CatRow = (typeof bySig)[number] & { more?: number; child?: boolean };
-          const filtered: CatRow[] = [];
-          for (const c of bySig) {
-            const members = c.story ? storyMembers.get(c.story) : undefined;
-            if (!c.story || !members || members.length < 3) { filtered.push(c); continue; }
-            const lead = members.reduce((a, b) => ((b.score ?? 0) > (a.score ?? 0) ? b : a));
-            if (c !== lead) continue;
-            filtered.push({ ...c, more: members.length - 1 });
-            if (openStories[c.story]) for (const m of members) if (m !== lead) filtered.push({ ...m, child: true });
-          }
-
-          // 100 per page — a stock can carry thousands of grade / Form 4 / 13F
-          // rows, and rendering them all at once froze the tab.
-          const pageKey = `${stock.t}|${selectedCatFilter}|${selectedSigFilter}`;
-          const pageCount = Math.max(1, Math.ceil(filtered.length / CAT_PAGE_SIZE));
-          const catPage = Math.min(catPageState.key === pageKey ? catPageState.page : 0, pageCount - 1);
-          const setCatPage = (page: number) => setCatPageState({ key: pageKey, page });
-          const pageStart = catPage * CAT_PAGE_SIZE;
-          const pageEnd = Math.min(pageStart + CAT_PAGE_SIZE, filtered.length);
-          const upcomingCount = filtered.filter((c) => !c.child && isUpcoming(c)).length;
-          const latestCount = filtered.filter((c) => !c.child && !isUpcoming(c)).length;
-
-          const cats = filtered.slice(pageStart, pageEnd).map((cItem) => ({
-            ...cItem,
-            catUpper: cItem.cat.toUpperCase(),
-            when: cItem.dd < 0 ? `${-cItem.dd}D AGO` : cItem.dd === 0 ? "TODAY" : `IN ${cItem.dd}D`,
-            whenCol: cItem.dd < 0 ? "#5d6b79" : cItem.dd === 0 ? "#4ade80" : "#a9c6e3",
-            impCol: cItem.imp === "HIGH" ? "#f5b031" : cItem.imp === "MED" ? STEEL : "#93a1af",
-            dirCol: cItem.dir === "Positive" ? UP : cItem.dir === "Risk" ? DN : cItem.dir === "Mixed" ? "#f5b031" : "#93a1af",
-            dot: cItem.dd < 0 ? "#2a3a4a" : cItem.imp === "HIGH" ? "#f5b031" : STEEL,
-            bd: cItem.dd >= 0 && cItem.imp === "HIGH" ? "rgba(245,176,49,0.4)" : "#1c2733",
-          }));
-
-          return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {/* Filter Chips with live item counts: one row, scrolls sideways on a narrow screen */}
-              <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", alignItems: "center", overflowX: "auto", paddingBottom: 2 }}>
-                {CAT_KINDS.map((cat) => {
-                  const isSelected = selectedCatFilter === cat;
-                  const cnt = countMap[cat] ?? 0;
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCatFilter(cat)}
-                      style={{
-                        height: 32,
-                        padding: "0 10px",
-                        flexShrink: 0,
-                        whiteSpace: "nowrap",
-                        border: `1px solid ${isSelected ? STEEL : "#2a3a4a"}`,
-                        background: isSelected ? "rgba(89,128,166,0.22)" : "transparent",
-                        color: "var(--si-text-hi, #e8eef4)",
-                        fontFamily: "'Manrope', sans-serif",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                        transition: "all 160ms ease",
-                      }}
-                    >
-                      <span>{cat}</span>
-                      {cnt > 0 && (
-                        <span style={{ fontSize: 11, opacity: 0.7, fontFamily: "'JetBrains Mono', monospace" }}>
-                          ({cnt})
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Quick filters by how much a row matters and which way it leans */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                {(["All", "High impact", "Risk", "Positive"] as const).map((f) => {
-                  const on = selectedSigFilter === f;
-                  const tone = f === "Risk" ? DN : f === "Positive" ? UP : f === "High impact" ? "#f5b031" : STEEL;
-                  const n = f === "All" ? null : sigCount[f];
-                  return (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setSelectedSigFilter(f)}
-                      style={{
-                        height: 28,
-                        padding: "0 12px",
-                        border: `1px solid ${on ? tone : "#2a3a4a"}`,
-                        background: on ? "rgba(255,255,255,0.06)" : "transparent",
-                        color: on ? tone : "var(--si-text-mid, #93a1af)",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 11,
-                        letterSpacing: "0.06em",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {f === "All" ? "ALL IMPACT" : f.toUpperCase()}{n != null ? ` (${n})` : ""}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Timeline cards, one page at a time */}
-              {filtered.length > CAT_PAGE_SIZE && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                  <span>Showing {pageStart + 1}–{pageEnd} of {filtered.length}</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <button
-                      type="button"
-                      disabled={catPage === 0}
-                      onClick={() => setCatPage(catPage - 1)}
-                      style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: catPage === 0 ? "#5d6b79" : "var(--si-text-hi, #e8eef4)", cursor: catPage === 0 ? "default" : "pointer", fontFamily: "inherit", fontSize: 12 }}
-                    >
-                      ‹ Prev
-                    </button>
-                    <span>Page {catPage + 1} / {pageCount}</span>
-                    <button
-                      type="button"
-                      disabled={catPage >= pageCount - 1}
-                      onClick={() => setCatPage(catPage + 1)}
-                      style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: catPage >= pageCount - 1 ? "#5d6b79" : "var(--si-text-hi, #e8eef4)", cursor: catPage >= pageCount - 1 ? "default" : "pointer", fontFamily: "inherit", fontSize: 12 }}
-                    >
-                      Next ›
-                    </button>
-                  </span>
-                </div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {cats.map((cItem, i) => (
-                  <React.Fragment key={pageStart + i}>
-                  {/* Section header at the top of each page and wherever the list switches from ahead to behind */}
-                  {(i === 0 || isUpcoming(cItem) !== isUpcoming(cats[i - 1])) && (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "baseline",
-                        gap: 10,
-                        marginTop: i === 0 ? 0 : 14,
-                        paddingBottom: 6,
-                        borderBottom: isUpcoming(cItem) ? `1px solid ${catAheadCol}` : "1px solid #1c2733",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 12,
-                        letterSpacing: "0.1em",
-                        fontWeight: 700,
-                        color: isUpcoming(cItem) ? catAheadCol : "#93a1af",
-                      }}
-                    >
-                      <span
-                        style={{
-                          padding: "2px 9px",
-                          border: `1px solid ${isUpcoming(cItem) ? catAheadCol : "var(--si-border-sec, #2a3a4a)"}`,
-                          background: isUpcoming(cItem) ? catAheadTint : "transparent",
-                        }}
-                      >
-                        {isUpcoming(cItem) ? "▶ UPCOMING" : "LATEST"} ({isUpcoming(cItem) ? upcomingCount : latestCount})
-                      </span>
-                      <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.04em", color: "#5d6b79" }}>
-                        {isUpcoming(cItem) ? "dates still ahead · soonest first" : "already happened · newest first"}
-                      </span>
-                    </div>
-                  )}
-                  <div
-                    className="si-cat-row"
-                    style={{
-                      border: `1px solid ${cItem.bd}`,
-                      // A coloured edge shows which way the row leans; low-impact neutral rows are muted.
-                      borderLeft: cItem.dir === "Risk" || cItem.dir === "Positive" || cItem.dir === "Mixed" ? `3px solid ${cItem.dirCol}` : `1px solid ${cItem.bd}`,
-                      background: "var(--si-card, rgba(12, 17, 24, 0.9))",
-                      // Rows still ahead get a cool tint; rows already behind keep the plain card.
-                      ...(isUpcoming(cItem) ? { backgroundImage: `linear-gradient(${catAheadTint}, ${catAheadTint})` } : {}),
-                      padding: "16px 20px",
-                      marginLeft: cItem.child ? 28 : 0,
-                      opacity: cItem.imp === "LOW" && cItem.dir === "Neutral" ? 0.7 : 1,
-                      display: "grid",
-                      gridTemplateColumns: "140px 1fr auto",
-                      gap: 18,
-                      alignItems: "center",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: isUpcoming(cItem) ? catAheadCol : "var(--si-text-hi, #e8eef4)" }}>
-                        {cItem.date}
-                      </div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: isUpcoming(cItem) ? 700 : 400, color: isUpcoming(cItem) ? catAheadCol : cItem.whenCol, marginTop: 2 }}>
-                        {cItem.when}
-                      </div>
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <span
-                          style={{
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 10,
-                            letterSpacing: "0.1em",
-                            color: "var(--si-accent-light, #a9c6e3)",
-                            border: "1px solid var(--si-border-sec, #2a3a4a)",
-                            padding: "1px 6px",
-                          }}
-                        >
-                          {cItem.cat}
-                        </span>
-                        {cItem.sourceBadge && (showVendor || !/FMP|POLYGON/.test(cItem.sourceBadge)) && (
-                          <span
-                            style={{
-                              fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 9,
-                              letterSpacing: "0.08em",
-                              color: "#4ade80",
-                              border: "1px solid rgba(74,222,128,0.35)",
-                              background: "rgba(74,222,128,0.08)",
-                              padding: "1px 5px",
-                            }}
-                          >
-                            {cItem.sourceBadge}
-                          </span>
-                        )}
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                          {cItem.ev}
-                        </span>
-                      </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
-                        {cItem.note}
-                      </div>
-                      {cItem.more != null && cItem.story && (
-                        <button
-                          type="button"
-                          onClick={() => setOpenStories((o) => ({ ...o, [cItem.story as string]: !o[cItem.story as string] }))}
-                          style={{
-                            marginTop: 8,
-                            padding: "2px 10px",
-                            border: "1px solid #2a3a4a",
-                            background: "transparent",
-                            color: "var(--si-accent-light, #a9c6e3)",
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 11,
-                            letterSpacing: "0.06em",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {openStories[cItem.story] ? "▴ HIDE ARTICLES" : `▾ +${cItem.more} MORE ARTICLES ON THIS STORY`}
-                        </button>
-                      )}
-                    </div>
-                    <div className="si-cat-imp" style={{ textAlign: "right" }}>
-                      {/* One badge: how much it matters, then which way it leans. */}
-                      <div
-                        style={{
-                          display: "inline-block",
-                          fontFamily: "'Barlow Condensed', sans-serif",
-                          fontSize: cItem.imp === "HIGH" ? 19 : 16,
-                          fontWeight: 700,
-                          letterSpacing: "0.06em",
-                          color: cItem.dir === "Neutral" || cItem.dir === "Binary" ? cItem.impCol : cItem.dirCol,
-                          border: cItem.imp === "HIGH" ? `1px solid ${cItem.dir === "Neutral" || cItem.dir === "Binary" ? cItem.impCol : cItem.dirCol}` : "1px solid transparent",
-                          background: cItem.imp === "HIGH" ? "rgba(255,255,255,0.04)" : "transparent",
-                          padding: "2px 10px",
-                        }}
-                      >
-                        {cItem.imp} · {cItem.dir.toUpperCase()}
-                      </div>
-                    </div>
-                  </div>
-                  </React.Fragment>
-                ))}
-                {cats.length === 0 && (
-                  <div style={{ padding: "40px 20px", textAlign: "center", border: "1px dashed #2a3a4a", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 14 }}>
-                    No catalysts found matching category “{selectedCatFilter}”
-                  </div>
-                )}
-              </div>
-              {filtered.length > CAT_PAGE_SIZE && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                  <span>Showing {pageStart + 1}–{pageEnd} of {filtered.length}</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <button
-                      type="button"
-                      disabled={catPage === 0}
-                      onClick={() => setCatPage(catPage - 1)}
-                      style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: catPage === 0 ? "#5d6b79" : "var(--si-text-hi, #e8eef4)", cursor: catPage === 0 ? "default" : "pointer", fontFamily: "inherit", fontSize: 12 }}
-                    >
-                      ‹ Prev
-                    </button>
-                    <span>Page {catPage + 1} / {pageCount}</span>
-                    <button
-                      type="button"
-                      disabled={catPage >= pageCount - 1}
-                      onClick={() => setCatPage(catPage + 1)}
-                      style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: catPage >= pageCount - 1 ? "#5d6b79" : "var(--si-text-hi, #e8eef4)", cursor: catPage >= pageCount - 1 ? "default" : "pointer", fontFamily: "inherit", fontSize: 12 }}
-                    >
-                      Next ›
-                    </button>
-                  </span>
-                </div>
-              )}
-
-            </div>
-          );
-        })()}
 
         {/* ====================================================
             TAB 7: AI RESEARCH
@@ -4941,7 +4247,7 @@ export function StockIntelligenceScreen() {
               </div>
               {[
                 `What is the institutional bull case for ${stock.t}?`,
-                `What is the biggest downside risk or bear thesis?`,
+                `What is the biggest downside risk or bear trade?`,
                 `What exact price and metric levels invalidate this setup?`,
                 `How does ${stock.t}'s valuation compare against peers?`,
               ].map((sq, i) => (
@@ -4971,10 +4277,121 @@ export function StockIntelligenceScreen() {
             TAB 8: THESIS LAB (Issue 6 & 7: Full Scenario Engine)
             ==================================================== */}
         {activeTab === "lab" && (() => {
+          if (!labStarted) {
+            const ready = pickDir != null && pickHz != null && pickMode != null;
+            const stepLabel: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 8 };
+            const choice = (active: boolean, accent: string, disabled: boolean): React.CSSProperties => ({
+              height: 44,
+              minWidth: 120,
+              padding: "0 18px",
+              border: `1px solid ${active ? accent : "#1c2733"}`,
+              background: active ? "rgba(89,128,166,0.2)" : "transparent",
+              color: "#ffffff",
+              opacity: disabled ? 0.35 : 1,
+              fontFamily: "'Manrope', sans-serif",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: disabled ? "not-allowed" : "pointer",
+              transition: "background 160ms, border-color 160ms",
+            });
+            return (
+              <>
+                {labSavedNote && (
+                  <div style={{ maxWidth: 780, width: "100%", margin: "14px auto -6px", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.07)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <span style={{ color: "var(--up, #4ade80)", fontSize: 16 }}>✓</span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#ffffff" }}>{labSavedNote}</span>
+                    <button
+                      onClick={() => {
+                        setLabSavedNote(null);
+                        setActiveTab("mon");
+                      }}
+                      style={{ marginLeft: "auto", height: 30, padding: "0 12px", border: "1px solid var(--si-accent, #5980a6)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer" }}
+                    >
+                      VIEW IN TRADE TRACKER ▸
+                    </button>
+                    <button onClick={() => setLabSavedNote(null)} aria-label="Dismiss" style={{ width: 26, height: 26, border: "none", background: "transparent", color: "#ffffff", fontSize: 16, cursor: "pointer" }}>
+                      ×
+                    </button>
+                  </div>
+                )}
+                <div
+                  id="si-trade-builder-top"
+                  style={{ scrollMarginTop: 110, maxWidth: 780, width: "100%", margin: "14px auto 20px", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 30px", display: "flex", flexDirection: "column", gap: 20 }}
+                >
+                  <div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>TRADE BUILDER</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "#ffffff", marginTop: 4, lineHeight: 1.05 }}>BUILD YOUR TRADE STRATEGY FOR {stock.t}</div>
+                  </div>
+                  <div>
+                    <div style={stepLabel}>STEP 1 · DIRECTION</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {(["Bull", "Bear"] as const).map((d) => (
+                        <button key={d} onClick={() => setPickDir(d)} style={choice(pickDir === d, d === "Bull" ? UP : DN, false)}>
+                          {d === "Bull" ? "▲ Bullish" : "▼ Bearish"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={stepLabel}>STEP 2 · HORIZON</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {["1M", "3M", "6M", "9M"].map((hz) => (
+                        <button key={hz} disabled={pickDir == null} onClick={() => setPickHz(hz)} style={{ ...choice(pickHz === hz, STEEL, pickDir == null), minWidth: 80, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {hz}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={stepLabel}>STEP 3 · MODE</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {([
+                        ["NORMAL", "Normal", "Engine weights, fixed"],
+                        ["ADVANCED", "Advanced", "Edit the engine weights yourself"],
+                      ] as const).map(([m, title, sub]) => (
+                        <button
+                          key={m}
+                          disabled={pickHz == null}
+                          onClick={() => setPickMode(m)}
+                          style={{ ...choice(pickMode === m, STEEL, pickHz == null), height: 62, minWidth: 230, textAlign: "left", display: "flex", flexDirection: "column", justifyContent: "center", gap: 3 }}
+                        >
+                          <span>{title}</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>{sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      disabled={!ready}
+                      onClick={() => {
+                        if (!pickDir || !pickHz || !pickMode) return;
+                        setLabDir(pickDir);
+                        setLabHz(pickHz);
+                        setLabMode(pickMode);
+                        setLabWeightsState(null);
+                        setTargetOverride(null);
+                        setStopOverride(null);
+                        setLabEditTargets(false);
+                        setLabBreakdownOpen({});
+                        setLabSavedNote(null);
+                        setLabStarted(true);
+                      }}
+                      style={{ height: 50, padding: "0 30px", border: "none", background: ready ? "#5980a6" : "#1c2733", color: "#ffffff", opacity: ready ? 1 : 0.5, fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", cursor: ready ? "pointer" : "not-allowed" }}
+                    >
+                      RUN STRATEGY →
+                    </button>
+                  </div>
+                </div>
+                <TradeBuilderGuide done={[pickDir != null, pickHz != null, pickMode != null]} />
+              </>
+            );
+          }
           const thBull = labDir === "Bull";
-          const thHz = labHz === "12M" ? "1Y" : labHz;
-          const thRun = thesisRun(stock.t, labDir, labHz, null, labWeightsState || undefined, siFacts);
-          const thPrev = thesisRun(stock.t, labDir, labHz, (c: any, n: any, f: any, dd: number) => -dd, labWeightsState || undefined, siFacts);
+          // Custom weights only count in Advanced mode.
+          const thCustomW = labMode === "ADVANCED" ? labWeightsState : null;
+          const thRun = thesisRun(stock.t, labDir, labHz, null, thCustomW || undefined, siFacts);
+          const thPrev = thesisRun(stock.t, labDir, labHz, (c: any, n: any, f: any, dd: number) => -dd, thCustomW || undefined, siFacts);
           const TT = thesisTargets(stock.t, labDir, labHz, thRun, stock.p, siFacts);
           const TPt = getTP(stock.t, siFacts);
 
@@ -4985,12 +4402,9 @@ export function StockIntelligenceScreen() {
           const thRR = Math.abs(thUp / (thDn || 1));
           const thConf = thRun.conf != null ? Math.round(thRun.conf) : null;
           const dConf = (thRun.conf != null && thPrev.conf != null) ? Math.round(thRun.conf - thPrev.conf) : 0;
-          const thAtRisk = thRun.critFail.length > 0;
           const thBand: [string, string] = thConf == null
             ? ["UNAVAILABLE", "#93a1af"]
-            : thAtRisk
-              ? ["TRADE AT RISK", DN]
-              : thConf >= 75
+            : thConf >= 75
                 ? ["HIGH CONVICTION", UP]
                 : thConf >= 60
                   ? ["CONSTRUCTIVE", STEEL]
@@ -4999,8 +4413,6 @@ export function StockIntelligenceScreen() {
                     : ["WEAK", DN];
 
           const thStrong = thRun.drv.slice().sort((a: any, b: any) => b.pts - a.pts).slice(0, 3);
-          const thWeak = thRun.drv.filter((d: any) => d.share >= 2).sort((a: any, b: any) => a.ev - b.ev).slice(0, 2);
-          const thMover = thRun.drv.filter((d: any) => d.dd).sort((a: any, b: any) => Math.abs(b.dd) - Math.abs(a.dd)).slice(0, 2);
 
           const thLo = Math.min(TT.dn, stopV, stock.p) * 0.97;
           const thHi = Math.max(TT.up, tgtV, stock.p) * 1.03;
@@ -5040,7 +4452,6 @@ export function StockIntelligenceScreen() {
           const stopYPct = `${(yOf(stopV) / 260) * 100}%`;
           const nowYPct = `${(yOf(stock.p) / 260) * 100}%`;
 
-          const thEvCol = (v: number) => (v >= 70 ? UP : v >= 55 ? STEEL : v >= 40 ? "#f5b031" : DN);
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -5064,6 +4475,17 @@ export function StockIntelligenceScreen() {
                   <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
                     {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} STRATEGY
                   </div>
+                  <button
+                    onClick={() => {
+                      setPickDir(labDir);
+                      setPickHz(labHz);
+                      setPickMode(labMode);
+                      setLabStarted(false);
+                    }}
+                    style={{ marginTop: 8, background: "none", border: "none", padding: 0, color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", cursor: "pointer" }}
+                  >
+                    ← EDIT SETUP
+                  </button>
                 </div>
 
                 {/* Mode Toggle */}
@@ -5075,7 +4497,14 @@ export function StockIntelligenceScreen() {
                     {(["NORMAL", "ADVANCED"] as const).map((m) => (
                       <button
                         key={m}
-                        onClick={() => setLabMode(m)}
+                        onClick={() => {
+                          setLabMode(m);
+                          if (m === "NORMAL") {
+                            setTargetOverride(null);
+                            setStopOverride(null);
+                            setLabEditTargets(false);
+                          }
+                        }}
                         style={{
                           height: 30,
                           padding: "0 14px",
@@ -5140,7 +4569,7 @@ export function StockIntelligenceScreen() {
                     HORIZON
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
-                    {["1M", "3M", "6M", "12M"].map((hz) => {
+                    {["1M", "3M", "6M", "9M"].map((hz) => {
                       const isActive = labHz === hz;
                       return (
                         <button
@@ -5174,9 +4603,9 @@ export function StockIntelligenceScreen() {
                 {/* Driver Weights Strip */}
                 <div style={{ marginLeft: "auto", minWidth: 300, flex: 1, maxWidth: 520, paddingTop: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
-                    <span>DRIVER WEIGHTS</span>
+                    <span>{thCustomW ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}</span>
                     <span style={{ color: "var(--si-text-mid, #93a1af)", letterSpacing: "0.04em" }}>
-                      {labHz === "1M" ? "1M tactical" : labHz === "12M" ? "12M fundamental" : "3–6M balanced"} · {thBull ? "bullish" : "bearish"}
+                      {labHz === "1M" ? "1M tactical" : labHz === "9M" || labHz === "12M" ? `${labHz} fundamental` : labHz === "3M" ? "3M momentum" : "6M balanced"} · {thBull ? "bullish" : "bearish"}
                     </span>
                   </div>
                   <div style={{ display: "flex", minHeight: 30, gap: 2 }}>
@@ -5187,7 +4616,7 @@ export function StockIntelligenceScreen() {
                           flexGrow: c.w,
                           flexBasis: 0,
                           minWidth: 38,
-                          borderTop: `2px solid ${thEvCol(c.score)}`,
+                          borderTop: `2px solid ${sc(c.score)}`,
                           background: "rgba(89,128,166,0.12)",
                           display: "flex",
                           flexDirection: "column",
@@ -5210,24 +4639,143 @@ export function StockIntelligenceScreen() {
                 </div>
               </div>
 
-              {/* NORMAL MODE CONTENT */}
-              {labMode === "NORMAL" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))", gap: 18, alignItems: "start" }}>
-                  {/* Left Column: Market History */}
+              {/* Engine weights: sliders are live in Advanced mode and greyed out (tap for an explanation) in Normal mode */}
+              <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minHeight: 28 }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: thCustomW ? "#f5b031" : "var(--si-text-hi, #e8eef4)" }}>
+                    {thCustomW ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="How the trade confidence is calculated"
+                    aria-expanded={labExplainerOpen}
+                    title="How this is calculated"
+                    onClick={() => setLabExplainerOpen((v) => !v)}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: "50%",
+                      border: "1px solid var(--si-accent-light, #a9c6e3)",
+                      background: labExplainerOpen ? "var(--si-accent-light, #a9c6e3)" : "transparent",
+                      color: labExplainerOpen ? "#0c1118" : "var(--si-accent-light, #a9c6e3)",
+                      fontFamily: "Georgia, serif",
+                      fontSize: 12,
+                      fontStyle: "italic",
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      padding: 0,
+                      cursor: "pointer",
+                      alignSelf: "center",
+                      flex: "none",
+                    }}
+                  >
+                    i
+                  </button>
+                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
+                    {labMode === "ADVANCED" ? "Drag to set relative importance — automatically normalized to 100%." : "Fixed in Normal mode."}
+                  </span>
+                  {labMode === "ADVANCED" && (
+                    <button
+                      onClick={() => setLabWeightsState(null)}
+                      style={{ marginLeft: "auto", height: 28, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Reset to engine weights
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px 22px" }}>
+                  {CATS_T.map(([k, label]) => {
+                    const raw = thCustomW ? thCustomW[k] : thesisWeights(labDir, labHz)[k];
+                    const shown = Math.round(thRun.W[k]);
+                    return (
+                      <div key={k} style={{ position: "relative", opacity: labMode === "ADVANCED" ? 1 : 0.42, filter: labMode === "ADVANCED" ? "none" : "grayscale(1)", transition: "opacity 200ms ease" }}>
+                        {labMode !== "ADVANCED" && (
+                          <div
+                            role="button"
+                            aria-label={`${label} weight is fixed in Normal mode`}
+                            onPointerDown={(e) => {
+                              e.preventDefault();
+                              setLabWeightsDialog(true);
+                            }}
+                            style={{ position: "absolute", inset: 0, zIndex: 1, cursor: "pointer" }}
+                          />
+                        )}
+                        <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "var(--si-text-body, #d5dfe9)", marginBottom: 4 }}>
+                          <span>{label}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{shown}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="40"
+                          step="1"
+                          value={raw || 0}
+                          tabIndex={labMode === "ADVANCED" ? 0 : -1}
+                          onChange={(e) => {
+                            if (labMode !== "ADVANCED") {
+                              setLabWeightsDialog(true);
+                              return;
+                            }
+                            const base = labWeightsState || thesisWeights(labDir, labHz);
+                            setLabWeightsState({ ...base, [k]: +e.target.value });
+                          }}
+                          style={{ width: "100%", accentColor: "#5980a6", cursor: "pointer" }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                {labExplainerOpen && (
+                  <ConfidenceExplainer cats={thRun.cats} conf={thConf} hz={labHz} bull={thBull} custom={!!thCustomW} onClose={() => setLabExplainerOpen(false)} />
+                )}
+                {labWeightsDialog && labMode !== "ADVANCED" && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Engine weights"
+                    onClick={() => setLabWeightsDialog(false)}
+                    style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(4, 7, 11, 0.62)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+                  >
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width: "min(420px, 100%)", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card, #0c1118)", boxShadow: "0 18px 48px rgba(0,0,0,0.6)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}
+                    >
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #e8eef4)" }}>ENGINE WEIGHTS</div>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#ffffff", lineHeight: 1.55 }}>Switch to Advanced mode to edit the weights.</div>
+                      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+                        <button
+                          onClick={() => setLabWeightsDialog(false)}
+                          style={{ height: 34, padding: "0 14px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          OK
+                        </button>
+                        <button
+                          autoFocus
+                          onClick={() => {
+                            setLabWeightsDialog(false);
+                            setLabMode("ADVANCED");
+                          }}
+                          style={{ height: 34, padding: "0 14px", border: "none", background: "var(--si-accent-btn, #5980a6)", color: "#ffffff", fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Switch to Advanced
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))", gap: 18, alignItems: "stretch" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+                  {/* Market history */}
                   <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                        MARKET HISTORY
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.12em", color: "var(--si-text-mid, #93a1af)" }}>
-                        LAST {labHz === "12M" ? "12 MONTHS" : labHz}
-                      </span>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARKET HISTORY</span>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: "0.12em", color: "#ffffff" }}>LAST {labHz === "12M" ? "9M" : labHz}</span>
                     </div>
-
                     <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
                       Historical Underlying Asset Benchmark Performance — buy-and-hold returns, drawdown and volatility; not an active strategy backtest.
                     </div>
-
                     <div style={{ position: "relative", height: 260 }}>
                       <svg width="100%" height="260" viewBox="0 0 1000 260" preserveAspectRatio="none" style={{ display: "block" }}>
                         <line x1="0" x2="1000" y1="65" y2="65" stroke="#152029" vectorEffect="non-scaling-stroke" />
@@ -5236,418 +4784,80 @@ export function StockIntelligenceScreen() {
                         <path d={hsArea} fill={hsRet >= 0 ? UP : DN} opacity="0.1" />
                         <path d={hsPath} fill="none" stroke={hsRet >= 0 ? UP : DN} strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
                       </svg>
-
-                      {/* Target dashed line */}
                       <div style={{ position: "absolute", left: 0, right: 0, top: tgtYPct, borderTop: "1px dashed #4ade80" }}>
-                        <span style={{ position: "absolute", right: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#4ade80", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>
-                          TARGET {usd(tgtV)}
-                        </span>
+                        <span style={{ position: "absolute", right: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#4ade80", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>TARGET {usd(tgtV)}</span>
                       </div>
-
-                      {/* Invalidation dashed line */}
                       <div style={{ position: "absolute", left: 0, right: 0, top: stopYPct, borderTop: "1px dashed #f05656" }}>
-                        <span style={{ position: "absolute", left: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#f05656", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>
-                          INVALIDATION {usd(stopV)}
-                        </span>
+                        <span style={{ position: "absolute", left: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#f05656", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>INVALIDATION {usd(stopV)}</span>
                       </div>
-
-                      {/* Current price glowing dot */}
+                      <div style={{ position: "absolute", left: 0, right: 0, top: nowYPct, borderTop: "1px dashed rgba(255,255,255,0.55)" }}>
+                        <span style={{ position: "absolute", right: 12, top: 3, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#ffffff", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>PRESENT {usd(stock.p)}</span>
+                      </div>
                       <div style={{ position: "absolute", right: -4, top: nowYPct, width: 8, height: 8, marginTop: -4, borderRadius: 99, background: "#e8eef4", boxShadow: "0 0 10px rgba(232,238,244,0.6)" }} />
                     </div>
-
-                    {/* Stats Grid */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
                       {[
                         ["RETURN", pct1(hsRet), hsRet >= 0 ? UP : DN],
-                        // Neutral figures use the theme's text colour — a fixed
-                        // near-white was invisible on the day-mode (white) tile.
                         ["HIGH", usd(Math.max(...hs)), "var(--si-text-hi, #e8eef4)"],
                         ["LOW", usd(Math.min(...hs)), "var(--si-text-hi, #e8eef4)"],
                         ["MAX DRAWDOWN", pct1(hsDD * 100), "var(--down, #dc2626)"],
                         ["VOLATILITY", Math.round(hsVolA) + "% ann.", "var(--si-text-hi, #e8eef4)"],
                       ].map(([k, v, c], idx) => (
                         <div key={idx} style={{ padding: "10px 12px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>
-                            {k}
-                          </div>
-                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: c as string, marginTop: 2 }}>
-                            {v}
-                          </div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>{k}</div>
+                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: c as string, marginTop: 2 }}>{v}</div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Right Column: Thesis Confidence & Weights */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                    {/* Confidence Box */}
-                    <div
-                      style={{
-                        position: "relative",
-                        border: "1px solid var(--si-border, #1c2733)",
-                        background: "var(--si-card, #0c1118)",
-                        boxShadow: "var(--si-shadow, none)",
-                        padding: "18px 20px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 10,
-                      }}
+                  {/* Trade card */}
+                  <div style={{ position: "relative", border: "1px solid #5980a6", background: "var(--si-card, rgba(12, 17, 24, 0.95))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>TRADE CARD</span>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
+                        {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} TRADE
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
+                      {[
+                        ["PRESENT PRICE", usd(stock.p), "#ffffff"],
+                        ["TARGET", usd(tgtV), thBull ? UP : DN],
+                        ["INVALIDATION", usd(stopV), DN],
+                        ["UPSIDE", pct1(thUp), UP],
+                        ["DOWNSIDE", pct1(thDn), DN],
+                        ["REWARD / RISK", thRR.toFixed(1) + "×", thRR >= 2 ? UP : thRR >= 1.2 ? "#f5b031" : DN],
+                        ["TRADE CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
+                      ].map(([k, v, c], idx) => (
+                        <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "#ffffff" }}>{k}</div>
+                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, color: c as string, marginTop: 4 }}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                      <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>KEY CATALYST</div>
+                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.cat}</div>
+                      </div>
+                      <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f5b031" }}>BIGGEST RISK</div>
+                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.risk}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setLabSaveOpen(true)}
+                      style={{ height: 48, border: "none", background: "#5980a6", color: "#ffffff", fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.04em", cursor: "pointer", transition: "background 160ms" }}
                     >
-                      {/* Corner brackets */}
-                      <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-
-                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                            TRADE CONFIDENCE
-                          </div>
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: thConf != null ? 56 : 32, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {thConf != null ? thConf : "Unavailable"}
-                            </span>
-                            {thConf != null && (
-                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
-                                / 100
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.08em", color: thBand[1] }}>
-                            {thBand[0]}
-                          </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
-                            CORE INTACT <span style={{ color: thRun.coreOk === thRun.core.length ? UP : "#f5b031" }}>{thRun.coreOk} / {thRun.core.length}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ height: 8, background: "var(--si-border, #1c2733)" }}>
-                        <div style={{ height: 8, width: `${thConf}%`, background: thBand[1], transition: "width 400ms ease" }} />
-                      </div>
-
-                      {thAtRisk && (
-                        <div style={{ border: "1px solid rgba(240,86,86,0.5)", background: "rgba(240,86,86,0.08)", padding: "10px 12px", fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffd2d2", lineHeight: 1.45 }}>
-                          ◆ Critical driver failing: {thRun.critFail.map((d: any) => d.name).join(", ")}. The trade is flagged AT RISK even though the aggregate score is {thConf}.
-                        </div>
-                      )}
-
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-                        {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
-                      </div>
-                    </div>
-
-                    {/* Weights Breakdown Accordion */}
-                    <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                          WEIGHTS
-                        </span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: labWeightsState ? "#f5b031" : STEEL, border: `1px solid ${labWeightsState ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
-                          {labWeightsState ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}
-                        </span>
-                      </div>
-
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
-                        {labHz === "1M" ? "Short horizon — price action, catalysts and positioning carry the most weight." : labHz === "12M" ? "Long horizon — business quality and valuation carry the most weight." : "Balanced 3–6 month horizon — fundamentals and revisions lead, confirmed by price action."}
-                      </div>
-
-                      {thRun.cats.map((c: any) => {
-                        const isOpen = expandedLabDrivers[c.k];
-                        const top = c.ds.slice().sort((a: any, b: any) => (b.share || 0) - (a.share || 0))[0];
-                        return (
-                          <div key={c.k} style={{ borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                            <div
-                              onClick={() => setExpandedLabDrivers((prev) => ({ ...prev, [c.k]: !prev[c.k] }))}
-                              style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 44px 34px 14px", alignItems: "center", gap: 12, padding: "7px 0", cursor: "pointer" }}
-                            >
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                                  {c.label}
-                                </div>
-                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                  {top ? `${top.name} · ${top.val}` : "—"}
-                                </div>
-                              </div>
-                              <div style={{ height: 6, background: "#1c2733" }}>
-                                <div style={{ height: 6, width: `${(c.w / 30) * 100}%`, background: "#5980a6", transition: "width 300ms ease" }} />
-                              </div>
-                              <span style={{ textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
-                                {Math.round(c.w)}%
-                              </span>
-                              <span style={{ textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: thEvCol(c.score) }}>
-                                {Math.round(c.score)}
-                              </span>
-                              <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "var(--si-accent, #5980a6)", fontSize: 12 }}>
-                                ▼
-                              </span>
-                            </div>
-
-                            {isOpen && (
-                              <div style={{ display: "flex", flexDirection: "column", gap: 0, margin: "6px 0 4px 0", borderLeft: "1px solid var(--si-border-sec, #2a3a4a)", paddingLeft: 12 }}>
-                                {c.ds.map((xd: any, xidx: number) => (
-                                  <div key={xidx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid #141d27" }}>
-                                    <span style={{ width: 58, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, color: xd.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
-                                      {xd.core ? "CORE" : "CONFIRM"}
-                                    </span>
-                                    <div style={{ flex: 1, minWidth: 120 }}>
-                                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 6, alignItems: "center" }}>
-                                        <span>{xd.name}</span>
-                                        {xd.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: "#f5b031" }}>◆ CRITICAL</span>}
-                                      </div>
-                                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 1 }}>
-                                        {xd.val}
-                                      </div>
-                                    </div>
-                                    <div style={{ width: "clamp(36px,18%,90px)", flex: "none", height: 4, background: "#1c2733" }}>
-                                      <div style={{ height: 4, width: `${xd.ev}%`, background: thEvCol(xd.ev) }} />
-                                    </div>
-                                    <span style={{ width: 26, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: thEvCol(xd.ev) }}>
-                                      {Math.round(xd.ev)}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-sub, #5d6b79)", marginTop: 4 }}>
-                        <span>WEIGHT · EVIDENCE · Click a row for its drivers</span>
-                        <span>Advanced mode to edit weights</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ADVANCED MODE CONTENT */}
-              {labMode === "ADVANCED" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))", gap: 18, alignItems: "start" }}>
-                  {/* Edit Weights Panel */}
-                  <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, gridColumn: "1 / -1" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                        EDIT WEIGHTS
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: labWeightsState ? "#f5b031" : STEEL, border: `1px solid ${labWeightsState ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
-                        {labWeightsState ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}
-                      </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                        Drag to set relative importance — automatically normalized to 100%.
-                      </span>
-                      <button
-                        onClick={() => setLabWeightsState(null)}
-                        style={{ marginLeft: "auto", height: 28, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                      >
-                        Reset to engine weights
-                      </button>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px 22px" }}>
-                      {CATS_T.map(([k, label]) => {
-                        const raw = labWeightsState ? labWeightsState[k] : thesisWeights(labDir, labHz)[k];
-                        const pctVal = Math.round(thRun.W[k]);
-                        return (
-                          <div key={k}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "var(--si-text-body, #d5dfe9)", marginBottom: 4 }}>
-                              <span>{label}</span>
-                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{pctVal}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="40"
-                              step="1"
-                              value={raw || 0}
-                              onChange={(e) => {
-                                const base = labWeightsState || thesisWeights(labDir, labHz);
-                                setLabWeightsState({ ...base, [k]: +e.target.value });
-                              }}
-                              style={{ width: "100%", accentColor: "#5980a6" }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
+                      Save and monitor trade setup →
+                    </button>
                   </div>
 
-                  {/* Left Column: Driver Evidence Table */}
-                  <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
-                    <div style={{ height: 50, display: "flex", alignItems: "center", gap: 14, padding: "0 18px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                        TRADE ENGINE · DRIVER EVIDENCE
-                      </span>
-                      <span style={{ marginLeft: "auto", display: "flex", gap: 12, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-dim, #7d8b99)" }}>
-                        <span style={{ border: "1px solid #5980a6", color: "var(--si-accent-light, #a9c6e3)", padding: "2px 6px" }}>CORE</span>
-                        <span style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 6px" }}>CONFIRM</span>
-                        <span style={{ color: "#f5b031" }}>◆ CRITICAL</span>
-                      </span>
-                    </div>
-
-                    {thRun.cats.map((c: any) => (
-                      <div key={c.k} style={{ borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px 8px" }}>
-                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #e8eef4)", flex: 1 }}>
-                            {c.label}
-                          </span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>
-                            WEIGHT {Math.round(c.w)}%
-                          </span>
-                          <div style={{ width: 120, height: 6, background: "#1c2733" }}>
-                            <div style={{ height: 6, width: `${c.score}%`, background: thEvCol(c.score), transition: "width 300ms ease" }} />
-                          </div>
-                          <span style={{ width: 30, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: thEvCol(c.score) }}>
-                            {Math.round(c.score)}
-                          </span>
-                          <span style={{ width: 66, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
-                            {c.pts.toFixed(1)} pts
-                          </span>
-                        </div>
-
-                        {c.ds.map((dv: any, didx: number) => {
-                          const bad = dv.crit && dv.ev < 40;
-                          return (
-                            <div key={didx} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 18px 7px 30px", background: bad ? "rgba(240,86,86,0.08)" : "transparent" }}>
-                              <span style={{ width: 62, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: dv.core ? "#a9c6e3" : "#7d8b99", border: `1px solid ${dv.core ? "#5980a6" : "#2a3a4a"}`, padding: "2px 0" }}>
-                                {dv.core ? "CORE" : "CONFIRM"}
-                              </span>
-                              <div style={{ flex: 1, minWidth: 140 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                                  <span>{dv.name}</span>
-                                  {dv.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: bad ? DN : "#f5b031" }}>◆ CRITICAL</span>}
-                                </div>
-                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-dim, #7d8b99)", marginTop: 2 }}>
-                                  {dv.val}
-                                </div>
-                              </div>
-                              <div style={{ width: "clamp(40px,10%,110px)", flex: "none", height: 4, background: "#1c2733" }}>
-                                <div style={{ height: 4, width: `${dv.ev}%`, background: thEvCol(dv.ev), transition: "width 300ms ease" }} />
-                              </div>
-                              <span style={{ width: 28, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: thEvCol(dv.ev) }}>
-                                {Math.round(dv.ev)}
-                              </span>
-                              <span style={{ width: 52, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 500, color: "var(--si-text-mid, #93a1af)" }}>
-                                +{dv.pts.toFixed(1)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        <div style={{ height: 6 }} />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Right Column: Confidence + Target Overrides + Invalidation */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                    {/* Confidence Box */}
-                    <div
-                      style={{
-                        position: "relative",
-                        border: "1px solid var(--si-border, #1c2733)",
-                        background: "var(--si-card, #0c1118)",
-                        boxShadow: "var(--si-shadow, none)",
-                        padding: "20px 22px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 14,
-                      }}
-                    >
-                      {/* Corner brackets */}
-                      <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-
-                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                            TRADE CONFIDENCE
-                          </div>
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 64, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {thConf}
-                            </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
-                              / 100
-                            </span>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.08em", color: thBand[1] }}>
-                            {thBand[0]}
-                          </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
-                            CORE INTACT <span style={{ color: thRun.coreOk === thRun.core.length ? UP : "#f5b031" }}>{thRun.coreOk} / {thRun.core.length}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ height: 8, background: "var(--si-border, #1c2733)" }}>
-                        <div style={{ height: 8, width: `${thConf}%`, background: thBand[1], transition: "width 400ms ease" }} />
-                      </div>
-
-                      {thAtRisk && (
-                        <div style={{ border: "1px solid rgba(240,86,86,0.5)", background: "rgba(240,86,86,0.08)", padding: "10px 12px", fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffd2d2", lineHeight: 1.45 }}>
-                          ◆ Critical driver failing: {thRun.critFail.map((d: any) => d.name).join(", ")}.
-                        </div>
-                      )}
-
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-                        {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
-                      </div>
-
-                      {/* Strongest & Weakest */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "#4ade80", marginBottom: 6 }}>
-                            STRONGEST
-                          </div>
-                          {thStrong.map((sg: any, idx: number) => (
-                            <div key={idx} style={{ padding: "5px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.3 }}>{sg.name}</div>
-                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-mid, #93a1af)" }}>{sg.val} · +{sg.pts.toFixed(1)} pts</div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "#f5b031", marginBottom: 6 }}>
-                            WEAKEST
-                          </div>
-                          {thWeak.map((wk: any, idx: number) => (
-                            <div key={idx} style={{ padding: "5px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.3 }}>{wk.name}</div>
-                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: thEvCol(wk.ev) }}>{wk.val} · ev {Math.round(wk.ev)}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* What changed */}
-                      <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 10 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)" }}>
-                          <span>WHAT CHANGED</span>
-                          <span style={{ color: dConf > 0 ? UP : dConf < 0 ? "#f5b031" : "#93a1af" }}>
-                            {dConf >= 0 ? "+" : ""}{dConf} vs last week
-                          </span>
-                        </div>
-                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #c5d0db)", marginTop: 6, lineHeight: 1.45 }}>
-                          {thMover.length > 0 ? thMover.map((d: any) => `${d.name} ${d.dd > 0 ? "strengthened" : "weakened"} (${d.dd > 0 ? "+" : ""}${d.dd})`).join(" · ") : "No material driver change this week."}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Price Target & Overrides */}
+                  {/* Price target: only in Advanced mode, where the target and stop can be overridden */}
+                  {labMode === "ADVANCED" && (
                     <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                          PRICE TARGET
-                        </span>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>PRICE TARGET</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: targetOverride != null ? "#f5b031" : STEEL, border: `1px solid ${targetOverride != null ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
                           {targetOverride != null ? "OVERRIDDEN" : "SUGGESTED"}
                         </span>
@@ -5658,56 +4868,24 @@ export function StockIntelligenceScreen() {
                           {labEditTargets ? "Done" : "Edit / Override"}
                         </button>
                       </div>
-
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                        {usd(tgtV)}
-                      </div>
-
-                      {/* Marks track bar */}
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{usd(tgtV)}</div>
                       <div style={{ position: "relative", height: 56, margin: "4px 6px 0" }}>
                         <div style={{ position: "absolute", left: 0, right: 0, top: 26, height: 2, background: "#1c2733" }} />
                         <div style={{ position: "absolute", top: 18, left: thPos(stopV), width: 2, height: 18, background: "#f05656" }} />
                         <div style={{ position: "absolute", top: 16, left: thPos(tgtV), width: 12, height: 12, marginLeft: -5, border: "2px solid #e8eef4", background: "var(--si-bg, #080b10)", transform: "rotate(45deg)", transition: "left 300ms ease" }} />
-
-                        {[
+                        {([
                           ["BEAR", TT.dn, DN],
                           ["NOW", stock.p, "var(--si-text-hi, #e8eef4)"],
                           ["BASE", TT.base, STEEL],
                           ["BULL", TT.up, UP],
-                        ].map(([k, v, c], idx) => (
-                          <div key={idx} style={{ position: "absolute", top: 0, left: thPos(v as number), transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", color: c as string }}>{k}</span>
-                            <span style={{ width: 1, height: 14, background: c as string, marginTop: 2 }} />
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 500, color: "var(--si-text-mid, #93a1af)", marginTop: 16 }}>{usd(v as number)}</span>
+                        ] as [string, number, string][]).map(([k, v, c], idx) => (
+                          <div key={idx} style={{ position: "absolute", top: 0, left: thPos(v), transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", color: c }}>{k}</span>
+                            <span style={{ width: 1, height: 14, background: c, marginTop: 2 }} />
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 500, color: "var(--si-text-mid, #93a1af)", marginTop: 16 }}>{usd(v)}</span>
                           </div>
                         ))}
                       </div>
-
-                      {/* Evidence sources */}
-                      <div style={{ marginTop: 8 }}>
-                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 4 }}>
-                          EVIDENCE SOURCES
-                        </div>
-                        {TT.src.map((sr: any, idx: number) => (
-                          <div key={idx} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                            <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {sr[0]} <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)" }}>· {withoutVendorNames(sr[1], showVendor)}</span>
-                            </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
-                              {usd(sr[2])}
-                            </span>
-                          </div>
-                        ))}
-                        <div style={{ display: "flex", gap: 10, padding: "6px 0" }}>
-                          <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                            Estimate-revision adjustment
-                          </span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
-                            {pct1(TT.revAdj * 100)}
-                          </span>
-                        </div>
-                      </div>
-
                       {labEditTargets && (
                         <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
                           <div>
@@ -5715,33 +4893,15 @@ export function StockIntelligenceScreen() {
                               <span>OVERRIDE TARGET · SUGGESTED {usd(TT.target)}</span>
                               <span style={{ color: "var(--si-text-hi, #e8eef4)" }}>{usd(tgtV)}</span>
                             </div>
-                            <input
-                              type="range"
-                              min={Math.round(stock.p * 0.5)}
-                              max={Math.round(stock.p * 1.8)}
-                              step="1"
-                              value={Math.round(tgtV)}
-                              onChange={(e) => setTargetOverride(+e.target.value)}
-                              style={{ width: "100%", accentColor: UP }}
-                            />
+                            <input type="range" min={Math.round(stock.p * 0.5)} max={Math.round(stock.p * 1.8)} step="1" value={Math.round(tgtV)} onChange={(e) => setTargetOverride(+e.target.value)} style={{ width: "100%", accentColor: UP }} />
                           </div>
-
                           <div>
                             <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
                               <span>OVERRIDE INVALIDATION · SUGGESTED {usd(TT.stop)}</span>
                               <span style={{ color: "#f05656" }}>{usd(stopV)}</span>
                             </div>
-                            <input
-                              type="range"
-                              min={Math.round(stock.p * 0.5)}
-                              max={Math.round(stock.p * 1.4)}
-                              step="1"
-                              value={Math.round(stopV)}
-                              onChange={(e) => setStopOverride(+e.target.value)}
-                              style={{ width: "100%", accentColor: DN }}
-                            />
+                            <input type="range" min={Math.round(stock.p * 0.5)} max={Math.round(stock.p * 1.4)} step="1" value={Math.round(stopV)} onChange={(e) => setStopOverride(+e.target.value)} style={{ width: "100%", accentColor: DN }} />
                           </div>
-
                           <button
                             onClick={() => {
                               setTargetOverride(null);
@@ -5754,144 +4914,100 @@ export function StockIntelligenceScreen() {
                         </div>
                       )}
                     </div>
+                  )}
+                </div>
 
-                    {/* Invalidation Rules */}
-                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                          INVALIDATION
-                        </span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: stopOverride != null ? "#f5b031" : STEEL, border: `1px solid ${stopOverride != null ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
-                          {stopOverride != null ? "OVERRIDDEN" : "SUGGESTED"}
-                        </span>
-                      </div>
-
-                      <div style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <span style={{ width: 84, flex: "none", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f05656", paddingTop: 3 }}>
-                          PRICE
-                        </span>
-                        <div>
-                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                            Daily close {thBull ? "below" : "above"} {usd(stopV)}
-                          </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-dim, #7d8b99)", marginTop: 2 }}>
-                            {thBull ? `${labHz === "12M" ? "200-DMA" : "50-DMA / breakout shelf"} at ${usd(TT.lvl)}, less a 1.5% buffer` : `${TPt.res != null ? usd(TPt.res) : "Resistance"} plus a 1.5% buffer`}
-                          </div>
+                {/* Right column: the trade confidence and where it comes from */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, #0c1118)", boxShadow: "var(--si-shadow, none)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
+                      <div>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>TRADE CONFIDENCE</div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
+                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: thConf != null ? 56 : 32, fontWeight: 700, lineHeight: 0.9, color: thConf != null ? thBand[1] : "var(--si-text-hi, #e8eef4)" }}>{thConf ?? "Unavailable"}</span>
+                          {thConf != null && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>/ 100</span>}
                         </div>
                       </div>
-
-                      <div style={{ display: "flex", gap: 12, padding: "8px 0" }}>
-                        <span style={{ width: 84, flex: "none", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f05656", paddingTop: 3 }}>
-                          FUNDAMENTAL
-                        </span>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {(thBull ? TPt.fi : TPt.fiB).map((rule: string, rIdx: number) => (
-                            <div key={rIdx} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {rule}
-                            </div>
-                          ))}
-                        </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.08em", color: thBand[1] }}>{thBand[0]}</div>
                       </div>
+                    </div>
+                    <div style={{ height: 8, background: "var(--si-border, #1c2733)" }}>
+                      <div style={{ height: 8, width: `${thConf ?? 0}%`, background: thBand[1], transition: "width 400ms ease" }} />
+                    </div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
+                      {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
+                    </div>
+                    <ConfidenceBreakdown cats={thRun.cats} colorFor={sc} open={labBreakdownOpen} onToggle={(k) => setLabBreakdownOpen((o) => ({ ...o, [k]: !o[k] }))} />
+                  </div>
+                </div>
+              </div>
+
+              {labSaveOpen && (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Save this trade"
+                  onClick={() => setLabSaveOpen(false)}
+                  style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(4, 7, 11, 0.66)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+                >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ width: "min(440px, 100%)", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card, #0c1118)", boxShadow: "0 18px 48px rgba(0,0,0,0.6)", padding: "24px 26px", display: "flex", flexDirection: "column", gap: 14 }}
+                  >
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.1em", color: "#ffffff" }}>SAVE THIS TRADE?</div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "#ffffff", lineHeight: 1.55 }}>
+                      <b style={{ color: thBull ? "var(--up, #4ade80)" : "var(--down, #f87171)" }}>{thBull ? "Long" : "Short"}</b> {stock.t}, target <b style={{ color: "var(--up, #4ade80)" }}>{usd(tgtV)}</b>, invalidation <b style={{ color: "var(--down, #f87171)" }}>{usd(stopV)}</b> over <b style={{ color: "#4fb3ff" }}>{labHz}</b>. It will be saved in your Trade Tracker, and you will be taken back to the Trade Builder setup.
+                    </div>
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+                      <button
+                        onClick={() => setLabSaveOpen(false)}
+                        style={{ height: 40, padding: "0 18px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        autoFocus
+                        onClick={() => {
+                          // Added to this stock's saved trades; nothing already saved is replaced.
+                          const nowMs = Date.now();
+                          let saved: SavedTrade | null = null;
+                          try {
+                            const { trades, trade } = addTrade(
+                              readTrades(localStorage, stock.t),
+                              {
+                                ticker: stock.t,
+                                dir: labDir,
+                                hz: labHz,
+                                title: `${thBull ? "LONG" : "SHORT"} ${stock.t} → ${usd(tgtV)} · ${labHz}`,
+                                target: tgtV,
+                                stop: stopV,
+                                confAtSave: thConf,
+                                savedDate: "Just now · Active",
+                                entryPx: Number.isFinite(stock.p) ? stock.p : null,
+                                savedAt: new Date(nowMs).toISOString(),
+                                wO: thCustomW,
+                              },
+                              nowMs,
+                            );
+                            writeTrades(localStorage, stock.t, trades);
+                            setSavedTrades(trades);
+                            saved = trade;
+                          } catch { }
+                          if (saved) setSelectedTradeId(saved.id);
+                          setLabSaveOpen(false);
+                          setLabSavedNote(`${stock.t} trade saved to your Trade Tracker`);
+                          resetBuilder();
+                          setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 60);
+                        }}
+                        style={{ height: 40, padding: "0 20px", border: "none", background: "#5980a6", color: "#ffffff", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        Save to Trade Tracker
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
-
-              {/* Bottom Complete Simulated Thesis Card */}
-              <div
-                style={{
-                  position: "relative",
-                  border: "1px solid #5980a6",
-                  background: "var(--si-card, rgba(12, 17, 24, 0.95))",
-                  padding: "20px 22px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 16,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                    TRADE CARD
-                  </span>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
-                    {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} THESIS
-                  </span>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
-                  {[
-                    ["TARGET", usd(tgtV), thBull ? UP : DN],
-                    ["INVALIDATION", usd(stopV), DN],
-                    ["UPSIDE", pct1(thUp), UP],
-                    ["DOWNSIDE", pct1(thDn), DN],
-                    ["REWARD / RISK", thRR.toFixed(1) + "×", thRR >= 2 ? UP : thRR >= 1.2 ? "#f5b031" : DN],
-                    ["TRADE CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
-                    ["CORE DRIVERS INTACT", `${thRun.coreOk} of ${thRun.core.length}`, thRun.coreOk === thRun.core.length ? UP : "#f5b031"],
-                  ].map(([k, v, c], idx) => (
-                    <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>{k}</div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, color: c as string, marginTop: 4 }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-                  <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>KEY CATALYST</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.cat}</div>
-                  </div>
-                  <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f5b031" }}>BIGGEST RISK</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.risk}</div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    // Added to this stock's saved trades; nothing already saved is replaced.
-                    const nowMs = Date.now();
-                    let saved: SavedTrade | null = null;
-                    try {
-                      const { trades, trade } = addTrade(
-                        readTrades(localStorage, stock.t),
-                        {
-                          ticker: stock.t,
-                          dir: labDir,
-                          hz: labHz,
-                          title: `${thBull ? "LONG" : "SHORT"} ${stock.t} → ${usd(tgtV)} · ${labHz}`,
-                          target: tgtV,
-                          stop: stopV,
-                          confAtSave: thConf,
-                          savedDate: "Just now · Active",
-                          entryPx: Number.isFinite(stock.p) ? stock.p : null,
-                          savedAt: new Date(nowMs).toISOString(),
-                          wO: labWeightsState,
-                        },
-                        nowMs,
-                      );
-                      writeTrades(localStorage, stock.t, trades);
-                      setSavedTrades(trades);
-                      saved = trade;
-                    } catch { }
-                    if (saved) setSelectedTradeId(saved.id);
-                    setActiveTab("mon");
-                  }}
-                  style={{
-                    height: 48,
-                    border: "none",
-                    background: "#5980a6",
-                    color: "#ffffff",
-                    fontFamily: "'Manrope', sans-serif",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    letterSpacing: "0.04em",
-                    cursor: "pointer",
-                    transition: "background 160ms",
-                  }}
-                >
-                  Save and monitor trade setup →
-                </button>
-              </div>
             </div>
           );
         })()}
@@ -5900,10 +5016,10 @@ export function StockIntelligenceScreen() {
             TAB 9: TRADE TRACKER (was "Strategy Monitor"; Issue 7: Full Monitored View)
             ==================================================== */}
         {activeTab === "mon" && (() => {
-          // With more than one saved trade the tab is a list on the left and the
-          // open stock's trade on the right; with one or none it stays full width.
+          // With a saved trade the tab is a list on the left and the open stock's
+          // trade on the right; with none it stays full width.
           const monLayout = (body: React.ReactNode) =>
-            trackedTrades.length > 1 ? (
+            trackedTrades.length > 0 ? (
               <div className="si-trk">
                 <TrackedTradesList trades={trackedTrades} activeId={savedThesis?.id ?? null} onSelect={selectTrackedTrade} onRemove={removeSavedTrade} />
                 <div className="si-trk-detail">{body}</div>
@@ -6010,7 +5126,9 @@ export function StockIntelligenceScreen() {
           const monRun = thesisRun(stock.t, savedThesis.dir, savedThesis.hz, monAdj, savedThesis.wO || undefined, siFacts);
           const monPx = monScenario === "break" ? (b2 ? savedThesis.stop * 0.985 : savedThesis.stop * 1.015) : stock.p;
           const monPriceBroken = b2 ? monPx <= savedThesis.stop : monPx >= savedThesis.stop;
-          const monFundBroken = monRun.crit.filter((d: any) => d.ev < 25);
+          // The weakest of the seven categories that have data.
+          const monWeakest = monRun.cats.filter((c: any) => c.ds.length > 0).sort((a: any, b: any) => a.score - b.score)[0];
+          const monConfInvalid = monRun.conf != null && monRun.conf < 30;
           const monDelta = (monRun.conf != null && savedThesis.confAtSave != null) ? monRun.conf - savedThesis.confAtSave : 0;
           const monEntry = typeof savedThesis.entryPx === "number" && savedThesis.entryPx > 0 ? savedThesis.entryPx : null;
           // Against the live price (the PRICE NOW at the top), not a simulated one.
@@ -6018,34 +5136,34 @@ export function StockIntelligenceScreen() {
 
           let monStatus = "ON TRACK";
           let monCol = UP;
-          let monCause = `All ${monRun.core.length} core drivers within tolerance.`;
-          let monBy = "Core Drivers";
+          let monCause = monRun.conf != null ? `Trade confidence ${Math.round(monRun.conf)} / 100, within tolerance.` : "Trade confidence unavailable.";
+          let monBy = "Trade confidence";
 
           if (monPriceBroken) {
             monStatus = "INVALIDATED";
             monCol = DN;
             monBy = "Price invalidation";
             monCause = `Price closed ${b2 ? "below" : "above"} the ${usd(savedThesis.stop)} invalidation level (${usd(monPx)}).`;
-          } else if (monFundBroken.length) {
+          } else if (monConfInvalid) {
             monStatus = "INVALIDATED";
             monCol = DN;
-            monBy = monFundBroken[0].name;
-            monCause = `Fundamental invalidation triggered: ${monFundBroken[0].name} evidence fell to ${Math.round(monFundBroken[0].ev)}.`;
-          } else if (monRun.critFail.length || (monRun.conf != null && monRun.conf < 45)) {
+            monBy = "Trade confidence";
+            monCause = `Trade confidence fell to ${Math.round(monRun.conf ?? 0)}, below the 30 invalidation line.`;
+          } else if (monRun.conf != null && monRun.conf < 45) {
             monStatus = "AT RISK";
             monCol = "#f2763a";
-            monBy = monRun.critFail.length ? monRun.critFail[0].name : "Aggregate confidence";
-            monCause = monRun.critFail.length ? `Critical core driver failing: ${monRun.critFail[0].name}` : "Trade confidence fell below 45.";
+            monBy = "Trade confidence";
+            monCause = "Trade confidence fell below 45.";
           } else if (monDelta >= 3) {
             monStatus = "STRENGTHENING";
             monCol = UP;
-            monBy = "Core momentum";
-            monCause = `Thesis evidence improved (+${Math.round(monDelta)} pts).`;
+            monBy = "Score momentum";
+            monCause = `Trade evidence improved (+${Math.round(monDelta)} pts).`;
           } else if (monDelta <= -3) {
             monStatus = "WEAKENING";
             monCol = "#f5b031";
             monBy = "Factor pressure";
-            monCause = `Thesis evidence slipped (${Math.round(monDelta)} pts).`;
+            monCause = `Trade evidence slipped (${Math.round(monDelta)} pts).`;
           }
 
           const L5 = ["ON TRACK", "STRENGTHENING", "WEAKENING", "AT RISK", "INVALIDATED"];
@@ -6059,15 +5177,14 @@ export function StockIntelligenceScreen() {
               <div style={{ position: "relative", border: `1px solid ${monCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16, transition: "border-color 300ms" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 22, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 280 }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span>PAPER TRADE TRACKER · CLIENT-SIDE ONLY</span>
-                      <span style={{ fontSize: 10, background: "rgba(89, 128, 166, 0.2)", padding: "2px 6px", borderRadius: 3, color: "var(--si-accent-light, #a9c6e3)" }}>CLIENT STORAGE · NOT BROKER-CONNECTED</span>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
+                      <span style={{ color: savedThesis.dir === "Bull" ? UP : DN }}>{savedThesis.dir === "Bull" ? "LONG" : "SHORT"}</span> {stock.t} · TARGET{" "}
+                      <span style={{ color: UP }}>{usd(savedThesis.target).replace(/\.00$/, "")}</span> IN <span style={{ color: "#4fb3ff" }}>{savedThesis.hz}</span> TIMEFRAME
                     </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", marginTop: 4, lineHeight: 1.45 }}>
-                      Paper Trade Tracker — client-side only. This trade is stored in your current browser and is not broker-connected or guaranteed to synchronize across devices.
-                    </div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>
-                      {savedThesis.title}
+                    <div style={{ marginTop: 6 }}>
+                      <span title="This trade is stored in your current browser. It is not broker-connected and may not sync across devices." style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", background: "rgba(89, 128, 166, 0.2)", padding: "2px 6px", borderRadius: 3, color: "var(--si-accent-light, #a9c6e3)" }}>
+                        SAVED IN THIS BROWSER · NOT BROKER-CONNECTED
+                      </span>
                     </div>
                     {formatSavedAt(savedThesis.savedAt) && (
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
@@ -6080,9 +5197,14 @@ export function StockIntelligenceScreen() {
                         onClick={() => {
                           setLabDir(savedThesis.dir);
                           setLabHz(savedThesis.hz);
+                          // Advanced mode, so the saved weights, target and invalidation are visible and editable.
+                          setLabMode("ADVANCED");
                           setLabWeightsState(savedThesis.wO || null);
                           setTargetOverride(savedThesis.target);
                           setStopOverride(savedThesis.stop);
+                          setLabBreakdownOpen({});
+                          setLabSavedNote(null);
+                          setLabStarted(true);
                           setActiveTab("lab");
                         }}
                         style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
@@ -6209,8 +5331,8 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CORE DRIVERS INTACT</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{monRun.coreOk} / {monRun.core.length}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>WEAKEST DRIVER</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: monWeakest ? sc(Math.round(monWeakest.score)) : "var(--si-text-hi, #e8eef4)" }}>{monWeakest ? `${monWeakest.k} ${Math.round(monWeakest.score)}` : "—"}</div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>ENTRY PRICE</div>
@@ -6282,9 +5404,8 @@ export function StockIntelligenceScreen() {
                     const was = Math.round(d.ev - (d.dd || 0));
                     const now = Math.round(d.ev);
                     const dv = now - was;
-                    const isFail = d.core && now < 40;
-                    const stt = isFail
-                      ? ["FAILED", DN]
+                    const stt = now < 40
+                      ? ["AGAINST", DN]
                       : dv <= -3
                         ? ["SLIPPING", "#f5b031"]
                         : dv >= 3
@@ -6293,9 +5414,6 @@ export function StockIntelligenceScreen() {
 
                     return (
                       <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <span style={{ width: 62, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: d.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
-                          {d.core ? "CORE" : "CONFIRM"}
-                        </span>
                         <span style={{ flex: 1, minWidth: 0, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {d.name}
                         </span>
@@ -6329,15 +5447,11 @@ export function StockIntelligenceScreen() {
                         st: monPriceBroken ? "TRIGGERED" : "CLEAR",
                         c: monPriceBroken ? DN : UP,
                       },
-                      ...(b2 ? TPt.fi : TPt.fiB).map((rule: string, i: number) => {
-                        const trig = i === 0 && monFundBroken.length > 0;
-                        const warn = i === 0 && !trig && monScenario === "cut";
-                        return {
-                          k: rule,
-                          st: trig ? "TRIGGERED" : warn ? "WATCH" : "CLEAR",
-                          c: trig ? DN : warn ? "#f5b031" : UP,
-                        };
-                      }),
+                      {
+                        k: "Trade confidence under 30 (at risk under 45)",
+                        st: monConfInvalid ? "TRIGGERED" : monRun.conf != null && monRun.conf < 45 ? "WATCH" : "CLEAR",
+                        c: monConfInvalid ? DN : monRun.conf != null && monRun.conf < 45 ? "#f5b031" : UP,
+                      },
                     ].map((fc, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <span style={{ width: 9, height: 9, borderRadius: 99, background: fc.c, boxShadow: `0 0 8px ${fc.c}` }} />
