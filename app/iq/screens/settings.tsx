@@ -484,7 +484,7 @@ export function SettingsScreen() {
 
 /** "Nov 19, 2026" */
 function shortDate(iso: string | null | undefined): string {
-  return iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
+  return iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "";
 }
 
 /**

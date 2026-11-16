@@ -39,5 +39,6 @@ export function displayPrice(plan: CatalogPlan, interval: BillingInterval): { pe
 
 export function longDate(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  // US Eastern calendar: trials and the intro end at 11:59 PM Eastern on their last day.
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "America/New_York" });
 }

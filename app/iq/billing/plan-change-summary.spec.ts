@@ -47,7 +47,8 @@ describe("plan change confirmation", () => {
   it("the confirmation page verifies the change with the server before showing it, and mentions the email", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "app/iq/billing/billing-pages.tsx"), "utf8");
     assert.match(src, /summary\?\.kind === "scheduled"\s*\? s\.scheduledChange\?\.planId === plan\s*: s\.planId === plan/);
-    assert.match(src, /data-testid="success-email"[^>]*>\s*We&apos;ve emailed you a confirmation/);
+    assert.match(src, /data-testid="success-email"[^>]*>\s*Manage your plan in profile settings anytime\./);
+    assert.doesNotMatch(src, /Everything it includes is ready to use/);
     const checkout = fs.readFileSync(path.join(process.cwd(), "app/iq/billing/checkout/checkout-page.tsx"), "utf8");
     assert.match(checkout, /rememberPlanChange\(\{/);
   });

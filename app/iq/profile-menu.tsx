@@ -38,7 +38,7 @@ export function ProfileMenu() {
   const profileImage = profile?.profile_image || user?.photoURL || null;
   // Drives the "Pending" pill on My Profile — same rule as Settings (REQUIRED_PROFILE_FIELDS).
   const profileIncomplete = isProfileIncomplete(profile);
-  const hasActivePlan = !!ent && ent.planId !== "none" && ent.planId !== "free" && (ent.status === "active" || ent.status === "trialing" || !!ent.staff);
+  const hasActivePlan = !!ent && ent.planId !== "none" && ent.planId !== "free" && (["ACTIVE", "TRIALING", "PAST_DUE"].includes(String(ent.status).toUpperCase()) || !!ent.staff);
 
   // Anchor the menu under the avatar; re-measure on resize/scroll while open.
   useLayoutEffect(() => {

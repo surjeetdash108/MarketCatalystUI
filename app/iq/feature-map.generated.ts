@@ -70,7 +70,7 @@ export const PLANS = [
     "bullets": [
       "Everything in Starter",
       "Money Flow by sector",
-      "Biggest institutional gainers and losers"
+      "See where money is rotating today: the top 15 movers each way and the price levels to watch"
     ]
   },
   {
@@ -86,8 +86,7 @@ export const PLANS = [
     "bullets": [
       "Everything in Pro",
       "Strategy Lab",
-      "Backtest any strategy",
-      "Strategy Lab entry, stop and target levels"
+      "Backtest any strategy"
     ]
   }
 ] as const;

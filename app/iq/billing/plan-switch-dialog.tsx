@@ -29,6 +29,8 @@ export function PlanSwitchDialog(props: {
   const [busy, setBusy] = useState(false);
   const [useCredits, setUseCredits] = useState(false);
   const [warnLeftover, setWarnLeftover] = useState(false);
+  // The renewal consent is a tick box the member checks before switching.
+  const [agreed, setAgreed] = useState(false);
   const money = (n: number) => formatMoney(n, currency);
   // Credits come off a real charge: today's (switch now, outside the trial) or
   // the new plan's first charge (switch at renewal).
@@ -63,7 +65,7 @@ export function PlanSwitchDialog(props: {
         prorationDate: cp.prorationDate,
         ...(cp.kind === "upgrade" ? { expectedAmountDue: cp.amountDueNow } : {}),
         ...(cp.kind === "downgrade" ? { expectedCredit: cp.creditToBalance } : {}),
-        consent: { accepted: true, version: cp.consent?.version ?? "" },
+        consent: { accepted: agreed, version: cp.consent?.version ?? "" },
         ...(creditsUsed > 0 ? { useCredits: true } : {}),
       });
       if (res.status === "requires_action" && res.clientSecret) {
@@ -116,9 +118,16 @@ export function PlanSwitchDialog(props: {
             ))}
           </div>
           {cp.consent?.text && (
-            <p style={{ margin: 0, fontSize: ".74rem", color: "var(--text-dim-solid)", lineHeight: 1.5 }}>
-              By choosing Yes: {cp.consent.text}
-            </p>
+            <label data-testid="plan-switch-consent" style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: ".8rem", lineHeight: 1.5, color: "var(--text)", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                data-testid="plan-switch-consent-box"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                style={{ marginTop: 3, width: 16, height: 16, flex: "none", accentColor: "#4ade80" }}
+              />
+              <span>{cp.consent.text}</span>
+            </label>
           )}
           <UseCreditsChoice
             available={cp.creditsAvailable ?? 0}
@@ -140,19 +149,28 @@ export function PlanSwitchDialog(props: {
       {warnLeftover ? (
         <LeftoverCreditsWarning amount={leftover} money={money} busy={busy} onContinue={() => void confirm()} onBack={() => setWarnLeftover(false)} />
       ) : (
-        <div style={{ display: "flex", gap: 10 }}>
-          <button
-            className="co-cta"
-            data-testid="plan-switch-yes"
-            disabled={!cp || busy}
-            onClick={() => (leftover > 0 ? setWarnLeftover(true) : void confirm())}
-          >
-            {busy ? "Switching…" : "Yes, switch"}
-          </button>
-          <button className="co-cta" data-testid="plan-switch-no" disabled={busy} style={{ background: "var(--surface-2)", color: "var(--text)" }} onClick={onClose}>
-            Cancel
-          </button>
-        </div>
+        <button
+          type="button"
+          data-testid="plan-switch-yes"
+          disabled={!cp || busy || !agreed}
+          onClick={() => (leftover > 0 ? setWarnLeftover(true) : void confirm())}
+          style={{
+            width: "100%",
+            padding: "13px 18px",
+            borderRadius: 99,
+            border: 0,
+            // Market Catalyst green, the same as the module switcher and the main CTAs.
+            background: "#4ade80",
+            color: "#05210f",
+            fontWeight: 800,
+            fontSize: ".95rem",
+            cursor: !cp || busy || !agreed ? "not-allowed" : "pointer",
+            opacity: !cp || busy || !agreed ? 0.55 : 1,
+            boxShadow: "0 0 18px rgba(74,222,128,0.35)",
+          }}
+        >
+          {busy ? "Switching…" : `Yes, switch to ${planName}`}
+        </button>
       )}
     </Modal>
   );

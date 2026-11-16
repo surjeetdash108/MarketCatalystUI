@@ -465,11 +465,6 @@ export function ChoosePlanScreen({
           );
         })}
       </div>
-      {trialDays > 0 && !userHasActivePlan && (
-        <p data-testid="choose-plan-trial-note" style={{ margin: 0, fontSize: ".86rem", color: "var(--text-dim-solid)", textAlign: "center" }}>
-          Every plan starts with a {trialDays}-day free trial: $0 today, cancel before it ends and you pay nothing.
-        </p>
-      )}
       {switchTo && (
         <PlanSwitchDialog
           planId={switchTo.id}

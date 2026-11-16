@@ -134,13 +134,9 @@ export function BillingSuccess() {
                       <p key={l} style={{ margin: 0 }}>{l}</p>
                     ))}
                   </div>
-                ) : (
-                  <p style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".9rem", maxWidth: 420, lineHeight: 1.5 }}>
-                    Your plan is active. Everything it includes is ready to use.
-                  </p>
-                )}
+                ) : null}
                 <p data-testid="success-email" style={{ margin: 0, color: "var(--text-dim-solid)", fontSize: ".8rem" }}>
-                  We&apos;ve emailed you a confirmation. You can see every change in Settings → Plan → Purchase history.
+                  Manage your plan in profile settings anytime.
                 </p>
                 <Link
                   href="/dashboard"

@@ -21,7 +21,6 @@ export function switchPreviewLines(
     ];
   if (cp.trialEndsAt)
     return [
-      `You switch to ${names.to} (${cadence}) now.`,
       "You're still in your free trial, so nothing is charged today.",
       `Your first charge is ${money(cp.nextRenewalAmount)} on ${date(cp.trialEndsAt)}, then every ${per}.`,
     ];
@@ -32,7 +31,7 @@ export function switchPreviewLines(
       `Next renewal: ${money(cp.nextRenewalAmount)} on ${date(cp.nextRenewalDate)}.`,
     ];
   return [
-    `You switch to ${names.to} (${cadence}) now. The new features are available right away.`,
+    "The new features are available right away.",
     cp.amountDueNow > 0
       ? `Charged today: ${money(cp.amountDueNow)} (prorated), to your card on file.`
       : "Nothing is charged today.",

@@ -29,10 +29,13 @@ describe("checkout summary card", () => {
   it("with a free trial: the trial line, $0 due today, when the trial ends, and the first charge (incl. tax) and date", () => {
     const trial = { ...preview, trial: { days: 7, endsAt: "2026-11-17T12:00:00.000Z" }, dueToday: 0, firstCharge: { amount: 5748, at: "2026-11-17T12:00:00.000Z" } };
     const html = renderToStaticMarkup(<SummaryCard plan={pro} interval="monthly" step={2} preview={trial} action={null} />);
-    assert.match(html, /data-testid="summary-trial"><span>7-day free trial<\/span><span>−\$57\.48/);
+    // The trial line has no amount next to it; "Due today $0" says what is charged.
+    assert.match(html, /data-testid="summary-trial"><span>7-day free trial<\/span><\/div>/);
     assert.match(html, /Due today<\/span><span data-testid="summary-total">\$0</);
     // The N-days-free box moved above the card field; the summary says when to cancel for free.
-    assert.match(html, /<li>Cancel for free before November 17, 2026 at \d{1,2}:\d{2} [AP]M\.<\/li>/);
+    // The date only (the trial ends at 11:59 PM US Eastern that day).
+    assert.match(html, /<li>Cancel for free before November 17, 2026\.<\/li>/);
+    assert.match(html, /<li>Renews automatically until you cancel\.<\/li>/);
     assert.doesNotMatch(html, /data-testid="trial-box"/);
     assert.match(html, /First charge<\/h4>\$57\.48 on November 17, 2026, then \$59 every month until you cancel\./);
   });
@@ -43,7 +46,7 @@ describe("checkout summary card", () => {
     assert.match(html, /Sales tax \(TX, simulated\)<\/span><span data-testid="summary-tax">\$4\.38/);
     assert.match(html, /data-testid="summary-total">\$57\.48/);
     assert.match(html, /Charged today<\/h4>\$57\.48 today, then \$59 every month from December 10, 2026 until you cancel\./);
-    assert.match(html, /Renews at the full price every month until you cancel/);
+    assert.match(html, /Renews automatically until you cancel/);
     assert.match(html, /Cancel anytime in Manage Plan and keep access until the end of the period/);
     assert.ok(html.includes(REFUND_POLICY.checkoutLine.replace(/'/g, "&#x27;")));
   });

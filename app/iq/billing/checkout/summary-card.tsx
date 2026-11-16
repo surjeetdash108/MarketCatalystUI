@@ -26,16 +26,13 @@ export function ConsentText({ text, onOpen }: { text: string; onOpen: (doc: "ter
 /** "November 19, 2026" */
 function day(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 }
 
-/** "November 20, 2026 at 3:00 PM" in the buyer's own time zone (trials end to the hour). */
+/** "November 20, 2026": the trial ends at 11:59 PM US Eastern that day, so the date alone (Eastern calendar). */
 export function trialEnd(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  const date = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  return `${date} at ${time}`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 }
 
 /** The free-trial box, shown above the card number field. */
@@ -97,7 +94,6 @@ export function SummaryCard(props: {
         {trial && (
           <div className="co-row" style={{ color: "var(--brand-2)" }} data-testid="summary-trial">
             <span>{trial.days}-day free trial</span>
-            <span>−{money(firstCharge)}</span>
           </div>
         )}
         <div className="co-row total"><span>Due today</span><span data-testid="summary-total">{money(dueToday)}{!trial && !taxKnown ? " + tax" : ""}</span></div>
@@ -117,11 +113,11 @@ export function SummaryCard(props: {
                 <>
                   <li>{trial.days} days free — nothing is charged today.</li>
                   <li>Cancel for free before {trialEnd(trial.endsAt)}.</li>
-                  <li>Then it renews at the full price every {c.unit} until you cancel.</li>
+                  <li>Renews automatically until you cancel.</li>
                 </>
               ) : (
                 <>
-                  <li>Renews at the full price every {c.unit} until you cancel.</li>
+                  <li>Renews automatically until you cancel.</li>
                   <li>Cancel anytime in Manage Plan and keep access until the end of the period.</li>
                   <li data-testid="refund-line">{REFUND_POLICY.checkoutLine}</li>
                 </>
