@@ -80,6 +80,7 @@ import { useWatchlistsContext } from "../hooks/useWatchlists";
 import type { Stock13FResponse } from "../stock-13f-view";
 import { useEntitlements } from "../hooks/useEntitlements";
 import { LockedFeature } from "../entitlement-gate";
+import { ProfileMenu } from "../profile-menu";
 
 const toneColor = (tone?: "up" | "dn") =>
   tone === "up" ? "var(--up, #16a34a)" : tone === "dn" ? "var(--down, #dc2626)" : "var(--si-text-hi, #e8eef4)";
@@ -1676,14 +1677,13 @@ export function StockIntelligenceScreen() {
 
         <div style={{ position: "absolute", top: 20, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10, padding: "0 24px" }}>
           <ModuleSwitcher />
+          <div style={{ position: "absolute", right: 24, display: "flex", alignItems: "center", gap: 8 }}>
           <button
             type="button"
             onClick={toggleTheme}
             title={isLight ? "Switch to dark mode" : "Switch to light mode"}
             aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
             style={{
-              position: "absolute",
-              right: 24,
               height: 34,
               width: 34,
               padding: 0,
@@ -1710,6 +1710,8 @@ export function StockIntelligenceScreen() {
               </svg>
             )}
           </button>
+          <ProfileMenu />
+          </div>
         </div>
         <div style={{ maxWidth: 640, width: "100%", textAlign: "center", marginTop: 40 }}>
           <div
@@ -2513,6 +2515,7 @@ export function StockIntelligenceScreen() {
             >
               Track Trade
             </button>
+            <ProfileMenu />
           </div>
         </div>
 

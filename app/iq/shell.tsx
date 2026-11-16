@@ -2,7 +2,6 @@
 
 // iq.css is imported globally via app/layout.tsx
 import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -18,8 +17,6 @@ export const StockScreenEmbed = dynamic<{
   () => import("./screens/stock").then(m => ({ default: m.StockScreen })),
   { ssr: false, loading: () => <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim-solid)" }}>Loading…</div> }
 );
-import { signOut } from "firebase/auth";
-import { firebaseAuth } from "../firebase";
 import { apiGet, apiPatch, apiPost } from "./backend";
 import { useAppSelector } from "../store/hooks";
 import { AuthGuard } from "../dashboard/auth-guard";
@@ -65,12 +62,11 @@ import { LiveQuotesProvider, QUOTE_DELAY_LABEL } from "./live-quotes-context";
 import { SIProvider, useSI } from "./si/si-context";
 import { SISweepOverlay } from "./si/si-switcher";
 import { ModuleSwitcher } from "./module-switcher";
+import { ProfileMenu } from "./profile-menu";
 import { useEntitlements } from "./hooks/useEntitlements";
 import { ChoosePlanScreen } from "./billing/choose-plan-screen";
-import { clearOnboardingSession } from "./billing/plan-intent";
 import { WelcomeFeedbackModals } from "./welcome-feedback-modals";
 import { bannerKind } from "./contextual-banner";
-import { isProfileIncomplete } from "../profile/profile-fields";
 import { trialCountdown } from "./trial-countdown";
 
 // ---- Route helpers ----
@@ -1134,7 +1130,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAppSelector(state => state.auth);
-  const { data: profile } = useAppSelector(state => state.profile);
   const { data: ent } = useEntitlements();
   const isBillingRoute = pathname?.startsWith("/billing") || pathname?.startsWith("/manage-plan") || pathname?.startsWith("/refer-a-friend");
   const planRequired = !isBillingRoute && ent?.subscriptionsEnabled === true && !ent?.staff && ent?.planId === "none";
@@ -1205,7 +1200,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   const [copilotOpen, setCopilotOpen] = useState(false);
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [expandedChart, setExpandedChart] = useState<{ title: string; node: ReactNode } | null>(null);
   // Collapsed-rail tooltip. A CSS ::after cannot be used here: .rail sets
@@ -1332,10 +1326,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     | null
   >(null);
 
-  const profileDropdownRef = useRef<HTMLDivElement>(null);
-  // The menu is portaled to document.body, outside profileDropdownRef.
-  const profileMenuPortalRef = useRef<HTMLDivElement>(null);
-
   // Overlay scrollbars. The thumb is transparent at rest (see iq.css) and CSS
   // :hover covers the common case, but a trackpad or keyboard scroll can happen
   // with the pointer nowhere near the scroller — this flips the thumb on for a
@@ -1377,19 +1367,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
       } catch { /* keep defaults on error */ }
     })();
   }, [user?.uid]);
-
-  // Close profile dropdown when clicking outside
-  useEffect(() => {
-    function handleOutsideClick(e: MouseEvent) {
-      const target = e.target as Node;
-      const inside =
-        profileDropdownRef.current?.contains(target) ||
-        profileMenuPortalRef.current?.contains(target);
-      if (!inside) setProfileDropdownOpen(false);
-    }
-    if (profileDropdownOpen) document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [profileDropdownOpen]);
 
   // Close search dropdown when clicking outside
   useEffect(() => {
@@ -1435,7 +1412,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(true); (document.querySelector(".cmd-input") as HTMLInputElement)?.focus(); }
-      if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); setDrawer(null); setCopilotOpen(false); setProfileDropdownOpen(false); setNavOpen(false); }
+      if (e.key === "Escape") { setSearchOpen(false); setSearchQ(""); setDrawer(null); setCopilotOpen(false); setNavOpen(false); }
     }
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -1472,21 +1449,6 @@ export function IQShell({ children }: { children: React.ReactNode }) {
     font,
     setFont,
   };
-
-  const displayName = profile?.name || user?.displayName || user?.email || "User";
-  const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-  const profileImage = profile?.profile_image || user?.photoURL || null;
-
-  // Drives the "Pending" pill on My Profile — same rule as Settings (REQUIRED_PROFILE_FIELDS).
-  const profileIncomplete = isProfileIncomplete(profile);
-
-  const hasActivePlan = !!ent && ent.planId !== "none" && ent.planId !== "free" && (ent.status === "active" || ent.status === "trialing" || !!ent.staff);
-
-  async function handleSignOut() {
-    clearOnboardingSession();
-    await signOut(firebaseAuth);
-    window.location.href = "/auth/login";
-  }
 
   const isSiPage = pathname?.startsWith("/si");
   // Strategy Lab is a full-screen module like SI (its own header, no MC chrome).
@@ -1623,59 +1585,7 @@ export function IQShell({ children }: { children: React.ReactNode }) {
               </button>
               {/* Bell sits immediately left of the profile avatar. */}
               <NotificationBell />
-              <div className="profile-dropdown-wrap" ref={profileDropdownRef}>
-                <div
-                  className="topbar-avatar"
-                  title={displayName}
-                  onClick={() => setProfileDropdownOpen(o => !o)}
-                  style={{ cursor: "pointer" }}
-                >
-                  {initials}
-                  {profileImage && <img src={profileImage} alt={displayName} />}
-                </div>
-
-                {profileDropdownOpen && typeof document !== "undefined" && createPortal(
-                  <div className="profile-dropdown" ref={profileMenuPortalRef} style={{ zIndex: 1000000 }}>
-                    {/* User info */}
-                    <div className="pd-user">
-                      <div className="pd-avatar">
-                        {initials}
-                        {profileImage && <img src={profileImage} alt={displayName} />}
-                      </div>
-                      <div className="pd-name">{displayName}</div>
-                      <div className="pd-email">{user?.email ?? ""}</div>
-                    </div>
-
-                    {/* Menu items */}
-                    <button className="pd-item" onClick={() => { router.push("/profile/edit"); setProfileDropdownOpen(false); }}>
-                      <span className="pd-icon">👤</span> My Profile
-                      {profileIncomplete && <span className="pd-pending">Pending</span>}
-                    </button>
-                    <button className="pd-item" onClick={() => { router.push("/settings"); setProfileDropdownOpen(false); }}>
-                      <span className="pd-icon">⚙</span> Settings
-                    </button>
-                    <button className="pd-item" onClick={() => { router.push("/menu/notes"); setProfileDropdownOpen(false); }}>
-                      <span className="pd-icon">📝</span> Chart Notes
-                    </button>
-                    <button className="pd-item" onClick={() => { router.push("/manage-plan"); setProfileDropdownOpen(false); }}>
-                      <span className="pd-icon">◈</span> Manage Plan
-                    </button>
-                    {hasActivePlan && (
-                      <button className="pd-item" onClick={() => { router.push("/refer-a-friend"); setProfileDropdownOpen(false); }}>
-                        <span className="pd-icon">🎁</span> Refer a Friend
-                      </button>
-                    )}
-                    <button className="pd-item" onClick={() => { router.push("/requests"); setProfileDropdownOpen(false); }}>
-                      <span className="pd-icon">💡</span> Feature Requests
-                    </button>
-                    <div className="pd-divider" />
-                    <button className="pd-item danger" onClick={() => { handleSignOut(); setProfileDropdownOpen(false); }}>
-                      <span className="pd-icon">↩</span> Logout
-                    </button>
-                  </div>,
-                  document.body
-                )}
-              </div>
+              <ProfileMenu />
             </div>
 
             {/* Resources — sits under the logo, left of the search box */}

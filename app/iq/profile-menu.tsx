@@ -1,237 +1,142 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
 import { firebaseAuth } from "../firebase";
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { useAppSelector } from "../store/hooks";
 import { useEntitlements } from "./hooks/useEntitlements";
 import { clearOnboardingSession } from "./billing/plan-intent";
+import { isProfileIncomplete } from "../profile/profile-fields";
 
+export async function signOutToLogin() {
+  clearOnboardingSession();
+  await signOut(firebaseAuth);
+  window.location.href = "/auth/login";
+}
+
+/**
+ * The profile avatar and its menu (My Profile, Settings, … Logout). One
+ * component for every product — Market Catalyst's topbar and the Stock
+ * Intelligence, Money Flow and Strategy Lab headers — so the menu and sign-out
+ * behave the same everywhere. The menu is portaled to document.body and opens
+ * under the avatar, whatever the height of the header it sits in.
+ */
 export function ProfileMenu() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const { user } = useAppSelector(state => state.auth);
+  const { data: profile } = useAppSelector(state => state.profile);
   const { data: ent } = useEntitlements();
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const displayName = profile?.name || user?.displayName || user?.email || "User";
+  const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+  const profileImage = profile?.profile_image || user?.photoURL || null;
+  // Drives the "Pending" pill on My Profile — same rule as Settings (REQUIRED_PROFILE_FIELDS).
+  const profileIncomplete = isProfileIncomplete(profile);
   const hasActivePlan = !!ent && ent.planId !== "none" && ent.planId !== "free" && (ent.status === "active" || ent.status === "trialing" || !!ent.staff);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(firebaseAuth, (u) => setUser(u));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    function handleOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleOutside);
-      return () => document.removeEventListener("mousedown", handleOutside);
-    }
+  // Anchor the menu under the avatar; re-measure on resize/scroll while open.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = wrapRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: Math.round(r.bottom + 8), right: Math.max(8, Math.round(window.innerWidth - r.right)) });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
   }, [open]);
 
-  if (!user) return null;
+  // Close on a click outside (the menu is portaled, so check both nodes) or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
-  const displayName = user.displayName || user.email?.split("@")[0] || "User";
-  const initials = (displayName || "U")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-  const profileImage = user.photoURL || null;
-
-  const navigate = (path: string) => {
-    setOpen(false);
-    router.push(path);
-  };
-
-  const handleLogout = async () => {
-    setOpen(false);
-    clearOnboardingSession();
-    try {
-      await signOut(firebaseAuth);
-      window.location.href = "/auth/login";
-    } catch {
-      window.location.href = "/auth/login";
-    }
-  };
+  const go = (href: string) => { setOpen(false); router.push(href); };
 
   return (
-    <div className="profile-dropdown-wrap" ref={menuRef} style={{ position: "relative" }}>
-      <button
-        type="button"
+    <div className="profile-dropdown-wrap" ref={wrapRef}>
+      <div
         className="topbar-avatar"
+        role="button"
+        tabIndex={0}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Account menu for ${displayName}`}
         title={displayName}
-        onClick={() => setOpen((o) => !o)}
-        aria-label="User profile menu"
-        style={{
-          cursor: "pointer",
-          width: 32,
-          height: 32,
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "var(--brand, #22c55e)",
-          color: "#000",
-          fontWeight: 700,
-          fontSize: ".78rem",
-          border: "2px solid rgba(255,255,255,0.15)",
-          overflow: "hidden",
-          padding: 0,
-        }}
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); } }}
       >
-        {profileImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={profileImage} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        ) : (
-          initials
-        )}
-      </button>
+        {initials}
+        {/* eslint-disable-next-line @next/next/no-img-element -- remote avatar URL */}
+        {profileImage && <img src={profileImage} alt={displayName} />}
+      </div>
 
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <div
           className="profile-dropdown"
-          style={{
-            position: "absolute",
-            top: 40,
-            right: 0,
-            width: 230,
-            background: "var(--surface-1, #12171c)",
-            border: "1px solid var(--border, rgba(255,255,255,0.1))",
-            borderRadius: 14,
-            boxShadow: "0 14px 40px rgba(0,0,0,0.65)",
-            zIndex: 99999,
-            overflow: "hidden",
-            animation: "iq-dropdownIn 0.15s ease both",
-          }}
+          role="menu"
+          ref={menuRef}
+          style={{ zIndex: 1000000, ...(pos ? { top: pos.top, right: pos.right } : {}) }}
         >
-          <div className="pd-user" style={{ padding: "16px 14px 12px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  background: "var(--brand, #22c55e)",
-                  color: "#000",
-                  fontWeight: 700,
-                  fontSize: ".85rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  overflow: "hidden",
-                }}
-              >
-                {profileImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={profileImage} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  initials
-                )}
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: ".88rem", color: "var(--text-hi, #fff)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {displayName}
-                </div>
-                <div style={{ fontSize: ".74rem", color: "var(--text-dim-solid, #8a96a3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {user.email ?? ""}
-                </div>
-              </div>
+          <div className="pd-user">
+            <div className="pd-avatar">
+              {initials}
+              {/* eslint-disable-next-line @next/next/no-img-element -- remote avatar URL */}
+              {profileImage && <img src={profileImage} alt={displayName} />}
             </div>
+            <div className="pd-name">{displayName}</div>
+            <div className="pd-email">{user?.email ?? ""}</div>
           </div>
 
-          <div style={{ padding: 6 }}>
-            <button
-              type="button"
-              className="pd-item"
-              onClick={() => navigate("/profile/edit")}
-              style={itemStyle}
-            >
-              <span style={iconStyle}>👤</span> My Profile
+          <button className="pd-item" onClick={() => go("/profile/edit")}>
+            <span className="pd-icon">👤</span> My Profile
+            {profileIncomplete && <span className="pd-pending">Pending</span>}
+          </button>
+          <button className="pd-item" onClick={() => go("/settings")}>
+            <span className="pd-icon">⚙</span> Settings
+          </button>
+          <button className="pd-item" onClick={() => go("/menu/notes")}>
+            <span className="pd-icon">📝</span> Chart Notes
+          </button>
+          <button className="pd-item" onClick={() => go("/manage-plan")}>
+            <span className="pd-icon">◈</span> Manage Plan
+          </button>
+          {hasActivePlan && (
+            <button className="pd-item" onClick={() => go("/refer-a-friend")}>
+              <span className="pd-icon">🎁</span> Refer a Friend
             </button>
-            <button
-              type="button"
-              className="pd-item"
-              onClick={() => navigate("/settings")}
-              style={itemStyle}
-            >
-              <span style={iconStyle}>⚙</span> Settings
-            </button>
-            <button
-              type="button"
-              className="pd-item"
-              onClick={() => navigate("/menu/notes")}
-              style={itemStyle}
-            >
-              <span style={iconStyle}>📝</span> Chart Notes
-            </button>
-            <button
-              type="button"
-              className="pd-item"
-              onClick={() => navigate("/manage-plan")}
-              style={itemStyle}
-            >
-              <span style={iconStyle}>◈</span> Manage Plan
-            </button>
-            {hasActivePlan && (
-              <button
-                type="button"
-                className="pd-item"
-                onClick={() => navigate("/refer-a-friend")}
-                style={itemStyle}
-              >
-                <span style={iconStyle}>🎁</span> Refer a Friend
-              </button>
-            )}
-            <button
-              type="button"
-              className="pd-item"
-              onClick={() => navigate("/requests")}
-              style={itemStyle}
-            >
-              <span style={iconStyle}>💡</span> Feature Requests
-            </button>
-            <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "4px 8px" }} />
-            <button
-              type="button"
-              className="pd-item danger"
-              onClick={() => void handleLogout()}
-              style={{ ...itemStyle, color: "#f87171" }}
-            >
-              <span style={iconStyle}>↩</span> Logout
-            </button>
-          </div>
-        </div>
+          )}
+          <button className="pd-item" onClick={() => go("/requests")}>
+            <span className="pd-icon">💡</span> Feature Requests
+          </button>
+          <div className="pd-divider" />
+          <button className="pd-item danger" onClick={() => { setOpen(false); void signOutToLogin(); }}>
+            <span className="pd-icon">↩</span> Logout
+          </button>
+        </div>,
+        document.body,
       )}
     </div>
   );
 }
-
-const itemStyle: React.CSSProperties = {
-  width: "100%",
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "8px 10px",
-  borderRadius: 8,
-  fontSize: ".82rem",
-  fontWeight: 500,
-  color: "var(--text, #e2e8f0)",
-  background: "none",
-  border: 0,
-  cursor: "pointer",
-  textAlign: "left",
-};
-
-const iconStyle: React.CSSProperties = {
-  fontSize: ".9rem",
-  width: 18,
-  textAlign: "center",
-  display: "inline-block",
-};
-

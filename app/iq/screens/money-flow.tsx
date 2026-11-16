@@ -54,8 +54,10 @@ import {
 // import { NOT_DETECTED } from "../patterns"; // the glossary now lists only the enabled patterns
 import { useIQActions } from "../shell";
 import { ModuleSwitcher } from "../module-switcher";
+import { ProfileMenu } from "../profile-menu";
 import { useSI } from "../si/si-context";
 import { useBackendMarketStatus } from "../hooks/useBackendMarketStatus";
+import { moneyDayPossessive } from "../market-status";
 import { useApiResource } from "../hooks/useApiResource";
 import { PopFullChart } from "../money-flow/full-chart";
 import { useTapeStream } from "../hooks/useTapeStream";
@@ -98,6 +100,11 @@ export function MoneyFlowScreen() {
     });
     return { day, time };
   });
+
+  // "today's" on a trading day, else the last session by name ("Friday's" on a
+  // weekend) — ET calendar. navTime.day changes at ET midnight, so this follows it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const moneyDay = useMemo(() => moneyDayPossessive(), [navTime.day]);
 
   useEffect(() => {
     const tick = () => {
@@ -782,6 +789,7 @@ export function MoneyFlowScreen() {
               {mkt.label}
             </span>
             <ModuleThemeToggle />
+            <ProfileMenu />
           </div>
         </div>
       </div>
@@ -791,7 +799,7 @@ export function MoneyFlowScreen() {
         {/* Subtitle & Glossary Button */}
         <div className="mf-desc-row">
           <div className="mf-desc-text">
-            Follow today&apos;s money: hot and cold sectors, the top 15 movers each way, and the key price levels to watch.
+            Follow {moneyDay} money: hot and cold sectors, the top 15 movers each way, and the key price levels to watch.
           </div>
           <button
             type="button"
