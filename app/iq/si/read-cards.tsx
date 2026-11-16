@@ -99,8 +99,9 @@ export function InfoTip({ lines }: { lines: [string, string][] }) {
             textAlign: "left",
           }}
         >
-          {lines.map(([label, body]) => (
-            <span key={label} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: "var(--si-text-hi, #e8eef4)" }}>
+          {lines.map(([label, body], i) => (
+            // An all-capitals label (TREND, MOMENTUM, ...) opens a group of rules: leave a gap above it.
+            <span key={label} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: "var(--si-text-hi, #e8eef4)", marginTop: i > 0 && label === label.toUpperCase() ? 6 : 0 }}>
               <b style={{ color: "var(--si-accent-light, #a9c6e3)" }}>{label}</b> {body}
             </span>
           ))}

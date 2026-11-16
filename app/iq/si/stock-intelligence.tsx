@@ -624,10 +624,21 @@ function highlightScoreNote(text: string, gradeCol: string): React.ReactNode[] {
 
 /** How the Technical Read card on Overview is worked out (shown by its "i" button). */
 const TECHNICAL_READ_INFO: [string, string][] = [
-  ["Trend:", "Bullish if price is above both the 50 and 200 DMA, Bearish if below both, otherwise Mixed."],
-  ["Momentum:", "From 14-day RSI. 70+ Overbought, 55–70 Strong, 45–55 Neutral, 30–45 Weak, under 30 Oversold."],
-  ["52W High:", "How far price sits below its 52-week high. Within 3% reads as at / near the high."],
-  ["Risk:", "From 30-day realized volatility. 50%+ High, 30–50% Elevated, under 30% Moderate."],
+  ["TREND", "compares the price to the 50 DMA and the 200 DMA."],
+  ["Bullish (green):", "price is above both."],
+  ["Bearish (red):", "price is below both."],
+  ["Mixed (steel blue):", "price is between them."],
+  ["MOMENTUM", "uses 14-day RSI."],
+  ["Overbought (amber):", "RSI 70 or above."],
+  ["Strong (green):", "RSI 55 to under 70."],
+  ["Neutral (amber):", "RSI above 45 and under 55."],
+  ["Weak (red):", "RSI above 30 and up to 45."],
+  ["Oversold (red):", "RSI 30 or below."],
+  ["52W HIGH", "is how far price sits below its 52-week high. Within 3% reads as at / near the high."],
+  ["RISK", "uses 30-day realized volatility, which is annualized price volatility and not beta or drawdown."],
+  ["High (red):", "50% or more."],
+  ["Elevated (amber):", "30% to under 50%."],
+  ["Moderate (green):", "under 30%."],
 ];
 
 export function StockIntelligenceScreen() {
