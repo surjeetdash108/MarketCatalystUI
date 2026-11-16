@@ -1372,7 +1372,7 @@ export function StockIntelligenceScreen() {
   useEffect(() => {
     try {
       const found: TrackedTrade[] = listAllTrades(localStorage).map((t) => ({
-        id: t.id, ticker: t.ticker, dir: t.dir, hz: t.hz, target: t.target, stop: t.stop, savedAt: t.savedAt,
+        id: t.id, ticker: t.ticker, dir: t.dir, hz: t.hz, target: t.target, stop: t.stop, entryPx: t.entryPx, savedAt: t.savedAt,
       }));
       // Same array when nothing changed, so this can never feed a render loop.
       setTrackedTrades(prev => (JSON.stringify(prev) === JSON.stringify(found) ? prev : found));
