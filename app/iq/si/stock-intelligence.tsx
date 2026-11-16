@@ -152,15 +152,6 @@ const CATALYST_EVENT_EDITS: Record<string, { hide?: boolean; title?: string }> =
   "NVDA|2026-11-10": { title: "CEO Scandal" }, // "Nvidia Stock Plunges 5.5% as CEO Scandal Overshadows Its Up…"
 };
 
-/** Colours explicitly signed percentages in a sentence: +N% green, -N% red. Unsigned figures (margins, ratios) stay as they are. */
-const SIGNED_PCT = /((?<![\w.])[+\-−]\d[\d,]*(?:\.\d+)?%)/g;
-const colorSigned = (text: string | null | undefined): React.ReactNode =>
-  (text ?? "").split(SIGNED_PCT).map((part, i) =>
-    i % 2 === 1
-      ? <span key={i} style={{ color: part.startsWith("+") ? "var(--up, #16a34a)" : "var(--down, #dc2626)", fontWeight: 700 }}>{part}</span>
-      : part,
-  );
-
 const clampLines = (n: number): React.CSSProperties => ({ display: "-webkit-box", WebkitLineClamp: n, WebkitBoxOrient: "vertical", overflow: "hidden" });
 
 function SixMonthAreaChart({
@@ -1332,7 +1323,6 @@ export function StockIntelligenceScreen() {
   const [showSigHow, setShowSigHow] = useState(false);
   const [showAssessEv, setShowAssessEv] = useState(false);
   const [showAttHow, setShowAttHow] = useState(false);
-  const [showFundEv, setShowFundEv] = useState(false);
   const [showReadme, setShowReadme] = useState(false);
 
   // Thesis Lab interactive state
@@ -4071,57 +4061,6 @@ export function StockIntelligenceScreen() {
                     })
                   )}
                 </div>
-              </div>
-
-              {/* AI Fundamental Read with Evidence Toggle */}
-              <div
-                style={{
-                  position: "relative",
-                  border: "1px solid var(--si-border, #1c2733)",
-                  background: "var(--si-card, #0c1118)",
-                  boxShadow: "var(--si-shadow, none)",
-                  padding: "20px 22px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                    ✦ AI FUNDAMENTALS READ
-                  </span>
-                  <div style={{ flex: 1, minWidth: 260, fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
-                    {colorSigned(stockDetail.fundTxt)}
-                  </div>
-                  <button
-                    onClick={() => setShowFundEv(!showFundEv)}
-                    style={{
-                      height: 32,
-                      padding: "0 12px",
-                      border: "1px solid var(--si-border-sec, #2a3a4a)",
-                      background: "transparent",
-                      color: "var(--si-accent-light, #a9c6e3)",
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {showFundEv ? "Hide evidence" : "Evidence ▸"}
-                  </button>
-                </div>
-
-                {showFundEv && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
-                    {(stockDetail.fundEv || []).map((fe, i) => (
-                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8, lineHeight: 1.45 }}>
-                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                        <span>{colorSigned(fe)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           );
