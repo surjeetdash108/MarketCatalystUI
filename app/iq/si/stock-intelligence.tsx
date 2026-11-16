@@ -5951,7 +5951,9 @@ export function StockIntelligenceScreen() {
           const monRun = thesisRun(stock.t, savedThesis.dir, savedThesis.hz, monAdj, savedThesis.wO || undefined, siFacts);
           const monPx = monScenario === "break" ? (b2 ? savedThesis.stop * 0.985 : savedThesis.stop * 1.015) : stock.p;
           const monPriceBroken = b2 ? monPx <= savedThesis.stop : monPx >= savedThesis.stop;
-          const monFundBroken = monRun.crit.filter((d: any) => d.ev < 25);
+          // The weakest of the seven categories that have data.
+          const monWeakest = monRun.cats.filter((c: any) => c.ds.length > 0).sort((a: any, b: any) => a.score - b.score)[0];
+          const monConfInvalid = monRun.conf != null && monRun.conf < 30;
           const monDelta = (monRun.conf != null && savedThesis.confAtSave != null) ? monRun.conf - savedThesis.confAtSave : 0;
           const monEntry = typeof savedThesis.entryPx === "number" && savedThesis.entryPx > 0 ? savedThesis.entryPx : null;
           // Against the live price (the PRICE NOW at the top), not a simulated one.
@@ -5959,34 +5961,34 @@ export function StockIntelligenceScreen() {
 
           let monStatus = "ON TRACK";
           let monCol = UP;
-          let monCause = `All ${monRun.core.length} core drivers within tolerance.`;
-          let monBy = "Core Drivers";
+          let monCause = monRun.conf != null ? `Trade confidence ${Math.round(monRun.conf)} / 100, within tolerance.` : "Trade confidence unavailable.";
+          let monBy = "Trade confidence";
 
           if (monPriceBroken) {
             monStatus = "INVALIDATED";
             monCol = DN;
             monBy = "Price invalidation";
             monCause = `Price closed ${b2 ? "below" : "above"} the ${usd(savedThesis.stop)} invalidation level (${usd(monPx)}).`;
-          } else if (monFundBroken.length) {
+          } else if (monConfInvalid) {
             monStatus = "INVALIDATED";
             monCol = DN;
-            monBy = monFundBroken[0].name;
-            monCause = `Fundamental invalidation triggered: ${monFundBroken[0].name} evidence fell to ${Math.round(monFundBroken[0].ev)}.`;
-          } else if (monRun.critFail.length || (monRun.conf != null && monRun.conf < 45)) {
+            monBy = "Trade confidence";
+            monCause = `Trade confidence fell to ${Math.round(monRun.conf ?? 0)}, below the 30 invalidation line.`;
+          } else if (monRun.conf != null && monRun.conf < 45) {
             monStatus = "AT RISK";
             monCol = "#f2763a";
-            monBy = monRun.critFail.length ? monRun.critFail[0].name : "Aggregate confidence";
-            monCause = monRun.critFail.length ? `Critical core driver failing: ${monRun.critFail[0].name}` : "Trade confidence fell below 45.";
+            monBy = "Trade confidence";
+            monCause = "Trade confidence fell below 45.";
           } else if (monDelta >= 3) {
             monStatus = "STRENGTHENING";
             monCol = UP;
-            monBy = "Core momentum";
-            monCause = `Thesis evidence improved (+${Math.round(monDelta)} pts).`;
+            monBy = "Score momentum";
+            monCause = `Trade evidence improved (+${Math.round(monDelta)} pts).`;
           } else if (monDelta <= -3) {
             monStatus = "WEAKENING";
             monCol = "#f5b031";
             monBy = "Factor pressure";
-            monCause = `Thesis evidence slipped (${Math.round(monDelta)} pts).`;
+            monCause = `Trade evidence slipped (${Math.round(monDelta)} pts).`;
           }
 
           const L5 = ["ON TRACK", "STRENGTHENING", "WEAKENING", "AT RISK", "INVALIDATED"];
@@ -6000,15 +6002,14 @@ export function StockIntelligenceScreen() {
               <div style={{ position: "relative", border: `1px solid ${monCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16, transition: "border-color 300ms" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 22, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 280 }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span>PAPER TRADE TRACKER · CLIENT-SIDE ONLY</span>
-                      <span style={{ fontSize: 10, background: "rgba(89, 128, 166, 0.2)", padding: "2px 6px", borderRadius: 3, color: "var(--si-accent-light, #a9c6e3)" }}>CLIENT STORAGE · NOT BROKER-CONNECTED</span>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
+                      <span style={{ color: savedThesis.dir === "Bull" ? UP : DN }}>{savedThesis.dir === "Bull" ? "LONG" : "SHORT"}</span> {stock.t} · TARGET{" "}
+                      <span style={{ color: UP }}>{usd(savedThesis.target).replace(/\.00$/, "")}</span> IN <span style={{ color: "#4fb3ff" }}>{savedThesis.hz}</span> TIMEFRAME
                     </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", marginTop: 4, lineHeight: 1.45 }}>
-                      Paper Trade Tracker — client-side only. This trade is stored in your current browser and is not broker-connected or guaranteed to synchronize across devices.
-                    </div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>
-                      {savedThesis.title}
+                    <div style={{ marginTop: 6 }}>
+                      <span title="This trade is stored in your current browser. It is not broker-connected and may not sync across devices." style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", background: "rgba(89, 128, 166, 0.2)", padding: "2px 6px", borderRadius: 3, color: "var(--si-accent-light, #a9c6e3)" }}>
+                        SAVED IN THIS BROWSER · NOT BROKER-CONNECTED
+                      </span>
                     </div>
                     {formatSavedAt(savedThesis.savedAt) && (
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
@@ -6155,8 +6156,8 @@ export function StockIntelligenceScreen() {
                     </div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>CORE DRIVERS INTACT</div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{monRun.coreOk} / {monRun.core.length}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>WEAKEST DRIVER</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: monWeakest ? sc(Math.round(monWeakest.score)) : "var(--si-text-hi, #e8eef4)" }}>{monWeakest ? `${monWeakest.k} ${Math.round(monWeakest.score)}` : "—"}</div>
                   </div>
                   <div style={{ padding: "10px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>ENTRY PRICE</div>
@@ -6228,9 +6229,8 @@ export function StockIntelligenceScreen() {
                     const was = Math.round(d.ev - (d.dd || 0));
                     const now = Math.round(d.ev);
                     const dv = now - was;
-                    const isFail = d.core && now < 40;
-                    const stt = isFail
-                      ? ["FAILED", DN]
+                    const stt = now < 40
+                      ? ["AGAINST", DN]
                       : dv <= -3
                         ? ["SLIPPING", "#f5b031"]
                         : dv >= 3
@@ -6239,9 +6239,6 @@ export function StockIntelligenceScreen() {
 
                     return (
                       <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <span style={{ width: 62, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: d.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
-                          {d.core ? "CORE" : "CONFIRM"}
-                        </span>
                         <span style={{ flex: 1, minWidth: 0, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {d.name}
                         </span>
@@ -6275,15 +6272,11 @@ export function StockIntelligenceScreen() {
                         st: monPriceBroken ? "TRIGGERED" : "CLEAR",
                         c: monPriceBroken ? DN : UP,
                       },
-                      ...(b2 ? TPt.fi : TPt.fiB).map((rule: string, i: number) => {
-                        const trig = i === 0 && monFundBroken.length > 0;
-                        const warn = i === 0 && !trig && monScenario === "cut";
-                        return {
-                          k: rule,
-                          st: trig ? "TRIGGERED" : warn ? "WATCH" : "CLEAR",
-                          c: trig ? DN : warn ? "#f5b031" : UP,
-                        };
-                      }),
+                      {
+                        k: "Trade confidence under 30 (at risk under 45)",
+                        st: monConfInvalid ? "TRIGGERED" : monRun.conf != null && monRun.conf < 45 ? "WATCH" : "CLEAR",
+                        c: monConfInvalid ? DN : monRun.conf != null && monRun.conf < 45 ? "#f5b031" : UP,
+                      },
                     ].map((fc, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                         <span style={{ width: 9, height: 9, borderRadius: 99, background: fc.c, boxShadow: `0 0 8px ${fc.c}` }} />
