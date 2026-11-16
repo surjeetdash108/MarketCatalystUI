@@ -197,8 +197,7 @@ export function ChoosePlanScreen({
           const highlighted = initialPlan === p.id;
           let ctaText = "Subscribe";
           if (isCurrent) ctaText = "Current plan";
-          else if (isUpgrade) ctaText = `Upgrade to ${p.name}`;
-          else if (isDowngrade) ctaText = `Change to ${p.name}`;
+          else if (isUpgrade || isDowngrade) ctaText = `Switch to ${p.name}`;
           // Signed out → step 1 (create an account) with this plan; signed in → payment.
           const ctaHref = signedIn
             ? `/checkout?plan=${encodeURIComponent(p.id)}&interval=${interval}${onboarding ? "&onboarding=1" : ""}`

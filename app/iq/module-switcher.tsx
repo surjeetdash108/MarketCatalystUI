@@ -186,7 +186,7 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
                 }}
               >
                 <span>{label}</span>
-                {locked && <span style={{ fontSize: "10px", opacity: 0.65, marginLeft: 2 }} title="Upgrade required">🔒</span>}
+                {locked && <span style={{ fontSize: "10px", opacity: 0.65, marginLeft: 2 }} title="Switch plan to unlock">🔒</span>}
               </span>
             );
           })}

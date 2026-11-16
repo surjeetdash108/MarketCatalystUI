@@ -31,6 +31,7 @@ import type { PaymentAdapter, PaymentFormValue, PaymentResult } from "./payment-
 import { ConsentText, SummaryCard, TrialBox } from "./summary-card";
 import { LegalModal } from "../../../auth/legal/legal-modal";
 import { OnboardingStepper } from "../onboarding-stepper";
+import { LeftoverCreditsWarning, UseCreditsChoice, creditsToUse } from "../credits-ui";
 import "./checkout.css";
 
 type Phase = "loading" | "soon" | "staff" | "verify" | "checkout" | "upgrade";
@@ -57,6 +58,9 @@ export function CheckoutPage() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentFormValue>({ ready: false, address: null });
   const [consent, setConsent] = useState(false);
+  // Market Catalyst credits: opt-in only; never applied on their own.
+  const [useCredits, setUseCredits] = useState(false);
+  const [warnLeftover, setWarnLeftover] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [action, setAction] = useState<string | null>(null);
@@ -134,7 +138,7 @@ export function CheckoutPage() {
     if (phase !== "checkout" || !plan) return;
     let live = true;
     const t = window.setTimeout(() => {
-      previewCheckout({ planId: plan.id, interval, ...(promoCode ? { promoCode } : {}), ...(region && (region.country !== "US" || region.state) ? { region } : {}) })
+      previewCheckout({ planId: plan.id, interval, ...(promoCode ? { promoCode } : {}), ...(region && (region.country !== "US" || region.state) ? { region } : {}), ...(useCredits ? { useCredits: true } : {}) })
         .then((p) => {
           if (!live || p.planId !== plan.id || p.interval !== interval) return;
           setPreview(p);
@@ -161,7 +165,7 @@ export function CheckoutPage() {
       live = false;
       window.clearTimeout(t);
     };
-  }, [phase, plan, interval, promoCode, region]);
+  }, [phase, plan, interval, promoCode, region, useCredits]);
 
   const onPayment = useCallback((v: PaymentFormValue) => setPayment(v), []);
 
@@ -215,6 +219,7 @@ export function CheckoutPage() {
         ...(promoCode ? { promoCode } : {}),
         consent: { accepted: consent, version: preview?.consent?.version ?? "" },
         marketingOptIn: false,
+        ...(useCredits && (preview?.credits?.applied ?? 0) > 0 ? { useCredits: true } : {}),
         billing: { name: a.name, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country } },
       });
       session.current = co.sessionId;
@@ -273,6 +278,7 @@ export function CheckoutPage() {
         ...(paymentMethodId ? { paymentMethodId } : {}),
         billing: { name: a.name, address: { line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: a.country } },
         consent: { accepted: consent, version: changePrev.consent?.version ?? "" },
+        ...(useCredits ? { useCredits: true } : {}),
       });
       if (res.status === "requires_action" && res.clientSecret) {
         const action = await handleStripeAction(res.clientSecret);
@@ -346,12 +352,16 @@ export function CheckoutPage() {
     const canConfirm = !busy && !!PayForm && payment.ready && !!payment.address && consent && !!cp.consent?.version;
     const scheduled = cp.kind === "scheduled";
     const inTrial = !!cp.trialEndsAt;
+    const leftover = cp.leftoverToCredits ?? 0;
+    const creditCharge = scheduled ? cp.nextRenewalAmount : cp.kind === "upgrade" && !inTrial ? cp.amountDueNow : 0;
+    const creditsUsed = useCredits ? creditsToUse(cp.creditsAvailable ?? 0, creditCharge) : 0;
+    const dueNow = scheduled ? 0 : Math.max(0, cp.amountDueNow - creditsUsed);
     const startsAt = cp.startsAt ?? (scheduled ? cp.effectiveAt : new Date(cp.prorationDate).toISOString());
     const title = `Switch to ${plan.name} (${cadenceLabel})`;
     const cta = scheduled
       ? `Switch to ${plan.name} from ${longDate(startsAt)}`
-      : cp.amountDueNow > 0
-        ? `Pay ${money(cp.amountDueNow)} & start ${plan.name} now`
+      : dueNow > 0
+        ? `Pay ${money(dueNow)} & start ${plan.name} now`
         : `Start ${plan.name} now`;
     const row = (label: string, value: string, testId: string, tone?: "up" | "down") => (
       <div data-testid={testId} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: ".9rem" }}>
@@ -392,9 +402,11 @@ export function CheckoutPage() {
                 {bd.tax > 0 && row("Tax", money(bd.tax), "bd-tax")}
                 {bd.creditUsed > 0 && row("Account credit used", `−${money(bd.creditUsed)}`, "bd-credit-used", "up")}
                 <div style={{ height: 1, background: "rgba(255, 255, 255, 0.1)" }} />
+                {creditsUsed > 0 && row("Market Catalyst credits used", `−${money(creditsUsed)}`, "bd-mc-credits", "up")}
                 {cp.kind === "upgrade"
-                  ? row("Charged now", money(cp.amountDueNow), "bd-charged")
+                  ? row("Charged now", money(dueNow), "bd-charged")
                   : row("Credit to your account", money(cp.creditToBalance), "bd-credit", "up")}
+                {cp.kind === "upgrade" && leftover > 0 && row("Added to Market Catalyst credits", money(leftover), "bd-leftover", "up")}
               </div>
             ) : null}
 
@@ -407,11 +419,22 @@ export function CheckoutPage() {
             {PayForm ? (
               <div data-testid="change-payment" style={{ marginBottom: 20 }}>
                 <span style={{ ...labelStyle, marginBottom: 10 }}>Card and billing address</span>
-                <PayForm onChange={onPayment} disabled={busy} amount={cp.amountDueNow} currency={plan.currency} purpose="planChange" />
+                <PayForm onChange={onPayment} disabled={busy} amount={dueNow} currency={plan.currency} purpose="planChange" />
               </div>
             ) : (
               <Notice tone="error" testId="change-no-payment">Payments aren&apos;t available right now. Your plan has not changed.</Notice>
             )}
+
+            <div style={{ marginBottom: 16 }}>
+              <UseCreditsChoice
+                available={cp.creditsAvailable ?? 0}
+                charge={creditCharge}
+                checked={useCredits}
+                onChange={setUseCredits}
+                money={money}
+                appliesTo={scheduled ? `your first ${plan.name} payment` : "today's charge"}
+              />
+            </div>
 
             <label className="co-check" data-testid="change-consent" style={{ marginBottom: 20 }}>
               <input type="checkbox" data-testid="change-consent-box" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
@@ -421,9 +444,13 @@ export function CheckoutPage() {
             </label>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <button type="button" className="co-cta" data-testid="change-confirm" onClick={() => void handleChangeConfirm()} disabled={!canConfirm}>
-                {busy ? "Processing…" : cta}
-              </button>
+              {warnLeftover ? (
+                <LeftoverCreditsWarning amount={leftover} money={money} busy={busy} onContinue={() => void handleChangeConfirm()} onBack={() => setWarnLeftover(false)} />
+              ) : (
+                <button type="button" className="co-cta" data-testid="change-confirm" onClick={() => (leftover > 0 ? setWarnLeftover(true) : void handleChangeConfirm())} disabled={!canConfirm}>
+                  {busy ? "Processing…" : cta}
+                </button>
+              )}
               <button type="button" onClick={close} style={{ background: "transparent", border: "none", color: "var(--text-dim-solid)", fontSize: ".85rem", cursor: "pointer", padding: "8px", textDecoration: "underline" }}>
                 Cancel and return
               </button>
@@ -532,6 +559,18 @@ export function CheckoutPage() {
                   </div>
                 )}
                 {promoError && <div data-testid="promo-error" style={{ marginTop: 6, fontSize: ".76rem", color: "var(--down)" }}>{promoError}</div>}
+                {!preview?.trial && (
+                  <div style={{ marginTop: 10 }}>
+                    <UseCreditsChoice
+                      available={preview?.credits?.available ?? 0}
+                      charge={Math.max(0, (preview?.subtotal ?? 0) - ((preview?.discount ?? 0) - (preview?.credits?.applied ?? 0)))}
+                      checked={useCredits}
+                      onChange={setUseCredits}
+                      money={money}
+                      appliesTo="today's payment"
+                    />
+                  </div>
+                )}
               </div>
             }
             consentSlot={

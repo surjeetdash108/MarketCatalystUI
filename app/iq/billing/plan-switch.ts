@@ -36,6 +36,9 @@ export function switchPreviewLines(
     cp.amountDueNow > 0
       ? `Charged today: ${money(cp.amountDueNow)} (prorated), to your card on file.`
       : "Nothing is charged today.",
+    ...(cp.creditToBalance > 0
+      ? [`The unused value of ${from}, ${money(cp.creditToBalance)}, is added to your Market Catalyst credits.`]
+      : []),
     `Next renewal: ${money(cp.nextRenewalAmount)} on ${date(cp.nextRenewalDate)}.`,
   ];
 }

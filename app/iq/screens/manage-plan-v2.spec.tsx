@@ -34,7 +34,8 @@ describe("Manage Plan v2", () => {
     assert.match(mp, />Update payment method</);
     assert.match(mp, /<h3>Purchase history<\/h3>/);
     assert.match(mp, /label = `Switch to \$\{p\.name\}`;/);
-    assert.match(mp, /afterChange\("Thank you for trusting us", "Enjoy 50% off for the next 2 months\."\)/);
+    // The thank-you repeats exactly what the member accepted (monthly 50% or annual 11 months).
+    assert.match(mp, /afterChange\("Thank you for staying", `\$\{r\.description\}\.`\)/);
   });
   it("Manage Plan never charges or changes a plan itself: every change goes to the checkout page", () => {
     assert.doesNotMatch(mp, /applyChange|previewChange|confirmChange|handleStripeAction/);
