@@ -99,8 +99,9 @@ export function pct1(v: number): string {
   return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "%";
 }
 
+/** Score colour: 75+ green, 60-74 blue, 45-59 amber, under 45 red (same scale as the MC Confidence). */
 export function sc(v: number): string {
-  return v >= 65 ? UP : v <= 45 ? DN : STEEL;
+  return v >= 75 ? UP : v >= 60 ? STEEL : v >= 45 ? "#f5b031" : DN;
 }
 
 export const CATS_T: [string, string][] = [
@@ -109,7 +110,7 @@ export const CATS_T: [string, string][] = [
   ["TECH", "Technical / Market"],
   ["CAT", "Catalysts"],
   ["VAL", "Valuation"],
-  ["POS", "Positioning / Options"],
+  ["POS", "Positioning"],
   ["MAC", "Macro / Market Regime"],
 ];
 

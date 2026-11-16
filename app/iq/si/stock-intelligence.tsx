@@ -45,6 +45,8 @@ import {
 import { applyAiCards, moveCardPath, type AiMoveCard } from "./move-card-ai";
 import { scoreNews, reactionAfter, summarizeNewsSentiment, classifyDirection } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
+import { ReadCard } from "./read-cards";
+import { fundamentalReadText, technicalReadText } from "./read-text";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
 import { StockChart } from "../stock-panel";
@@ -537,6 +539,14 @@ const rangesDef: Record<string, [number, number, number]> = {
 
 /** Catalyst cards shown per page in each section. */
 const CAT_PAGE_SIZE = 100;
+
+/** How the Technical Read card on Overview is worked out (shown by its "i" button). */
+const TECHNICAL_READ_INFO: [string, string][] = [
+  ["Trend:", "Bullish if price is above both the 50 and 200 DMA, Bearish if below both, otherwise Mixed."],
+  ["Momentum:", "From 14-day RSI. 70+ Overbought, 55–70 Strong, 45–55 Neutral, 30–45 Weak, under 30 Oversold."],
+  ["52W High:", "How far price sits below its 52-week high. Within 3% reads as at / near the high."],
+  ["Risk:", "From 30-day realized volatility. 50%+ High, 30–50% Elevated, under 30% Moderate."],
+];
 
 export function StockIntelligenceScreen() {
   const { data: ent } = useEntitlements();
@@ -1237,6 +1247,7 @@ export function StockIntelligenceScreen() {
   // Expandable sections state
   const [selectedSignal, setSelectedSignal] = useState<string | null>(null);
   const [showSigHow, setShowSigHow] = useState(false);
+  const [showAssessEv, setShowAssessEv] = useState(false);
   const [showAttHow, setShowAttHow] = useState(false);
   const [showFwdHow, setShowFwdHow] = useState(false);
   const [expandedFwd, setExpandedFwd] = useState<Record<string, boolean>>({});
@@ -1571,9 +1582,6 @@ export function StockIntelligenceScreen() {
         style={{
           minHeight: "100vh",
           background: "var(--si-bg, #080b10)",
-          backgroundImage:
-            "linear-gradient(var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px), linear-gradient(90deg, var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
           color: "var(--si-text-hi, #e8eef4)",
           display: "flex",
           flexDirection: "column",
@@ -1588,7 +1596,6 @@ export function StockIntelligenceScreen() {
         <style>{`
         .si-screen {
           --si-bg: #080b10;
-          --si-bg-grid: rgba(127,168,208,0.045);
           --si-topbar: rgba(8,11,16,0.96);
           --si-card: rgba(12, 17, 24, 0.9);
           --si-card-solid: #0c1118;
@@ -1612,7 +1619,6 @@ export function StockIntelligenceScreen() {
         }
         .si-screen {
           --si-bg: #080b10;
-          --si-bg-grid: rgba(127,168,208,0.045);
           --si-topbar: rgba(8,11,16,0.96);
           --si-card: rgba(12, 17, 24, 0.9);
           --si-card-solid: #0c1118;
@@ -1640,7 +1646,6 @@ export function StockIntelligenceScreen() {
         .si-screen[data-theme="light"],
         .iq-root[data-theme="light"] .si-screen {
           --si-bg: #f4f6fa;
-          --si-bg-grid: rgba(15,23,42,0.035);
           --si-topbar: rgba(255,255,255,0.96);
           --si-card: #ffffff;
           --si-card-solid: #ffffff;
@@ -2008,18 +2013,67 @@ export function StockIntelligenceScreen() {
   );
   const hi52 = r52.high;
   const lo52 = r52.low;
-  const statsRow = [
-    { k: "MARKET CAP", v: realMcap || "—", sub: liveCompany?.sector || stock.sector || "Equity" },
-    { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", sub: fpeVal != null ? `fwd ${fpeVal.toFixed(1)}×` : "fwd —" },
-    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), sub: realFundGrowth ? (showVendor ? "y/y, FMP reported" : "y/y, reported") : "y/y, latest qtr" },
-    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), sub: realFundGrowth ? "y/y, GAAP diluted" : "y/y, latest qtr" },
-    { k: "52W LOW / HIGH", v: `${lo52 != null ? usd(lo52) : "—"} / ${hi52 != null ? usd(hi52) : "—"}`, sub: "Range" },
-  ];
+  const MCAP_BLUE = "#4fb3ff";
+  const growthColor = (v: number | null | undefined) => (v == null ? undefined : v >= 0 ? UP : DN);
 
   // Overview signal scores, confidence and confluence come from the same
   // 6-month bullish forward run as the "Why it could move" tab, so the two
   // never disagree (the old fallback showed fixed 88/87/80/… for every stock).
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
+  const mcConfidence = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
+  const mcConfidenceColor = overviewRun.conf == null ? STEEL : sc(Math.round(overviewRun.conf));
+  /** How many of the 7 signal categories score 75 or more. */
+  const confluenceCount = overviewRun.cats.filter((c) => Math.round(c.score) >= 75).length;
+  const confluenceColor = confluenceCount >= 5 ? UP : confluenceCount >= 3 ? STEEL : confluenceCount === 2 ? "#f5b031" : DN;
+
+  type HeroStat = { k: string; v: string; col?: string; node?: React.ReactNode; link?: boolean };
+  const statsRow: HeroStat[] = [
+    { k: "MARKET CAP", v: realMcap || "—", col: MCAP_BLUE },
+    { k: "P/E", v: peVal != null ? `${peVal.toFixed(1)}×` : "—", col: MCAP_BLUE },
+    { k: "REVENUE GROWTH", v: realFundGrowth?.revYoy != null ? pct1(realFundGrowth.revYoy) : (stock.rev != null ? pct1(stock.rev) : "—"), col: growthColor(realFundGrowth?.revYoy ?? stock.rev) },
+    { k: "EPS GROWTH", v: realFundGrowth?.epsYoy != null ? pct1(realFundGrowth.epsYoy) : (stock.eps != null ? pct1(stock.eps) : "—"), col: growthColor(realFundGrowth?.epsYoy ?? stock.eps) },
+    {
+      k: "52W LOW / HIGH",
+      v: `${lo52 != null ? usd(lo52) : "—"} / ${hi52 != null ? usd(hi52) : "—"}`,
+      node: (
+        <>
+          <span style={{ color: DN }}>{lo52 != null ? usd(lo52) : "—"}</span>
+          {" / "}
+          <span style={{ color: UP }}>{hi52 != null ? usd(hi52) : "—"}</span>
+        </>
+      ),
+    },
+    {
+      k: "MC CONFIDENCE",
+      v: mcConfidence != null ? `${mcConfidence} / 100` : "—",
+      col: mcConfidenceColor,
+      link: true,
+      node:
+        mcConfidence != null ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 84,
+                height: 84,
+                borderRadius: "50%",
+                border: `4px solid ${mcConfidenceColor}`,
+                fontSize: 38,
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
+            >
+              {mcConfidence}
+            </span>
+            <span style={{ fontSize: 20, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>/ 100</span>
+          </span>
+        ) : undefined,
+    },
+  ];
+  const scrollToSignals = () => document.getElementById("si-signals")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
   // Technical Read card: shown on Overview and on the Technicals tab.
   const technicalReadCard = (
     <div
@@ -2034,11 +2088,6 @@ export function StockIntelligenceScreen() {
         gap: 14,
       }}
     >
-      {/* Corner brackets */}
-      <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-      <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-      <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-      <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
 
       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
         ✦ TECHNICAL READ
@@ -2121,9 +2170,6 @@ export function StockIntelligenceScreen() {
       style={{
         minHeight: "100vh",
         background: "var(--si-bg, #080b10)",
-        backgroundImage:
-          "linear-gradient(var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px), linear-gradient(90deg, var(--si-bg-grid, rgba(127,168,208,0.045)) 1px, transparent 1px)",
-        backgroundSize: "48px 48px",
         color: "var(--si-text-hi, #e8eef4)",
         paddingBottom: 120, // Issue 8 fix: generous padding at bottom
       }}
@@ -2132,7 +2178,6 @@ export function StockIntelligenceScreen() {
       <style>{`
         .si-screen {
           --si-bg: #080b10;
-          --si-bg-grid: rgba(127,168,208,0.045);
           --si-topbar: rgba(8,11,16,0.96);
           --si-card: rgba(12, 17, 24, 0.9);
           --si-card-solid: #0c1118;
@@ -2156,7 +2201,6 @@ export function StockIntelligenceScreen() {
         }
         .si-screen {
           --si-bg: #080b10;
-          --si-bg-grid: rgba(127,168,208,0.045);
           --si-topbar: rgba(8,11,16,0.96);
           --si-card: rgba(12, 17, 24, 0.9);
           --si-card-solid: #0c1118;
@@ -2184,7 +2228,6 @@ export function StockIntelligenceScreen() {
         .si-screen[data-theme="light"],
         .iq-root[data-theme="light"] .si-screen {
           --si-bg: #f4f6fa;
-          --si-bg-grid: rgba(15,23,42,0.035);
           --si-topbar: rgba(255,255,255,0.96);
           --si-card: #ffffff;
           --si-card-solid: #ffffff;
@@ -2533,14 +2576,15 @@ export function StockIntelligenceScreen() {
                   padding: "0 16px",
                   border: "none",
                   background: "transparent",
-                  color: isActive ? "var(--up, #16a34a)" : "var(--si-text-hi, #e8eef4)",
+                  color: isActive ? "#6db3ff" : "var(--si-text-hi, #e8eef4)",
+                  textShadow: isActive ? "0 0 10px rgba(79,163,255,0.75), 0 0 22px rgba(79,163,255,0.35)" : "none",
                   fontFamily: "'Barlow Condensed', sans-serif",
                   fontSize: 15,
                   fontWeight: 600,
                   letterSpacing: "0.12em",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
-                  boxShadow: isActive ? "inset 0 -2px 0 var(--up, #16a34a)" : "none",
+                  boxShadow: isActive ? "inset 0 -2px 0 #4fa3ff, 0 6px 14px -6px rgba(79,163,255,0.6)" : "none",
                 }}
               >
                 {label}
@@ -2557,7 +2601,7 @@ export function StockIntelligenceScreen() {
             ==================================================== */}
         {activeTab === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Header Identity & Key Stats Grid */}
+            {/* Header identity and key stats */}
             <div
               className="si-hero"
               style={{
@@ -2565,26 +2609,22 @@ export function StockIntelligenceScreen() {
                 border: "1px solid var(--si-border, #1c2733)",
                 background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                 display: "grid",
-                gridTemplateColumns: "auto repeat(4, minmax(0, 1fr)) minmax(0, 1.5fr)",
+                gridTemplateColumns: "auto repeat(2, minmax(0, 1fr)) minmax(max-content, 1.3fr) minmax(max-content, 1.5fr)",
               }}
             >
-              {/* Corner brackets */}
-              <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid #7fa8d0", borderTop: "1px solid #7fa8d0" }} />
-              <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderTop: "1px solid #7fa8d0" }} />
-              <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
-              <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid #7fa8d0", borderBottom: "1px solid #7fa8d0" }} />
-
-              {/* Identity Box with Logo */}
-              <div className="si-hero-id" style={{ padding: "16px 18px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260, display: "flex", alignItems: "center" }}>
-                {/* One line: logo, ticker and name, then the price and day change beside them (wraps only on a narrow phone). */}
-                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 22, rowGap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <StockLogo sym={stock.t} size={40} />
-                    <div style={{ maxWidth: 190 }}>
+              {/* Identity: logo, ticker, name and price, with market cap and P/E underneath */}
+              <div
+                className="si-hero-id"
+                style={{ padding: "14px 20px", borderRight: "1px solid var(--si-border, #1c2733)", minWidth: 260, display: "flex", flexDirection: "column", justifyContent: "center", gap: 12 }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <StockLogo sym={stock.t} size={52} />
+                    <div>
                       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
                         {stock.t}
                       </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", marginTop: 4, whiteSpace: "nowrap" }}>
                         {stock.name}
                       </div>
                     </div>
@@ -2598,56 +2638,60 @@ export function StockIntelligenceScreen() {
                     </span>
                   </div>
                 </div>
+                <div style={{ display: "flex", justifyContent: "center", gap: 28, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 10 }}>
+                  {statsRow.slice(0, 2).map((st) => (
+                    <div key={st.k} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
+                        {st.k}
+                      </span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: st.col ?? "var(--si-text-hi, #e8eef4)", whiteSpace: "nowrap" }}>
+                        {st.node ?? st.v}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Stats Items */}
-              {statsRow.map((st, i) => (
+              {/* Stats: revenue growth, EPS growth, 52-week range, MC confidence */}
+              {statsRow.slice(2).map((st, i, arr) => (
                 <div
                   key={st.k}
                   className="si-hero-stat"
+                  role={st.link ? "button" : undefined}
+                  tabIndex={st.link ? 0 : undefined}
+                  onClick={st.link ? scrollToSignals : undefined}
+                  onKeyDown={st.link ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); scrollToSignals(); } } : undefined}
                   style={{
-                    padding: "16px 18px",
-                    borderRight:
-                      i !== statsRow.length - 1
-                        ? "1px solid var(--si-border, #1c2733)"
-                        : "none",
+                    cursor: st.link ? "pointer" : undefined,
+                    padding: "14px 20px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    textAlign: "center",
+                    borderRight: i !== arr.length - 1 ? "1px solid var(--si-border, #1c2733)" : "none",
                     minWidth: 0,
                     boxSizing: "border-box",
                   }}
                 >
-                  <div
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: "0.14em",
-                      color: "var(--si-accent, #5980a6)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", whiteSpace: "nowrap" }}>
                     {st.k}
                   </div>
-
-                  <div
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 20,
-                      fontWeight: 600,
-                      color: "var(--si-text-hi, #e8eef4)",
-                      marginTop: 8,
-                      whiteSpace: "normal",
-                      overflowWrap: "anywhere",
-                      lineHeight: 1.4,
-                      // The 52-week range stays on one line: "$148.80 / $243.37".
-                      ...(st.k === "52W LOW / HIGH" ? { whiteSpace: "nowrap", overflowWrap: "normal", fontSize: 18 } : {}),
-                    }}
-                  >
-                    {st.v}
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 600, color: st.col ?? "var(--si-text-hi, #e8eef4)", marginTop: 8, whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                    {st.node ?? st.v}
                   </div>
+                  {st.link && (
+                    <div style={{ marginTop: 6, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
+                      Click here to know more ↓
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
+            <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
+            <div className="si-ov">
+              <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
             {/* Price History Chart Card with Interactive Crosshair & Detailed X-Axis */}
             <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
               <div className="si-ph-head" style={{ height: 50, display: "flex", alignItems: "center", gap: 10, padding: "0 16px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
@@ -2897,14 +2941,11 @@ export function StockIntelligenceScreen() {
               </div>
             </div>
 
-            {/* Two-Column Grid: MarketCatalyst Intelligence & Signal Scores */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
-              {/* Card 1: Technical Read (same card as the Technicals tab) */}
-              {technicalReadCard}
-
-              {/* Card 2: Signal Scores */}
+              {/* Signal scores */}
               <div
+                id="si-signals"
                 style={{
+                  scrollMarginTop: 90,
                   border: "1px solid var(--si-border, #1c2733)",
                   background: "var(--si-card, rgba(12, 17, 24, 0.9))",
                   padding: "18px 20px",
@@ -2946,8 +2987,8 @@ export function StockIntelligenceScreen() {
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                       HOW EACH SCORE IS CALCULATED
                     </div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, margin: "4px 0" }}>
-                      Every signal score runs 0–100, where 50 is neutral. Scores above 60 indicate positive alignment with the forward thesis.
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.5, margin: "4px 0" }}>
+                      Every signal score runs 0–100, where 50 is neutral. Scores of 75 or more (green) indicate strong alignment with the forward trade and count toward Confluence; 60–74 (blue) is moderate, 45–59 (amber) is middling, and under 45 (red) is weak. The overall MC Confidence uses the same scale: 75+ high conviction, 60–74 constructive, 45–59 mixed, under 45 weak.
                     </div>
                     {[
                       ["Business", "Revenue growth in key segments, gross and operating margin trend, and forward guidance."],
@@ -2958,16 +2999,17 @@ export function StockIntelligenceScreen() {
                       ["Flows", "Call/put skew, short interest, days to cover, plus institutional ownership change from latest 13F filings."],
                       ["Macro", "Market trend, VIX level, interest rate volatility, and sector sensitivity to broader liquidity."],
                     ].map(([sName, sDesc], idx) => (
-                      <div key={idx} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</span>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-body, #c9d4de)" }}>{sDesc}</span>
+                      <div key={idx} style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</span>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #c9d4de)" }}>{sDesc}</span>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* 7 Interactive Score Buttons */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8 }}>
+                {/* 7 interactive score buttons, then the Confluence box */}
+                <style>{`.si-sig{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.si-sig-cb{grid-column:span 5;display:grid;grid-template-columns:minmax(180px,260px) auto;gap:8px}@media (max-width:760px){.si-sig{grid-template-columns:repeat(3,minmax(0,1fr))}.si-sig-cb{grid-column:span 2;grid-template-columns:1fr}.si-sig-cb>button{grid-column:1/-1;height:32px}}`}</style>
+                <div className="si-sig">
                   {signalScores.map((scItem: SignalScoreItem) => {
                     const isSelected = selectedSignal === scItem.name;
                     return (
@@ -2998,7 +3040,38 @@ export function StockIntelligenceScreen() {
                       </button>
                     );
                   })}
+                  <div className="si-sig-cb">
+                    <div style={{ border: "1px solid var(--si-accent, #5980a6)", background: "var(--si-accent-bg, rgba(89,128,166,0.12))", padding: 12, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 6, minWidth: 0 }}>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", color: "var(--si-text-mid, #93a1af)" }}>CONFLUENCE</span>
+                      <span style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6, lineHeight: 1 }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 40, fontWeight: 700, color: confluenceColor }}>{confluenceCount}</span>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>/ 7</span>
+                      </span>
+                      <span style={{ display: "flex", gap: 3, alignSelf: "stretch" }}>
+                        {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+                          <span key={n} style={{ flex: 1, height: 3, background: n < confluenceCount ? confluenceColor : "var(--si-card-tert, #1c2733)" }} />
+                        ))}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowAssessEv(!showAssessEv)}
+                      style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card-sec, transparent)", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "0 14px" }}
+                    >
+                      {showAssessEv ? "Hide evidence" : "Evidence ▸"}
+                    </button>
+                  </div>
                 </div>
+
+                {showAssessEv && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
+                    {(stockDetail.assessEv || []).map((ev, i) => (
+                      <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #c4d0dc)", display: "flex", gap: 8 }}>
+                        <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
+                        <span>{ev}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Expanded Signal Evidence Card */}
                 {selectedSignal && (
@@ -3066,6 +3139,28 @@ export function StockIntelligenceScreen() {
                     ))}
                   </div>
                 )}
+              </div>
+              </div>
+              {/* Right column: the take, then the two reads */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+                <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, #0c1118)", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "var(--si-shadow, none)" }}>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+                    MARKETCATALYST TAKE
+                  </div>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
+                    {stockDetail.assessSegs
+                      ? stockDetail.assessSegs.map((seg, i) =>
+                          seg.tone ? (
+                            <span key={i} style={{ color: seg.tone === "up" ? "var(--up, #16a34a)" : "var(--down, #dc2626)", fontWeight: 700 }}>{seg.t}</span>
+                          ) : (
+                            seg.t
+                          ),
+                        )
+                      : stockDetail.assess}
+                  </div>
+                </div>
+                <ReadCard title="FUNDAMENTAL READ" text={fundamentalReadText(stock.t, siFacts, stock.fpe)} onOpen={() => setActiveTab("fund")} />
+                <ReadCard title="TECHNICAL READ" text={technicalReadText(siFacts)} info={TECHNICAL_READ_INFO} onOpen={() => setActiveTab("tech")} />
               </div>
             </div>
           </div>
@@ -3148,8 +3243,6 @@ export function StockIntelligenceScreen() {
                   gap: 14,
                 }}
               >
-                <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
                 <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
                   ✦ AI EXPLANATION
                 </span>
@@ -3384,8 +3477,6 @@ export function StockIntelligenceScreen() {
                     boxShadow: "var(--si-shadow, none)",
                   }}
                 >
-                  <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                  <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
 
                   {/* SVG Circular Ring */}
                   <div style={{ position: "relative", width: 170, height: 170, flex: "none" }}>
@@ -4102,11 +4193,6 @@ export function StockIntelligenceScreen() {
                   gap: 12,
                 }}
               >
-                {/* Corner brackets */}
-                <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
 
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
@@ -4162,11 +4248,6 @@ export function StockIntelligenceScreen() {
                 padding: "16px 18px 10px",
               }}
             >
-              {/* Corner brackets matching SI UI aesthetic */}
-              <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-              <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-              <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-              <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -5293,11 +5374,6 @@ export function StockIntelligenceScreen() {
                         gap: 10,
                       }}
                     >
-                      {/* Corner brackets */}
-                      <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
 
                       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
                         <div>
@@ -5557,11 +5633,6 @@ export function StockIntelligenceScreen() {
                         gap: 14,
                       }}
                     >
-                      {/* Corner brackets */}
-                      <span style={{ position: "absolute", left: -5, top: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", right: -5, top: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderTop: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", left: -5, bottom: -5, width: 10, height: 10, borderLeft: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
-                      <span style={{ position: "absolute", right: -5, bottom: -5, width: 10, height: 10, borderRight: "1px solid var(--si-accent-soft, #7fa8d0)", borderBottom: "1px solid var(--si-accent-soft, #7fa8d0)" }} />
 
                       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
                         <div>
