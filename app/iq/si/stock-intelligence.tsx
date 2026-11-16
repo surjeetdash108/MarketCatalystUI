@@ -570,6 +570,58 @@ const FACTOR_INFO: [string, string][] = [
   ["Technical Factors:", "Whatever is left, with a floor of 5%. The four always add up to 100%."],
 ];
 
+/** How each Fundamentals scorecard grade is worked out (shown by its "i" button). */
+const SCORECARD_INFO: Record<string, [string, string][]> = {
+  GROWTH: [
+    ["Measure:", "Latest quarter's revenue against the same quarter a year earlier."],
+    ["Strong:", "20% or more."],
+    ["Solid:", "8% to 20%."],
+    ["Slow:", "0% to 8%."],
+    ["Shrinking:", "below 0%."],
+  ],
+  PROFITABILITY: [
+    ["Measure:", "Latest quarter's operating margin (operating income / revenue). The y/y change is shown beside it."],
+    ["Strong:", "25% or more."],
+    ["Solid:", "12% to 25%."],
+    ["Thin:", "0% to 12%."],
+    ["Losing money:", "below 0%."],
+  ],
+  "FINANCIAL HEALTH": [
+    ["Measure:", "The balance-sheet checks in the Financial Health card below: cash against debt, current ratio, debt / equity, debt / EBITDA."],
+    ["Strong:", "at least two checks are healthy and none is flagged."],
+    ["Mixed:", "a check carries a caution."],
+    ["Stretched:", "a check is flagged as a problem."],
+  ],
+  VALUATION: [
+    ["Measure:", "P/E (forward P/E when there is no trailing one) against a sector reference."],
+    ["Attractive:", "under 0.8× the reference."],
+    ["Fair:", "0.8× to 1.2×."],
+    ["Rich:", "1.2× to 1.8×."],
+    ["Expensive:", "above 1.8×."],
+  ],
+};
+
+/** Colours the numbers in a scorecard note: signed changes green/red, the sector reference amber, the other figures in the grade's colour. */
+function highlightScoreNote(text: string, gradeCol: string): React.ReactNode[] {
+  const re = /([+−-]\d[\d.,]*(?:%| pts)?)|(\d[\d.,]*×(?= sector))|(\$?\d[\d.,]*(?:%|×|[BMKT])?)/g;
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let k = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const col = m[1] ? (m[1].startsWith("+") ? "var(--up, #4ade80)" : "var(--down, #f87171)") : m[2] ? "#f5b031" : gradeCol;
+    out.push(
+      <span key={k++} style={{ color: col, fontWeight: 700 }}>
+        {m[0]}
+      </span>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
 /** How the Technical Read card on Overview is worked out (shown by its "i" button). */
 const TECHNICAL_READ_INFO: [string, string][] = [
   ["Trend:", "Bullish if price is above both the 50 and 200 DMA, Bearish if below both, otherwise Mixed."],
@@ -3710,18 +3762,24 @@ export function StockIntelligenceScreen() {
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Scorecard: one grade per question, each from the number shown under it */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12 }}>
-                {scoreCards.map((s) => (
-                  <div key={s.k} style={{ border: `1px solid ${s.grade === "—" ? "var(--si-border, #1c2733)" : toneCol(s.tone)}`, borderLeftWidth: 3, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-mid, #93a1af)" }}>{s.k}</span>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, letterSpacing: "0.04em", lineHeight: 1.1, color: s.grade === "—" ? "var(--si-text-sub, #5d6b79)" : toneCol(s.tone) }}>{s.grade}</span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-mid, #93a1af)" }}>{s.note}</span>
-                  </div>
-                ))}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+                {scoreCards.map((s) => {
+                  const gradeCol = s.grade === "—" ? "var(--si-text-sub, #5d6b79)" : toneCol(s.tone);
+                  return (
+                    <div key={s.k} style={{ border: `1px solid ${s.grade === "—" ? "var(--si-border, #1c2733)" : gradeCol}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+                      <span style={{ display: "flex", alignItems: "center" }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 }}>{s.k}</span>
+                        <InfoTip lines={SCORECARD_INFO[s.k] ?? []} />
+                      </span>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: gradeCol }}>{s.grade}</span>
+                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #ffffff)", lineHeight: 1.5 }}>{highlightScoreNote(s.note, gradeCol)}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* 6 Financial Metric Cards with 8-Quarter Mini-Bars */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14 }}>
                 {fundMetrics.map((fm, idx) => {
                   const selKey = `${stock.t}:${idx}`;
                   const selIdx = fundSel[selKey];
@@ -3729,12 +3787,12 @@ export function StockIntelligenceScreen() {
                   // Revenue, EPS, margins and cash flow are better when higher; debt when lower.
                   const chgCol = (v: number) => ((idx === 5 ? -v : v) >= 0 ? UP : DN);
                   return (
-                  <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 14px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", columnGap: 6 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
+                  <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "16px 18px", minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", columnGap: 8 }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: "var(--si-accent-light, #a9c6e3)", whiteSpace: "nowrap" }}>
                         {fm.k}
                       </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: fm.col, whiteSpace: "nowrap" }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: fm.col, whiteSpace: "nowrap" }}>
                         {fm.yoy}
                       </span>
                     </div>
@@ -3783,22 +3841,22 @@ export function StockIntelligenceScreen() {
                     </div>
                     {selBar && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 3, borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
                           <span style={{ fontWeight: 700, color: "var(--si-accent-light, #a9c6e3)" }}>{selBar.label}</span>
                           {selBar.end && <span style={{ color: "var(--si-text-sub, #5d6b79)" }}>ended {selBar.end}</span>}
                         </div>
-                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{selBar.value}</div>
-                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600 }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{selBar.value}</div>
+                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600 }}>
                           {selBar.qoq != null && <span style={{ color: chgCol(selBar.qoq) }}>{pct1(selBar.qoq)} q/q</span>}
                           {selBar.yoy != null && <span style={{ color: chgCol(selBar.yoy) }}>{pct1(selBar.yoy)} y/y</span>}
                           {selBar.qoq == null && selBar.yoy == null && <span style={{ color: "var(--si-text-sub, #5d6b79)" }}>earliest quarter shown</span>}
                         </div>
                         {selBar.note && (
-                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.4 }}>{selBar.note}</div>
+                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.4 }}>{selBar.note}</div>
                         )}
                       </div>
                     )}
-                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-sub, #5d6b79)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-sub, #5d6b79)" }}>
                       <span>{fm.q0}</span>
                       {fm.bars.length > 0 && !selBar && <span style={{ opacity: 0.7 }}>click a bar</span>}
                       <span>{fm.q1}</span>
@@ -3815,28 +3873,28 @@ export function StockIntelligenceScreen() {
                     { title: "FINANCIAL HEALTH", sub: healthSub ? `${healthSub} balance sheet` : "Latest balance sheet", rows: healthRows },
                     { title: "EARNINGS QUALITY", sub: "Last 12 months", rows: qualityRows },
                   ]).filter((p) => p.rows.length > 0).map((p) => (
-                    <div key={p.title} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    <div key={p.title} style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                           {p.title}
                         </span>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>{p.sub}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{p.sub}</span>
                       </div>
                       {p.rows.map((r) => (
-                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px 120px 84px 1fr", alignItems: "center", columnGap: 10, minHeight: 32, borderTop: "1px solid var(--si-border, #1c2733)" }}>
+                        <div key={r.k} style={{ display: "grid", gridTemplateColumns: "10px 128px 92px 1fr", alignItems: "center", columnGap: 12, minHeight: 50, borderTop: "1px solid var(--si-border, #1c2733)" }}>
                           <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: toneCol(r.tone) }} />
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.k}</span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, textAlign: "right", color: r.tone === "neutral" ? "var(--si-text-hi, #e8eef4)" : toneCol(r.tone) }}>{r.v}</span>
-                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: "var(--si-text-mid, #93a1af)" }}>{r.note}</span>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 400, color: "var(--si-text-hi, #e8eef4)" }}>{r.k}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, textAlign: "right", color: r.tone === "neutral" ? "var(--si-text-hi, #e8eef4)" : toneCol(r.tone) }}>{r.v}</span>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>{r.note}</span>
                         </div>
                       ))}
                     </div>
                   ))}
                   {marginLines.length > 0 && fmpQ && (
-                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARGIN TREND</span>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>{QL[0]} to {QL[1]}</span>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARGIN TREND</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>{QL[0]} to {QL[1]}</span>
                       </div>
                       <svg viewBox={`0 0 ${MW} ${MH}`} width="100%" role="img" aria-label={`${stock.t} gross, operating and net margin by quarter`} style={{ display: "block" }}>
                         <line x1={MPAD} x2={MW - MPAD} y1={my(0)} y2={my(0)} stroke="#2a3a4a" strokeWidth={1} strokeDasharray="3 3" />
@@ -3857,7 +3915,7 @@ export function StockIntelligenceScreen() {
                           const now = l.vals[lastIdx];
                           const then = l.vals[lastIdx - 4] ?? null;
                           return (
-                            <span key={l.k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-hi, #e8eef4)" }}>
+                            <span key={l.k} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "var(--si-text-hi, #e8eef4)" }}>
                               <i style={{ display: "inline-block", width: 10, height: 3, background: l.col, marginRight: 6, verticalAlign: "middle" }} />
                               {l.k} {now != null ? `${now.toFixed(1)}%` : "—"}
                               {now != null && then != null && (
@@ -3875,31 +3933,31 @@ export function StockIntelligenceScreen() {
               {/* Valuation & Peer Comparison Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 460px), 1fr))", gap: 18, alignItems: "start" }}>
                 {/* Valuation Multiples vs Reference Benchmark */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       VALUATION MULTIPLES
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>
                       ▮ {stock.t} &nbsp; ┃ Reference Benchmark
                     </span>
                   </div>
-                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.4 }}>
+                  <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.4 }}>
                     Reference benchmarks (indicated by ┃ and right column) are static sector reference values, not live peer-company medians.
                   </div>
                   {valRows.map((vl, idx) => (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 34 }}>
-                      <span style={{ width: 100, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12, height: 42 }}>
+                      <span style={{ width: 110, fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                         {vl.k}
                       </span>
                       <div style={{ position: "relative", flex: 1, height: 10, background: "#1c2733" }}>
                         <div style={{ height: 10, width: vl.w, background: "#5980a6" }} />
                         <div style={{ position: "absolute", top: -4, left: vl.m, width: 2, height: 18, background: "#e8eef4", boxShadow: "0 0 6px rgba(255,255,255,0.4)" }} />
                       </div>
-                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
+                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
                         {vl.v}
                       </span>
-                      <span style={{ width: 62, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
+                      <span style={{ width: 70, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: "var(--si-text-mid, #93a1af)" }}>
                         {vl.med}
                       </span>
                     </div>
@@ -3907,16 +3965,16 @@ export function StockIntelligenceScreen() {
                 </div>
 
                 {/* Peer Comparison Table */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
+                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 8, overflowX: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
                       PEER COMPARISON
                     </span>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11.5, color: "var(--si-text-mid, #93a1af)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>
                       Click any peer to open in SI
                     </span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent, #5980a6)", padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
                     <span>COMPANY</span>
                     <span style={{ textAlign: "right" }}>PRICE</span>
                     <span style={{ textAlign: "right" }}>CHANGE</span>
@@ -3971,9 +4029,9 @@ export function StockIntelligenceScreen() {
                             display: "grid",
                             gridTemplateColumns: "minmax(140px, 1.4fr) repeat(6, minmax(75px, 1fr))",
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 13,
+                            fontSize: 15,
                             color: "var(--si-text-hi, #e8eef4)",
-                            padding: "9px 8px",
+                            padding: "11px 8px",
                             borderBottom: "1px solid var(--si-border, #1c2733)",
                             cursor: "pointer",
                             borderRadius: 4,
