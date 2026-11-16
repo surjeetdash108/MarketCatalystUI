@@ -93,7 +93,22 @@ export function ModuleSwitcher({ style }: { style?: React.CSSProperties }) {
     };
     update();
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    // The segments are sized by their labels, so they move when the web font arrives and when the
+    // lock icons appear or go (entitlements load after first paint): measure again each time, or the
+    // pill is left at the old spot and no longer lines up with its label.
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    for (const el of Object.values(refs.current)) if (el) ro?.observe(el);
+    let cancelled = false;
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (!cancelled) update();
+      });
+    }
+    return () => {
+      cancelled = true;
+      ro?.disconnect();
+      window.removeEventListener("resize", update);
+    };
   }, [activeModule]);
 
   const go = (m: AppModule) => {
