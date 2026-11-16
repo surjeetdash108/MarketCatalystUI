@@ -1,6 +1,6 @@
 // Stock Intelligence on a phone (≤760px): the header's five stats stack under
 // the name in two columns (they were crushed to one character a line), the
-// price-history range buttons wrap, and catalyst rows stack.
+// price-history range buttons wrap.
 // Run: node --test tests/ui/
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -15,10 +15,9 @@ describe("Stock Intelligence phone layout", () => {
     assert.match(css, /\.si-hero-id \{ grid-column: 1 \/ -1; min-width: 0 !important;/);
     for (const c of ["si-hero", "si-hero-id", "si-hero-stat"]) assert.match(src, new RegExp(`className="${c}"`), c);
   });
-  it("price history header wraps; catalyst rows stack; page padding shrinks", () => {
+  it("price history header wraps; page padding shrinks", () => {
     assert.match(css, /\.si-ph-head \{ height: auto !important; flex-wrap: wrap;/);
-    assert.match(css, /\.si-cat-row \{ grid-template-columns: minmax\(0, 1fr\) !important;/);
     assert.match(css, /\.si-main \{ padding: 14px 12px 100px !important; \}/);
-    for (const c of ["si-ph-head", "si-cat-row", "si-cat-imp", "si-main"]) assert.match(src, new RegExp(`className="${c}"`), c);
+    for (const c of ["si-ph-head", "si-main"]) assert.match(src, new RegExp(`className="${c}"`), c);
   });
 });

@@ -2395,8 +2395,6 @@ export function StockIntelligenceScreen() {
           .si-hero-stat:last-child { grid-column: 1 / -1; border-bottom: none; }
           .si-ph-head { height: auto !important; flex-wrap: wrap; padding: 10px 12px !important; row-gap: 8px; }
           .si-ph-head > div { margin-left: 0 !important; flex-wrap: wrap; }
-          .si-cat-row { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important; padding: 12px 14px !important; }
-          .si-cat-imp { text-align: left !important; display: flex; gap: 10px; align-items: baseline; }
         }
       `}</style>
 
