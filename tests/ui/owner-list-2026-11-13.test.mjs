@@ -7,8 +7,9 @@ import fs from "node:fs";
 const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 
 test("profile menu says 'Manage Plan'; Settings says 'Manage Plan' and 'Purchase history'", () => {
+  // The one profile menu (shared by MC, SI, Money Flow and Strategy Lab).
+  assert.match(read("app/iq/profile-menu.tsx"), /◈<\/span> Manage Plan/);
   for (const f of ["app/iq/shell.tsx", "app/iq/profile-menu.tsx"]) {
-    assert.match(read(f), /◈<\/span> Manage Plan/, f);
     assert.doesNotMatch(read(f), /Manage Account/, f);
   }
   const s = read("app/iq/screens/settings.tsx");

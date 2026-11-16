@@ -92,6 +92,22 @@ export function latestSessionDate(now: Date = new Date()): string {
   return d;
 }
 
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/**
+ * Whose money the Money Flow screen is following, judged on the ET calendar:
+ * "today's" on any trading day; on a weekend or full-closure holiday, the most
+ * recent trading day by name — "Friday's" on Sat/Sun, "Tuesday's" when
+ * Wednesday is a holiday (and "Thursday's" over a Good Friday weekend).
+ */
+export function moneyDayPossessive(now: Date = new Date()): string {
+  const { isoDate } = etParts(now);
+  if (isTradingDay(isoDate)) return "today's";
+  let d = addDays(isoDate, -1);
+  for (let i = 0; i < 10 && !isTradingDay(d); i++) d = addDays(d, -1);
+  return `${WEEKDAY_NAMES[new Date(`${d}T12:00:00Z`).getUTCDay()]}'s`;
+}
+
 /**
  * Trading sessions after `from`, up to and including `to` — 0 when `to` is not
  * later. Bounded so a malformed date cannot spin.
