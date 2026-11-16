@@ -201,7 +201,7 @@ export interface BillingSummary {
   credits?: { balance: number; available: number; pending: number; currency: string; usable: boolean };
 }
 export const billingSummary = () => apiGet<BillingSummary>("/api/billing/summary");
-export const useCreditsOnNextPayment = () => apiPost<{ applied: number; on: string }>("/api/billing/credits/use-next");
+export const creditsOnNextPayment = () => apiPost<{ applied: number; on: string }>("/api/billing/credits/use-next");
 
 export interface InvoiceLine {
   description: string;

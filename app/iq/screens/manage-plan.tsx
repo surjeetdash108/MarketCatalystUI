@@ -16,7 +16,7 @@ import {
   resumePlan,
   retentionOffer,
   syncClaims,
-  useCreditsOnNextPayment,
+  creditsOnNextPayment,
   type BillingSummary,
   type TimelineEntry,
   type InvoiceRow,
@@ -198,8 +198,8 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
     if (r) await afterChange("Thank you for staying", `${r.description}.`);
   }
 
-  async function useCreditsNext() {
-    const r = await run(() => useCreditsOnNextPayment());
+  async function spendCreditsNext() {
+    const r = await run(() => creditsOnNextPayment());
     if (r) await afterChange("Credits set", `${formatMoney(r.applied, summary?.credits?.currency ?? "USD")} of your Market Catalyst credits comes off your next payment on ${longDate(r.on)}.`);
   }
 
@@ -249,7 +249,7 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
                   {summary.credits.pending > 0 && ` (${formatMoney(summary.credits.pending, summary.credits.currency)} set to come off your next payment)`}
                 </span>
                 {subscribed && !summary.cancelAtPeriodEnd && summary.credits.usable && summary.credits.available > 0 && summary.credits.pending === 0 && (
-                  <Button kind="secondary" testId="use-credits-next" onClick={() => void useCreditsNext()} disabled={busy}>
+                  <Button kind="secondary" testId="use-credits-next" onClick={() => void spendCreditsNext()} disabled={busy}>
                     Use on my next payment
                   </Button>
                 )}
