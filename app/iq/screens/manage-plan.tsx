@@ -16,6 +16,7 @@ import {
   resumePlan,
   retentionOffer,
   syncClaims,
+  useCreditsOnNextPayment,
   type BillingSummary,
   type TimelineEntry,
   type InvoiceRow,
@@ -194,7 +195,12 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
 
   async function keepWithDiscount() {
     const r = await run(() => acceptRetention());
-    if (r) await afterChange("Thank you for trusting us", "Enjoy 50% off for the next 2 months.");
+    if (r) await afterChange("Thank you for staying", `${r.description}.`);
+  }
+
+  async function useCreditsNext() {
+    const r = await run(() => useCreditsOnNextPayment());
+    if (r) await afterChange("Credits set", `${formatMoney(r.applied, summary?.credits?.currency ?? "USD")} of your Market Catalyst credits comes off your next payment on ${longDate(r.on)}.`);
   }
 
   return (
@@ -235,6 +241,19 @@ export function BillingScreen({ preview = false }: { preview?: boolean } = {}) {
                 Changing to <b>{plans.find((p) => p.id === summary.scheduledChange?.planId)?.name ?? summary.scheduledChange.planId}</b> ({summary.scheduledChange.interval}) on {longDate(summary.scheduledChange.effectiveAt)}.{" "}
                 <Button kind="secondary" testId="keep-plan" onClick={() => void run(() => keepCurrentPlan()).then((r) => r && afterChange("Plan kept", `You stay on ${current?.name}.`))}>Keep my current plan</Button>
               </Notice>
+            )}
+            {!!summary.credits?.balance && (
+              <div data-testid="mc-credits" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+                <span>
+                  Market Catalyst credits: <b>{formatMoney(summary.credits.balance, summary.credits.currency)}</b>
+                  {summary.credits.pending > 0 && ` (${formatMoney(summary.credits.pending, summary.credits.currency)} set to come off your next payment)`}
+                </span>
+                {subscribed && !summary.cancelAtPeriodEnd && summary.credits.usable && summary.credits.available > 0 && summary.credits.pending === 0 && (
+                  <Button kind="secondary" testId="use-credits-next" onClick={() => void useCreditsNext()} disabled={busy}>
+                    Use on my next payment
+                  </Button>
+                )}
+              </div>
             )}
             {summary.discount && <div data-testid="discount">Discount: {summary.discount.source === "retention" ? "Retention offer" : summary.discount.code} — {summary.discount.description}{summary.discount.endsAt ? ` (until ${longDate(summary.discount.endsAt)})` : ""}</div>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -433,7 +452,7 @@ export function RetentionChoice({ offer, busy, onKeep, onCancel, onClose }: { of
       <div data-testid="retention-headline" style={{ fontSize: "1rem", color: "var(--text-hi)", fontWeight: 600 }}>{offer.headline}</div>
       <div data-testid="retention-description">{offer.description}.</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Button testId="retention-keep" onClick={onKeep} disabled={busy} style={equal}>Keep my plan at 50%</Button>
+        <Button testId="retention-keep" onClick={onKeep} disabled={busy} style={equal}>{offer.cta ?? "Keep my plan"}</Button>
         <Button kind="danger" testId="retention-cancel" onClick={onCancel} disabled={busy} style={equal}>Cancel my plan</Button>
       </div>
     </Modal>

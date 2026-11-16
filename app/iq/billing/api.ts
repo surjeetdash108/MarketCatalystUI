@@ -36,6 +36,8 @@ export interface CheckoutBody {
   consent: { accepted: boolean; version: string };
   marketingOptIn: boolean;
   billing: { name: string; address: { line1: string; line2: string | null; city: string; state: string | null; postalCode: string | null; country: string } };
+  /** Use Market Catalyst credits on this payment (opt-in; never on a free trial). */
+  useCredits?: boolean;
 }
 export const startCheckout = (body: CheckoutBody) => apiPost<CheckoutResponse>("/api/billing/checkout", body);
 
@@ -61,8 +63,10 @@ export interface CheckoutPreview {
   dueToday?: number;
   /** The first real charge (incl. tax) and when — the trial end, or today. */
   firstCharge?: { amount: number; at: string };
+  /** Market Catalyst credits: what the buyer has, and what's used on this payment (when chosen). */
+  credits?: { available: number; applied: number };
 }
-export const previewCheckout = (body: { planId: string; interval: BillingInterval; promoCode?: string; region?: { country: string; state?: string | null; postalCode?: string | null } }) =>
+export const previewCheckout = (body: { planId: string; interval: BillingInterval; promoCode?: string; region?: { country: string; state?: string | null; postalCode?: string | null }; useCredits?: boolean }) =>
   apiPost<CheckoutPreview>("/api/billing/checkout/preview", body);
 
 /** Fake provider only (TEST MODE): the simulated payment form confirms through these. */
@@ -133,6 +137,10 @@ export interface ChangePreview {
   startsAt: string;
   /** The renewal consent for the new plan (ticked on the checkout page). */
   consent: { version: string; text: string };
+  /** Unused value left over by a switch now; it goes to Market Catalyst credits. */
+  leftoverToCredits?: number;
+  /** Market Catalyst credits the member could choose to use on this switch. */
+  creditsAvailable?: number;
 }
 export const previewChange = (body: { planId: string; interval: BillingInterval }) => apiPost<ChangePreview>("/api/billing/change/preview", body);
 export type ChangeResult =
@@ -154,12 +162,14 @@ export const applyChange = (body: {
   /** The billing name and address entered on the checkout page. */
   billing?: ChangeBilling;
   consent?: { accepted: boolean; version: string };
+  /** Use Market Catalyst credits on this switch (opt-in). */
+  useCredits?: boolean;
 }) => apiPost<ChangeResult>("/api/billing/change", body);
 export const keepCurrentPlan = () => apiPost<{ kept: boolean }>("/api/billing/change/keep");
 export const cancelPlan = () => apiPost<{ endsAt: string }>("/api/billing/cancel");
 export const resumePlan = () => apiPost<{ renewsAt: string }>("/api/billing/resume");
 
-export interface RetentionOffer { mode: string; percentOff: number; months: number; interval: BillingInterval; creditAmount: number | null; currency: string; appliesFrom: string; headline: string; description: string }
+export interface RetentionOffer { mode: string; percentOff: number; months: number; interval: BillingInterval; creditAmount: number | null; currency: string; appliesFrom: string; headline: string; description: string; cta?: string }
 export const retentionOffer = () => apiGet<{ eligible: true; offer: RetentionOffer } | { eligible: false; reason: string }>("/api/billing/retention");
 export const acceptRetention = () => apiPost<{ applied: true; description: string; appliesFrom: string }>("/api/billing/retention/accept");
 
@@ -187,8 +197,11 @@ export interface BillingSummary {
   discount: { source: string | null; code: string | null; description: string; endsAt: string | null } | null;
   nextCharge: { amount: number; currency: string; date: string; discountAmount: number; creditApplied: number } | null;
   hasBillingAccount: boolean;
+  /** Market Catalyst credits: never refunded, used only when the member chooses. Minor units. */
+  credits?: { balance: number; available: number; pending: number; currency: string; usable: boolean };
 }
 export const billingSummary = () => apiGet<BillingSummary>("/api/billing/summary");
+export const useCreditsOnNextPayment = () => apiPost<{ applied: number; on: string }>("/api/billing/credits/use-next");
 
 export interface InvoiceLine {
   description: string;

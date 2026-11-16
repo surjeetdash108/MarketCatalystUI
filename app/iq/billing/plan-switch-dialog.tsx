@@ -8,6 +8,7 @@ import { handleStripeAction } from "./checkout/stripe-payment-form";
 import { rememberPlanChange } from "./plan-change-summary";
 import { switchPreviewLines } from "./plan-switch";
 import { Modal, Notice } from "./ui";
+import { LeftoverCreditsWarning, UseCreditsChoice, creditsToUse } from "./credits-ui";
 
 /**
  * Switching plans: a pop-up with when the new plan starts and what's charged,
@@ -26,7 +27,20 @@ export function PlanSwitchDialog(props: {
   const [cp, setCp] = useState<ChangePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [useCredits, setUseCredits] = useState(false);
+  const [warnLeftover, setWarnLeftover] = useState(false);
   const money = (n: number) => formatMoney(n, currency);
+  // Credits come off a real charge: today's (switch now, outside the trial) or
+  // the new plan's first charge (switch at renewal).
+  const creditCharge = !cp
+    ? 0
+    : cp.kind === "scheduled"
+      ? cp.nextRenewalAmount
+      : cp.kind === "upgrade" && !cp.trialEndsAt
+        ? cp.amountDueNow
+        : 0;
+  const creditsUsed = useCredits ? creditsToUse(cp?.creditsAvailable ?? 0, creditCharge) : 0;
+  const leftover = cp?.leftoverToCredits ?? 0;
 
   useEffect(() => {
     let live = true;
@@ -50,6 +64,7 @@ export function PlanSwitchDialog(props: {
         ...(cp.kind === "upgrade" ? { expectedAmountDue: cp.amountDueNow } : {}),
         ...(cp.kind === "downgrade" ? { expectedCredit: cp.creditToBalance } : {}),
         consent: { accepted: true, version: cp.consent?.version ?? "" },
+        ...(creditsUsed > 0 ? { useCredits: true } : {}),
       });
       if (res.status === "requires_action" && res.clientSecret) {
         const action = await handleStripeAction(res.clientSecret);
@@ -105,18 +120,40 @@ export function PlanSwitchDialog(props: {
               By choosing Yes: {cp.consent.text}
             </p>
           )}
-          <div style={{ fontWeight: 700, color: "var(--text-hi)" }}>Are you sure you want to switch?</div>
+          <UseCreditsChoice
+            available={cp.creditsAvailable ?? 0}
+            charge={creditCharge}
+            checked={useCredits}
+            onChange={setUseCredits}
+            money={money}
+            appliesTo={cp.kind === "scheduled" ? `your first ${planName} payment` : "today's charge"}
+          />
+          {creditsUsed > 0 && cp.kind !== "scheduled" && (
+            <div data-testid="plan-switch-after-credits" style={{ fontSize: ".9rem" }}>
+              Charged today after credits: <b>{money(Math.max(0, cp.amountDueNow - creditsUsed))}</b>
+            </div>
+          )}
+          {!warnLeftover && <div style={{ fontWeight: 700, color: "var(--text-hi)" }}>Are you sure you want to switch?</div>}
         </>
       )}
       {error && <Notice tone="error" testId="plan-switch-error">{error}</Notice>}
-      <div style={{ display: "flex", gap: 10 }}>
-        <button className="co-cta" data-testid="plan-switch-yes" disabled={!cp || busy} onClick={() => void confirm()}>
-          {busy ? "Switching…" : "Yes, switch"}
-        </button>
-        <button className="co-cta" data-testid="plan-switch-no" disabled={busy} style={{ background: "var(--surface-2)", color: "var(--text)" }} onClick={onClose}>
-          Cancel
-        </button>
-      </div>
+      {warnLeftover ? (
+        <LeftoverCreditsWarning amount={leftover} money={money} busy={busy} onContinue={() => void confirm()} onBack={() => setWarnLeftover(false)} />
+      ) : (
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            className="co-cta"
+            data-testid="plan-switch-yes"
+            disabled={!cp || busy}
+            onClick={() => (leftover > 0 ? setWarnLeftover(true) : void confirm())}
+          >
+            {busy ? "Switching…" : "Yes, switch"}
+          </button>
+          <button className="co-cta" data-testid="plan-switch-no" disabled={busy} style={{ background: "var(--surface-2)", color: "var(--text)" }} onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }

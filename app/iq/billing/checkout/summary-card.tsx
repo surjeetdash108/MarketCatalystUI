@@ -84,8 +84,11 @@ export function SummaryCard(props: {
       {step === 2 && props.promoSlot}
       <div>
         <div className="co-row"><span>Subtotal</span><span data-testid="summary-subtotal">{money(preview?.subtotal ?? price)}</span></div>
-        {!!preview?.discount && (
-          <div className="co-row" style={{ color: "var(--up)" }}><span>Discount{preview.promo ? ` (${preview.promo.code})` : ""}</span><span data-testid="summary-discount">−{money(preview.discount)}</span></div>
+        {!!preview && preview.discount - (preview.credits?.applied ?? 0) > 0 && (
+          <div className="co-row" style={{ color: "var(--up)" }}><span>Discount{preview.promo ? ` (${preview.promo.code})` : ""}</span><span data-testid="summary-discount">−{money(preview.discount - (preview.credits?.applied ?? 0))}</span></div>
+        )}
+        {!!preview?.credits?.applied && (
+          <div className="co-row" style={{ color: "var(--up)" }}><span>Market Catalyst credits</span><span data-testid="summary-credits">−{money(preview.credits.applied)}</span></div>
         )}
         <div className="co-row">
           <span>{preview?.taxLabel ?? "Tax"}</span>
