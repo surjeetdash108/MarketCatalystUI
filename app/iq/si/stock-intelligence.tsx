@@ -161,6 +161,8 @@ const colorSigned = (text: string | null | undefined): React.ReactNode =>
       : part,
   );
 
+const clampLines = (n: number): React.CSSProperties => ({ display: "-webkit-box", WebkitLineClamp: n, WebkitBoxOrient: "vertical", overflow: "hidden" });
+
 function SixMonthAreaChart({
   ticker,
   stock,
@@ -205,7 +207,41 @@ function SixMonthAreaChart({
   }, [aiRequestKey, ticker]);
   const events = useMemo(() => applyAiCards(baseEvents, aiCards.ticker === ticker ? aiCards.byIso : {}), [baseEvents, aiCards, ticker]);
 
-  const [hoveredEventId, setHoveredEventId] = useState<number | null>(null);
+  // A pin opens its dialog on hover (a short grace period lets the pointer reach the dialog) and stays open,
+  // larger, once clicked; Escape or a click on the chart closes it. The chart fills whatever height its
+  // card is given (it sits beside the taller read), so its drawing area is measured.
+  const [hover, setHover] = useState<number | null>(null);
+  const [pinned, setPinned] = useState<number | null>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPinned(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    };
+  }, []);
+  const enterPin = (num: number) => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    setHover(num);
+  };
+  const leavePin = () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    leaveTimer.current = setTimeout(() => setHover(null), 220);
+  };
 
   // Real 6-month daily bars
   const chartBars = useMemo(() => {
@@ -237,7 +273,8 @@ function SixMonthAreaChart({
   const plotLeft = 14;
   const plotRight = 920;
   const plotTop = 24;
-  const plotBottom = 296;
+  const H = Math.max(340, size.h || 340);
+  const plotBottom = H - 44;
   const plotW = plotRight - plotLeft;
   const plotH = plotBottom - plotTop;
 
@@ -286,34 +323,58 @@ function SixMonthAreaChart({
   // Map 5 Major Events to coordinates on the chart
   const mappedEvents = useMemo(() => {
     if (chartBars.length === 0) return [];
-    return events.map((ev) => {
+    // The five most extreme moves get a numbered pin.
+    return events.filter((ev) => ev.card !== false).map((ev, idx) => {
       const targetIdx = Math.min(n - 1, Math.max(0, Math.round(ev.fr * (n - 1))));
       const bar = chartBars[targetIdx];
       const x = xOf(targetIdx);
       const y = yOf(bar.c);
       return {
         ...ev,
+        num: idx + 1,
         targetIdx,
         x,
         y,
         priceAtEvent: bar.c,
       };
     });
-  }, [events, chartBars, n]);
+  }, [events, chartBars, n, H]);
 
-  const activeHover = mappedEvents.find((e) => e.num === hoveredEventId);
+  const active = hover ?? pinned;
+  const activeHover = mappedEvents.find((e) => e.num === active);
 
 
+
+  // The dialog sits beside its pin, on the side and height where it covers the fewest other pins;
+  // when there is no clear spot it drops below the chart.
+  const dialogPos = (() => {
+    if (!activeHover) return null;
+    const dw = 260;
+    const dh = 148;
+    const W = size.w || 840;
+    const px = (e: { x: number }) => (e.x / 1000) * W;
+    const others = mappedEvents.filter((e) => e.num !== activeHover.num);
+    const hits = (left: number, top: number) => others.filter((o) => px(o) > left - 14 && px(o) < left + dw + 14 && o.y > top - 14 && o.y < top + dh + 14).length;
+    const options: Array<{ left: number; top: number; hits: number; score: number }> = [];
+    for (const side of ["right", "left"] as const) {
+      const left = side === "right" ? px(activeHover) + 18 : px(activeHover) - 18 - dw;
+      if (left < 4 || left + dw > W - 4) continue;
+      for (let top = 6; top <= H - dh - 6; top += 6) {
+        const h = hits(left, top);
+        options.push({ left, top, hits: h, score: h * 1000 + Math.abs(top + dh / 2 - activeHover.y) + (side === "left" ? 40 : 0) });
+      }
+    }
+    const best = options.sort((a, b) => a.score - b.score)[0];
+    const below = { left: Math.max(4, Math.min(W - dw - 4, px(activeHover) - dw / 2)), top: H + 4 };
+    return best && best.hits === 0 ? { left: best.left, top: best.top } : below;
+  })();
 
   return (
-    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px" }}>
+    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", boxSizing: "border-box", height: "100%" }}>
       {/* Header bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-          6-MONTH TRAJECTORY & {events.length || 5} MAJOR CATALYSTS
-        </span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-          Last 6 Months · Area Chart
+          LAST 6-MONTH TRAJECTORY &amp; MAJOR CATALYSTS
         </span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: stock.c >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
@@ -325,9 +386,13 @@ function SixMonthAreaChart({
         </div>
       </div>
 
-      {/* Area Chart Container */}
-      <div style={{ position: "relative", width: "100%", height: 340, background: "var(--si-card-sec, #06080c)", border: "1px solid var(--si-border, #1c2733)", borderRadius: 4, overflow: "visible" }}>
-        <svg width="100%" height="100%" viewBox="0 0 1000 340" preserveAspectRatio="none" style={{ display: "block" }}>
+      {/* Area chart: fills the card's height */}
+      <div
+        ref={wrapRef}
+        onClick={() => setPinned(null)}
+        style={{ position: "relative", width: "100%", flex: 1, minHeight: 340, background: "var(--si-card-sec, #06080c)", border: "1px solid var(--si-border, #1c2733)", borderRadius: 4, overflow: "visible" }}
+      >
+        <svg width="100%" height="100%" viewBox={`0 0 1000 ${H}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0, display: "block" }}>
           <defs>
             <linearGradient id="siSixMonthAreaGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--up, #22c55e)" stopOpacity="0.25" />
@@ -335,9 +400,17 @@ function SixMonthAreaChart({
               <stop offset="90%" stopColor="var(--up, #22c55e)" stopOpacity="0.02" />
               <stop offset="100%" stopColor="var(--up, #22c55e)" stopOpacity="0.0" />
             </linearGradient>
+            <filter id="siPinGlow" x="-200%" y="-200%" width="500%" height="500%">
+              <feGaussianBlur stdDeviation="6" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
 
-          {/* Horizontal Gridlines & Price Readouts on Right Y-Axis */}
+          {/* Horizontal gridlines & price readouts on the right axis */}
           {gridTicks.map((pVal, idx) => {
             const y = yOf(pVal);
             return (
@@ -350,16 +423,12 @@ function SixMonthAreaChart({
             );
           })}
 
-          {/* Area under the curve */}
+          {/* Area under the curve, price line */}
           <path d={areaD} fill="url(#siSixMonthAreaGrad)" />
-
-          {/* Price Line */}
           <path d={pathD} fill="none" stroke="var(--up, #22c55e)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
 
-          {/* Horizontal Purple Dashed Reference Line for Current Price */}
+          {/* Current price: dashed line and the tag on the right axis */}
           <line x1={plotLeft} y1={curY} x2={plotRight} y2={curY} stroke="#818cf8" strokeDasharray="4 4" strokeWidth="1.5" opacity="0.85" />
-
-          {/* Purple Pill Tag on Right Axis matching user image */}
           <g>
             <rect x={plotRight + 4} y={curY - 10} width={68} height={20} rx={4} fill="#6366f1" />
             <text x={plotRight + 38} y={curY + 4} textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
@@ -367,68 +436,113 @@ function SixMonthAreaChart({
             </text>
           </g>
 
-          {/* Bottom X-Axis Date Ticks */}
+          {/* Bottom axis dates */}
           {dateTicks.map((dt, idx) => (
-            <text key={idx} x={dt.x} y={328} textAnchor="middle" fill="var(--si-text-dim, #64748b)" fontSize="10.5" fontFamily="'JetBrains Mono', monospace">
+            <text key={idx} x={dt.x} y={H - 12} textAnchor="middle" fill="var(--si-text-dim, #64748b)" fontSize="10.5" fontFamily="'JetBrains Mono', monospace">
               {dt.label}
             </text>
           ))}
 
-          {/* 5 Major Event Drop Lines & Markers */}
+          {/* Numbered pins on the five biggest moves */}
           {mappedEvents.map((ev) => {
-            const isHover = hoveredEventId === ev.num;
+            const on = active === ev.num;
             return (
-              <g key={ev.num}>
-                {/* Vertical guide line */}
-                <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={isHover ? "var(--si-accent-soft, #7fa8d0)" : "var(--si-border-sec, rgba(127,168,208,0.22))"} strokeDasharray="3 3" strokeWidth={isHover ? 1.5 : 1} />
-                {/* Hover halo (only while the pin or its card is hovered) */}
-                {isHover && <circle cx={ev.x} cy={ev.y} r={13} fill="var(--si-accent-bg, rgba(127,168,208,0.3))" stroke="var(--si-accent, #a9c6e3)" strokeWidth="1" style={{ pointerEvents: "none" }} />}
-                {/* The pin: a plain black dot (thin light edge so it stays visible on a dark chart). Larger invisible circle = easier hover target. */}
-                <circle cx={ev.x} cy={ev.y} r="12" fill="transparent" style={{ cursor: "pointer" }} onMouseEnter={() => setHoveredEventId(ev.num)} onMouseLeave={() => setHoveredEventId(null)} />
-                <circle cx={ev.x} cy={ev.y} r={isHover ? 7.5 : 6} fill="#000000" stroke="rgba(255,255,255,0.85)" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
+              <g
+                key={ev.num}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => enterPin(ev.num)}
+                onMouseLeave={leavePin}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinned((cur) => (cur === ev.num ? null : ev.num));
+                }}
+              >
+                <line x1={ev.x} y1={ev.y} x2={ev.x} y2={plotBottom} stroke={on ? "#ffffff" : "var(--si-border-sec, rgba(127,168,208,0.22))"} strokeDasharray="3 3" strokeWidth={on ? 1.5 : 1} />
+                <circle cx={ev.x} cy={ev.y} r={on ? 17 : 11} fill={on ? "rgba(169,198,227,0.55)" : "rgba(34,197,94,0.18)"} stroke={on ? "#ffffff" : "var(--up, #22c55e)"} strokeWidth="1" filter={on ? "url(#siPinGlow)" : undefined} />
+                <circle cx={ev.x} cy={ev.y} r="9" fill={on ? "var(--si-accent, #5980a6)" : "var(--si-card-solid, #080b10)"} stroke={on ? "#ffffff" : "var(--si-accent-soft, #7fa8d0)"} strokeWidth="2" filter={on ? "url(#siPinGlow)" : undefined} />
+                <text x={ev.x} y={ev.y + 3.5} textAnchor="middle" fill={on ? "#ffffff" : "var(--si-accent-soft, #a9c6e3)"} fontSize="10" fontWeight="800" fontFamily="'JetBrains Mono', monospace" style={{ pointerEvents: "none" }}>
+                  {ev.num}
+                </text>
               </g>
             );
           })}
         </svg>
 
-        {/* Floating Tooltip when Event Point is Hovered */}
-        {activeHover && (
+        {/* The pin's dialog: a short read on hover, the full one (with the earnings detail) once pinned */}
+        {activeHover && dialogPos && (
           <div
+            role="dialog"
+            aria-label={`Catalyst #${activeHover.num}`}
+            onMouseEnter={() => enterPin(activeHover.num)}
+            onMouseLeave={leavePin}
+            onClick={(e) => e.stopPropagation()}
             style={{
               position: "absolute",
-              left: `${Math.min(84, Math.max(16, (activeHover.x / 1000) * 100))}%`,
-              // A pin high on the chart opens the tooltip downward: this one is tall
-              // (title, metrics, article text) and used to run off the top of the page.
-              top: activeHover.y < 170 ? `${(activeHover.y / 340) * 100 + 5}%` : `${Math.max(12, (activeHover.y / 340) * 100 - 24)}%`,
-              transform: activeHover.y < 170 ? "translate(-50%, 0)" : "translate(-50%, -100%)",
-              background: "var(--si-card-solid, #0c1118)",
-              border: "1px solid var(--si-border-sec, #7fa8d0)",
-              boxShadow: "var(--si-shadow, 0 8px 24px rgba(0,0,0,0.4))",
-              padding: "10px 14px",
-              borderRadius: 4,
-              pointerEvents: "none",
-              zIndex: 30,
-              minWidth: 220,
-              maxWidth: 380,
-              maxHeight: 330,
-              overflow: "hidden",
+              top: dialogPos.top,
+              left: dialogPos.left,
+              width: 260,
+              height: pinned === activeHover.num ? 290 : 148,
+              transition: "height 180ms ease",
+              maxWidth: "calc(100% - 24px)",
+              boxSizing: "border-box",
+              zIndex: 20,
+              overflowY: "auto",
+              borderStyle: "solid",
+              borderTopWidth: 2,
+              borderRightWidth: 1,
+              borderBottomWidth: 1,
+              borderLeftWidth: 1,
+              borderTopColor: "var(--si-accent-soft, #7fa8d0)",
+              borderRightColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
+              borderBottomColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
+              borderLeftColor: pinned === activeHover.num ? "#ffffff" : "var(--si-border-sec, #2a3a4a)",
+              background: "var(--si-card, #0c1118)",
+              boxShadow: "0 18px 44px rgba(0,0,0,0.6), 0 0 18px rgba(169,198,227,0.18)",
+              padding: "10px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 5,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "var(--si-accent-soft, #7fa8d0)" }}>
-                {activeHover.date}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: "#ffffff", whiteSpace: "nowrap" }}>
+                  #{activeHover.num} · {activeHover.date}
+                </span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", padding: "1px 5px", background: "var(--si-accent-bg, rgba(89,128,166,0.2))", color: "#ffffff", borderRadius: 2 }}>
+                  {activeHover.category.toUpperCase()}
+                </span>
               </span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: activeHover.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
-                {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: activeHover.mv >= 0 ? "var(--up, #16a34a)" : "var(--down, #dc2626)" }}>
+                  {activeHover.mv >= 0 ? "+" : ""}{activeHover.mv.toFixed(2)}%
+                </span>
+                {pinned === activeHover.num && (
+                  <button type="button" aria-label="Close" onClick={() => setPinned(null)} style={{ width: 22, height: 22, border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "#ffffff", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 0 }}>
+                    ×
+                  </button>
+                )}
               </span>
             </div>
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #ffffff)", marginBottom: 4 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 700, color: "#ffffff", lineHeight: 1.3, ...(pinned === activeHover.num ? {} : clampLines(1)) }}>
               {activeHover.label}
             </div>
-            <EventContextBlocks ev={activeHover} compact metricsOnly />
-            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, color: "var(--si-text-dim, #93a1af)", lineHeight: 1.35, marginTop: 6 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffffff", lineHeight: 1.35, ...(pinned === activeHover.num ? {} : clampLines(2)) }}>
               {activeHover.details}
             </div>
+            {pinned === activeHover.num && <EventContextBlocks ev={activeHover} compact />}
+            {pinned !== activeHover.num && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinned(activeHover.num);
+                }}
+                style={{ marginTop: "auto", alignSelf: "flex-start", border: "1px solid var(--si-accent, #5980a6)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", padding: "4px 10px", cursor: "pointer" }}
+              >
+                READ MORE ▸
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -2040,13 +2154,13 @@ export function StockIntelligenceScreen() {
         ✦ TECHNICAL READ
         <InfoTip lines={TECHNICAL_READ_INFO} />
       </span>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
         {stockDetail.read.map((rd, i) => (
-          <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: 10 }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-accent, #5980a6)" }}>
+          <div key={i} style={{ border: `1px solid ${rd.col}`, background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: "0.14em", color: "var(--si-text-hi, #ffffff)", opacity: 0.7 }}>
               {rd.k}
             </div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: rd.col, marginTop: 4 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: 800, color: rd.col }}>
               {rd.v}
             </div>
           </div>
@@ -2067,10 +2181,10 @@ export function StockIntelligenceScreen() {
           <div style={{ display: "flex", flexDirection: "column" }}>
             {rows.map((r) => (
               <div key={r.title} style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 10, alignItems: "baseline", padding: "9px 0", borderTop: "1px solid var(--si-border, #1c2733)" }}>
-                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14.5, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.title}</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13.5, fontWeight: 700, color: col(r.tone), whiteSpace: "pre" }}>{r.value}</span>
+                <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{r.title}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: col(r.tone), whiteSpace: "pre" }}>{r.value}</span>
                 {r.note && (
-                  <span style={{ gridColumn: "1 / 3", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
+                  <span style={{ gridColumn: "1 / 3", fontFamily: "'Manrope', sans-serif", fontSize: 14, lineHeight: 1.45, color: "var(--si-text-mid, #93a1af)", marginTop: 2 }}>{r.note}</span>
                 )}
               </div>
             ))}
@@ -3968,7 +4082,7 @@ export function StockIntelligenceScreen() {
                 </div>
               </div>
               <div className="si-tech-chart" style={{ minHeight: 540, width: "100%" }}>
-                <style>{`.si-tech-chart .cc-tvbtn.icon{display:none}.si-tech-chart .cc-tvbtn{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:12.96px;font-weight:500;line-height:1.2;padding:6px 8px;background:none;border:0;color:var(--si-text-hi,#e8eef4);cursor:pointer;white-space:nowrap}.si-tech-chart .cc-tvbtn svg{opacity:.75}.si-tech-chart .cc-tvbtn b{font-weight:600}.si-tech-chart .cc-tvbtn b{font-size:inherit}`}</style>
+                <style>{`.si-tech-chart .cc-tvbtn.icon{display:none}.si-tech-chart .cc-tvbtn{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:12.96px;font-weight:500;line-height:1.2;padding:6px 8px;background:none;border:0;color:var(--si-text-hi,#e8eef4);cursor:pointer;white-space:nowrap}.si-tech-chart .cc-tvbtn svg{opacity:.75}.si-tech-chart .cc-tvbtn b{font-weight:600}.si-tech-chart .cc-tvbtn b{font-size:inherit}${isLight ? "" : ".si-tech-chart .rng.indbtn{padding:4px 9px;border-radius:6px;font-weight:600;color:#6c747c;background:transparent}.si-tech-chart .rng.indbtn.on{background:#14181b;color:#f4f6f5}.si-tech-chart .cc-ma.on .cc-ma-all,.si-tech-chart .cc-ma.on .cc-ma-all *{color:#f4f6f5}.si-tech-chart .cc-ma:not(.on) .cc-ma-all,.si-tech-chart .cc-ma:not(.on) .cc-ma-all *{color:#6c747c}"}`}</style>
                 <StockChart
                   sym={stock.t}
                   name={stock.name || liveCompany?.name}
@@ -3992,13 +4106,13 @@ export function StockIntelligenceScreen() {
 
               {/* Key levels */}
               <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
                   KEY SUPPORT & RESISTANCE LEVELS
                 </span>
                 {stockDetail.levels.map((lv, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#ffffff" }}>{lv.k}</span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: lv.col }}>{lv.v}</span>
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "#ffffff" }}>{lv.k}</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 600, color: lv.col }}>{lv.v}</span>
                   </div>
                 ))}
               </div>
@@ -4896,10 +5010,10 @@ export function StockIntelligenceScreen() {
             TAB 9: TRADE TRACKER (was "Strategy Monitor"; Issue 7: Full Monitored View)
             ==================================================== */}
         {activeTab === "mon" && (() => {
-          // With more than one saved trade the tab is a list on the left and the
-          // open stock's trade on the right; with one or none it stays full width.
+          // With a saved trade the tab is a list on the left and the open stock's
+          // trade on the right; with none it stays full width.
           const monLayout = (body: React.ReactNode) =>
-            trackedTrades.length > 1 ? (
+            trackedTrades.length > 0 ? (
               <div className="si-trk">
                 <TrackedTradesList trades={trackedTrades} activeId={savedThesis?.id ?? null} onSelect={selectTrackedTrade} onRemove={removeSavedTrade} />
                 <div className="si-trk-detail">{body}</div>
