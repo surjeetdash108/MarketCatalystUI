@@ -44,6 +44,7 @@ import {
 import { applyAiCards, moveCardPath, type AiMoveCard } from "./move-card-ai";
 import { summarizeNewsSentiment } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
+import { BullBearChecks } from "./could-checks";
 import { ReadCard, InfoTip, highlightNumbers, highlightSignedPercents } from "./read-cards";
 import { weekMove } from "./week-move";
 import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
@@ -1154,8 +1155,6 @@ export function StockIntelligenceScreen() {
   const [showSigHow, setShowSigHow] = useState(false);
   const [showAssessEv, setShowAssessEv] = useState(false);
   const [showAttHow, setShowAttHow] = useState(false);
-  const [showFwdHow, setShowFwdHow] = useState(false);
-  const [expandedFwd, setExpandedFwd] = useState<Record<string, boolean>>({});
   const [showFundEv, setShowFundEv] = useState(false);
   const [showReadme, setShowReadme] = useState(false);
 
@@ -3215,295 +3214,59 @@ export function StockIntelligenceScreen() {
         {/* ====================================================
             TAB 3: WHY IT COULD MOVE (Complete Implementation)
             ==================================================== */}
-        {activeTab === "could" && (() => {
-          const fRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
-          const fAl = fRun.cats.filter((c: any) => Math.round(c.score) >= 60).length;
-          const C = 2 * Math.PI * 70; // 439.82
-          const ringDash = `${(C * fAl) / 7} ${C}`;
-          const fConf = fRun.conf != null ? Math.round(fRun.conf) : null;
+        {activeTab === "could" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <BullBearChecks bullish={stockDetail.valid} bearish={stockDetail.invalid} broken={stockDetail.broken} />
 
-          return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {/* Upcoming Catalysts Timeline */}
-              <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px" }}>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 22 }}>
-                  CATALYSTS · RECENT &amp; UPCOMING
-                </div>
-                <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
-                  {upcomingCatalysts.map((up, i) => (
-                    <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8 }}>
-                      {/* The timeline line is drawn per event, from this marker across the gap to the next one,
-                          so every row of the grid (not just the first) is joined up. */}
-                      {i < upcomingCatalysts.length - 1 && (
-                        <span aria-hidden style={{ position: "absolute", left: 13, right: -18, top: 12, height: 2, background: "rgba(89,128,166,0.55)", zIndex: 0 }} />
-                      )}
-                      {/* Passed events get a green dot in the ring; events still ahead keep the empty ring. */}
-                      <span
-                        style={{
-                          position: "relative",
-                          zIndex: 1,
-                          width: 26,
-                          height: 26,
-                          borderRadius: 99,
-                          background: "var(--si-bg, #080b10)",
-                          border: `2px solid ${up.past ? "var(--up, #4ade80)" : "#7fa8d0"}`,
-                          boxShadow: up.past ? "0 0 0 6px rgba(74,222,128,0.12)" : "0 0 0 6px rgba(127,168,208,0.12)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {up.past && <span style={{ width: 10, height: 10, borderRadius: 99, background: "var(--up, #4ade80)" }} />}
-                      </span>
-                      {/* Passed events read a little greyer than the ones still ahead. */}
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: up.past ? "var(--si-text-mid, #93a1af)" : "var(--si-accent-light, #a9c6e3)", marginTop: 4 }}>
-                        {up.date} · {up.days}
-                      </span>
-                      {up.cat && (
-                        <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: up.cat === "Political" ? up.col : "var(--si-text-sub, #5d6b79)" }}>
-                          {up.cat.toUpperCase()}
-                        </span>
-                      )}
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, opacity: up.past ? 0.78 : 1 }}>
-                        {up.n}
-                      </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45, opacity: up.past ? 0.78 : 1 }}>
-                        {up.txt}
-                      </span>
-                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "2px 8px", marginTop: 4, opacity: up.past ? 0.78 : 1 }}>
-                        {up.imp} IMPACT
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            {/* Catalysts timeline */}
+            <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 24px" }}>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 22 }}>
+                CATALYSTS · RECENT &amp; UPCOMING
               </div>
-
-              {/* Forward Signals & Confluence Grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 540px), 1fr))", gap: 18, alignItems: "start" }}>
-                {/* Left: 7 Forward Signals */}
-                <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                      FORWARD SIGNALS
+              <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
+                {upcomingCatalysts.map((up, i) => (
+                  <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, opacity: up.past ? 0.6 : 1 }}>
+                    {/* The timeline line is drawn per event, from this marker across the gap to the next one,
+                        so every row of the grid (not just the first) is joined up. */}
+                    {i < upcomingCatalysts.length - 1 && (
+                      <span aria-hidden style={{ position: "absolute", left: 13, right: -18, top: 12, height: 2, background: "rgba(89,128,166,0.55)", zIndex: 0 }} />
+                    )}
+                    {/* Events that have passed are a filled grey dot and fade back; events still ahead keep the open ring. */}
+                    <span
+                      style={{
+                        position: "relative",
+                        zIndex: 1,
+                        width: 26,
+                        height: 26,
+                        borderRadius: 99,
+                        background: up.past ? "#2a3a4a" : "var(--si-bg, #080b10)",
+                        border: `2px solid ${up.past ? "#5d6b79" : "#7fa8d0"}`,
+                        boxShadow: up.past ? "0 0 0 6px rgba(93,107,121,0.12)" : "0 0 0 6px rgba(127,168,208,0.12)",
+                      }}
+                    />
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "#ffffff", marginTop: 4 }}>
+                      {up.date} · {up.days}
                     </span>
-                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                        Click a signal to see what it’s made of
+                    {up.cat && (
+                      <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", color: "#ffffff" }}>
+                        {up.cat.toUpperCase()}
                       </span>
-                      <button
-                        onClick={() => setShowFwdHow(!showFwdHow)}
-                        style={{
-                          height: 24,
-                          padding: "0 9px",
-                          border: "1px solid var(--si-border-sec, #2a3a4a)",
-                          background: "transparent",
-                          color: "var(--si-accent-light, #a9c6e3)",
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 10,
-                          letterSpacing: "0.12em",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {showFwdHow ? "HIDE HOW" : "HOW IT WORKS"}
-                      </button>
+                    )}
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 700, color: "#ffffff", lineHeight: 1 }}>
+                      {up.n}
+                    </span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "#ffffff", lineHeight: 1.5 }}>
+                      {up.txt}
+                    </span>
+                    <span style={{ alignSelf: "flex-start", fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 700, letterSpacing: "0.1em", color: up.col, border: `1px solid ${up.col}`, padding: "3px 9px", marginTop: 4 }}>
+                      {up.imp} IMPACT
                     </span>
                   </div>
-
-                  {/* How It Works Explanatory Dropdown */}
-                  {showFwdHow && (
-                    <div style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", background: "#0b1016", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                        HOW EACH FORWARD SIGNAL IS CALCULATED
-                      </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.55, margin: "6px 0 4px" }}>
-                        Each signal runs 0–100, where 50 is neutral. It is built from the stock’s own drivers: each driver gets an evidence score from current data, and the signal is their weighted average. Scored for a 6-month bullish view. Above 70 points to upside, below 40 to downside.
-                      </div>
-                      {[
-                        ["Business", "FUNDAMENTALS", "Revenue growth in key segments, gross and operating margin trend, and forward guidance."],
-                        ["Earnings", "ESTIMATES", "EPS and revenue estimate revisions over 30 and 90 days, beat rate over the last 8 quarters, and surprise magnitude."],
-                        ["Technical", "PRICE ACTION", "Trend vs. 50- and 200-day moving averages, relative strength vs. S&P 500, and distance to key support/resistance."],
-                        ["Catalysts", "CALENDAR", "Upcoming dated events (earnings, product launches, conferences) weighted by historical volatility impact."],
-                        ["Valuation", "MULTIPLES", "Forward P/E and EV/EBITDA vs. 5-year history and peers, adjusted for growth (PEG ratio)."],
-                        ["Positioning", "FLOWS", "Call/put skew, short interest, days to cover, plus institutional ownership change from latest 13F filings."],
-                        ["Macro", "REGIME", "Market trend, VIX level, interest rate volatility, and sector sensitivity to broader liquidity."],
-                      ].map(([sName, sSrc, sDesc], idx) => (
-                        <div key={idx} style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                          <div>
-                            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{sName}</div>
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em", color: "var(--si-text-sub, #5d6b79)", marginTop: 3 }}>{sSrc}</div>
-                          </div>
-                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #c9d4de)", lineHeight: 1.5 }}>{sDesc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 7 Signal Rows */}
-                  {fRun.cats.map((c: any) => {
-                    const shortName = SHORT[c.k] || c.label;
-                    const score = Math.round(c.score);
-                    const col = sc(score);
-                    const isOpen = expandedFwd[c.k];
-
-                    return (
-                      <div key={c.k}>
-                        <div
-                          onClick={() => setExpandedFwd((prev) => ({ ...prev, [c.k]: !prev[c.k] }))}
-                          style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer", padding: "4px 0" }}
-                        >
-                          <span style={{ width: 100, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                            {shortName}
-                          </span>
-                          <div style={{ flex: 1, display: "flex", gap: 3 }}>
-                            {Array.from({ length: 10 }, (_, i) => (
-                              <span
-                                key={i}
-                                style={{
-                                  flex: 1,
-                                  height: 18,
-                                  background: i < Math.round(score / 10) ? col : "#1c2733",
-                                  transition: "background 200ms ease",
-                                }}
-                              />
-                            ))}
-                          </div>
-                          <span style={{ width: 36, textAlign: "right", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: col }}>
-                            {score}
-                          </span>
-                          <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "var(--si-accent, #5980a6)", fontSize: 12, flex: "none" }}>
-                            ▼
-                          </span>
-                        </div>
-
-                        {/* Expandable Driver Evidence List */}
-                        {isOpen && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 0, margin: "6px 0 4px 0", borderLeft: "1px solid var(--si-border-sec, #2a3a4a)", paddingLeft: 12 }}>
-                            {c.ds.map((xd: any, xidx: number) => {
-                              const evCol = sc(xd.ev);
-                              return (
-                                <div key={xidx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid #141d27" }}>
-                                  <span style={{ width: 58, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, color: xd.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
-                                    {xd.core ? "CORE" : "CONFIRM"}
-                                  </span>
-                                  <div style={{ flex: 1, minWidth: 120 }}>
-                                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                                      <span>{xd.name}</span>
-                                      {xd.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: "#f5b031" }}>◆ CRITICAL</span>}
-                                    </div>
-                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 1 }}>
-                                      {xd.val}
-                                      {xd.shared && <span style={{ color: "var(--si-accent, #5980a6)" }}> · ↔ counted once</span>}
-                                    </div>
-                                  </div>
-                                  <div style={{ width: "clamp(36px,18%,90px)", flex: "none", height: 4, background: "#1c2733" }}>
-                                    <div style={{ height: 4, width: `${xd.ev}%`, background: evCol }} />
-                                  </div>
-                                  <span style={{ width: 28, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: evCol }}>
-                                    {Math.round(xd.ev)}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Right: Confluence & Confidence Ring */}
-                <div
-                  style={{
-                    position: "relative",
-                    border: "1px solid var(--si-border, #1c2733)",
-                    background: "var(--si-card, #0c1118)",
-                    padding: "24px 26px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 32,
-                    flexWrap: "wrap",
-                    boxShadow: "var(--si-shadow, none)",
-                  }}
-                >
-
-                  {/* SVG Circular Ring */}
-                  <div style={{ position: "relative", width: 170, height: 170, flex: "none" }}>
-                    <svg width="170" height="170" viewBox="0 0 170 170" style={{ position: "absolute", left: 0, top: 0 }}>
-                      <circle cx="85" cy="85" r="70" fill="none" stroke="var(--si-border, #1c2733)" strokeWidth="14" />
-                      <circle
-                        cx="85"
-                        cy="85"
-                        r="70"
-                        fill="none"
-                        stroke="#7fa8d0"
-                        strokeWidth="14"
-                        strokeDasharray={ringDash}
-                        transform="rotate(-90 85 85)"
-                        style={{ transition: "stroke-dasharray 600ms ease" }}
-                      />
-                    </svg>
-                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 46, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                        {fAl}/7
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: "2px", color: "var(--si-text-mid, #93a1af)" }}>
-                        ALIGNED
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Ring Details */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                        CONFLUENCE
-                      </div>
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
-                        {fAl} of 7 signals aligned
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                        CONFIDENCE
-                      </div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: fConf != null ? 52 : 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1, marginTop: 4 }}>
-                        {fConf != null ? fConf : "Unavailable"}
-                        {fConf != null && (
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                            {" "}/ 100
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Invalidation Conditions */}
-              <div style={{ border: "1px solid rgba(127,168,208,0.45)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent-soft, #7fa8d0)" }}>
-                  {stockDetail.broken.length ? "WHAT HAS ALREADY BROKEN, AND WHAT STILL COULD" : "WHAT WOULD BREAK THIS SETUP?"}
-                </span>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
-                  {stockDetail.broken.map((iv, i) => (
-                    <div key={`broken-${i}`} style={{ border: "1px solid var(--down, #dc2626)", background: "rgba(220,38,38,0.08)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.14em", color: "var(--down, #dc2626)" }}>ALREADY BROKEN</span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[0]}</span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[1]}</span>
-                    </div>
-                  ))}
-                  {stockDetail.invalid.map((iv, i) => (
-                    <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[0]}</span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{iv[1]}</span>
-                    </div>
-                  ))}
-                </div>
+                ))}
               </div>
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* ====================================================
             TAB 4: FUNDAMENTALS (Complete Implementation)

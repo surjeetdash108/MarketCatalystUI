@@ -724,6 +724,40 @@ export function invalidationLevels(f: SiFacts): { pending: [string, string][]; b
   return { pending, broken };
 }
 
+/**
+ * "What would validate this setup": the bullish checks shown beside the bearish ones on Why It Could
+ * Move. Like `invalidationLevels`, a level is read against where the price stands: a stock already
+ * below its 50 DMA is asked to reclaim it, not to "hold" it, and a stock already above R1 has no
+ * "breaks first resistance" left to do.
+ */
+export function validationLevels(f: SiFacts): [string, string][] {
+  const out: [string, string][] = [];
+  if (has(f.sma50)) {
+    out.push(
+      has(f.price) && f.price < f.sma50
+        ? ["Price reclaims the 50 DMA", `Daily close back above ${usd(f.sma50)}`]
+        : ["Price holds the 50 DMA", `Daily closes stay above ${usd(f.sma50)}`],
+    );
+  }
+  if (has(f.pivotR1) && !(has(f.price) && f.price > f.pivotR1)) {
+    out.push(["Breaks first resistance", `Daily close above R1 ${usd(f.pivotR1)}`]);
+  }
+  out.push([
+    "Forward EPS holds or rises",
+    has(f.nextFyEps) ? `Next-FY consensus EPS stays at or above ${usd(f.nextFyEps)}` : "Next-FY consensus EPS is not cut",
+  ]);
+  out.push([
+    "Next report beats",
+    has(f.epsBeats) && has(f.epsReports)
+      ? `EPS at or above consensus again (beat ${f.epsBeats} of the last ${f.epsReports})`
+      : "EPS at or above consensus",
+  ]);
+  if (has(f.rsRating)) {
+    out.push(["Relative strength stays strong", `RS rating holds at 70 or above (now ${Math.round(f.rsRating)}/99)`]);
+  }
+  return out;
+}
+
 export function detail(t: string, live?: any): DetailStock {
   const sym = t.toUpperCase().trim();
   const facts: SiFacts = live?.facts ?? EMPTY_FACTS;
@@ -809,6 +843,7 @@ export function detail(t: string, live?: any): DetailStock {
   };
 
   const { pending: invalid, broken } = invalidationLevels(facts);
+  const valid = validationLevels(facts);
   invalid.push(["Forward EPS cuts", "Next-FY consensus EPS revised down more than 10%"]);
 
   const fundBits = [
@@ -904,6 +939,7 @@ export function detail(t: string, live?: any): DetailStock {
     movedTxt,
     movedEv,
     upcoming: [],
+    valid,
     invalid,
     broken,
     fundTxt,

@@ -3,7 +3,7 @@
 // through was shown as a risk still to come. Levels now split on where the price is.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { EMPTY_FACTS, detail, invalidationLevels, trendRead, type SiFacts } from "./data";
+import { EMPTY_FACTS, detail, invalidationLevels, trendRead, validationLevels, type SiFacts } from "./data";
 import { localCopilotAnswer, type CopilotLocalInput } from "./copilot-local";
 
 const facts = (o: Partial<SiFacts>): SiFacts => ({ ...EMPTY_FACTS, ...o });
@@ -118,5 +118,31 @@ describe("trendRead", () => {
   it("says so when an average is missing", () => {
     assert.equal(trendRead(100, null, 90), "Moving-average data is not available for this stock yet.");
     assert.equal(trendRead(null, 100, 90), "Moving-average data is not available for this stock yet.");
+  });
+});
+
+describe("validationLevels", () => {
+  it("price above the 50 DMA and under R1: hold the 50 DMA, break R1, plus the earnings and RS checks", () => {
+    const r = validationLevels(facts({ price: 180, sma50: 172, pivotR1: 189.85, nextFyEps: 3.58, epsBeats: 4, epsReports: 4, rsRating: 96 }));
+    assert.deepEqual(r, [
+      ["Price holds the 50 DMA", "Daily closes stay above $172.00"],
+      ["Breaks first resistance", "Daily close above R1 $189.85"],
+      ["Forward EPS holds or rises", "Next-FY consensus EPS stays at or above $3.58"],
+      ["Next report beats", "EPS at or above consensus again (beat 4 of the last 4)"],
+      ["Relative strength stays strong", "RS rating holds at 70 or above (now 96/99)"],
+    ]);
+  });
+
+  it("price already below the 50 DMA is asked to reclaim it; price already above R1 has no breakout left", () => {
+    const r = validationLevels(facts({ price: 200, sma50: 217.12, pivotR1: 190 }));
+    assert.deepEqual(r[0], ["Price reclaims the 50 DMA", "Daily close back above $217.12"]);
+    assert.equal(titles(r).includes("Breaks first resistance"), false);
+  });
+
+  it("without data it keeps the two earnings checks, in their plain wording, and drops the rest", () => {
+    assert.deepEqual(validationLevels(facts({})), [
+      ["Forward EPS holds or rises", "Next-FY consensus EPS is not cut"],
+      ["Next report beats", "EPS at or above consensus"],
+    ]);
   });
 });
