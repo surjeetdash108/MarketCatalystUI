@@ -46,6 +46,7 @@ import { applyAiCards, moveCardPath, type AiMoveCard } from "./move-card-ai";
 import { scoreNews, reactionAfter, summarizeNewsSentiment, classifyDirection } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
 import { ReadCard } from "./read-cards";
+import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
 import { fundamentalReadText, technicalReadText } from "./read-text";
 import { useTickerSearch } from "../hooks/useTickerSearch";
 import { BarInterval } from "../candle-chart";
@@ -557,7 +558,7 @@ export function StockIntelligenceScreen() {
   // The shell's setTheme persists to localStorage + backend, keeping MC in sync.
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
   const router = useRouter();
-  const { setSiTicker, activeTab, setActiveTab, goToSearch } = useSI();
+  const { siTicker, setSiTicker, activeTab, setActiveTab, goToSearch } = useSI();
 
   // Search input state
   const [searchQuery, setSearchQuery] = useState("");
@@ -1271,6 +1272,55 @@ export function StockIntelligenceScreen() {
   const [showGuide, setShowGuide] = useState(false);
   const [expandedLabDrivers, setExpandedLabDrivers] = useState<Record<string, boolean>>({});
   const [labEditTargets, setLabEditTargets] = useState(false);
+  // Trade Builder: three set-up steps first (direction, horizon, mode), then Run shows the trade.
+  const [labStarted, setLabStarted] = useState(false);
+  const [pickDir, setPickDir] = useState<"Bull" | "Bear" | null>(null);
+  const [pickHz, setPickHz] = useState<string | null>(null);
+  const [pickMode, setPickMode] = useState<"NORMAL" | "ADVANCED" | null>(null);
+  const [labSaveOpen, setLabSaveOpen] = useState(false);
+  const [labSavedNote, setLabSavedNote] = useState<string | null>(null);
+  const [labExplainerOpen, setLabExplainerOpen] = useState(false);
+  const [labWeightsDialog, setLabWeightsDialog] = useState(false);
+  const [labBreakdownOpen, setLabBreakdownOpen] = useState<Record<string, boolean>>({});
+  // A new stock starts from an empty set-up.
+  useEffect(() => {
+    queueMicrotask(() => {
+      setLabStarted(false);
+      setPickDir(null);
+      setPickHz(null);
+      setPickMode(null);
+      setLabSavedNote(null);
+    });
+  }, [siTicker]);
+  // The set-up page opens at the top, whatever the last tab's scroll position was.
+  useEffect(() => {
+    if (activeTab !== "lab" || labStarted || typeof window === "undefined") return;
+    const toTop = () => {
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+      document.querySelectorAll("main.main, .main").forEach((el) => {
+        if (el.scrollTop > 0) el.scrollTop = 0;
+      });
+    };
+    toTop();
+    const raf = requestAnimationFrame(toTop);
+    const timer = setTimeout(toTop, 150);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [activeTab, labStarted]);
+  /** Back to the empty three-step set-up (after a save). */
+  const resetBuilder = () => {
+    setLabStarted(false);
+    setPickDir(null);
+    setPickHz(null);
+    setPickMode(null);
+    setLabWeightsState(null);
+    setTargetOverride(null);
+    setStopOverride(null);
+    setLabEditTargets(false);
+    setLabBreakdownOpen({});
+  };
 
   // Thesis Monitor state
   const [monScenario, setMonScenario] = useState<"live" | "cut" | "break" | "surge">("live");
@@ -5052,10 +5102,121 @@ export function StockIntelligenceScreen() {
             TAB 8: THESIS LAB (Issue 6 & 7: Full Scenario Engine)
             ==================================================== */}
         {activeTab === "lab" && (() => {
+          if (!labStarted) {
+            const ready = pickDir != null && pickHz != null && pickMode != null;
+            const stepLabel: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 8 };
+            const choice = (active: boolean, accent: string, disabled: boolean): React.CSSProperties => ({
+              height: 44,
+              minWidth: 120,
+              padding: "0 18px",
+              border: `1px solid ${active ? accent : "#1c2733"}`,
+              background: active ? "rgba(89,128,166,0.2)" : "transparent",
+              color: "#ffffff",
+              opacity: disabled ? 0.35 : 1,
+              fontFamily: "'Manrope', sans-serif",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: disabled ? "not-allowed" : "pointer",
+              transition: "background 160ms, border-color 160ms",
+            });
+            return (
+              <>
+                {labSavedNote && (
+                  <div style={{ maxWidth: 780, width: "100%", margin: "14px auto -6px", border: "1px solid rgba(74,222,128,0.4)", background: "rgba(74,222,128,0.07)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <span style={{ color: "var(--up, #4ade80)", fontSize: 16 }}>✓</span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "#ffffff" }}>{labSavedNote}</span>
+                    <button
+                      onClick={() => {
+                        setLabSavedNote(null);
+                        setActiveTab("mon");
+                      }}
+                      style={{ marginLeft: "auto", height: 30, padding: "0 12px", border: "1px solid var(--si-accent, #5980a6)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer" }}
+                    >
+                      VIEW IN TRADE TRACKER ▸
+                    </button>
+                    <button onClick={() => setLabSavedNote(null)} aria-label="Dismiss" style={{ width: 26, height: 26, border: "none", background: "transparent", color: "#ffffff", fontSize: 16, cursor: "pointer" }}>
+                      ×
+                    </button>
+                  </div>
+                )}
+                <div
+                  id="si-trade-builder-top"
+                  style={{ scrollMarginTop: 110, maxWidth: 780, width: "100%", margin: "14px auto 20px", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "22px 30px", display: "flex", flexDirection: "column", gap: 20 }}
+                >
+                  <div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)", textShadow: "0 0 6px rgba(127, 168, 208, 0.75), 0 0 14px rgba(89, 128, 166, 0.55)" }}>TRADE BUILDER</div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 34, fontWeight: 700, color: "#ffffff", marginTop: 4, lineHeight: 1.05 }}>BUILD YOUR TRADE STRATEGY FOR {stock.t}</div>
+                  </div>
+                  <div>
+                    <div style={stepLabel}>STEP 1 · DIRECTION</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {(["Bull", "Bear"] as const).map((d) => (
+                        <button key={d} onClick={() => setPickDir(d)} style={choice(pickDir === d, d === "Bull" ? UP : DN, false)}>
+                          {d === "Bull" ? "▲ Bullish" : "▼ Bearish"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={stepLabel}>STEP 2 · HORIZON</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {["1M", "3M", "6M", "9M"].map((hz) => (
+                        <button key={hz} disabled={pickDir == null} onClick={() => setPickHz(hz)} style={{ ...choice(pickHz === hz, STEEL, pickDir == null), minWidth: 80, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {hz}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={stepLabel}>STEP 3 · MODE</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {([
+                        ["NORMAL", "Normal", "Engine weights, fixed"],
+                        ["ADVANCED", "Advanced", "Edit the engine weights yourself"],
+                      ] as const).map(([m, title, sub]) => (
+                        <button
+                          key={m}
+                          disabled={pickHz == null}
+                          onClick={() => setPickMode(m)}
+                          style={{ ...choice(pickMode === m, STEEL, pickHz == null), height: 62, minWidth: 230, textAlign: "left", display: "flex", flexDirection: "column", justifyContent: "center", gap: 3 }}
+                        >
+                          <span>{title}</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, opacity: 0.8 }}>{sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <button
+                      disabled={!ready}
+                      onClick={() => {
+                        if (!pickDir || !pickHz || !pickMode) return;
+                        setLabDir(pickDir);
+                        setLabHz(pickHz);
+                        setLabMode(pickMode);
+                        setLabWeightsState(null);
+                        setTargetOverride(null);
+                        setStopOverride(null);
+                        setLabEditTargets(false);
+                        setLabBreakdownOpen({});
+                        setLabSavedNote(null);
+                        setLabStarted(true);
+                      }}
+                      style={{ height: 50, padding: "0 30px", border: "none", background: ready ? "#5980a6" : "#1c2733", color: "#ffffff", opacity: ready ? 1 : 0.5, fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", cursor: ready ? "pointer" : "not-allowed" }}
+                    >
+                      RUN STRATEGY →
+                    </button>
+                  </div>
+                </div>
+                <TradeBuilderGuide done={[pickDir != null, pickHz != null, pickMode != null]} />
+              </>
+            );
+          }
           const thBull = labDir === "Bull";
-          const thHz = labHz === "12M" ? "1Y" : labHz;
-          const thRun = thesisRun(stock.t, labDir, labHz, null, labWeightsState || undefined, siFacts);
-          const thPrev = thesisRun(stock.t, labDir, labHz, (c: any, n: any, f: any, dd: number) => -dd, labWeightsState || undefined, siFacts);
+          // Custom weights only count in Advanced mode.
+          const thCustomW = labMode === "ADVANCED" ? labWeightsState : null;
+          const thRun = thesisRun(stock.t, labDir, labHz, null, thCustomW || undefined, siFacts);
+          const thPrev = thesisRun(stock.t, labDir, labHz, (c: any, n: any, f: any, dd: number) => -dd, thCustomW || undefined, siFacts);
           const TT = thesisTargets(stock.t, labDir, labHz, thRun, stock.p, siFacts);
           const TPt = getTP(stock.t, siFacts);
 
@@ -5066,12 +5227,9 @@ export function StockIntelligenceScreen() {
           const thRR = Math.abs(thUp / (thDn || 1));
           const thConf = thRun.conf != null ? Math.round(thRun.conf) : null;
           const dConf = (thRun.conf != null && thPrev.conf != null) ? Math.round(thRun.conf - thPrev.conf) : 0;
-          const thAtRisk = thRun.critFail.length > 0;
           const thBand: [string, string] = thConf == null
             ? ["UNAVAILABLE", "#93a1af"]
-            : thAtRisk
-              ? ["TRADE AT RISK", DN]
-              : thConf >= 75
+            : thConf >= 75
                 ? ["HIGH CONVICTION", UP]
                 : thConf >= 60
                   ? ["CONSTRUCTIVE", STEEL]
@@ -5080,8 +5238,6 @@ export function StockIntelligenceScreen() {
                     : ["WEAK", DN];
 
           const thStrong = thRun.drv.slice().sort((a: any, b: any) => b.pts - a.pts).slice(0, 3);
-          const thWeak = thRun.drv.filter((d: any) => d.share >= 2).sort((a: any, b: any) => a.ev - b.ev).slice(0, 2);
-          const thMover = thRun.drv.filter((d: any) => d.dd).sort((a: any, b: any) => Math.abs(b.dd) - Math.abs(a.dd)).slice(0, 2);
 
           const thLo = Math.min(TT.dn, stopV, stock.p) * 0.97;
           const thHi = Math.max(TT.up, tgtV, stock.p) * 1.03;
@@ -5121,7 +5277,6 @@ export function StockIntelligenceScreen() {
           const stopYPct = `${(yOf(stopV) / 260) * 100}%`;
           const nowYPct = `${(yOf(stock.p) / 260) * 100}%`;
 
-          const thEvCol = (v: number) => (v >= 70 ? UP : v >= 55 ? STEEL : v >= 40 ? "#f5b031" : DN);
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -5145,6 +5300,17 @@ export function StockIntelligenceScreen() {
                   <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 30, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", marginTop: 4 }}>
                     {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} STRATEGY
                   </div>
+                  <button
+                    onClick={() => {
+                      setPickDir(labDir);
+                      setPickHz(labHz);
+                      setPickMode(labMode);
+                      setLabStarted(false);
+                    }}
+                    style={{ marginTop: 8, background: "none", border: "none", padding: 0, color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", cursor: "pointer" }}
+                  >
+                    ← EDIT SETUP
+                  </button>
                 </div>
 
                 {/* Mode Toggle */}
@@ -5156,7 +5322,14 @@ export function StockIntelligenceScreen() {
                     {(["NORMAL", "ADVANCED"] as const).map((m) => (
                       <button
                         key={m}
-                        onClick={() => setLabMode(m)}
+                        onClick={() => {
+                          setLabMode(m);
+                          if (m === "NORMAL") {
+                            setTargetOverride(null);
+                            setStopOverride(null);
+                            setLabEditTargets(false);
+                          }
+                        }}
                         style={{
                           height: 30,
                           padding: "0 14px",
@@ -5221,7 +5394,7 @@ export function StockIntelligenceScreen() {
                     HORIZON
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
-                    {["1M", "3M", "6M", "12M"].map((hz) => {
+                    {["1M", "3M", "6M", "9M"].map((hz) => {
                       const isActive = labHz === hz;
                       return (
                         <button
@@ -5255,9 +5428,9 @@ export function StockIntelligenceScreen() {
                 {/* Driver Weights Strip */}
                 <div style={{ marginLeft: "auto", minWidth: 300, flex: 1, maxWidth: 520, paddingTop: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
-                    <span>DRIVER WEIGHTS</span>
+                    <span>{thCustomW ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}</span>
                     <span style={{ color: "var(--si-text-mid, #93a1af)", letterSpacing: "0.04em" }}>
-                      {labHz === "1M" ? "1M tactical" : labHz === "12M" ? "12M fundamental" : "3–6M balanced"} · {thBull ? "bullish" : "bearish"}
+                      {labHz === "1M" ? "1M tactical" : labHz === "9M" || labHz === "12M" ? `${labHz} fundamental` : labHz === "3M" ? "3M momentum" : "6M balanced"} · {thBull ? "bullish" : "bearish"}
                     </span>
                   </div>
                   <div style={{ display: "flex", minHeight: 30, gap: 2 }}>
@@ -5268,7 +5441,7 @@ export function StockIntelligenceScreen() {
                           flexGrow: c.w,
                           flexBasis: 0,
                           minWidth: 38,
-                          borderTop: `2px solid ${thEvCol(c.score)}`,
+                          borderTop: `2px solid ${sc(c.score)}`,
                           background: "rgba(89,128,166,0.12)",
                           display: "flex",
                           flexDirection: "column",
@@ -5291,24 +5464,143 @@ export function StockIntelligenceScreen() {
                 </div>
               </div>
 
-              {/* NORMAL MODE CONTENT */}
-              {labMode === "NORMAL" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))", gap: 18, alignItems: "start" }}>
-                  {/* Left Column: Market History */}
+              {/* Engine weights: sliders are live in Advanced mode and greyed out (tap for an explanation) in Normal mode */}
+              <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minHeight: 28 }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: thCustomW ? "#f5b031" : "var(--si-text-hi, #e8eef4)" }}>
+                    {thCustomW ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="How the trade confidence is calculated"
+                    aria-expanded={labExplainerOpen}
+                    title="How this is calculated"
+                    onClick={() => setLabExplainerOpen((v) => !v)}
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: "50%",
+                      border: "1px solid var(--si-accent-light, #a9c6e3)",
+                      background: labExplainerOpen ? "var(--si-accent-light, #a9c6e3)" : "transparent",
+                      color: labExplainerOpen ? "#0c1118" : "var(--si-accent-light, #a9c6e3)",
+                      fontFamily: "Georgia, serif",
+                      fontSize: 12,
+                      fontStyle: "italic",
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      padding: 0,
+                      cursor: "pointer",
+                      alignSelf: "center",
+                      flex: "none",
+                    }}
+                  >
+                    i
+                  </button>
+                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
+                    {labMode === "ADVANCED" ? "Drag to set relative importance — automatically normalized to 100%." : "Fixed in Normal mode."}
+                  </span>
+                  {labMode === "ADVANCED" && (
+                    <button
+                      onClick={() => setLabWeightsState(null)}
+                      style={{ marginLeft: "auto", height: 28, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Reset to engine weights
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px 22px" }}>
+                  {CATS_T.map(([k, label]) => {
+                    const raw = thCustomW ? thCustomW[k] : thesisWeights(labDir, labHz)[k];
+                    const shown = Math.round(thRun.W[k]);
+                    return (
+                      <div key={k} style={{ position: "relative", opacity: labMode === "ADVANCED" ? 1 : 0.42, filter: labMode === "ADVANCED" ? "none" : "grayscale(1)", transition: "opacity 200ms ease" }}>
+                        {labMode !== "ADVANCED" && (
+                          <div
+                            role="button"
+                            aria-label={`${label} weight is fixed in Normal mode`}
+                            onPointerDown={(e) => {
+                              e.preventDefault();
+                              setLabWeightsDialog(true);
+                            }}
+                            style={{ position: "absolute", inset: 0, zIndex: 1, cursor: "pointer" }}
+                          />
+                        )}
+                        <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "var(--si-text-body, #d5dfe9)", marginBottom: 4 }}>
+                          <span>{label}</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{shown}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="40"
+                          step="1"
+                          value={raw || 0}
+                          tabIndex={labMode === "ADVANCED" ? 0 : -1}
+                          onChange={(e) => {
+                            if (labMode !== "ADVANCED") {
+                              setLabWeightsDialog(true);
+                              return;
+                            }
+                            const base = labWeightsState || thesisWeights(labDir, labHz);
+                            setLabWeightsState({ ...base, [k]: +e.target.value });
+                          }}
+                          style={{ width: "100%", accentColor: "#5980a6", cursor: "pointer" }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                {labExplainerOpen && (
+                  <ConfidenceExplainer cats={thRun.cats} conf={thConf} hz={labHz} bull={thBull} custom={!!thCustomW} onClose={() => setLabExplainerOpen(false)} />
+                )}
+                {labWeightsDialog && labMode !== "ADVANCED" && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Engine weights"
+                    onClick={() => setLabWeightsDialog(false)}
+                    style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(4, 7, 11, 0.62)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+                  >
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ width: "min(420px, 100%)", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card, #0c1118)", boxShadow: "0 18px 48px rgba(0,0,0,0.6)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}
+                    >
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #e8eef4)" }}>ENGINE WEIGHTS</div>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#ffffff", lineHeight: 1.55 }}>Switch to Advanced mode to edit the weights.</div>
+                      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+                        <button
+                          onClick={() => setLabWeightsDialog(false)}
+                          style={{ height: 34, padding: "0 14px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          OK
+                        </button>
+                        <button
+                          autoFocus
+                          onClick={() => {
+                            setLabWeightsDialog(false);
+                            setLabMode("ADVANCED");
+                          }}
+                          style={{ height: 34, padding: "0 14px", border: "none", background: "var(--si-accent-btn, #5980a6)", color: "#ffffff", fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          Switch to Advanced
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))", gap: 18, alignItems: "stretch" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+                  {/* Market history */}
                   <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                        MARKET HISTORY
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.12em", color: "var(--si-text-mid, #93a1af)" }}>
-                        LAST {labHz === "12M" ? "12 MONTHS" : labHz}
-                      </span>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>MARKET HISTORY</span>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: "0.12em", color: "#ffffff" }}>LAST {labHz === "12M" ? "9M" : labHz}</span>
                     </div>
-
                     <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
                       Historical Underlying Asset Benchmark Performance — buy-and-hold returns, drawdown and volatility; not an active strategy backtest.
                     </div>
-
                     <div style={{ position: "relative", height: 260 }}>
                       <svg width="100%" height="260" viewBox="0 0 1000 260" preserveAspectRatio="none" style={{ display: "block" }}>
                         <line x1="0" x2="1000" y1="65" y2="65" stroke="#152029" vectorEffect="non-scaling-stroke" />
@@ -5317,408 +5609,80 @@ export function StockIntelligenceScreen() {
                         <path d={hsArea} fill={hsRet >= 0 ? UP : DN} opacity="0.1" />
                         <path d={hsPath} fill="none" stroke={hsRet >= 0 ? UP : DN} strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
                       </svg>
-
-                      {/* Target dashed line */}
                       <div style={{ position: "absolute", left: 0, right: 0, top: tgtYPct, borderTop: "1px dashed #4ade80" }}>
-                        <span style={{ position: "absolute", right: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#4ade80", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>
-                          TARGET {usd(tgtV)}
-                        </span>
+                        <span style={{ position: "absolute", right: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#4ade80", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>TARGET {usd(tgtV)}</span>
                       </div>
-
-                      {/* Invalidation dashed line */}
                       <div style={{ position: "absolute", left: 0, right: 0, top: stopYPct, borderTop: "1px dashed #f05656" }}>
-                        <span style={{ position: "absolute", left: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#f05656", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>
-                          INVALIDATION {usd(stopV)}
-                        </span>
+                        <span style={{ position: "absolute", left: 0, top: "-18px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, color: "#f05656", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>INVALIDATION {usd(stopV)}</span>
                       </div>
-
-                      {/* Current price glowing dot */}
+                      <div style={{ position: "absolute", left: 0, right: 0, top: nowYPct, borderTop: "1px dashed rgba(255,255,255,0.55)" }}>
+                        <span style={{ position: "absolute", right: 12, top: 3, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: "#ffffff", background: "var(--si-card-solid, #0c1118)", padding: "1px 6px" }}>PRESENT {usd(stock.p)}</span>
+                      </div>
                       <div style={{ position: "absolute", right: -4, top: nowYPct, width: 8, height: 8, marginTop: -4, borderRadius: 99, background: "#e8eef4", boxShadow: "0 0 10px rgba(232,238,244,0.6)" }} />
                     </div>
-
-                    {/* Stats Grid */}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
                       {[
                         ["RETURN", pct1(hsRet), hsRet >= 0 ? UP : DN],
-                        // Neutral figures use the theme's text colour — a fixed
-                        // near-white was invisible on the day-mode (white) tile.
                         ["HIGH", usd(Math.max(...hs)), "var(--si-text-hi, #e8eef4)"],
                         ["LOW", usd(Math.min(...hs)), "var(--si-text-hi, #e8eef4)"],
                         ["MAX DRAWDOWN", pct1(hsDD * 100), "var(--down, #dc2626)"],
                         ["VOLATILITY", Math.round(hsVolA) + "% ann.", "var(--si-text-hi, #e8eef4)"],
                       ].map(([k, v, c], idx) => (
                         <div key={idx} style={{ padding: "10px 12px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>
-                            {k}
-                          </div>
-                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: c as string, marginTop: 2 }}>
-                            {v}
-                          </div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>{k}</div>
+                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: c as string, marginTop: 2 }}>{v}</div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Right Column: Thesis Confidence & Weights */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                    {/* Confidence Box */}
-                    <div
-                      style={{
-                        position: "relative",
-                        border: "1px solid var(--si-border, #1c2733)",
-                        background: "var(--si-card, #0c1118)",
-                        boxShadow: "var(--si-shadow, none)",
-                        padding: "18px 20px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 10,
-                      }}
+                  {/* Trade card */}
+                  <div style={{ position: "relative", border: "1px solid #5980a6", background: "var(--si-card, rgba(12, 17, 24, 0.95))", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>TRADE CARD</span>
+                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
+                        {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} TRADE
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
+                      {[
+                        ["PRESENT PRICE", usd(stock.p), "#ffffff"],
+                        ["TARGET", usd(tgtV), thBull ? UP : DN],
+                        ["INVALIDATION", usd(stopV), DN],
+                        ["UPSIDE", pct1(thUp), UP],
+                        ["DOWNSIDE", pct1(thDn), DN],
+                        ["REWARD / RISK", thRR.toFixed(1) + "×", thRR >= 2 ? UP : thRR >= 1.2 ? "#f5b031" : DN],
+                        ["TRADE CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
+                      ].map(([k, v, c], idx) => (
+                        <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "#ffffff" }}>{k}</div>
+                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, color: c as string, marginTop: 4 }}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                      <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>KEY CATALYST</div>
+                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.cat}</div>
+                      </div>
+                      <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f5b031" }}>BIGGEST RISK</div>
+                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.risk}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setLabSaveOpen(true)}
+                      style={{ height: 48, border: "none", background: "#5980a6", color: "#ffffff", fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.04em", cursor: "pointer", transition: "background 160ms" }}
                     >
-
-                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                            TRADE CONFIDENCE
-                          </div>
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: thConf != null ? 56 : 32, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {thConf != null ? thConf : "Unavailable"}
-                            </span>
-                            {thConf != null && (
-                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
-                                / 100
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.08em", color: thBand[1] }}>
-                            {thBand[0]}
-                          </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
-                            CORE INTACT <span style={{ color: thRun.coreOk === thRun.core.length ? UP : "#f5b031" }}>{thRun.coreOk} / {thRun.core.length}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ height: 8, background: "var(--si-border, #1c2733)" }}>
-                        <div style={{ height: 8, width: `${thConf}%`, background: thBand[1], transition: "width 400ms ease" }} />
-                      </div>
-
-                      {thAtRisk && (
-                        <div style={{ border: "1px solid rgba(240,86,86,0.5)", background: "rgba(240,86,86,0.08)", padding: "10px 12px", fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffd2d2", lineHeight: 1.45 }}>
-                          ◆ Critical driver failing: {thRun.critFail.map((d: any) => d.name).join(", ")}. The trade is flagged AT RISK even though the aggregate score is {thConf}.
-                        </div>
-                      )}
-
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-                        {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
-                      </div>
-                    </div>
-
-                    {/* Weights Breakdown Accordion */}
-                    <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                          WEIGHTS
-                        </span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: labWeightsState ? "#f5b031" : STEEL, border: `1px solid ${labWeightsState ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
-                          {labWeightsState ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}
-                        </span>
-                      </div>
-
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-mid, #93a1af)", lineHeight: 1.45 }}>
-                        {labHz === "1M" ? "Short horizon — price action, catalysts and positioning carry the most weight." : labHz === "12M" ? "Long horizon — business quality and valuation carry the most weight." : "Balanced 3–6 month horizon — fundamentals and revisions lead, confirmed by price action."}
-                      </div>
-
-                      {thRun.cats.map((c: any) => {
-                        const isOpen = expandedLabDrivers[c.k];
-                        const top = c.ds.slice().sort((a: any, b: any) => (b.share || 0) - (a.share || 0))[0];
-                        return (
-                          <div key={c.k} style={{ borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                            <div
-                              onClick={() => setExpandedLabDrivers((prev) => ({ ...prev, [c.k]: !prev[c.k] }))}
-                              style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 90px 44px 34px 14px", alignItems: "center", gap: 12, padding: "7px 0", cursor: "pointer" }}
-                            >
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                                  {c.label}
-                                </div>
-                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                  {top ? `${top.name} · ${top.val}` : "—"}
-                                </div>
-                              </div>
-                              <div style={{ height: 6, background: "#1c2733" }}>
-                                <div style={{ height: 6, width: `${(c.w / 30) * 100}%`, background: "#5980a6", transition: "width 300ms ease" }} />
-                              </div>
-                              <span style={{ textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
-                                {Math.round(c.w)}%
-                              </span>
-                              <span style={{ textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: thEvCol(c.score) }}>
-                                {Math.round(c.score)}
-                              </span>
-                              <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 200ms", color: "var(--si-accent, #5980a6)", fontSize: 12 }}>
-                                ▼
-                              </span>
-                            </div>
-
-                            {isOpen && (
-                              <div style={{ display: "flex", flexDirection: "column", gap: 0, margin: "6px 0 4px 0", borderLeft: "1px solid var(--si-border-sec, #2a3a4a)", paddingLeft: 12 }}>
-                                {c.ds.map((xd: any, xidx: number) => (
-                                  <div key={xidx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid #141d27" }}>
-                                    <span style={{ width: 58, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, color: xd.core ? "#a9c6e3" : "#7d8b99", border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 0" }}>
-                                      {xd.core ? "CORE" : "CONFIRM"}
-                                    </span>
-                                    <div style={{ flex: 1, minWidth: 120 }}>
-                                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 6, alignItems: "center" }}>
-                                        <span>{xd.name}</span>
-                                        {xd.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: "#f5b031" }}>◆ CRITICAL</span>}
-                                      </div>
-                                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)", marginTop: 1 }}>
-                                        {xd.val}
-                                      </div>
-                                    </div>
-                                    <div style={{ width: "clamp(36px,18%,90px)", flex: "none", height: 4, background: "#1c2733" }}>
-                                      <div style={{ height: 4, width: `${xd.ev}%`, background: thEvCol(xd.ev) }} />
-                                    </div>
-                                    <span style={{ width: 26, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: thEvCol(xd.ev) }}>
-                                      {Math.round(xd.ev)}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-sub, #5d6b79)", marginTop: 4 }}>
-                        <span>WEIGHT · EVIDENCE · Click a row for its drivers</span>
-                        <span>Advanced mode to edit weights</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ADVANCED MODE CONTENT */}
-              {labMode === "ADVANCED" && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))", gap: 18, alignItems: "start" }}>
-                  {/* Edit Weights Panel */}
-                  <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, gridColumn: "1 / -1" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                        EDIT WEIGHTS
-                      </span>
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: labWeightsState ? "#f5b031" : STEEL, border: `1px solid ${labWeightsState ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
-                        {labWeightsState ? "CUSTOM WEIGHTS" : "ENGINE WEIGHTS"}
-                      </span>
-                      <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                        Drag to set relative importance — automatically normalized to 100%.
-                      </span>
-                      <button
-                        onClick={() => setLabWeightsState(null)}
-                        style={{ marginLeft: "auto", height: 28, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                      >
-                        Reset to engine weights
-                      </button>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px 22px" }}>
-                      {CATS_T.map(([k, label]) => {
-                        const raw = labWeightsState ? labWeightsState[k] : thesisWeights(labDir, labHz)[k];
-                        const pctVal = Math.round(thRun.W[k]);
-                        return (
-                          <div key={k}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: "var(--si-text-body, #d5dfe9)", marginBottom: 4 }}>
-                              <span>{label}</span>
-                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{pctVal}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="40"
-                              step="1"
-                              value={raw || 0}
-                              onChange={(e) => {
-                                const base = labWeightsState || thesisWeights(labDir, labHz);
-                                setLabWeightsState({ ...base, [k]: +e.target.value });
-                              }}
-                              style={{ width: "100%", accentColor: "#5980a6" }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
+                      Save and monitor trade setup →
+                    </button>
                   </div>
 
-                  {/* Left Column: Driver Evidence Table */}
-                  <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))" }}>
-                    <div style={{ height: 50, display: "flex", alignItems: "center", gap: 14, padding: "0 18px", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                        TRADE ENGINE · DRIVER EVIDENCE
-                      </span>
-                      <span style={{ marginLeft: "auto", display: "flex", gap: 12, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "var(--si-text-dim, #7d8b99)" }}>
-                        <span style={{ border: "1px solid #5980a6", color: "var(--si-accent-light, #a9c6e3)", padding: "2px 6px" }}>CORE</span>
-                        <span style={{ border: "1px solid var(--si-border-sec, #2a3a4a)", padding: "2px 6px" }}>CONFIRM</span>
-                        <span style={{ color: "#f5b031" }}>◆ CRITICAL</span>
-                      </span>
-                    </div>
-
-                    {thRun.cats.map((c: any) => (
-                      <div key={c.k} style={{ borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px 8px" }}>
-                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, letterSpacing: "0.12em", color: "var(--si-text-hi, #e8eef4)", flex: 1 }}>
-                            {c.label}
-                          </span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)" }}>
-                            WEIGHT {Math.round(c.w)}%
-                          </span>
-                          <div style={{ width: 120, height: 6, background: "#1c2733" }}>
-                            <div style={{ height: 6, width: `${c.score}%`, background: thEvCol(c.score), transition: "width 300ms ease" }} />
-                          </div>
-                          <span style={{ width: 30, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, color: thEvCol(c.score) }}>
-                            {Math.round(c.score)}
-                          </span>
-                          <span style={{ width: 66, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
-                            {c.pts.toFixed(1)} pts
-                          </span>
-                        </div>
-
-                        {c.ds.map((dv: any, didx: number) => {
-                          const bad = dv.crit && dv.ev < 40;
-                          return (
-                            <div key={didx} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 18px 7px 30px", background: bad ? "rgba(240,86,86,0.08)" : "transparent" }}>
-                              <span style={{ width: 62, flex: "none", textAlign: "center", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: dv.core ? "#a9c6e3" : "#7d8b99", border: `1px solid ${dv.core ? "#5980a6" : "#2a3a4a"}`, padding: "2px 0" }}>
-                                {dv.core ? "CORE" : "CONFIRM"}
-                              </span>
-                              <div style={{ flex: 1, minWidth: 140 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                                  <span>{dv.name}</span>
-                                  {dv.crit && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: bad ? DN : "#f5b031" }}>◆ CRITICAL</span>}
-                                </div>
-                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-dim, #7d8b99)", marginTop: 2 }}>
-                                  {dv.val}
-                                </div>
-                              </div>
-                              <div style={{ width: "clamp(40px,10%,110px)", flex: "none", height: 4, background: "#1c2733" }}>
-                                <div style={{ height: 4, width: `${dv.ev}%`, background: thEvCol(dv.ev), transition: "width 300ms ease" }} />
-                              </div>
-                              <span style={{ width: 28, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: thEvCol(dv.ev) }}>
-                                {Math.round(dv.ev)}
-                              </span>
-                              <span style={{ width: 52, textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 500, color: "var(--si-text-mid, #93a1af)" }}>
-                                +{dv.pts.toFixed(1)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        <div style={{ height: 6 }} />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Right Column: Confidence + Target Overrides + Invalidation */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                    {/* Confidence Box */}
-                    <div
-                      style={{
-                        position: "relative",
-                        border: "1px solid var(--si-border, #1c2733)",
-                        background: "var(--si-card, #0c1118)",
-                        boxShadow: "var(--si-shadow, none)",
-                        padding: "20px 22px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 14,
-                      }}
-                    >
-
-                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                            TRADE CONFIDENCE
-                          </div>
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 64, fontWeight: 700, lineHeight: 0.9, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {thConf}
-                            </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>
-                              / 100
-                            </span>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.08em", color: thBand[1] }}>
-                            {thBand[0]}
-                          </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "var(--si-text-mid, #93a1af)", marginTop: 4 }}>
-                            CORE INTACT <span style={{ color: thRun.coreOk === thRun.core.length ? UP : "#f5b031" }}>{thRun.coreOk} / {thRun.core.length}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ height: 8, background: "var(--si-border, #1c2733)" }}>
-                        <div style={{ height: 8, width: `${thConf}%`, background: thBand[1], transition: "width 400ms ease" }} />
-                      </div>
-
-                      {thAtRisk && (
-                        <div style={{ border: "1px solid rgba(240,86,86,0.5)", background: "rgba(240,86,86,0.08)", padding: "10px 12px", fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "#ffd2d2", lineHeight: 1.45 }}>
-                          ◆ Critical driver failing: {thRun.critFail.map((d: any) => d.name).join(", ")}.
-                        </div>
-                      )}
-
-                      <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
-                        {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
-                      </div>
-
-                      {/* Strongest & Weakest */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "#4ade80", marginBottom: 6 }}>
-                            STRONGEST
-                          </div>
-                          {thStrong.map((sg: any, idx: number) => (
-                            <div key={idx} style={{ padding: "5px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.3 }}>{sg.name}</div>
-                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-mid, #93a1af)" }}>{sg.val} · +{sg.pts.toFixed(1)} pts</div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "#f5b031", marginBottom: 6 }}>
-                            WEAKEST
-                          </div>
-                          {thWeak.map((wk: any, idx: number) => (
-                            <div key={idx} style={{ padding: "5px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.3 }}>{wk.name}</div>
-                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: thEvCol(wk.ev) }}>{wk.val} · ev {Math.round(wk.ev)}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* What changed */}
-                      <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 10 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)" }}>
-                          <span>WHAT CHANGED</span>
-                          <span style={{ color: dConf > 0 ? UP : dConf < 0 ? "#f5b031" : "#93a1af" }}>
-                            {dConf >= 0 ? "+" : ""}{dConf} vs last week
-                          </span>
-                        </div>
-                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #c5d0db)", marginTop: 6, lineHeight: 1.45 }}>
-                          {thMover.length > 0 ? thMover.map((d: any) => `${d.name} ${d.dd > 0 ? "strengthened" : "weakened"} (${d.dd > 0 ? "+" : ""}${d.dd})`).join(" · ") : "No material driver change this week."}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Price Target & Overrides */}
+                  {/* Price target: only in Advanced mode, where the target and stop can be overridden */}
+                  {labMode === "ADVANCED" && (
                     <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                          PRICE TARGET
-                        </span>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>PRICE TARGET</span>
                         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: targetOverride != null ? "#f5b031" : STEEL, border: `1px solid ${targetOverride != null ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
                           {targetOverride != null ? "OVERRIDDEN" : "SUGGESTED"}
                         </span>
@@ -5729,56 +5693,24 @@ export function StockIntelligenceScreen() {
                           {labEditTargets ? "Done" : "Edit / Override"}
                         </button>
                       </div>
-
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>
-                        {usd(tgtV)}
-                      </div>
-
-                      {/* Marks track bar */}
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{usd(tgtV)}</div>
                       <div style={{ position: "relative", height: 56, margin: "4px 6px 0" }}>
                         <div style={{ position: "absolute", left: 0, right: 0, top: 26, height: 2, background: "#1c2733" }} />
                         <div style={{ position: "absolute", top: 18, left: thPos(stopV), width: 2, height: 18, background: "#f05656" }} />
                         <div style={{ position: "absolute", top: 16, left: thPos(tgtV), width: 12, height: 12, marginLeft: -5, border: "2px solid #e8eef4", background: "var(--si-bg, #080b10)", transform: "rotate(45deg)", transition: "left 300ms ease" }} />
-
-                        {[
+                        {([
                           ["BEAR", TT.dn, DN],
                           ["NOW", stock.p, "var(--si-text-hi, #e8eef4)"],
                           ["BASE", TT.base, STEEL],
                           ["BULL", TT.up, UP],
-                        ].map(([k, v, c], idx) => (
-                          <div key={idx} style={{ position: "absolute", top: 0, left: thPos(v as number), transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", color: c as string }}>{k}</span>
-                            <span style={{ width: 1, height: 14, background: c as string, marginTop: 2 }} />
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 500, color: "var(--si-text-mid, #93a1af)", marginTop: 16 }}>{usd(v as number)}</span>
+                        ] as [string, number, string][]).map(([k, v, c], idx) => (
+                          <div key={idx} style={{ position: "absolute", top: 0, left: thPos(v), transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600, letterSpacing: "0.1em", color: c }}>{k}</span>
+                            <span style={{ width: 1, height: 14, background: c, marginTop: 2 }} />
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 500, color: "var(--si-text-mid, #93a1af)", marginTop: 16 }}>{usd(v)}</span>
                           </div>
                         ))}
                       </div>
-
-                      {/* Evidence sources */}
-                      <div style={{ marginTop: 8 }}>
-                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", marginBottom: 4 }}>
-                          EVIDENCE SOURCES
-                        </div>
-                        {TT.src.map((sr: any, idx: number) => (
-                          <div key={idx} style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                            <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {sr[0]} <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-text-dim, #7d8b99)" }}>· {withoutVendorNames(sr[1], showVendor)}</span>
-                            </span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
-                              {usd(sr[2])}
-                            </span>
-                          </div>
-                        ))}
-                        <div style={{ display: "flex", gap: 10, padding: "6px 0" }}>
-                          <span style={{ flex: 1, fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                            Estimate-revision adjustment
-                          </span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: "var(--si-accent-light, #a9c6e3)" }}>
-                            {pct1(TT.revAdj * 100)}
-                          </span>
-                        </div>
-                      </div>
-
                       {labEditTargets && (
                         <div style={{ borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
                           <div>
@@ -5786,33 +5718,15 @@ export function StockIntelligenceScreen() {
                               <span>OVERRIDE TARGET · SUGGESTED {usd(TT.target)}</span>
                               <span style={{ color: "var(--si-text-hi, #e8eef4)" }}>{usd(tgtV)}</span>
                             </div>
-                            <input
-                              type="range"
-                              min={Math.round(stock.p * 0.5)}
-                              max={Math.round(stock.p * 1.8)}
-                              step="1"
-                              value={Math.round(tgtV)}
-                              onChange={(e) => setTargetOverride(+e.target.value)}
-                              style={{ width: "100%", accentColor: UP }}
-                            />
+                            <input type="range" min={Math.round(stock.p * 0.5)} max={Math.round(stock.p * 1.8)} step="1" value={Math.round(tgtV)} onChange={(e) => setTargetOverride(+e.target.value)} style={{ width: "100%", accentColor: UP }} />
                           </div>
-
                           <div>
                             <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--si-accent, #5980a6)", marginBottom: 6 }}>
                               <span>OVERRIDE INVALIDATION · SUGGESTED {usd(TT.stop)}</span>
                               <span style={{ color: "#f05656" }}>{usd(stopV)}</span>
                             </div>
-                            <input
-                              type="range"
-                              min={Math.round(stock.p * 0.5)}
-                              max={Math.round(stock.p * 1.4)}
-                              step="1"
-                              value={Math.round(stopV)}
-                              onChange={(e) => setStopOverride(+e.target.value)}
-                              style={{ width: "100%", accentColor: DN }}
-                            />
+                            <input type="range" min={Math.round(stock.p * 0.5)} max={Math.round(stock.p * 1.4)} step="1" value={Math.round(stopV)} onChange={(e) => setStopOverride(+e.target.value)} style={{ width: "100%", accentColor: DN }} />
                           </div>
-
                           <button
                             onClick={() => {
                               setTargetOverride(null);
@@ -5825,144 +5739,100 @@ export function StockIntelligenceScreen() {
                         </div>
                       )}
                     </div>
+                  )}
+                </div>
 
-                    {/* Invalidation Rules */}
-                    <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                          INVALIDATION
-                        </span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: stopOverride != null ? "#f5b031" : STEEL, border: `1px solid ${stopOverride != null ? "#f5b031" : STEEL}`, padding: "1px 6px" }}>
-                          {stopOverride != null ? "OVERRIDDEN" : "SUGGESTED"}
-                        </span>
-                      </div>
-
-                      <div style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                        <span style={{ width: 84, flex: "none", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f05656", paddingTop: 3 }}>
-                          PRICE
-                        </span>
-                        <div>
-                          <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>
-                            Daily close {thBull ? "below" : "above"} {usd(stopV)}
-                          </div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-dim, #7d8b99)", marginTop: 2 }}>
-                            {thBull ? `${labHz === "12M" ? "200-DMA" : "50-DMA / breakout shelf"} at ${usd(TT.lvl)}, less a 1.5% buffer` : `${TPt.res != null ? usd(TPt.res) : "Resistance"} plus a 1.5% buffer`}
-                          </div>
+                {/* Right column: the trade confidence and where it comes from */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, #0c1118)", boxShadow: "var(--si-shadow, none)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
+                      <div>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>TRADE CONFIDENCE</div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
+                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: thConf != null ? 56 : 32, fontWeight: 700, lineHeight: 0.9, color: thConf != null ? thBand[1] : "var(--si-text-hi, #e8eef4)" }}>{thConf ?? "Unavailable"}</span>
+                          {thConf != null && <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 600, color: "var(--si-text-sub, #5d6b79)" }}>/ 100</span>}
                         </div>
                       </div>
-
-                      <div style={{ display: "flex", gap: 12, padding: "8px 0" }}>
-                        <span style={{ width: 84, flex: "none", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f05656", paddingTop: 3 }}>
-                          FUNDAMENTAL
-                        </span>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {(thBull ? TPt.fi : TPt.fiB).map((rule: string, rIdx: number) => (
-                            <div key={rIdx} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)" }}>
-                              {rule}
-                            </div>
-                          ))}
-                        </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.08em", color: thBand[1] }}>{thBand[0]}</div>
                       </div>
+                    </div>
+                    <div style={{ height: 8, background: "var(--si-border, #1c2733)" }}>
+                      <div style={{ height: 8, width: `${thConf ?? 0}%`, background: thBand[1], transition: "width 400ms ease" }} />
+                    </div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.55 }}>
+                      {thBull ? "Bullish" : "Bearish"} because {thStrong.map((d: any) => `${d.name} (${d.val})`).join(", ")} carry the most weight in the {labHz} profile.
+                    </div>
+                    <ConfidenceBreakdown cats={thRun.cats} colorFor={sc} open={labBreakdownOpen} onToggle={(k) => setLabBreakdownOpen((o) => ({ ...o, [k]: !o[k] }))} />
+                  </div>
+                </div>
+              </div>
+
+              {labSaveOpen && (
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Save this trade"
+                  onClick={() => setLabSaveOpen(false)}
+                  style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(4, 7, 11, 0.66)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+                >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ width: "min(440px, 100%)", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "var(--si-card, #0c1118)", boxShadow: "0 18px 48px rgba(0,0,0,0.6)", padding: "24px 26px", display: "flex", flexDirection: "column", gap: 14 }}
+                  >
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.1em", color: "#ffffff" }}>SAVE THIS TRADE?</div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, color: "#ffffff", lineHeight: 1.55 }}>
+                      <b style={{ color: thBull ? "var(--up, #4ade80)" : "var(--down, #f87171)" }}>{thBull ? "Long" : "Short"}</b> {stock.t}, target <b style={{ color: "var(--up, #4ade80)" }}>{usd(tgtV)}</b>, invalidation <b style={{ color: "var(--down, #f87171)" }}>{usd(stopV)}</b> over <b style={{ color: "#4fb3ff" }}>{labHz}</b>. It will be saved in your Trade Tracker, and you will be taken back to the Trade Builder setup.
+                    </div>
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+                      <button
+                        onClick={() => setLabSaveOpen(false)}
+                        style={{ height: 40, padding: "0 18px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-text-mid, #93a1af)", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        autoFocus
+                        onClick={() => {
+                          // Added to this stock's saved trades; nothing already saved is replaced.
+                          const nowMs = Date.now();
+                          let saved: SavedTrade | null = null;
+                          try {
+                            const { trades, trade } = addTrade(
+                              readTrades(localStorage, stock.t),
+                              {
+                                ticker: stock.t,
+                                dir: labDir,
+                                hz: labHz,
+                                title: `${thBull ? "LONG" : "SHORT"} ${stock.t} → ${usd(tgtV)} · ${labHz}`,
+                                target: tgtV,
+                                stop: stopV,
+                                confAtSave: thConf,
+                                savedDate: "Just now · Active",
+                                entryPx: Number.isFinite(stock.p) ? stock.p : null,
+                                savedAt: new Date(nowMs).toISOString(),
+                                wO: thCustomW,
+                              },
+                              nowMs,
+                            );
+                            writeTrades(localStorage, stock.t, trades);
+                            setSavedTrades(trades);
+                            saved = trade;
+                          } catch { }
+                          if (saved) setSelectedTradeId(saved.id);
+                          setLabSaveOpen(false);
+                          setLabSavedNote(`${stock.t} trade saved to your Trade Tracker`);
+                          resetBuilder();
+                          setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 60);
+                        }}
+                        style={{ height: 40, padding: "0 20px", border: "none", background: "#5980a6", color: "#ffffff", fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        Save to Trade Tracker
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
-
-              {/* Bottom Complete Simulated Thesis Card */}
-              <div
-                style={{
-                  position: "relative",
-                  border: "1px solid #5980a6",
-                  background: "var(--si-card, rgba(12, 17, 24, 0.95))",
-                  padding: "20px 22px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 16,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
-                    TRADE CARD
-                  </span>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>
-                    {thBull ? "LONG" : "SHORT"} {stock.t} · {labHz} THESIS
-                  </span>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", borderTop: "1px solid var(--si-border, #1c2733)", borderLeft: "1px solid var(--si-border, #1c2733)" }}>
-                  {[
-                    ["TARGET", usd(tgtV), thBull ? UP : DN],
-                    ["INVALIDATION", usd(stopV), DN],
-                    ["UPSIDE", pct1(thUp), UP],
-                    ["DOWNSIDE", pct1(thDn), DN],
-                    ["REWARD / RISK", thRR.toFixed(1) + "×", thRR >= 2 ? UP : thRR >= 1.2 ? "#f5b031" : DN],
-                    ["TRADE CONFIDENCE", thConf != null ? `${thConf} / 100` : "Unavailable", thBand[1]],
-                    ["CORE DRIVERS INTACT", `${thRun.coreOk} of ${thRun.core.length}`, thRun.coreOk === thRun.core.length ? UP : "#f5b031"],
-                  ].map(([k, v, c], idx) => (
-                    <div key={idx} style={{ padding: "12px 14px", borderRight: "1px solid var(--si-border, #1c2733)", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>{k}</div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 700, color: c as string, marginTop: 4 }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-                  <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "var(--si-accent, #5980a6)" }}>KEY CATALYST</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.cat}</div>
-                  </div>
-                  <div style={{ border: "1px solid var(--si-border, #1c2733)", padding: "12px 14px" }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", color: "#f5b031" }}>BIGGEST RISK</div>
-                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)", marginTop: 6 }}>{TPt.risk}</div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    // Added to this stock's saved trades; nothing already saved is replaced.
-                    const nowMs = Date.now();
-                    let saved: SavedTrade | null = null;
-                    try {
-                      const { trades, trade } = addTrade(
-                        readTrades(localStorage, stock.t),
-                        {
-                          ticker: stock.t,
-                          dir: labDir,
-                          hz: labHz,
-                          title: `${thBull ? "LONG" : "SHORT"} ${stock.t} → ${usd(tgtV)} · ${labHz}`,
-                          target: tgtV,
-                          stop: stopV,
-                          confAtSave: thConf,
-                          savedDate: "Just now · Active",
-                          entryPx: Number.isFinite(stock.p) ? stock.p : null,
-                          savedAt: new Date(nowMs).toISOString(),
-                          wO: labWeightsState,
-                        },
-                        nowMs,
-                      );
-                      writeTrades(localStorage, stock.t, trades);
-                      setSavedTrades(trades);
-                      saved = trade;
-                    } catch { }
-                    if (saved) setSelectedTradeId(saved.id);
-                    setActiveTab("mon");
-                  }}
-                  style={{
-                    height: 48,
-                    border: "none",
-                    background: "#5980a6",
-                    color: "#ffffff",
-                    fontFamily: "'Manrope', sans-serif",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    letterSpacing: "0.04em",
-                    cursor: "pointer",
-                    transition: "background 160ms",
-                  }}
-                >
-                  Save and monitor trade setup →
-                </button>
-              </div>
             </div>
           );
         })()}
@@ -6151,9 +6021,14 @@ export function StockIntelligenceScreen() {
                         onClick={() => {
                           setLabDir(savedThesis.dir);
                           setLabHz(savedThesis.hz);
+                          // Advanced mode, so the saved weights, target and invalidation are visible and editable.
+                          setLabMode("ADVANCED");
                           setLabWeightsState(savedThesis.wO || null);
                           setTargetOverride(savedThesis.target);
                           setStopOverride(savedThesis.stop);
+                          setLabBreakdownOpen({});
+                          setLabSavedNote(null);
+                          setLabStarted(true);
                           setActiveTab("lab");
                         }}
                         style={{ height: 30, padding: "0 12px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}

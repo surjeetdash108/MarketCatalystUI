@@ -432,12 +432,16 @@ export function getStock(
 }
 
 export function thesisWeights(dir: "Bull" | "Bear", hz: string) {
+  // 1M leans on price action and catalysts, 9M (and the old 12M) on the business and
+  // its valuation, 3M adds momentum, and 6M (the default) sits in between.
   let w: Record<string, number> =
     hz === "1M"
       ? { BUS: 10, EARN: 15, TECH: 30, CAT: 20, VAL: 5, POS: 10, MAC: 10 }
-      : hz === "12M"
+      : hz === "9M" || hz === "12M"
         ? { BUS: 30, EARN: 20, TECH: 10, CAT: 5, VAL: 20, POS: 5, MAC: 10 }
-        : { BUS: 25, EARN: 20, TECH: 20, CAT: 10, VAL: 10, POS: 5, MAC: 10 };
+        : hz === "3M"
+          ? { BUS: 20, EARN: 20, TECH: 25, CAT: 15, VAL: 5, POS: 5, MAC: 10 }
+          : { BUS: 25, EARN: 20, TECH: 15, CAT: 10, VAL: 15, POS: 5, MAC: 10 };
   w = { ...w };
   if (dir === "Bear") {
     w.VAL += 5;
@@ -499,7 +503,7 @@ export function thesisRun(t: string, dir: "Bull" | "Bear", hz: string, adj?: any
     let sw = 0,
       sv = 0;
     const sl = Object.values(slots).map((a) => {
-      const w = a.some((d: any) => d.core) ? 2 : 1;
+      const w = 1;
       const v = a.reduce((s: number, d: any) => s + d.ev, 0) / a.length;
       sw += w;
       sv += w * v;
@@ -547,7 +551,7 @@ export function thesisRun(t: string, dir: "Bull" | "Bear", hz: string, adj?: any
   };
 }
 
-const HZF: Record<string, number> = { "1M": 0.3, "3M": 0.55, "6M": 0.8, "12M": 1 };
+const HZF: Record<string, number> = { "1M": 0.3, "3M": 0.55, "6M": 0.8, "9M": 0.9, "12M": 1 };
 
 /**
  * Price target and stop for a thesis. The 12-month base blends only the inputs
@@ -559,8 +563,12 @@ export function thesisTargets(t: string, dir: "Bull" | "Bear", hz: string, run: 
   const P = getTP(t, facts);
   const f = HZF[hz] || 0.8;
   const bull = dir === "Bull";
-  const earn = run.cats.find((c: any) => c.k === "EARN");
-  const revAdj = earn && earn.ds.length ? Math.max(-0.08, Math.min(0.08, (earn.score - 50) / 600)) * (bull ? 1 : -1) : 0;
+  // Trade confidence (0-100, 50 when there is none) stretches the target and the
+  // stop: the more the evidence backs the trade, the further the target sits and
+  // the wider the stop; weak evidence pulls both toward the present price.
+  const conf = typeof run?.conf === "number" ? Math.max(0, Math.min(100, run.conf)) : 50;
+  const targetScale = 0.6 + (0.8 * conf) / 100;
+  const stopScale = 0.8 + (0.4 * conf) / 100;
   const parts: Array<{ w: number; v: number; src: [string, string, number] }> = [];
   if (has(P.nextFyEps) && P.nextFyEps > 0 && has(P.fpe)) {
     const v = P.nextFyEps * P.fpe;
@@ -574,7 +582,7 @@ export function thesisTargets(t: string, dir: "Bull" | "Bear", hz: string, run: 
     parts.push({ w: 0.2, v, src: ["Technical measured move", `${usd(P.res)} resistance + range`, v] });
   }
   const wSum = parts.reduce((a, x) => a + x.w, 0);
-  const base12 = wSum > 0 ? (parts.reduce((a, x) => a + x.w * x.v, 0) / wSum) * (1 + revAdj) : p;
+  const base12 = wSum > 0 ? parts.reduce((a, x) => a + x.w * x.v, 0) / wSum : p;
   // Bull/bear 12-month cases: next-FY EPS at ±20% of today's forward multiple.
   const bull12 = has(P.nextFyEps) && has(P.fpe) ? P.nextFyEps * P.fpe * 1.2 : base12;
   const bear12 = has(P.nextFyEps) && has(P.fpe) ? P.nextFyEps * P.fpe * 0.8 : base12;
@@ -584,10 +592,12 @@ export function thesisTargets(t: string, dir: "Bull" | "Bear", hz: string, run: 
   const dn = at(bear12);
   // A long thesis needs its target above the price (XOM: $172 target under a
   // $177 price on a "bullish" thesis) — mirrors the bear case's floor below it.
-  const target = bull ? Math.max((up + base) / 2, p * 1.06) : Math.min((dn + base) / 2, p * 0.94);
-  const lvl = (hz === "12M" ? P.sup2 : P.sup) ?? p * 0.95;
-  const stop = bull ? Math.min(lvl * 0.985, p * 0.95) : Math.max((P.res ?? p * 1.05) * 1.015, p * 1.05);
-  return { target, stop, base, up, dn, src: parts.map((x) => x.src), revAdj, lvl, f };
+  const rawTarget = bull ? Math.max((up + base) / 2, p * 1.06) : Math.min((dn + base) / 2, p * 0.94);
+  const target = p + (rawTarget - p) * targetScale;
+  const lvl = (hz === "9M" || hz === "12M" ? P.sup2 : P.sup) ?? p * 0.95;
+  const rawStop = bull ? Math.min(lvl * 0.985, p * 0.95) : Math.max((P.res ?? p * 1.05) * 1.015, p * 1.05);
+  const stop = p + (rawStop - p) * stopScale;
+  return { target, stop, base, up, dn, src: parts.map((x) => x.src), confAdj: targetScale - 1, lvl, f };
 }
 
 /**
