@@ -45,7 +45,8 @@ import {
 import { applyAiCards, moveCardPath, type AiMoveCard } from "./move-card-ai";
 import { scoreNews, reactionAfter, summarizeNewsSentiment, classifyDirection } from "./news-significance";
 import { localCopilotAnswer } from "./copilot-local";
-import { ReadCard } from "./read-cards";
+import { ReadCard, InfoTip, highlightNumbers, highlightSignedPercents } from "./read-cards";
+import { weekMove } from "./week-move";
 import { ConfidenceBreakdown, ConfidenceExplainer, TradeBuilderGuide } from "./trade-builder-parts";
 import { fundamentalReadText, technicalReadText } from "./read-text";
 import { useTickerSearch } from "../hooks/useTickerSearch";
@@ -540,6 +541,15 @@ const rangesDef: Record<string, [number, number, number]> = {
 
 /** Catalyst cards shown per page in each section. */
 const CAT_PAGE_SIZE = 100;
+
+/** How the estimated factor attribution on Why It Moved is split (shown by its "i" button). */
+const FACTOR_INFO: [string, string][] = [
+  ["What it is:", "A model of how the move splits across four drivers, not a measured cause."],
+  ["Sector Momentum:", "Scales with the stock's beta (beta × 28%), kept between 20% and 55%."],
+  ["Company News:", "What the sector share leaves of 65%, kept between 20% and 45%."],
+  ["Market Regime:", "The remainder after sector and news, less 12%, with a floor of 12%."],
+  ["Technical Factors:", "Whatever is left, with a floor of 5%. The four always add up to 100%."],
+];
 
 /** How the Technical Read card on Overview is worked out (shown by its "i" button). */
 const TECHNICAL_READ_INFO: [string, string][] = [
@@ -2070,6 +2080,7 @@ export function StockIntelligenceScreen() {
   // 6-month bullish forward run as the "Why it could move" tab, so the two
   // never disagree (the old fallback showed fixed 88/87/80/… for every stock).
   const overviewRun = thesisRun(stock.t, "Bull", "6M", undefined, undefined, siFacts);
+  const movedWeek = weekMove(stock.t, sixMonthBars, tickerNews as unknown as Parameters<typeof weekMove>[2]);
   const mcConfidence = overviewRun.conf != null ? Math.round(overviewRun.conf) : null;
   const mcConfidenceColor = overviewRun.conf == null ? STEEL : sc(Math.round(overviewRun.conf));
   /** How many of the 7 signal categories score 75 or more. */
@@ -3221,94 +3232,93 @@ export function StockIntelligenceScreen() {
             ==================================================== */}
         {activeTab === "moved" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* 6-Month Area Chart from stock function with 5 Major Events Markers & Cards */}
-            <SixMonthAreaChart
-              ticker={stock.t}
-              stock={stock}
-              bars={sixMonthBars}
-              events={majorEvents}
-            />
-
-            {/* Attribution Breakdown & AI Explanation */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
-              {/* Attribution */}
-              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    ESTIMATED FACTOR ATTRIBUTION
-                  </span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--si-text-mid, #93a1af)" }}>
-                    of <b style={{ color }}>{pct(stock.c)}</b> today
-                  </span>
-                  <button
-                    onClick={() => setShowAttHow(!showAttHow)}
-                    style={{ marginLeft: "auto", height: 24, padding: "0 9px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, cursor: "pointer" }}
-                  >
-                    HOW IT WORKS
-                  </button>
-                </div>
-                {showAttHow && (
-                  <div style={{ padding: "10px 12px", background: "var(--si-evidence-bg, rgba(89,128,166,0.08))", border: "1px solid var(--si-border-sec, #2a3a4a)", borderRadius: 4, fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.45 }}>
-                    Estimated Factor Attribution: Percentages are modeled estimates derived from sector beta and market regime heuristics, not empirically measured or causal contributions.
-                  </div>
-                )}
-                {/* Stacked Bar */}
-                <div style={{ display: "flex", height: 16, width: "100%", borderRadius: 2, overflow: "hidden" }}>
-                  {[
-                    { k: "Sector", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
-                    { k: "News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
-                    { k: "Market", p: stockDetail.att[2], c: "#8b5cf6" },
-                    { k: "Technical", p: stockDetail.att[3], c: "#f59e0b" },
-                  ].map((at, idx) => (
-                    <span key={idx} style={{ height: 16, width: `${at.p}%`, background: at.c, borderRight: "2px solid var(--si-card-solid, #080b10)" }} />
-                  ))}
-                </div>
-                {/* Factor rows */}
-                {[
-                  { k: "Sector Momentum", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
-                  { k: "Company News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
-                  { k: "Market Regime", p: stockDetail.att[2], c: "#8b5cf6" },
-                  { k: "Technical Factors", p: stockDetail.att[3], c: "#f59e0b" },
-                ].map((at, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ width: 10, height: 10, background: at.c }} />
-                    <span style={{ width: 120, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{at.k}</span>
-                    <div style={{ flex: 1, height: 6, background: "var(--si-card-tert, #1c2733)" }}>
-                      <div style={{ height: 6, width: `${at.p}%`, background: at.c }} />
-                    </div>
-                    <span style={{ width: 44, textAlign: "right", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)" }}>{at.p}%</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* AI Explanation Card */}
+            {/* Chart beside the MarketCatalyst read (last week when the daily bars are there, else today) */}
+            <style>{`.si-ov-m{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:stretch}@media (max-width:1050px){.si-ov-m{grid-template-columns:minmax(0,1fr)}}`}</style>
+            <div className="si-ov-m">
+              <SixMonthAreaChart ticker={stock.t} stock={stock} bars={sixMonthBars} events={majorEvents} />
               <div
                 style={{
                   position: "relative",
                   border: "1px solid var(--si-border-sec, #5980a6)",
                   background: "var(--si-card, rgba(12,17,24,0.92))",
-                  padding: "20px 22px",
+                  padding: "24px 26px",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 14,
+                  gap: 16,
+                  minWidth: 0,
+                  boxSizing: "border-box",
                 }}
               >
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
-                  ✦ AI EXPLANATION
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent, #5980a6)" }}>
+                  MARKETCATALYST READ
                 </span>
                 <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 500, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1.55 }}>
-                  {stockDetail.movedTxt}
+                  {highlightSignedPercents(movedWeek ? movedWeek.text : stockDetail.movedTxt)}
                 </div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 12 }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)", borderTop: "1px solid var(--si-border, #1c2733)", paddingTop: 14 }}>
                   SUPPORTING EVIDENCE
                 </div>
-                {stockDetail.movedEv.map((me, i) => (
-                  <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13.5, color: "var(--si-text-body, #d5dfe9)", display: "flex", gap: 8, lineHeight: 1.45 }}>
-                    <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
-                    <span>{me}</span>
-                  </div>
-                ))}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {(movedWeek ? [...movedWeek.ev, stockDetail.movedEv[0]] : stockDetail.movedEv).map((me: React.ReactNode, i: number) => (
+                    <div key={i} style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, color: "var(--si-text-hi, #e8eef4)", display: "flex", gap: 10, lineHeight: 1.5 }}>
+                      <span style={{ color: "var(--si-accent, #1d4ed8)", fontWeight: 700 }}>▸</span>
+                      <span>{typeof me === "string" ? highlightNumbers(me) : me}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+            </div>
+
+            {/* Estimated factor attribution: stacked bar plus one tile per factor */}
+            <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-accent, #5980a6)" }}>
+                  ESTIMATED FACTOR ATTRIBUTION
+                  <InfoTip lines={FACTOR_INFO} />
+                </span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--si-text-mid, #93a1af)" }}>
+                  of <b style={{ color: movedWeek ? (movedWeek.pct >= 0 ? "var(--up, #4ade80)" : "var(--down, #f87171)") : color }}>{movedWeek ? pct(movedWeek.pct) : pct(stock.c)}</b> {movedWeek ? "last week" : "today"}
+                </span>
+                <button
+                  onClick={() => setShowAttHow(!showAttHow)}
+                  style={{ marginLeft: "auto", height: 26, padding: "0 10px", border: "1px solid var(--si-border-sec, #2a3a4a)", background: "transparent", color: "var(--si-accent-light, #a9c6e3)", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.12em", cursor: "pointer" }}
+                >
+                  HOW IT WORKS
+                </button>
+              </div>
+              {showAttHow && (
+                <div style={{ padding: "10px 12px", background: "var(--si-evidence-bg, rgba(89,128,166,0.08))", border: "1px solid var(--si-border-sec, #2a3a4a)", borderRadius: 4, fontFamily: "'Manrope', sans-serif", fontSize: 13, color: "var(--si-text-body, #d5dfe9)", lineHeight: 1.5 }}>
+                  Estimated Factor Attribution: Percentages are modeled estimates derived from sector beta and market regime heuristics, not empirically measured or causal contributions.
+                </div>
+              )}
+              {(() => {
+                const factors = [
+                  { k: "Sector Momentum", p: stockDetail.att[0], c: "var(--si-accent-soft, #7fa8d0)" },
+                  { k: "Company News", p: stockDetail.att[1], c: "var(--up, #16a34a)" },
+                  { k: "Market Regime", p: stockDetail.att[2], c: "#8b5cf6" },
+                  { k: "Technical Factors", p: stockDetail.att[3], c: "#f59e0b" },
+                ];
+                return (
+                  <>
+                    <div style={{ display: "flex", height: 16, width: "100%", borderRadius: 2, overflow: "hidden" }}>
+                      {factors.map((at, idx) => (
+                        <span key={idx} style={{ height: 16, width: `${at.p}%`, background: at.c, borderRight: "2px solid var(--si-card-solid, #080b10)" }} />
+                      ))}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+                      {factors.map((at, idx) => (
+                        <div key={idx} style={{ border: "1px solid var(--si-border, #1c2733)", borderLeft: `3px solid ${at.c}`, background: "var(--si-card-sec, rgba(12,17,24,0.6))", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{at.k}</span>
+                          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 32, fontWeight: 700, color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{at.p}%</span>
+                          <div style={{ height: 6, background: "var(--si-card-tert, #1c2733)" }}>
+                            <div style={{ height: 6, width: `${at.p}%`, background: at.c }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

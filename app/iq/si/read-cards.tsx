@@ -26,6 +26,21 @@ export function highlightNumbers(text: string | null | undefined): ReactNode[] {
   });
 }
 
+const SIGNED_PCT_RE = /((?<![\w.])[+\-−–]\d[\d,]*(?:\.\d+)?%)/g;
+
+/** Only signed percentages are tinted (green up, red down); the rest of the sentence stays as written. */
+export function highlightSignedPercents(text: string | null | undefined): ReactNode[] {
+  return (text ?? "").split(SIGNED_PCT_RE).map((part, i) =>
+    i % 2 === 1 ? (
+      <span key={i} style={{ color: part.startsWith("+") ? "var(--up, #16a34a)" : "var(--down, #dc2626)", fontWeight: 700 }}>
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+}
+
 /** Small "i" button that shows how a card is calculated on hover, focus or tap. */
 export function InfoTip({ lines }: { lines: [string, string][] }) {
   const [open, setOpen] = useState(false);
