@@ -18,7 +18,9 @@ describe("Terms §12 matches the subscription system", () => {
     "Each paid plan can start with a 7-day free trial, once per person",
     "at least 30 days",
     "There is no free plan",
-    "Every plan change is made on the checkout page, where you enter your card and billing address",
+    "Before you confirm a switch, we show you when the new plan starts and what you pay",
+    "the difference is kept as Market Catalyst credits",
+    "your next charge is for the new plan",
   ]) it(`says: ${phrase}`, () => assert.ok(terms.includes(phrase), phrase));
   for (const gone of ["credited to your account balance", "We do not currently offer free trials", "take effect immediately. Upgrades"])
     it(`no longer says: ${gone}`, () => assert.ok(!terms.includes(gone), gone));
