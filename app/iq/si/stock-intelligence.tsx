@@ -3867,7 +3867,7 @@ export function StockIntelligenceScreen() {
 
               {/* Financial health (balance sheet) and earnings quality (cash vs profit) */}
               {(healthRows.length > 0 || qualityRows.length > 0 || marginLines.length > 0) && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 400px), 1fr))", gap: 18, alignItems: "start" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 18, alignItems: "stretch" }}>
                   {([
                     { title: "FINANCIAL HEALTH", sub: healthSub ? `${healthSub} balance sheet` : "Latest balance sheet", rows: healthRows },
                     { title: "EARNINGS QUALITY", sub: "Last 12 months", rows: qualityRows },
