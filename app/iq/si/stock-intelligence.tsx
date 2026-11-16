@@ -2152,8 +2152,9 @@ export function StockIntelligenceScreen() {
 
       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--si-accent-light, #a9c6e3)" }}>
         ✦ TECHNICAL READ
+        <InfoTip lines={TECHNICAL_READ_INFO} />
       </span>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
         {stockDetail.read.map((rd, i) => (
           <div key={i} style={{ border: "1px solid var(--si-border, #1c2733)", padding: 10 }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.1em", color: "var(--si-accent, #5980a6)" }}>
@@ -2322,6 +2323,7 @@ export function StockIntelligenceScreen() {
           color: #94a3b8 !important;
         }
         /* ── Phone (≤760px): the stat columns stack under the name instead of crushing to one character a line ── */
+        @media (max-width: 1300px) { .si-hero-stat > div:last-child { white-space: normal !important; overflow-wrap: anywhere; } }
         @media (max-width: 760px) {
           .si-main { padding: 14px 12px 100px !important; }
           .si-hero { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
@@ -4298,36 +4300,32 @@ export function StockIntelligenceScreen() {
             TAB 5: TECHNICALS (Issue 2: Full Live Technical Chart)
             ==================================================== */}
         {activeTab === "tech" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* Live Technical CandleChart Card with full MC Stock Function feature parity */}
-            <div
-              style={{
-                position: "relative",
-                border: "1px solid var(--si-border, #1c2733)",
-                background: "var(--si-card, rgba(12, 17, 24, 0.9))",
-                padding: "16px 18px 10px",
-              }}
-            >
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 18, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)" }}>
-                    {stock.t}
-                  </span>
-                  <span style={{ fontSize: 12, color: "var(--si-text-mid, #8b9bb0)", letterSpacing: "0.06em" }}>
-                    {stock.name || liveCompany?.name}
-                  </span>
+          <div className="si-ov" style={{ alignItems: "stretch" }}>
+            <style>{`.si-ov{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(360px,1fr);gap:18px;align-items:start}@media (max-width:1050px){.si-ov{grid-template-columns:minmax(0,1fr)}}`}</style>
+            {/* Live technical chart with the full MC stock-function toolbar */}
+            <div style={{ position: "relative", border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--si-border, #1c2733)", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <StockLogo sym={stock.t} size={34} />
+                  <div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, letterSpacing: "0.08em", color: "var(--si-text-hi, #e8eef4)", lineHeight: 1 }}>{stock.t}</div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, color: "#ffffff", opacity: 0.7, marginTop: 3 }}>{stock.name || liveCompany?.name}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, whiteSpace: "nowrap" }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 600, color: "var(--si-text-hi, #e8eef4)" }}>{usd(stock.p)}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: stock.c >= 0 ? UP : DN }}>{pct(stock.c)}</span>
                 </div>
               </div>
-
-              <div style={{ minHeight: 480, width: "100%" }}>
+              <div className="si-tech-chart" style={{ minHeight: 540, width: "100%" }}>
+                <style>{`.si-tech-chart .cc-tvbtn.icon{display:none}.si-tech-chart .cc-tvbtn{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:12.96px;font-weight:500;line-height:1.2;padding:6px 8px;background:none;border:0;color:var(--si-text-hi,#e8eef4);cursor:pointer;white-space:nowrap}.si-tech-chart .cc-tvbtn svg{opacity:.75}.si-tech-chart .cc-tvbtn b{font-weight:600}.si-tech-chart .cc-tvbtn b{font-size:inherit}`}</style>
                 <StockChart
                   sym={stock.t}
                   name={stock.name || liveCompany?.name}
                   interval={barInterval}
                   onIntervalChange={setBarInterval}
                   expandable
-                  height={480}
+                  height={540}
                   data={{
                     live,
                     bars: { bars: realBars, loading: barsLoading },
@@ -4339,18 +4337,17 @@ export function StockIntelligenceScreen() {
               </div>
             </div>
 
-            {/* Technical Read & Key Levels */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
               {technicalReadCard}
 
-              {/* Key Levels */}
-              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
+              {/* Key levels */}
+              <div style={{ border: "1px solid var(--si-border, #1c2733)", background: "var(--si-card, rgba(12, 17, 24, 0.9))", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
                 <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: "0.14em", color: "var(--si-text-hi, #e8eef4)", marginBottom: 8 }}>
                   KEY SUPPORT & RESISTANCE LEVELS
                 </span>
                 {stockDetail.levels.map((lv, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid var(--si-border, #1c2733)" }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "var(--si-text-mid, #93a1af)" }}>{lv.k}</span>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, color: "#ffffff" }}>{lv.k}</span>
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: lv.col }}>{lv.v}</span>
                   </div>
                 ))}
@@ -5082,7 +5079,7 @@ export function StockIntelligenceScreen() {
               </div>
               {[
                 `What is the institutional bull case for ${stock.t}?`,
-                `What is the biggest downside risk or bear thesis?`,
+                `What is the biggest downside risk or bear trade?`,
                 `What exact price and metric levels invalidate this setup?`,
                 `How does ${stock.t}'s valuation compare against peers?`,
               ].map((sq, i) => (

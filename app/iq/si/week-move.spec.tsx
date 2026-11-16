@@ -14,8 +14,8 @@ test("describes a rising week, with the move over the last five sessions", () =>
   const closes = [90, 91, 92, 100, 101, 102, 104, 105, 106];
   const bars = closes.map((c, i) => bar(i, c));
   const m = weekMove("NVDA", bars, [])!;
-  // last bar 106 against the close five sessions earlier (101)
-  assert.ok(Math.abs(m.pct - ((106 / 101 - 1) * 100)) < 1e-9);
+  // last bar 106 against the close five sessions earlier (100)
+  assert.ok(Math.abs(m.pct - ((106 / 100 - 1) * 100)) < 1e-9);
   assert.match(m.text, /^NVDA rose sharply|^NVDA rose /);
   assert.match(m.text, /closing higher on 5 of 5 sessions\.$/);
   assert.equal(m.ev.length >= 4, true);
