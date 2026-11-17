@@ -733,11 +733,28 @@ select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+x
 .pl-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pl-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .pl-tk{position:relative}
-.pl-tklist{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;background:var(--surface2);border:1px solid var(--border);border-radius:9px;max-height:240px;overflow:auto;box-shadow:0 12px 30px rgba(0,0,0,.4)}
-.pl-tklist button{display:flex;gap:10px;align-items:center;width:100%;background:none;border:0;color:var(--text);padding:8px 10px;cursor:pointer;text-align:left;font-size:12.5px}
-.pl-tklist button:hover{background:var(--surface)}
-.pl-tklist b{font-family:var(--f-mono);color:var(--hi);min-width:58px}
-.pl-tklist span{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-cmd{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);color:var(--dim2);cursor:text;transition:border-color .15s,background .15s}
+.pl-cmd:hover,.pl-cmd.on{border-color:var(--brand);background:#4ADE8014}
+.pl-cmd-ic{font-size:14px;line-height:1}
+.pl-cmd-input{flex:1;min-width:0;background:none;border:0;outline:none;color:var(--hi);font-family:var(--f-body);font-size:13px}
+.pl-cmd-input::placeholder{color:var(--dim2)}
+.pl-cmd-clear{background:none;border:0;color:var(--dim2);cursor:pointer;font-size:11px;padding:0 2px;line-height:1}
+.pl-cmd-clear:hover{color:var(--hi)}
+.pl-tklist{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:12px;max-height:340px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.45)}
+.pl-tkhd{display:flex;justify-content:flex-end;padding:6px 12px 2px;font-size:9.5px;color:var(--dim2);text-transform:uppercase;letter-spacing:.04em}
+.pl-pi{display:flex;align-items:center;gap:11px;padding:10px 15px;cursor:pointer;transition:background .1s}
+.pl-pi:hover,.pl-pi.sel{background:var(--surface2)}
+.pl-pi-ic{width:26px;height:26px;border-radius:7px;background:var(--surface2);display:grid;place-items:center;font:700 12px var(--f-mono);color:var(--brand2);flex-shrink:0}
+.pl-pi:hover .pl-pi-ic,.pl-pi.sel .pl-pi-ic{background:var(--border)}
+.pl-pi-main{flex:1;min-width:0}
+.pl-pi-top{display:flex;align-items:baseline;gap:8px}
+.pl-pi-lbl{font-size:13px;color:var(--hi);font-weight:500}
+.pl-pi-px{font:12.5px var(--f-mono);color:var(--hi)}
+.pl-pi-pct{font:11.5px var(--f-mono)}
+.pl-pi-pct.up{color:#4ADE80}.pl-pi-pct.down{color:#F0565A}.pl-pi-pct.flat{color:var(--dim2)}
+.pl-pi-ext{font:11px var(--f-mono);color:var(--dim2)}
+.pl-pi-sub{font-size:10.5px;color:var(--dim2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-tknone{padding:12px 15px;color:var(--dim2);font-size:13px}
 .pl-tksel{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:5px 8px 5px 5px;border:1px solid var(--border);border-radius:9px;background:var(--surface2);font:600 12px var(--f-mono);color:var(--hi)}
 .pl-tksel button{background:none;border:0;color:var(--dim2);cursor:pointer;font-size:14px;padding:0 2px}
 .pl-av{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px;flex:none;overflow:hidden;background:#3b5bdb}
@@ -1150,8 +1167,13 @@ tr.ops-row.jb-isrunning td{background:#2FB6A80a}
               <textarea id="plText" class="inp" rows="4" maxlength="500" placeholder="NVDA, AMD lead chip bid in premarket as TSMC flags stronger AI demand into 2027."></textarea>
               <div class="pl-count"><span id="plCount">0</span> / 500</div>
               <label class="fl" for="plTicker">Ticker <span class="pl-opt">optional — its logo replaces the letter</span></label>
+              <!-- Same search as Market Catalyst's box; a click selects the ticker. -->
               <div class="pl-tk">
-                <input id="plTicker" class="inp" autocomplete="off" placeholder="Search ticker or company…">
+                <div class="pl-cmd" id="plCmd">
+                  <span class="pl-cmd-ic">⌕</span>
+                  <input id="plTicker" class="pl-cmd-input" autocomplete="off" spellcheck="false" placeholder="Search tickers and stocks…">
+                  <button type="button" class="pl-cmd-clear" id="plClear" hidden title="Clear">✕</button>
+                </div>
                 <div id="plTkList" class="pl-tklist" hidden></div>
                 <div id="plTkSel" class="pl-tksel" hidden></div>
               </div>
@@ -5381,12 +5403,44 @@ function plRender(){
 }
 function plSetTicker(t,name){
   PL.ticker=t||null;
-  const sel=plEl('plTkSel'), inp=plEl('plTicker');
-  plEl('plTkList').hidden=true;
+  const sel=plEl('plTkSel'), cmd=plEl('plCmd');
+  plClose(); plEl('plTicker').value=''; plEl('plClear').hidden=true;
   if(PL.ticker){
     sel.innerHTML='<span class="pl-av" style="width:22px;height:22px"><img alt="" src="/live/logo?ticker='+encodeURIComponent(PL.ticker)+'" onerror="this.remove()"></span>$'+xesc(PL.ticker)+(name?' <span style="font-weight:500;color:var(--dim)">'+xesc(name)+'</span>':'')+'<button type="button" title="Remove ticker" onclick="plSetTicker(null)">×</button>';
-    sel.hidden=false; inp.value=''; inp.hidden=true;
-  } else { sel.hidden=true; sel.innerHTML=''; inp.hidden=false; inp.value=''; }
+    sel.hidden=false; cmd.hidden=true;
+  } else { sel.hidden=true; sel.innerHTML=''; cmd.hidden=false; }
+}
+/* Search dropdown — mirrors Market Catalyst's: quick list when empty, ranked
+   matches as you type, live price + change (and the extended-hours line), Enter
+   picks the top match, Escape closes. Live prices re-read every 30 s while open. */
+PL.open=false; PL.rows=[]; PL.poll=null; PL.timer=null;
+const plFmt=n=>Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const plSign=n=>{const v=Math.round(n*100)/100;return v===0?'0.00%':(v>0?'+':'')+v.toFixed(2)+'%';};
+const plCls=n=>n>0?'up':n<0?'down':'flat';
+function plAsk(){ PL.searchSeq++; plPost({type:'admin:pulseSearch', q:plEl('plTicker').value, seq:PL.searchSeq}); }
+function plOpen(){
+  PL.open=true; plEl('plCmd').classList.add('on'); plAsk();
+  clearInterval(PL.poll); PL.poll=setInterval(()=>{ if(PL.open) plAsk(); },30000);
+}
+function plClose(){ PL.open=false; clearInterval(PL.poll); const c=plEl('plCmd'); if(c) c.classList.remove('on'); const l=plEl('plTkList'); if(l) l.hidden=true; }
+function plRows(rows,q){
+  const box=plEl('plTkList'); PL.rows=rows;
+  if(!PL.open) return;
+  let h='';
+  if(rows.length) h+='<div class="pl-tkhd">Tickers</div>';
+  h+=rows.map((m,i)=>'<div class="pl-pi" data-i="'+i+'">'
+    +'<div class="pl-pi-ic">'+xesc((m.sym||'?')[0])+'</div>'
+    +'<div class="pl-pi-main"><div class="pl-pi-top"><span class="pl-pi-lbl">'+xesc(m.sym)+'</span>'
+    +(m.price!=null?'<span class="pl-pi-px">'+plFmt(m.price)+'</span>'+(m.pctChange!=null?'<span class="pl-pi-pct '+plCls(m.pctChange)+'">'+plSign(m.pctChange)+'</span>':''):'')
+    +'</div>'
+    +(m.extended&&m.extended.price!=null?'<div class="pl-pi-ext" title="The official 4:00 PM close is shown above; this is the latest extended-hours trade.">'+(m.extended.session==='pre-market'?'Pre-market':'After hours')+' '+plFmt(m.extended.price)+' <span class="pl-pi-pct '+plCls(m.extended.pctChange)+'">'+plSign(m.extended.pctChange)+'</span>'+(m.extended.at!=null?' · '+new Date(m.extended.at).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit'})+' ET':'')+'</div>':'')
+    +'<div class="pl-pi-sub">'+xesc(m.name||'Stock')+' · click to select</div></div></div>').join('');
+  if(q&&!rows.length) h+='<div class="pl-tknone">No results for “'+xesc(q)+'”</div>';
+  box.innerHTML=h; box.hidden=!h;
+  box.querySelectorAll('.pl-pi').forEach(el=>{
+    el.onmousedown=e=>e.preventDefault();
+    el.onclick=()=>{ const m=PL.rows[Number(el.dataset.i)]; if(m) plSetTicker(m.sym,m.name||''); };
+  });
 }
 function plReset(){
   PL.editId=null; plEl('plText').value=''; plEl('plName').value=''; plEl('plHandle').value='';
@@ -5416,15 +5470,24 @@ function plDelete(id){
 (function plInit(){
   const txt=plEl('plText'), inp=plEl('plTicker'); if(!txt||!inp) return;
   txt.addEventListener('input',()=>{ plEl('plCount').textContent=String(txt.value.length); });
-  let timer=null;
+  inp.addEventListener('focus',()=>{ if(!PL.open) plOpen(); });
   inp.addEventListener('input',()=>{
-    clearTimeout(timer);
-    const q=inp.value.trim();
-    if(!q){ plEl('plTkList').hidden=true; return; }
-    timer=setTimeout(()=>{ PL.searchSeq++; plPost({type:'admin:pulseSearch', q, seq:PL.searchSeq}); },220);
+    plEl('plClear').hidden=!inp.value;
+    if(!PL.open){ plOpen(); return; }
+    clearTimeout(PL.timer); PL.timer=setTimeout(plAsk,150);
   });
-  inp.addEventListener('keydown',e=>{ if(e.key==='Escape') plEl('plTkList').hidden=true; });
-  document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('.pl-tk')) plEl('plTkList').hidden=true; });
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){ inp.value=''; plEl('plClear').hidden=true; plClose(); inp.blur(); }
+    if(e.key==='Enter'){
+      e.preventDefault();
+      const top=PL.rows[0];
+      if(top) plSetTicker(top.sym,top.name||'');
+      else if(/^[A-Za-z][A-Za-z0-9.-]{0,9}$/.test(inp.value.trim())) plSetTicker(inp.value.trim().toUpperCase(),'');
+    }
+  });
+  plEl('plClear').onclick=()=>{ inp.value=''; plEl('plClear').hidden=true; inp.focus(); plAsk(); };
+  plEl('plCmd').onclick=()=>inp.focus();
+  document.addEventListener('mousedown',e=>{ if(!e.target.closest||!e.target.closest('.pl-tk')) plClose(); });
   if(BLOG_BRIDGE) plPost({type:'admin:pulseList'});
   setInterval(plRender,60000); // keep "5m ago" current
 })();
@@ -5433,10 +5496,7 @@ window.addEventListener('message',function(e){
   const d=e.data||{};
   if(d.type==='admin:pulseSearchResult'){
     if(d.seq!==PL.searchSeq) return;
-    const box=plEl('plTkList'); const rs=Array.isArray(d.results)?d.results:[];
-    box.innerHTML=rs.length?rs.slice(0,8).map(r=>'<button type="button" data-t="'+plAttr(r.ticker)+'" data-n="'+plAttr(r.name||'')+'"><b>'+xesc(r.ticker)+'</b><span>'+xesc(r.name||'')+'</span></button>').join(''):'<div class="zempty">No matches</div>';
-    box.querySelectorAll('button').forEach(b=>b.onclick=()=>plSetTicker(b.dataset.t,b.dataset.n));
-    box.hidden=false;
+    plRows(Array.isArray(d.results)?d.results:[], (d.q||'').trim());
     return;
   }
   if(d.type==='admin:pulseResult'){

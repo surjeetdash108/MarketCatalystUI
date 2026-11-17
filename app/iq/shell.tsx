@@ -49,6 +49,7 @@ import { fmt, sign, cls, arr, SemiGauge, DataState, NotAvailable, VendorTag, tit
 import { useBackendBars } from "./hooks/useBackendBars";
 import { NotificationBell } from "./notification-bell";
 import { useTickerSearch } from "./hooks/useTickerSearch";
+import { searchMatchesFor } from "./search-matches";
 import { useTapeStream } from "./hooks/useTapeStream";
 import { useBackendMarketStatus } from "./hooks/useBackendMarketStatus";
 import { useApiList } from "./hooks/useApiList";
@@ -1253,43 +1254,9 @@ export function IQShell({ children }: { children: React.ReactNode }) {
   // shown before the user types and as a name-match augmentation once they
   // do — useTickerSearch's full ~10,000-ticker universe only matches by
   // ticker prefix, so a company-name search (e.g. "apple") needs this.
-  const quickAccessCompanies = [...shellCompanies].sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0)).slice(0, 15);
   const tickerSearchResults = useTickerSearch(searchQ);
-  const searchMatches: Array<{ sym: string; name: string | null; price: number | null; pctChange: number | null }> = searchQ
-    ? (() => {
-        const q = searchQ.trim().toLowerCase();
-        const upper = searchQ.trim().toUpperCase();
-        const bySym = new Map(tickerSearchResults.map(r => [r.ticker, r]));
-        // A handful of live `companies` docs are written by side-jobs (news
-        // count, fundamentals growth) that can create the doc before the
-        // primary sync job ever sets `ticker` — guard rather than crash on
-        // that partial data.
-        const nameMatched = shellCompanies.filter(
-          c => !!c.ticker && ((c.name ?? "").toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)) && !bySym.has(c.ticker),
-        );
-        const candidates = [
-          ...tickerSearchResults.map(r => ({ sym: r.ticker, name: r.name, price: r.price, pctChange: r.pctChange })),
-          ...nameMatched.map(c => ({ sym: c.ticker, name: c.name, price: c.price, pctChange: c.pctChange })),
-        ];
-
-        // Rank candidates: exact ticker → ticker prefix → name prefix → substring
-        const exact: typeof candidates = [];
-        const tickerPrefix: typeof candidates = [];
-        const namePrefix: typeof candidates = [];
-        const substring: typeof candidates = [];
-
-        for (const item of candidates) {
-          const symUpper = (item.sym ?? "").toUpperCase();
-          const nameLower = (item.name ?? "").toLowerCase();
-          if (symUpper === upper) exact.push(item);
-          else if (symUpper.startsWith(upper)) tickerPrefix.push(item);
-          else if (nameLower.startsWith(q)) namePrefix.push(item);
-          else substring.push(item);
-        }
-
-        return [...exact, ...tickerPrefix, ...namePrefix, ...substring];
-      })()
-    : quickAccessCompanies.filter(c => !!c.ticker).map(c => ({ sym: c.ticker, name: c.name, price: c.price, pctChange: c.pctChange }));
+  // Matching and ranking are shared with the admin console's ticker picker.
+  const searchMatches = searchMatchesFor(searchQ, tickerSearchResults, shellCompanies);
   // On-demand quote enrichment: /live/search returns only ticker+name (its
   // in-memory universe carries no quote), so searched tickers arrive with a
   // null price. Fetch live quotes for the visible matches and overlay
