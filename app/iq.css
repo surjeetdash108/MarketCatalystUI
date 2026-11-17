@@ -14195,3 +14195,6 @@ h6.sd-sec {
   .iq-root .alp-list { contain: size; min-height: 360px; }
   .iq-root .alp-list .alp-rows { flex: 1 1 0; min-height: 0; max-height: none; }
 }
+
+/* An empty Top Picks carousel is hidden; its display:grid would beat [hidden]. */
+.iq-root .alp-cards[hidden] { display: none; }

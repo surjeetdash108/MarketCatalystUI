@@ -6,7 +6,6 @@ import { firebaseAuth } from "../firebase";
 import { apiGet, apiPost, apiPatch, apiDelete, apiUpload } from "../iq/backend";
 import { buildAdminDataset, fetchAdminBlogs, ADMIN_DATA_KEY, ADMIN_EMAIL } from "./admin-data";
 import type { ConsoleBlogRow } from "./admin-data";
-import { searchMatchesFor } from "../iq/search-matches";
 import { createOpsBridge, isOpsMessage } from "./admin-ops-bridge";
 
 /**
@@ -18,18 +17,6 @@ import { createOpsBridge, isOpsMessage } from "./admin-ops-bridge";
  *
  * The admin is a single fixed account (email never changes; password can).
  */
-
-/** The company list for the Pulse ticker picker (quick access + name matches), read once. */
-let companiesOnce: Promise<Array<{ ticker: string; name: string | null; price: number | null; pctChange: number | null; marketCap?: number | null }>> | null = null;
-function adminCompanies() {
-  companiesOnce ??= apiGet<Array<{ ticker: string; name: string | null; price: number | null; pctChange: number | null; marketCap?: number | null }>>("/market-data/companies")
-    .then((r) => (Array.isArray(r) ? r : []))
-    .catch(() => {
-      companiesOnce = null;
-      return [];
-    });
-  return companiesOnce;
-}
 
 export function AdminConsole() {
   const [state, setState] = useState<"checking" | "denied" | "ok">("checking");
@@ -306,36 +293,15 @@ export function AdminConsole() {
         const reply = (m: Record<string, unknown>) =>
           iframeRef.current?.contentWindow?.postMessage(m, window.location.origin);
         if (d.type === "admin:pulseSearch") {
-          // Same search as Market Catalyst's box: /live/search + the company
-          // list, ranked by the shared searchMatchesFor, then live quotes for
-          // the visible rows (/live/quotes, the same cache MC's dropdown reads).
+          // Same search as Market Catalyst's box, served for the admin account
+          // (which has no plan, so the user search routes refuse it): quick
+          // list when empty, MC's ranking, live quotes for the visible rows.
           const q = String(d.q ?? "").slice(0, 40);
           try {
-            const companies = await adminCompanies();
-            const found = q.trim()
-              ? (await apiGet<{ results?: Array<{ ticker: string; name: string | null }> }>(`/live/search?q=${encodeURIComponent(q.trim())}`)).results ?? []
-              : [];
-            const matches = searchMatchesFor(q, found, companies).slice(0, 12);
-            let quotes: Array<{ ticker: string; price: number | null; pctChange: number | null; extended?: unknown }> = [];
-            if (matches.length) {
-              try {
-                quotes = await apiGet(`/live/quotes?tickers=${encodeURIComponent(matches.map((m) => m.sym).join(","))}`);
-              } catch {
-                quotes = [];
-              }
-            }
-            const byT = new Map((Array.isArray(quotes) ? quotes : []).map((x) => [x.ticker.toUpperCase(), x]));
-            const results = matches.map((m) => {
-              const lq = byT.get(m.sym.toUpperCase());
-              return {
-                sym: m.sym, name: m.name,
-                price: lq?.price ?? m.price, pctChange: lq?.pctChange ?? m.pctChange,
-                extended: lq?.extended ?? null,
-              };
-            });
-            reply({ type: "admin:pulseSearchResult", seq: d.seq, q, results });
-          } catch {
-            reply({ type: "admin:pulseSearchResult", seq: d.seq, q, results: [] });
+            const r = await apiGet<{ results?: unknown[] }>(`/api/admin/ticker-search?q=${encodeURIComponent(q.trim())}`);
+            reply({ type: "admin:pulseSearchResult", seq: d.seq, q, results: r.results ?? [] });
+          } catch (err) {
+            reply({ type: "admin:pulseSearchResult", seq: d.seq, q, results: [], error: (err as Error).message });
           }
           return;
         }

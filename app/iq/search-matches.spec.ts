@@ -20,7 +20,8 @@ describe("ticker search (shared by MC's search box and the admin Pulse picker)",
   });
   it("MC's search box and the admin picker both use it", () => {
     assert.match(readFileSync(new URL("./shell.tsx", import.meta.url), "utf8"), /searchMatchesFor\(searchQ, tickerSearchResults, shellCompanies\)/);
-    assert.match(readFileSync(new URL("../admin/admin-console.tsx", import.meta.url), "utf8"), /searchMatchesFor\(q, found, companies\)/);
+    // The admin picker gets the same ranking from the backend (the admin account has no plan for the user routes).
+    assert.match(readFileSync(new URL("../admin/admin-console.tsx", import.meta.url), "utf8"), /\/api\/admin\/ticker-search\?q=/);
     const html = readFileSync(new URL("../../public/admin/console.html", import.meta.url), "utf8");
     assert.match(html, /placeholder="Search tickers and stocks…"/);
     assert.match(html, /click to select/);
