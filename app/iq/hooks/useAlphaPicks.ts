@@ -5,12 +5,38 @@ import { apiGet } from "../backend";
 import { useApiList } from "./useApiList";
 import { useIntradayBars } from "./useIntradayBars";
 import { etParts, getMarketStatus, type MarketPhase } from "../market-status";
+import { pairedQuote, useLiveQuotes, type LiveQuote } from "../live-quotes-context";
 import type { AnalystConsensusDoc, CompanyDoc } from "../types";
 import { pickBear, pickTop, scoreCompany, type Signal } from "../alpha-signals-model";
 import {
   evaluateIntraday, intradayCandidates, intradayLists, metricsFromBars,
-  type IntradaySignal,
+  type IntradaySignal, type SessionMetrics,
 } from "../alpha-intraday";
+
+/**
+ * A stored company doc with the app-wide live quote laid over its price and
+ * day change (the same pair Market Catalyst shows — see pairedQuote), so a
+ * ticker reads the same price on every screen.
+ */
+export function withLiveQuote(c: CompanyDoc, q: LiveQuote | undefined): CompanyDoc {
+  if (!q) return c;
+  const { price, pctChange } = pairedQuote(q, c);
+  if (price === c.price && pctChange === c.pctChange) return c;
+  return { ...c, price, pctChange };
+}
+
+/**
+ * Session metrics brought up to the live quote when it is newer than the last
+ * 5-minute bar: price, day change and the day's range. VWAP, the opening range
+ * and prior-day levels stay bar-based.
+ */
+export function metricsWithQuote(m: SessionMetrics, q: LiveQuote | undefined, today: string): SessionMetrics {
+  if (!q || q.price == null || m.session !== today) return m;
+  if (q.updatedAt != null && q.updatedAt <= m.lastBarAt + 5 * 60_000) return m;
+  const price = q.price;
+  const chg = q.pctChange != null ? q.pctChange / 100 : m.priorClose ? price / m.priorClose - 1 : m.chg;
+  return { ...m, price, chg, dayHigh: Math.max(m.dayHigh, price), dayLow: Math.min(m.dayLow, price) };
+}
 
 /** 60-second clock: open/closed, the earnings window and staleness all read it. */
 export function useMarketClock(tickMs = 60_000) {
@@ -82,8 +108,13 @@ export const COMPANY_POLL_MS = 60_000;
  */
 export function useAlphaPicks({ limit, pool, barsPollMs, fill = false, enabled = true }: AlphaPicksOptions) {
   const { now, phase, open } = useMarketClock();
-  const { data: companies, loading: companiesLoading } = usePolledList<CompanyDoc>(enabled ? "/market-data/companies" : null, open ? COMPANY_POLL_MS : null);
+  const { data: storedCompanies, loading: companiesLoading } = usePolledList<CompanyDoc>(enabled ? "/market-data/companies" : null, open ? COMPANY_POLL_MS : null);
   const { data: analystDocs } = useApiList<AnalystConsensusDoc>(enabled ? "/market-data/analyst-actions" : null);
+  // The shared live-quote map (one poll for the whole app). Tickers this hook
+  // shows are subscribed below; every quote already in the map is used.
+  const [watch, setWatch] = useState<string[]>([]);
+  const quotes = useLiveQuotes(enabled ? watch : []);
+  const companies = useMemo(() => storedCompanies.map(c => withLiveQuote(c, quotes.get(c.ticker))), [storedCompanies, quotes]);
 
   const analyst = useMemo(() => new Map(analystDocs.map(a => [a.ticker, a])), [analystDocs]);
   // Scores use the clock minute (earnings window, freshness), not every render.
@@ -101,16 +132,18 @@ export function useAlphaPicks({ limit, pool, barsPollMs, fill = false, enabled =
   const { data: bars, loading: barsLoading, lastRound } = useIntradayBars(tickers, open ? barsPollMs : null);
 
   const intraday = useMemo(() => {
-    const spy = metricsFromBars(bars.get("SPY")?.bars);
-    const spx = spy?.chg ?? null;
     const today = etParts(new Date(now)).isoDate;
+    const spyRaw = metricsFromBars(bars.get("SPY")?.bars);
+    const spy = spyRaw ? metricsWithQuote(spyRaw, quotes.get("SPY"), today) : null;
+    const spx = spy?.chg ?? null;
     const out: IntradaySignal[] = [];
     for (const c of candidates) {
       const b = bars.get(c.ticker);
       if (!b) continue;
       const prevClose = c.price != null && c.pctChange != null && c.pctChange > -100 ? c.price / (1 + c.pctChange / 100) : null;
-      const m = metricsFromBars(b.bars, { dailyRvol: c.rvol ?? null, prevClose });
-      if (!m) continue;
+      const raw = metricsFromBars(b.bars, { dailyRvol: c.rvol ?? null, prevClose });
+      if (!raw) continue;
+      const m = metricsWithQuote(raw, quotes.get(c.ticker), today);
       out.push(evaluateIntraday(c.ticker, m, c, {
         marketOpen: open,
         spx,
@@ -123,9 +156,18 @@ export function useAlphaPicks({ limit, pool, barsPollMs, fill = false, enabled =
       }));
     }
     return { all: out, spx, spySession: spy?.session ?? null };
-  }, [bars, candidates, sigBy, open, now]);
+  }, [bars, candidates, sigBy, open, now, quotes]);
 
   const lists = useMemo(() => intradayLists(intraday.all, limit, fill), [intraday.all, limit, fill]);
+
+  // Subscribe the tickers this hook puts on screen (picks, the intraday pool, SPY).
+  const watchKey = useMemo(
+    () => [...new Set([...swingBull, ...swingBear].map(s => s.c.ticker).concat(candidates.map(c => c.ticker), "SPY"))].sort().join(","),
+    [swingBull, swingBear, candidates],
+  );
+  useEffect(() => {
+    queueMicrotask(() => setWatch(prev => (prev.join(",") === watchKey ? prev : watchKey.split(","))));
+  }, [watchKey]);
   const lastBarAt = useMemo(
     () => intraday.all.reduce<number | null>((a, s) => (a == null || s.m.lastBarAt > a ? s.m.lastBarAt : a), null),
     [intraday.all],
@@ -133,7 +175,7 @@ export function useAlphaPicks({ limit, pool, barsPollMs, fill = false, enabled =
 
   return {
     now, phase, open,
-    companies, companiesLoading, analyst,
+    companies, companiesLoading, analyst, quotes,
     sigs, sigBy, swingBull, swingBear,
     candidates, barsLoading: barsLoading && tickers.length > 0, lastRound,
     intraAll: intraday.all, intraBull: lists.bull, intraBear: lists.bear,

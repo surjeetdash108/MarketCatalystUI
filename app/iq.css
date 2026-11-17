@@ -14187,3 +14187,11 @@ h6.sd-sec {
 .iq-root .alpha-grp.bull .alpha-chip.st-setup-active { border-color: var(--up); }
 .iq-root .alpha-grp.bear .alpha-chip.st-setup-active { border-color: var(--down); }
 .iq-root .alpha-chip.st-watch { opacity: .6; border-style: dashed; }
+
+/* Stock Screens list: fill the panel's full height (set by the screens list and
+   the detail panel beside it) and scroll the rest, instead of stopping at a
+   fixed height and leaving empty space under the rows. */
+@media (min-width: 761px) {
+  .iq-root .alp-list { contain: size; min-height: 360px; }
+  .iq-root .alp-list .alp-rows { flex: 1 1 0; min-height: 0; max-height: none; }
+}

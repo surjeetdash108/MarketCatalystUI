@@ -6,6 +6,7 @@ import { useApiList } from "../hooks/useApiList";
 import { useBackendBars } from "../hooks/useBackendBars";
 import { useWatchlistsContext } from "../hooks/useWatchlists";
 import { useAlphaPicks } from "../hooks/useAlphaPicks";
+import { useLiveQuotes } from "../live-quotes-context";
 import { useIQActions } from "../shell";
 import { WatchlistPicker } from "../watchlist-picker";
 import { exchangeLabel } from "../exchange";
@@ -238,6 +239,9 @@ export function AlphaSignals() {
   const rows = allRows.slice(0, topN);
   const curRow: ScreenRow | undefined = rows.find(r => r.ticker === sel) ?? rows[0];
   const curSig = curRow ? A.sigBy.get(curRow.ticker) : undefined;
+  // Live prices for the rows on screen — the same shared quotes Market Catalyst
+  // shows; A.companies already carries every quote in that map.
+  useLiveQuotes(rows.map(r => r.ticker));
 
   const bear = dir === "Bearish";
   const swingList = bear ? A.swingBear : A.swingBull;
@@ -534,7 +538,11 @@ export function AlphaSignals() {
               />
             )}
             {swingPick && bear && (
-              <SwingBearBody p={swingPick} onInfo={openSideInfo} onClose={() => setPickSym(null)} onExplore={() => { setPickSym(null); enterSI(swingPick.c.ticker); }} />
+              <SwingBearBody
+                p={swingPick} onInfo={openSideInfo} onClose={() => setPickSym(null)}
+                onExplore={() => { setPickSym(null); enterSI(swingPick.c.ticker); }}
+                onViewFullChart={() => { setPickSym(null); openStockDetail(swingPick.c.ticker, listTickers); }}
+              />
             )}
             {intraPick && !bear && (
               <IntraBullBody
@@ -542,10 +550,15 @@ export function AlphaSignals() {
                 onStar={e => void toggleWatch(intraPick.ticker, e)}
                 onInfo={openSideInfo} onPrev={() => nextPick(-1)} onNext={() => nextPick(1)} onClose={() => setPickSym(null)}
                 onExplore={() => { setPickSym(null); enterSI(intraPick.ticker); }}
+                onViewFullChart={() => { setPickSym(null); openStockDetail(intraPick.ticker, listTickers); }}
               />
             )}
             {intraPick && bear && (
-              <IntraBearBody s={intraPick} onInfo={openSideInfo} onClose={() => setPickSym(null)} onExplore={() => { setPickSym(null); enterSI(intraPick.ticker); }} />
+              <IntraBearBody
+                s={intraPick} onInfo={openSideInfo} onClose={() => setPickSym(null)}
+                onExplore={() => { setPickSym(null); enterSI(intraPick.ticker); }}
+                onViewFullChart={() => { setPickSym(null); openStockDetail(intraPick.ticker, listTickers); }}
+              />
             )}
           </div>
         </div>, modalHost)}
@@ -712,7 +725,7 @@ function SwingBullBody({ p, pos, now, starred, onStar, onInfo, onPrev, onNext, o
   );
 }
 
-function SwingBearBody({ p, onInfo, onClose, onExplore }: { p: Signal; onInfo: () => void; onClose: () => void; onExplore: () => void }) {
+function SwingBearBody({ p, onInfo, onClose, onExplore, onViewFullChart }: { p: Signal; onInfo: () => void; onClose: () => void; onExplore: () => void; onViewFullChart: () => void }) {
   const c = p.c;
   const plan = planOf(c, p.risk, "bear");
   const w = bearWhy(p);
@@ -784,7 +797,7 @@ function SwingBearBody({ p, onInfo, onClose, onExplore }: { p: Signal; onInfo: (
           </div>
         </div>
       </div>
-      <Foot onExplore={onExplore} />
+      <Foot onExplore={onExplore} onViewFullChart={onViewFullChart} />
     </>
   );
 }
@@ -817,10 +830,11 @@ function stopPct(s: IntradaySignal) {
   return `${p > 0 ? "+" : "−"}${Math.abs(p).toFixed(1)}%`;
 }
 
-function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, onClose, onExplore }: {
+function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, onClose, onExplore, onViewFullChart }: {
   s: IntradaySignal; pos: string; open: boolean; starred: boolean;
   onStar: (e: React.MouseEvent<HTMLButtonElement>) => void;
   onInfo: () => void; onPrev: () => void; onNext: () => void; onClose: () => void; onExplore: () => void;
+  onViewFullChart: () => void;
 }) {
   const m = s.m;
   const plan = s.plan;
@@ -896,12 +910,12 @@ function IntraBullBody({ s, pos, open, starred, onStar, onInfo, onPrev, onNext, 
           </div>
         </div>
       </div>
-      <Foot onExplore={onExplore} />
+      <Foot onExplore={onExplore} onViewFullChart={onViewFullChart} />
     </>
   );
 }
 
-function IntraBearBody({ s, onInfo, onClose, onExplore }: { s: IntradaySignal; onInfo: () => void; onClose: () => void; onExplore: () => void }) {
+function IntraBearBody({ s, onInfo, onClose, onExplore, onViewFullChart }: { s: IntradaySignal; onInfo: () => void; onClose: () => void; onExplore: () => void; onViewFullChart: () => void }) {
   const m = s.m;
   const plan = s.plan;
   return (
@@ -961,7 +975,7 @@ function IntraBearBody({ s, onInfo, onClose, onExplore }: { s: IntradaySignal; o
           </div>
         </div>
       </div>
-      <Foot onExplore={onExplore} />
+      <Foot onExplore={onExplore} onViewFullChart={onViewFullChart} />
     </>
   );
 }
